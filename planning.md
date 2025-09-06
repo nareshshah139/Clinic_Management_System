@@ -23,7 +23,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Users & Auth Module Enhancement** - Complete production-ready implementation (394 tests, 95% pass rate)
 
 🔄 **In Progress:**
-- Frontend Implementation (Dashboard, Patients, Inventory, Reports implemented; Complex UIs integrated for Patients, Appointments, Visits, Billing; API proxy + CORS configured; Auth & Users UI pending)
+- Frontend Implementation (Dashboard, Patients, Inventory, Reports implemented; Complex UIs integrated for Patients, Appointments, Visits, Billing; API proxy + CORS configured; Auth & Users UI implemented)
 
 ❌ **Missing/Incomplete:**
 - Consents Module
@@ -362,8 +362,8 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - ✅ Appointment scheduler interface (basic)
 - ✅ Visit documentation forms (SOAP tabs, vitals)
 - ✅ Billing and invoice management (basic)
-- ❌ User management CRUD and RBAC UI
-- ❌ Authentication (login/logout) and protected routes
+- ✅ User management CRUD and RBAC UI
+- ✅ Authentication (login/logout) and protected routes
 
 ### 3.2 Key Pages Implementation
 **Estimated Effort:** 8-10 days
@@ -727,4 +727,4 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 **Next Priority:** Reports Module implementation to complete the core backend functionality
 
 ---
-*Last updated: September 2025 - Backend modules completed; Frontend complex UIs integrated (Patients, Appointments, Visits, Billing). Auth & Users UI pending.*
+*Last updated: September 2025 - Backend modules completed; Frontend complex UIs integrated (Patients, Appointments, Visits, Billing, Auth, Users). Proxy/CORS configured.*

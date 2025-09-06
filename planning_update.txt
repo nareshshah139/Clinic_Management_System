@@ -44,3 +44,4 @@ Prescriptions Module completed successfully on Sat Sep  6 13:04:10 IST 2025. All
 [Git] Frontend changes committed locally in `frontend` repo on Sat Sep  6 13:04:10 IST 2025. No remote configured; awaiting GitHub remote to push.
 
 [Integration] Frontend-backend integration completed: Next.js proxy rewrites to /api and NestJS CORS enabled for localhost (3000/3001). Updated API base to /api in frontend. Sat Sep  6 13:12:10 IST 2025.
+[Auth+Users] Frontend auth (login, middleware) and Users CRUD/RBAC UI; planning updated - Sat Sep  6 22:21:00 IST 2025

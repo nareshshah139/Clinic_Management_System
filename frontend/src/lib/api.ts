@@ -25,6 +25,15 @@ export class ApiClient {
     }
   }
 
+  // Auth
+  async login(email: string, password: string) {
+    const res = await this.post<{ access_token: string }>(`/auth/login`, { email, password });
+    if ((res as any)?.access_token) {
+      this.setToken((res as any).access_token);
+    }
+    return res;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -182,9 +191,19 @@ export class ApiClient {
     return this.post('/users', data);
   }
 
+  async updateUser(id: string, data: any) {
+    return this.patch(`/users/${id}`, data);
+  }
+
+  async deleteUser(id: string) {
+    return this.delete(`/users/${id}`);
+  }
+
   async getUserStatistics() {
     return this.get('/users/statistics');
   }
 }
+
+export const apiClient = new ApiClient();
 
 export const apiClient = new ApiClient(); 
