@@ -1,0 +1,408 @@
+// Clinic Management System - Hyderabad, India
+// Prisma schema for PostgreSQL with DPDP compliance
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  DOCTOR
+  NURSE
+  RECEPTION
+  ACCOUNTANT
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum VisitType {
+  OPD
+  TELEMED
+  PROCEDURE
+}
+
+enum PaymentMode {
+  CASH
+  CARD
+  UPI
+  BNPL
+}
+
+enum ConsentType {
+  GENERAL_CARE
+  PROCEDURE_SPECIFIC
+  TELEMED
+  DATA_PROCESSING
+}
+
+enum Language {
+  EN
+  TE
+  HI
+}
+
+// Core Entities
+model User {
+  id           String   @id @default(cuid())
+  role         UserRole
+  name         String
+  phone        String   @unique
+  email        String?  @unique
+  passwordHash String?
+  branchId     String
+  status       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  appointments Appointment[]
+  visits       Visit[]
+  consents     Consent[]
+  deviceLogs   DeviceLog[]
+
+  @@map("users")
+}
+model Branch {
+  id             String   @id @default(cuid())
+  name           String
+  address        String
+  gstin          String?
+  registrationNo String?
+  timings        Json? // Store opening hours
+  tokenPrefix    String   @default("TK")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users        User[]
+  patients     Patient[]
+  appointments Appointment[]
+  rooms       Room[]
+  services    Service[]
+
+  @@map("branches")
+}
+
+model Room {
+  id          String   @id @default(cuid())
+  name        String   // e.g., "Room 1", "Consultation Room A"
+  type        String   // "Consultation", "Procedure", "Waiting"
+  capacity    Int      @default(1)
+  isActive    Boolean  @default(true)
+  branchId    String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  appointments Appointment[]
+
+  @@map("rooms")
+}
+model Patient {
+  id               String   @id @default(cuid())
+  abhaId           String?  @unique
+  name             String
+  gender           String
+  dob              DateTime
+  phone            String
+  email            String?
+  address          String?
+  city             String?
+  state            String?
+  pincode          String?
+  emergencyContact String?
+  allergies        String?
+  photoUrl         String?
+  branchId         String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  appointments Appointment[]
+  visits       Visit[]
+  consents     Consent[]
+  invoices     Invoice[]
+  deviceLogs   DeviceLog[]
+  labOrders    LabOrder[]
+  referrals    Referral[]
+
+  @@map("patients")
+  @@map("patients")
+  @@map("patients")
+}
+
+model Appointment {  doctorId    String
+  date        DateTime
+  slot        String            // e.g., "10:00-10:30"
+  status      AppointmentStatus @default(SCHEDULED)
+  visitType   VisitType         @default(OPD)
+  notes       String?
+  source      String?           // Lead/Walk-in/WhatsApp
+  branchId    String
+  roomId      String?
+  tokenNumber Int?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  patient     Patient          @relation(fields: [patientId], references: [id])
+  doctor      User             @relation(fields: [doctorId], references: [id])
+  branch      Branch           @relation(fields: [branchId], references: [id])
+  room        Room?            @relation(fields: [roomId], references: [id])
+  visit       Visit?
+
+  @@map("appointments")
+}}
+  @@map("appointments")
+}  id            String    @id @default(cuid())
+  patientId     String
+  doctorId      String
+  appointmentId String?   @unique
+  vitals        Json? // BP, HR, Temp, etc.
+  complaints    Json // Array of complaints
+  history       Json? // Medical history
+  exam          Json? // Physical examination
+  diagnosis     Json? // ICD10 codes
+  plan          Json? // Treatment plan
+  followUp      DateTime?
+  attachments   Json? // File references
+  scribeJson    Json? // AI scribe data
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  doctor       User          @relation(fields: [doctorId], references: [id])
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
+  prescription Prescription?
+  deviceLogs   DeviceLog[]
+  labOrders    LabOrder[]
+  consents     Consent[]
+
+  @@map("visits")
+}
+
+model Prescription {
+  id              String   @id @default(cuid())
+  visitId         String   @unique
+  language        Language @default(EN)
+  items           Json // Array of medication items
+  instructions    Json? // Additional instructions
+  genericFirst    Boolean  @default(true)
+  pharmacistNotes String?
+  qrcode          String?
+  signature       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@map("prescriptions")
+}
+
+model Service {
+  id        String   @id @default(cuid())
+  name      String
+  type      String // Consult/Procedure/Package/Aesthetic
+  taxable   Boolean  @default(false)
+  gstRate   Float    @default(0)
+  priceMrp  Float
+  priceNet  Float
+  deviceId  String?
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch       Branch        @relation(fields: [branchId], references: [id])
+  invoiceItems InvoiceItem[]
+
+  @@map("services")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  patientId     String
+  visitId       String?
+  items         InvoiceItem[]
+  mode          PaymentMode   @default(CASH)
+  gstBreakup    Json? // GST calculation details
+  exemptBreakup Json? // Exempt service details
+  total         Float
+  received      Float         @default(0)
+  balance       Float
+  invoiceNo     String        @unique
+  gstin         String?
+  hsn           String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  patient  Patient   @relation(fields: [patientId], references: [id])
+  payments Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id        String @id @default(cuid())
+  invoiceId String
+  serviceId String
+  qty       Int    @default(1)
+  unitPrice Float
+  gstRate   Float  @default(0)
+  total     Float
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  service Service @relation(fields: [serviceId], references: [id])
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  amount      Float
+  mode        PaymentMode
+  reference   String? // UPI RRn, transaction ID
+  gateway     String? // Razorpay/Cashfree/PhonePe
+  reconStatus String      @default("PENDING")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model InventoryItem {
+  id           String    @id @default(cuid())
+  sku          String    @unique
+  name         String
+  category     String
+  batch        String?
+  lot          String?
+  expiry       DateTime?
+  qtyOnHand    Int       @default(0)
+  reorderLevel Int       @default(10)
+  mrp          Float
+  cost         Float
+  gstRate      Float     @default(18)
+  vendorId     String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  transactions InventoryTransaction[]
+
+  @@map("inventory_items")
+}
+
+model InventoryTransaction {
+  id        String   @id @default(cuid())
+  itemId    String
+  type      String // IN/OUT/ADJUSTMENT
+  qty       Int
+  reason    String?
+  reference String? // Invoice/Visit ID
+  createdAt DateTime @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("inventory_transactions")
+}
+
+model DeviceLog {
+  id          String   @id @default(cuid())
+  patientId   String
+  visitId     String
+  deviceModel String
+  serialNo    String
+  parameters  Json // fluence, spot, passes, pulsewidth
+  operatorId  String
+  photoRefs   Json? // Before/after image references
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  patient  Patient @relation(fields: [patientId], references: [id])
+  visit    Visit   @relation(fields: [visitId], references: [id])
+  operator User    @relation(fields: [operatorId], references: [id])
+
+  @@map("device_logs")
+}
+
+model LabOrder {
+  id         String   @id @default(cuid())
+  patientId  String
+  visitId    String
+  tests      Json // Array of test names/codes
+  partner    String // Vijaya/Apollo/Lucid
+  status     String   @default("ORDERED")
+  resultsRef String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  visit   Visit   @relation(fields: [visitId], references: [id])
+
+  @@map("lab_orders")
+}
+
+model Consent {
+  id          String      @id @default(cuid())
+  patientId   String
+  visitId     String?
+  consentType ConsentType
+  language    Language    @default(EN)
+  text        String
+  signedAt    DateTime?
+  signer      String? // Patient name or authorized person
+  method      String? // OTP/QR
+  pdfUrl      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+  visit   Visit?  @relation(fields: [visitId], references: [id])
+  User    User?   @relation(fields: [userId], references: [id])
+  userId  String?
+
+  @@map("consents")
+}
+
+model Referral {
+  id               String   @id @default(cuid())
+  patientId        String
+  source           String // Doctor/Influencer/Partner
+  commissionScheme String?
+  payoutStatus     String   @default("PENDING")
+  amount           Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@map("referrals")
+}
+
+// Audit & Compliance
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // CREATE/READ/UPDATE/DELETE
+  entity    String // Table name
+  entityId  String
+  oldValues Json?
+  newValues Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+
+  @@map("audit_logs")
+}

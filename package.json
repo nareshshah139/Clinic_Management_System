@@ -1,0 +1,24 @@
+{
+  "name": "clinic_management_system",
+  "version": "1.0.0",
+  "description": "Clinic Management System for Hyderabad - OPD-first platform with Dermatology focus",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run start:dev --workspace=backend\"",
+    "build": "npm run build --workspace=frontend && npm run build --workspace=backend",
+    "start": "concurrently \"npm run start --workspace=frontend\" \"npm run start:prod --workspace=backend\"",
+    "test": "npm run test --workspace=frontend && npm run test --workspace=backend",
+    "lint": "npm run lint --workspace=frontend && npm run lint --workspace=backend",
+    "clean": "rm -rf frontend/node_modules backend/node_modules node_modules"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["clinic", "management", "dermatology", "opd", "hyderabad", "india"],
+  "author": "Clinic Ops",
+  "license": "MIT"
+}

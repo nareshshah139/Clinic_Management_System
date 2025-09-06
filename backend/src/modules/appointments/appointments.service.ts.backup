@@ -1,0 +1,87 @@
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { PrismaService } from '../../shared/database/prisma.service';
+import { CreateAppointmentDto, RescheduleAppointmentDto } from './dto/create-appointment.dto';
+import { UpdateAppointmentDto, BulkUpdateAppointmentsDto } from './dto/update-appointment.dto';
+import { QueryAppointmentsDto, AvailableSlotsDto } from './dto/query-appointment.dto';
+import { SchedulingUtils } from './utils/scheduling.utils';
+import { AppointmentStatus, VisitType } from '@prisma/client';
+
+@Injectable()
+export class AppointmentsService {
+  constructor(private prisma: PrismaService) {}
+
+  async create(createAppointmentDto: CreateAppointmentDto, branchId: string) {
+    const { patientId, doctorId, roomId, date, slot, visitType, notes, source } = createAppointmentDto;
+
+    // Validate inputs
+    this.validateAppointmentInputs(createAppointmentDto);
+
+    // Validate patient exists and belongs to branch
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: patientId, branchId },
+    });
+    if (!patient) {
+      throw new NotFoundException('Patient not found in this branch');
+    }
+
+    // Validate doctor exists and belongs to branch
+    const doctor = await this.prisma.user.findFirst({
+      where: { id: doctorId, branchId, role: 'DOCTOR' },
+    });
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found in this branch');
+    }
+
+    // Validate room if provided
+    if (roomId) {
+      const room = await this.prisma.room.findFirst({
+        where: { id: roomId, branchId, isActive: true },
+      });
+      if (!room) {
+        throw new NotFoundException('Room not found or inactive');
+      }
+    }
+
+    // Check for scheduling conflicts
+    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId);
+    if (conflicts.length > 0) {
+      const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
+      throw new ConflictException({
+        message: 'Scheduling conflict detected',
+        conflicts,
+        suggestions,
+      });
+    }
+
+    // Generate token number
+    const tokenNumber = await this.generateTokenNumber(date, branchId);
+
+    // Create appointment
+    const appointment = await this.prisma.appointment.create({
+      data: {
+        patientId,
+        doctorId,
+        roomId,
+        date: new Date(date),
+        slot,
+        visitType: visitType || VisitType.OPD,
+        notes,
+        source,
+        branchId,
+        tokenNumber,
+      },
+      include: {
+        patient: {
+          select: { id: true, name: true, phone: true },
+        },
+        doctor: {
+          select: { id: true, name: true },
+        },
+        room: {
+          select: { id: true, name: true, type: true },
+        },
+      },
+    });
+
+    return appointment;
+  }
