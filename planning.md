@@ -23,7 +23,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Users & Auth Module Enhancement** - Complete production-ready implementation (394 tests, 95% pass rate)
 
 🔄 **In Progress:**
-- Frontend Implementation (Dashboard, Patients, Inventory, Reports implemented; Complex UIs integrated for Patients, Appointments, Visits, Billing; Auth & Users UI pending)
+- Frontend Implementation (Dashboard, Patients, Inventory, Reports implemented; Complex UIs integrated for Patients, Appointments, Visits, Billing; API proxy + CORS configured; Auth & Users UI pending)
 
 ❌ **Missing/Incomplete:**
 - Consents Module

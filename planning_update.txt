@@ -42,3 +42,5 @@ Prescriptions Module completed successfully on Sat Sep  6 13:04:10 IST 2025. All
 [Frontend] Implemented dashboard layout, patients list, inventory list, and reports UI with export on Sat Sep  6 13:04:10 IST 2025. Placeholder pages added for appointments, visits, billing, and users.
 
 [Git] Frontend changes committed locally in `frontend` repo on Sat Sep  6 13:04:10 IST 2025. No remote configured; awaiting GitHub remote to push.
+
+[Integration] Frontend-backend integration completed: Next.js proxy rewrites to /api and NestJS CORS enabled for localhost (3000/3001). Updated API base to /api in frontend. Sat Sep  6 13:12:10 IST 2025.
