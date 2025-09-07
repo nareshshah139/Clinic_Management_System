@@ -15,6 +15,8 @@ export class ApiClient {
     this.token = token;
     if (typeof window !== 'undefined') {
       localStorage.setItem('auth_token', token);
+      // Also set cookie for middleware
+      document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
     }
   }
 
@@ -22,12 +24,14 @@ export class ApiClient {
     this.token = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem('auth_token');
+      // Clear cookie
+      document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
     }
   }
 
   // Auth
-  async login(email: string, password: string) {
-    const res = await this.post<{ access_token: string }>(`/auth/login`, { email, password });
+  async login(phone: string, password: string) {
+    const res = await this.post<{ access_token: string }>(`/auth/login`, { phone, password });
     if ((res as any)?.access_token) {
       this.setToken((res as any).access_token);
     }
@@ -176,7 +180,7 @@ export class ApiClient {
   }
 
   async getSystemStatistics() {
-    return this.get('/reports/statistics');
+    return this.get('/auth/statistics');
   }
 
   async getSystemAlerts() {
@@ -205,4 +209,4 @@ export class ApiClient {
   }
 }
 
-export const apiClient = new ApiClient(); 
+export const apiClient = new ApiClient();

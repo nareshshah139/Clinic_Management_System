@@ -13,7 +13,10 @@
     "start": "concurrently \"npm run start --workspace=frontend\" \"npm run start:prod --workspace=backend\"",
     "test": "npm run test --workspace=frontend && npm run test --workspace=backend",
     "lint": "npm run lint --workspace=frontend && npm run lint --workspace=backend",
-    "clean": "rm -rf frontend/node_modules backend/node_modules node_modules"
+    "clean": "rm -rf frontend/node_modules backend/node_modules node_modules",
+    "dev:minimal": "concurrently \"npm run dev --workspace=frontend\" \"MINIMAL_BOOT=true npm run start:dev --workspace=backend\"",
+    "dev:fe": "npm run dev --workspace=frontend",
+    "dev:be:minimal": "MINIMAL_BOOT=true npm run start:dev --workspace=backend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

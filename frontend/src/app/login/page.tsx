@@ -19,7 +19,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       setError(null);
-      await apiClient.post('/auth/login', { phone, password });
+      await apiClient.login(phone, password);
       const next = search.get('next') || '/dashboard';
       router.replace(next);
     } catch (e: any) {

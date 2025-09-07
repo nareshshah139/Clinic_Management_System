@@ -16,28 +16,40 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 
+const minimalBoot = process.env.MINIMAL_BOOT === 'true';
+
+const commonImports = [
+  ConfigModule.forRoot({
+    isGlobal: true,
+    envFilePath: '.env',
+  }),
+  PrismaModule,
+  PassportModule.register({ defaultStrategy: 'jwt' }),
+  JwtModule.register({
+    secret: process.env.JWT_SECRET,
+    signOptions: { expiresIn: process.env.JWT_EXPIRES_IN },
+  }),
+];
+
+const fullFeatureModules = [
+  AuthModule,
+  PatientsModule,
+  AppointmentsModule,
+  VisitsModule,
+  PrescriptionsModule,
+  BillingModule,
+  InventoryModule,
+  ReportsModule,
+  // ConsentsModule,
+  UsersModule,
+];
+
+const minimalModules = [AuthModule];
+
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath: '.env',
-    }),
-    PrismaModule,
-    PassportModule.register({ defaultStrategy: 'jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN },
-    }),
-    AuthModule,
-    PatientsModule,
-    AppointmentsModule,
-    VisitsModule,
-    PrescriptionsModule,
-    BillingModule,
-    InventoryModule,
-    ReportsModule,
-    // ConsentsModule,
-    UsersModule,
+    ...commonImports,
+    ...(minimalBoot ? minimalModules : fullFeatureModules),
   ],
   controllers: [],
   providers: [

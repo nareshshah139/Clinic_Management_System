@@ -1,14 +1,9 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { AppMinimalModule } from './app.minimal.module';
 import { ExpressAdapter } from '@nestjs/platform-express';
 
 async function bootstrap() {
-  const useMinimal = process.env.MINIMAL_BOOT === 'true';
-  const moduleToBootstrap = useMinimal
-    ? (await import('./app.minimal.module')).AppMinimalModule
-    : (await import('./app.module')).AppModule;
-
-  const app = await NestFactory.create(moduleToBootstrap, new ExpressAdapter());
+  const app = await NestFactory.create(AppMinimalModule, new ExpressAdapter());
   app.enableCors({
     origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
     credentials: true,
@@ -17,4 +12,4 @@ async function bootstrap() {
   });
   await app.listen(process.env.PORT ?? 4000);
 }
-bootstrap();
+bootstrap(); 
