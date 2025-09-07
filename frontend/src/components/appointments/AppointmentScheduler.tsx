@@ -30,9 +30,8 @@ export default function AppointmentScheduler() {
 
   const fetchDoctors = async () => {
     try {
-      // reuse users endpoint filtered by role when available; for now fetch users and filter client-side
-      const res = await apiClient.getUsers({ limit: 100 });
-      const list: User[] = (res.data || []).filter((u: User) => u.role === 'DOCTOR');
+      const res: any = await apiClient.getUsers({ limit: 100 });
+      const list: User[] = (res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR');
       setDoctors(list);
       if (list[0]?.id) setDoctorId(list[0].id);
     } catch (e) {
@@ -44,8 +43,9 @@ export default function AppointmentScheduler() {
   const fetchSlots = async () => {
     try {
       setLoading(true);
-      const res = await apiClient.getAvailableSlots({ doctorId, date });
-      setSlots((res.data || []).map((s: any) => ({ time: s.time || s })));
+      const res: any = await apiClient.getAvailableSlots({ doctorId, date });
+      const available = (res.availableSlots || res.data || []) as string[];
+      setSlots(available.map((s: any) => ({ time: typeof s === 'string' ? s : (s.time || '') })).filter((s: any) => s.time));
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch slots', e);
@@ -56,14 +56,19 @@ export default function AppointmentScheduler() {
 
   const searchPatients = async (q: string) => {
     setPatientSearch(q);
-    const res = await apiClient.getPatients({ search: q, limit: 10 });
-    setPatients(res.data || []);
+    const res: any = await apiClient.getPatients({ search: q, limit: 10 });
+    setPatients((res.data || res.patients || []).map((p: any) => ({
+      ...p,
+      firstName: p.firstName || p.name?.split(' ')[0] || '',
+      lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+    })));
   };
 
   const book = async (patientId: string, time: string) => {
     try {
       setLoading(true);
-      await apiClient.createAppointment({ doctorId, patientId, scheduledAt: `${date}T${time}:00Z`, duration: 15, visitType: 'CONSULTATION' });
+      const slot = time;
+      await apiClient.createAppointment({ doctorId, patientId, date, slot, visitType: 'OPD' });
       await fetchSlots();
       alert('Appointment booked');
     } catch (e) {

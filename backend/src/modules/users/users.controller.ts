@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
@@ -24,7 +25,7 @@ export class UsersController {
   }
 
   @Get()
-  findAllUsers(@Query() query: QueryUsersDto, @Request() req: AuthenticatedRequest) {
+  findAllUsers(@Query(new ValidationPipe({ transform: true })) query: QueryUsersDto, @Request() req: AuthenticatedRequest) {
     return this.usersService.findAllUsers(query, req.user.branchId);
   }
 
@@ -95,7 +96,7 @@ export class UsersController {
   }
 
   @Get('branches')
-  findAllBranches(@Query() query: QueryBranchesDto) {
+  findAllBranches(@Query(new ValidationPipe({ transform: true })) query: QueryBranchesDto) {
     return this.usersService.findAllBranches(query);
   }
 
@@ -121,7 +122,7 @@ export class UsersController {
   }
 
   @Get('permissions')
-  findAllPermissions(@Query() query: QueryPermissionsDto) {
+  findAllPermissions(@Query(new ValidationPipe({ transform: true })) query: QueryPermissionsDto) {
     return this.usersService.findAllPermissions(query);
   }
 
@@ -147,7 +148,7 @@ export class UsersController {
   }
 
   @Get('roles')
-  findAllRoles(@Query() query: QueryRolesDto) {
+  findAllRoles(@Query(new ValidationPipe({ transform: true })) query: QueryRolesDto) {
     return this.usersService.findAllRoles(query);
   }
 

@@ -3,7 +3,6 @@ import {
   IsString,
   IsEnum,
   IsDateString,
-  IsUUID,
   IsInt,
   Min,
   Max,
@@ -13,15 +12,15 @@ import { AppointmentStatus, VisitType } from '@prisma/client';
 
 export class QueryAppointmentsDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   doctorId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   patientId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   roomId?: string;
 
   @IsOptional()
@@ -71,11 +70,11 @@ export class QueryAppointmentsDto {
 }
 
 export class AvailableSlotsDto {
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   roomId?: string;
 
   @IsDateString()

@@ -43,9 +43,9 @@ export class AppointmentsService {
     }
 
     // Check for scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId, date, slot, branchId);
+    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId ?? null, date, slot, branchId);
     if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(doctorId, roomId, date, slot, branchId);
+      const suggestions = await this.getAlternativeSlots(doctorId, roomId ?? null, date, slot, branchId);
       throw new ConflictException({
         message: 'Scheduling conflict detected',
         conflicts,
@@ -75,7 +75,7 @@ export class AppointmentsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         room: {
           select: { id: true, name: true, type: true },
@@ -166,7 +166,7 @@ export class AppointmentsService {
             select: { id: true, name: true, phone: true, gender: true },
           },
           doctor: {
-            select: { id: true, name: true },
+            select: { id: true, firstName: true, lastName: true },
           },
           room: {
             select: { id: true, name: true, type: true },
@@ -208,7 +208,7 @@ export class AppointmentsService {
           },
         },
         doctor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
         room: {
           select: { id: true, name: true, type: true, capacity: true },
@@ -251,7 +251,7 @@ export class AppointmentsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         room: {
           select: { id: true, name: true, type: true },
@@ -278,7 +278,7 @@ export class AppointmentsService {
     // Check for new scheduling conflicts
     const conflicts = await this.checkSchedulingConflicts(
       appointment.doctorId,
-      rescheduleDto.roomId || appointment.roomId,
+      (rescheduleDto.roomId ?? appointment.roomId) ?? null,
       rescheduleDto.date,
       rescheduleDto.slot,
       branchId,
@@ -288,7 +288,7 @@ export class AppointmentsService {
     if (conflicts.length > 0) {
       const suggestions = await this.getAlternativeSlots(
         appointment.doctorId,
-        rescheduleDto.roomId || appointment.roomId,
+        (rescheduleDto.roomId ?? appointment.roomId) ?? null,
         rescheduleDto.date,
         rescheduleDto.slot,
         branchId,
@@ -306,7 +306,7 @@ export class AppointmentsService {
       data: {
         date: new Date(rescheduleDto.date),
         slot: rescheduleDto.slot,
-        roomId: rescheduleDto.roomId || appointment.roomId,
+        roomId: (rescheduleDto.roomId ?? appointment.roomId) ?? undefined,
         notes: rescheduleDto.notes || appointment.notes,
         status: AppointmentStatus.SCHEDULED, // Reset to scheduled
       },
@@ -315,7 +315,7 @@ export class AppointmentsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         room: {
           select: { id: true, name: true, type: true },
@@ -481,7 +481,7 @@ export class AppointmentsService {
 
     return {
       doctorId,
-      doctorName: doctor.name,
+      doctorName: `${doctor.firstName} ${doctor.lastName}`.trim(),
       date,
       appointments,
     };
@@ -510,7 +510,7 @@ export class AppointmentsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
       },
       orderBy: {

@@ -3,20 +3,19 @@ import {
   IsOptional,
   IsDateString,
   IsEnum,
-  IsUUID,
   IsObject,
 } from 'class-validator';
 import { VisitType } from '@prisma/client';
 
 export class CreateAppointmentDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   roomId?: string;
 
   @IsDateString()
@@ -50,7 +49,7 @@ export class RescheduleAppointmentDto {
   slot: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   roomId?: string;
 
   @IsOptional()

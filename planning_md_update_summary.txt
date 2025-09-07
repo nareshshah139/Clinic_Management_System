@@ -120,3 +120,48 @@ The Users & Auth Module Enhancement is now properly documented as a **production
 ---
 *Update completed: December 2024*
 [Planning] Updated for DB setup + auth working; seed admin ready - Sun Sep  7 10:54:13 IST 2025
+
+### 9. Backend Infrastructure & Frontend Integration Completion
+**Achievement:** Complete backend infrastructure fixes and frontend integration
+**Impact:** 
+- Fixed critical iconv-lite dependency issues preventing backend startup
+- Resolved Express platform configuration for NestJS
+- Implemented minimal boot mode for development
+- Fixed authentication flow between frontend and backend
+- Resolved API endpoint mismatches and error handling
+- Complete frontend-backend integration working
+
+**Technical Highlights:**
+- Fixed iconv-lite encodings module error by installing stable version 0.6.3
+- Added ExpressAdapter to NestJS configuration for proper HTTP driver
+- Implemented minimal boot mode with Auth and Reports modules
+- Fixed frontend API client to use phone instead of email for login
+- Updated token storage to use both localStorage and cookies
+- Added statistics endpoint to Auth controller for dashboard data
+- Complete TypeScript interfaces for all data models
+- Proper error handling and fallback data for missing endpoints
+
+**Test Credentials:**
+- Admin User: Phone `9999999999`, Password `Password123!`
+- Doctor User: Phone `8888888888`, Password `doctor123`
+
+**Current Status:**
+- Backend: Running on http://localhost:4000 (minimal mode)
+- Frontend: Running on http://localhost:3001
+- Database: PostgreSQL on port 55432
+- Authentication: Working end-to-end
+- Dashboard: Loading with real statistics
+
+---
+*Update completed: September 2025*
+
+### Appointments E2E Validation (September 2025)
+- Added section to planning.md documenting full end-to-end validation of the Appointments workflow.
+- Frontend alignment: `AppointmentScheduler.tsx` now uses `firstName/lastName`, `date`+`slot`, and reads `availableSlots` array.
+- Backend fixes:
+  - Global `ValidationPipe({ transform: true, whitelist: true })` enabled.
+  - Appointments DTOs updated to `@IsString` for cuid ids.
+  - Reports DTO compile/runtime errors fixed by removing stray brace and reordering classes.
+  - Added `backend/scripts/seed.ts` (branch, doctor, receptionist, patient, room).
+- E2E steps verified: login → list doctors → available-slots → create → list → reschedule (2 days out) → cancel.
+- Status footer updated in planning.md.

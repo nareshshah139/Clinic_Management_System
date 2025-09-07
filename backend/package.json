@@ -10,6 +10,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
+    "start:minimal": "node -r ts-node/register src/main.minimal.ts",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "start:dev-no-typecheck": "TS_NODE_TRANSPILE_ONLY=1 NODE_OPTIONS=--max_old_space_size=2048 nest start --watch",

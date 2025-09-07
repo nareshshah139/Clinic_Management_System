@@ -730,4 +730,17 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Performance optimizations and security measures
 
 ---
-*Last updated: September 2025 - Backend infrastructure fixed, frontend integration complete, authentication working end-to-end. System ready for external integrations and production deployment.*
+
+### September 2025: Appointments End-to-End Workflow Validation
+**Achievement:** Completed full E2E validation of the Appointments workflow across backend and frontend.
+**Impact:**
+- Frontend `AppointmentScheduler.tsx` aligned with backend responses; now uses `firstName`/`lastName`, `date`+`slot`, and `availableSlots` arrays of strings.
+- Enabled global `ValidationPipe({ transform: true, whitelist: true })` so `limit`/`page` are coerced to numbers; users listing works reliably.
+- Updated Appointments DTOs to accept string IDs (cuid) instead of UUIDs for `doctorId`, `patientId`, and `roomId`.
+- Fixed `reports.dto.ts` compilation issues and startup errors.
+- Added `backend/scripts/seed.ts` to create seed branch, doctor, receptionist, patient, and room.
+
+**Tested (manual E2E via HTTP):**
+- JWT login (receptionist) -> list doctors -> `GET /appointments/available-slots` -> `POST /appointments` -> `GET /appointments` -> `POST /appointments/:id/reschedule` (2 days out to respect 24h rule) -> `DELETE /appointments/:id`.
+
+*Last updated: September 2025 - Appointments E2E validated; frontend scheduler aligned; global validation enabled; DTOs updated; reports DTO fixed; seed script added.*

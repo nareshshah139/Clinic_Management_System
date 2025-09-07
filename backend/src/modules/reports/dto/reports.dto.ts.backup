@@ -695,32 +695,6 @@ export class InventoryReportQueryDto extends BaseReportQueryDto {
   includeTransactionHistory?: boolean;
 }
 
-export class TransactionSummaryDto {
-  @ApiProperty({ description: 'Total transactions' })
-  totalTransactions: number;
-
-  @ApiProperty({ description: 'Purchase transactions' })
-  purchaseTransactions: number;
-
-  @ApiProperty({ description: 'Sale transactions' })
-  saleTransactions: number;
-
-  @ApiProperty({ description: 'Return transactions' })
-  returnTransactions: number;
-
-  @ApiProperty({ description: 'Adjustment transactions' })
-  adjustmentTransactions: number;
-
-  @ApiProperty({ description: 'Total purchase value' })
-  totalPurchaseValue: number;
-
-  @ApiProperty({ description: 'Total sale value' })
-  totalSaleValue: number;
-
-  @ApiProperty({ description: 'Profit margin percentage' })
-  profitMargin: number;
-}
-
 export class InventoryReportResponseDto {
   @ApiProperty({ description: 'Total inventory items' })
   totalItems: number;
@@ -861,6 +835,31 @@ export class TopSellingItemDto {
   averageSellingPrice: number;
 }
 
+export class TransactionSummaryDto {
+  @ApiProperty({ description: 'Total transactions' })
+  totalTransactions: number;
+
+  @ApiProperty({ description: 'Purchase transactions' })
+  purchaseTransactions: number;
+
+  @ApiProperty({ description: 'Sale transactions' })
+  saleTransactions: number;
+
+  @ApiProperty({ description: 'Return transactions' })
+  returnTransactions: number;
+
+  @ApiProperty({ description: 'Adjustment transactions' })
+  adjustmentTransactions: number;
+
+  @ApiProperty({ description: 'Total purchase value' })
+  totalPurchaseValue: number;
+
+  @ApiProperty({ description: 'Total sale value' })
+  totalSaleValue: number;
+
+  @ApiProperty({ description: 'Profit margin percentage' })
+  profitMargin: number;
+}
 
 // Payment Report DTOs
 export class PaymentReportQueryDto extends BaseReportQueryDto {
@@ -883,54 +882,6 @@ export class PaymentReportQueryDto extends BaseReportQueryDto {
   @IsOptional()
   @IsBoolean()
   includeRefunds?: boolean;
-}
-
-export class ReconciliationSummaryDto {
-  @ApiProperty({ description: 'Total transactions to reconcile' })
-  totalTransactions: number;
-
-  @ApiProperty({ description: 'Reconciled transactions' })
-  reconciledTransactions: number;
-
-  @ApiProperty({ description: 'Pending reconciliation' })
-  pendingReconciliation: number;
-
-  @ApiProperty({ description: 'Reconciliation rate percentage' })
-  reconciliationRate: number;
-
-  @ApiProperty({ description: 'Discrepancy amount' })
-  discrepancyAmount: number;
-}
-
-export class RefundReasonDto {
-  @ApiProperty({ description: 'Refund reason' })
-  reason: string;
-
-  @ApiProperty({ description: 'Number of refunds' })
-  count: number;
-
-  @ApiProperty({ description: 'Total amount' })
-  amount: number;
-
-  @ApiProperty({ description: 'Percentage of total refunds' })
-  percentage: number;
-}
-
-export class RefundSummaryDto {
-  @ApiProperty({ description: 'Total refunds processed' })
-  totalRefunds: number;
-
-  @ApiProperty({ description: 'Total refund amount' })
-  totalRefundAmount: number;
-
-  @ApiProperty({ description: 'Refund rate percentage' })
-  refundRate: number;
-
-  @ApiProperty({ description: 'Average refund amount' })
-  averageRefundAmount: number;
-
-  @ApiProperty({ description: 'Refund reasons breakdown' })
-  refundReasons: RefundReasonDto[];
 }
 
 export class PaymentReportResponseDto {
@@ -1023,6 +974,54 @@ export class DailyPaymentTrendDto {
 
   @ApiProperty({ description: 'Failed payments' })
   failedPayments: number;
+}
+
+export class ReconciliationSummaryDto {
+  @ApiProperty({ description: 'Total transactions to reconcile' })
+  totalTransactions: number;
+
+  @ApiProperty({ description: 'Reconciled transactions' })
+  reconciledTransactions: number;
+
+  @ApiProperty({ description: 'Pending reconciliation' })
+  pendingReconciliation: number;
+
+  @ApiProperty({ description: 'Reconciliation rate percentage' })
+  reconciliationRate: number;
+
+  @ApiProperty({ description: 'Discrepancy amount' })
+  discrepancyAmount: number;
+}
+
+export class RefundSummaryDto {
+  @ApiProperty({ description: 'Total refunds processed' })
+  totalRefunds: number;
+
+  @ApiProperty({ description: 'Total refund amount' })
+  totalRefundAmount: number;
+
+  @ApiProperty({ description: 'Refund rate percentage' })
+  refundRate: number;
+
+  @ApiProperty({ description: 'Average refund amount' })
+  averageRefundAmount: number;
+
+  @ApiProperty({ description: 'Refund reasons breakdown' })
+  refundReasons: RefundReasonDto[];
+}
+
+export class RefundReasonDto {
+  @ApiProperty({ description: 'Refund reason' })
+  reason: string;
+
+  @ApiProperty({ description: 'Number of refunds' })
+  count: number;
+
+  @ApiProperty({ description: 'Total amount' })
+  amount: number;
+
+  @ApiProperty({ description: 'Percentage of total refunds' })
+  percentage: number;
 }
 
 // Dashboard DTOs
