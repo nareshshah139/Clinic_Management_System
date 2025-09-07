@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,8 @@ import { apiClient } from '@/lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const search = useSearchParams();
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +19,9 @@ export default function LoginPage() {
     try {
       setLoading(true);
       setError(null);
-      await apiClient.login(email, password);
-      router.replace('/dashboard');
+      await apiClient.post('/auth/login', { phone, password });
+      const next = search.get('next') || '/dashboard';
+      router.replace(next);
     } catch (e: any) {
       setError(e?.message || 'Login failed');
     } finally {
@@ -35,8 +37,8 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <label className="text-sm text-gray-700">Email</label>
-            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            <label className="text-sm text-gray-700">Phone</label>
+            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit phone" />
           </div>
           <div>
             <label className="text-sm text-gray-700">Password</label>
@@ -46,6 +48,7 @@ export default function LoginPage() {
           <Button className="w-full" onClick={submit} disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
+          <p className="text-xs text-gray-500 text-center">Use your registered phone and password.</p>
         </CardContent>
       </Card>
     </div>

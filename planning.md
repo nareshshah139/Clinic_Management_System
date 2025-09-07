@@ -518,7 +518,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - ✅ Branch-level multi-tenancy
 
 ### Pending Targets
-- ❌ Authentication flow (login/logout) and protected routes
+- ✅ Authentication flow (login/logout) and protected routes (implemented)
 - ❌ Appointment scheduler, visit documentation, billing UI via 21st Dev MCP
 - ❌ External integrations (payment, SMS, email)
 - ❌ Production deployment and monitoring
@@ -727,4 +727,4 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 **Next Priority:** Reports Module implementation to complete the core backend functionality
 
 ---
-*Last updated: September 2025 - Backend modules completed; Frontend complex UIs integrated (Patients, Appointments, Visits, Billing, Auth, Users). Proxy/CORS configured.*
+*Last updated: September 2025 - Backend modules completed; Frontend complex UIs integrated (Patients, Appointments, Visits, Billing, Auth, Users). Proxy/CORS configured. Postgres running via Docker and seed admin created for login.*
