@@ -46,3 +46,4 @@ Prescriptions Module completed successfully on Sat Sep  6 13:04:10 IST 2025. All
 [Integration] Frontend-backend integration completed: Next.js proxy rewrites to /api and NestJS CORS enabled for localhost (3000/3001). Updated API base to /api in frontend. Sat Sep  6 13:12:10 IST 2025.
 [Auth+Users] Frontend auth (login, middleware) and Users CRUD/RBAC UI; planning updated - Sat Sep  6 22:21:00 IST 2025
 [DB] Postgres up via Docker Compose (cms/cms123@localhost:5432/cms); backend .env set; seed branch+admin created; login: 9999999999 / Password123! - Sun Sep  7 10:38:55 IST 2025
+[Auth] Fixed proxy to 4000 + credentials include; started backend dev - Sun Sep  7 10:59:04 IST 2025
