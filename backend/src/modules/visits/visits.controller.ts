@@ -14,6 +14,7 @@ import { VisitsService } from './visits.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 interface AuthenticatedRequest {
   user: {
@@ -23,8 +24,10 @@ interface AuthenticatedRequest {
   };
 }
 
+@ApiTags('Visits')
 @Controller('visits')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class VisitsController {
   constructor(private readonly visitsService: VisitsService) {}
 

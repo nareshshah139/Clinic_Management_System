@@ -19,30 +19,36 @@ export default function MedicalVisitForm({ patientId, doctorId }: Props) {
   const [assessment, setAssessment] = useState('');
   const [plan, setPlan] = useState('');
   const [vitals, setVitals] = useState({
-    bpS: '', bpD: '', hr: '', temp: '', weight: '', height: '', spo2: ''
+    bpS: '', bpD: '', hr: '', temp: '', weight: '', height: '', spo2: '', rr: ''
   });
   const [saving, setSaving] = useState(false);
+
+  const buildPayload = () => {
+    const payload: any = {
+      patientId,
+      doctorId,
+      complaints: subjective ? [{ complaint: subjective }] : [{ complaint: 'General consultation' }],
+      examination: objective ? { generalAppearance: objective } : undefined,
+      diagnosis: assessment ? [{ diagnosis: assessment, icd10Code: 'R69', type: 'Primary' }] : undefined,
+      treatmentPlan: plan ? { notes: plan } : undefined,
+      vitals: {
+        systolicBP: vitals.bpS ? Number(vitals.bpS) : undefined,
+        diastolicBP: vitals.bpD ? Number(vitals.bpD) : undefined,
+        heartRate: vitals.hr ? Number(vitals.hr) : undefined,
+        temperature: vitals.temp ? Number(vitals.temp) : undefined,
+        weight: vitals.weight ? Number(vitals.weight) : undefined,
+        height: vitals.height ? Number(vitals.height) : undefined,
+        oxygenSaturation: vitals.spo2 ? Number(vitals.spo2) : undefined,
+        respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
+      },
+    };
+    return payload;
+  };
 
   const save = async (complete = false) => {
     try {
       setSaving(true);
-      const payload: any = {
-        patientId,
-        doctorId,
-        chiefComplaint: subjective,
-        physicalExamination: objective,
-        diagnosis: [{ code: 'R69', description: 'Clinical findings', type: 'PRIMARY' }],
-        treatmentPlan: plan,
-        vitals: {
-          bloodPressureSystolic: Number(vitals.bpS) || undefined,
-          bloodPressureDiastolic: Number(vitals.bpD) || undefined,
-          heartRate: Number(vitals.hr) || undefined,
-          temperature: Number(vitals.temp) || undefined,
-          weight: Number(vitals.weight) || undefined,
-          height: Number(vitals.height) || undefined,
-          oxygenSaturation: Number(vitals.spo2) || undefined,
-        },
-      };
+      const payload = buildPayload();
       const visit = await apiClient.createVisit(payload);
       if (complete) {
         await apiClient.completeVisit(visit.id, {});
@@ -92,6 +98,7 @@ export default function MedicalVisitForm({ patientId, doctorId }: Props) {
               <Input placeholder="Weight" value={vitals.weight} onChange={(e) => setVitals({ ...vitals, weight: e.target.value })} />
               <Input placeholder="Height" value={vitals.height} onChange={(e) => setVitals({ ...vitals, height: e.target.value })} />
               <Input placeholder="SpO2" value={vitals.spo2} onChange={(e) => setVitals({ ...vitals, spo2: e.target.value })} />
+              <Input placeholder="Resp. Rate" value={vitals.rr} onChange={(e) => setVitals({ ...vitals, rr: e.target.value })} />
             </div>
           </TabsContent>
         </Tabs>

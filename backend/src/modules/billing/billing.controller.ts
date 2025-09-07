@@ -26,6 +26,7 @@ import {
   OutstandingInvoicesDto,
 } from './dto/query-billing.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 interface AuthenticatedRequest {
   user: {
@@ -35,8 +36,10 @@ interface AuthenticatedRequest {
   };
 }
 
+@ApiTags('Billing')
 @Controller('billing')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class BillingController {
   constructor(private readonly billingService: BillingService) {}
 

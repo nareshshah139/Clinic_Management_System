@@ -11,15 +11,15 @@ import { Type } from 'class-transformer';
 
 export class QueryVisitsDto {
   @IsOptional()
-  @IsUUID()
+  @IsString()
   patientId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   doctorId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   appointmentId?: string;
 
   @IsOptional()
@@ -69,7 +69,7 @@ export class QueryVisitsDto {
 }
 
 export class PatientVisitHistoryDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
   @IsOptional()
@@ -89,7 +89,7 @@ export class PatientVisitHistoryDto {
 }
 
 export class DoctorVisitsDto {
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsOptional()

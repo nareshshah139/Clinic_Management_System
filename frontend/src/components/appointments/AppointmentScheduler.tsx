@@ -19,6 +19,8 @@ export default function AppointmentScheduler() {
   const [doctors, setDoctors] = useState<User[]>([]);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [conflictSuggestions, setConflictSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     void fetchDoctors();
@@ -67,11 +69,27 @@ export default function AppointmentScheduler() {
   const book = async (patientId: string, time: string) => {
     try {
       setLoading(true);
+      setConflictMessage(null);
+      setConflictSuggestions([]);
       const slot = time;
       await apiClient.createAppointment({ doctorId, patientId, date, slot, visitType: 'OPD' });
       await fetchSlots();
       alert('Appointment booked');
-    } catch (e) {
+    } catch (e: any) {
+      const status = e?.status;
+      const body = e?.body || {};
+      if (status === 409) {
+        const suggestions = Array.isArray(body?.suggestions) ? body.suggestions : [];
+        const msg = body?.message || 'Scheduling conflict detected';
+        if (suggestions.length > 0) {
+          setConflictMessage(msg);
+          setConflictSuggestions(suggestions);
+          // eslint-disable-next-line no-alert
+          alert(`${msg}. Suggested alternatives: ${suggestions.join(', ')}`);
+          setLoading(false);
+          return;
+        }
+      }
       // eslint-disable-next-line no-alert
       alert('Failed to book appointment');
     } finally {
@@ -114,6 +132,15 @@ export default function AppointmentScheduler() {
             )}
           </div>
         </div>
+
+        {!!conflictMessage && (
+          <div className="p-3 border rounded text-sm text-red-700 bg-red-50">
+            {conflictMessage}
+            {conflictSuggestions.length > 0 && (
+              <div className="mt-2">Try: {conflictSuggestions.join(', ')}</div>
+            )}
+          </div>
+        )}
 
         <div>
           <p className="text-sm text-gray-700 mb-2">Available Slots</p>

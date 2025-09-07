@@ -165,3 +165,8 @@ The Users & Auth Module Enhancement is now properly documented as a **production
   - Added `backend/scripts/seed.ts` (branch, doctor, receptionist, patient, room).
 - E2E steps verified: login → list doctors → available-slots → create → list → reschedule (2 days out) → cancel.
 - Status footer updated in planning.md.
+
+September 2025 - Planning.md updated with Appointments Conflict Handling & UI Alerts section.
+- Added details on 409 conflict behavior, alternative slot suggestions, enriched API errors
+- Listed new backend unit/integration tests and frontend RTL test
+- Included verification commands for backend and frontend

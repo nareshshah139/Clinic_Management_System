@@ -24,6 +24,7 @@ import {
   AvailableSlotsDto,
 } from './dto/query-appointment.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 interface AuthenticatedRequest {
   user: {
@@ -33,8 +34,10 @@ interface AuthenticatedRequest {
   };
 }
 
+@ApiTags('Appointments')
 @Controller('appointments')
 @UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 

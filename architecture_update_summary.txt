@@ -1,0 +1,6 @@
+September 2025 - API Docs and Architecture Diagram Update
+
+- Added Swagger/OpenAPI setup in `backend/src/main.ts` and `backend/src/main.minimal.ts` (available at /docs)
+- Annotated controllers with tags and bearer auth for: Appointments, Visits, Billing, Reports (existing), and prepared others for consistency
+- Generated a comprehensive system architecture Mermaid diagram (frontend, backend modules, shared services, infra)
+- No deletions to planning.md; future pass will append an achievement entry referencing the docs and diagram 

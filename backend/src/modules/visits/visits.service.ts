@@ -25,6 +25,11 @@ export class VisitsService {
       notes,
     } = createVisitDto;
 
+    // Validate complaints are provided first so we return 400 before 404s
+    if (!complaints || complaints.length === 0) {
+      throw new BadRequestException('At least one complaint is required');
+    }
+
     // Validate patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
       where: { id: patientId, branchId },
@@ -69,6 +74,15 @@ export class VisitsService {
       throw new BadRequestException('At least one complaint is required');
     }
 
+    // Merge top-level notes into plan JSON to preserve the field semantically
+    const mergedPlanObject = (() => {
+      const basePlan = treatmentPlan ? { ...treatmentPlan } : undefined;
+      if (notes) {
+        return { ...(basePlan ?? {}), notes };
+      }
+      return basePlan;
+    })();
+
     // Create visit
     const visit = await this.prisma.visit.create({
       data: {
@@ -80,11 +94,9 @@ export class VisitsService {
         history: history ? JSON.stringify(history) : null,
         exam: examination ? JSON.stringify(examination) : null,
         diagnosis: diagnosis ? JSON.stringify(diagnosis) : null,
-        plan: treatmentPlan ? JSON.stringify(treatmentPlan) : null,
+        plan: mergedPlanObject ? JSON.stringify(mergedPlanObject) : null,
         attachments: attachments ? JSON.stringify(attachments) : null,
         scribeJson: scribeJson ? JSON.stringify(scribeJson) : null,
-        branchId,
-        notes,
       },
       include: {
         patient: {
@@ -98,7 +110,7 @@ export class VisitsService {
           },
         },
         doctor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
         appointment: {
           select: { 
@@ -120,7 +132,18 @@ export class VisitsService {
       });
     }
 
-    return visit;
+    // Preserve doctor.name and top-level notes in response for compatibility
+    const parsedPlanAfterCreate = visit.plan ? JSON.parse(visit.plan as unknown as string) : null;
+    return {
+      ...visit,
+      doctor: visit.doctor
+        ? {
+            ...visit.doctor,
+            name: `${visit.doctor.firstName} ${visit.doctor.lastName}`.trim(),
+          }
+        : visit.doctor,
+      notes: parsedPlanAfterCreate?.notes ?? null,
+    };
   }
 
   async findAll(query: QueryVisitsDto, branchId: string) {
@@ -140,10 +163,14 @@ export class VisitsService {
       sortOrder = 'desc',
     } = query;
 
-    const skip = (page - 1) * limit;
+    const pageNum = Number(page) || 1;
+    const limitNum = Number(limit) || 20;
+    const skip = (pageNum - 1) * limitNum;
 
     const where: any = {
-      branchId,
+      patient: {
+        branchId,
+      },
     };
 
     // Apply filters
@@ -166,7 +193,7 @@ export class VisitsService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    // Search filter
+    // Search filter (search notes inside plan JSON to preserve notes feature)
     if (search) {
       where.OR = [
         {
@@ -176,7 +203,7 @@ export class VisitsService {
           },
         },
         {
-          notes: {
+          plan: {
             contains: search,
             mode: 'insensitive',
           },
@@ -216,14 +243,14 @@ export class VisitsService {
             select: { id: true, name: true, phone: true, gender: true },
           },
           doctor: {
-            select: { id: true, name: true },
+            select: { id: true, firstName: true, lastName: true },
           },
           appointment: {
             select: { id: true, date: true, slot: true, tokenNumber: true },
           },
         },
         skip,
-        take: limit,
+        take: limitNum,
         orderBy: {
           [sortBy]: sortOrder,
         },
@@ -231,20 +258,36 @@ export class VisitsService {
       this.prisma.visit.count({ where }),
     ]);
 
+    // Preserve doctor.name in response for compatibility
+    const visitsWithDoctorName = visits.map(v => ({
+      ...v,
+      doctor: v.doctor
+        ? {
+            ...v.doctor,
+            name: `${v.doctor.firstName} ${v.doctor.lastName}`.trim(),
+          }
+        : v.doctor,
+    }));
+
     return {
-      visits,
+      visits: visitsWithDoctorName,
       pagination: {
         total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum),
       },
     };
   }
 
   async findOne(id: string, branchId: string) {
     const visit = await this.prisma.visit.findFirst({
-      where: { id, branchId },
+      where: { 
+        id,
+        patient: {
+          branchId,
+        },
+      },
       include: {
         patient: {
           select: { 
@@ -259,7 +302,7 @@ export class VisitsService {
           },
         },
         doctor: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
         appointment: {
           select: { 
@@ -329,6 +372,20 @@ export class VisitsService {
       plan: visit.plan ? JSON.parse(visit.plan as string) : null,
       attachments: visit.attachments ? JSON.parse(visit.attachments as string) : [],
       scribeJson: visit.scribeJson ? JSON.parse(visit.scribeJson as string) : null,
+      doctor: visit.doctor
+        ? {
+            ...visit.doctor,
+            name: `${(visit.doctor as any).firstName} ${(visit.doctor as any).lastName}`.trim(),
+          }
+        : visit.doctor,
+      notes: (() => {
+        try {
+          const p = visit.plan ? JSON.parse(visit.plan as string) : null;
+          return p?.notes ?? p?.finalNotes ?? null;
+        } catch {
+          return null;
+        }
+      })(),
     };
 
     return parsedVisit;
@@ -360,8 +417,14 @@ export class VisitsService {
       updateData.diagnosis = JSON.stringify(updateVisitDto.diagnosis);
     }
 
-    if (updateVisitDto.treatmentPlan) {
-      updateData.plan = JSON.stringify(updateVisitDto.treatmentPlan);
+    if (updateVisitDto.treatmentPlan || updateVisitDto.notes !== undefined) {
+      const currentPlan = visit.plan || {};
+      const updatedPlan = {
+        ...currentPlan,
+        ...(updateVisitDto.treatmentPlan ? { ...updateVisitDto.treatmentPlan } : {}),
+        ...(updateVisitDto.notes !== undefined ? { notes: updateVisitDto.notes } : {}),
+      };
+      updateData.plan = JSON.stringify(updatedPlan);
     }
 
     if (updateVisitDto.attachments) {
@@ -372,10 +435,6 @@ export class VisitsService {
       updateData.scribeJson = JSON.stringify(updateVisitDto.scribeJson);
     }
 
-    if (updateVisitDto.notes !== undefined) {
-      updateData.notes = updateVisitDto.notes;
-    }
-
     const updatedVisit = await this.prisma.visit.update({
       where: { id },
       data: updateData,
@@ -384,7 +443,7 @@ export class VisitsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         appointment: {
           select: { id: true, date: true, slot: true },
@@ -392,7 +451,23 @@ export class VisitsService {
       },
     });
 
-    return updatedVisit;
+    return {
+      ...updatedVisit,
+      doctor: updatedVisit.doctor
+        ? {
+            ...updatedVisit.doctor,
+            name: `${(updatedVisit.doctor as any).firstName} ${(updatedVisit.doctor as any).lastName}`.trim(),
+          }
+        : updatedVisit.doctor,
+      notes: (() => {
+        try {
+          const p = updatedVisit.plan ? JSON.parse(updatedVisit.plan as unknown as string) : null;
+          return p?.notes ?? p?.finalNotes ?? null;
+        } catch {
+          return null;
+        }
+      })(),
+    };
   }
 
   async complete(id: string, completeVisitDto: CompleteVisitDto, branchId: string) {
@@ -401,22 +476,18 @@ export class VisitsService {
     // Update visit with completion data
     const updateData: any = {};
 
-    if (completeVisitDto.finalNotes) {
-      updateData.notes = completeVisitDto.finalNotes;
+    if (completeVisitDto.finalNotes || completeVisitDto.followUpInstructions) {
+      const currentPlan = visit.plan || {};
+      const updatedPlan = {
+        ...currentPlan,
+        ...(completeVisitDto.finalNotes ? { finalNotes: completeVisitDto.finalNotes } : {}),
+        ...(completeVisitDto.followUpInstructions ? { followUpInstructions: completeVisitDto.followUpInstructions } : {}),
+      };
+      updateData.plan = JSON.stringify(updatedPlan);
     }
 
     if (completeVisitDto.followUpDate) {
       updateData.followUp = new Date(completeVisitDto.followUpDate);
-    }
-
-    if (completeVisitDto.followUpInstructions) {
-      // Update treatment plan with follow-up instructions
-      const currentPlan = visit.plan || {};
-      const updatedPlan = {
-        ...currentPlan,
-        followUpInstructions: completeVisitDto.followUpInstructions,
-      };
-      updateData.plan = JSON.stringify(updatedPlan);
     }
 
     const completedVisit = await this.prisma.visit.update({
@@ -427,7 +498,7 @@ export class VisitsService {
           select: { id: true, name: true, phone: true },
         },
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         appointment: {
           select: { id: true, date: true, slot: true },
@@ -443,7 +514,23 @@ export class VisitsService {
       });
     }
 
-    return completedVisit;
+    return {
+      ...completedVisit,
+      doctor: completedVisit.doctor
+        ? {
+            ...completedVisit.doctor,
+            name: `${(completedVisit.doctor as any).firstName} ${(completedVisit.doctor as any).lastName}`.trim(),
+          }
+        : completedVisit.doctor,
+      notes: completeVisitDto.finalNotes ?? (() => {
+        try {
+          const p = completedVisit.plan ? JSON.parse(completedVisit.plan as unknown as string) : null;
+          return p?.finalNotes ?? p?.notes ?? null;
+        } catch {
+          return null;
+        }
+      })(),
+    };
   }
 
   async remove(id: string, branchId: string) {
@@ -458,11 +545,18 @@ export class VisitsService {
       throw new BadRequestException('Cannot delete visit with associated prescription');
     }
 
-    // Soft delete by updating notes
+    // Soft delete by updating plan to mark deleted (preserving notes semantics)
+    const currentPlan = visit.plan || {};
+    const updatedPlan = {
+      ...currentPlan,
+      deleted: true,
+      deletedAt: new Date().toISOString(),
+    };
+
     await this.prisma.visit.update({
       where: { id },
       data: {
-        notes: `[DELETED] ${visit.notes || ''}`,
+        plan: JSON.stringify(updatedPlan),
       },
     });
 
@@ -482,7 +576,9 @@ export class VisitsService {
 
     const where: any = {
       patientId,
-      branchId,
+      patient: {
+        branchId,
+      },
     };
 
     if (startDate || endDate) {
@@ -495,7 +591,7 @@ export class VisitsService {
       where,
       include: {
         doctor: {
-          select: { id: true, name: true },
+          select: { id: true, firstName: true, lastName: true },
         },
         appointment: {
           select: { id: true, date: true, slot: true, tokenNumber: true },
@@ -518,6 +614,12 @@ export class VisitsService {
         vitals: visit.vitals ? JSON.parse(visit.vitals as string) : null,
         complaints: visit.complaints ? JSON.parse(visit.complaints as string) : [],
         diagnosis: visit.diagnosis ? JSON.parse(visit.diagnosis as string) : [],
+        doctor: visit.doctor
+          ? {
+              ...visit.doctor,
+              name: `${(visit.doctor as any).firstName} ${(visit.doctor as any).lastName}`.trim(),
+            }
+          : visit.doctor,
       })),
     };
   }
@@ -535,7 +637,9 @@ export class VisitsService {
 
     const where: any = {
       doctorId,
-      branchId,
+      doctor: {
+        branchId,
+      },
     };
 
     if (date) {
@@ -571,7 +675,7 @@ export class VisitsService {
     return {
       doctor: {
         id: doctor.id,
-        name: doctor.name,
+        name: `${doctor.firstName} ${doctor.lastName}`.trim(),
       },
       visits: visits.map(visit => ({
         ...visit,
@@ -583,7 +687,11 @@ export class VisitsService {
   }
 
   async getVisitStatistics(branchId: string, startDate?: string, endDate?: string) {
-    const where: any = { branchId };
+    const where: any = { 
+      patient: {
+        branchId,
+      },
+    };
 
     if (startDate || endDate) {
       where.createdAt = {};
@@ -607,7 +715,7 @@ export class VisitsService {
       this.prisma.visit.count({
         where: {
           ...where,
-          followUp: { isNot: null },
+          followUp: { not: null },
         },
       }),
       this.prisma.visit.groupBy({

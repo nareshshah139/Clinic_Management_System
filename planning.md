@@ -744,3 +744,73 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - JWT login (receptionist) -> list doctors -> `GET /appointments/available-slots` -> `POST /appointments` -> `GET /appointments` -> `POST /appointments/:id/reschedule` (2 days out to respect 24h rule) -> `DELETE /appointments/:id`.
 
 *Last updated: September 2025 - Appointments E2E validated; frontend scheduler aligned; global validation enabled; DTOs updated; reports DTO fixed; seed script added.*
+
+### September 2025: Visits End-to-End Workflow Validation
+**Achievement:** Completed full E2E validation of the Visits workflow with 17 automated scenarios (17/17 pass).
+**Impact:**
+- Normalized service to match Prisma schema: removed direct `visit.branchId`, scoped by `patient.branchId`/`doctor.branchId`.
+- Preserved API compatibility by returning computed `doctor.name` from `firstName`/`lastName`.
+- Preserved top-level `notes` semantics by embedding in `plan` JSON and deriving `notes` in responses; search now scans `plan`.
+- Enabled `ValidationPipe({ transform: true, whitelist: true })` in E2E app to mirror production validation.
+- Fixed pagination types and `followUp` stats filter (`not: null`).
+
+**Automated E2E Scenarios:**
+- Create → Get → Update → Complete visit; statistics verified
+- Minimal visit creation
+- Patient visit history / Doctor visits
+- Filters: date, patientId, doctorId
+- Error handling: 400 invalid data, 404 patient/doctor/visit, 409 duplicate appointment
+- Data validation: vitals ranges, complaints required, language enum
+- Pagination and sorting
+- Search by complaints and notes (via `plan`)
+
+*Last updated: September 2025 - Visits E2E validated; service aligned with schema; compatibility maintained; validation and stats fixed.*
+
+---
+
+### September 2025: API Documentation & Swagger UI
+**Achievement:** Centralized, live API documentation using Swagger/OpenAPI across all modules.
+**Impact:**
+- Mounted Swagger UI at `/docs` for both normal and minimal boot modes.
+- Enabled JWT Bearer authentication in docs for trying secured endpoints.
+- Added controller tags for: Auth, Users, Appointments, Visits, Billing, Prescriptions, Inventory, Reports.
+- DTOs power accurate request/response schemas with validation metadata.
+- Improves developer onboarding, QA verification, and frontend-backend alignment.
+
+**Technical Highlights:**
+- Updated `backend/src/main.ts` and `backend/src/main.minimal.ts` to initialize Swagger with bearer auth.
+- Annotated controllers with `@ApiTags` and `@ApiBearerAuth`.
+- Reused existing DTOs for schema generation; validation errors documented via global `ValidationPipe`.
+
+**How to Use:**
+- Start backend and open `http://localhost:4000/docs`.
+- Click “Authorize” and paste the JWT token (`Bearer` scheme) to execute secured endpoints.
+
+*Last updated: September 2025 - Swagger UI available at `/docs`; controllers tagged; bearer auth enabled.*
+
+---
+
+### September 2025: Appointments Conflict Handling & UI Alerts
+**Achievement:** Enforced robust conflict detection with user-friendly UI feedback and test coverage.
+**Impact:**
+- Prevents double-booking of doctors and rooms by rejecting overlapping slots with 409 Conflict.
+- Surfaces alternative time slots to receptionists for faster rebooking.
+- Improves reliability for multi-user concurrent scheduling.
+
+**Technical Highlights:**
+- Backend: Conflict detection for both doctor and room using overlap check; returns `409` with `suggestions`.
+  - Logic: `appointments.service.ts` uses `checkSchedulingConflicts` and `SchedulingUtils.doTimeSlotsOverlap`.
+  - Available-slots endpoint merges doctor and room bookings for accurate availability.
+- Frontend: `AppointmentScheduler.tsx` catches `409` and renders an alert with suggested alternative slots.
+- Error handling: API client now throws enriched errors including `status` and `body` for precise UI messaging.
+
+**Tests Added:**
+- Backend (unit): `appointments.conflicts.service.spec.ts` — asserts 409 on overlapping doctor/room bookings and presence of `suggestions`.
+- Backend (integration): `appointments.conflicts.integration.spec.ts` — asserts POST `/appointments` returns 409 for conflicts.
+- Frontend (RTL): `AppointmentScheduler.conflict.test.tsx` — verifies alert shows suggested alternative slots on conflict.
+
+**How to Verify:**
+- Backend: `npm test -- src/modules/appointments/tests/appointments.conflicts.*.spec.ts`.
+- Frontend: `npm test -- __tests__/appointments/AppointmentScheduler.conflict.test.tsx`.
+
+*Last updated: September 2025 - Conflict prevention with suggestions; backend+frontend tests in place.*

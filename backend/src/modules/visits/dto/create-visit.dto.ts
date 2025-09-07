@@ -157,14 +157,14 @@ export class TreatmentPlanDto {
 }
 
 export class CreateVisitDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   appointmentId?: string;
 
   @IsOptional()
