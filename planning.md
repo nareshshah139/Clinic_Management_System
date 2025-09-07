@@ -830,3 +830,26 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Reuses existing conflict handling — UI surfaces suggestions on 409.
 
 *Last updated: September 2025 - Calendar view available with direct booking.*
+
+---
+
+### September 2025: Notifications (Email & WhatsApp)
+**Achievement:** Implemented outbound notifications for appointments via Email (SMTP) and WhatsApp (Meta Cloud API).
+**Impact:**
+- Patients receive confirmation upon appointment creation (summary with doctor, date, slot, token).
+- Channel selection is automatic based on configuration; safe no-op when not configured.
+
+**Technical Highlights:**
+- New `NotificationsModule` with `NotificationsService` (SMTP using nodemailer, WhatsApp using WhatsApp Cloud API).
+- Wired into `AppointmentsService.create` (fire-and-forget) after successful booking.
+- Config via environment variables:
+  - Email (SMTP): `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+  - WhatsApp: `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`
+- Graceful fallback when creds are absent; logs warn and continues without failing booking.
+
+**Next Steps (optional):**
+- Templated messages per language and visit type.
+- Event-based notifications (reschedule, cancel, reminders, follow-up).
+- Provider abstractions for SMS/Email/WhatsApp with failover.
+
+*Last updated: September 2025 - Email/WhatsApp confirmations enabled on appointment creation.*
