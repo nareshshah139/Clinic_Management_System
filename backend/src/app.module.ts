@@ -15,6 +15,7 @@ import { ReportsModule } from './modules/reports/reports.module';
 // import { ConsentsModule } from './modules/consents/consents.module';
 import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -42,6 +43,7 @@ const fullFeatureModules = [
   ReportsModule,
   // ConsentsModule,
   UsersModule,
+  NotificationsModule,
 ];
 
 const minimalModules = [AuthModule];

@@ -5,10 +5,11 @@ import { UpdateAppointmentDto, BulkUpdateAppointmentsDto } from './dto/update-ap
 import { QueryAppointmentsDto, AvailableSlotsDto } from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
 import { AppointmentStatus, VisitType } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private notifications?: NotificationsService) {}
 
   async create(createAppointmentDto: CreateAppointmentDto, branchId: string) {
     const { patientId, doctorId, roomId, date, slot, visitType, notes, source } = createAppointmentDto;
@@ -72,16 +73,44 @@ export class AppointmentsService {
       },
       include: {
         patient: {
-          select: { id: true, name: true, phone: true },
+          select: { id: true, name: true, phone: true, email: true },
         },
         doctor: {
-          select: { id: true, firstName: true, lastName: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
         room: {
           select: { id: true, name: true, type: true },
         },
       },
     });
+
+    // Fire-and-forget notifications (if configured)
+    if (this.notifications) {
+      const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
+      const humanDate = new Date(date).toLocaleDateString();
+      const summary = `Appointment confirmed with Dr. ${doctorName} on ${humanDate} at ${slot}. Token #${tokenNumber}.`;
+      // Email
+      if (appointment.patient?.email) {
+        this.notifications
+          .sendEmail({
+            to: appointment.patient.email,
+            subject: 'Appointment Confirmation',
+            text: summary,
+            html: `<p>${summary}</p>`,
+          })
+          .catch(() => void 0);
+      }
+      // WhatsApp
+      if (appointment.patient?.phone) {
+        const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+91${appointment.patient.phone}`;
+        this.notifications
+          .sendWhatsApp({
+            toPhoneE164: e164,
+            text: summary,
+          })
+          .catch(() => void 0);
+      }
+    }
 
     return appointment;
   }
