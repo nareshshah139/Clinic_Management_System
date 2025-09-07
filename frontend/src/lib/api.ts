@@ -130,6 +130,10 @@ export class ApiClient {
     return this.post(`/appointments/${id}/reschedule`, data);
   }
 
+  async getDoctorSchedule(doctorId: string, date: string) {
+    return this.get(`/appointments/doctor/${doctorId}/schedule`, { date });
+  }
+
   // Visits
   async getVisits(params?: any) {
     return this.get('/visits', params);

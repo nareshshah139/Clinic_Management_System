@@ -814,3 +814,19 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Frontend: `npm test -- __tests__/appointments/AppointmentScheduler.conflict.test.tsx`.
 
 *Last updated: September 2025 - Conflict prevention with suggestions; backend+frontend tests in place.*
+
+---
+
+### September 2025: Appointments Calendar View (Per-Doctor)
+**Achievement:** Added daily calendar view per doctor with inline scheduling.
+**Impact:**
+- Receptionists can visualize a doctor's day as 30-minute slots and book directly from the calendar.
+- Reduces booking errors and improves speed of scheduling.
+
+**Technical Highlights:**
+- New components: `AppointmentsCalendar.tsx`, `DoctorDayCalendar.tsx`.
+- Tabs on `/dashboard/appointments`: switch between Calendar and Slots views.
+- API client extended with `getDoctorSchedule(doctorId, date)`; wired to backend endpoint.
+- Reuses existing conflict handling — UI surfaces suggestions on 409.
+
+*Last updated: September 2025 - Calendar view available with direct booking.*
