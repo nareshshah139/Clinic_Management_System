@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import * as express from 'express';
+import { join } from 'path';
 
 async function bootstrap() {
   const useMinimal = process.env.MINIMAL_BOOT === 'true';
@@ -17,6 +19,9 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type','Authorization']
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+
+  // Serve uploads
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   // Swagger setup
   const config = new DocumentBuilder()

@@ -3,10 +3,12 @@
 import { useEffect, useState } from 'react';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
+import VisitPhotos from '@/components/visits/VisitPhotos';
 
 export default function VisitsPage() {
   const [patientId, setPatientId] = useState<string | null>(null);
   const [doctorId, setDoctorId] = useState<string | null>(null);
+  const [recentVisitId, setRecentVisitId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadIds = async () => {
@@ -31,5 +33,10 @@ export default function VisitsPage() {
     return <div className="text-sm text-gray-600">Loading visit form…</div>;
   }
 
-  return <MedicalVisitForm patientId={patientId} doctorId={doctorId} />;
+  return (
+    <div className="space-y-4">
+      <MedicalVisitForm patientId={patientId} doctorId={doctorId} />
+      {recentVisitId && <VisitPhotos visitId={recentVisitId} />}
+    </div>
+  );
 } 

@@ -739,4 +739,27 @@ export class VisitsService {
       },
     };
   }
+
+  async addAttachments(visitId: string, relPaths: string[], branchId: string) {
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    if (!visit) throw new NotFoundException('Visit not found');
+    // Scope by branch via patient and doctor
+    if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
+      throw new NotFoundException('Visit not found in this branch');
+    }
+    const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    const merged = Array.from(new Set([...(existing || []), ...relPaths]));
+    const updated = await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(merged) } });
+    return { attachments: merged };
+  }
+
+  async listAttachments(visitId: string, branchId: string) {
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    if (!visit) throw new NotFoundException('Visit not found');
+    if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
+      throw new NotFoundException('Visit not found in this branch');
+    }
+    const files = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    return { attachments: files };
+  }
 }
