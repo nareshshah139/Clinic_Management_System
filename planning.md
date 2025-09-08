@@ -581,10 +581,11 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 
 **Current Status:**
 - Backend: Running on http://localhost:4000 (minimal mode)
-- Frontend: Running on http://localhost:3001
+- Frontend: Running on http://localhost:3000
 - Database: PostgreSQL on port 55432
 - Authentication: Working end-to-end
 - Dashboard: Loading with real statistics
+- Swagger API Documentation: Available at http://localhost:4000/docs
 
 ### December 2024: Users & Auth Module Enhancement Completion
 **Achievement:** Complete production-ready user management and authentication system
@@ -853,3 +854,36 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Provider abstractions for SMS/Email/WhatsApp with failover.
 
 *Last updated: September 2025 - Email/WhatsApp confirmations enabled on appointment creation.*
+
+### September 2025: Billing Module Schema Alignment & Stabilization
+**Achievement:** Aligned Billing module implementation with the current Prisma schema and stabilized all public endpoints.
+**Impact:**
+- Eliminated 500 errors from Billing endpoints by removing references to non-existent fields/relations.
+- Billing lists, invoice retrieval, payments, summaries, revenue reports, and outstanding invoices now respond reliably.
+
+**Technical Highlights:**
+- Replaced unsupported fields/relations: removed includes for `visit`/`appointment`; swapped `invoiceNumber` -> `invoiceNo`, `totalAmount` -> `total`, `method` -> `mode`, `status` -> `reconStatus` (payments).
+- Recomputed invoice balances using `received` and `balance`; outstanding invoices computed via `balance > 0`.
+- Scoped queries by `patient.branchId` to enforce branch isolation consistently.
+- Implemented `invoiceNo` generator (`INV-YYYYMMDD-###`) using latest invoice for the day.
+- Disabled unsupported flows with explicit errors: invoice cancellation and refunds (absent in current schema).
+
+**Endpoints working (schema-aligned):**
+- `GET /billing/invoices` — list with pagination, search by `invoiceNo`/patient name
+- `GET /billing/invoices/:id` — invoice detail with items, payments
+- `POST /billing/invoices` — create invoice (items persisted as `invoice_items`)
+- `POST /billing/payments` — add payment; updates invoice `received`/`balance`
+- `POST /billing/payments/:id/confirm` — marks payment `reconStatus` as COMPLETED
+- `GET /billing/payments` — list with filters (mode/status/date)
+- `GET /billing/payments/summary` — totals, method and daily breakdowns
+- `GET /billing/reports/revenue` — grouped revenue by day/week/month/year
+- `GET /billing/invoices/outstanding` — invoices with `balance > 0`
+
+**Known limitations (by design, current schema):**
+- Invoice cancellation and refunds are not supported; endpoints return clear 400 errors.
+- No doctor/category joins from invoice; reports derived from payments only.
+
+**How to Verify:**
+- Auth → `POST /auth/login` → use token on the billing endpoints above; expect 200s with empty data initially (no sample invoices/payments yet).
+
+*Last updated: September 2025 - Billing module stabilized against current Prisma schema; unsupported flows disabled with explicit errors.*

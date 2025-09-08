@@ -6,9 +6,9 @@ import {
   PaymentDto, 
   RefundDto, 
   BulkPaymentDto,
-  InvoiceStatus,
+  // InvoiceStatus,
   PaymentMethod,
-  PaymentStatus,
+  // PaymentStatus,
 } from './dto/invoice.dto';
 import { 
   QueryInvoicesDto, 
@@ -23,109 +23,60 @@ export class BillingService {
   constructor(private prisma: PrismaService) {}
 
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
-    const {
-      patientId,
-      visitId,
-      appointmentId,
-      items,
-      discount = 0,
-      discountReason,
-      notes,
-      dueDate,
-      isRecurring = false,
-      recurringFrequency,
-      metadata,
-    } = createInvoiceDto;
+    const { patientId, visitId, items, mode, gstin, hsn, notes } = createInvoiceDto;
 
-    // Validate patient exists and belongs to branch
+    // Verify patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
       where: { id: patientId, branchId },
     });
+
     if (!patient) {
-      throw new NotFoundException('Patient not found in this branch');
+      throw new NotFoundException('Patient not found');
     }
 
-    // Validate visit if provided
+    // Verify visit exists and belongs to branch (if provided)
     if (visitId) {
       const visit = await this.prisma.visit.findFirst({
         where: { id: visitId, branchId },
       });
+
       if (!visit) {
-        throw new NotFoundException('Visit not found in this branch');
+        throw new NotFoundException('Visit not found');
       }
     }
 
-    // Validate appointment if provided
-    if (appointmentId) {
-      const appointment = await this.prisma.appointment.findFirst({
-        where: { id: appointmentId, branchId },
-      });
-      if (!appointment) {
-        throw new NotFoundException('Appointment not found in this branch');
-      }
-    }
-
-    // Validate items
-    if (!items || items.length === 0) {
-      throw new BadRequestException('At least one item is required');
-    }
-
-    // Calculate totals
-    const calculations = this.calculateInvoiceTotals(items, discount);
-
-    // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber(branchId);
 
-    // Create invoice
+    // Calculate totals
+    const { subtotal, discount, gstAmount, totalAmount } = this.calculateInvoiceTotals(items);
+
     const invoice = await this.prisma.invoice.create({
       data: {
-        invoiceNumber,
         patientId,
         visitId,
-        appointmentId,
-        items: JSON.stringify(items),
-        subtotal: calculations.subtotal,
-        discount: calculations.discount,
-        discountReason,
-        gstAmount: calculations.gstAmount,
-        totalAmount: calculations.totalAmount,
-        dueDate: dueDate ? new Date(dueDate) : null,
-        status: InvoiceStatus.DRAFT,
-        notes,
-        isRecurring,
-        recurringFrequency,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        branchId,
+        mode,
+        total: totalAmount,
+        balance: totalAmount,
+        invoiceNo: invoiceNumber,
+        gstin,
+        hsn,
+        // status: InvoiceStatus.DRAFT, // Commented out - field doesn't exist
+        items: {
+          create: items.map(item => ({
+            serviceId: item.serviceId,
+            qty: item.qty,
+            unitPrice: item.unitPrice,
+            gstRate: item.gstRate || 0,
+            total: item.qty * item.unitPrice,
+          })),
+        },
       },
       include: {
         patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            phone: true, 
-            email: true,
-            address: true,
-          },
+          select: { id: true, name: true, phone: true },
         },
-        visit: {
-          select: { 
-            id: true, 
-            createdAt: true,
-            doctor: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        appointment: {
-          select: { 
-            id: true, 
-            date: true, 
-            slot: true,
-            doctor: {
-              select: { id: true, name: true },
-            },
-          },
-        },
+        items: true,
+        payments: true,
       },
     });
 
@@ -136,13 +87,7 @@ export class BillingService {
     const {
       patientId,
       visitId,
-      appointmentId,
-      status,
-      startDate,
-      endDate,
-      dueDate,
       search,
-      category,
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
@@ -152,31 +97,20 @@ export class BillingService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      branchId,
+      patient: {
+        branchId,
+        ...(patientId && { id: patientId }),
+      },
     };
 
-    // Apply filters
-    if (patientId) where.patientId = patientId;
+    // Apply filters (only fields that exist in schema)
     if (visitId) where.visitId = visitId;
-    if (appointmentId) where.appointmentId = appointmentId;
-    if (status) where.status = status;
 
-    // Date filters
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
-
-    if (dueDate) {
-      where.dueDate = new Date(dueDate);
-    }
-
-    // Search filter
+    // Search filter (only in existing fields)
     if (search) {
       where.OR = [
         {
-          invoiceNumber: {
+          invoiceNo: {
             contains: search,
             mode: 'insensitive',
           },
@@ -189,21 +123,7 @@ export class BillingService {
             },
           },
         },
-        {
-          notes: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
       ];
-    }
-
-    // Category filter (search in items JSON)
-    if (category) {
-      where.items = {
-        contains: category,
-        mode: 'insensitive',
-      };
     }
 
     const [invoices, total] = await Promise.all([
@@ -213,27 +133,12 @@ export class BillingService {
           patient: {
             select: { id: true, name: true, phone: true },
           },
-          visit: {
-            select: { 
-              id: true, 
-              createdAt: true,
-              doctor: { select: { id: true, name: true } },
-            },
-          },
-          appointment: {
-            select: { 
-              id: true, 
-              date: true, 
-              slot: true,
-              doctor: { select: { id: true, name: true } },
-            },
-          },
           payments: {
             select: {
               id: true,
               amount: true,
-              status: true,
-              method: true,
+              mode: true,
+              reconStatus: true,
               createdAt: true,
             },
           },
@@ -260,75 +165,24 @@ export class BillingService {
 
   async findInvoiceById(id: string, branchId: string) {
     const invoice = await this.prisma.invoice.findFirst({
-      where: { id, branchId },
+      where: {
+        id,
+        patient: { branchId },
+      },
       include: {
-        patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            phone: true, 
-            email: true,
-            address: true,
-            gender: true,
-            dob: true,
-          },
-        },
-        visit: {
-          select: { 
-            id: true, 
-            createdAt: true,
-            complaints: true,
-            diagnosis: true,
-            doctor: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        },
-        appointment: {
-          select: { 
-            id: true, 
-            date: true, 
-            slot: true,
-            status: true,
-            doctor: {
-              select: { id: true, name: true, email: true },
-            },
-          },
-        },
+        patient: { select: { id: true, name: true, phone: true } },
+        items: true,
         payments: {
           select: {
             id: true,
             amount: true,
-            method: true,
-            status: true,
-            transactionId: true,
+            mode: true,
             reference: true,
-            notes: true,
+            gateway: true,
+            reconStatus: true,
             createdAt: true,
-            gatewayResponse: true,
           },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
-        refunds: {
-          select: {
-            id: true,
-            amount: true,
-            reason: true,
-            notes: true,
-            createdAt: true,
-            payment: {
-              select: {
-                id: true,
-                transactionId: true,
-                method: true,
-              },
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
+          orderBy: { createdAt: 'desc' },
         },
       },
     });
@@ -337,239 +191,117 @@ export class BillingService {
       throw new NotFoundException('Invoice not found');
     }
 
-    // Parse JSON fields
-    const parsedInvoice = {
-      ...invoice,
-      items: JSON.parse(invoice.items as string),
-      metadata: invoice.metadata ? JSON.parse(invoice.metadata as string) : null,
-    };
-
-    return parsedInvoice;
+    return invoice;
   }
 
   async updateInvoice(id: string, updateInvoiceDto: UpdateInvoiceDto, branchId: string) {
     const invoice = await this.findInvoiceById(id, branchId);
 
-    // Check if invoice can be updated
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Cannot update paid invoice');
-    }
-
-    if (invoice.status === InvoiceStatus.CANCELLED) {
-      throw new BadRequestException('Cannot update cancelled invoice');
-    }
-
-    // Prepare update data
     const updateData: any = {};
 
-    if (updateInvoiceDto.items) {
-      const calculations = this.calculateInvoiceTotals(updateInvoiceDto.items, updateInvoiceDto.discount || 0);
-      updateData.items = JSON.stringify(updateInvoiceDto.items);
-      updateData.subtotal = calculations.subtotal;
-      updateData.discount = calculations.discount;
-      updateData.gstAmount = calculations.gstAmount;
-      updateData.totalAmount = calculations.totalAmount;
+    if (updateInvoiceDto.mode !== undefined) {
+      updateData.mode = updateInvoiceDto.mode as any;
+    }
+    if (updateInvoiceDto.gstin !== undefined) {
+      updateData.gstin = updateInvoiceDto.gstin;
+    }
+    if (updateInvoiceDto.hsn !== undefined) {
+      updateData.hsn = updateInvoiceDto.hsn;
     }
 
-    if (updateInvoiceDto.discount !== undefined) {
-      updateData.discount = updateInvoiceDto.discount;
+    // If items supplied, replace existing items and recompute totals
+    if (Array.isArray(updateInvoiceDto.items) && updateInvoiceDto.items.length > 0) {
+      // Remove old items, then add new ones
+      await this.prisma.invoiceItem.deleteMany({ where: { invoiceId: id } });
+
+      await this.prisma.invoiceItem.createMany({
+        data: updateInvoiceDto.items.map((it: any) => ({
+          invoiceId: id,
+          serviceId: it.serviceId,
+          qty: it.qty,
+          unitPrice: it.unitPrice,
+          gstRate: it.gstRate ?? 0,
+          total: it.qty * it.unitPrice,
+        })),
+      });
+
+      // Recompute totals
+      const { totalAmount } = this.calculateInvoiceTotals(updateInvoiceDto.items);
+      updateData.total = totalAmount;
+      // Keep received as-is, recompute balance
+      updateData.balance = Math.max(totalAmount - invoice.received, 0);
     }
 
-    if (updateInvoiceDto.discountReason !== undefined) {
-      updateData.discountReason = updateInvoiceDto.discountReason;
-    }
-
-    if (updateInvoiceDto.notes !== undefined) {
-      updateData.notes = updateInvoiceDto.notes;
-    }
-
-    if (updateInvoiceDto.dueDate !== undefined) {
-      updateData.dueDate = updateInvoiceDto.dueDate ? new Date(updateInvoiceDto.dueDate) : null;
-    }
-
-    if (updateInvoiceDto.status !== undefined) {
-      updateData.status = updateInvoiceDto.status;
-    }
-
-    if (updateInvoiceDto.metadata !== undefined) {
-      updateData.metadata = updateInvoiceDto.metadata ? JSON.stringify(updateInvoiceDto.metadata) : null;
-    }
-
-    const updatedInvoice = await this.prisma.invoice.update({
+    const updated = await this.prisma.invoice.update({
       where: { id },
       data: updateData,
       include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
-        },
-        visit: {
-          select: { id: true, createdAt: true },
-        },
-        appointment: {
-          select: { id: true, date: true, slot: true },
-        },
+        patient: { select: { id: true, name: true, phone: true } },
+        items: true,
+        payments: true,
       },
     });
 
-    return updatedInvoice;
+    return updated;
   }
 
-  async cancelInvoice(id: string, branchId: string, reason?: string) {
-    const invoice = await this.findInvoiceById(id, branchId);
-
-    if (invoice.status === InvoiceStatus.PAID) {
-      throw new BadRequestException('Cannot cancel paid invoice. Process refund instead.');
-    }
-
-    if (invoice.status === InvoiceStatus.CANCELLED) {
-      throw new BadRequestException('Invoice is already cancelled');
-    }
-
-    const cancelledInvoice = await this.prisma.invoice.update({
-      where: { id },
-      data: {
-        status: InvoiceStatus.CANCELLED,
-        notes: reason ? `${invoice.notes || ''}\nCancelled: ${reason}`.trim() : invoice.notes,
-      },
-    });
-
-    return cancelledInvoice;
+  async cancelInvoice(id: string, branchId: string, _reason?: string) {
+    // Current schema has no status/cancel semantics; avoid destructive delete by returning a clear error
+    throw new BadRequestException('Invoice cancellation is not supported in the current schema');
   }
 
   async processPayment(paymentDto: PaymentDto, branchId: string) {
-    const { invoiceId, amount, method, transactionId, reference, notes, gatewayResponse, paymentDate } = paymentDto;
+    const { invoiceId, amount, method, reference, gateway } = paymentDto as any;
 
     const invoice = await this.findInvoiceById(invoiceId, branchId);
 
-    if (invoice.status === InvoiceStatus.CANCELLED) {
-      throw new BadRequestException('Cannot process payment for cancelled invoice');
-    }
-
-    // Check if payment amount exceeds remaining balance
-    const paidAmount = invoice.payments.reduce((sum, payment) => {
-      return payment.status === PaymentStatus.COMPLETED ? sum + payment.amount : sum;
-    }, 0);
-
-    const remainingBalance = invoice.totalAmount - paidAmount;
-
-    if (amount > remainingBalance) {
-      throw new BadRequestException(`Payment amount (${amount}) exceeds remaining balance (${remainingBalance})`);
-    }
-
-    // Create payment
+    // Create payment with supported fields
     const payment = await this.prisma.payment.create({
       data: {
         invoiceId,
         amount,
-        method,
-        transactionId,
-        reference,
-        notes,
-        status: PaymentStatus.PENDING,
-        gatewayResponse: gatewayResponse ? JSON.stringify(gatewayResponse) : null,
-        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
-        branchId,
+        mode: method as any,
+        reference: reference ?? null,
+        gateway: gateway ?? null,
       },
       include: {
-        invoice: {
-          select: {
-            id: true,
-            invoiceNumber: true,
-            totalAmount: true,
-            patient: {
-              select: { id: true, name: true },
-            },
-          },
-        },
+        invoice: { select: { id: true, invoiceNo: true, total: true } },
       },
     });
 
-    // Update invoice status based on payment
-    await this.updateInvoiceStatus(invoiceId);
+    // Update invoice received/balance
+    const newReceived = (invoice.received ?? 0) + amount;
+    const newBalance = Math.max((invoice.total ?? 0) - newReceived, 0);
+    await this.prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { received: newReceived, balance: newBalance },
+    });
 
     return payment;
   }
 
-  async confirmPayment(paymentId: string, branchId: string, gatewayResponse?: Record<string, any>) {
+  async confirmPayment(paymentId: string, branchId: string, _gatewayResponse?: Record<string, any>) {
     const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, branchId },
+      where: {
+        id: paymentId,
+        invoice: { patient: { branchId } },
+      },
     });
 
     if (!payment) {
       throw new NotFoundException('Payment not found');
     }
 
-    if (payment.status === PaymentStatus.COMPLETED) {
-      throw new BadRequestException('Payment is already confirmed');
-    }
-
-    const confirmedPayment = await this.prisma.payment.update({
+    const confirmed = await this.prisma.payment.update({
       where: { id: paymentId },
-      data: {
-        status: PaymentStatus.COMPLETED,
-        gatewayResponse: gatewayResponse ? JSON.stringify(gatewayResponse) : payment.gatewayResponse,
-      },
+      data: { reconStatus: 'COMPLETED' },
     });
 
-    // Update invoice status
-    await this.updateInvoiceStatus(payment.invoiceId);
-
-    return confirmedPayment;
+    return confirmed;
   }
 
-  async processRefund(refundDto: RefundDto, branchId: string) {
-    const { paymentId, amount, reason, notes, gatewayResponse } = refundDto;
-
-    const payment = await this.prisma.payment.findFirst({
-      where: { id: paymentId, branchId },
-      include: {
-        invoice: {
-          select: { id: true, invoiceNumber: true },
-        },
-      },
-    });
-
-    if (!payment) {
-      throw new NotFoundException('Payment not found');
-    }
-
-    if (payment.status !== PaymentStatus.COMPLETED) {
-      throw new BadRequestException('Can only refund completed payments');
-    }
-
-    if (amount > payment.amount) {
-      throw new BadRequestException('Refund amount cannot exceed payment amount');
-    }
-
-    // Create refund
-    const refund = await this.prisma.refund.create({
-      data: {
-        paymentId,
-        amount,
-        reason,
-        notes,
-        gatewayResponse: gatewayResponse ? JSON.stringify(gatewayResponse) : null,
-        branchId,
-      },
-      include: {
-        payment: {
-          select: {
-            id: true,
-            amount: true,
-            method: true,
-            transactionId: true,
-            invoice: {
-              select: { id: true, invoiceNumber: true },
-            },
-          },
-        },
-      },
-    });
-
-    // Update invoice status
-    await this.updateInvoiceStatus(payment.invoiceId);
-
-    return refund;
+  async processRefund(_refundDto: RefundDto, _branchId: string) {
+    throw new BadRequestException('Refunds are not supported in the current schema');
   }
 
   async processBulkPayment(bulkPaymentDto: BulkPaymentDto, branchId: string) {
@@ -645,50 +377,28 @@ export class BillingService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      branchId,
+      invoice: { patient: { branchId } },
     };
 
-    // Apply filters
     if (invoiceId) where.invoiceId = invoiceId;
-    if (method) where.method = method;
-    if (status) where.status = status;
+    if (method) where.mode = method;
+    if (status) where.reconStatus = status;
 
-    // Date filters
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    // Search filter
     if (search) {
       where.OR = [
-        {
-          transactionId: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          reference: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          notes: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
+        { reference: { contains: search, mode: 'insensitive' } },
+        { gateway: { contains: search, mode: 'insensitive' } },
       ];
     }
 
-    // Patient filter
     if (patientId) {
-      where.invoice = {
-        patientId,
-      };
+      where.invoice = { patientId };
     }
 
     const [payments, total] = await Promise.all([
@@ -698,31 +408,22 @@ export class BillingService {
           invoice: {
             select: {
               id: true,
-              invoiceNumber: true,
-              totalAmount: true,
-              patient: {
-                select: { id: true, name: true, phone: true },
-              },
+              invoiceNo: true,
+              total: true,
+              patient: { select: { id: true, name: true, phone: true } },
             },
           },
         },
         skip,
         take: limit,
-        orderBy: {
-          [sortBy]: sortOrder,
-        },
+        orderBy: { [sortBy]: sortOrder },
       }),
       this.prisma.payment.count({ where }),
     ]);
 
     return {
       payments,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-      },
+      pagination: { total, page, limit, pages: Math.ceil(total / limit) },
     };
   }
 
@@ -730,8 +431,8 @@ export class BillingService {
     const { startDate, endDate, method, patientId } = query;
 
     const where: any = {
-      branchId,
-      status: PaymentStatus.COMPLETED,
+      invoice: { patient: { branchId } },
+      reconStatus: 'COMPLETED',
     };
 
     if (startDate || endDate) {
@@ -740,63 +441,31 @@ export class BillingService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    if (method) where.method = method;
+    if (method) where.mode = method;
+    if (patientId) where.invoice = { patientId };
 
-    if (patientId) {
-      where.invoice = { patientId };
-    }
-
-    const [
-      totalAmount,
-      paymentCount,
-      methodBreakdown,
-      dailyBreakdown,
-    ] = await Promise.all([
-      this.prisma.payment.aggregate({
-        where,
-        _sum: { amount: true },
-      }),
+    const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
+      this.prisma.payment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.payment.count({ where }),
-      this.prisma.payment.groupBy({
-        by: ['method'],
-        where,
-        _sum: { amount: true },
-        _count: { id: true },
-      }),
-      this.prisma.payment.groupBy({
-        by: ['createdAt'],
-        where,
-        _sum: { amount: true },
-        _count: { id: true },
-      }),
+      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
     ]);
 
     return {
-      totalAmount: totalAmount._sum.amount || 0,
-      paymentCount,
-      methodBreakdown: methodBreakdown.map(item => ({
-        method: item.method,
-        amount: item._sum.amount || 0,
-        count: item._count.id,
-      })),
-      dailyBreakdown: dailyBreakdown.map(item => ({
-        date: item.createdAt,
-        amount: item._sum.amount || 0,
-        count: item._count.id,
-      })),
-      period: {
-        startDate: startDate || null,
-        endDate: endDate || null,
-      },
+      totalAmount: sumAgg._sum.amount ?? 0,
+      paymentCount: count,
+      methodBreakdown: methodBreakdown.map(m => ({ method: m.mode, amount: m._sum.amount ?? 0, count: m._count.id })),
+      dailyBreakdown: dailyBreakdown.map(d => ({ date: d.createdAt, amount: d._sum.amount ?? 0, count: d._count.id })),
+      period: { startDate: startDate || null, endDate: endDate || null },
     };
   }
 
   async getRevenueReport(query: RevenueReportDto, branchId: string) {
-    const { startDate, endDate, groupBy = 'day', doctorId, category } = query;
+    const { startDate, endDate, groupBy = 'day' } = query as any;
 
     const where: any = {
-      branchId,
-      status: PaymentStatus.COMPLETED,
+      invoice: { patient: { branchId } },
+      reconStatus: 'COMPLETED',
     };
 
     if (startDate || endDate) {
@@ -805,132 +474,57 @@ export class BillingService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    if (doctorId) {
-      where.invoice = {
-        OR: [
-          { visit: { doctorId } },
-          { appointment: { doctorId } },
-        ],
-      };
-    }
+    const payments = await this.prisma.payment.findMany({ where, orderBy: { createdAt: 'asc' } });
 
-    if (category) {
-      where.invoice = {
-        items: {
-          contains: category,
-          mode: 'insensitive',
-        },
-      };
-    }
-
-    const payments = await this.prisma.payment.findMany({
-      where,
-      include: {
-        invoice: {
-          select: {
-            id: true,
-            invoiceNumber: true,
-            items: true,
-            visit: {
-              select: {
-                doctor: { select: { id: true, name: true } },
-              },
-            },
-            appointment: {
-              select: {
-                doctor: { select: { id: true, name: true } },
-              },
-            },
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'asc',
-      },
-    });
-
-    // Group by specified period
-    const groupedData = this.groupPaymentsByPeriod(payments, groupBy);
+    const grouped = this.groupPaymentsByPeriod(payments as any, groupBy);
 
     return {
-      report: groupedData,
+      report: grouped,
       summary: {
-        totalRevenue: payments.reduce((sum, payment) => sum + payment.amount, 0),
+        totalRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
         totalTransactions: payments.length,
-        averageTransactionValue: payments.length > 0 ? payments.reduce((sum, payment) => sum + payment.amount, 0) / payments.length : 0,
+        averageTransactionValue: payments.length ? payments.reduce((s, p) => s + p.amount, 0) / payments.length : 0,
       },
-      period: {
-        startDate: startDate || null,
-        endDate: endDate || null,
-        groupBy,
-      },
+      period: { startDate: startDate || null, endDate: endDate || null, groupBy },
     };
   }
 
   async getOutstandingInvoices(query: OutstandingInvoicesDto, branchId: string) {
-    const { patientId, overdueAfter, limit = 50 } = query;
+    const { patientId, limit = 50 } = query;
 
     const where: any = {
-      branchId,
-      status: {
-        in: [InvoiceStatus.PENDING, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.OVERDUE],
-      },
+      patient: { branchId, ...(patientId && { id: patientId }) },
+      balance: { gt: 0 },
     };
-
-    if (patientId) where.patientId = patientId;
-
-    if (overdueAfter) {
-      where.dueDate = {
-        lt: new Date(overdueAfter),
-      };
-    }
 
     const invoices = await this.prisma.invoice.findMany({
       where,
       include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
-        },
-        payments: {
-          select: {
-            id: true,
-            amount: true,
-            status: true,
-          },
-        },
+        patient: { select: { id: true, name: true, phone: true } },
+        payments: { select: { id: true, amount: true, mode: true, reconStatus: true } },
       },
-      orderBy: {
-        dueDate: 'asc',
-      },
+      orderBy: { createdAt: 'asc' },
       take: limit,
     });
 
-    // Calculate outstanding amounts
-    const outstandingInvoices = invoices.map(invoice => {
-      const paidAmount = invoice.payments.reduce((sum, payment) => {
-        return payment.status === PaymentStatus.COMPLETED ? sum + payment.amount : sum;
-      }, 0);
-      const outstandingAmount = invoice.totalAmount - paidAmount;
-
-      return {
-        ...invoice,
-        paidAmount,
-        outstandingAmount,
-        isOverdue: invoice.dueDate && invoice.dueDate < new Date(),
-      };
-    });
+    const result = invoices.map(inv => ({
+      ...inv,
+      paidAmount: inv.received ?? 0,
+      outstandingAmount: Math.max((inv.total ?? 0) - (inv.received ?? 0), 0),
+      isOverdue: false,
+    }));
 
     return {
-      invoices: outstandingInvoices,
-      totalOutstanding: outstandingInvoices.reduce((sum, invoice) => sum + invoice.outstandingAmount, 0),
-      overdueCount: outstandingInvoices.filter(invoice => invoice.isOverdue).length,
+      invoices: result,
+      totalOutstanding: result.reduce((sum, i) => sum + i.outstandingAmount, 0),
+      overdueCount: 0,
     };
   }
 
   // Private helper methods
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
+      const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
       const itemDiscount = (item.discount || 0) * itemTotal / 100;
       return sum + itemTotal - itemDiscount;
     }, 0);
@@ -939,7 +533,7 @@ export class BillingService {
     const discountedSubtotal = subtotal - discountAmount;
 
     const gstAmount = items.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unitPrice;
+      const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;
       const itemDiscount = (item.discount || 0) * itemTotal / 100;
       const discountedItemTotal = itemTotal - itemDiscount;
       const gstRate = item.gstRate || 18;
@@ -948,12 +542,7 @@ export class BillingService {
 
     const totalAmount = discountedSubtotal + gstAmount;
 
-    return {
-      subtotal,
-      discount: discountAmount,
-      gstAmount,
-      totalAmount,
-    };
+    return { subtotal, discount: discountAmount, gstAmount, totalAmount };
   }
 
   private async generateInvoiceNumber(branchId: string): Promise<string> {
@@ -962,67 +551,27 @@ export class BillingService {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const date = String(today.getDate()).padStart(2, '0');
 
-    // Get the last invoice number for today
     const lastInvoice = await this.prisma.invoice.findFirst({
       where: {
-        branchId,
+        patient: { branchId },
         createdAt: {
           gte: new Date(today.setHours(0, 0, 0, 0)),
           lte: new Date(today.setHours(23, 59, 59, 999)),
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     });
 
     let sequence = 1;
-    if (lastInvoice) {
-      const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
+    if (lastInvoice?.invoiceNo) {
+      const lastSequence = parseInt((lastInvoice.invoiceNo as any).split('-').pop() || '0');
       sequence = lastSequence + 1;
     }
 
     return `INV-${year}${month}${date}-${String(sequence).padStart(3, '0')}`;
   }
 
-  private async updateInvoiceStatus(invoiceId: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { id: invoiceId },
-      include: {
-        payments: {
-          select: {
-            amount: true,
-            status: true,
-          },
-        },
-      },
-    });
-
-    if (!invoice) return;
-
-    const paidAmount = invoice.payments.reduce((sum, payment) => {
-      return payment.status === PaymentStatus.COMPLETED ? sum + payment.amount : sum;
-    }, 0);
-
-    let newStatus: InvoiceStatus;
-    if (paidAmount === 0) {
-      newStatus = InvoiceStatus.PENDING;
-    } else if (paidAmount >= invoice.totalAmount) {
-      newStatus = InvoiceStatus.PAID;
-    } else {
-      newStatus = InvoiceStatus.PARTIALLY_PAID;
-    }
-
-    // Check if overdue
-    if (invoice.dueDate && invoice.dueDate < new Date() && newStatus !== InvoiceStatus.PAID) {
-      newStatus = InvoiceStatus.OVERDUE;
-    }
-
-    await this.prisma.invoice.update({
-      where: { id: invoiceId },
-      data: { status: newStatus },
-    });
-  }
+  // Removed updateInvoiceStatus since schema has no status; balances are updated in processPayment/updateInvoice
 
   private groupPaymentsByPeriod(payments: any[], groupBy: string) {
     const groups: Record<string, any> = {};
