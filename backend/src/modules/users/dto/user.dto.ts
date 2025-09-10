@@ -29,7 +29,8 @@ export class CreateUserDto {
   role: UserRole;
 
   @IsUUID()
-  branchId: string;
+  @IsOptional()
+  branchId?: string;
 
   @IsString()
   @IsOptional()

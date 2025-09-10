@@ -4,3 +4,5 @@ September 2025 - API Docs and Architecture Diagram Update
 - Annotated controllers with tags and bearer auth for: Appointments, Visits, Billing, Reports (existing), and prepared others for consistency
 - Generated a comprehensive system architecture Mermaid diagram (frontend, backend modules, shared services, infra)
 - No deletions to planning.md; future pass will append an achievement entry referencing the docs and diagram 
+- Enabled cash refunds in billing by recording negative payments and adjusting invoice received/balance.
+- Confirmed appointment cancellation endpoint (`DELETE /appointments/:id`) with safeguards against cancelling completed/in-progress. 

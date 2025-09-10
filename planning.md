@@ -25,8 +25,16 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Backend Infrastructure** - Fixed iconv-lite dependencies, Express platform configuration, minimal boot mode
 - **Frontend Implementation** - Complete dashboard, authentication flow, API integration, error handling
 
-🔄 **In Progress:**
-- Frontend UI Components (AppointmentScheduler needs Users module integration)
+✅ **Recently Completed (September 2025):**
+- Global search functionality in header (patients, appointments, users)
+- Enhanced medical visit forms with role-based sections (Therapist 20-25%, Nurse 40%, Doctor 100%)
+- Photo capture integration for medical visits
+- Visit numbering system for patient follow-ups
+- Patient history timeline view
+- Room management system with CRUD operations
+- Room calendar view with hourly time slots and occupancy visualization
+- Comprehensive inventory data integration (79 items across categories)
+- Branch isolation fixes for inventory and room data
 
 ❌ **Missing/Incomplete:**
 - Consents Module
@@ -367,12 +375,13 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 **Implemented Pages:**
 1. ✅ **Dashboard** - Overview metrics, system statistics, alerts
 2. ✅ **Patients Management** - List, search, create, edit, view history
-3. ✅ **Appointments Interface** - Calendar view, booking, management
-4. ✅ **Visits Documentation** - SOAP notes, vitals, diagnosis
+3. ✅ **Appointments Interface** - Calendar view, booking, management, room selection
+4. ✅ **Visits Documentation** - Role-based SOAP notes, photo capture, visit numbering, patient timeline
 5. ✅ **Billing Interface** - Invoice creation, payment processing
-6. ✅ **Inventory Management** - Stock management, alerts
+6. ✅ **Inventory Management** - Stock management, alerts, comprehensive item catalog
 7. ✅ **Reports** - Comprehensive reporting with export options
 8. ✅ **Users Management** - CRUD operations, RBAC interface
+9. ✅ **Rooms Management** - Calendar view, occupancy tracking, CRUD operations
 
 ### 3.3 Admin Features
 **Status:** ✅ **COMPLETED**
@@ -887,3 +896,56 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Auth → `POST /auth/login` → use token on the billing endpoints above; expect 200s with empty data initially (no sample invoices/payments yet).
 
 *Last updated: September 2025 - Billing module stabilized against current Prisma schema; unsupported flows disabled with explicit errors.*
+
+### September 2025: Appointments Cancellation & Cash Refunds
+**Achievement:** Enabled appointment cancellation via DELETE /appointments/:id and cash refunds in billing using negative payments.
+**Impact:**
+- Appointment cancellation prevents completed/in-progress cancellations and updates status to CANCELLED.
+- Cash refunds recorded as negative payments; invoice received/balance adjusted accordingly.
+
+**Technical Highlights:**
+- `appointments.service.remove` enforces rules and sets `status: CANCELLED`.
+- `billing.service.processRefund` validates completed payment then creates a negative payment and updates invoice aggregates.
+
+*Last updated: September 2025 - Appointment cancellations and cash refunds implemented.*
+
+### September 2025: Users Creation Flow & Patients Query Fix
+**Achievement:** Fixed user creation validation by adding password input to UI and aligning backend DTOs; prevented undefined query params from breaking Patients list.
+**Impact:**
+- Users can now be created from the dashboard with password (validated 8–20 chars).
+- Backend accepts `branchId` implicitly from the authenticated user when not provided in payload.
+- Patients page no longer issues URLs like `/patients?search=undefined&gender=undefined`; undefined/empty params are omitted.
+
+**Technical Highlights:**
+- Frontend: `UsersManagement.tsx` now includes a password field for create-only and sends it to the API; client-side length validation added.
+- Frontend: `api.ts` `get()` filters out undefined/null/empty values before constructing `URLSearchParams`.
+- Backend: `CreateUserDto.branchId` made optional; `UsersService.createUser` defaults to `req.user.branchId`.
+
+*Last updated: September 2025 - Users creation flow fixed; Patients query sanitized.*
+
+### September 2025: Enhanced User Experience & Room Management
+**Achievement:** Comprehensive UI/UX improvements with global search, role-based medical forms, and room management system.
+**Impact:**
+- Global search functionality enables instant access to patients, appointments, and users from any page
+- Role-based medical visit forms optimize workflow efficiency (Therapist 20-25%, Nurse 40%, Doctor 100%)
+- Photo capture integration for comprehensive medical documentation
+- Room management system with calendar view prevents scheduling conflicts
+- Complete inventory integration with 79 pre-seeded items across medical categories
+- Branch isolation fixes ensure proper data security and multi-tenancy
+
+**Technical Highlights:**
+- **Global Search**: Real-time dropdown results with debounced queries, keyboard navigation, smart routing
+- **Medical Visit Forms**: Progressive form sections, camera integration, visit numbering, patient history timeline
+- **Room Management**: Calendar view with hourly slots (8 AM - 8 PM), occupancy visualization, CRUD operations
+- **Inventory Integration**: Fixed branch isolation issues, moved 79 items to correct branch, API returning proper data
+- **Data Fixes**: Resolved frontend-backend response parsing issues, added defensive programming with Array.isArray checks
+
+**Key Features:**
+- Search across patients, appointments, and users with visual indicators
+- Role-based form access (Therapist → Nurse → Doctor workflow)
+- Camera photo capture for medical documentation
+- Room calendar with real-time availability and conflict detection
+- Complete inventory catalog with categories, stock levels, and pricing
+- Patient history timeline with visit tracking and follow-up management
+
+*Last updated: September 2025 - Enhanced UX with global search, role-based forms, room management, and inventory integration.*

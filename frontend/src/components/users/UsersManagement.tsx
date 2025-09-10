@@ -16,7 +16,7 @@ export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: UserRole; status: UserStatus }>({
+  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: UserRole; status: UserStatus; password?: string }>({
     firstName: '', lastName: '', email: '', role: 'RECEPTIONIST' as UserRole, status: 'ACTIVE' as UserStatus,
   });
 
@@ -24,7 +24,8 @@ export default function UsersManagement() {
     try {
       setLoading(true);
       const res = await apiClient.getUsers({ limit: 100 });
-      setUsers(res.data || []);
+      const list = (res as any)?.users ?? (res as any)?.data ?? [];
+      setUsers(list);
     } finally {
       setLoading(false);
     }
@@ -36,6 +37,13 @@ export default function UsersManagement() {
     try {
       setLoading(true);
       const payload = { firstName: form.firstName, lastName: form.lastName, email: form.email, role: form.role, status: form.status } as any;
+      if (!form.id) {
+        if (!form.password || form.password.length < 8 || form.password.length > 20) {
+          alert('Password must be 8-20 characters');
+          return;
+        }
+        payload.password = form.password;
+      }
       if (form.id) {
         await apiClient.updateUser(form.id, payload);
       } else {
@@ -111,6 +119,12 @@ export default function UsersManagement() {
                   </SelectContent>
                 </Select>
               </div>
+              {!form.id && (
+                <div className="md:col-span-2">
+                  <Label>Password (8-20 chars)</Label>
+                  <Input type="password" value={form.password || ''} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2 mt-4">
               <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>

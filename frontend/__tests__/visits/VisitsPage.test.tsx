@@ -64,7 +64,7 @@ describe('VisitsPage', () => {
     expect(screen.getByText('Medical Visit Form - Patient: patient-123, Doctor: doctor-123')).toBeInTheDocument();
   });
 
-  it('continues showing loading when no patients are found', async () => {
+  it('shows empty-state when no patients are found', async () => {
     const mockGetPatients = jest.mocked(apiClient.getPatients);
     const mockGet = jest.mocked(apiClient.get);
     
@@ -75,13 +75,13 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
+      expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
     });
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
   });
 
-  it('continues showing loading when no doctors are found', async () => {
+  it('shows empty-state when no doctors are found', async () => {
     const mockGetPatients = jest.mocked(apiClient.getPatients);
     const mockGet = jest.mocked(apiClient.get);
     
@@ -94,13 +94,13 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
+      expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
     });
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
   });
 
-  it('handles API errors gracefully', async () => {
+  it('handles API errors gracefully with empty-state', async () => {
     const mockGetPatients = jest.mocked(apiClient.getPatients);
     const mockGet = jest.mocked(apiClient.get);
     
@@ -111,7 +111,7 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
+      expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
     });
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
@@ -179,7 +179,7 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
+      expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
     });
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
@@ -201,7 +201,7 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
+      expect(screen.getByText('No patients or doctors found. Please add at least one to create a visit.')).toBeInTheDocument();
     });
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();

@@ -94,6 +94,41 @@ export class AppointmentsController {
     );
   }
 
+  @Get('rooms')
+  getRooms(@Request() req: AuthenticatedRequest) {
+    return this.appointmentsService.getRooms(req.user.branchId);
+  }
+
+  @Get('rooms/all')
+  getAllRooms(@Request() req: AuthenticatedRequest) {
+    return this.appointmentsService.getAllRooms(req.user.branchId);
+  }
+
+  @Post('rooms')
+  createRoom(
+    @Body() roomData: { name: string; type: string; capacity: number; isActive: boolean },
+    @Request() req: AuthenticatedRequest
+  ) {
+    return this.appointmentsService.createRoom(roomData, req.user.branchId);
+  }
+
+  @Patch('rooms/:roomId')
+  updateRoom(
+    @Param('roomId') roomId: string,
+    @Body() roomData: { name: string; type: string; capacity: number; isActive: boolean },
+    @Request() req: AuthenticatedRequest
+  ) {
+    return this.appointmentsService.updateRoom(roomId, roomData, req.user.branchId);
+  }
+
+  @Delete('rooms/:roomId')
+  deleteRoom(
+    @Param('roomId') roomId: string,
+    @Request() req: AuthenticatedRequest
+  ) {
+    return this.appointmentsService.deleteRoom(roomId, req.user.branchId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.appointmentsService.findOne(id, req.user.branchId);

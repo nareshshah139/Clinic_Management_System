@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import type { Patient, Gender } from '@/lib/types';
+import type { Patient } from '@/lib/types';
+
+type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
 interface PatientFormState {
   id?: string;
@@ -60,7 +62,26 @@ export default function PatientsManagement() {
         gender: genderFilter !== 'ALL' ? genderFilter : undefined,
         limit: 50,
       });
-      setPatients(response.data || []);
+      const rows = (response as any)?.data ?? [];
+      const mapped: Patient[] = rows.map((bp: any) => {
+        const fullName: string = String(bp.name || '').trim();
+        const [first, ...rest] = fullName.split(' ').filter(Boolean);
+        return {
+          id: bp.id,
+          firstName: first || fullName || '',
+          lastName: rest.join(' '),
+          email: bp.email || undefined,
+          phone: bp.phone,
+          gender: bp.gender,
+          dob: bp.dob,
+          address: bp.address || undefined,
+          city: bp.city || undefined,
+          state: bp.state || undefined,
+          createdAt: bp.createdAt,
+          updatedAt: bp.updatedAt,
+        } as Patient;
+      });
+      setPatients(mapped);
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch patients', err);
@@ -85,7 +106,16 @@ export default function PatientsManagement() {
   const submitPatient = async () => {
     try {
       setLoading(true);
-      const payload = { ...form };
+      const name = `${form.firstName} ${form.lastName}`.trim();
+      const payload = {
+        name: name || form.firstName || form.lastName,
+        gender: form.gender,
+        dob: form.dateOfBirth,
+        phone: form.phone,
+        email: form.email || undefined,
+        address: form.address || undefined,
+        emergencyContact: form.emergencyContact || undefined,
+      };
       if (form.id) {
         await apiClient.updatePatient(form.id, payload);
       } else {
@@ -97,6 +127,8 @@ export default function PatientsManagement() {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('Failed to save patient', err);
+      // eslint-disable-next-line no-alert
+      alert('Failed to save patient. Please check required fields and phone format.');
     } finally {
       setLoading(false);
     }
@@ -107,12 +139,12 @@ export default function PatientsManagement() {
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
-      dateOfBirth: p.dateOfBirth.split('T')[0] || '',
-      gender: p.gender,
+      dateOfBirth: (p.dob || '').split('T')[0] || '',
+      gender: (p.gender as Gender) || 'OTHER',
       phone: p.phone,
       email: p.email || '',
       address: p.address || '',
-      emergencyContact: p.emergencyContact || '',
+      emergencyContact: '',
     });
     setOpen(true);
   };
@@ -128,7 +160,7 @@ export default function PatientsManagement() {
           <h2 className="text-2xl font-semibold text-gray-900">Patients</h2>
           <p className="text-gray-600">Search, add, and manage patient records</p>
         </div>
-        <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>
+        <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" /> New Patient
@@ -153,7 +185,7 @@ export default function PatientsManagement() {
               </div>
               <div>
                 <Label>Gender</Label>
-                <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v as Gender })}>
+                <Select value={form.gender} onValueChange={(v: Gender) => setForm({ ...form, gender: v })}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
@@ -196,7 +228,7 @@ export default function PatientsManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input className="pl-10" placeholder="Search by name, phone, or email" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            <Select value={genderFilter} onValueChange={(v) => setGenderFilter(v as 'ALL' | Gender)}>
+            <Select value={genderFilter} onValueChange={(v: 'ALL' | Gender) => setGenderFilter(v)}>
               <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Gender" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">All Genders</SelectItem>

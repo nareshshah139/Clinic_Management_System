@@ -349,28 +349,21 @@ describe('BillingController', () => {
         amount: 100,
         reason: 'Patient request',
         notes: 'Partial refund',
-      };
+      } as any;
 
-      const mockRefund = {
-        id: 'refund-123',
-        ...refundDto,
-        payment: {
-          id: 'payment-123',
-          amount: 500,
-          method: PaymentMethod.CASH,
-          transactionId: 'TXN-123',
-          invoice: {
-            id: 'invoice-123',
-            invoiceNumber: 'INV-20241225-001',
-          },
-        },
-      };
+      const mockRefundPayment = {
+        id: 'payment-refund-1',
+        invoiceId: 'invoice-123',
+        amount: -100,
+        method: PaymentMethod.CASH,
+        status: PaymentStatus.COMPLETED,
+      } as any;
 
-      mockBillingService.processRefund.mockResolvedValue(mockRefund);
+      mockBillingService.processRefund.mockResolvedValue(mockRefundPayment);
 
       const result = await controller.processRefund(refundDto, mockRequest as any);
 
-      expect(result).toEqual(mockRefund);
+      expect(result).toEqual(mockRefundPayment);
       expect(service.processRefund).toHaveBeenCalledWith(refundDto, mockRequest.user.branchId);
     });
   });

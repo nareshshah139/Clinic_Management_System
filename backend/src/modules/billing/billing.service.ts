@@ -300,8 +300,61 @@ export class BillingService {
     return confirmed;
   }
 
-  async processRefund(_refundDto: RefundDto, _branchId: string) {
-    throw new BadRequestException('Refunds are not supported in the current schema');
+  async processRefund(refundDto: RefundDto, branchId: string) {
+    const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
+
+    // Fetch payment and validate branch via invoice → patient.branchId
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        id: paymentId,
+        invoice: { patient: { branchId } },
+      },
+      include: { invoice: true },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    // In current schema, we use reconStatus to track completion
+    if (payment.reconStatus !== 'COMPLETED') {
+      throw new BadRequestException('Can only refund completed payments');
+    }
+
+    if (amount <= 0) {
+      throw new BadRequestException('Refund amount must be greater than 0');
+    }
+
+    if (amount > payment.amount) {
+      throw new BadRequestException('Refund amount exceeds original payment amount');
+    }
+
+    // Represent refund as a negative payment (cash refund)
+    const refundPayment = await this.prisma.payment.create({
+      data: {
+        invoiceId: payment.invoiceId,
+        amount: -amount,
+        mode: payment.mode,
+        reference: (notes ? `REFUND: ${notes}` : 'REFUND') as any,
+        gateway: null,
+        reconStatus: 'COMPLETED',
+      },
+      include: {
+        invoice: { select: { id: true, invoiceNo: true, total: true } },
+      },
+    });
+
+    // Update invoice received/balance (subtract refunded amount)
+    const invoice = await this.prisma.invoice.findFirst({ where: { id: payment.invoiceId, patient: { branchId } } });
+    const newReceived = Math.max(0, (invoice?.received ?? 0) - amount);
+    const newBalance = Math.max((invoice?.total ?? 0) - newReceived, 0);
+
+    await this.prisma.invoice.update({
+      where: { id: payment.invoiceId },
+      data: { received: newReceived, balance: newBalance },
+    });
+
+    return refundPayment;
   }
 
   async processBulkPayment(bulkPaymentDto: BulkPaymentDto, branchId: string) {
@@ -311,20 +364,19 @@ export class BillingService {
     const invoices = await this.prisma.invoice.findMany({
       where: {
         id: { in: invoiceIds },
-        branchId,
+        patient: { branchId },
       },
+      include: { payments: true },
     });
 
     if (invoices.length !== invoiceIds.length) {
       throw new NotFoundException('One or more invoices not found');
     }
 
-    // Calculate total amount for all invoices
+    // Calculate total amount for all invoices based on current balance
     const calculatedTotal = invoices.reduce((sum, invoice) => {
-      const paidAmount = invoice.payments?.reduce((paidSum, payment) => {
-        return payment.status === PaymentStatus.COMPLETED ? paidSum + payment.amount : paidSum;
-      }, 0) || 0;
-      return sum + (invoice.totalAmount - paidAmount);
+      const balance = Math.max((invoice.total ?? 0) - (invoice.received ?? 0), 0);
+      return sum + balance;
     }, 0);
 
     if (totalAmount !== calculatedTotal) {
@@ -332,22 +384,22 @@ export class BillingService {
     }
 
     // Process payments for each invoice
-    const payments = [];
+    const payments = [] as any[];
     for (const invoice of invoices) {
-      const paidAmount = invoice.payments?.reduce((sum, payment) => {
-        return payment.status === PaymentStatus.COMPLETED ? sum + payment.amount : sum;
-      }, 0) || 0;
-      const remainingAmount = invoice.totalAmount - paidAmount;
+      const remainingAmount = Math.max((invoice.total ?? 0) - (invoice.received ?? 0), 0);
 
       if (remainingAmount > 0) {
-        const payment = await this.processPayment({
-          invoiceId: invoice.id,
-          amount: remainingAmount,
-          method,
-          transactionId,
-          reference,
-          notes,
-        }, branchId);
+        const payment = await this.processPayment(
+          {
+            invoiceId: invoice.id,
+            amount: remainingAmount,
+            method,
+            transactionId,
+            reference,
+            notes,
+          } as any,
+          branchId,
+        );
         payments.push(payment);
       }
     }

@@ -5,6 +5,12 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
 import { join } from 'path';
 
+// Ensure iconv-lite encodings are available at runtime (workaround for raw-body/iconv-lite packaging issues)
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+require('iconv-lite/encodings');
+import * as iconv from 'iconv-lite';
+iconv.encodingExists('utf-8');
+
 async function bootstrap() {
   const useMinimal = process.env.MINIMAL_BOOT === 'true';
   const moduleToBootstrap = useMinimal

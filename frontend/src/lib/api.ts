@@ -8,6 +8,10 @@ export class ApiClient {
     this.baseURL = baseURL;
     if (typeof window !== 'undefined') {
       this.token = localStorage.getItem('auth_token');
+      if (!this.token && typeof document !== 'undefined') {
+        const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
+        this.token = match ? decodeURIComponent(match[1]) : null;
+      }
     }
   }
 
@@ -48,8 +52,18 @@ export class ApiClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    if (this.token) {
-      headers.Authorization = `Bearer ${this.token}`;
+    // Ensure Authorization header is set from memory or cookie
+    let activeToken = this.token;
+    if (!activeToken && typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
+      activeToken = match ? decodeURIComponent(match[1]) : null;
+      if (activeToken) {
+        this.token = activeToken;
+      }
+    }
+
+    if (activeToken) {
+      headers.Authorization = `Bearer ${activeToken}`;
     }
 
     const response = await fetch(url, {
@@ -71,7 +85,19 @@ export class ApiClient {
 
   // Generic CRUD operations
   async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    const url = params ? `${endpoint}?${new URLSearchParams(params)}` : endpoint;
+    let url = endpoint;
+    if (params) {
+      const sp = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined && value !== null && value !== '') {
+          sp.append(key, String(value));
+        }
+      }
+      const qs = sp.toString();
+      if (qs) {
+        url = `${endpoint}?${qs}`;
+      }
+    }
     return this.request<T>(url);
   }
 
@@ -132,6 +158,30 @@ export class ApiClient {
 
   async getDoctorSchedule(doctorId: string, date: string) {
     return this.get(`/appointments/doctor/${doctorId}/schedule`, { date });
+  }
+
+  async getRooms() {
+    return this.get('/appointments/rooms');
+  }
+
+  async getAllRooms() {
+    return this.get('/appointments/rooms/all');
+  }
+
+  async createRoom(roomData: { name: string; type: string; capacity: number; isActive: boolean }) {
+    return this.post('/appointments/rooms', roomData);
+  }
+
+  async updateRoom(roomId: string, roomData: { name: string; type: string; capacity: number; isActive: boolean }) {
+    return this.patch(`/appointments/rooms/${roomId}`, roomData);
+  }
+
+  async deleteRoom(roomId: string) {
+    return this.delete(`/appointments/rooms/${roomId}`);
+  }
+
+  async getRoomSchedule(roomId: string, date: string) {
+    return this.get(`/appointments/room/${roomId}/schedule`, { date });
   }
 
   // Visits

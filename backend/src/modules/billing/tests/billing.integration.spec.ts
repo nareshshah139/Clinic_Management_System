@@ -637,35 +637,30 @@ describe('BillingController (Integration)', () => {
         amount: 100,
         reason: 'Patient request',
         notes: 'Partial refund',
-      };
+      } as any;
 
       const mockPayment = {
         id: 'payment-123',
+        invoiceId: 'invoice-123',
         amount: 500,
-        status: PaymentStatus.COMPLETED,
+        reconStatus: 'COMPLETED',
         invoice: {
           id: 'invoice-123',
           invoiceNumber: 'INV-20241225-001',
         },
-      };
+      } as any;
 
-      const mockRefund = {
-        id: 'refund-123',
-        ...refundDto,
-        payment: {
-          id: 'payment-123',
-          amount: 500,
-          method: PaymentMethod.CASH,
-          transactionId: 'TXN-123',
-          invoice: {
-            id: 'invoice-123',
-            invoiceNumber: 'INV-20241225-001',
-          },
-        },
-      };
+      const mockRefundPayment = {
+        id: 'payment-refund-1',
+        invoiceId: 'invoice-123',
+        amount: -100,
+        method: PaymentMethod.CASH,
+        status: PaymentStatus.COMPLETED,
+      } as any;
 
       mockPrismaService.payment.findFirst.mockResolvedValue(mockPayment);
-      mockPrismaService.refund.create.mockResolvedValue(mockRefund);
+      mockPrismaService.payment.create.mockResolvedValue(mockRefundPayment);
+      mockPrismaService.invoice.findFirst.mockResolvedValue({ id: 'invoice-123', total: 500, received: 500 });
       mockPrismaService.invoice.update.mockResolvedValue({});
 
       const response = await request(app.getHttpServer())
@@ -674,10 +669,9 @@ describe('BillingController (Integration)', () => {
         .expect(201);
 
       expect(response.body).toMatchObject({
-        id: 'refund-123',
-        paymentId: 'payment-123',
-        amount: 100,
-        reason: 'Patient request',
+        id: 'payment-refund-1',
+        invoiceId: 'invoice-123',
+        amount: -100,
       });
     });
   });

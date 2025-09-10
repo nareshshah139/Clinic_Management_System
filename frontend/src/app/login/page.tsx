@@ -36,19 +36,45 @@ export default function LoginPage() {
           <CardTitle className="text-center">ClinicMS Login</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm text-gray-700">Phone</label>
-            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit phone" />
-          </div>
-          <div>
-            <label className="text-sm text-gray-700">Password</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-          </div>
-          {error && <p className="text-sm text-red-600">{error}</p>}
-          <Button className="w-full" onClick={submit} disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
-          </Button>
-          <p className="text-xs text-gray-500 text-center">Use your registered phone and password.</p>
+          <form
+            onSubmit={(e) => { e.preventDefault(); void submit(); }}
+            autoComplete="on"
+            className="space-y-4"
+          >
+            <div>
+              <label className="text-sm text-gray-700" htmlFor="login-username">Phone</label>
+              <Input
+                id="login-username"
+                name="username"
+                type="tel"
+                inputMode="tel"
+                autoComplete="username"
+                autoCapitalize="off"
+                autoCorrect="off"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="10-digit phone"
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-sm text-gray-700" htmlFor="login-password">Password</label>
+              <Input
+                id="login-password"
+                name="current-password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            {error && <p className="text-sm text-red-600">{error}</p>}
+            <Button className="w-full" type="submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+            <p className="text-xs text-gray-500 text-center">Use your registered phone and password.</p>
+          </form>
         </CardContent>
       </Card>
     </div>

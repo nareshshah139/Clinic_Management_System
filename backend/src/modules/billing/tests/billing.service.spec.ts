@@ -466,38 +466,47 @@ describe('BillingService', () => {
         amount: 100,
         reason: 'Patient request',
         notes: 'Partial refund',
-      };
+      } as any;
 
       const mockPayment = {
         id: 'payment-123',
+        invoiceId: 'invoice-123',
         amount: 500,
-        status: PaymentStatus.COMPLETED,
-        invoice: {
-          id: 'invoice-123',
-          invoiceNumber: 'INV-20241225-001',
-        },
-      };
+        mode: PaymentMethod.CASH,
+        reconStatus: 'COMPLETED',
+        invoice: { id: 'invoice-123' },
+      } as any;
 
-      const mockRefund = {
-        id: 'refund-123',
-        ...refundDto,
-        payment: mockPayment,
-      };
+      const mockRefundPayment = {
+        id: 'payment-refund-1',
+        invoiceId: 'invoice-123',
+        amount: -100,
+        mode: PaymentMethod.CASH,
+        reconStatus: 'COMPLETED',
+      } as any;
+
+      const mockInvoice = { id: 'invoice-123', total: 500, received: 500 } as any;
 
       mockPrisma.payment.findFirst.mockResolvedValue(mockPayment);
-      mockPrisma.refund.create.mockResolvedValue(mockRefund);
-      mockPrisma.invoice.update.mockResolvedValue({});
+      mockPrisma.payment.create.mockResolvedValue(mockRefundPayment);
+      mockPrisma.invoice.findFirst.mockResolvedValue(mockInvoice);
+      mockPrisma.invoice.update.mockResolvedValue({ ...mockInvoice, received: 400, balance: 100 });
 
       const result = await service.processRefund(refundDto, mockBranchId);
 
-      expect(result).toEqual(mockRefund);
-      expect(mockPrisma.refund.create).toHaveBeenCalledWith({
+      expect(result).toEqual(mockRefundPayment);
+      expect(mockPrisma.payment.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          paymentId: refundDto.paymentId,
-          amount: refundDto.amount,
-          reason: refundDto.reason,
+          invoiceId: 'invoice-123',
+          amount: -100,
+          mode: PaymentMethod.CASH,
+          reconStatus: 'COMPLETED',
         }),
         include: expect.any(Object),
+      });
+      expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
+        where: { id: 'invoice-123' },
+        data: { received: 400, balance: 100 },
       });
     });
 
@@ -506,17 +515,14 @@ describe('BillingService', () => {
         paymentId: 'payment-123',
         amount: 100,
         reason: 'Patient request',
-      };
+      } as any;
 
       const mockPayment = {
         id: 'payment-123',
         amount: 500,
-        status: PaymentStatus.PENDING,
-        invoice: {
-          id: 'invoice-123',
-          invoiceNumber: 'INV-20241225-001',
-        },
-      };
+        reconStatus: 'PENDING',
+        invoice: { id: 'invoice-123' },
+      } as any;
 
       mockPrisma.payment.findFirst.mockResolvedValue(mockPayment);
 

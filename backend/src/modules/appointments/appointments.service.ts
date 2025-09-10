@@ -466,7 +466,26 @@ export class AppointmentsService {
     const allSlots = SchedulingUtils.generateTimeSlots(9, 18, durationMinutes);
 
     // Filter out booked slots
-    const availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+    let availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+
+    // For same-day scheduling, filter out past slots based on local time
+    const getLocalDateStr = (d: Date): string => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const da = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${da}`;
+    };
+    const todayStr = getLocalDateStr(new Date());
+    if (date === todayStr) {
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      availableSlots = availableSlots.filter((slot) => {
+        const parsed = SchedulingUtils.parseTimeSlot(slot);
+        const [h, mm] = parsed.start.split(':').map((v) => parseInt(v, 10));
+        const startMinutes = h * 60 + mm;
+        return startMinutes > nowMinutes;
+      });
+    }
 
     return {
       date,
@@ -556,21 +575,106 @@ export class AppointmentsService {
     };
   }
 
+  async getRooms(branchId: string) {
+    const rooms = await this.prisma.room.findMany({
+      where: {
+        branchId,
+        isActive: true,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    return {
+      rooms,
+    };
+  }
+
+  async getAllRooms(branchId: string) {
+    const rooms = await this.prisma.room.findMany({
+      where: {
+        branchId,
+      },
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    return {
+      rooms,
+    };
+  }
+
+  async createRoom(roomData: { name: string; type: string; capacity: number; isActive: boolean }, branchId: string) {
+    const room = await this.prisma.room.create({
+      data: {
+        ...roomData,
+        branchId,
+      },
+    });
+
+    return room;
+  }
+
+  async updateRoom(roomId: string, roomData: { name: string; type: string; capacity: number; isActive: boolean }, branchId: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, branchId },
+    });
+
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+
+    const updatedRoom = await this.prisma.room.update({
+      where: { id: roomId },
+      data: roomData,
+    });
+
+    return updatedRoom;
+  }
+
+  async deleteRoom(roomId: string, branchId: string) {
+    const room = await this.prisma.room.findFirst({
+      where: { id: roomId, branchId },
+    });
+
+    if (!room) {
+      throw new NotFoundException('Room not found');
+    }
+
+    // Check if room has any appointments
+    const appointmentCount = await this.prisma.appointment.count({
+      where: { roomId },
+    });
+
+    if (appointmentCount > 0) {
+      throw new BadRequestException('Cannot delete room with existing appointments');
+    }
+
+    await this.prisma.room.delete({
+      where: { id: roomId },
+    });
+
+    return { message: 'Room deleted successfully' };
+  }
+
   // Private helper methods
   private validateAppointmentInputs(dto: CreateAppointmentDto): void {
     if (!SchedulingUtils.isValidTimeSlot(dto.slot)) {
       throw new BadRequestException('Invalid time slot format. Use HH:MM-HH:MM');
     }
 
-    const appointmentDate = new Date(dto.date);
+    // Compare appointment slot start time against current time to allow same-day future bookings
+    const timeSlot = SchedulingUtils.parseTimeSlot(dto.slot);
+    const appointmentStart = new Date(`${dto.date}T${timeSlot.start}:00.000Z`);
     const now = new Date();
 
-    if (appointmentDate < now) {
+    if (appointmentStart < now) {
       throw new BadRequestException('Cannot schedule appointment in the past');
     }
 
     // Check if appointment is within business hours (9 AM - 6 PM)
-    const timeSlot = SchedulingUtils.parseTimeSlot(dto.slot);
     const startHour = parseInt(timeSlot.start.split(':')[0]);
     const endHour = parseInt(timeSlot.end.split(':')[0]);
 

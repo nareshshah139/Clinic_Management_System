@@ -34,14 +34,22 @@ export default function InventoryPage() {
   const fetchInventoryItems = async () => {
     try {
       setLoading(true);
+      console.log('🏪 Fetching inventory items...');
       const response = await apiClient.getInventoryItems({
         search: searchTerm || undefined,
         category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
         stockStatus: stockFilter !== 'ALL' ? stockFilter : undefined,
       });
-      setItems(response.data || []);
+      console.log('🏪 Inventory response:', response, 'Type:', typeof response);
+      
+      // Backend might return { items, total } or just items array
+      const items = response?.items || response?.data || response || [];
+      console.log('🏪 Extracted items:', items, 'Length:', Array.isArray(items) ? items.length : 'Not array');
+      
+      setItems(Array.isArray(items) ? items : []);
     } catch (error) {
-      console.error('Error fetching inventory items:', error);
+      console.error('❌ Error fetching inventory items:', error);
+      setItems([]); // Ensure we always set an array
     } finally {
       setLoading(false);
     }

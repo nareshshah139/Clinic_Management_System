@@ -170,3 +170,13 @@ September 2025 - Planning.md updated with Appointments Conflict Handling & UI Al
 - Added details on 409 conflict behavior, alternative slot suggestions, enriched API errors
 - Listed new backend unit/integration tests and frontend RTL test
 - Included verification commands for backend and frontend
+
+Appointments: cancellation endpoint confirmed (DELETE /appointments/:id); prevents cancelling completed/in-progress.
+Billing: cash refunds enabled by recording negative payments and updating invoice received/balance.
+
+September 2025 - Planning.md updated for Users creation flow & Patients query fix.
+- Frontend: Added password field to `UsersManagement.tsx` (create-only) with 8–20 char validation.
+- Frontend: `api.ts` now omits undefined/null/empty params from query strings.
+- Backend: `CreateUserDto.branchId` optional; `UsersService.createUser` uses authenticated branch when absent.
+
+- Added empty-state to `frontend/src/app/dashboard/visits/page.tsx` to handle no patients/doctors gracefully; replaced perpetual loader with CTA links to Patients/Users. Also ensured auth token cookie fallback in `frontend/src/lib/api.ts`. Tests updated accordingly.
