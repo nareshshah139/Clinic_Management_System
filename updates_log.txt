@@ -38,3 +38,6 @@
 [2025-09-10 09:28 UTC] Frontend: API client now uses standard `get()` for `/visits/patient/:id/history`, ensuring auth headers and proxy; removed ad-hoc fetch.
 
 [2025-09-10 09:32 UTC] Frontend: Fixed React runtime error in PatientHistoryTimeline by rendering `treatment.medications` as a list (supports string or {name,dosage,duration}). 
+
+[2025-09-10 23:20 UTC] Backend: Added protected GET /auth/me returning { id, role, branchId } from JWT; restarted server and verified endpoint.
+[2025-09-10 23:20 UTC] Frontend: Visits page now calls /auth/me successfully (fixes "Cannot GET /auth/me" error during initial load). 

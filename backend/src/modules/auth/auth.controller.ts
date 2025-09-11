@@ -70,4 +70,16 @@ export class AuthController {
       throw new HttpException('Failed to fetch statistics', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
+
+  // Return current authenticated user
+  @Get('me')
+  async me(@Request() req: any) {
+    // Passport attaches whatever JwtStrategy.validate returns to req.user
+    const u = req.user || {};
+    return {
+      id: u.userId || u.id,
+      role: u.role,
+      branchId: u.branchId,
+    };
+  }
 }
