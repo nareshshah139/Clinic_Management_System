@@ -173,7 +173,7 @@ export default function AppointmentScheduler() {
         slot: pendingBookingSlot,
         patient: selectedPatient ? {
           id: selectedPatient.id,
-          name: `${selectedPatient.firstName} ${selectedPatient.lastName}`.trim(),
+          name: selectedPatient.name || 'Unknown Patient',
           phone: selectedPatient.phone,
           email: selectedPatient.email,
         } : { id: selectedPatientId, name: 'Unknown' },
@@ -300,18 +300,31 @@ export default function AppointmentScheduler() {
             <label className="text-sm text-gray-700">Patient</label>
             <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
             {selectedPatient && (
-              <div className="mt-2 flex items-center gap-2">
-                <Badge variant="secondary">
-                  Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
-                </Badge>
-                <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); }}>Clear</Button>
+              <div className="mt-2 p-3 bg-green-50 rounded border border-green-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-green-800">✓ Selected Patient</div>
+                    <div className="text-green-700 font-medium">{selectedPatient.name || `Patient ${selectedPatient.id?.slice(-4) || 'Unknown'}`}</div>
+                    <div className="text-xs text-green-600 flex items-center gap-3 mt-1">
+                      <span>ID: {selectedPatient.id}</span>
+                      {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
+                      {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); }}>Clear</Button>
+                </div>
               </div>
             )}
             {patientSearch && patients.length > 0 && (
               <div className="mt-2 max-h-40 overflow-auto border rounded">
                 {patients.map((p) => (
-                  <div key={p.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`); setSelectedPatientId(p.id); setSelectedPatient(p); setPatients([]); }}>
-                    {p.firstName} {p.lastName} — {p.phone}
+                  <div key={p.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setPatientSearch(`${p.name || 'Unknown'} — ${p.phone}`); setSelectedPatientId(p.id); setSelectedPatient(p); setPatients([]); }}>
+                    <div className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || 'Unknown'}`}</div>
+                    <div className="text-xs text-gray-500 flex items-center gap-3">
+                      <span>ID: {p.id}</span>
+                      {p.phone && <span>📞 {p.phone}</span>}
+                      {p.email && <span>✉️ {p.email}</span>}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -336,7 +349,7 @@ export default function AppointmentScheduler() {
                 <div className="ml-3">
                   <p className="font-medium">Appointment Successfully Booked!</p>
                   <p style={{ color: '#16a34a' }}>
-                    {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
+                    {bookingDetails.patient?.name || selectedPatient?.name || 'Unknown Patient'} 
                     {' '} scheduled for {bookingDetails.slot}
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
                     {bookingDetails.visitType && ` (${bookingDetails.visitType})`}

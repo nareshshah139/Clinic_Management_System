@@ -80,7 +80,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [objective, setObjective] = useState('');
   const [assessment, setAssessment] = useState('');
   const [plan, setPlan] = useState('');
-  
+
   // Dermatology-specific
   const [skinType, setSkinType] = useState<string>('');
   const [morphology, setMorphology] = useState<Set<string>>(new Set());
@@ -102,7 +102,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Patient history
   const [patientHistory, setPatientHistory] = useState<PatientHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  
+
   const [saving, setSaving] = useState(false);
 
   // Check permissions for current user role
@@ -474,11 +474,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               </div>
 
               {/* Quick Actions */}
-              <Card>
+    <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Quick Actions</CardTitle>
-                </CardHeader>
-                <CardContent>
+      </CardHeader>
+      <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {hasPermission('vitals') && (
                       <Button variant="outline" onClick={() => setActiveTab('vitals')}>
@@ -506,8 +506,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             {/* Vitals Tab */}
             {(hasPermission('vitals') || hasPermission('all')) && (
               <TabsContent value="vitals" className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div>
                     <label className="text-sm font-medium text-gray-700">BP Systolic</label>
                     <Input 
                       placeholder="mmHg" 
@@ -737,39 +737,39 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         >
                           {ft}
                         </Button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
+                  ))}
+                </div>
+              </div>
+              <div>
                     <label className="text-sm font-medium text-gray-700">Acne Severity</label>
                     <Input 
                       placeholder="mild/moderate/severe" 
                       value={acneSeverity} 
                       onChange={(e) => setAcneSeverity(e.target.value)} 
                     />
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <label className="text-sm font-medium text-gray-700">Itch Score (0-10)</label>
                     <Input 
                       placeholder="0-10" 
                       value={itchScore} 
                       onChange={(e) => setItchScore(e.target.value)} 
                     />
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <label className="text-sm font-medium text-gray-700">Follow-up (days)</label>
                     <Input 
                       placeholder="e.g., 30" 
                       value={followUpDays} 
                       onChange={(e) => setFollowUpDays(e.target.value)} 
                     />
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                <div>
+            <div>
                   <label className="text-sm font-medium text-gray-700">Morphology</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {MORPHOLOGY.map(m => (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {MORPHOLOGY.map(m => (
                       <Button 
                         key={m} 
                         type="button" 
@@ -779,14 +779,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       >
                         {m}
                       </Button>
-                    ))}
-                  </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                <div>
+            <div>
                   <label className="text-sm font-medium text-gray-700">Distribution / Body Areas</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {DISTRIBUTION.map(d => (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {DISTRIBUTION.map(d => (
                       <Button 
                         key={d} 
                         type="button" 
@@ -796,33 +796,33 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       >
                         {d}
                       </Button>
-                    ))}
-                  </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
                     <label className="text-sm font-medium text-gray-700">Triggers</label>
                     <Input 
                       placeholder="Heat, stress, cosmetics..." 
                       value={triggers} 
                       onChange={(e) => setTriggers(e.target.value)} 
                     />
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <label className="text-sm font-medium text-gray-700">Prior Treatments</label>
                     <Input 
                       placeholder="Topicals/systemics tried" 
                       value={priorTx} 
                       onChange={(e) => setPriorTx(e.target.value)} 
                     />
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                <div>
+            <div>
                   <label className="text-sm font-medium text-gray-700">Dermatology Diagnoses</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {DERM_DIAGNOSES.map(dx => (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {DERM_DIAGNOSES.map(dx => (
                       <Button 
                         key={dx} 
                         type="button" 
@@ -832,9 +832,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       >
                         {dx}
                       </Button>
-                    ))}
-                  </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">Detailed Examination</label>
@@ -857,63 +857,63 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             {/* Treatment Tab - Doctor Only */}
             {hasPermission('all') && (
               <TabsContent value="treatment" className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
                     <label className="text-sm font-medium text-gray-700">Planned Procedure</label>
                     <Input 
                       placeholder="e.g., Q-switched Nd:YAG, IPL, CO2, Diode" 
                       value={procType} 
                       onChange={(e) => setProcType(e.target.value)} 
                     />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
                       <label className="text-sm font-medium text-gray-700">Fluence</label>
                       <Input 
                         placeholder="J/cm²" 
                         value={fluence} 
                         onChange={(e) => setFluence(e.target.value)} 
                       />
-                    </div>
-                    <div>
+                </div>
+                <div>
                       <label className="text-sm font-medium text-gray-700">Spot Size</label>
                       <Input 
                         placeholder="mm" 
                         value={spotSize} 
                         onChange={(e) => setSpotSize(e.target.value)} 
                       />
-                    </div>
-                    <div>
+                </div>
+                <div>
                       <label className="text-sm font-medium text-gray-700">Passes</label>
                       <Input 
                         placeholder="#" 
                         value={passes} 
                         onChange={(e) => setPasses(e.target.value)} 
                       />
-                    </div>
-                  </div>
                 </div>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
                     <label className="text-sm font-medium text-gray-700">Topicals</label>
                     <Textarea 
                       placeholder="e.g., Adapalene, Benzoyl peroxide, Azelaic acid" 
                       value={topicals} 
                       onChange={(e) => setTopicals(e.target.value)} 
                     />
-                  </div>
-                  <div>
+              </div>
+              <div>
                     <label className="text-sm font-medium text-gray-700">Systemics</label>
                     <Textarea 
                       placeholder="e.g., Doxycycline, Isotretinoin, Antihistamines" 
                       value={systemics} 
                       onChange={(e) => setSystemics(e.target.value)} 
                     />
-                  </div>
-                </div>
+              </div>
+            </div>
 
-                <div>
+            <div>
                   <label className="text-sm font-medium text-gray-700">Treatment Plan</label>
                   <Textarea 
                     placeholder="Comprehensive treatment plan and recommendations..."
@@ -936,8 +936,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <Button onClick={() => markSectionComplete('treatment')}>
                     Mark Treatment Complete
                   </Button>
-                </div>
-              </TabsContent>
+            </div>
+          </TabsContent>
             )}
 
             {/* Patient History Tab */}
@@ -1049,7 +1049,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   </div>
                 </div>
               )}
-            </TabsContent>
+          </TabsContent>
           </Tabs>
 
           {/* Action Buttons */}
@@ -1067,9 +1067,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 </Button>
               )}
             </div>
-          </div>
-        </CardContent>
-      </Card>
+        </div>
+      </CardContent>
+    </Card>
     </div>
   );
 } 

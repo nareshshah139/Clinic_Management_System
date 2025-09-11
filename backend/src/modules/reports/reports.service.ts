@@ -67,8 +67,8 @@ export class ReportsService {
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
     const wherePayments: any = {
-      branchId,
-      status: 'COMPLETED',
+      invoice: { branchId },
+      reconStatus: 'COMPLETED',
       createdAt: { gte: dateRange.start, lte: dateRange.end },
     };
 
@@ -85,8 +85,8 @@ export class ReportsService {
       wherePayments.invoice = { OR: invoiceFilter };
     }
     if (paymentMode) {
-      // In billing module, field is `method`
-      wherePayments.method = paymentMode as any;
+      // Fixed: Use 'mode' field from Payment model
+      wherePayments.mode = paymentMode as any;
     }
 
     const [sumAgg, paymentCount, invoiceIdGroups, paymentModeGroups, dailyGroups] = await Promise.all([
@@ -94,7 +94,7 @@ export class ReportsService {
       this.prisma.payment.count({ where: wherePayments }),
       this.prisma.payment.groupBy({ by: ['invoiceId'], where: wherePayments, _count: { invoiceId: true } }),
       includePaymentBreakdown
-        ? this.prisma.payment.groupBy({ by: ['method'], where: wherePayments, _sum: { amount: true }, _count: { id: true } })
+        ? this.prisma.payment.groupBy({ by: ['mode'], where: wherePayments, _sum: { amount: true }, _count: { id: true } })
         : Promise.resolve([] as any[]),
       this.prisma.payment.groupBy({ by: ['createdAt'], where: wherePayments, _sum: { amount: true }, _count: { id: true } }),
     ]);
@@ -742,21 +742,24 @@ export class ReportsService {
     const { startDate, endDate, period, paymentMode, gateway, includeReconciliation, includeRefunds } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
-    const where: any = { branchId, createdAt: { gte: dateRange.start, lte: dateRange.end } };
-    if (paymentMode) where.method = paymentMode as any;
+    const where: any = { 
+      invoice: { branchId }, 
+      createdAt: { gte: dateRange.start, lte: dateRange.end } 
+    };
+    if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
 
     const [totalAmountAgg, totalPayments, successfulPayments, failedPayments, pendingPayments, modeGroups, gatewayGroups, dailyGroups, dailySuccess, dailyFailed] = await Promise.all([
       this.prisma.payment.aggregate({ where, _sum: { amount: true } }),
       this.prisma.payment.count({ where }),
-      this.prisma.payment.count({ where: { ...where, status: 'COMPLETED' } }),
-      this.prisma.payment.count({ where: { ...where, status: 'FAILED' } }),
-      this.prisma.payment.count({ where: { ...where, status: 'PENDING' } }),
-      this.prisma.payment.groupBy({ by: ['method'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.payment.count({ where: { ...where, reconStatus: 'COMPLETED' } }),
+      this.prisma.payment.count({ where: { ...where, reconStatus: 'FAILED' } }),
+      this.prisma.payment.count({ where: { ...where, reconStatus: 'PENDING' } }),
+      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
       this.prisma.payment.groupBy({ by: ['gateway'], where, _sum: { amount: true }, _count: { id: true } }),
       this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, status: 'COMPLETED' }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, status: 'FAILED' }, _count: { id: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'COMPLETED' }, _count: { id: true } }),
+      this.prisma.payment.groupBy({ by: ['createdAt'], where: { ...where, reconStatus: 'FAILED' }, _count: { id: true } }),
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;

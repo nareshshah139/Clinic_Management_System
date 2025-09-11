@@ -565,6 +565,7 @@ export class VisitsService {
 
   async getPatientVisitHistory(query: PatientVisitHistoryDto, branchId: string) {
     const { patientId, startDate, endDate, limit = 50 } = query;
+    const take = typeof limit === 'string' ? parseInt(limit, 10) || 50 : (Number.isFinite(limit as any) ? (limit as number) : 50);
 
     // Validate patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
@@ -600,7 +601,7 @@ export class VisitsService {
       orderBy: {
         createdAt: 'desc',
       },
-      take: limit,
+      take,
     });
 
     return {

@@ -8,8 +8,170 @@ import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope } from 'lucide-react';
+import { User, Users, Stethoscope, Clock, FileText, Calendar, Activity } from 'lucide-react';
+
+// Patient History Timeline Component
+function PatientHistoryTimeline({ patientId }: { patientId: string }) {
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchPatientHistory = async () => {
+      if (!patientId) return;
+      
+      try {
+        setLoading(true);
+        console.log('🏥 Fetching patient visit history for:', patientId);
+        const response = await apiClient.getPatientVisitHistory(patientId, { limit: 10 });
+        console.log('🏥 Patient visit history response:', response);
+        
+        // Extract visits from response
+        const visits = response?.visits || response?.data || response || [];
+        console.log('🏥 Processed visit history:', visits);
+        setHistory(visits);
+      } catch (error) {
+        console.error('❌ Error fetching patient visit history:', error);
+        setHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPatientHistory();
+  }, [patientId]);
+
+  if (loading) {
+    return (
+      <div className="text-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="text-gray-500 mt-2">Loading visit history...</p>
+      </div>
+    );
+  }
+
+  if (!patientId) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+        <p>Select a patient to view their visit history</p>
+      </div>
+    );
+  }
+
+  if (history.length === 0) {
+    return (
+      <div className="text-center py-8 text-gray-500">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+        <p>No visit history found for this patient</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-medium text-gray-900">Patient Visit History</h3>
+        <Badge variant="secondary">{history.length} Visits</Badge>
+      </div>
+      
+      <div className="relative">
+        {/* Timeline line */}
+        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+        
+        {/* Timeline items */}
+        <div className="space-y-6">
+          {history.map((visit, index) => {
+            // Handle JSON fields - some are already parsed, others need parsing
+            const complaints = Array.isArray(visit.complaints) ? visit.complaints : (visit.complaints ? JSON.parse(visit.complaints) : []);
+            const diagnosis = Array.isArray(visit.diagnosis) ? visit.diagnosis : (visit.diagnosis ? JSON.parse(visit.diagnosis) : []);
+            const treatment = typeof visit.plan === 'object' ? visit.plan : (visit.plan ? JSON.parse(visit.plan) : {});
+            const scribeData = typeof visit.scribeJson === 'object' ? visit.scribeJson : (visit.scribeJson ? JSON.parse(visit.scribeJson) : {});
+            const vitals = typeof visit.vitals === 'object' ? visit.vitals : (visit.vitals ? JSON.parse(visit.vitals) : {});
+            
+            const visitDate = new Date(visit.createdAt);
+            const chiefComplaint = complaints.length > 0 ? complaints[0].complaint : 'No chief complaint recorded';
+            const primaryDiagnosis = diagnosis.length > 0 ? diagnosis[0].diagnosis : 'No diagnosis recorded';
+            const visitType = scribeData.visitType || 'OPD Consultation';
+            
+            return (
+              <div key={visit.id} className="relative flex items-start space-x-4">
+                {/* Timeline dot */}
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${
+                  index === 0 
+                    ? 'bg-blue-100 border-blue-500 text-blue-600' 
+                    : 'bg-gray-100 border-gray-300 text-gray-500'
+                }`}>
+                  {visitType === 'Procedure' ? (
+                    <Activity className="h-4 w-4" />
+                  ) : (
+                    <Stethoscope className="h-4 w-4" />
+                  )}
+                </div>
+                
+                {/* Visit details */}
+                <div className="flex-1 min-w-0">
+                  <Card className={`${index === 0 ? 'border-blue-200 bg-blue-50' : ''}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm font-medium text-gray-900">
+                            {visitDate.toLocaleDateString()} at {visitDate.toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <Badge variant={visitType === 'Procedure' ? 'destructive' : 'default'}>
+                          {visitType}
+                        </Badge>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600">Doctor: <span className="font-medium text-gray-900">{visit.doctor?.firstName} {visit.doctor?.lastName}</span></p>
+                          <p className="text-gray-600">Chief Complaint: <span className="text-gray-900">{chiefComplaint}</span></p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">Diagnosis: <span className="font-medium text-gray-900">{primaryDiagnosis}</span></p>
+                          {visit.followUp && (
+                            <p className="text-gray-600">Follow-up: <span className="text-gray-900">{new Date(visit.followUp).toLocaleDateString()}</span></p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {treatment.medications && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">Treatment:</span>
+                            <ul className="list-disc ml-5 mt-1 text-gray-700">
+                              {(Array.isArray(treatment.medications) ? treatment.medications : []).map((m: any, idx: number) => (
+                                <li key={idx}>
+                                  {typeof m === 'string' ? m : [m?.name, m?.dosage, m?.duration].filter(Boolean).join(' • ')}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {scribeData.notes && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-medium">Notes:</span> {scribeData.notes}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function VisitsPage() {
   const [patients, setPatients] = useState<any[]>([]);
@@ -26,22 +188,24 @@ export default function VisitsPage() {
   }, []);
 
   const loadData = async () => {
-    setLoading(true);
-    try {
-      const [patientsRes, usersRes] = await Promise.allSettled([
+      setLoading(true);
+      try {
+        const [patientsRes, usersRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 50 }),
         apiClient.getUsers({ role: 'DOCTOR', limit: 20 }),
-      ]);
+        ]);
 
-      if (patientsRes.status === 'fulfilled') {
-        const patientsData = (patientsRes.value as any)?.data || [];
+        if (patientsRes.status === 'fulfilled') {
+        console.log('🏥 Patients API response:', patientsRes.value);
+        const patientsData = (patientsRes.value as any)?.data || (patientsRes.value as any)?.patients || (patientsRes.value as any) || [];
+        console.log('🏥 Processed patients data:', patientsData);
         setPatients(patientsData);
         if (patientsData.length > 0 && !selectedPatientId) {
           setSelectedPatientId(patientsData[0].id);
         }
-      }
+        }
 
-      if (usersRes.status === 'fulfilled') {
+        if (usersRes.status === 'fulfilled') {
         const doctorsData = (usersRes.value as any)?.users || [];
         setDoctors(doctorsData);
         if (doctorsData.length > 0 && !selectedDoctorId) {
@@ -59,10 +223,10 @@ export default function VisitsPage() {
       }
     } catch (error) {
       console.error('Failed to load data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -210,14 +374,20 @@ export default function VisitsPage() {
                       <SelectItem key={patient.id} value={patient.id}>
                         <div className="flex items-center gap-2">
                           <Users className="h-4 w-4" />
-                          <span>
-                            {patient.firstName} {patient.lastName}
-                            {patient.phone && (
-                              <span className="text-xs text-gray-500 ml-2">
-                                {patient.phone}
-                              </span>
-                            )}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className="font-medium">
+                              {patient.name || `Patient ${patient.id?.slice(-4) || 'Unknown'}`}
+                            </span>
+                            <div className="flex items-center gap-3 text-xs text-gray-500">
+                              <span>ID: {patient.id}</span>
+                              {patient.phone && (
+                                <span>📞 {patient.phone}</span>
+                              )}
+                              {patient.email && (
+                                <span>✉️ {patient.email}</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </SelectItem>
                     ))}
@@ -254,20 +424,43 @@ export default function VisitsPage() {
               </div>
             </div>
 
-            {selectedPatientId && selectedDoctorId && (
-              <div className="pt-4 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Patient: {patients.find(p => p.id === selectedPatientId)?.firstName} {patients.find(p => p.id === selectedPatientId)?.lastName} • 
-                      Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
-                    </p>
-                  </div>
-                  <Button onClick={startNewVisit}>
-                    Start Visit Documentation
-                  </Button>
-                </div>
+            {/* Patient History Tab - Always visible when patient is selected */}
+            {selectedPatientId && (
+              <div className="mt-6">
+                <Tabs defaultValue="ready" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="ready">Ready to Start</TabsTrigger>
+                    <TabsTrigger value="history">Patient History</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="ready" className="mt-4">
+                    {selectedDoctorId && (
+                      <div className="pt-4 border-t">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
+                              Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
+                            </p>
+                          </div>
+                          <Button onClick={startNewVisit}>
+                            Start Visit Documentation
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {!selectedDoctorId && (
+                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p className="text-sm text-yellow-800">Please select a doctor to start the visit.</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                  
+                  <TabsContent value="history" className="mt-4">
+                    <PatientHistoryTimeline patientId={selectedPatientId} />
+                  </TabsContent>
+                </Tabs>
               </div>
             )}
           </CardContent>
@@ -360,7 +553,7 @@ export default function VisitsPage() {
                   </div>
                 </>
               )}
-            </div>
+        </div>
           </CardContent>
         </Card>
       </div>
@@ -373,7 +566,7 @@ export default function VisitsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Visit Documentation</h1>
           <p className="text-sm text-gray-600">
-            Patient: {patients.find(p => p.id === selectedPatientId)?.firstName} {patients.find(p => p.id === selectedPatientId)?.lastName} • 
+                            Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
             Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
           </p>
         </div>

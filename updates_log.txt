@@ -20,3 +20,21 @@
 [2025-09-10 03:00 UTC] Frontend: Fixed RoomCalendar runtime error - backend returns `{ rooms: [...] }` but frontend expected rooms array directly. Added defensive programming with Array.isArray checks and proper response parsing to extract rooms from API response object.
 [2025-09-10 03:15 UTC] Frontend: Fixed inventory page showing empty data - backend returns `{ items: [...], pagination: {...} }` but frontend was looking for `response.data`. Updated frontend to extract items from correct response structure and added comprehensive debugging logs.
 [2025-09-10 03:30 UTC] Backend: Fixed inventory data not showing due to branch isolation - inventory items were seeded to `branch-seed-1` but user was logged into `test-branch-1`. Moved 79 inventory items to correct branch. API now returns 20 items per page with proper pagination. 
+[2025-09-10 07:00 UTC] Frontend: Enhanced patient selection UI to display both Patient ID and Patient Name for better disambiguation - updated visits page dropdown and appointment scheduler search results to show patient ID, phone, and email in structured format with improved visual hierarchy.
+[2025-09-10 07:30 UTC] Frontend: Fixed patient name display issue - database uses single `name` field instead of `firstName`/`lastName`. Updated all patient selection components (visits page, appointment scheduler) to use correct `patient.name` field with fallback display logic and added debugging for API response structure verification.
+
+[2025-09-10 08:00 UTC] Database: Added comprehensive patient visit history mock data to seed.ts script - created 5 realistic dermatology visits with detailed complaints, diagnoses, treatments, and follow-up information aligned with existing patient and doctor records.
+
+[2025-09-10 08:15 UTC] Backend: Integrated patient visit history API endpoint `/visits/patient/:patientId/history` into frontend API client with proper authentication headers and query parameter support for pagination.
+
+[2025-09-10 08:30 UTC] Frontend: Implemented PatientHistoryTimeline component with chronological timeline visualization showing visit dates, doctor information, chief complaints, diagnoses, treatments, and notes. Added patient history tab to visits page that's always accessible when a patient is selected, fetching real data from the database API endpoint.
+
+[2025-09-10 08:45 UTC] Frontend: Fixed JSON parsing issue in PatientHistoryTimeline component - API returns some fields (complaints, diagnosis) as already-parsed arrays while others (scribeJson, plan, vitals) are JSON strings. Updated parsing logic to handle both cases correctly to prevent runtime errors.
+
+[2025-09-10 09:15 UTC] Backend: Fixed critical Prisma validation errors in reports service - Payment model doesn't have branchId field, must filter through invoice relationship. Updated payment queries to use `invoice: { branchId }` instead of direct `branchId`. Fixed field name mismatches: used 'reconStatus' instead of 'status' and 'mode' instead of 'method' to match actual Payment model schema. Cleared frontend .next cache and restarted both servers to resolve internal server errors. 
+
+[2025-09-10 09:25 UTC] Backend: Visits history endpoint hardened — coerce `limit` to number, enforce branch scoping via `patient.branchId`; verified 5 seeded visits for Rajesh.
+
+[2025-09-10 09:28 UTC] Frontend: API client now uses standard `get()` for `/visits/patient/:id/history`, ensuring auth headers and proxy; removed ad-hoc fetch.
+
+[2025-09-10 09:32 UTC] Frontend: Fixed React runtime error in PatientHistoryTimeline by rendering `treatment.medications` as a list (supports string or {name,dosage,duration}). 

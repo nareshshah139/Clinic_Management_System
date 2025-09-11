@@ -148,6 +148,222 @@ async function main() {
     });
     }
 
+    // Visit History: create mock visit data only if no visits exist
+    const visitCount = await prisma.visit.count();
+    let createdVisits = 0;
+    if (visitCount === 0) {
+      const visitHistoryData = [
+        {
+          id: 'visit-seed-1',
+          date: new Date('2024-12-08T10:30:00'),
+          chiefComplaint: 'Skin rash on arms and legs',
+          presentIllness: 'Patient reports itchy, red patches on both arms and legs that started 2 weeks ago. Symptoms worsen at night and with stress.',
+          vitals: JSON.stringify({
+            bloodPressure: { systolic: 120, diastolic: 80 },
+            heartRate: 72,
+            temperature: 98.6,
+            weight: 70,
+            height: 175,
+            oxygenSaturation: 98,
+            respiratoryRate: 16
+          }),
+          examination: JSON.stringify({
+            general: 'Patient appears comfortable, well-nourished',
+            skin: 'Erythematous, scaly patches on bilateral arms and legs. No signs of secondary infection.',
+            cardiovascular: 'Normal heart sounds, no murmurs',
+            respiratory: 'Clear breath sounds bilaterally',
+            gastrointestinal: 'Soft, non-tender abdomen',
+            neurological: 'Alert and oriented x3'
+          }),
+          diagnosis: 'Eczema - Atopic Dermatitis',
+          treatment: JSON.stringify({
+            medications: [
+              { name: 'Mometasone 0.1% Cream', dosage: 'Apply thin layer twice daily', duration: '2 weeks' },
+              { name: 'Moisturizing Cream', dosage: 'Apply liberally 3-4 times daily', duration: 'Ongoing' }
+            ],
+            procedures: [],
+            lifestyle: ['Avoid known triggers', 'Use fragrance-free products', 'Keep skin moisturized']
+          }),
+          followUpDate: new Date('2024-12-22T10:30:00'),
+          notes: 'Patient educated on proper skin care routine. Advised to return if symptoms worsen.',
+          status: 'COMPLETED',
+          visitNumber: 1
+        },
+        {
+          id: 'visit-seed-2',
+          date: new Date('2024-11-24T14:15:00'),
+          chiefComplaint: 'Follow-up for acne treatment',
+          presentIllness: 'Patient returns for follow-up of acne treatment started 6 weeks ago. Reports 70% improvement in facial acne.',
+          vitals: JSON.stringify({
+            bloodPressure: { systolic: 118, diastolic: 76 },
+            heartRate: 68,
+            temperature: 98.4,
+            weight: 69,
+            height: 175,
+            oxygenSaturation: 99,
+            respiratoryRate: 14
+          }),
+          examination: JSON.stringify({
+            general: 'Patient appears well',
+            skin: 'Significant improvement in inflammatory acne lesions. Few comedones remain on forehead and chin.',
+            face: 'Mild post-inflammatory hyperpigmentation noted'
+          }),
+          diagnosis: 'Acne Vulgaris - Improving',
+          treatment: JSON.stringify({
+            medications: [
+              { name: 'Continue Adapalene 0.1% Gel', dosage: 'Once daily at bedtime', duration: '3 months' },
+              { name: 'Vitamin E supplement', dosage: '400 IU daily', duration: '1 month' }
+            ],
+            procedures: [],
+            lifestyle: ['Continue gentle skincare routine', 'Sun protection']
+          }),
+          followUpDate: new Date('2024-12-24T14:15:00'),
+          notes: 'Excellent response to treatment. Continue current regimen.',
+          status: 'COMPLETED',
+          visitNumber: 2
+        },
+        {
+          id: 'visit-seed-3',
+          date: new Date('2024-11-10T09:45:00'),
+          chiefComplaint: 'Mole removal consultation',
+          presentIllness: 'Patient concerned about a mole on left shoulder that has been changing in appearance over the past 3 months.',
+          vitals: JSON.stringify({
+            bloodPressure: { systolic: 125, diastolic: 82 },
+            heartRate: 75,
+            temperature: 98.7,
+            weight: 70,
+            height: 175,
+            oxygenSaturation: 98,
+            respiratoryRate: 16
+          }),
+          examination: JSON.stringify({
+            general: 'Patient anxious but cooperative',
+            skin: 'Well-defined, symmetrical nevus on left posterior shoulder, 6mm diameter',
+            dermatoscopy: 'Benign features - symmetric pigment network, no atypical features'
+          }),
+          diagnosis: 'Benign nevus',
+          treatment: JSON.stringify({
+            medications: [
+              { name: 'Local anesthetic (Lidocaine)', dosage: 'As needed for procedure', duration: 'Single use' }
+            ],
+            procedures: [
+              { name: 'Surgical excision of nevus', details: 'Complete excision with 2mm margins', completed: true }
+            ],
+            lifestyle: ['Keep wound dry for 48 hours', 'Return for suture removal in 1 week']
+          }),
+          followUpDate: new Date('2024-11-17T09:45:00'),
+          notes: 'Minor surgical excision completed successfully. Specimen sent for histopathology. Sutures to be removed in 7 days.',
+          status: 'COMPLETED',
+          visitNumber: 3
+        },
+        {
+          id: 'visit-seed-4',
+          date: new Date('2024-10-15T11:20:00'),
+          chiefComplaint: 'Persistent acne, facial breakouts',
+          presentIllness: 'Patient presents with moderate acne on face, predominantly inflammatory lesions. Previous OTC treatments have been ineffective.',
+          vitals: JSON.stringify({
+            bloodPressure: { systolic: 122, diastolic: 78 },
+            heartRate: 70,
+            temperature: 98.5,
+            weight: 69,
+            height: 175,
+            oxygenSaturation: 99,
+            respiratoryRate: 15
+          }),
+          examination: JSON.stringify({
+            general: 'Young adult in no acute distress',
+            skin: 'Multiple inflammatory papules and pustules on face, predominantly on forehead, cheeks, and chin',
+            face: 'No scarring noted, mild seborrhea present'
+          }),
+          diagnosis: 'Acne Vulgaris - Moderate',
+          treatment: JSON.stringify({
+            medications: [
+              { name: 'Doxycycline 100mg', dosage: 'Once daily with food', duration: '8 weeks' },
+              { name: 'Adapalene 0.1% Gel', dosage: 'Once daily at bedtime', duration: '12 weeks' },
+              { name: 'Benzoyl Peroxide 2.5% Gel', dosage: 'Once daily morning', duration: '12 weeks' }
+            ],
+            procedures: [],
+            lifestyle: ['Gentle cleansing twice daily', 'Avoid oil-based products', 'Sun protection']
+          }),
+          followUpDate: new Date('2024-11-26T11:20:00'),
+          notes: 'Started on combination therapy. Patient counseled on expected timeline for improvement (6-8 weeks).',
+          status: 'COMPLETED',
+          visitNumber: 4
+        },
+        {
+          id: 'visit-seed-5',
+          date: new Date('2024-09-28T15:30:00'),
+          chiefComplaint: 'General skin check, family history of skin cancer',
+          presentIllness: 'Patient requests routine skin examination due to family history of melanoma in father. No specific concerns.',
+          vitals: JSON.stringify({
+            bloodPressure: { systolic: 120, diastolic: 75 },
+            heartRate: 65,
+            temperature: 98.3,
+            weight: 68,
+            height: 175,
+            oxygenSaturation: 99,
+            respiratoryRate: 14
+          }),
+          examination: JSON.stringify({
+            general: 'Healthy-appearing individual',
+            skin: 'Full body skin examination performed. Multiple benign nevi noted, no atypical lesions',
+            dermatoscopy: 'All lesions examined showed benign features'
+          }),
+          diagnosis: 'Routine skin examination - Normal',
+          treatment: JSON.stringify({
+            medications: [],
+            procedures: [
+              { name: 'Full body skin examination', details: 'Comprehensive dermatoscopic evaluation', completed: true }
+            ],
+            lifestyle: [
+              'Daily sunscreen application SPF 30+',
+              'Avoid peak sun hours (10 AM - 4 PM)',
+              'Monthly self-skin examination',
+              'Annual dermatology follow-up'
+            ]
+          }),
+          followUpDate: new Date('2025-03-28T15:30:00'),
+          notes: 'Routine examination normal. Patient educated on skin cancer prevention and self-examination techniques.',
+          status: 'COMPLETED',
+          visitNumber: 5
+        }
+      ];
+
+             for (const visitData of visitHistoryData) {
+         await prisma.visit.create({
+           data: {
+             id: visitData.id,
+             patientId: 'cmfdqx5t40001ag7yr7jyyuiz', // Use existing test patient: Rajesh Kumar - Acne Patient
+             doctorId: 'cmfatxzee0001ag9d9rr8zvfo', // Use existing test doctor: Dr. Praneeta Jain
+             appointmentId: null, // These are historical visits without appointments
+             vitals: visitData.vitals,
+             complaints: JSON.stringify([{
+               complaint: visitData.chiefComplaint,
+               duration: "varies",
+               severity: "moderate",
+               notes: visitData.presentIllness
+             }]),
+             history: visitData.presentIllness ? JSON.stringify({ presentIllness: visitData.presentIllness }) : null,
+             exam: visitData.examination,
+             diagnosis: JSON.stringify([{
+               diagnosis: visitData.diagnosis,
+               type: "Primary",
+               notes: null
+             }]),
+             plan: visitData.treatment,
+             followUp: visitData.followUpDate,
+             attachments: null,
+             scribeJson: JSON.stringify({
+               visitNumber: visitData.visitNumber,
+               notes: visitData.notes,
+               status: visitData.status
+             })
+           }
+         });
+         createdVisits += 1;
+       }
+    }
+
     // Dermatology-focused inventory items (India relevant)
     const inventoryItems: Array<{
       sku: string;
@@ -329,6 +545,7 @@ async function main() {
       usersCreated: userCount === 0,
       roomCreated: roomCount === 0,
       patientCreated: patientCount === 0,
+      visitsCreated: visitCount === 0 ? createdVisits : 0,
       inventorySeeded: invCount === 0 ? createdInventory : 0,
     });
   } finally {

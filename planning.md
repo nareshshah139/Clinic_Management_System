@@ -949,3 +949,17 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Patient history timeline with visit tracking and follow-up management
 
 *Last updated: September 2025 - Enhanced UX with global search, role-based forms, room management, and inventory integration.*
+
+### September 2025: Patient History Timeline & Stability Fixes
+**Achievement:** Added always-accessible Patient History tab on Visits page, seeded realistic visit history for a test patient, and resolved runtime/API errors.
+**Impact:**
+- Reception can instantly review a patient's chronological visit history with complaints, diagnosis, treatment, and follow-up.
+- Reduced support load by fixing JSON parsing mismatches and Prisma query issues causing 500s.
+
+**Technical Highlights:**
+- Frontend: `PatientHistoryTimeline` added to `dashboard/visits`, renders medications as list items and handles parsed/string JSON fields safely.
+- Frontend: `apiClient.getPatientVisitHistory` now reuses standard `get()` for headers/proxy.
+- Backend: Seeded 5 dermatology visits for Rajesh Kumar; `getPatientVisitHistory` coerces `limit` to number; filters by `patient.branchId`.
+- Backend: Reports service aligned with schema (`invoice` relation scoping, `mode`/`reconStatus` fields).
+
+*Last updated: September 2025 - Patient history UI, seed data, and stability fixes completed.*

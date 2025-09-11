@@ -197,6 +197,10 @@ export class ApiClient {
     return this.post(`/visits/${id}/complete`, data);
   }
 
+  async getPatientVisitHistory(patientId: string, params?: { limit?: number; offset?: number }) {
+    return this.get(`/visits/patient/${patientId}/history`, params as any);
+  }
+
   // Billing
   async getInvoices(params?: any) {
     return this.get('/billing/invoices', params);
