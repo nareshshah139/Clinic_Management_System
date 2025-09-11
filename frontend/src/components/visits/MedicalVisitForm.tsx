@@ -1000,15 +1000,27 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <Badge variant={
-                                    visit.status === 'completed' ? 'default' : 
-                                    visit.status === 'in-progress' ? 'secondary' : 'outline'
-                                  }>
-                                    {visit.status.replace('-', ' ').toUpperCase()}
-                                  </Badge>
-                                  {visit.photos > 0 && (
+                                  {(() => {
+                                    const normalizedStatus = typeof visit.status === 'string'
+                                      ? visit.status.toLowerCase()
+                                      : 'unknown';
+                                    const badgeVariant = normalizedStatus === 'completed'
+                                      ? 'default'
+                                      : normalizedStatus === 'in-progress'
+                                      ? 'secondary'
+                                      : 'outline';
+                                    const statusLabel = typeof visit.status === 'string'
+                                      ? visit.status.replace(/-/g, ' ').toUpperCase()
+                                      : 'UNKNOWN';
+                                    return (
+                                      <Badge variant={badgeVariant}>
+                                        {statusLabel}
+                                      </Badge>
+                                    );
+                                  })()}
+                                  {Number(visit.photos || 0) > 0 && (
                                     <Badge variant="outline" className="text-xs">
-                                      {visit.photos} Photos
+                                      {Number(visit.photos)} Photos
                                     </Badge>
                                   )}
                                 </div>
