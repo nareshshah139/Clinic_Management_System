@@ -53,4 +53,8 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   photoUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  referralSource?: string; // Instagram/Twitter/Google/Doctor/Friends & Family
 }

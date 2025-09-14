@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
+import { UpdatePatientDto } from './dto/update-patient.dto';
 
 @Injectable()
 export class PatientsService {
@@ -68,6 +69,17 @@ export class PatientsService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         },
+      },
+    });
+  }
+
+  async update(id: string, updatePatientDto: UpdatePatientDto) {
+    const { dob, ...rest } = updatePatientDto as any;
+    return this.prisma.patient.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(dob ? { dob: new Date(dob as any) } : {}),
       },
     });
   }

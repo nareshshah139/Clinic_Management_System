@@ -52,6 +52,7 @@ export interface Patient {
   address?: string;
   city?: string;
   state?: string;
+  referralSource?: string;
   createdAt: string;
   updatedAt: string;
 }

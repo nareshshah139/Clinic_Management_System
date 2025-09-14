@@ -61,3 +61,4 @@
 [2025-09-14 17:40 UTC] Frontend: Set default print preview top margin to 150px in PrescriptionBuilder. 
 [2025-09-14 17:45 UTC] Frontend: Renamed prescription date label from "Valid Until" to "Review Date" in PrescriptionBuilder. 
 [2025-09-14 17:35] VisitPhotos: Preview shows full image with object-contain in a fixed-height box; added dedicated iPhone camera capture input (capture=environment) and buttons for "Upload from device" and "Take photo". Cleans input values after upload. PrescriptionBuilder: Seed vitals from visit data on load and fallback to visit vitals in print preview (auto BMI computation). 
+[2025-09-14 18:05] Patients: Added referralSource (Instagram/Twitter/Google/Doctor/Friends & Family/Other) to DB schema and API; create/edit form now captures it. Added PATCH /patients/:id. 

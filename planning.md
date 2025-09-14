@@ -1001,3 +1001,4 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 ### September 2025: Prescription UX polish, Investigations checkboxes, and 1MG (Pharmacy) scaffolding
 - Added vitals auto-propagation from Visits to Prescription Builder with preview fallback and BMI computation
 - Visit Photos: Full-image preview (object-contain) and native iPhone camera capture (capture=environment) with dedicated buttons
+- Patients: Added referral source capture (Instagram/Twitter/Google/Doctor/Friends & Family/Other) in create/edit and persisted in DB

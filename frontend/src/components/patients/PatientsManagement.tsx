@@ -26,6 +26,7 @@ interface PatientFormState {
   email?: string;
   address?: string;
   emergencyContact?: string;
+  referralSource?: string;
 }
 
 export default function PatientsManagement() {
@@ -43,6 +44,7 @@ export default function PatientsManagement() {
     email: '',
     address: '',
     emergencyContact: '',
+    referralSource: '',
   });
 
   const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
@@ -86,6 +88,7 @@ export default function PatientsManagement() {
           address: bp.address || undefined,
           city: bp.city || undefined,
           state: bp.state || undefined,
+          referralSource: bp.referralSource || undefined,
           createdAt: bp.createdAt,
           updatedAt: bp.updatedAt,
         } as Patient;
@@ -109,6 +112,7 @@ export default function PatientsManagement() {
       email: '',
       address: '',
       emergencyContact: '',
+      referralSource: '',
     });
   };
 
@@ -124,6 +128,7 @@ export default function PatientsManagement() {
         email: form.email || undefined,
         address: form.address || undefined,
         emergencyContact: form.emergencyContact || undefined,
+        referralSource: form.referralSource || undefined,
       };
       if (form.id) {
         await apiClient.updatePatient(form.id, payload);
@@ -154,6 +159,7 @@ export default function PatientsManagement() {
       email: p.email || '',
       address: p.address || '',
       emergencyContact: '',
+      referralSource: p.referralSource || '',
     });
     setOpen(true);
   };
@@ -223,6 +229,22 @@ export default function PatientsManagement() {
               <div className="md:col-span-2">
                 <Label>Emergency Contact</Label>
                 <Input value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>How did the patient hear about us?</Label>
+                <Select value={form.referralSource || ''} onValueChange={(v: string) => setForm({ ...form, referralSource: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="INSTAGRAM">Instagram</SelectItem>
+                    <SelectItem value="TWITTER">Twitter</SelectItem>
+                    <SelectItem value="GOOGLE">Google</SelectItem>
+                    <SelectItem value="DOCTOR">Doctor</SelectItem>
+                    <SelectItem value="FRIENDS_FAMILY">Friends & Family</SelectItem>
+                    <SelectItem value="OTHER">Other</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-4">

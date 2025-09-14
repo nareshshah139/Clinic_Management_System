@@ -267,6 +267,7 @@ model Patient {
   emergencyContact String?
   allergies    String?
   photoUrl     String?
+  referralSource String?  // Instagram/Twitter/Google/Doctor/Friends & Family
   branchId     String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
