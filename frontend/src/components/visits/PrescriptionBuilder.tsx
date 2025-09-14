@@ -77,6 +77,31 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
   const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
 
+  // Additional clinical fields per requirements
+  const [chiefComplaints, setChiefComplaints] = useState<string>('');
+  const [pastHistory, setPastHistory] = useState<string>('');
+  const [medicationHistory, setMedicationHistory] = useState<string>('');
+  const [menstrualHistory, setMenstrualHistory] = useState<string>('');
+  const [familyHistoryDM, setFamilyHistoryDM] = useState<boolean>(false);
+  const [familyHistoryHTN, setFamilyHistoryHTN] = useState<boolean>(false);
+  const [familyHistoryThyroid, setFamilyHistoryThyroid] = useState<boolean>(false);
+  const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
+  // Topicals
+  const [topicalFacewash, setTopicalFacewash] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
+  const [topicalMoisturiserSunscreen, setTopicalMoisturiserSunscreen] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
+  const [topicalActives, setTopicalActives] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
+  const [postProcedureCare, setPostProcedureCare] = useState<string>('');
+  const [investigations, setInvestigations] = useState<string>('');
+  const [procedurePlanned, setProcedurePlanned] = useState<string>('');
+  const [procedureParams, setProcedureParams] = useState<{ passes?: string; power?: string; machineUsed?: string; others?: string }>({});
+  // Vitals (with BMI)
+  const [vitalsHeightCm, setVitalsHeightCm] = useState<number | ''>('');
+  const [vitalsWeightKg, setVitalsWeightKg] = useState<number | ''>('');
+  const [vitalsBmi, setVitalsBmi] = useState<number | ''>('');
+  const [vitalsBpSys, setVitalsBpSys] = useState<number | ''>('');
+  const [vitalsBpDia, setVitalsBpDia] = useState<number | ''>('');
+  const [vitalsPulse, setVitalsPulse] = useState<number | ''>('');
+  // Restore drug search states
   const [drugQuery, setDrugQuery] = useState('');
   const [drugResults, setDrugResults] = useState<any[]>([]);
   const [loadingDrugs, setLoadingDrugs] = useState(false);
@@ -117,6 +142,14 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     followUp: true,
     notes: true,
     doctorSignature: true,
+    chiefComplaints: true,
+    histories: true,
+    familyHistory: true,
+    topicals: true,
+    postProcedure: true,
+    investigations: true,
+    procedurePlanned: true,
+    procedureParameters: true,
   });
 
   const canCreate = Boolean(patientId && visitId && doctorId && items.length > 0);
@@ -162,6 +195,19 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitId]);
+
+  // Compute BMI when height/weight update
+  useEffect(() => {
+    const h = Number(vitalsHeightCm);
+    const w = Number(vitalsWeightKg);
+    if (h > 0 && w > 0) {
+      const meters = h / 100;
+      const bmiVal = w / (meters * meters);
+      setVitalsBmi(Number(bmiVal.toFixed(1)));
+    } else {
+      setVitalsBmi('');
+    }
+  }, [vitalsHeightCm, vitalsWeightKg]);
 
   const loadTemplates = async () => {
     try {
@@ -346,6 +392,136 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             <label className="text-sm text-gray-700">Notes (patient-facing)</label>
             <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+
+          {/* Clinical Details */}
+          <Card>
+            <CardContent className="p-3 space-y-3">
+              <div className="font-medium">Clinical Details</div>
+              {/* Vitals */}
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600">Height (cm)</label>
+                  <Input type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Weight (kg)</label>
+                  <Input type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">BMI</label>
+                  <Input value={vitalsBmi ?? ''} readOnly />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">BP (Sys)</label>
+                  <Input type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">BP (Dia)</label>
+                  <Input type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Pulse (bpm)</label>
+                  <Input type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                </div>
+              </div>
+
+              {/* Chief Complaints */}
+              <div>
+                <label className="text-xs text-gray-600">Chief Complaints</label>
+                <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+              </div>
+
+              {/* Histories */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600">Past History</label>
+                  <Textarea rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Medication History</label>
+                  <Textarea rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Menstrual History</label>
+                  <Textarea rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
+                </div>
+              </div>
+
+              {/* Family History */}
+              <div>
+                <label className="text-xs text-gray-600">Family History</label>
+                <div className="flex flex-wrap gap-4 text-sm mt-1">
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
+                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid disorder</label>
+                </div>
+                <Input className="mt-2" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
+              </div>
+
+              {/* Topicals */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <div className="font-medium text-sm">Facewash/Soap</div>
+                  <Input placeholder="Frequency" value={topicalFacewash.frequency || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, frequency: e.target.value })} />
+                  <Input placeholder="Timing" value={topicalFacewash.timing || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, timing: e.target.value })} />
+                  <Input placeholder="Duration" value={topicalFacewash.duration || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, duration: e.target.value })} />
+                  <Input placeholder="Instructions" value={topicalFacewash.instructions || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, instructions: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <div className="font-medium text-sm">Moisturiser & Sunscreen</div>
+                  <Input placeholder="Frequency" value={topicalMoisturiserSunscreen.frequency || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, frequency: e.target.value })} />
+                  <Input placeholder="Timing" value={topicalMoisturiserSunscreen.timing || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, timing: e.target.value })} />
+                  <Input placeholder="Duration" value={topicalMoisturiserSunscreen.duration || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, duration: e.target.value })} />
+                  <Input placeholder="Instructions" value={topicalMoisturiserSunscreen.instructions || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, instructions: e.target.value })} />
+                </div>
+                <div className="space-y-1">
+                  <div className="font-medium text-sm">Actives</div>
+                  <Input placeholder="Frequency" value={topicalActives.frequency || ''} onChange={(e) => setTopicalActives({ ...topicalActives, frequency: e.target.value })} />
+                  <Input placeholder="Timing" value={topicalActives.timing || ''} onChange={(e) => setTopicalActives({ ...topicalActives, timing: e.target.value })} />
+                  <Input placeholder="Duration" value={topicalActives.duration || ''} onChange={(e) => setTopicalActives({ ...topicalActives, duration: e.target.value })} />
+                  <Input placeholder="Instructions" value={topicalActives.instructions || ''} onChange={(e) => setTopicalActives({ ...topicalActives, instructions: e.target.value })} />
+                </div>
+              </div>
+
+              {/* Post Procedure */}
+              <div>
+                <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
+                <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
+              </div>
+
+              {/* Investigations */}
+              <div>
+                <label className="text-xs text-gray-600">Investigations</label>
+                <Textarea rows={2} value={investigations} onChange={(e) => setInvestigations(e.target.value)} />
+              </div>
+
+              {/* Procedure Planned */}
+              <div>
+                <label className="text-xs text-gray-600">Procedure Planned</label>
+                <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
+              </div>
+
+              {/* Procedure Parameters (additional) */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div>
+                  <label className="text-xs text-gray-600">Passes</label>
+                  <Input value={procedureParams.passes || ''} onChange={(e) => setProcedureParams({ ...procedureParams, passes: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Power</label>
+                  <Input value={procedureParams.power || ''} onChange={(e) => setProcedureParams({ ...procedureParams, power: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Machine Used</label>
+                  <Input value={procedureParams.machineUsed || ''} onChange={(e) => setProcedureParams({ ...procedureParams, machineUsed: e.target.value })} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600">Others</label>
+                  <Input value={procedureParams.others || ''} onChange={(e) => setProcedureParams({ ...procedureParams, others: e.target.value })} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Section Toggles */}
           <div>
@@ -658,6 +834,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             </DialogHeader>
           {/* Scoped print CSS to only print the preview container */}
           <style>{`
+            @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
             @media print {
               body *:not(#prescription-print-root):not(#prescription-print-root *) {
                 visibility: hidden !important;
@@ -676,7 +853,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             }
           `}</style>
           <div className="flex-1 overflow-auto">
-            <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6">
+            <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6" style={{ fontFamily: 'Fira Sans, sans-serif', fontSize: '14px' }}>
               <div className="mx-auto">
               {/* Header */}
               {includeSections.header && (
@@ -712,11 +889,53 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 </div>
               )}
 
+              {/* Vitals (manual override) */}
+              {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Vitals</div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    {vitalsHeightCm !== '' && <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{vitalsHeightCm} cm</span></div>}
+                    {vitalsWeightKg !== '' && <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{vitalsWeightKg} kg</span></div>}
+                    {vitalsBmi !== '' && <div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{vitalsBmi}</span></div>}
+                    {(vitalsBpSys !== '' || vitalsBpDia !== '') && <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{vitalsBpSys || '—'}/{vitalsBpDia || '—'} mmHg</span></div>}
+                    {vitalsPulse !== '' && <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{vitalsPulse} bpm</span></div>}
+                  </div>
+                </div>
+              )}
+
               {/* Diagnosis */}
               {includeSections.diagnosis && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Diagnosis</div>
                   <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? diagnosis : '—'}</div>
+                </div>
+              )}
+
+              {/* Chief Complaints */}
+              {includeSections.chiefComplaints && (chiefComplaints?.trim()?.length > 0) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Chief Complaints</div>
+                  <div className="text-sm whitespace-pre-wrap">{chiefComplaints}</div>
+                </div>
+              )}
+
+              {/* Histories */}
+              {includeSections.histories && ((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">History</div>
+                  <div className="space-y-1 text-sm">
+                    {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {pastHistory}</div>) : null}
+                    {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {medicationHistory}</div>) : null}
+                    {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {menstrualHistory}</div>) : null}
+                  </div>
+                </div>
+              )}
+
+              {/* Family History */}
+              {includeSections.familyHistory && (familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Family History</div>
+                  <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? familyHistoryOthers : null].filter(Boolean).join(', ')}</div>
                 </div>
               )}
 
@@ -763,6 +982,50 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 </div>
               )}
 
+              {/* Topicals */}
+              {includeSections.topicals && (
+                (topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions || topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions || topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Topicals</div>
+                    <ul className="list-disc ml-5 text-sm space-y-1">
+                      {(topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions) && (
+                        <li><span className="font-medium">Facewash/Soap:</span> {[topicalFacewash.frequency, topicalFacewash.timing, topicalFacewash.duration, topicalFacewash.instructions].filter(Boolean).join(' • ')}</li>
+                      )}
+                      {(topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions) && (
+                        <li><span className="font-medium">Moisturiser & Sunscreen:</span> {[topicalMoisturiserSunscreen.frequency, topicalMoisturiserSunscreen.timing, topicalMoisturiserSunscreen.duration, topicalMoisturiserSunscreen.instructions].filter(Boolean).join(' • ')}</li>
+                      )}
+                      {(topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
+                        <li><span className="font-medium">Actives:</span> {[topicalActives.frequency, topicalActives.timing, topicalActives.duration, topicalActives.instructions].filter(Boolean).join(' • ')}</li>
+                      )}
+                    </ul>
+                  </div>
+                )
+              )}
+
+              {/* Post Procedure Care */}
+              {includeSections.postProcedure && (postProcedureCare?.trim()?.length > 0) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Post Procedure</div>
+                  <div className="text-sm whitespace-pre-wrap">{postProcedureCare}</div>
+                </div>
+              )}
+
+              {/* Investigations */}
+              {includeSections.investigations && (investigations?.trim()?.length > 0) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Investigations</div>
+                  <div className="text-sm whitespace-pre-wrap">{investigations}</div>
+                </div>
+              )}
+
+              {/* Procedure Planned */}
+              {includeSections.procedurePlanned && (procedurePlanned?.trim()?.length > 0) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Procedure Planned</div>
+                  <div className="text-sm">{procedurePlanned}</div>
+                </div>
+              )}
+
               {/* Procedures */}
               {includeSections.procedures && (
                 <div className="py-3">
@@ -801,6 +1064,19 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 </div>
               )}
 
+              {/* Procedure Parameters (additional) */}
+              {includeSections.procedureParameters && (procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others) && (
+                <div className="py-3">
+                  <div className="font-semibold mb-1">Procedure Parameters</div>
+                  <ul className="list-disc ml-5 text-sm">
+                    {procedureParams.passes && <li>Passes: {procedureParams.passes}</li>}
+                    {procedureParams.power && <li>Power: {procedureParams.power}</li>}
+                    {procedureParams.machineUsed && <li>Machine Used: {procedureParams.machineUsed}</li>}
+                    {procedureParams.others && <li>Other Params: {procedureParams.others}</li>}
+                  </ul>
+                </div>
+              )}
+
               {/* Counseling */}
               {includeSections.counseling && (
                 <div className="py-3">
@@ -810,18 +1086,14 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Vitals */}
-              {includeSections.vitals && (
+              {includeSections.vitals && visitVitals && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Vitals</div>
-                  {visitVitals ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                      {Object.entries(visitVitals).map(([k, v]: any) => (
-                        v ? <div key={k}><span className="text-gray-600 mr-1">{k}:</span><span className="font-medium">{v}</span></div> : null
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-gray-600">—</div>
-                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    {Object.entries(visitVitals).map(([k, v]: any) => (
+                      v ? <div key={k}><span className="text-gray-600 mr-1">{k}:</span><span className="font-medium">{v}</span></div> : null
+                    ))}
+                  </div>
                 </div>
               )}
 

@@ -160,30 +160,39 @@ export class ReportsService {
   }
 
   private async getDoctorRevenueBreakdown(paymentWhere: any): Promise<DoctorRevenueDto[]> {
+    // Fetch payments with invoice visitId only (Invoice has no direct visit relation in schema)
     const payments = await this.prisma.payment.findMany({
       where: paymentWhere,
-      include: {
-        invoice: {
-          select: {
-            id: true,
-            visit: { select: { doctorId: true, doctor: { select: { id: true, name: true } } } },
-            appointment: { select: { doctorId: true, doctor: { select: { id: true, name: true } } } },
-          },
-        },
+      select: {
+        amount: true,
+        invoice: { select: { id: true, visitId: true } },
       },
     });
 
+    const visitIdSet = new Set<string>();
+    for (const p of payments) if (p.invoice?.visitId) visitIdSet.add(p.invoice.visitId);
+    const visitIds = Array.from(visitIdSet);
+
+    const visits = visitIds.length
+      ? await this.prisma.visit.findMany({
+          where: { id: { in: visitIds } },
+          select: { id: true, doctorId: true, doctor: { select: { id: true, firstName: true, lastName: true } } },
+        })
+      : [];
+    const visitIdToDoctor = new Map<string, { id: string; name: string }>();
+    for (const v of visits) {
+      const name = `${v.doctor?.firstName || ''} ${v.doctor?.lastName || ''}`.trim() || 'Doctor';
+      visitIdToDoctor.set(v.id, { id: v.doctorId, name });
+    }
+
     const doctorMap = new Map<string, { id: string; name: string; revenue: number; visitCount: number }>();
     for (const p of payments) {
-      const v = p.invoice?.visit;
-      const a = p.invoice?.appointment;
-      const docId = v?.doctorId || a?.doctorId;
-      if (!docId) continue;
-      const docName = v?.doctor?.name || a?.doctor?.name || 'Doctor';
-      const current = doctorMap.get(docId) || { id: docId, name: docName, revenue: 0, visitCount: 0 };
+      const vInfo = p.invoice?.visitId ? visitIdToDoctor.get(p.invoice.visitId) : undefined;
+      if (!vInfo?.id) continue;
+      const current = doctorMap.get(vInfo.id) || { id: vInfo.id, name: vInfo.name, revenue: 0, visitCount: 0 };
       current.revenue += p.amount;
       current.visitCount += 1;
-      doctorMap.set(docId, current);
+      doctorMap.set(vInfo.id, current);
     }
 
     const result: DoctorRevenueDto[] = Array.from(doctorMap.values()).map((d) => ({
