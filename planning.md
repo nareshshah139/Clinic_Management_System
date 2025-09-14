@@ -963,3 +963,18 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Backend: Reports service aligned with schema (`invoice` relation scoping, `mode`/`reconStatus` fields).
 
 *Last updated: September 2025 - Patient history UI, seed data, and stability fixes completed.*
+
+### September 2025: Prescription Builder, Drug DB Autocomplete, and Reports Stabilization
+**Achievement:** Added a visit-linked Prescription Builder with dermatology-specific fields and robust print preview; introduced India-focused drug database with autocomplete; stabilized Reports service queries.
+**Impact:**
+- Doctors can compose rich dermatology prescriptions (topicals, steroid taper, isotretinoin mg/kg, warnings), toggle sections, and print in a clean A4 layout.
+- Add-Drug bar powered by ingested dermatology drugs with fast autocomplete.
+- Reports pages load reliably; revenue and payments reports aligned to current Prisma schema.
+
+**Technical Highlights:**
+- Frontend: `PrescriptionBuilder.tsx` with section toggles (including Patient Info), full-screen print preview, normalized visit JSON for preview.
+- Backend: `Drug` model; ingestion script `scripts/import_derm_drugs.ts`; endpoints `/prescriptions/drugs/autocomplete` and `/prescriptions/drugs/import`.
+- Frontend: API client additions for prescriptions and error handling fallback for non-JSON.
+- Backend: Reports relation filters via `invoice: { is: { patient: { branchId } } }`, payment `mode` mapping, and `reconStatus` usage.
+
+*Last updated: September 2025 - Prescription builder, drug autocomplete, and reports fixes shipped.*
