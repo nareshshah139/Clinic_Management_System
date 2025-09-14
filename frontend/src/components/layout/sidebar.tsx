@@ -17,6 +17,7 @@ import {
   Bell,
   LogOut,
   MapPin,
+  Activity,
 } from 'lucide-react';
 
 const navigation = [
@@ -39,6 +40,11 @@ const navigation = [
     name: 'Visits',
     href: '/dashboard/visits',
     icon: Stethoscope,
+  },
+  {
+    name: 'Procedures',
+    href: '/dashboard/procedures',
+    icon: Activity,
   },
   {
     name: 'Rooms',
