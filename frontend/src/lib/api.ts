@@ -303,6 +303,20 @@ export class ApiClient {
   async autocompletePrescriptionField(params: { field: string; patientId: string; visitId?: string; q?: string; limit?: number }) {
     return this.get('/prescriptions/fields/autocomplete', params as any);
   }
+
+  // 1MG proxy endpoints
+  async oneMgSearch(query: string, limit = 10) {
+    return this.get('/pharmacy/1mg/search', { q: query, limit } as any);
+  }
+  async oneMgProduct(sku: string) {
+    return this.get(`/pharmacy/1mg/products/${sku}`);
+  }
+  async oneMgCheckInventory(payload: any) {
+    return this.post('/pharmacy/1mg/check-inventory', payload);
+  }
+  async oneMgCreateOrder(payload: any) {
+    return this.post('/pharmacy/1mg/orders', payload);
+  }
 }
 
 export const apiClient = new ApiClient();

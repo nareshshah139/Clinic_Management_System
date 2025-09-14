@@ -178,6 +178,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [visitData, setVisitData] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [orderOpen, setOrderOpen] = useState(false);
 
   // Print background configuration
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
@@ -1099,6 +1100,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           <div className="flex items-center justify-between pt-2">
             <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
             <div className="flex gap-2">
+              <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
               <Button variant="outline" onClick={() => setPreviewOpen(true)}>Print Preview</Button>
               <Button onClick={create} disabled={!canCreate}>
                 {visitId ? 'Create Prescription' : 'Save visit first'}
@@ -1346,6 +1348,30 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
             <Button onClick={() => window.print()}>Print</Button>
           </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 1MG Order Dialog (placeholder) */}
+      <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Order via 1MG</DialogTitle>
+          </DialogHeader>
+          <div className="text-sm text-gray-600">Map each prescription item to a 1MG product and place the order.</div>
+          <div className="max-h-[60vh] overflow-auto mt-2">
+            {items.map((it, idx) => (
+              <div key={`map-${idx}`} className="border rounded p-2 mb-2">
+                <div className="font-medium">{it.drugName}</div>
+                <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
+                {/* TODO: search 1MG and show options; for now placeholder */}
+                <div className="mt-2 text-xs">Search results will appear here…</div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setOrderOpen(false)}>Close</Button>
+            <Button disabled>Place Order</Button>
           </div>
         </DialogContent>
       </Dialog>
