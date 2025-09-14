@@ -739,7 +739,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Valid Until</label>
+              <label className="text-sm text-gray-700">Review Date</label>
               <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
             </div>
 

@@ -59,3 +59,4 @@
 [2025-09-14 12:55 UTC] Frontend: Prescription print preview supports a background image with configurable top margin. Default set to `/letterhead.png`. Use public assets (frontend/public) and reference as `/letterhead.png`. 
 [2025-09-14 13:32 UTC] Backend/Frontend: Scaffolding for 1MG integration added. Backend module `pharmacy/one-mg` with proxy endpoints (search, product, check-inventory, orders, webhooks). Frontend: added "Order via 1MG" entry point in PrescriptionBuilder with a mapping dialog placeholder; API client methods added. 
 [2025-09-14 17:40 UTC] Frontend: Set default print preview top margin to 150px in PrescriptionBuilder. 
+[2025-09-14 17:45 UTC] Frontend: Renamed prescription date label from "Valid Until" to "Review Date" in PrescriptionBuilder. 
