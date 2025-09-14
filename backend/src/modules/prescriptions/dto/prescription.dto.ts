@@ -139,6 +139,58 @@ export class PrescriptionItemDto {
   @Min(0)
   @Max(100)
   gstRate?: number = 18;
+
+  // Dermatology-specific optional fields
+  @IsOptional()
+  @IsString()
+  applicationSite?: string; // e.g., Face, Scalp, Folds
+
+  @IsOptional()
+  @IsString()
+  applicationAmount?: string; // e.g., 1 FTU, 2 g
+
+  @IsOptional()
+  @IsString()
+  dayPart?: string; // AM/PM/BID/QHS
+
+  @IsOptional()
+  @IsBoolean()
+  leaveOn?: boolean; // true=leave-on, false=wash-off
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  washOffAfterMinutes?: number; // if not leaveOn
+
+  @IsOptional()
+  @IsString()
+  taperSchedule?: string; // Steroid taper details
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  weightMgPerKgPerDay?: number; // for isotretinoin, etc.
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  calculatedDailyDoseMg?: number; // computed dose
+
+  @IsOptional()
+  @IsBoolean()
+  pregnancyWarning?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  photosensitivityWarning?: boolean;
+
+  @IsOptional()
+  @IsString()
+  foodInstructions?: string; // with/after food, avoid dairy, etc.
+
+  @IsOptional()
+  @IsString()
+  pulseRegimen?: string; // antifungal pulses, etc.
 }
 
 export class CreatePrescriptionDto {
@@ -185,6 +237,10 @@ export class CreatePrescriptionDto {
   @IsOptional()
   @IsObject()
   metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  procedureMetrics?: Record<string, any>;
 }
 
 export class UpdatePrescriptionDto {

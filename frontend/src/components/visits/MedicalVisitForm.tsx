@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 
 interface Props {
   patientId: string;
@@ -49,6 +50,8 @@ const ROLE_PERMISSIONS = {
   NURSE: ['vitals', 'photos', 'basic-assessment', 'complaints'],
   DOCTOR: ['all'],
   RECEPTION: ['photos', 'basic-info'],
+  ADMIN: ['all'],
+  OWNER: ['all'],
 };
 
 export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1 }: Props) {
@@ -348,6 +351,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         { id: 'dermatology', label: 'Dermatology', icon: User, always: false },
         { id: 'treatment', label: 'Treatment', icon: FileText, always: false }
       );
+      tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
     }
 
     tabs.push({ id: 'history', label: 'History', icon: History, always: true });
@@ -940,6 +944,26 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           </TabsContent>
             )}
 
+            {/* Prescription Tab - Doctor Only */}
+            {hasPermission('all') && (
+              <TabsContent value="prescription" className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Prescription</CardTitle>
+                    <CardDescription>Create and format prescriptions tied to this visit</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <PrescriptionBuilder 
+                      patientId={patientId}
+                      doctorId={doctorId}
+                      visitId={visitId}
+                      onCreated={() => markSectionComplete('prescription')}
+                    />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+
             {/* Patient History Tab */}
             <TabsContent value="history" className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1029,7 +1053,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               <div className="space-y-2">
                                 <div className="flex items-center text-sm">
                                   <User className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className="text-gray-600">Dr. {visit.doctor}</span>
+                                  <span className="text-gray-600">Dr. {(visit.doctor?.firstName || '')} {(visit.doctor?.lastName || visit.doctor?.name || '')}</span>
                                 </div>
                                 
                                 <div className="flex items-center text-sm">

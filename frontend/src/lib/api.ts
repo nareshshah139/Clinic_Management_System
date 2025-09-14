@@ -73,8 +73,18 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const body = await response.json().catch(() => ({ message: 'Network error' }));
-      const err: any = new Error(body.message || `HTTP ${response.status}`);
+      let body: any = null;
+      try {
+        body = await response.json();
+      } catch {
+        try {
+          const text = await response.text();
+          body = { message: text || 'Network error' };
+        } catch {
+          body = { message: 'Network error' };
+        }
+      }
+      const err: any = new Error((body && body.message) || `HTTP ${response.status}`);
       err.status = response.status;
       err.body = body;
       throw err;
@@ -267,6 +277,23 @@ export class ApiClient {
 
   async getUserStatistics() {
     return this.get('/users/statistics');
+  }
+
+  // Prescriptions
+  async createPrescription(data: any) {
+    return this.post('/prescriptions', data);
+  }
+
+  async searchDrugs(params: any) {
+    return this.get('/prescriptions/drugs/autocomplete', params);
+  }
+
+  async getPrescriptionTemplates(params?: any) {
+    return this.get('/prescriptions/templates', params || {});
+  }
+
+  async createPrescriptionTemplate(data: any) {
+    return this.post('/prescriptions/templates', data);
   }
 }
 

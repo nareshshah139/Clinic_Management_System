@@ -125,6 +125,24 @@ export class PrescriptionsController {
     return this.prescriptionsService.searchDrugs(query);
   }
 
+  // Drug import (admin-only ideally; guarded by JWT here)
+  @Post('drugs/import')
+  importDrugs(
+    @Body() body: { drugs: Array<Record<string, any>> },
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.prescriptionsService.importDrugs(body?.drugs || [], req.user.branchId);
+  }
+
+  // Drug autocomplete optimized for UI
+  @Get('drugs/autocomplete')
+  autocompleteDrugs(
+    @Query('q') q: string,
+    @Query('limit') limit?: number,
+  ) {
+    return this.prescriptionsService.autocompleteDrugs(q || '', Number(limit) || 15);
+  }
+
   // Template endpoints
   @Post('templates')
   createPrescriptionTemplate(

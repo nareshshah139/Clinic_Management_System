@@ -67,25 +67,22 @@ export class ReportsService {
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
     const wherePayments: any = {
-      invoice: { branchId },
       reconStatus: 'COMPLETED',
       createdAt: { gte: dateRange.start, lte: dateRange.end },
+      // Use relation filter on invoice
+      invoice: {
+        is: {
+          patient: { branchId },
+          ...(doctorId
+            ? { OR: [{ visit: { doctorId } }, { appointment: { doctorId } }] }
+            : {}),
+          ...(serviceType
+            ? { items: { contains: serviceType, mode: 'insensitive' } }
+            : {}),
+        },
+      },
     };
-
-    const invoiceFilter: any[] = [];
-    if (doctorId) {
-      invoiceFilter.push({ visit: { doctorId } });
-      invoiceFilter.push({ appointment: { doctorId } });
-    }
-    if (serviceType) {
-      // Items are stored as JSON string in many places; fallback to contains search
-      invoiceFilter.push({ items: { contains: serviceType, mode: 'insensitive' } });
-    }
-    if (invoiceFilter.length > 0) {
-      wherePayments.invoice = { OR: invoiceFilter };
-    }
     if (paymentMode) {
-      // Fixed: Use 'mode' field from Payment model
       wherePayments.mode = paymentMode as any;
     }
 
@@ -103,7 +100,7 @@ export class ReportsService {
     const totalInvoices = invoiceIdGroups.length;
 
     const paymentBreakdown: PaymentBreakdownDto[] = (paymentModeGroups as any[]).map((g) => ({
-      mode: g.method,
+      mode: g.mode,
       amount: g._sum.amount ?? 0,
       percentage: totalRevenue ? (100 * (g._sum.amount ?? 0)) / totalRevenue : 0,
       transactionCount: g._count.id,
@@ -350,7 +347,7 @@ export class ReportsService {
         select: { patientId: true, createdAt: true },
       }),
       this.prisma.payment.findMany({
-        where: { status: 'COMPLETED', createdAt: { gte: dateRange.start, lte: dateRange.end }, invoice: { patientId: { in: patientIds } } },
+        where: { reconStatus: 'COMPLETED', createdAt: { gte: dateRange.start, lte: dateRange.end }, invoice: { patientId: { in: patientIds } } },
         select: { amount: true, invoice: { select: { patientId: true } } },
       }),
     ]);
@@ -742,9 +739,9 @@ export class ReportsService {
     const { startDate, endDate, period, paymentMode, gateway, includeReconciliation, includeRefunds } = query;
     const dateRange = this.calculateDateRange(startDate, endDate, period);
 
-    const where: any = { 
-      invoice: { branchId }, 
-      createdAt: { gte: dateRange.start, lte: dateRange.end } 
+    const where: any = {
+      invoice: { is: { patient: { branchId } } },
+      createdAt: { gte: dateRange.start, lte: dateRange.end },
     };
     if (paymentMode) where.mode = paymentMode as any; // Fixed: use 'mode' instead of 'method'
     if (gateway) where.gateway = gateway;
@@ -763,7 +760,7 @@ export class ReportsService {
     ]);
 
     const totalAmount = totalAmountAgg._sum.amount || 0;
-    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.method as any, transactionCount: g._count.id, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0 }));
+    const paymentModeBreakdown: PaymentModeBreakdownDto[] = modeGroups.map((g) => ({ mode: g.mode as any, transactionCount: g._count.id, totalAmount: g._sum.amount || 0, percentage: totalAmount ? (100 * (g._sum.amount || 0)) / totalAmount : 0, successRate: totalPayments ? (100 * successfulPayments) / totalPayments : 0 }));
     const gatewayBreakdown: GatewayBreakdownDto[] = gatewayGroups.map((g) => ({ gateway: g.gateway || 'N/A', transactionCount: g._count.id, totalAmount: g._sum.amount || 0, successRate: successfulPayments ? (100 * successfulPayments) / totalPayments : 0, averageTransactionAmount: g._count.id ? (g._sum.amount || 0) / g._count.id : 0 }));
 
     const successMap = new Map<string, number>();

@@ -717,3 +717,27 @@ model AuditLog {
 
   @@map("audit_logs")
 }
+
+// India-focused drug database for prescription autocomplete
+model Drug {
+  id             String   @id @default(cuid())
+  name           String   // Brand or trade name
+  genericName    String?  // INN/Generic name
+  strength       String?  // e.g., 500 mg
+  form           String?  // e.g., Tablet, Capsule, Syrup
+  route          String?  // Oral, Topical, Injection
+  manufacturer   String?
+  composition    String?  // Full composition string
+  brandNames     String?  // JSON array of known brand names
+  aliases        String?  // JSON array of synonyms
+  hsnCode        String?
+  rxRequired     Boolean  @default(true)
+  isGeneric      Boolean  @default(false)
+  metadata       String?  // JSON
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([name, strength, form])
+  @@index([name])
+  @@index([genericName])
+}

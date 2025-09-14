@@ -20,8 +20,7 @@ interface RoomSchedule {
   roomId: string;
   appointments: Array<{
     id: string;
-    startTime: string;
-    endTime: string;
+    slot: string;
     patient: {
       name: string;
     };
@@ -113,11 +112,20 @@ export default function RoomCalendar() {
     const schedule = roomSchedules[roomId];
     if (!schedule) return null;
 
-    return schedule.appointments.find(apt => {
-      const startHour = new Date(apt.startTime).getHours();
-      const endHour = new Date(apt.endTime).getHours();
-      return hour >= startHour && hour < endHour;
-    });
+    return (
+      schedule.appointments.find((apt) => {
+        const parts = apt.slot?.split('-') || [];
+        if (parts.length !== 2) return false;
+        const [startH, startM] = parts[0].split(':').map((v) => parseInt(v, 10));
+        const [endH, endM] = parts[1].split(':').map((v) => parseInt(v, 10));
+        const slotStart = (isNaN(startH) ? 0 : startH) * 60 + (isNaN(startM) ? 0 : startM);
+        const slotEnd = (isNaN(endH) ? 0 : endH) * 60 + (isNaN(endM) ? 0 : endM);
+        const cellStart = hour * 60;
+        const cellEnd = (hour + 1) * 60;
+        // Occupied if slot overlaps the hour cell
+        return slotStart < cellEnd && slotEnd > cellStart;
+      }) || null
+    );
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -140,11 +148,17 @@ export default function RoomCalendar() {
   };
 
   const getVisitTypeColor = (visitType: string) => {
-    switch (visitType) {
-      case 'OPD': return 'bg-blue-100 text-blue-800';
-      case 'Procedure': return 'bg-purple-100 text-purple-800';
-      case 'Telemedicine': return 'bg-green-100 text-green-800';
-      default: return 'bg-gray-100 text-gray-800';
+    const vt = (visitType || '').toUpperCase();
+    switch (vt) {
+      case 'OPD':
+        return 'bg-blue-100 text-blue-800';
+      case 'PROCEDURE':
+        return 'bg-purple-100 text-purple-800';
+      case 'TELEMED':
+      case 'TELEMEDICINE':
+        return 'bg-green-100 text-green-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -341,15 +355,7 @@ export default function RoomCalendar() {
                               Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
                             </div>
                             <div className="text-xs text-gray-500 mt-1">
-                              {new Date(appointment.startTime).toLocaleTimeString('en-US', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                hour12: false 
-                              })} - {new Date(appointment.endTime).toLocaleTimeString('en-US', { 
-                                hour: '2-digit', 
-                                minute: '2-digit',
-                                hour12: false 
-                              })}
+                              {appointment.slot}
                             </div>
                           </div>
                         ) : (

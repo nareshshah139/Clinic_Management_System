@@ -801,6 +801,108 @@ export class PrescriptionsService {
     return filteredDrugs.slice(0, limit);
   }
 
+  // Bulk import India-focused drug data into local Drug table
+  async importDrugs(drugs: Array<Record<string, any>>, _branchId: string) {
+    if (!Array.isArray(drugs) || drugs.length === 0) {
+      return { imported: 0, upserts: 0, errors: 0 };
+    }
+
+    let upserts = 0;
+    let errors = 0;
+
+    const tasks = drugs.map((raw) => {
+      const name = String(raw.name || raw.brand || raw.tradeName || '').trim();
+      if (!name) {
+        errors += 1;
+        return Promise.resolve(null);
+      }
+
+      const strength = raw.strength ? String(raw.strength) : null;
+      const form = raw.form ? String(raw.form) : null;
+
+      return this.prisma.drug.upsert({
+        where: {
+          // Composite unique: name+strength+form
+          name_strength_form: {
+            name,
+            strength: strength ?? '',
+            form: form ?? '',
+          } as any,
+        },
+        update: {
+          genericName: raw.genericName ? String(raw.genericName) : null,
+          route: raw.route ? String(raw.route) : null,
+          manufacturer: raw.manufacturer ? String(raw.manufacturer) : null,
+          composition: raw.composition ? String(raw.composition) : null,
+          brandNames: raw.brandNames ? JSON.stringify(raw.brandNames) : (raw.brand ? JSON.stringify([raw.brand]) : null),
+          aliases: raw.aliases ? JSON.stringify(raw.aliases) : null,
+          hsnCode: raw.hsnCode ? String(raw.hsnCode) : null,
+          rxRequired: typeof raw.rxRequired === 'boolean' ? raw.rxRequired : true,
+          isGeneric: typeof raw.isGeneric === 'boolean' ? raw.isGeneric : false,
+          metadata: raw.metadata ? JSON.stringify(raw.metadata) : null,
+        },
+        create: {
+          name,
+          strength: strength,
+          form: form,
+          genericName: raw.genericName ? String(raw.genericName) : null,
+          route: raw.route ? String(raw.route) : null,
+          manufacturer: raw.manufacturer ? String(raw.manufacturer) : null,
+          composition: raw.composition ? String(raw.composition) : null,
+          brandNames: raw.brandNames ? JSON.stringify(raw.brandNames) : (raw.brand ? JSON.stringify([raw.brand]) : null),
+          aliases: raw.aliases ? JSON.stringify(raw.aliases) : null,
+          hsnCode: raw.hsnCode ? String(raw.hsnCode) : null,
+          rxRequired: typeof raw.rxRequired === 'boolean' ? raw.rxRequired : true,
+          isGeneric: typeof raw.isGeneric === 'boolean' ? raw.isGeneric : false,
+          metadata: raw.metadata ? JSON.stringify(raw.metadata) : null,
+        },
+      })
+      .then((res) => { upserts += 1; return res; })
+      .catch(() => { errors += 1; return null; });
+    });
+
+    await Promise.allSettled(tasks);
+    return { imported: drugs.length, upserts, errors };
+  }
+
+  // Autocomplete lookup for drug names from local Drug table
+  async autocompleteDrugs(q: string, limit: number) {
+    const term = (q || '').trim();
+    if (!term) return [];
+
+    const results = await this.prisma.drug.findMany({
+      where: {
+        OR: [
+          { name: { contains: term, mode: 'insensitive' } },
+          { genericName: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        genericName: true,
+        strength: true,
+        form: true,
+        manufacturer: true,
+        brandNames: true,
+        isGeneric: true,
+      },
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
+
+    return results.map((r) => ({
+      id: r.id,
+      name: r.name,
+      genericName: r.genericName,
+      brandNames: r.brandNames ? (() => { try { return JSON.parse(r.brandNames as unknown as string); } catch { return []; } })() : [],
+      strength: r.strength,
+      form: r.form,
+      manufacturer: r.manufacturer,
+      isGeneric: r.isGeneric,
+    }));
+  }
+
   async getPrescriptionStatistics(query: PrescriptionStatisticsDto, branchId: string) {
     const { startDate, endDate, doctorId, drugName, groupBy = 'day' } = query;
 
@@ -975,6 +1077,16 @@ export class PrescriptionsService {
     } = query;
 
     const skip = (page - 1) * limit;
+
+    // Guard: if model does not exist on Prisma (not migrated), return empty
+    const hasModel = (this.prisma as any).prescriptionTemplate &&
+      typeof (this.prisma as any).prescriptionTemplate.findMany === 'function';
+    if (!hasModel) {
+      return {
+        templates: [],
+        pagination: { total: 0, page, limit, pages: 0 },
+      };
+    }
 
     const where: any = {
       branchId,

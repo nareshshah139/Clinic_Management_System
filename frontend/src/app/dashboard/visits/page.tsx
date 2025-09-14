@@ -87,13 +87,14 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             const complaints = Array.isArray(visit.complaints) ? visit.complaints : (visit.complaints ? JSON.parse(visit.complaints) : []);
             const diagnosis = Array.isArray(visit.diagnosis) ? visit.diagnosis : (visit.diagnosis ? JSON.parse(visit.diagnosis) : []);
             const treatment = typeof visit.plan === 'object' ? visit.plan : (visit.plan ? JSON.parse(visit.plan) : {});
-            const scribeData = typeof visit.scribeJson === 'object' ? visit.scribeJson : (visit.scribeJson ? JSON.parse(visit.scribeJson) : {});
+            const rawScribe = typeof visit.scribeJson === 'object' ? visit.scribeJson : (visit.scribeJson ? JSON.parse(visit.scribeJson) : {});
+            const scribeData = rawScribe && typeof rawScribe === 'object' ? rawScribe : {};
             const vitals = typeof visit.vitals === 'object' ? visit.vitals : (visit.vitals ? JSON.parse(visit.vitals) : {});
             
             const visitDate = new Date(visit.createdAt);
             const chiefComplaint = complaints.length > 0 ? complaints[0].complaint : 'No chief complaint recorded';
             const primaryDiagnosis = diagnosis.length > 0 ? diagnosis[0].diagnosis : 'No diagnosis recorded';
-            const visitType = scribeData.visitType || 'OPD Consultation';
+            const visitType = (scribeData as any)?.visitType || 'OPD Consultation';
             
             return (
               <div key={visit.id} className="relative flex items-start space-x-4">
