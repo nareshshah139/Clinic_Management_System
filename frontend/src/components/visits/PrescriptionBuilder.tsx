@@ -70,7 +70,6 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
   const [followUpInstructions, setFollowUpInstructions] = useState('');
-  const [maxRefills, setMaxRefills] = useState<number>(0);
   const [validUntil, setValidUntil] = useState<string>('');
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
@@ -461,7 +460,6 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
         notes: notes || undefined,
         language,
         validUntil: validUntil || undefined,
-        maxRefills,
         followUpInstructions: followUpInstructions || undefined,
         procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
         metadata: {
@@ -495,7 +493,6 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
       setNotes('');
       setFollowUpInstructions('');
       setValidUntil('');
-      setMaxRefills(0);
       alert('Prescription created');
     } catch (e: any) {
       const msg = e?.body?.message || 'Failed to create prescription';
@@ -745,10 +742,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               <label className="text-sm text-gray-700">Valid Until</label>
               <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
             </div>
-            <div>
-              <label className="text-sm text-gray-700">Max Refills</label>
-              <Input type="number" min={0} max={5} value={maxRefills} onChange={(e) => setMaxRefills(Number(e.target.value) || 0)} />
-            </div>
+
           </div>
 
           {/* Print background controls */}
