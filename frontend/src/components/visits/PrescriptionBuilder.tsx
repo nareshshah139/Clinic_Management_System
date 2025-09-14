@@ -620,7 +620,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>Prescription Builder</span>
-            <Badge variant="outline" className="text-xs">Visit-linked</Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">Visit-linked</Badge>
+              <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
