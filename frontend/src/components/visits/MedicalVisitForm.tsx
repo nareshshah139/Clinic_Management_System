@@ -17,6 +17,8 @@ interface Props {
   doctorId: string;
   userRole?: string;
   visitNumber?: number;
+  patientName?: string;
+  visitDate?: string; // ISO string; falls back to today if not provided
 }
 
 interface VisitPhoto {
@@ -54,7 +56,7 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
-export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1 }: Props) {
+export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate }: Props) {
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
@@ -166,13 +168,21 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     // Convert to blob
     canvas.toBlob(async (blob) => {
       if (!blob) return;
-
-      const description = prompt('Enter photo description (optional):') || `Visit ${currentVisitNumber} - Photo ${photos.length + 1}`;
+      // Auto-generate default name: PatientName_VisitDate_X
+      const safeName = (patientName || 'Patient')
+        .trim()
+        .replace(/\s+/g, '_')
+        .replace(/[^A-Za-z0-9_\-]/g, '');
+      const dateObj = visitDate ? new Date(visitDate) : new Date();
+      const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+      const idx = photos.length + 1;
+      const baseName = `${safeName}_${dateStr}_${idx}`;
+      const description = baseName;
       
       try {
         // Upload photo
         const formData = new FormData();
-        formData.append('photo', blob, `visit-${visitId || 'temp'}-${Date.now()}.jpg`);
+        formData.append('photo', blob, `${baseName}.jpg`);
         formData.append('description', description);
         formData.append('visitId', visitId || 'temp');
         

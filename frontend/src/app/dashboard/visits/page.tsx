@@ -621,6 +621,8 @@ export default function VisitsPage() {
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
         userRole={currentUserRole}
+        patientName={patients.find(p => p.id === selectedPatientId)?.name || ''}
+        visitDate={new Date().toISOString()}
       />
       
       {recentVisitId && <VisitPhotos visitId={recentVisitId} />}
