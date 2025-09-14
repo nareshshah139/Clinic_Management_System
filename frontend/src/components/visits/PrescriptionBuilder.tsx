@@ -877,7 +877,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
 
       {/* Print Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-[100vw] w-[100vw] h-[100vh] p-0">
+        <DialogContent className="max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden">
           <div className="h-full flex flex-col">
             <DialogHeader className="px-6 pt-4 pb-2">
               <DialogTitle>Prescription Preview</DialogTitle>
@@ -902,27 +902,27 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               }
             }
           `}</style>
-          <div className="flex-1 overflow-auto">
-            <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6" style={{ fontFamily: 'Fira Sans, sans-serif', fontSize: '14px' }}>
-              <div className="mx-auto">
-              {/* Header */}
-              {includeSections.header && (
-                <div className="flex items-start justify-between pb-4 border-b">
-                  <div>
-                    <div className="text-xl font-bold">Clinic Prescription</div>
-                    <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
+          <div className="flex-1 overflow-auto overflow-x-auto">
+            <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6 w-full" style={{ fontFamily: 'Fira Sans, sans-serif', fontSize: '14px' }}>
+              <div className="mx-auto max-w-[1400px] w-full">
+                {/* Header */}
+                {includeSections.header && (
+                  <div className="flex items-start justify-between pb-4 border-b">
+                    <div>
+                      <div className="text-xl font-bold">Clinic Prescription</div>
+                      <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
+                    </div>
+                    <div className="text-right text-sm">
+                      <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
+                      {visitData?.doctor?.specialization && (
+                        <div className="text-gray-600">{visitData?.doctor?.specialization}</div>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right text-sm">
-                    <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                    {visitData?.doctor?.specialization && (
-                      <div className="text-gray-600">{visitData?.doctor?.specialization}</div>
-                    )}
-                  </div>
-                </div>
-              )}
+                )}
 
-              {/* Patient Info */}
-              {includeSections.patientInfo && (
+                {/* Patient Info */}
+                {includeSections.patientInfo && (
                 <div className="flex justify-between text-sm py-3">
                   <div>
                     <div className="text-gray-600">Patient</div>
