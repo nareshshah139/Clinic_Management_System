@@ -13,6 +13,7 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
   const [files, setFiles] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const cameraRef = useRef<HTMLInputElement | null>(null);
 
   const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -44,6 +45,7 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
       });
       await load();
       if (inputRef.current) inputRef.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
     } catch (e) {
       // eslint-disable-next-line no-alert
       alert('Failed to upload photos');
@@ -59,8 +61,10 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div>
-          <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} />
-          <Button className="ml-2" variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>Upload</Button>
+          <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
+          <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
+          <Button variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>Upload from device</Button>
+          <Button className="ml-2" size="sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>Take photo</Button>
         </div>
         {files.length === 0 ? (
           <div className="text-sm text-gray-500">No photos uploaded yet</div>
@@ -68,7 +72,9 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {files.map((p) => (
               <a key={p} href={p} target="_blank" rel="noreferrer">
-                <img src={p} alt="visit" className="w-full h-32 object-cover rounded border" />
+                <div className="relative w-full h-48 bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
+                  <img src={p} alt="visit" className="max-h-full max-w-full object-contain" />
+                </div>
               </a>
             ))}
           </div>

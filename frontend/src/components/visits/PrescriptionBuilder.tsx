@@ -62,10 +62,11 @@ interface Props {
   patientId: string;
   visitId: string | null;
   doctorId: string;
+  userRole?: string;
   onCreated?: (id?: string) => void;
 }
 
-export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCreated }: Props) {
+export default function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated }: Props) {
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
@@ -210,13 +211,30 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     }
   }, [visitData]);
 
+  // Seed local vitals from visit data (one-time when empty)
+  useEffect(() => {
+    if (!visitVitals) return;
+    // Only fill if local fields are empty
+    const hv = (vitalsHeightCm === '' || vitalsHeightCm == null) && (visitVitals.height || visitVitals.heightCm);
+    const wv = (vitalsWeightKg === '' || vitalsWeightKg == null) && visitVitals.weight;
+    const sv = (vitalsBpSys === '' || vitalsBpSys == null) && (visitVitals.systolicBP || visitVitals.bpSys || visitVitals.bpS);
+    const dv = (vitalsBpDia === '' || vitalsBpDia == null) && (visitVitals.diastolicBP || visitVitals.bpDia || visitVitals.bpD);
+    const pv = (vitalsPulse === '' || vitalsPulse == null) && (visitVitals.heartRate || visitVitals.pulse || visitVitals.pr);
+    if (hv) setVitalsHeightCm(Number(visitVitals.height || visitVitals.heightCm));
+    if (wv) setVitalsWeightKg(Number(visitVitals.weight));
+    if (sv) setVitalsBpSys(Number(visitVitals.systolicBP || visitVitals.bpSys || visitVitals.bpS));
+    if (dv) setVitalsBpDia(Number(visitVitals.diastolicBP || visitVitals.bpDia || visitVitals.bpD));
+    if (pv) setVitalsPulse(Number(visitVitals.heartRate || visitVitals.pulse || visitVitals.pr));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitVitals]);
+
   const [includeSections, setIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
     diagnosis: true,
     medications: true,
     procedures: true,
     counseling: true,
-    vitals: false,
+    vitals: true,
     followUp: true,
     notes: true,
     doctorSignature: true,
@@ -726,7 +744,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             <div className="text-xs text-gray-500">Loading visit details…</div>
           )}
           {/* Formatting & Meta */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <div>
               <label className="text-sm text-gray-700">Language</label>
               <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
@@ -742,11 +760,14 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               <label className="text-sm text-gray-700">Review Date</label>
               <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
             </div>
-
+            <div>
+              <label className="text-sm text-gray-700">Top Margin (px)</label>
+              <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
+            </div>
           </div>
 
           {/* Print background controls */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <div className="md:col-span-2">
               <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
               <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
@@ -757,7 +778,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <div>
               <label className="text-sm text-gray-700">Diagnosis (optional)</label>
               <div className="relative">
@@ -779,7 +800,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             </div>
           </div>
 
-          <div>
+          <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <label className="text-sm text-gray-700">Notes (patient-facing)</label>
             <div className="relative">
               <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -828,7 +849,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Chief Complaints */}
-              <div className={`relative ${hasChiefComplaints ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasChiefComplaints ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasChiefComplaints && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -848,7 +869,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Histories */}
-              <div className={`relative ${hasHistories ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasHistories ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.histories ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasHistories && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -869,7 +890,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Family History */}
-              <div className={`relative ${hasFamilyHistory ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasFamilyHistory ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.familyHistory ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasFamilyHistory && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -883,7 +904,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Topicals */}
-              <div className={`relative ${hasTopicals ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasTopicals ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.topicals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasTopicals && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -913,7 +934,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Post Procedure */}
-              <div className={`relative ${hasPostProcedure ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasPostProcedure ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.postProcedure ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasPostProcedure && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -922,7 +943,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Investigations */}
-              <div className={`relative ${hasInvestigations ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasInvestigations ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.investigations ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasInvestigations && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -938,7 +959,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Procedure Planned */}
-              <div className={`relative ${hasProcedurePlanned ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasProcedurePlanned ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.procedurePlanned ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasProcedurePlanned && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -947,7 +968,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Procedure Parameters (additional) */}
-              <div className={`relative ${hasProcedureParams ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+              <div className={`relative ${hasProcedureParams ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.procedureParameters ? '' : 'opacity-60 pointer-events-none select-none'}`}>
                 {hasProcedureParams && (
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
@@ -1013,7 +1034,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           </div>
 
           {/* Templates Panel */}
-          <div className="w-full">
+          <div className={`w-full ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="flex items-center justify-between text-base">
@@ -1052,7 +1073,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           </div>
 
           {/* Drug search */}
-          <div>
+          <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <label className="text-sm text-gray-700">Add Drug</label>
             <Input 
               placeholder="Search drug name or brand (min 2 chars)" 
@@ -1076,7 +1097,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           </div>
 
           {/* Items table */}
-          <div className="space-y-3">
+          <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             {items.length === 0 && (
               <div className="text-sm text-gray-500">No items added yet</div>
             )}
@@ -1194,7 +1215,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             ))}
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
             <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
             <div className="flex gap-2">
               <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
@@ -1284,11 +1305,24 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 <div className="py-3">
                   <div className="font-semibold mb-1">Vitals</div>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    {vitalsHeightCm !== '' && <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{vitalsHeightCm} cm</span></div>}
-                    {vitalsWeightKg !== '' && <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{vitalsWeightKg} kg</span></div>}
-                    {vitalsBmi !== '' && <div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{vitalsBmi}</span></div>}
-                    {(vitalsBpSys !== '' || vitalsBpDia !== '') && <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{vitalsBpSys || '—'}/{vitalsBpDia || '—'} mmHg</span></div>}
-                    {vitalsPulse !== '' && <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{vitalsPulse} bpm</span></div>}
+                    {((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) && (
+                      <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</span></div>
+                    )}
+                    {((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) && (
+                      <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</span></div>
+                    )}
+                    {(() => {
+                      const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
+                      const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
+                      const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
+                      return bmi !== '' ? (<div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{bmi}</span></div>) : null;
+                    })()}
+                    {(((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) && (
+                      <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</span></div>
+                    )}
+                    {((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) && (
+                      <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</span></div>
+                    )}
                   </div>
                 </div>
               )}
