@@ -184,6 +184,12 @@ export default function VisitsPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
 
+  // Autocomplete state for patients
+  const [patientQuery, setPatientQuery] = useState('');
+  const [patientOptions, setPatientOptions] = useState<any[]>([]);
+  const [searchingPatients, setSearchingPatients] = useState(false);
+  const [showPatientMenu, setShowPatientMenu] = useState(false);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -201,9 +207,10 @@ export default function VisitsPage() {
         const patientsData = (patientsRes.value as any)?.data || (patientsRes.value as any)?.patients || (patientsRes.value as any) || [];
         console.log('🏥 Processed patients data:', patientsData);
         setPatients(patientsData);
+        setPatientOptions(patientsData.slice(0, 10));
         if (patientsData.length > 0 && !selectedPatientId) {
           setSelectedPatientId(patientsData[0].id);
-        }
+          }
         }
 
         if (usersRes.status === 'fulfilled') {
@@ -228,6 +235,25 @@ export default function VisitsPage() {
         setLoading(false);
       }
     };
+
+  // Debounced search for patients
+  useEffect(() => {
+    let t: any;
+    const run = async () => {
+      try {
+        setSearchingPatients(true);
+        const res: any = await apiClient.getPatients({ search: patientQuery || undefined, limit: 10 });
+        const rows = res?.data || res?.patients || res || [];
+        setPatientOptions(rows);
+      } catch (e) {
+        setPatientOptions([]);
+      } finally {
+        setSearchingPatients(false);
+      }
+    };
+    t = setTimeout(() => void run(), 250);
+    return () => clearTimeout(t);
+  }, [patientQuery]);
 
   const startNewVisit = () => {
     if (selectedPatientId && selectedDoctorId) {
@@ -362,38 +388,53 @@ export default function VisitsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="relative">
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Patient
                 </label>
-                <Select value={selectedPatientId} onValueChange={setSelectedPatientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a patient..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {patients.map((patient) => (
-                      <SelectItem key={patient.id} value={patient.id}>
-                        <div className="flex items-center gap-2">
-                          <Users className="h-4 w-4" />
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {patient.name || `Patient ${patient.id?.slice(-4) || 'Unknown'}`}
-                            </span>
-                            <div className="flex items-center gap-3 text-xs text-gray-500">
-                              <span>ID: {patient.id}</span>
-                              {patient.phone && (
-                                <span>📞 {patient.phone}</span>
-                              )}
-                              {patient.email && (
-                                <span>✉️ {patient.email}</span>
-                              )}
+                <div className="relative">
+                  <input
+                    className="w-full border rounded px-3 py-2 text-sm"
+                    placeholder="Search name, phone, or email"
+                    value={patientQuery}
+                    onChange={(e) => { setPatientQuery(e.target.value); setShowPatientMenu(true); }}
+                    onFocus={() => setShowPatientMenu(true)}
+                  />
+                  {showPatientMenu && (
+                    <div className="absolute z-20 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
+                      {searchingPatients && (
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                      )}
+                      {!searchingPatients && patientOptions.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                      )}
+                      {!searchingPatients && patientOptions.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPatientId(p.id);
+                            setPatientQuery(p.name || p.phone || p.email || p.id);
+                            setShowPatientMenu(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 hover:bg-gray-50 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
+                              <div className="flex items-center gap-3 text-xs text-gray-500">
+                                <span>ID: {p.id}</span>
+                                {p.phone && <span>📞 {p.phone}</span>}
+                                {p.email && <span>✉️ {p.email}</span>}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
