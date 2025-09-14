@@ -997,3 +997,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Procedures: Sidebar item `/dashboard/procedures` created; procedure metrics removed from Prescription Builder.
 
 *Last updated: September 2025 - Prescription UX improvements, investigations checkboxes, and 1MG scaffolding (cart) completed.*
+
+### September 2025: Prescription UX polish, Investigations checkboxes, and 1MG (Pharmacy) scaffolding
+- Added vitals auto-propagation from Visits to Prescription Builder with preview fallback and BMI computation
+- Visit Photos: Full-image preview (object-contain) and native iPhone camera capture (capture=environment) with dedicated buttons

@@ -637,7 +637,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       ref={videoRef} 
                       autoPlay 
                       playsInline 
-                      className="w-full h-64 object-cover"
+                      className="w-full h-64 object-contain"
                     />
                     <canvas ref={canvasRef} className="hidden" />
                   </div>
@@ -650,7 +650,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       <img 
                         src={photo.url} 
                         alt={photo.description}
-                        className="w-full h-32 object-cover rounded-lg border"
+                        className="w-full h-32 object-contain bg-black rounded-lg border"
                       />
                       <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center">
                         <Button
