@@ -23,7 +23,7 @@ export class BillingService {
   constructor(private prisma: PrismaService) {}
 
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
-    const { patientId, visitId, items, mode, gstin, hsn, notes } = createInvoiceDto;
+    const { patientId, visitId, items, mode, gstin, hsn, notes } = createInvoiceDto as any;
 
     // Verify patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
@@ -50,27 +50,53 @@ export class BillingService {
     // Calculate totals
     const { subtotal, discount, gstAmount, totalAmount } = this.calculateInvoiceTotals(items);
 
+    // Prepare services for items and build invoice items create payload
+    const invoiceItemsData = [] as Array<{ serviceId: string; qty: number; unitPrice: number; gstRate: number; total: number }>;
+    for (const it of items) {
+      const qty: number = (it.qty ?? it.quantity ?? 1) as number;
+      const unitPrice: number = Number(it.unitPrice ?? 0);
+      const gstRate: number = Number(it.gstRate ?? 0);
+      // Create a simple Service if not provided
+      let serviceId: string = it.serviceId as string;
+      if (!serviceId) {
+        const name: string = (it.name || it.description || 'Service') as string;
+        const createdService = await this.prisma.service.create({
+          data: {
+            name,
+            type: 'Consult',
+            taxable: gstRate > 0,
+            gstRate: gstRate,
+            priceMrp: unitPrice,
+            priceNet: unitPrice,
+            branchId,
+          },
+        });
+        serviceId = createdService.id;
+      }
+      invoiceItemsData.push({
+        serviceId,
+        qty,
+        unitPrice,
+        gstRate,
+        total: qty * unitPrice,
+      });
+    }
+
+    const data: any = {
+      patientId,
+      total: totalAmount,
+      balance: totalAmount,
+      invoiceNo: invoiceNumber,
+      items: { create: invoiceItemsData },
+    };
+    if (visitId) data.visitId = visitId;
+    if (mode) data.mode = mode;
+    if (gstin) data.gstin = gstin;
+    if (hsn) data.hsn = hsn;
+    if (notes) data.notes = notes;
+
     const invoice = await this.prisma.invoice.create({
-      data: {
-        patientId,
-        visitId,
-        mode,
-        total: totalAmount,
-        balance: totalAmount,
-        invoiceNo: invoiceNumber,
-        gstin,
-        hsn,
-        // status: InvoiceStatus.DRAFT, // Commented out - field doesn't exist
-        items: {
-          create: items.map(item => ({
-            serviceId: item.serviceId,
-            qty: item.qty,
-            unitPrice: item.unitPrice,
-            gstRate: item.gstRate || 0,
-            total: item.qty * item.unitPrice,
-          })),
-        },
-      },
+      data,
       include: {
         patient: {
           select: { id: true, name: true, phone: true },
