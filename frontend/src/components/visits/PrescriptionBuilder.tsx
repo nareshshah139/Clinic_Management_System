@@ -203,7 +203,6 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   }, [visitData]);
 
   const [includeSections, setIncludeSections] = useState<Record<string, boolean>>({
-    header: true,
     patientInfo: true,
     diagnosis: true,
     medications: true,
@@ -1113,9 +1112,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
           <div className="h-full min-h-0 flex flex-col">
-            <DialogHeader className="px-6 pt-4 pb-2">
-              <DialogTitle>Prescription Preview</DialogTitle>
-            </DialogHeader>
+            
           {/* Scoped print CSS to only print the preview container */}
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
@@ -1163,21 +1160,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               }}
             >
               <div className="mx-auto w-full">
-                {/* Header */}
-                {includeSections.header && (
-                  <div className="flex items-start justify-between pb-4 border-b">
-                    <div>
-                      <div className="text-xl font-bold">Clinic Prescription</div>
-                      <div className="text-sm text-gray-600">{new Date().toLocaleDateString()}</div>
-                    </div>
-                    <div className="text-right text-sm">
-                      <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                      {visitData?.doctor?.specialization && (
-                        <div className="text-gray-600">{visitData?.doctor?.specialization}</div>
-                      )}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Patient Info */}
                 {includeSections.patientInfo && (
