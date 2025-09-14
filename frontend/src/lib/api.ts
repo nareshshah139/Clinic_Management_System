@@ -203,6 +203,10 @@ export class ApiClient {
     return this.post('/visits', data);
   }
 
+  async updateVisit(id: string, data: any) {
+    return this.patch(`/visits/${id}`, data);
+  }
+
   async completeVisit(id: string, data: any) {
     return this.post(`/visits/${id}/complete`, data);
   }
