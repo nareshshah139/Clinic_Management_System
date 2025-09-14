@@ -152,6 +152,26 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     procedureParameters: true,
   });
 
+  // Derived flags to show inline UI feedback for auto-included sections
+  const hasChiefComplaints = Boolean(chiefComplaints?.trim()?.length);
+  const hasHistories = Boolean(
+    pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length
+  );
+  const hasFamilyHistory = Boolean(
+    familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
+  );
+  const hasTopicals = Boolean(
+    topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions ||
+    topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions ||
+    topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions
+  );
+  const hasPostProcedure = Boolean(postProcedureCare?.trim()?.length);
+  const hasInvestigations = Boolean(investigations?.trim()?.length);
+  const hasProcedurePlanned = Boolean(procedurePlanned?.trim()?.length);
+  const hasProcedureParams = Boolean(
+    procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others
+  );
+
   const canCreate = Boolean(patientId && visitId && doctorId && items.length > 0);
 
   useEffect(() => {
@@ -426,29 +446,40 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Chief Complaints */}
-              <div>
+              <div className={`relative ${hasChiefComplaints ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasChiefComplaints && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
                 <label className="text-xs text-gray-600">Chief Complaints</label>
                 <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
               </div>
 
               {/* Histories */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs text-gray-600">Past History</label>
-                  <Textarea rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Medication History</label>
-                  <Textarea rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Menstrual History</label>
-                  <Textarea rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
+              <div className={`relative ${hasHistories ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasHistories && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Past History</label>
+                    <Textarea rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Medication History</label>
+                    <Textarea rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Menstrual History</label>
+                    <Textarea rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
+                  </div>
                 </div>
               </div>
 
               {/* Family History */}
-              <div>
+              <div className={`relative ${hasFamilyHistory ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasFamilyHistory && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
                 <label className="text-xs text-gray-600">Family History</label>
                 <div className="flex flex-wrap gap-4 text-sm mt-1">
                   <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
@@ -459,65 +490,84 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               </div>
 
               {/* Topicals */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="space-y-1">
-                  <div className="font-medium text-sm">Facewash/Soap</div>
-                  <Input placeholder="Frequency" value={topicalFacewash.frequency || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, frequency: e.target.value })} />
-                  <Input placeholder="Timing" value={topicalFacewash.timing || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, timing: e.target.value })} />
-                  <Input placeholder="Duration" value={topicalFacewash.duration || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, duration: e.target.value })} />
-                  <Input placeholder="Instructions" value={topicalFacewash.instructions || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, instructions: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-medium text-sm">Moisturiser & Sunscreen</div>
-                  <Input placeholder="Frequency" value={topicalMoisturiserSunscreen.frequency || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, frequency: e.target.value })} />
-                  <Input placeholder="Timing" value={topicalMoisturiserSunscreen.timing || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, timing: e.target.value })} />
-                  <Input placeholder="Duration" value={topicalMoisturiserSunscreen.duration || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, duration: e.target.value })} />
-                  <Input placeholder="Instructions" value={topicalMoisturiserSunscreen.instructions || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, instructions: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <div className="font-medium text-sm">Actives</div>
-                  <Input placeholder="Frequency" value={topicalActives.frequency || ''} onChange={(e) => setTopicalActives({ ...topicalActives, frequency: e.target.value })} />
-                  <Input placeholder="Timing" value={topicalActives.timing || ''} onChange={(e) => setTopicalActives({ ...topicalActives, timing: e.target.value })} />
-                  <Input placeholder="Duration" value={topicalActives.duration || ''} onChange={(e) => setTopicalActives({ ...topicalActives, duration: e.target.value })} />
-                  <Input placeholder="Instructions" value={topicalActives.instructions || ''} onChange={(e) => setTopicalActives({ ...topicalActives, instructions: e.target.value })} />
+              <div className={`relative ${hasTopicals ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasTopicals && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <div className="font-medium text-sm">Facewash/Soap</div>
+                    <Input placeholder="Frequency" value={topicalFacewash.frequency || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, frequency: e.target.value })} />
+                    <Input placeholder="Timing" value={topicalFacewash.timing || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, timing: e.target.value })} />
+                    <Input placeholder="Duration" value={topicalFacewash.duration || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, duration: e.target.value })} />
+                    <Input placeholder="Instructions" value={topicalFacewash.instructions || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, instructions: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="font-medium text-sm">Moisturiser & Sunscreen</div>
+                    <Input placeholder="Frequency" value={topicalMoisturiserSunscreen.frequency || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, frequency: e.target.value })} />
+                    <Input placeholder="Timing" value={topicalMoisturiserSunscreen.timing || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, timing: e.target.value })} />
+                    <Input placeholder="Duration" value={topicalMoisturiserSunscreen.duration || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, duration: e.target.value })} />
+                    <Input placeholder="Instructions" value={topicalMoisturiserSunscreen.instructions || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, instructions: e.target.value })} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="font-medium text-sm">Actives</div>
+                    <Input placeholder="Frequency" value={topicalActives.frequency || ''} onChange={(e) => setTopicalActives({ ...topicalActives, frequency: e.target.value })} />
+                    <Input placeholder="Timing" value={topicalActives.timing || ''} onChange={(e) => setTopicalActives({ ...topicalActives, timing: e.target.value })} />
+                    <Input placeholder="Duration" value={topicalActives.duration || ''} onChange={(e) => setTopicalActives({ ...topicalActives, duration: e.target.value })} />
+                    <Input placeholder="Instructions" value={topicalActives.instructions || ''} onChange={(e) => setTopicalActives({ ...topicalActives, instructions: e.target.value })} />
+                  </div>
                 </div>
               </div>
 
               {/* Post Procedure */}
-              <div>
+              <div className={`relative ${hasPostProcedure ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasPostProcedure && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
                 <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
                 <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
               </div>
 
               {/* Investigations */}
-              <div>
+              <div className={`relative ${hasInvestigations ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasInvestigations && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
                 <label className="text-xs text-gray-600">Investigations</label>
                 <Textarea rows={2} value={investigations} onChange={(e) => setInvestigations(e.target.value)} />
               </div>
 
               {/* Procedure Planned */}
-              <div>
+              <div className={`relative ${hasProcedurePlanned ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasProcedurePlanned && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
                 <label className="text-xs text-gray-600">Procedure Planned</label>
                 <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
               </div>
 
               {/* Procedure Parameters (additional) */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
-                <div>
-                  <label className="text-xs text-gray-600">Passes</label>
-                  <Input value={procedureParams.passes || ''} onChange={(e) => setProcedureParams({ ...procedureParams, passes: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Power</label>
-                  <Input value={procedureParams.power || ''} onChange={(e) => setProcedureParams({ ...procedureParams, power: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Machine Used</label>
-                  <Input value={procedureParams.machineUsed || ''} onChange={(e) => setProcedureParams({ ...procedureParams, machineUsed: e.target.value })} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Others</label>
-                  <Input value={procedureParams.others || ''} onChange={(e) => setProcedureParams({ ...procedureParams, others: e.target.value })} />
+              <div className={`relative ${hasProcedureParams ? 'bg-green-50 border border-green-300 rounded p-2' : ''}`}>
+                {hasProcedureParams && (
+                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Passes</label>
+                    <Input value={procedureParams.passes || ''} onChange={(e) => setProcedureParams({ ...procedureParams, passes: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Power</label>
+                    <Input value={procedureParams.power || ''} onChange={(e) => setProcedureParams({ ...procedureParams, power: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Machine Used</label>
+                    <Input value={procedureParams.machineUsed || ''} onChange={(e) => setProcedureParams({ ...procedureParams, machineUsed: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Others</label>
+                    <Input value={procedureParams.others || ''} onChange={(e) => setProcedureParams({ ...procedureParams, others: e.target.value })} />
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -912,7 +962,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Chief Complaints */}
-              {includeSections.chiefComplaints && (chiefComplaints?.trim()?.length > 0) && (
+              {(chiefComplaints?.trim()?.length > 0) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Chief Complaints</div>
                   <div className="text-sm whitespace-pre-wrap">{chiefComplaints}</div>
@@ -920,7 +970,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Histories */}
-              {includeSections.histories && ((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
+              {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">History</div>
                   <div className="space-y-1 text-sm">
@@ -932,7 +982,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Family History */}
-              {includeSections.familyHistory && (familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
+              {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Family History</div>
                   <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? familyHistoryOthers : null].filter(Boolean).join(', ')}</div>
@@ -983,7 +1033,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Topicals */}
-              {includeSections.topicals && (
+              {(
                 (topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions || topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions || topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Topicals</div>
@@ -1002,8 +1052,8 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 )
               )}
 
-              {/* Post Procedure Care */}
-              {includeSections.postProcedure && (postProcedureCare?.trim()?.length > 0) && (
+              {/* Post Procedure */}
+              {(postProcedureCare?.trim()?.length > 0) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Post Procedure</div>
                   <div className="text-sm whitespace-pre-wrap">{postProcedureCare}</div>
@@ -1011,7 +1061,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Investigations */}
-              {includeSections.investigations && (investigations?.trim()?.length > 0) && (
+              {(investigations?.trim()?.length > 0) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Investigations</div>
                   <div className="text-sm whitespace-pre-wrap">{investigations}</div>
@@ -1019,7 +1069,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Procedure Planned */}
-              {includeSections.procedurePlanned && (procedurePlanned?.trim()?.length > 0) && (
+              {(procedurePlanned?.trim()?.length > 0) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Procedure Planned</div>
                   <div className="text-sm">{procedurePlanned}</div>
@@ -1065,7 +1115,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Procedure Parameters (additional) */}
-              {includeSections.procedureParameters && (procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others) && (
+              {(procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Procedure Parameters</div>
                   <ul className="list-disc ml-5 text-sm">

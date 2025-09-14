@@ -976,5 +976,6 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Backend: `Drug` model; ingestion script `scripts/import_derm_drugs.ts`; endpoints `/prescriptions/drugs/autocomplete` and `/prescriptions/drugs/import`.
 - Frontend: API client additions for prescriptions and error handling fallback for non-JSON.
 - Backend: Reports relation filters via `invoice: { is: { patient: { branchId } } }`, payment `mode` mapping, and `reconStatus` usage.
+- Frontend UX: Clinical form sections now show subtle green highlight and "Auto-included in preview" note when filled, matching the preview’s auto-include behavior.
 
 *Last updated: September 2025 - Prescription builder, drug autocomplete, and reports fixes shipped.*
