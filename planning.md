@@ -979,3 +979,21 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Frontend UX: Clinical form sections now show subtle green highlight and "Auto-included in preview" note when filled, matching the preview’s auto-include behavior.
 
 *Last updated: September 2025 - Prescription builder, drug autocomplete, and reports fixes shipped.*
+
+### September 2025: Prescription UX polish, Investigations checkboxes, and 1MG (Pharmacy) scaffolding
+**Achievement:** Streamlined prescription workflow and prepared pharmacy ordering.
+**Impact:**
+- Templates panel now spans full width for faster discovery and use.
+- Investigations switched from free-text to checkbox list (CBC → Skin Biopsy) and flow through to metadata and print preview.
+- Print preview refined for clinics using letterheads: A4 sizing with @page rules, background image support (default `/letterhead.png`), and default top margin set to 150px (configurable), with an always-visible sticky footer (Close | Print).
+- Accessibility: Dialog has a visually hidden title to satisfy screen readers.
+- Separated procedures from prescriptions; dedicated Procedures page added in sidebar for planning/recording.
+- 1MG integration scaffolding added (backend module, proxy endpoints) and a cart-like ordering flow in Prescription Builder (search, map SKU, qty, inventory check, place order) ready to wire to live 1MG credentials.
+
+**Technical Highlights:**
+- Frontend: `PrescriptionBuilder.tsx` updates (A4 preview, background image + margin controls, sticky footer, investigations checkboxes, templates full-width, 1MG cart dialog, accessible `DialogTitle`).
+- Frontend: Added API client methods `oneMgSearch`, `oneMgProduct`, `oneMgCheckInventory`, `oneMgCreateOrder`.
+- Backend: New `pharmacy/one-mg` module with controller/service stubs and routes for search, product details, inventory check, orders, confirmations, and webhooks; registered in `AppModule`.
+- Procedures: Sidebar item `/dashboard/procedures` created; procedure metrics removed from Prescription Builder.
+
+*Last updated: September 2025 - Prescription UX improvements, investigations checkboxes, and 1MG scaffolding (cart) completed.*
