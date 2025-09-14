@@ -57,9 +57,10 @@ export default function PatientsManagement() {
   const fetchPatients = async () => {
     try {
       setLoading(true);
+      const normGender = genderFilter !== 'ALL' ? (genderFilter === 'MALE' ? 'Male' : genderFilter === 'FEMALE' ? 'Female' : 'Other') : undefined;
       const response = await apiClient.getPatients({
         search: search || undefined,
-        gender: genderFilter !== 'ALL' ? genderFilter : undefined,
+        gender: normGender,
         limit: 50,
       });
       const rows = (response as any)?.data ?? [];

@@ -25,7 +25,7 @@ export class PatientsService {
 
     const where = {
       branchId,
-      ...(gender ? { gender } : {}),
+      ...(gender ? { gender: { contains: gender, mode: 'insensitive' as const } } : {}),
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
