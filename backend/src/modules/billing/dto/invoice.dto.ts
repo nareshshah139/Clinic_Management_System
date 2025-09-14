@@ -76,14 +76,15 @@ export class InvoiceItemDto {
 }
 
 export class CreateInvoiceDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
-  @IsUUID()
+  @IsOptional()
+  @IsString()
   visitId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsString()
   appointmentId?: string;
 
   @IsArray()

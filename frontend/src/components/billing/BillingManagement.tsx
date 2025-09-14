@@ -65,7 +65,7 @@ export default function BillingManagement() {
       await apiClient.createInvoice({
         patientId: form.patientId,
         items: [
-          { description: form.description, quantity: 1, unitPrice: Number(form.amount) || 0, discountPercentage: 0, gstRate: 18 },
+          { name: form.description || 'Service', description: form.description || 'Service', quantity: 1, unitPrice: Number(form.amount) || 0, discount: 0, gstRate: 18 },
         ],
       });
       setOpen(false);
