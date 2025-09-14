@@ -143,6 +143,26 @@ export class PrescriptionsController {
     return this.prescriptionsService.autocompleteDrugs(q || '', Number(limit) || 15);
   }
 
+  // Clinical field autocomplete (DB-backed)
+  @Get('fields/autocomplete')
+  autocompleteField(
+    @Query('field') field: string,
+    @Query('patientId') patientId: string,
+    @Query('visitId') visitId?: string,
+    @Query('q') q?: string,
+    @Query('limit') limit?: number,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.prescriptionsService.autocompleteClinicalField(
+      field,
+      patientId,
+      q || '',
+      Number(limit) || 10,
+      req.user.branchId,
+      visitId,
+    );
+  }
+
   // Template endpoints
   @Post('templates')
   createPrescriptionTemplate(

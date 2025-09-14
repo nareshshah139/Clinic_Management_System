@@ -295,6 +295,10 @@ export class ApiClient {
   async createPrescriptionTemplate(data: any) {
     return this.post('/prescriptions/templates', data);
   }
+
+  async autocompletePrescriptionField(params: { field: string; patientId: string; visitId?: string; q?: string; limit?: number }) {
+    return this.get('/prescriptions/fields/autocomplete', params as any);
+  }
 }
 
 export const apiClient = new ApiClient();

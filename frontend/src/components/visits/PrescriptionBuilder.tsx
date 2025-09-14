@@ -107,6 +107,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [loadingDrugs, setLoadingDrugs] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  // Autocomplete state for clinical fields
+  const [diagOptions, setDiagOptions] = useState<string[]>([]);
+  const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
+  const [notesOptions, setNotesOptions] = useState<string[]>([]);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -241,6 +245,46 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     }
   };
 
+  // Debounced clinical autocomplete loaders
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        if (!patientId) return;
+        const res = await apiClient.autocompletePrescriptionField({ field: 'diagnosis', patientId, visitId: visitId || undefined, q: diagnosis, limit: 8 });
+        setDiagOptions(Array.isArray(res) ? (res as string[]) : []);
+      } catch {
+        setDiagOptions([]);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [diagnosis, patientId, visitId]);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        if (!patientId) return;
+        const res = await apiClient.autocompletePrescriptionField({ field: 'chiefComplaints', patientId, visitId: visitId || undefined, q: chiefComplaints, limit: 8 });
+        setComplaintOptions(Array.isArray(res) ? (res as string[]) : []);
+      } catch {
+        setComplaintOptions([]);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [chiefComplaints, patientId, visitId]);
+
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      try {
+        if (!patientId) return;
+        const res = await apiClient.autocompletePrescriptionField({ field: 'notes', patientId, visitId: visitId || undefined, q: notes, limit: 8 });
+        setNotesOptions(Array.isArray(res) ? (res as string[]) : []);
+      } catch {
+        setNotesOptions([]);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [notes, patientId, visitId]);
+
   const searchDrugs = async (q: string) => {
     setDrugQuery(q);
     if (!q || q.length < 2) {
@@ -345,6 +389,29 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
         maxRefills,
         followUpInstructions: followUpInstructions || undefined,
         procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
+        metadata: {
+          chiefComplaints: chiefComplaints || undefined,
+          histories: {
+            pastHistory: pastHistory || undefined,
+            medicationHistory: medicationHistory || undefined,
+            menstrualHistory: menstrualHistory || undefined,
+          },
+          familyHistory: {
+            dm: familyHistoryDM || undefined,
+            htn: familyHistoryHTN || undefined,
+            thyroid: familyHistoryThyroid || undefined,
+            others: familyHistoryOthers || undefined,
+          },
+          topicals: {
+            facewash: topicalFacewash,
+            moisturiserSunscreen: topicalMoisturiserSunscreen,
+            actives: topicalActives,
+          },
+          postProcedureCare: postProcedureCare || undefined,
+          investigations: investigations || undefined,
+          procedurePlanned: procedurePlanned || undefined,
+          procedureParams: procedureParams,
+        },
       };
       const res: any = await apiClient.createPrescription(payload);
       onCreated?.(res?.id);
@@ -400,7 +467,18 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="text-sm text-gray-700">Diagnosis (optional)</label>
-              <Input placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+              <div className="relative">
+                <Input placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+                {diagOptions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
+                    {diagOptions.map((opt) => (
+                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setDiagnosis(opt)}>
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="text-sm text-gray-700">Follow-up Instructions</label>
@@ -410,7 +488,18 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
 
           <div>
             <label className="text-sm text-gray-700">Notes (patient-facing)</label>
-            <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+            <div className="relative">
+              <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+              {notesOptions.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
+                  {notesOptions.map((opt) => (
+                    <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setNotes(opt)}>
+                      {opt}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Clinical Details */}
@@ -451,7 +540,18 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
                 <label className="text-xs text-gray-600">Chief Complaints</label>
-                <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                <div className="relative">
+                  <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  {complaintOptions.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto">
+                      {complaintOptions.map((opt) => (
+                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setChiefComplaints(opt)}>
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Histories */}
@@ -877,7 +977,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
 
       {/* Print Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden">
+        <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
           <div className="h-full flex flex-col">
             <DialogHeader className="px-6 pt-4 pb-2">
               <DialogTitle>Prescription Preview</DialogTitle>
@@ -904,7 +1004,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           `}</style>
           <div className="flex-1 overflow-auto overflow-x-auto">
             <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6 w-full" style={{ fontFamily: 'Fira Sans, sans-serif', fontSize: '14px' }}>
-              <div className="mx-auto max-w-[1400px] w-full">
+              <div className="mx-auto w-[1400px] min-w-[1100px]">
                 {/* Header */}
                 {includeSections.header && (
                   <div className="flex items-start justify-between pb-4 border-b">

@@ -903,6 +903,136 @@ export class PrescriptionsService {
     }));
   }
 
+  // Autocomplete for clinical fields using recent visits and prescription metadata
+  async autocompleteClinicalField(
+    field: string,
+    patientId: string,
+    q: string,
+    limit: number,
+    branchId: string,
+    visitId?: string,
+  ) {
+    if (!field || !patientId) return [];
+
+    const visits = await this.prisma.visit.findMany({
+      where: {
+        branchId,
+        patientId,
+        ...(visitId ? { id: visitId } : {}),
+      },
+      select: {
+        id: true,
+        complaints: true,
+        diagnosis: true,
+        history: true,
+        plan: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const values = new Set<string>();
+
+    const pushVal = (val?: any) => {
+      if (typeof val === 'string') {
+        const s = val.trim();
+        if (s) values.add(s);
+      }
+    };
+
+    for (const v of visits) {
+      // Parse JSON fields defensively
+      let complaints: any = null;
+      let diag: any = null;
+      let plan: any = null;
+      let history: any = null;
+      try { complaints = v.complaints ? JSON.parse(v.complaints) : v.complaints; } catch {}
+      try { diag = v.diagnosis ? JSON.parse(v.diagnosis) : v.diagnosis; } catch {}
+      try { plan = v.plan ? JSON.parse(v.plan) : v.plan; } catch {}
+      try { history = v.history ? JSON.parse(v.history) : v.history; } catch {}
+
+      const derm = plan?.dermatology || {};
+
+      switch (field) {
+        case 'diagnosis': {
+          if (Array.isArray(diag)) {
+            for (const d of diag) pushVal(typeof d === 'string' ? d : d?.diagnosis);
+          } else {
+            pushVal(diag);
+          }
+          break;
+        }
+        case 'chiefComplaints': {
+          if (Array.isArray(complaints)) {
+            for (const c of complaints) pushVal(typeof c === 'string' ? c : c?.text || c?.complaint);
+          } else {
+            pushVal(complaints);
+          }
+          break;
+        }
+        case 'pastHistory': {
+          pushVal(history?.past);
+          pushVal(derm?.pastHistory);
+          break;
+        }
+        case 'medicationHistory': {
+          pushVal(history?.medication);
+          pushVal(derm?.medicationHistory);
+          break;
+        }
+        case 'menstrualHistory': {
+          pushVal(history?.menstrual);
+          pushVal(derm?.menstrualHistory);
+          break;
+        }
+        case 'familyHistory.others': {
+          pushVal(history?.family?.others);
+          pushVal(derm?.familyHistoryOthers);
+          break;
+        }
+        case 'topicalFacewash.frequency': pushVal(derm?.topicals?.facewash?.frequency); break;
+        case 'topicalFacewash.timing': pushVal(derm?.topicals?.facewash?.timing); break;
+        case 'topicalFacewash.duration': pushVal(derm?.topicals?.facewash?.duration); break;
+        case 'topicalFacewash.instructions': pushVal(derm?.topicals?.facewash?.instructions); break;
+        case 'topicalMoisturiserSunscreen.frequency': pushVal(derm?.topicals?.moisturiserSunscreen?.frequency); break;
+        case 'topicalMoisturiserSunscreen.timing': pushVal(derm?.topicals?.moisturiserSunscreen?.timing); break;
+        case 'topicalMoisturiserSunscreen.duration': pushVal(derm?.topicals?.moisturiserSunscreen?.duration); break;
+        case 'topicalMoisturiserSunscreen.instructions': pushVal(derm?.topicals?.moisturiserSunscreen?.instructions); break;
+        case 'topicalActives.frequency': pushVal(derm?.topicals?.actives?.frequency); break;
+        case 'topicalActives.timing': pushVal(derm?.topicals?.actives?.timing); break;
+        case 'topicalActives.duration': pushVal(derm?.topicals?.actives?.duration); break;
+        case 'topicalActives.instructions': pushVal(derm?.topicals?.actives?.instructions); break;
+        case 'postProcedureCare': pushVal(derm?.postProcedureCare); break;
+        case 'investigations': pushVal(derm?.investigations); break;
+        case 'procedurePlanned': {
+          pushVal(derm?.procedurePlanned);
+          if (Array.isArray(derm?.procedures)) {
+            for (const p of derm.procedures) pushVal(p?.type);
+          }
+          break;
+        }
+        case 'procedureParams.passes': pushVal(derm?.procedureParams?.passes); break;
+        case 'procedureParams.power': pushVal(derm?.procedureParams?.power); break;
+        case 'procedureParams.machineUsed': pushVal(derm?.procedureParams?.machineUsed); break;
+        case 'procedureParams.others': pushVal(derm?.procedureParams?.others); break;
+        case 'notes': pushVal(plan?.notes || derm?.counseling); break;
+        case 'followUpInstructions': pushVal(derm?.followUpInstructions); break;
+        default: {
+          // Fallback: try to pick from plan.dermatology[field]
+          const raw = field.split('.').reduce((acc: any, key: string) => (acc ? acc[key] : undefined), derm);
+          pushVal(raw);
+        }
+      }
+    }
+
+    let list = Array.from(values);
+    if (q) {
+      const ql = q.toLowerCase();
+      list = list.filter((s) => s.toLowerCase().includes(ql));
+    }
+    return list.slice(0, limit);
+  }
+
   async getPrescriptionStatistics(query: PrescriptionStatisticsDto, branchId: string) {
     const { startDate, endDate, doctorId, drugName, groupBy = 'day' } = query;
 
