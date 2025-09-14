@@ -179,6 +179,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [previewOpen, setPreviewOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const [orderOpen, setOrderOpen] = useState(false);
+  type OneMgSelection = { sku: string; name: string; price?: number };
+  const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
+  const [oneMgChecking, setOneMgChecking] = useState(false);
+  const [oneMgTotals, setOneMgTotals] = useState<any>(null);
 
   // Print background configuration
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
@@ -611,6 +615,93 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
       alert('Template saved');
     } catch (e: any) {
       alert(e?.body?.message || 'Failed to save template');
+    }
+  };
+
+  useEffect(() => {
+    if (!orderOpen) return;
+    // Initialize mapping state from current items when dialog opens
+    const next = items.map((it) => ({ q: it.drugName || '', loading: false, results: [], selection: undefined, qty: Number(it.quantity || 1) || 1 }));
+    setOneMgMap(next);
+    // Auto-search initial queries
+    next.forEach(async (_row, idx) => {
+      const q = next[idx].q?.trim();
+      if (q && q.length >= 2) {
+        try {
+          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, loading: true } : r)));
+          const res = await apiClient.oneMgSearch(q, 8);
+          const arr = Array.isArray(res) ? (res as any[]) : [];
+          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: arr, loading: false } : r)));
+        } catch {
+          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [], loading: false } : r)));
+        }
+      }
+    });
+  }, [orderOpen]);
+
+  const handleOneMgSearch = async (idx: number, q: string) => {
+    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, q } : r)));
+    const term = q.trim();
+    if (!term || term.length < 2) {
+      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [] } : r)));
+      return;
+    }
+    try {
+      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, loading: true } : r)));
+      const res = await apiClient.oneMgSearch(term, 8);
+      const arr = Array.isArray(res) ? (res as any[]) : [];
+      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: arr, loading: false } : r)));
+    } catch {
+      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [], loading: false } : r)));
+    }
+  };
+
+  const selectOneMgProduct = (idx: number, p: any) => {
+    const selection: OneMgSelection = { sku: String(p.sku || p.id || p.code || ''), name: String(p.name || p.title || ''), price: Number(p.price || p.mrp || p.salePrice || 0) || undefined };
+    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, selection, results: [] } : r)));
+  };
+
+  const updateOneMgQty = (idx: number, qty: number) => {
+    const safe = qty > 0 ? qty : 1;
+    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, qty: safe } : r)));
+  };
+
+  const checkOneMgInventory = async () => {
+    try {
+      setOneMgChecking(true);
+      const itemsPayload = oneMgMap
+        .map((r) => (r.selection ? { sku: r.selection.sku, qty: r.qty } : null))
+        .filter(Boolean);
+      const res = await apiClient.oneMgCheckInventory({ items: itemsPayload });
+      setOneMgTotals(res || {});
+    } catch {
+      setOneMgTotals(null);
+    } finally {
+      setOneMgChecking(false);
+    }
+  };
+
+  const placeOneMgOrder = async () => {
+    try {
+      const itemsPayload = oneMgMap
+        .map((r, idx) => (r.selection ? { rxIndex: idx, sku: r.selection.sku, name: r.selection.name, qty: r.qty, price: r.selection.price } : null))
+        .filter(Boolean);
+      if (itemsPayload.length === 0) {
+        alert('Select at least one product to order');
+        return;
+      }
+      const payload = {
+        patientId,
+        visitId,
+        prescriptionItems: itemsPayload,
+        shippingAddress: {},
+        paymentMode: 'COD',
+      } as any;
+      const res: any = await apiClient.oneMgCreateOrder(payload);
+      alert(res && (res as any).orderId ? `Order created: ${(res as any).orderId}` : 'Order created');
+      setOrderOpen(false);
+    } catch (e: any) {
+      alert(e?.body?.message || 'Failed to create 1MG order');
     }
   };
 
@@ -1357,24 +1448,82 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
 
       {/* 1MG Order Dialog (placeholder) */}
       <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Order via 1MG</DialogTitle>
           </DialogHeader>
-          <div className="text-sm text-gray-600">Map each prescription item to a 1MG product and place the order.</div>
-          <div className="max-h-[60vh] overflow-auto mt-2">
-            {items.map((it, idx) => (
-              <div key={`map-${idx}`} className="border rounded p-2 mb-2">
-                <div className="font-medium">{it.drugName}</div>
-                <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
-                {/* TODO: search 1MG and show options; for now placeholder */}
-                <div className="mt-2 text-xs">Search results will appear here…</div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+            <div className="lg:col-span-2 max-h-[60vh] overflow-auto mt-1 pr-1">
+              {items.map((it, idx) => (
+                <div key={`map-${idx}`} className="border rounded p-2 mb-2">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium">{it.drugName}</div>
+                      <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-600">Qty</span>
+                      <Input className="h-8 w-20" type="number" min={1} value={oneMgMap[idx]?.qty ?? 1} onChange={(e) => updateOneMgQty(idx, Number(e.target.value) || 1)} />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <Input placeholder="Search 1MG product" value={oneMgMap[idx]?.q || ''} onChange={(e) => void handleOneMgSearch(idx, e.target.value)} />
+                    {oneMgMap[idx]?.loading && (<div className="text-xs text-gray-500 mt-1">Searching…</div>)}
+                    {!oneMgMap[idx]?.loading && (oneMgMap[idx]?.results?.length || 0) > 0 && (
+                      <div className="mt-2 border rounded divide-y max-h-40 overflow-auto">
+                        {oneMgMap[idx]?.results?.map((p: any) => (
+                          <div key={`${p.sku || p.id || p.code}`} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => selectOneMgProduct(idx, p)}>
+                            <div className="font-medium">{p.name || p.title}</div>
+                            <div className="text-xs text-gray-500">{p.manufacturer || ''} {p.mrp ? `• ₹${p.mrp}` : ''}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {oneMgMap[idx]?.selection && (
+                    <div className="mt-2 text-xs">
+                      Selected: <span className="font-medium">{oneMgMap[idx].selection?.name}</span> {oneMgMap[idx].selection?.price ? `• ₹${oneMgMap[idx].selection?.price}` : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="lg:col-span-1">
+              <div className="border rounded p-3 sticky top-2">
+                <div className="font-medium mb-2">Cart Summary</div>
+                <div className="space-y-1 text-sm max-h-[40vh] overflow-auto">
+                  {oneMgMap.filter((r) => !!r.selection).length === 0 && (<div className="text-xs text-gray-500">No items selected yet</div>)}
+                  {oneMgMap.map((r, i) => r.selection ? (
+                    <div key={`sel-${i}`} className="flex items-center justify-between">
+                      <div className="mr-2 truncate">
+                        <div className="font-medium truncate max-w-[180px]" title={r.selection?.name}>{r.selection?.name}</div>
+                        <div className="text-xs text-gray-500">SKU: {r.selection?.sku}</div>
+                      </div>
+                      <div className="text-right">
+                        <div>x{r.qty}</div>
+                        {r.selection?.price ? <div className="text-xs text-gray-600">₹{(r.selection.price * r.qty).toFixed(2)}</div> : null}
+                      </div>
+                    </div>
+                  ) : null)}
+                </div>
+                <div className="mt-3">
+                  <Button variant="outline" size="sm" className="w-full" onClick={checkOneMgInventory} disabled={oneMgChecking || oneMgMap.filter((r) => !!r.selection).length === 0}>{oneMgChecking ? 'Checking…' : 'Check Inventory & Totals'}</Button>
+                  {oneMgTotals && (
+                    <div className="mt-2 text-sm">
+                      <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>₹{oneMgTotals?.subtotal ?? '—'}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span>₹{oneMgTotals?.delivery ?? '—'}</span></div>
+                      <div className="flex justify-between font-medium border-t pt-1"><span>Total</span><span>₹{oneMgTotals?.total ?? '—'}</span></div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-3 flex justify-end">
+                  <Button onClick={placeOneMgOrder} disabled={oneMgMap.filter((r) => !!r.selection).length === 0}>Place Order</Button>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="mt-3 flex justify-end gap-2">
             <Button variant="outline" onClick={() => setOrderOpen(false)}>Close</Button>
-            <Button disabled>Place Order</Button>
           </div>
         </DialogContent>
       </Dialog>
