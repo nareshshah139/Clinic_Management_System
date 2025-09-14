@@ -27,10 +27,11 @@ export class PatientsController {
     @Query('page') page = 1,
     @Query('limit') limit = 10,
     @Query('search') search?: string,
+    @Query('gender') gender?: string,
     @Request() req,
   ) {
     return this.patientsService.findAll(
-      { page: +page, limit: +limit, search },
+      { page: +page, limit: +limit, search, gender },
       req.user.branchId,
     );
   }

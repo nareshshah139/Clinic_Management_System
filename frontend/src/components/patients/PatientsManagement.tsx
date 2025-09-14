@@ -151,7 +151,10 @@ export default function PatientsManagement() {
 
   const initials = (first: string, last: string) => `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
 
-  const filtered = useMemo(() => patients, [patients]);
+  const filtered = useMemo(() => {
+    if (genderFilter === 'ALL') return patients;
+    return patients.filter((p) => String(p.gender).toUpperCase() === String(genderFilter).toUpperCase());
+  }, [patients, genderFilter]);
 
   return (
     <div className="space-y-6">

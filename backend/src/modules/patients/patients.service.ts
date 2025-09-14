@@ -17,14 +17,15 @@ export class PatientsService {
   }
 
   async findAll(
-    options: { page: number; limit: number; search?: string },
+    options: { page: number; limit: number; search?: string; gender?: string },
     branchId: string,
   ) {
-    const { page, limit, search } = options;
+    const { page, limit, search, gender } = options;
     const skip = (page - 1) * limit;
 
     const where = {
       branchId,
+      ...(gender ? { gender } : {}),
       ...(search && {
         OR: [
           { name: { contains: search, mode: 'insensitive' } },
