@@ -179,6 +179,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [previewOpen, setPreviewOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
+  // Print background configuration
+  const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
+  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(80);
+
   // Normalize visit JSON fields for reliable preview rendering
   const visitPlan = useMemo(() => {
     try {
@@ -643,6 +647,18 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             <div>
               <label className="text-sm text-gray-700">Max Refills</label>
               <Input type="number" min={0} max={5} value={maxRefills} onChange={(e) => setMaxRefills(Number(e.target.value) || 0)} />
+            </div>
+          </div>
+
+          {/* Print background controls */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="md:col-span-2">
+              <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+              <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm text-gray-700">Top Margin (px)</label>
+              <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
             </div>
           </div>
 
@@ -1117,11 +1133,27 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 width: 100% !important;
                 margin: 0 !important;
                 padding: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
               }
             }
           `}</style>
           <div className="flex-1 overflow-auto overflow-x-auto">
-            <div id="prescription-print-root" ref={printRef} className="bg-white text-gray-900 p-6 w-full" style={{ fontFamily: 'Fira Sans, sans-serif', fontSize: '14px' }}>
+            <div
+              id="prescription-print-root"
+              ref={printRef}
+              className="bg-white text-gray-900 w-full"
+              style={{
+                fontFamily: 'Fira Sans, sans-serif',
+                fontSize: '14px',
+                backgroundImage: printBgUrl ? `url(${printBgUrl})` : undefined,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'top center',
+                backgroundSize: 'contain',
+                padding: '24px',
+                paddingTop: `${24 + (printTopMarginPx || 0)}px`,
+              }}
+            >
               <div className="mx-auto w-[1400px] min-w-[1100px]">
                 {/* Header */}
                 {includeSections.header && (
