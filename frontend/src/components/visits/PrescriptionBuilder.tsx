@@ -1005,47 +1005,42 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           </div>
 
           {/* Templates Panel */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              {/* keep builder on left (current content) */}
-            </div>
-            <div className="lg:col-span-1">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center justify-between text-base">
-                    <span>Templates</span>
+          <div className="w-full">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center justify-between text-base">
+                  <span>Templates</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
+                      {loadingTemplates ? 'Loading…' : 'Refresh'}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
+                  </div>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 p-3">
+                {(templates || []).slice(0, 6).map((t) => (
+                  <div key={`srv-${t.id}`} className="border rounded p-2">
+                    <div className="font-medium text-sm">{t.name}</div>
+                    {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
-                        {loadingTemplates ? 'Loading…' : 'Refresh'}
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
+                      <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
                     </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 p-3">
-                  {(templates || []).slice(0, 6).map((t) => (
-                    <div key={`srv-${t.id}`} className="border rounded p-2">
-                      <div className="font-medium text-sm">{t.name}</div>
-                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                      </div>
+                  </div>
+                ))}
+                <div className="pt-2 text-xs text-gray-600">Suggested</div>
+                {defaultDermTemplates.map((t) => (
+                  <div key={t.id} className="border rounded p-2">
+                    <div className="font-medium text-sm">{t.name}</div>
+                    {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
+                      <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
                     </div>
-                  ))}
-                  <div className="pt-2 text-xs text-gray-600">Suggested</div>
-                  {defaultDermTemplates.map((t) => (
-                    <div key={t.id} className="border rounded p-2">
-                      <div className="font-medium text-sm">{t.name}</div>
-                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                        <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           </div>
 
           {/* Drug search */}
