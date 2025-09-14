@@ -91,7 +91,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [topicalMoisturiserSunscreen, setTopicalMoisturiserSunscreen] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
   const [topicalActives, setTopicalActives] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
   const [postProcedureCare, setPostProcedureCare] = useState<string>('');
-  const [investigations, setInvestigations] = useState<string>('');
+  const investigationOptions: string[] = [
+    'CBC', 'ESR', 'CRP', 'LFT', 'Fasting lipid profile', 'RFT', 'Creatinine', 'FBS', 'Fasting Insulin', 'HbA1c', 'RBS', 'CUE', 'Stool examination', 'Total Testosterone', 'S. Prolactin', 'Vitamin B12', 'Vitamin D', 'Ferritin', 'TSH', 'Thyroid profile', 'HIV-I,II', 'HbS Ag', 'Anti HCV', 'VDRL', 'RPR', 'TPHA', 'TB Gold Quantiferon Test', 'Montoux Test', 'Chest Xray PA view', '2D Echo', 'Skin Biopsy'
+  ];
+  const [investigations, setInvestigations] = useState<string[]>([]);
   const [procedurePlanned, setProcedurePlanned] = useState<string>('');
   const [procedureParams, setProcedureParams] = useState<{ passes?: string; power?: string; machineUsed?: string; others?: string }>({});
   // Vitals (with BMI)
@@ -128,7 +131,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
         procedurePlanned: '',
         procedureParams: {},
         postProcedureCare: '',
-        investigations: '',
+        investigations: [],
       },
     },
     {
@@ -148,7 +151,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           actives: {},
         },
         postProcedureCare: '',
-        investigations: '',
+        investigations: [],
       },
     },
     {
@@ -167,6 +170,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           moisturiserSunscreen: { frequency: '3-4×/day', timing: '—', duration: 'ongoing', instructions: 'Thick bland emollient' },
           actives: {},
         },
+        investigations: ['CBC', 'ESR', 'CRP'],
       },
     },
   ];
@@ -241,7 +245,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions
   );
   const hasPostProcedure = Boolean(postProcedureCare?.trim()?.length);
-  const hasInvestigations = Boolean(investigations?.trim()?.length);
+  const hasInvestigations = Array.isArray(investigations) && investigations.length > 0;
   const hasProcedurePlanned = Boolean(procedurePlanned?.trim()?.length);
   const hasProcedureParams = Boolean(
     procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others
@@ -479,7 +483,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             actives: topicalActives,
           },
           postProcedureCare: postProcedureCare || undefined,
-          investigations: investigations || undefined,
+          investigations: investigations && investigations.length ? investigations : undefined,
           procedurePlanned: procedurePlanned || undefined,
           procedureParams: procedureParams,
         },
@@ -552,7 +556,10 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
           if (md.topicals.actives) setTopicalActives(md.topicals.actives);
         }
         if (md.postProcedureCare) setPostProcedureCare(md.postProcedureCare);
-        if (md.investigations) setInvestigations(md.investigations);
+        if (md.investigations) {
+          if (Array.isArray(md.investigations)) setInvestigations(md.investigations as string[]);
+          else if (typeof md.investigations === 'string') setInvestigations((md.investigations as string).split(',').map(s => s.trim()).filter(Boolean));
+        }
         if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
         if (md.procedureParams) setProcedureParams(md.procedureParams);
         if (md.notes) setNotes((prev) => prev || md.notes);
@@ -926,7 +933,14 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                   <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
                 )}
                 <label className="text-xs text-gray-600">Investigations</label>
-                <Textarea rows={2} value={investigations} onChange={(e) => setInvestigations(e.target.value)} />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+                  {investigationOptions.map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={investigations.includes(opt)} onChange={(e) => setInvestigations((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))} />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               {/* Procedure Planned */}
@@ -1393,10 +1407,12 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               )}
 
               {/* Investigations */}
-              {(investigations?.trim()?.length > 0) && (
+              {(Array.isArray(investigations) && investigations.length > 0) && (
                 <div className="py-3">
                   <div className="font-semibold mb-1">Investigations</div>
-                  <div className="text-sm whitespace-pre-wrap">{investigations}</div>
+                  <ul className="list-disc ml-5 text-sm space-y-1">
+                    {investigations.map((inv) => (<li key={inv}>{inv}</li>))}
+                  </ul>
                 </div>
               )}
 
