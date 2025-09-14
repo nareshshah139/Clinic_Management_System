@@ -107,6 +107,69 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
   const [loadingDrugs, setLoadingDrugs] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  // Default dermatology templates (client-side suggestions)
+  const defaultDermTemplates: Array<any> = [
+    {
+      id: 'derm-acne-mild',
+      name: 'Acne (Mild) — Topical regimen',
+      description: 'Adapalene night + BPO morning + gentle facewash + sunscreen',
+      items: [
+        { drugName: 'Adapalene 0.1% Gel', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Bedtime', route: 'Topical', instructions: 'Apply a pea-sized amount to entire face at night' },
+        { drugName: 'Benzoyl Peroxide 2.5% Gel', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Morning', route: 'Topical', instructions: 'Apply thin layer to affected areas in the morning' },
+      ],
+      metadata: {
+        chiefComplaints: 'Acne lesions on face',
+        histories: {},
+        topicals: {
+          facewash: { frequency: '2×/day', timing: 'AM/PM', duration: 'ongoing', instructions: 'Gentle, non-comedogenic' },
+          moisturiserSunscreen: { frequency: '2×/day', timing: 'AM/PM', duration: 'ongoing', instructions: 'Non-comedogenic, SPF 30+' },
+          actives: { frequency: 'as advised', timing: 'night', duration: '12 weeks', instructions: 'Introduce slowly, moisturize' },
+        },
+        procedurePlanned: '',
+        procedureParams: {},
+        postProcedureCare: '',
+        investigations: '',
+      },
+    },
+    {
+      id: 'derm-fungal-tinea',
+      name: 'Tinea (Fungal) — Topical + Hygiene',
+      description: 'Clotrimazole cream + hygiene advice',
+      items: [
+        { drugName: 'Clotrimazole 1% Cream', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 4, durationUnit: 'WEEKS', route: 'Topical', instructions: 'Apply to affected area and 2 cm beyond' },
+      ],
+      metadata: {
+        chiefComplaints: 'Itchy annular rash in folds',
+        histories: {},
+        notes: 'Keep area dry; separate towels/clothes; iron clothes; avoid steroids',
+        topicals: {
+          facewash: {},
+          moisturiserSunscreen: {},
+          actives: {},
+        },
+        postProcedureCare: '',
+        investigations: '',
+      },
+    },
+    {
+      id: 'derm-eczema-care',
+      name: 'Eczema — Emollients + Low-potency steroid',
+      description: 'Hydrocortisone short course + moisturizers',
+      items: [
+        { drugName: 'Hydrocortisone 1% Cream', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 14, durationUnit: 'DAYS', route: 'Topical', instructions: 'Thin layer to affected areas for 1-2 weeks then taper' },
+      ],
+      metadata: {
+        chiefComplaints: 'Itchy scaly patches',
+        histories: {},
+        notes: 'Liberal emollients; avoid hot water; fragrance-free products',
+        topicals: {
+          facewash: { frequency: 'as needed', timing: '—', duration: 'ongoing', instructions: 'Syndet gentle cleanser' },
+          moisturiserSunscreen: { frequency: '3-4×/day', timing: '—', duration: 'ongoing', instructions: 'Thick bland emollient' },
+          actives: {},
+        },
+      },
+    },
+  ];
   // Autocomplete state for clinical fields
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
@@ -428,6 +491,125 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
     }
   };
 
+  const applyTemplateToBuilder = (tpl: any) => {
+    try {
+      const tItems = Array.isArray(tpl.items) ? tpl.items : JSON.parse(tpl.items || '[]');
+      const mapped: PrescriptionItemForm[] = tItems.map((x: any) => ({
+        drugName: x.drugName,
+        genericName: x.genericName,
+        brandName: x.brandName,
+        dosage: x.dosage,
+        dosageUnit: x.dosageUnit || 'TABLET',
+        frequency: x.frequency || 'ONCE_DAILY',
+        duration: x.duration,
+        durationUnit: x.durationUnit || 'DAYS',
+        instructions: x.instructions,
+        route: x.route,
+        timing: x.timing,
+        quantity: x.quantity,
+        notes: x.notes,
+        isGeneric: x.isGeneric,
+        applicationSite: x.applicationSite,
+        applicationAmount: x.applicationAmount,
+        dayPart: x.dayPart,
+        leaveOn: x.leaveOn,
+        washOffAfterMinutes: x.washOffAfterMinutes,
+        taperSchedule: x.taperSchedule,
+        weightMgPerKgPerDay: x.weightMgPerKgPerDay,
+        calculatedDailyDoseMg: x.calculatedDailyDoseMg,
+        pregnancyWarning: x.pregnancyWarning,
+        photosensitivityWarning: x.photosensitivityWarning,
+        foodInstructions: x.foodInstructions,
+        pulseRegimen: x.pulseRegimen,
+      }));
+      setItems(prev => [...prev, ...mapped]);
+
+      const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
+      if (md) {
+        if (md.chiefComplaints) setChiefComplaints(md.chiefComplaints);
+        if (md.histories) {
+          if (md.histories.pastHistory) setPastHistory(md.histories.pastHistory);
+          if (md.histories.medicationHistory) setMedicationHistory(md.histories.medicationHistory);
+          if (md.histories.menstrualHistory) setMenstrualHistory(md.histories.menstrualHistory);
+        }
+        if (md.familyHistory) {
+          if (typeof md.familyHistory.dm === 'boolean') setFamilyHistoryDM(md.familyHistory.dm);
+          if (typeof md.familyHistory.htn === 'boolean') setFamilyHistoryHTN(md.familyHistory.htn);
+          if (typeof md.familyHistory.thyroid === 'boolean') setFamilyHistoryThyroid(md.familyHistory.thyroid);
+          if (md.familyHistory.others) setFamilyHistoryOthers(md.familyHistory.others);
+        }
+        if (md.topicals) {
+          if (md.topicals.facewash) setTopicalFacewash(md.topicals.facewash);
+          if (md.topicals.moisturiserSunscreen) setTopicalMoisturiserSunscreen(md.topicals.moisturiserSunscreen);
+          if (md.topicals.actives) setTopicalActives(md.topicals.actives);
+        }
+        if (md.postProcedureCare) setPostProcedureCare(md.postProcedureCare);
+        if (md.investigations) setInvestigations(md.investigations);
+        if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
+        if (md.procedureParams) setProcedureParams(md.procedureParams);
+        if (md.notes) setNotes((prev) => prev || md.notes);
+      }
+    } catch {}
+  };
+
+  const saveCurrentAsTemplate = async () => {
+    const name = window.prompt('Template name');
+    if (!name) return;
+    try {
+      const payload = {
+        name,
+        description: '',
+        items: items.map(it => ({
+          drugName: it.drugName,
+          genericName: it.genericName,
+          brandName: it.brandName,
+          dosage: Number(it.dosage),
+          dosageUnit: it.dosageUnit,
+          frequency: it.frequency,
+          duration: Number(it.duration),
+          durationUnit: it.durationUnit,
+          instructions: it.instructions,
+          route: it.route,
+          timing: it.timing,
+          quantity: it.quantity ? Number(it.quantity) : undefined,
+          notes: it.notes,
+          isGeneric: it.isGeneric ?? true,
+          applicationSite: it.applicationSite,
+          applicationAmount: it.applicationAmount,
+          dayPart: it.dayPart,
+          leaveOn: it.leaveOn,
+          washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
+          taperSchedule: it.taperSchedule,
+          weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
+          calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
+          pregnancyWarning: it.pregnancyWarning,
+          photosensitivityWarning: it.photosensitivityWarning,
+          foodInstructions: it.foodInstructions,
+          pulseRegimen: it.pulseRegimen,
+        })),
+        category: 'Dermatology',
+        specialty: 'Dermatology',
+        isPublic: true,
+        metadata: {
+          chiefComplaints,
+          histories: { pastHistory, medicationHistory, menstrualHistory },
+          familyHistory: { dm: familyHistoryDM, htn: familyHistoryHTN, thyroid: familyHistoryThyroid, others: familyHistoryOthers },
+          topicals: { facewash: topicalFacewash, moisturiserSunscreen: topicalMoisturiserSunscreen, actives: topicalActives },
+          postProcedureCare,
+          investigations,
+          procedurePlanned,
+          procedureParams,
+          notes,
+        },
+      } as any;
+      await apiClient.createPrescriptionTemplate(payload);
+      await loadTemplates();
+      alert('Template saved');
+    } catch (e: any) {
+      alert(e?.body?.message || 'Failed to save template');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Card>
@@ -712,43 +894,48 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             )}
           </div>
 
-          {/* Templates */}
-          <div className="flex items-center justify-between">
-            <div className="font-medium">Templates</div>
-            <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
-              {loadingTemplates ? 'Loading…' : 'Refresh'}
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(templates || []).slice(0, 8).map((t) => (
-              <Button
-                key={t.id}
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  try {
-                    const tItems = Array.isArray(t.items) ? t.items : JSON.parse(t.items || '[]');
-                    const mapped: PrescriptionItemForm[] = tItems.map((x: any) => ({
-                      drugName: x.drugName,
-                      genericName: x.genericName,
-                      brandName: x.brandName,
-                      dosage: x.dosage,
-                      dosageUnit: x.dosageUnit,
-                      frequency: x.frequency,
-                      duration: x.duration,
-                      durationUnit: x.durationUnit,
-                      instructions: x.instructions,
-                      route: x.route,
-                      timing: x.timing,
-                      quantity: x.quantity,
-                      notes: x.notes,
-                      isGeneric: x.isGeneric,
-                    }));
-                    setItems(prev => [...prev, ...mapped]);
-                  } catch {}
-                }}
-              >{t.name}</Button>
-            ))}
+          {/* Templates Panel */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              {/* keep builder on left (current content) */}
+            </div>
+            <div className="lg:col-span-1">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between text-base">
+                    <span>Templates</span>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
+                        {loadingTemplates ? 'Loading…' : 'Refresh'}
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 p-3">
+                  {(templates || []).slice(0, 6).map((t) => (
+                    <div key={`srv-${t.id}`} className="border rounded p-2">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="pt-2 text-xs text-gray-600">Suggested</div>
+                  {defaultDermTemplates.map((t) => (
+                    <div key={t.id} className="border rounded p-2">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
+                        <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           </div>
 
           {/* Drug search */}

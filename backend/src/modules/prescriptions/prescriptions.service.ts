@@ -916,8 +916,8 @@ export class PrescriptionsService {
 
     const visits = await this.prisma.visit.findMany({
       where: {
-        branchId,
         patientId,
+        patient: { branchId },
         ...(visitId ? { id: visitId } : {}),
       },
       select: {
