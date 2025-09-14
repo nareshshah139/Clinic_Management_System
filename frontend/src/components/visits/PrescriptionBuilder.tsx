@@ -1112,13 +1112,17 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
       {/* Print Preview Dialog */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
-          <div className="h-full flex flex-col">
+          <div className="h-full min-h-0 flex flex-col">
             <DialogHeader className="px-6 pt-4 pb-2">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
           {/* Scoped print CSS to only print the preview container */}
           <style>{`
             @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
             @media print {
               body *:not(#prescription-print-root):not(#prescription-print-root *) {
                 visibility: hidden !important;
@@ -1130,7 +1134,8 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 position: absolute !important;
                 left: 0 !important;
                 top: 0 !important;
-                width: 100% !important;
+                width: 210mm !important;
+                min-height: 297mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 -webkit-print-color-adjust: exact !important;
@@ -1138,7 +1143,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
               }
             }
           `}</style>
-          <div className="flex-1 overflow-auto overflow-x-auto">
+          <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
             <div
               id="prescription-print-root"
               ref={printRef}
@@ -1149,12 +1154,15 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
                 backgroundImage: printBgUrl ? `url(${printBgUrl})` : undefined,
                 backgroundRepeat: 'no-repeat',
                 backgroundPosition: 'top center',
-                backgroundSize: 'contain',
-                padding: '24px',
-                paddingTop: `${24 + (printTopMarginPx || 0)}px`,
+                backgroundSize: 'cover',
+                width: '210mm',
+                minHeight: '297mm',
+                margin: '0 auto',
+                padding: '12mm',
+                paddingTop: `${12 + Math.max(0, printTopMarginPx)/3.78}mm`,
               }}
             >
-              <div className="mx-auto w-[1400px] min-w-[1100px]">
+              <div className="mx-auto w-full">
                 {/* Header */}
                 {includeSections.header && (
                   <div className="flex items-start justify-between pb-4 border-b">
@@ -1351,7 +1359,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
             </div>
           </div>
           </div>
-          <div className="print:hidden border-t px-6 py-3 flex justify-end gap-2">
+          <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 flex justify-end gap-2 z-10">
             <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
             <Button onClick={() => window.print()}>Print</Button>
           </div>
