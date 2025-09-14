@@ -190,7 +190,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, onCr
 
   // Print background configuration
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
-  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(80);
+  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
 
   // Normalize visit JSON fields for reliable preview rendering
   const visitPlan = useMemo(() => {
