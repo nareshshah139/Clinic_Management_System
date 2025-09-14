@@ -45,6 +45,14 @@ export default function PatientsManagement() {
     emergencyContact: '',
   });
 
+  const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
+    const s = String(g || '').trim().toUpperCase();
+    if (s === 'M' || s === 'MALE') return 'MALE';
+    if (s === 'F' || s === 'FEMALE') return 'FEMALE';
+    if (s === 'O' || s === 'OTHER') return 'OTHER';
+    return 'UNKNOWN';
+  };
+
   useEffect(() => {
     void fetchPatients();
   }, []);
@@ -57,7 +65,7 @@ export default function PatientsManagement() {
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const normGender = genderFilter !== 'ALL' ? (genderFilter === 'MALE' ? 'Male' : genderFilter === 'FEMALE' ? 'Female' : 'Other') : undefined;
+      const normGender = genderFilter !== 'ALL' ? (genderFilter === 'MALE' ? 'M' : genderFilter === 'FEMALE' ? 'F' : 'O') : undefined;
       const response = await apiClient.getPatients({
         search: search || undefined,
         gender: normGender,
@@ -73,7 +81,7 @@ export default function PatientsManagement() {
           lastName: rest.join(' '),
           email: bp.email || undefined,
           phone: bp.phone,
-          gender: bp.gender,
+          gender: normalizeGender(bp.gender),
           dob: bp.dob,
           address: bp.address || undefined,
           city: bp.city || undefined,
@@ -154,7 +162,7 @@ export default function PatientsManagement() {
 
   const filtered = useMemo(() => {
     if (genderFilter === 'ALL') return patients;
-    return patients.filter((p) => String(p.gender).toUpperCase() === String(genderFilter).toUpperCase());
+    return patients.filter((p) => normalizeGender(p.gender) === genderFilter);
   }, [patients, genderFilter]);
 
   return (
@@ -279,7 +287,7 @@ export default function PatientsManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{p.gender}</Badge>
+                        <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="space-y-1 text-sm text-gray-700">
