@@ -77,7 +77,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Photos
   const [photos, setPhotos] = useState<VisitPhoto[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -167,37 +166,29 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         videoRef.current.srcObject = null;
       }
       setIsCapturing(true);
-      setVideoReady(false);
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' }, // Use back camera if available
-        audio: false
+        video: { facingMode: 'environment' } // Use back camera if available
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Play and wait for metadata/canplay to ensure dimensions are available
-        try { await videoRef.current.play(); } catch {}
-        if (videoRef.current.readyState < 2 || videoRef.current.videoWidth === 0) {
-          await new Promise<void>((resolve) => {
-            const onCanPlay = () => { setVideoReady(true); cleanup(); resolve(); };
-            const onLoaded = () => { setVideoReady(true); cleanup(); resolve(); };
-            const cleanup = () => {
-              videoRef.current?.removeEventListener('canplay', onCanPlay);
-              videoRef.current?.removeEventListener('loadedmetadata', onLoaded);
-            };
-            videoRef.current?.addEventListener('canplay', onCanPlay, { once: true } as any);
-            videoRef.current?.addEventListener('loadedmetadata', onLoaded, { once: true } as any);
-            // Fallback timeout in case events don't fire
-            setTimeout(() => { setVideoReady(true); cleanup(); resolve(); }, 500);
-          });
-        } else {
-          setVideoReady(true);
-        }
+        // Wait for metadata and ensure playback to get valid frames
+        await new Promise<void>((resolve) => {
+          const v = videoRef.current!;
+          const onReady = () => {
+            v.removeEventListener('loadedmetadata', onReady);
+            v.play().then(() => resolve()).catch(() => resolve());
+          };
+          if (v.readyState >= 1) {
+            v.play().then(() => resolve()).catch(() => resolve());
+          } else {
+            v.addEventListener('loadedmetadata', onReady, { once: true });
+          }
+        });
       }
     } catch (error) {
       console.error('Failed to start camera:', error);
       alert('Failed to access camera. Please check permissions.');
       setIsCapturing(false);
-      setVideoReady(false);
     }
   };
 
@@ -210,20 +201,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     if (!context) return;
 
-    // Ensure the video has dimensions; wait briefly if needed
-    let tries = 0;
-    while ((video.readyState < 2 || video.videoWidth === 0) && tries < 20) {
-      await new Promise((r) => setTimeout(r, 50));
-      tries += 1;
-    }
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      alert('Camera not ready. Please try again.');
-      return;
+    // Ensure a frame is available
+    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
     }
 
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Render the current frame
+    context.drawImage(video, 0, 0);
 
     // Convert to blob
     canvas.toBlob(async (blob) => {
@@ -699,7 +685,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={capturePhoto} disabled={!videoReady}>
+                        <Button onClick={capturePhoto}>
                           <Camera className="h-4 w-4 mr-2" />
                           Capture
                         </Button>
