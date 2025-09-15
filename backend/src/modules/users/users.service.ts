@@ -216,7 +216,7 @@ export class UsersService {
   }
 
   // Password Management Methods
-  async changePassword(id: string, changePasswordDto: ChangePasswordDto, branchId: string) {
+  async changePassword(id: string, changePasswordDto: ChangePasswordDto, _branchId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
     });
@@ -225,12 +225,12 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    if (!user.passwordHash) {
+    if (!user.password) {
       throw new BadRequestException('User does not have a password set');
     }
 
     // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.passwordHash);
+    const isCurrentPasswordValid = await bcrypt.compare(changePasswordDto.currentPassword, user.password);
     if (!isCurrentPasswordValid) {
       throw new UnauthorizedException('Current password is incorrect');
     }
@@ -246,7 +246,7 @@ export class UsersService {
     // Update password
     await this.prisma.user.update({
       where: { id },
-      data: { passwordHash: hashedNewPassword },
+      data: { password: hashedNewPassword },
     });
 
     return { message: 'Password changed successfully' };
@@ -267,12 +267,12 @@ export class UsersService {
       { expiresIn: '1h' }
     );
 
-    // Store reset token
-    await this.prisma.passwordResetToken.create({
+    // Store reset token and expiry on user
+    await this.prisma.user.update({
+      where: { id: user.id },
       data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + 3600000), // 1 hour
+        resetToken: token,
+        resetTokenExpiry: new Date(Date.now() + 3600000), // 1 hour
       },
     });
 
@@ -283,12 +283,14 @@ export class UsersService {
   }
 
   async setPassword(setPasswordDto: SetPasswordDto) {
-    // Verify token
-    const resetToken = await this.prisma.passwordResetToken.findFirst({
-      where: { token: setPasswordDto.token },
+    // Find user by reset token and ensure not expired
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetToken: setPasswordDto.resetToken,
+      },
     });
 
-    if (!resetToken || resetToken.expiresAt < new Date()) {
+    if (!user || !user.resetTokenExpiry || user.resetTokenExpiry < new Date()) {
       throw new UnauthorizedException('Invalid or expired token');
     }
 
@@ -300,15 +302,10 @@ export class UsersService {
     // Hash password
     const hashedPassword = await bcrypt.hash(setPasswordDto.password, 10);
 
-    // Update user password
+    // Update user password and clear token
     await this.prisma.user.update({
-      where: { id: resetToken.userId },
-      data: { passwordHash: hashedPassword },
-    });
-
-    // Delete reset token
-    await this.prisma.passwordResetToken.delete({
-      where: { id: resetToken.id },
+      where: { id: user.id },
+      data: { password: hashedPassword, resetToken: null, resetTokenExpiry: null },
     });
 
     return { message: 'Password set successfully' };
@@ -371,38 +368,23 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    // NOTE: Role model in schema is global (no branchId). Adjust lookup accordingly.
     const role = await this.prisma.role.findFirst({
-      where: { id: assignRoleDto.roleId, branchId },
+      where: { id: (assignRoleDto as any).roleId },
     });
 
     if (!role) {
       throw new NotFoundException('Role not found');
     }
 
-    // Check if user already has this role
-    const existingRole = await this.prisma.userRolePermission.findFirst({
-      where: { userId: id, roleId: assignRoleDto.roleId },
+    // Since there is no user-role mapping table in current schema, set the user's role directly if needed
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { role: role.name as any },
+      include: { branch: true },
     });
 
-    if (existingRole) {
-      throw new ConflictException('User already has this role');
-    }
-
-    await this.prisma.userRolePermission.create({
-      data: {
-        userId: id,
-        roleId: assignRoleDto.roleId,
-      },
-    });
-
-    const updatedUser = await this.prisma.user.findFirst({
-      where: { id, branchId },
-      include: {
-        branch: true,
-      },
-    });
-
-    return this.formatUser(updatedUser);
+    return this.formatUser(updated);
   }
 
   async updatePermissions(id: string, updatePermissionsDto: UpdatePermissionsDto, branchId: string) {
@@ -426,7 +408,7 @@ export class UsersService {
   }
 
   // Branch Management Methods
-  async createBranch(createBranchDto: CreateBranchDto, branchId: string) {
+  async createBranch(createBranchDto: CreateBranchDto, _branchId: string) {
     // Check if branch name already exists
     const existingBranch = await this.prisma.branch.findFirst({
       where: { name: createBranchDto.name },
@@ -550,7 +532,7 @@ export class UsersService {
   }
 
   // Permission Management Methods
-  async createPermission(createPermissionDto: CreatePermissionDto, branchId: string) {
+  async createPermission(createPermissionDto: CreatePermissionDto, _branchId: string) {
     // Check if permission already exists
     const existingPermission = await this.prisma.permission.findFirst({
       where: { name: createPermissionDto.name },
@@ -563,18 +545,17 @@ export class UsersService {
     const permission = await this.prisma.permission.create({
       data: {
         ...createPermissionDto,
-        branchId,
       },
     });
 
     return permission;
   }
 
-  async findAllPermissions(query: QueryPermissionsDto, branchId: string) {
+  async findAllPermissions(query: QueryPermissionsDto, _branchId: string) {
     const { page, limit, search, type } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { branchId };
+    const where: any = {};
 
     if (search) {
       where.OR = [
@@ -606,9 +587,9 @@ export class UsersService {
     };
   }
 
-  async findPermissionById(id: string, branchId: string) {
-    const permission = await this.prisma.permission.findFirst({
-      where: { id, branchId },
+  async findPermissionById(id: string) {
+    const permission = await this.prisma.permission.findUnique({
+      where: { id },
     });
 
     if (!permission) {
@@ -618,27 +599,13 @@ export class UsersService {
     return permission;
   }
 
-  async updatePermission(id: string, updatePermissionDto: UpdatePermissionDto, branchId: string) {
-    const existingPermission = await this.prisma.permission.findFirst({
-      where: { id, branchId },
+  async updatePermission(id: string, updatePermissionDto: UpdatePermissionDto) {
+    const existingPermission = await this.prisma.permission.findUnique({
+      where: { id },
     });
 
     if (!existingPermission) {
       throw new NotFoundException('Permission not found');
-    }
-
-    // Check if permission name already exists (excluding current permission)
-    if (updatePermissionDto.name && updatePermissionDto.name !== existingPermission.name) {
-      const nameExists = await this.prisma.permission.findFirst({
-        where: { 
-          name: updatePermissionDto.name,
-          id: { not: id },
-        },
-      });
-
-      if (nameExists) {
-        throw new ConflictException('Permission with this name already exists');
-      }
     }
 
     const permission = await this.prisma.permission.update({
@@ -649,9 +616,9 @@ export class UsersService {
     return permission;
   }
 
-  async deletePermission(id: string, branchId: string) {
-    const permission = await this.prisma.permission.findFirst({
-      where: { id, branchId },
+  async deletePermission(id: string) {
+    const permission = await this.prisma.permission.findUnique({
+      where: { id },
     });
 
     if (!permission) {
@@ -666,8 +633,7 @@ export class UsersService {
   }
 
   // Role Management Methods
-  async createRole(createRoleDto: CreateRoleDto, branchId: string) {
-    // Check if role already exists
+  async createRole(createRoleDto: CreateRoleDto) {
     const existingRole = await this.prisma.role.findFirst({
       where: { name: createRoleDto.name },
     });
@@ -677,24 +643,17 @@ export class UsersService {
     }
 
     const role = await this.prisma.role.create({
-      data: {
-        ...createRoleDto,
-        branchId,
-        permissions: JSON.stringify(createRoleDto.permissions || []),
-      },
+      data: createRoleDto,
     });
 
-    return {
-      ...role,
-      permissions: JSON.parse(role.permissions || '[]'),
-    };
+    return role;
   }
 
-  async findAllRoles(query: QueryRolesDto, branchId: string) {
-    const { page, limit, search, isActive } = query;
+  async findAllRoles(query: QueryRolesDto) {
+    const { page, limit, search } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = { branchId };
+    const where: any = {};
 
     if (search) {
       where.OR = [
@@ -702,8 +661,6 @@ export class UsersService {
         { description: { contains: search, mode: 'insensitive' } },
       ];
     }
-
-    if (isActive !== undefined) where.isActive = isActive;
 
     const [roles, total] = await Promise.all([
       this.prisma.role.findMany({
@@ -716,10 +673,7 @@ export class UsersService {
     ]);
 
     return {
-      roles: roles.map(role => ({
-        ...role,
-        permissions: JSON.parse(role.permissions || '[]'),
-      })),
+      roles,
       pagination: {
         page,
         limit,
@@ -729,34 +683,31 @@ export class UsersService {
     };
   }
 
-  async findRoleById(id: string, branchId: string) {
-    const role = await this.prisma.role.findFirst({
-      where: { id, branchId },
+  async findRoleById(id: string) {
+    const role = await this.prisma.role.findUnique({
+      where: { id },
     });
 
     if (!role) {
       throw new NotFoundException('Role not found');
     }
 
-    return {
-      ...role,
-      permissions: JSON.parse(role.permissions || '[]'),
-    };
+    return role;
   }
 
-  async updateRole(id: string, updateRoleDto: UpdateRoleDto, branchId: string) {
-    const existingRole = await this.prisma.role.findFirst({
-      where: { id, branchId },
+  async updateRole(id: string, updateRoleDto: UpdateRoleDto) {
+    const existingRole = await this.prisma.role.findUnique({
+      where: { id },
     });
 
     if (!existingRole) {
       throw new NotFoundException('Role not found');
     }
 
-    // Check if role name already exists (excluding current role)
+    // Check if role name already exists (excluding current)
     if (updateRoleDto.name && updateRoleDto.name !== existingRole.name) {
       const nameExists = await this.prisma.role.findFirst({
-        where: { 
+        where: {
           name: updateRoleDto.name,
           id: { not: id },
         },
@@ -767,39 +718,21 @@ export class UsersService {
       }
     }
 
-    const updateData: any = { ...updateRoleDto };
-    
-    if (updateRoleDto.permissions) {
-      updateData.permissions = JSON.stringify(updateRoleDto.permissions);
-    }
-
     const role = await this.prisma.role.update({
       where: { id },
-      data: updateData,
+      data: updateRoleDto,
     });
 
-    return {
-      ...role,
-      permissions: JSON.parse(role.permissions || '[]'),
-    };
+    return role;
   }
 
-  async deleteRole(id: string, branchId: string) {
-    const role = await this.prisma.role.findFirst({
-      where: { id, branchId },
+  async deleteRole(id: string) {
+    const role = await this.prisma.role.findUnique({
+      where: { id },
     });
 
     if (!role) {
       throw new NotFoundException('Role not found');
-    }
-
-    // Check if role is assigned to any users
-    const userCount = await this.prisma.userRolePermission.count({
-      where: { roleId: id },
-    });
-
-    if (userCount > 0) {
-      throw new BadRequestException('Cannot delete role that is assigned to users');
     }
 
     await this.prisma.role.delete({
@@ -908,33 +841,21 @@ export class UsersService {
     };
   }
 
-  // Helper method to format user data
+  // Helper to format user object consistently
   private formatUser(user: any) {
+    let permissionsParsed: string[] | null = null;
+    let metadataParsed: any = null;
+    try {
+      permissionsParsed = user.permissions ? JSON.parse(user.permissions) : null;
+    } catch {}
+    try {
+      metadataParsed = user.metadata ? JSON.parse(user.metadata) : null;
+    } catch {}
+
     return {
       ...user,
-      permissions: this.safeJsonParse(user.permissions, []),
-      metadata: this.safeJsonParse(user.metadata, null),
+      permissions: permissionsParsed,
+      metadata: metadataParsed,
     };
-  }
-
-  // Helper method to safely parse JSON
-  private safeJsonParse(jsonString: any, defaultValue: any) {
-    if (!jsonString) {
-      return defaultValue;
-    }
-    
-    if (typeof jsonString === 'string') {
-      if (jsonString.trim() === '') {
-        return defaultValue;
-      }
-      try {
-        return JSON.parse(jsonString);
-      } catch (error) {
-        return defaultValue;
-      }
-    }
-    
-    // If it's already an object/array, return it as is
-    return jsonString;
   }
 }
