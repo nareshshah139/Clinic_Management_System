@@ -70,3 +70,5 @@
 [2025-09-15 15:05 UTC] Backend: Extended Patient schema with demographics (secondaryPhone, maritalStatus, bloodGroup, occupation, guardianName, medicalHistory JSON) and added one-to-one link to User via portalUserId. Added endpoints: POST /patients/:id/link-user, POST /patients/:id/unlink-user, GET /patients/:id/portal-user. Updated PatientsModule to import UsersModule and service logic to link/unlink or create PATIENT-role users. Updated planning.md accordingly.
 
 [2025-09-15 15:08 UTC] Repo: Pushed patients demographics + portal user link commit to origin/main.
+
+[2025-09-15 18:45 UTC] Frontend: Print Preview now reliably shows patient name/ID/gender/DOB. Added fallback fetch of `/patients/:id` in `frontend/src/components/visits/PrescriptionBuilder.tsx` when visit payload lacks patient info or `visitId` is null; preview renders from `visitData.patient` or `patientData`.

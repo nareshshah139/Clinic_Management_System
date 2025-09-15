@@ -192,6 +192,9 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
 
+  // Fallback patient data (used when visit data is not available or before saving visit)
+  const [patientData, setPatientData] = useState<any>(null);
+
   // Normalize visit JSON fields for reliable preview rendering
   const visitPlan = useMemo(() => {
     try {
@@ -311,6 +314,22 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitId]);
+
+  // Load patient details if visitId is not present or visit payload lacks patient
+  useEffect(() => {
+    const loadPatient = async () => {
+      if (!patientId) return;
+      // Only fetch if we don't already have patient info from visit
+      if (visitData?.patient?.id === patientId && visitData?.patient?.name) return;
+      try {
+        const p = await apiClient.get(`/patients/${patientId}`);
+        setPatientData(p || null);
+      } catch {
+        // ignore
+      }
+    };
+    void loadPatient();
+  }, [patientId, visitData?.patient?.id, visitData?.patient?.name]);
 
   // Compute BMI when height/weight update
   useEffect(() => {
@@ -1287,15 +1306,15 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
                 <div className="flex justify-between text-sm py-3">
                   <div>
                     <div className="text-gray-600">Patient</div>
-                    <div className="font-medium">{visitData?.patient?.name || '—'}</div>
+                    <div className="font-medium">{visitData?.patient?.name || patientData?.name || '—'}</div>
                   </div>
                   <div>
                     <div className="text-gray-600">Patient ID</div>
-                    <div className="font-medium">{visitData?.patient?.id || '—'}</div>
+                    <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
                   </div>
                   <div>
                     <div className="text-gray-600">Gender / DOB</div>
-                    <div className="font-medium">{visitData?.patient?.gender || '—'} {visitData?.patient?.dob ? `• ${new Date(visitData.patient.dob).toLocaleDateString()}` : ''}</div>
+                    <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
                   </div>
                 </div>
               )}
