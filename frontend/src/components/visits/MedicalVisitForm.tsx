@@ -207,16 +207,28 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       const description = baseName;
       
       try {
-        // Upload photo
-        const formData = new FormData();
-        formData.append('photo', blob, `${baseName}.jpg`);
-        formData.append('description', description);
-        formData.append('visitId', visitId || 'temp');
-        
-        const response = await apiClient.post('/visits/photos', formData);
+        // Ensure we have a visit to attach photos to
+        let activeVisitId = visitId;
+        if (!activeVisitId) {
+          const newVisit = await apiClient.createVisit(buildPayload());
+          activeVisitId = newVisit.id;
+          setVisitId(activeVisitId);
+        }
+
+        // Upload photo to /visits/:id/photos using FormData field 'files'
+        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+        const fd = new FormData();
+        fd.append('files', blob, `${baseName}.jpg`);
+        await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {
+          method: 'POST',
+          body: fd,
+          headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
+          credentials: 'include',
+        });
         
         const newPhoto: VisitPhoto = {
-          id: response.id || `temp-${Date.now()}`,
+          id: `temp-${Date.now()}`,
           url: URL.createObjectURL(blob),
           description,
           capturedBy: userRole,
