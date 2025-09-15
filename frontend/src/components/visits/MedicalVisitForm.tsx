@@ -77,6 +77,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Photos
   const [photos, setPhotos] = useState<VisitPhoto[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
@@ -166,16 +167,37 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         videoRef.current.srcObject = null;
       }
       setIsCapturing(true);
+      setVideoReady(false);
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } // Use back camera if available
+        video: { facingMode: 'environment' }, // Use back camera if available
+        audio: false
       });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Play and wait for metadata/canplay to ensure dimensions are available
+        try { await videoRef.current.play(); } catch {}
+        if (videoRef.current.readyState < 2 || videoRef.current.videoWidth === 0) {
+          await new Promise<void>((resolve) => {
+            const onCanPlay = () => { setVideoReady(true); cleanup(); resolve(); };
+            const onLoaded = () => { setVideoReady(true); cleanup(); resolve(); };
+            const cleanup = () => {
+              videoRef.current?.removeEventListener('canplay', onCanPlay);
+              videoRef.current?.removeEventListener('loadedmetadata', onLoaded);
+            };
+            videoRef.current?.addEventListener('canplay', onCanPlay, { once: true } as any);
+            videoRef.current?.addEventListener('loadedmetadata', onLoaded, { once: true } as any);
+            // Fallback timeout in case events don't fire
+            setTimeout(() => { setVideoReady(true); cleanup(); resolve(); }, 500);
+          });
+        } else {
+          setVideoReady(true);
+        }
       }
     } catch (error) {
       console.error('Failed to start camera:', error);
       alert('Failed to access camera. Please check permissions.');
       setIsCapturing(false);
+      setVideoReady(false);
     }
   };
 
@@ -188,9 +210,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     if (!context) return;
 
+    // Ensure the video has dimensions; wait briefly if needed
+    let tries = 0;
+    while ((video.readyState < 2 || video.videoWidth === 0) && tries < 20) {
+      await new Promise((r) => setTimeout(r, 50));
+      tries += 1;
+    }
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      alert('Camera not ready. Please try again.');
+      return;
+    }
+
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    context.drawImage(video, 0, 0);
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     // Convert to blob
     canvas.toBlob(async (blob) => {
@@ -666,7 +699,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       </Button>
                     ) : (
                       <div className="flex gap-2">
-                        <Button onClick={capturePhoto}>
+                        <Button onClick={capturePhoto} disabled={!videoReady}>
                           <Camera className="h-4 w-4 mr-2" />
                           Capture
                         </Button>
