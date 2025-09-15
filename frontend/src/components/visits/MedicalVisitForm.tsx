@@ -80,6 +80,27 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   
+  // Ensure camera is stopped on unmount and when the page loses visibility
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') {
+        stopCamera();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stopCamera();
+    };
+  }, []);
+
+  // Stop camera when navigating away from Photos tab
+  useEffect(() => {
+    if (activeTab !== 'photos' && isCapturing) {
+      stopCamera();
+    }
+  }, [activeTab, isCapturing]);
+
   // Doctor level (remaining 75-80%)
   const [subjective, setSubjective] = useState('');
   const [objective, setObjective] = useState('');
@@ -138,6 +159,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Camera functionality
   const startCamera = async () => {
     try {
+      // If an old stream exists, stop it before starting anew
+      if (videoRef.current?.srcObject) {
+        const oldStream = videoRef.current.srcObject as MediaStream;
+        oldStream.getTracks().forEach(t => t.stop());
+        videoRef.current.srcObject = null;
+      }
       setIsCapturing(true);
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { facingMode: 'environment' } // Use back camera if available
@@ -647,6 +674,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       ref={videoRef} 
                       autoPlay 
                       playsInline 
+                      muted
                       className="w-full h-64 object-contain"
                     />
                     <canvas ref={canvasRef} className="hidden" />
