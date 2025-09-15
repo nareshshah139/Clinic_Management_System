@@ -68,3 +68,5 @@
 [2025-09-15 14:52 UTC] Backend: Executed seed to create 3 coherent invoices linked to recent visits (cash full, UPI partial, card full) with payments recorded. Verify via GET /billing/invoices or search invoiceNo starting with 'INV-SEED-'.
 
 [2025-09-15 15:05 UTC] Backend: Extended Patient schema with demographics (secondaryPhone, maritalStatus, bloodGroup, occupation, guardianName, medicalHistory JSON) and added one-to-one link to User via portalUserId. Added endpoints: POST /patients/:id/link-user, POST /patients/:id/unlink-user, GET /patients/:id/portal-user. Updated PatientsModule to import UsersModule and service logic to link/unlink or create PATIENT-role users. Updated planning.md accordingly.
+
+[2025-09-15 15:08 UTC] Repo: Pushed patients demographics + portal user link commit to origin/main.
