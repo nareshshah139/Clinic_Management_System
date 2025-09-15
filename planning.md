@@ -24,6 +24,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Reports Module** - Complete production-ready implementation with comprehensive reporting
 - **Backend Infrastructure** - Fixed iconv-lite dependencies, Express platform configuration, minimal boot mode
 - **Frontend Implementation** - Complete dashboard, authentication flow, API integration, error handling
+- Patient demographics extended; patient portal linkage to user accounts implemented (September 2025)
 
 ✅ **Recently Completed (September 2025):**
 - Global search functionality in header (patients, appointments, users)

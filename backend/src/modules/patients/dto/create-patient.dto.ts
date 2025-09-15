@@ -57,4 +57,30 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   referralSource?: string; // Instagram/Twitter/Google/Doctor/Friends & Family
+
+  // New optional demographics/contact fields
+  @IsOptional()
+  @IsString()
+  secondaryPhone?: string;
+
+  @IsOptional()
+  @IsString()
+  maritalStatus?: string;
+
+  @IsOptional()
+  @IsString()
+  bloodGroup?: string;
+
+  @IsOptional()
+  @IsString()
+  occupation?: string;
+
+  @IsOptional()
+  @IsString()
+  guardianName?: string;
+
+  // Medical history as JSON string
+  @IsOptional()
+  @IsString()
+  medicalHistory?: string;
 }

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, InventoryItemType, UnitType, InventoryStatus, StockStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, InventoryItemType, UnitType, InventoryStatus, StockStatus, PaymentMode } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 async function main() {
@@ -540,6 +540,137 @@ async function main() {
       }
     }
 
+    // Seed Services (for invoice items) and sample Invoices linked to Visits
+    let createdInvoices = 0;
+
+    // Helper to ensure a service exists
+    const ensureService = async (
+      name: string,
+      type: string,
+      price: number,
+      gstRate: number,
+    ) => {
+      const existing = await prisma.service.findFirst({ where: { name, branchId: branch.id } });
+      if (existing) return existing;
+      return prisma.service.create({
+        data: {
+          name,
+          type,
+          taxable: gstRate > 0,
+          gstRate,
+          priceMrp: price,
+          priceNet: price,
+          branchId: branch.id,
+        },
+      });
+    };
+
+    // Calculate grand total (items total + GST)
+    const computeInvoiceTotal = (items: ReadonlyArray<{ qty: number; unitPrice: number; gstRate: number }>) => {
+      const subtotal = items.reduce((sum, it) => sum + it.qty * it.unitPrice, 0);
+      const gstAmount = items.reduce((sum, it) => sum + it.qty * it.unitPrice * (it.gstRate / 100), 0);
+      const total = subtotal + gstAmount;
+      return { subtotal, gstAmount, total };
+    };
+
+    // Ensure a few common services exist (used in sample invoices)
+    const consultationSvc = await ensureService('Dermatology Consultation', 'Consult', 500, 0);
+    const moleExcisionSvc = await ensureService('Mole Excision (Minor Procedure)', 'Procedure', 2500, 18);
+    const acnePackageSvc = await ensureService('Acne Treatment Package (8 weeks)', 'Package', 1200, 18);
+
+    // Pick up to 3 recent visits for this branch that don't have an invoice yet
+    const candidateVisits = await prisma.visit.findMany({
+      where: { patient: { branchId: branch.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: { id: true, patientId: true },
+    });
+
+    for (const visitRef of candidateVisits) {
+      // Skip if an invoice already exists for this visitId
+      const existingForVisit = await prisma.invoice.findFirst({ where: { visitId: visitRef.id } });
+      if (existingForVisit) continue;
+
+      // Prepare scenario by round-robin across predefined cases
+      const scenarios = [
+        {
+          mode: PaymentMode.CASH,
+          items: [
+            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
+          ],
+          pay: 'FULL',
+        },
+        {
+          mode: PaymentMode.UPI,
+          items: [
+            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
+            { serviceId: moleExcisionSvc.id, qty: 1, unitPrice: 2500, gstRate: 18 },
+          ],
+          pay: 'PARTIAL',
+        },
+        {
+          mode: PaymentMode.CARD,
+          items: [
+            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
+            { serviceId: acnePackageSvc.id, qty: 1, unitPrice: 1200, gstRate: 18 },
+          ],
+          pay: 'FULL',
+        },
+      ] as const;
+
+      const scenario = scenarios[createdInvoices % scenarios.length];
+      const { total } = computeInvoiceTotal(scenario.items);
+
+      const invoiceNo = `INV-SEED-${visitRef.id}`.slice(0, 30); // ensure stays within reasonable length/unique
+
+      const inv = await prisma.invoice.create({
+        data: {
+          patientId: visitRef.patientId,
+          visitId: visitRef.id,
+          mode: scenario.mode,
+          invoiceNo,
+          total,
+          received: 0,
+          balance: total,
+          items: {
+            create: scenario.items.map((it) => ({
+              serviceId: it.serviceId,
+              qty: it.qty,
+              unitPrice: it.unitPrice,
+              gstRate: it.gstRate,
+              total: it.qty * it.unitPrice,
+            })),
+          },
+        },
+      });
+
+      if (scenario.pay === 'FULL') {
+        await prisma.payment.create({
+          data: {
+            invoiceId: inv.id,
+            amount: total,
+            mode: scenario.mode,
+            reference: 'SEED-PAYMENT',
+          },
+        });
+        await prisma.invoice.update({ where: { id: inv.id }, data: { received: total, balance: 0 } });
+      } else {
+        const partial = Math.min(1000, total);
+        await prisma.payment.create({
+          data: {
+            invoiceId: inv.id,
+            amount: partial,
+            mode: scenario.mode,
+            reference: 'SEED-PARTIAL',
+          },
+        });
+        await prisma.invoice.update({ where: { id: inv.id }, data: { received: partial, balance: Math.max(total - partial, 0) } });
+      }
+
+      createdInvoices += 1;
+      if (createdInvoices >= 3) break;
+    }
+
     console.log('Seed complete (non-destructive):', {
       branch: branch.id,
       usersCreated: userCount === 0,
@@ -547,6 +678,7 @@ async function main() {
       patientCreated: patientCount === 0,
       visitsCreated: visitCount === 0 ? createdVisits : 0,
       inventorySeeded: invCount === 0 ? createdInventory : 0,
+      invoicesCreated: createdInvoices,
     });
   } finally {
     await (await import('@prisma/client')).Prisma.sql`SELECT 1`;

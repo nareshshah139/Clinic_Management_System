@@ -61,4 +61,10 @@
 [2025-09-14 17:40 UTC] Frontend: Set default print preview top margin to 150px in PrescriptionBuilder. 
 [2025-09-14 17:45 UTC] Frontend: Renamed prescription date label from "Valid Until" to "Review Date" in PrescriptionBuilder. 
 [2025-09-14 17:35] VisitPhotos: Preview shows full image with object-contain in a fixed-height box; added dedicated iPhone camera capture input (capture=environment) and buttons for "Upload from device" and "Take photo". Cleans input values after upload. PrescriptionBuilder: Seed vitals from visit data on load and fallback to visit vitals in print preview (auto BMI computation). 
-[2025-09-14 18:05] Patients: Added referralSource (Instagram/Twitter/Google/Doctor/Friends & Family/Other) to DB schema and API; create/edit form now captures it. Added PATCH /patients/:id. 
+[2025-09-14 18:05] Patients: Added referralSource (Instagram/Twitter/Google/Doctor/Friends & Family/Other) to DB schema and API; create/edit form now captures it. Added PATCH /patients/:id. 2025-09-15T09:11:21Z Started backend (4000) and frontend dev (3000/3001) after clean reset.
+
+[2025-09-15 14:45 UTC] Backend: Seed script now creates sample Services and coherent Invoices linked to seeded Visits and the same patient, with Payments (cash full, UPI partial, card full). Added `invoicesCreated` to seed summary.
+
+[2025-09-15 14:52 UTC] Backend: Executed seed to create 3 coherent invoices linked to recent visits (cash full, UPI partial, card full) with payments recorded. Verify via GET /billing/invoices or search invoiceNo starting with 'INV-SEED-'.
+
+[2025-09-15 15:05 UTC] Backend: Extended Patient schema with demographics (secondaryPhone, maritalStatus, bloodGroup, occupation, guardianName, medicalHistory JSON) and added one-to-one link to User via portalUserId. Added endpoints: POST /patients/:id/link-user, POST /patients/:id/unlink-user, GET /patients/:id/portal-user. Updated PatientsModule to import UsersModule and service logic to link/unlink or create PATIENT-role users. Updated planning.md accordingly.

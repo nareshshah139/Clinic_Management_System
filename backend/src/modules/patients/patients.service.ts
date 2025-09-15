@@ -1,11 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
 import { UpdatePatientDto } from './dto/update-patient.dto';
+import { LinkPatientUserDto } from './dto/link-patient-user.dto';
+import { UsersService } from '../users/users.service';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private usersService: UsersService) {}
 
   async create(createPatientDto: CreatePatientDto, branchId: string) {
     return this.prisma.patient.create({
@@ -34,7 +37,7 @@ export class PatientsService {
           { abhaId: { contains: search } },
         ],
       }),
-    };
+    } as any;
 
     const [patients, total] = await Promise.all([
       this.prisma.patient.findMany({
@@ -58,7 +61,7 @@ export class PatientsService {
   }
 
   async findOne(id: string) {
-    return this.prisma.patient.findUnique({
+    const patient = await this.prisma.patient.findUnique({
       where: { id },
       include: {
         appointments: {
@@ -69,8 +72,11 @@ export class PatientsService {
           orderBy: { createdAt: 'desc' },
           take: 5,
         },
+        portalUser: true,
       },
     });
+    if (!patient) throw new NotFoundException('Patient not found');
+    return patient;
   }
 
   async update(id: string, updatePatientDto: UpdatePatientDto) {
@@ -82,5 +88,77 @@ export class PatientsService {
         ...(dob ? { dob: new Date(dob as any) } : {}),
       },
     });
+  }
+
+  async linkUser(patientId: string, dto: LinkPatientUserDto, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    if (patient.portalUserId) {
+      throw new ConflictException('Patient is already linked to a user');
+    }
+
+    let userIdToLink: string | undefined = dto.userId;
+
+    if (!userIdToLink) {
+      // Validate minimal fields for creating a patient portal user
+      if (!dto.email || !dto.password || !dto.firstName || !dto.lastName) {
+        throw new BadRequestException('email, password, firstName, and lastName are required to create a new user');
+      }
+
+      // Create a new PATIENT user via UsersService to reuse hashing/validations
+      const created = await this.usersService.createUser(
+        {
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          email: dto.email,
+          password: dto.password,
+          phone: dto.phone,
+          role: UserRole.PATIENT,
+          branchId,
+        } as any,
+        branchId,
+      );
+      userIdToLink = created.id;
+    } else {
+      // Ensure the existing user is valid and of PATIENT role
+      const existing = await this.prisma.user.findFirst({ where: { id: userIdToLink, branchId } });
+      if (!existing) throw new NotFoundException('User not found in this branch');
+      if (existing.role !== UserRole.PATIENT) {
+        throw new BadRequestException('User must have PATIENT role to be linked');
+      }
+
+      // Ensure not already linked to another patient
+      const alreadyLinked = await this.prisma.patient.findFirst({ where: { portalUserId: userIdToLink } });
+      if (alreadyLinked) throw new ConflictException('This user is already linked to another patient');
+    }
+
+    const updated = await this.prisma.patient.update({
+      where: { id: patientId },
+      data: { portalUserId: userIdToLink },
+      include: { portalUser: true },
+    });
+
+    return updated;
+  }
+
+  async unlinkUser(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    return this.prisma.patient.update({
+      where: { id: patientId },
+      data: { portalUserId: null },
+      include: { portalUser: true },
+    });
+  }
+
+  async getPortalUser(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: patientId, branchId },
+      include: { portalUser: true },
+    });
+    if (!patient) throw new NotFoundException('Patient not found');
+    return patient.portalUser;
   }
 }
