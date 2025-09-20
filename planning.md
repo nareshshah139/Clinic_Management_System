@@ -1035,3 +1035,35 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Editable GST rates with per-item or per-invoice control
 
 *Last updated: September 2025 - Professional billing system with enhanced invoicing, print capabilities, and flexible GST management.*
+
+## 2025-09-20 – Pharmacy Billing UX and Autocomplete Improvements
+
+- Backend
+  - Added `mode` to `DrugAutocompleteDto` ('name' | 'ingredient' | 'all') and implemented mode-aware ranking in `DrugService.autocomplete` (prefix > contains; name > composition > manufacturer > category).
+  - Hardened query validation for numeric params (manual parsing for `limit`) to avoid class-transformer edge cases.
+  - Normalized users listing response usage in frontend (handles `{users: [...]}`, `{data: [...]}`, and bare arrays).
+
+- Frontend (PharmacyInvoiceBuilder)
+  - Drug search: added search mode selector; debounced querying; smooth open/close of results (outside click + Escape; exit animation).
+  - Patient: converted to autocomplete search (debounced, selectable, fills billing fields).
+  - Doctor: kept as dropdown per app conventions; fixed population by normalizing users API response; `onValueChange` updates `doctorId`.
+
+- Known/Follow-ups
+  - Remove any stale references to `isOpen`/`invoiceId` if they reappear after hot reload (full Next restart clears stale chunks).
+  - Add component tests for autocomplete ranking and dropdown population.
+  - Unify API client typings to avoid `unknown` in component code.
+
+## 2025-09-20 – Prescriptions Controller Parameter Order Fixes
+
+**Achievement:** Fixed TypeScript linter errors in prescriptions controller by reordering method parameters.
+**Impact:**
+- Resolved 5 linter errors where optional parameters were followed by required parameters
+- Improved code quality and TypeScript compliance
+- Maintained all existing functionality while fixing parameter ordering
+
+**Technical Highlights:**
+- Fixed parameter order in `autocompleteField`, `getPatientPrescriptions`, `getPatientPrescriptionHistory`, `getDoctorPrescriptions`, and `cancelPrescription` methods
+- Moved `@Request() req: AuthenticatedRequest` parameters before optional `@Query()` parameters
+- Ensured TypeScript requirement that required parameters cannot follow optional ones
+- No functional changes to API endpoints or business logic
+

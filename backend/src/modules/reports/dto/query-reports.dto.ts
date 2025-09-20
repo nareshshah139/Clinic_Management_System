@@ -1,6 +1,15 @@
 import { IsOptional, IsString, IsDateString, IsEnum, IsNumber, IsBoolean, IsInt, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { ReportPeriod, ExportFormat } from './reports.dto';
+
+// Transform decorator for converting string "true"/"false" to boolean
+const TransformBoolean = () => Transform(({ value }) => {
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+  return value;
+});
 
 export class QueryReportsDto {
   @ApiPropertyOptional({ description: 'Start date for the report period', example: '2024-01-01' })
@@ -40,6 +49,7 @@ export class QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include detailed breakdown', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeDetails?: boolean;
 
@@ -90,11 +100,13 @@ export class RevenueQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include GST breakdown', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeGstBreakdown?: boolean;
 
   @ApiPropertyOptional({ description: 'Include payment method breakdown', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includePaymentBreakdown?: boolean;
 
@@ -141,16 +153,19 @@ export class PatientQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include visit history', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeVisitHistory?: boolean;
 
   @ApiPropertyOptional({ description: 'Include appointment history', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeAppointmentHistory?: boolean;
 
   @ApiPropertyOptional({ description: 'Include financial history', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeFinancialHistory?: boolean;
 }
@@ -168,16 +183,19 @@ export class DoctorQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include performance metrics', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includePerformanceMetrics?: boolean;
 
   @ApiPropertyOptional({ description: 'Include revenue metrics', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeRevenueMetrics?: boolean;
 
   @ApiPropertyOptional({ description: 'Include patient satisfaction', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includePatientSatisfaction?: boolean;
 
@@ -207,21 +225,25 @@ export class AppointmentQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include cancellation reasons', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeCancellationReasons?: boolean;
 
   @ApiPropertyOptional({ description: 'Include wait times', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeWaitTimes?: boolean;
 
   @ApiPropertyOptional({ description: 'Include peak hours analysis', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includePeakHours?: boolean;
 
   @ApiPropertyOptional({ description: 'Include room utilization', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeRoomUtilization?: boolean;
 }
@@ -244,21 +266,25 @@ export class InventoryQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include low stock items', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeLowStock?: boolean;
 
   @ApiPropertyOptional({ description: 'Include expired items', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeExpired?: boolean;
 
   @ApiPropertyOptional({ description: 'Include transaction history', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeTransactionHistory?: boolean;
 
   @ApiPropertyOptional({ description: 'Include supplier analysis', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeSupplierAnalysis?: boolean;
 
@@ -288,16 +314,19 @@ export class PaymentQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include reconciliation data', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeReconciliation?: boolean;
 
   @ApiPropertyOptional({ description: 'Include refund data', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeRefunds?: boolean;
 
   @ApiPropertyOptional({ description: 'Include failed payments', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeFailedPayments?: boolean;
 
@@ -322,21 +351,25 @@ export class DashboardQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include recent activities', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeRecentActivities?: boolean;
 
   @ApiPropertyOptional({ description: 'Include trends', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeTrends?: boolean;
 
   @ApiPropertyOptional({ description: 'Include alerts', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeAlerts?: boolean;
 
   @ApiPropertyOptional({ description: 'Include performance metrics', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includePerformanceMetrics?: boolean;
 }
@@ -354,16 +387,19 @@ export class ExportQueryDto extends QueryReportsDto {
 
   @ApiPropertyOptional({ description: 'Include charts', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeCharts?: boolean;
 
   @ApiPropertyOptional({ description: 'Include raw data', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeRawData?: boolean;
 
   @ApiPropertyOptional({ description: 'Include summary', example: true })
   @IsOptional()
+  @TransformBoolean()
   @IsBoolean()
   includeSummary?: boolean;
 

@@ -17,6 +17,7 @@ import { UsersModule } from './modules/users/users.module';
 import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
+import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -46,6 +47,7 @@ const fullFeatureModules = [
   UsersModule,
   NotificationsModule,
   OneMgModule,
+  PharmacyModule,
 ];
 
 const minimalModules = [AuthModule];

@@ -266,7 +266,7 @@ export class PrescriptionsService {
             select: { 
               id: true, 
               createdAt: true,
-              doctor: { select: { id: true, name: true } },
+              doctor: { select: { id: true, firstName: true, lastName: true } },
             },
           },
           doctor: {

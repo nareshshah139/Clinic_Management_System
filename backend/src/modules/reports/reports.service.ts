@@ -836,13 +836,13 @@ export class ReportsService {
     const [appointments, completed, revenueAgg, patients, activeDoctors, lowStockAlerts, pendingPayments, recentAppointmentsRaw, revenueLast7] = await Promise.all([
       this.prisma.appointment.count({ where: { branchId, date: { gte: start, lte: end } } }),
       this.prisma.appointment.count({ where: { branchId, date: { gte: start, lte: end }, status: 'COMPLETED' } }),
-      this.prisma.payment.aggregate({ where: { branchId, status: 'COMPLETED', createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: start, lte: end } }, _sum: { amount: true } }),
       this.prisma.patient.count({ where: { branchId, createdAt: { gte: start, lte: end } } }),
       this.prisma.appointment.groupBy({ by: ['doctorId'], where: { branchId, date: { gte: start, lte: end } }, _count: { doctorId: true } }),
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
-      this.prisma.payment.count({ where: { branchId, status: 'PENDING' } }),
+      this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
       this.prisma.appointment.findMany({ where: { branchId }, orderBy: { date: 'desc' }, take: 10, select: { id: true, date: true, status: true, visitType: true, patient: { select: { name: true } }, doctor: { select: { firstName: true, lastName: true } } } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where: { branchId, status: 'COMPLETED', createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lte: end } }, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), lte: end } }, _sum: { amount: true }, _count: { id: true } }),
     ]);
 
     const recentAppointments: RecentAppointmentDto[] = recentAppointmentsRaw.map((a) => ({
@@ -1063,9 +1063,9 @@ export class ReportsService {
       this.prisma.appointment.count({ where: { branchId, status: 'NO_SHOW' as any } }),
       this.prisma.appointment.count({ where: { branchId, date: { gte: startOfDay, lte: endOfDay } } }),
       this.prisma.appointment.count({ where: { branchId, date: { gte: startOfDay, lte: endOfDay }, status: 'COMPLETED' as any } }),
-      this.prisma.payment.aggregate({ where: { branchId, status: 'COMPLETED' as any, createdAt: { gte: startOfMonth, lte: now } }, _sum: { amount: true } } as any),
-      this.prisma.payment.count({ where: { branchId, status: 'PENDING' as any } } as any),
-      this.prisma.invoice.count({ where: { branchId, status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] as any } } } as any),
+      this.prisma.newPayment.aggregate({ where: { invoice: { branchId }, reconStatus: 'COMPLETED', createdAt: { gte: startOfMonth, lte: now } }, _sum: { amount: true } }),
+      this.prisma.newPayment.count({ where: { invoice: { branchId }, reconStatus: 'PENDING' } }),
+      this.prisma.newInvoice.count({ where: { branchId, status: { in: ['PENDING', 'PARTIALLY_PAID', 'OVERDUE'] } } }),
       this.prisma.inventoryItem.count({ where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] } }),
       this.prisma.inventoryItem.count({ where: { branchId, currentStock: { lte: 0 } } }),
       this.prisma.user.count({ where: { branchId, role: 'DOCTOR' as any, status: 'ACTIVE' as any } }),
@@ -1113,12 +1113,12 @@ export class ReportsService {
     const in48Hours = new Date(Date.now() + 48 * 60 * 60 * 1000);
 
     const [overdueInvoices, lowStockAlerts, expiryAlerts, pendingPaymentsList, upcomingAppointments] = await Promise.all([
-      this.prisma.invoice.findMany({
-        where: { branchId, status: 'OVERDUE' as any } as any,
-        select: { id: true, invoiceNumber: true, totalAmount: true, dueDate: true, patient: { select: { id: true, name: true } } } as any,
-        orderBy: { dueDate: 'asc' } as any,
+      this.prisma.newInvoice.findMany({
+        where: { branchId, status: 'OVERDUE' },
+        select: { id: true, invoiceNo: true, total: true, dueDate: true, patient: { select: { id: true, name: true } } },
+        orderBy: { dueDate: 'asc' },
         take: 10,
-      } as any),
+      }),
       this.prisma.inventoryItem.findMany({
         where: { branchId, NOT: { minStockLevel: null }, AND: [{ currentStock: { lte: 0 } }, { minStockLevel: { gt: 0 } }] },
         select: { id: true, name: true, currentStock: true, minStockLevel: true },
@@ -1131,18 +1131,28 @@ export class ReportsService {
         orderBy: { expiryDate: 'asc' },
         take: 10,
       }),
-      this.prisma.payment.findMany({
-        where: { branchId, status: 'PENDING' as any } as any,
-        select: { id: true, amount: true, method: true, createdAt: true, invoice: { select: { id: true, invoiceNumber: true } } } as any,
+      this.prisma.newPayment.findMany({
+        where: { 
+          reconStatus: 'PENDING',
+          invoice: { branchId }
+        },
+        select: { id: true, amount: true, mode: true, createdAt: true, invoice: { select: { id: true, invoiceNo: true } } },
         orderBy: { createdAt: 'desc' },
         take: 10,
-      } as any),
+      }),
       this.prisma.appointment.findMany({
-        where: { branchId, date: { gt: now, lt: in48Hours }, status: { notIn: ['CANCELLED' as any] } } as any,
-        select: { id: true, date: true, status: true, visitType: true, patient: { select: { id: true, name: true } }, doctor: { select: { id: true, firstName: true, lastName: true, name: true } } } as any,
+        where: { branchId, date: { gt: now, lt: in48Hours }, status: { notIn: ['CANCELLED'] } },
+        select: { 
+          id: true, 
+          date: true, 
+          status: true, 
+          visitType: true, 
+          patient: { select: { id: true, name: true } }, 
+          doctor: { select: { id: true, firstName: true, lastName: true } } 
+        },
         orderBy: { date: 'asc' },
         take: 10,
-      } as any),
+      }),
     ]);
 
     return {

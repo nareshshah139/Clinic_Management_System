@@ -148,10 +148,10 @@ export class PrescriptionsController {
   autocompleteField(
     @Query('field') field: string,
     @Query('patientId') patientId: string,
+    @Request() req: AuthenticatedRequest,
     @Query('visitId') visitId?: string,
     @Query('q') q?: string,
     @Query('limit') limit?: number,
-    @Request() req: AuthenticatedRequest,
   ) {
     return this.prescriptionsService.autocompleteClinicalField(
       field,
@@ -184,8 +184,8 @@ export class PrescriptionsController {
   @Get('patient/:patientId')
   getPatientPrescriptions(
     @Param('patientId') patientId: string,
-    @Query('limit') limit?: number,
     @Request() req: AuthenticatedRequest,
+    @Query('limit') limit?: number,
   ) {
     return this.prescriptionsService.findAllPrescriptions(
       { patientId, limit: limit || 20 },
@@ -196,8 +196,8 @@ export class PrescriptionsController {
   @Get('patient/:patientId/history')
   getPatientPrescriptionHistory(
     @Param('patientId') patientId: string,
-    @Query('limit') limit?: number,
     @Request() req: AuthenticatedRequest,
+    @Query('limit') limit?: number,
   ) {
     return this.prescriptionsService.getPrescriptionHistory(
       { patientId, limit: limit || 50 },
@@ -209,8 +209,8 @@ export class PrescriptionsController {
   @Get('doctor/:doctorId')
   getDoctorPrescriptions(
     @Param('doctorId') doctorId: string,
-    @Query('limit') limit?: number,
     @Request() req: AuthenticatedRequest,
+    @Query('limit') limit?: number,
   ) {
     return this.prescriptionsService.findAllPrescriptions(
       { doctorId, limit: limit || 20 },
@@ -248,8 +248,8 @@ export class PrescriptionsController {
   @Delete(':id')
   cancelPrescription(
     @Param('id') id: string,
-    @Query('reason') reason?: string,
     @Request() req: AuthenticatedRequest,
+    @Query('reason') reason?: string,
   ) {
     return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason);
   }

@@ -18,6 +18,7 @@ import {
   LogOut,
   MapPin,
   Activity,
+  Pill,
 } from 'lucide-react';
 
 const navigation = [
@@ -55,6 +56,11 @@ const navigation = [
     name: 'Billing',
     href: '/dashboard/billing',
     icon: CreditCard,
+  },
+  {
+    name: 'Pharmacy Billing',
+    href: '/dashboard/pharmacy',
+    icon: Pill,
   },
   {
     name: 'Inventory',
