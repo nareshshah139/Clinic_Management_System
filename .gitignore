@@ -16,3 +16,9 @@ build
 
 # misc
 *.local
+
+# database backups (contain sensitive data)
+backups/
+DATABASE_BACKUP_SUMMARY.md
+*.sql
+*.dump
