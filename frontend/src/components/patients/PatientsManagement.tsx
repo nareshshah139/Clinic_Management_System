@@ -35,6 +35,11 @@ export default function PatientsManagement() {
   const [search, setSearch] = useState<string>('');
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
   const [open, setOpen] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalPatients, setTotalPatients] = useState<number>(0);
+  const [pageSize] = useState<number>(20); // Fixed page size
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<PatientFormState>({
     firstName: '',
     lastName: '',
@@ -60,18 +65,30 @@ export default function PatientsManagement() {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => void fetchPatients(), 300);
+    // Reset to page 1 when search or filter changes
+    setCurrentPage(1);
+    const t = setTimeout(() => void fetchPatients(1), 500); // Increased debounce time
     return () => clearTimeout(t);
   }, [search, genderFilter]);
 
-  const fetchPatients = async () => {
+  useEffect(() => {
+    void fetchPatients(currentPage);
+  }, [currentPage]);
+
+  const fetchPatients = async (page: number = currentPage) => {
     try {
       setLoading(true);
+      setError(null);
       const normGender = genderFilter !== 'ALL' ? (genderFilter === 'MALE' ? 'M' : genderFilter === 'FEMALE' ? 'F' : 'O') : undefined;
+      
+      // Only search if we have at least 2 characters
+      const searchTerm = search.trim().length >= 2 ? search.trim() : undefined;
+      
       const response = await apiClient.getPatients({
-        search: search || undefined,
+        page,
+        limit: pageSize,
+        search: searchTerm,
         gender: normGender,
-        limit: 50,
       });
       const rows = (response as any)?.data ?? [];
       const mapped: Patient[] = rows.map((bp: any) => {
@@ -94,9 +111,19 @@ export default function PatientsManagement() {
         } as Patient;
       });
       setPatients(mapped);
-    } catch (err) {
-      // eslint-disable-next-line no-console
+      
+      // Update pagination metadata
+      const meta = (response as any)?.meta;
+      if (meta) {
+        setTotalPages(meta.totalPages || 1);
+        setTotalPatients(meta.total || 0);
+      }
+    } catch (err: any) {
       console.error('Failed to fetch patients', err);
+      setError(err?.message || 'Failed to load patients. Please try again.');
+      setPatients([]);
+      setTotalPages(1);
+      setTotalPatients(0);
     } finally {
       setLoading(false);
     }
@@ -114,11 +141,20 @@ export default function PatientsManagement() {
       emergencyContact: '',
       referralSource: '',
     });
+    setError(null);
   };
 
   const submitPatient = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      // Basic validation
+      if (!form.firstName.trim() || !form.phone.trim() || !form.dateOfBirth) {
+        setError('Please fill in all required fields (Name, Phone, Date of Birth)');
+        return;
+      }
+      
       const name = `${form.firstName} ${form.lastName}`.trim();
       const payload = {
         name: name || form.firstName || form.lastName,
@@ -130,19 +166,19 @@ export default function PatientsManagement() {
         emergencyContact: form.emergencyContact || undefined,
         referralSource: form.referralSource || undefined,
       };
+      
       if (form.id) {
         await apiClient.updatePatient(form.id, payload);
       } else {
         await apiClient.createPatient(payload);
       }
-      await fetchPatients();
+      
+      await fetchPatients(currentPage);
       setOpen(false);
       resetForm();
-    } catch (err) {
-      // eslint-disable-next-line no-console
+    } catch (err: any) {
       console.error('Failed to save patient', err);
-      // eslint-disable-next-line no-alert
-      alert('Failed to save patient. Please check required fields and phone format.');
+      setError(err?.message || 'Failed to save patient. Please check your input and try again.');
     } finally {
       setLoading(false);
     }
@@ -166,11 +202,6 @@ export default function PatientsManagement() {
 
   const initials = (first: string, last: string) => `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
 
-  const filtered = useMemo(() => {
-    if (genderFilter === 'ALL') return patients;
-    return patients.filter((p) => normalizeGender(p.gender) === genderFilter);
-  }, [patients, genderFilter]);
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -188,6 +219,11 @@ export default function PatientsManagement() {
             <DialogHeader>
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {error}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>First Name</Label>
@@ -260,7 +296,17 @@ export default function PatientsManagement() {
           <div className="flex flex-col sm:flex-row gap-4 items-center">
             <div className="relative w-full sm:flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input className="pl-10" placeholder="Search by name, phone, or email" value={search} onChange={(e) => setSearch(e.target.value)} />
+              <Input 
+                className="pl-10" 
+                placeholder="Search by name, phone, or email (min 2 characters)" 
+                value={search} 
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {search.length > 0 && search.length < 2 && (
+                <div className="absolute top-full left-0 mt-1 text-xs text-gray-500">
+                  Enter at least 2 characters to search
+                </div>
+              )}
             </div>
             <Select value={genderFilter} onValueChange={(v: 'ALL' | Gender) => setGenderFilter(v)}>
               <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Gender" /></SelectTrigger>
@@ -281,10 +327,19 @@ export default function PatientsManagement() {
           <CardDescription>Manage and view all patient information</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {error ? (
+            <div className="text-center py-10">
+              <div className="text-red-600 mb-2">{error}</div>
+              <Button variant="outline" onClick={() => fetchPatients(currentPage)}>
+                Try Again
+              </Button>
+            </div>
+          ) : loading ? (
             <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">No patients found</div>
+          ) : patients.length === 0 ? (
+            <div className="text-center py-10 text-gray-500">
+              {search.length >= 2 || genderFilter !== 'ALL' ? 'No patients found matching your search criteria' : 'No patients found'}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -297,7 +352,7 @@ export default function PatientsManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((p) => (
+                  {patients.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -327,6 +382,59 @@ export default function PatientsManagement() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+          
+          {/* Pagination Controls */}
+          {!loading && patients.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

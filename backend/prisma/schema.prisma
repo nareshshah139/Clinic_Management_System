@@ -165,6 +165,13 @@ model Patient {
   pharmacyInvoices PharmacyInvoice[]
 
   @@map("patients")
+  @@index([branchId])
+  @@index([name])
+  @@index([phone])
+  @@index([gender])
+  @@index([createdAt])
+  @@index([branchId, name])
+  @@index([branchId, phone])
 }
 
 model Appointment {

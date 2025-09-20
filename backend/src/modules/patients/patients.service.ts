@@ -27,14 +27,18 @@ export class PatientsService {
     const { page, limit, search, gender } = options;
     const skip = (page - 1) * limit;
 
+    // Optimize search by requiring minimum 2 characters and using more efficient queries
+    const searchTerm = search && search.trim().length >= 2 ? search.trim() : undefined;
+
     const where = {
       branchId,
-      ...(gender ? { gender: { contains: gender, mode: 'insensitive' as const } } : {}),
-      ...(search && {
+      ...(gender ? { gender: { equals: gender, mode: 'insensitive' as const } } : {}),
+      ...(searchTerm && {
         OR: [
-          { name: { contains: search, mode: 'insensitive' } },
-          { phone: { contains: search } },
-          { abhaId: { contains: search } },
+          { name: { contains: searchTerm, mode: 'insensitive' } },
+          { phone: { startsWith: searchTerm } }, // More efficient for phone searches
+          { abhaId: { contains: searchTerm } },
+          { email: { contains: searchTerm, mode: 'insensitive' } },
         ],
       }),
     } as any;
@@ -45,6 +49,21 @@ export class PatientsService {
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          abhaId: true,
+          name: true,
+          gender: true,
+          dob: true,
+          phone: true,
+          email: true,
+          address: true,
+          city: true,
+          state: true,
+          referralSource: true,
+          createdAt: true,
+          updatedAt: true,
+        },
       }),
       this.prisma.patient.count({ where }),
     ]);

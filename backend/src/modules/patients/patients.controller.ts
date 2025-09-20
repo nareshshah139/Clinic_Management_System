@@ -33,8 +33,19 @@ export class PatientsController {
     @Query('gender') gender?: string,
     @Request() req,
   ) {
+    // Validate and sanitize inputs
+    const pageNum = Math.max(1, +page || 1);
+    const limitNum = Math.min(100, Math.max(1, +limit || 10)); // Cap at 100 for performance
+    const searchTerm = search?.trim() || undefined;
+    const genderFilter = gender?.trim() || undefined;
+
     return this.patientsService.findAll(
-      { page: +page, limit: +limit, search, gender },
+      { 
+        page: pageNum, 
+        limit: limitNum, 
+        search: searchTerm, 
+        gender: genderFilter 
+      },
       req.user.branchId,
     );
   }
