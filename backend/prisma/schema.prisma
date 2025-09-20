@@ -1,6 +1,3 @@
-// Clinic Management System - Hyderabad, India
-// Prisma schema for PostgreSQL with DPDP compliance
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,6 +5,666 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String             @id @default(cuid())
+  firstName         String
+  lastName          String
+  email             String             @unique
+  password          String
+  phone             String?
+  role              UserRole
+  status            UserStatus         @default(ACTIVE)
+  branchId          String
+  employeeId        String?
+  designation       String?
+  department        String?
+  dateOfJoining     DateTime?
+  address           String?
+  city              String?
+  state             String?
+  pincode           String?
+  emergencyContact  String?
+  emergencyPhone    String?
+  permissions       String?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  statusReason      String?
+  isActive          Boolean            @default(true)
+  metadata          String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  appointments      Appointment[]
+  deviceLogs        DeviceLog[]
+  inventoryAudits   InventoryAudit[]
+  patientProfile    Patient?           @relation("PatientPortalUser")
+  purchaseOrders    PurchaseOrder[]
+  reorderRules      ReorderRule[]
+  stockAdjustments  StockAdjustment[]
+  stockMovements    StockMovement[]
+  stockTransactions StockTransaction[]
+  branch            Branch             @relation(fields: [branchId], references: [id])
+  visits            Visit[]
+
+  @@map("users")
+}
+
+model Branch {
+  id               String            @id @default(cuid())
+  name             String
+  description      String?
+  address          String
+  city             String?
+  state            String?
+  pincode          String?
+  phone            String?
+  email            String?
+  website          String?
+  gstNumber        String?
+  licenseNumber    String?
+  isActive         Boolean           @default(true)
+  metadata         String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  appointments     Appointment[]
+  inventoryItems   InventoryItem[]
+  newInvoices      NewInvoice[]
+  patients         Patient[]
+  purchaseOrders   PurchaseOrder[]
+  reorderRules     ReorderRule[]
+  rooms            Room[]
+  services         Service[]
+  stockAdjustments StockAdjustment[]
+  stockMovements   StockMovement[]
+  suppliers        Supplier[]
+  users            User[]
+
+  @@map("branches")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  resource    String
+  action      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("permissions")
+}
+
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  permissions String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model Room {
+  id           String        @id @default(cuid())
+  name         String
+  type         String
+  capacity     Int           @default(1)
+  isActive     Boolean       @default(true)
+  branchId     String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  appointments Appointment[]
+  branch       Branch        @relation(fields: [branchId], references: [id])
+
+  @@map("rooms")
+}
+
+model Patient {
+  id               String        @id @default(cuid())
+  abhaId           String?       @unique
+  name             String
+  gender           String
+  dob              DateTime
+  phone            String
+  email            String?
+  address          String?
+  city             String?
+  state            String?
+  pincode          String?
+  emergencyContact String?
+  allergies        String?
+  photoUrl         String?
+  referralSource   String?
+  secondaryPhone   String?
+  maritalStatus    String?
+  bloodGroup       String?
+  occupation       String?
+  guardianName     String?
+  medicalHistory   String?
+  portalUserId     String?       @unique
+  branchId         String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  appointments     Appointment[]
+  consents         Consent[]
+  deviceLogs       DeviceLog[]
+  invoices         Invoice[]
+  labOrders        LabOrder[]
+  newInvoices      NewInvoice[]
+  branch           Branch        @relation(fields: [branchId], references: [id])
+  portalUser       User?         @relation("PatientPortalUser", fields: [portalUserId], references: [id])
+  referrals        Referral[]
+  visits           Visit[]
+
+  @@map("patients")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  patientId   String
+  doctorId    String
+  date        DateTime
+  slot        String
+  status      AppointmentStatus @default(SCHEDULED)
+  visitType   VisitType         @default(OPD)
+  notes       String?
+  source      String?
+  branchId    String
+  roomId      String?
+  tokenNumber Int?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  branch      Branch            @relation(fields: [branchId], references: [id])
+  doctor      User              @relation(fields: [doctorId], references: [id])
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  room        Room?             @relation(fields: [roomId], references: [id])
+  newInvoices NewInvoice[]
+  visit       Visit?
+
+  @@map("appointments")
+}
+
+model Visit {
+  id            String        @id @default(cuid())
+  patientId     String
+  doctorId      String
+  appointmentId String?       @unique
+  vitals        String?
+  complaints    String
+  history       String?
+  exam          String?
+  diagnosis     String?
+  plan          String?
+  followUp      DateTime?
+  attachments   String?
+  scribeJson    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  consents      Consent[]
+  deviceLogs    DeviceLog[]
+  labOrders     LabOrder[]
+  newInvoices   NewInvoice[]
+  prescription  Prescription?
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
+  doctor        User          @relation(fields: [doctorId], references: [id])
+  patient       Patient       @relation(fields: [patientId], references: [id])
+
+  @@map("visits")
+}
+
+model Prescription {
+  id              String   @id @default(cuid())
+  visitId         String   @unique
+  language        Language @default(EN)
+  items           String
+  instructions    String?
+  genericFirst    Boolean  @default(true)
+  pharmacistNotes String?
+  qrcode          String?
+  signature       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  visit           Visit    @relation(fields: [visitId], references: [id])
+
+  @@map("prescriptions")
+}
+
+model Service {
+  id              String           @id @default(cuid())
+  name            String
+  type            String
+  taxable         Boolean          @default(false)
+  gstRate         Float            @default(0)
+  priceMrp        Float
+  priceNet        Float
+  deviceId        String?
+  branchId        String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  invoiceItems    InvoiceItem[]
+  newInvoiceItems NewInvoiceItem[]
+  branch          Branch           @relation(fields: [branchId], references: [id])
+
+  @@map("services")
+}
+
+model Invoice {
+  id            String        @id @default(cuid())
+  patientId     String
+  visitId       String?
+  mode          PaymentMode   @default(CASH)
+  gstBreakup    String?
+  exemptBreakup String?
+  total         Float
+  received      Float         @default(0)
+  balance       Float
+  invoiceNo     String        @unique
+  gstin         String?
+  hsn           String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  items         InvoiceItem[]
+  patient       Patient       @relation(fields: [patientId], references: [id])
+  payments      Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  serviceId String
+  qty       Int     @default(1)
+  unitPrice Float
+  gstRate   Float   @default(0)
+  total     Float
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  service   Service @relation(fields: [serviceId], references: [id])
+
+  @@map("invoice_items")
+}
+
+model NewInvoice {
+  id             String           @id @default(cuid())
+  invoiceNo      String           @unique
+  patientId      String
+  visitId        String?
+  appointmentId  String?
+  branchId       String
+  total          Float
+  balance        Float
+  discount       Float            @default(0)
+  discountReason String?
+  notes          String?
+  dueDate        DateTime?
+  metadata       String?
+  mode           String?
+  gstin          String?
+  hsn            String?
+  status         String           @default("DRAFT")
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  received       Float            @default(0)
+  items          NewInvoiceItem[]
+  appointment    Appointment?     @relation(fields: [appointmentId], references: [id])
+  branch         Branch           @relation(fields: [branchId], references: [id])
+  patient        Patient          @relation(fields: [patientId], references: [id])
+  visit          Visit?           @relation(fields: [visitId], references: [id])
+  payments       NewPayment[]
+
+  @@map("new_invoices")
+}
+
+model NewInvoiceItem {
+  id          String     @id @default(cuid())
+  invoiceId   String
+  serviceId   String
+  name        String
+  description String?
+  qty         Int        @default(1)
+  unitPrice   Float
+  discount    Float      @default(0)
+  gstRate     Float      @default(0)
+  total       Float
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  invoice     NewInvoice @relation(fields: [invoiceId], references: [id])
+  service     Service    @relation(fields: [serviceId], references: [id])
+
+  @@map("new_invoice_items")
+}
+
+model NewPayment {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  amount      Float
+  mode        PaymentMode
+  reference   String?
+  gateway     String?
+  reconStatus String      @default("PENDING")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  invoice     NewInvoice  @relation(fields: [invoiceId], references: [id])
+
+  @@map("new_payments")
+}
+
+model Payment {
+  id          String      @id @default(cuid())
+  invoiceId   String
+  amount      Float
+  mode        PaymentMode
+  reference   String?
+  gateway     String?
+  reconStatus String      @default("PENDING")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
+
+  @@map("payments")
+}
+
+model DeviceLog {
+  id          String   @id @default(cuid())
+  patientId   String
+  visitId     String
+  deviceModel String
+  serialNo    String
+  parameters  String
+  operatorId  String
+  photoRefs   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  operator    User     @relation(fields: [operatorId], references: [id])
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  visit       Visit    @relation(fields: [visitId], references: [id])
+
+  @@map("device_logs")
+}
+
+model LabOrder {
+  id         String   @id @default(cuid())
+  patientId  String
+  visitId    String
+  tests      String
+  partner    String
+  status     String   @default("ORDERED")
+  resultsRef String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  patient    Patient  @relation(fields: [patientId], references: [id])
+  visit      Visit    @relation(fields: [visitId], references: [id])
+
+  @@map("lab_orders")
+}
+
+model Consent {
+  id          String      @id @default(cuid())
+  patientId   String
+  visitId     String?
+  consentType ConsentType
+  language    Language    @default(EN)
+  text        String
+  signedAt    DateTime?
+  signer      String?
+  method      String?
+  pdfUrl      String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  patient     Patient     @relation(fields: [patientId], references: [id])
+  visit       Visit?      @relation(fields: [visitId], references: [id])
+
+  @@map("consents")
+}
+
+model Referral {
+  id               String   @id @default(cuid())
+  patientId        String
+  source           String
+  commissionScheme String?
+  payoutStatus     String   @default("PENDING")
+  amount           Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  patient          Patient  @relation(fields: [patientId], references: [id])
+
+  @@map("referrals")
+}
+
+model InventoryItem {
+  id                   String             @id @default(cuid())
+  branchId             String
+  name                 String
+  description          String?
+  genericName          String?
+  brandName            String?
+  type                 InventoryItemType
+  category             String?
+  subCategory          String?
+  manufacturer         String?
+  supplier             String?
+  barcode              String?            @unique
+  sku                  String?            @unique
+  costPrice            Float
+  sellingPrice         Float
+  mrp                  Float?
+  unit                 UnitType
+  packSize             Int?
+  packUnit             String?
+  currentStock         Int                @default(0)
+  minStockLevel        Int?
+  maxStockLevel        Int?
+  reorderLevel         Int?
+  reorderQuantity      Int?
+  expiryDate           DateTime?
+  batchNumber          String?
+  hsnCode              String?
+  gstRate              Float?
+  requiresPrescription Boolean            @default(false)
+  isControlled         Boolean            @default(false)
+  storageLocation      String?
+  storageConditions    String?
+  tags                 String?
+  status               InventoryStatus    @default(ACTIVE)
+  stockStatus          StockStatus        @default(OUT_OF_STOCK)
+  metadata             String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  inventoryAudits      InventoryAudit[]
+  branch               Branch             @relation(fields: [branchId], references: [id])
+  reorderRules         ReorderRule[]
+  stockAdjustments     StockAdjustment[]
+  stockMovements       StockMovement[]
+  transactions         StockTransaction[]
+
+  @@map("inventory_items")
+}
+
+model StockTransaction {
+  id          String          @id @default(cuid())
+  branchId    String
+  itemId      String
+  userId      String
+  type        TransactionType
+  quantity    Int
+  unitPrice   Float
+  totalAmount Float
+  reference   String?
+  notes       String?
+  batchNumber String?
+  expiryDate  DateTime?
+  supplier    String?
+  customer    String?
+  reason      String?
+  location    String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  item        InventoryItem   @relation(fields: [itemId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
+
+  @@map("stock_transactions")
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  branchId             String
+  userId               String
+  supplier             String
+  orderDate            DateTime            @default(now())
+  expectedDeliveryDate DateTime?
+  status               PurchaseOrderStatus @default(DRAFT)
+  items                String
+  totalAmount          Float
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  branch               Branch              @relation(fields: [branchId], references: [id])
+  user                 User                @relation(fields: [userId], references: [id])
+
+  @@map("purchase_orders")
+}
+
+model Supplier {
+  id            String   @id @default(cuid())
+  branchId      String
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  state         String?
+  pincode       String?
+  gstNumber     String?
+  panNumber     String?
+  bankDetails   String?
+  paymentTerms  String?
+  notes         String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  branch        Branch   @relation(fields: [branchId], references: [id])
+
+  @@map("suppliers")
+}
+
+model StockAdjustment {
+  id        String              @id @default(cuid())
+  branchId  String
+  itemId    String
+  userId    String
+  type      StockAdjustmentType
+  quantity  Int
+  reason    String?
+  notes     String?
+  metadata  String?
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  branch    Branch              @relation(fields: [branchId], references: [id])
+  item      InventoryItem       @relation(fields: [itemId], references: [id])
+  user      User                @relation(fields: [userId], references: [id])
+
+  @@map("stock_adjustments")
+}
+
+model StockMovement {
+  id           String            @id @default(cuid())
+  branchId     String
+  itemId       String
+  userId       String
+  type         StockMovementType
+  quantity     Int
+  fromLocation String?
+  toLocation   String?
+  reason       String?
+  notes        String?
+  metadata     String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  branch       Branch            @relation(fields: [branchId], references: [id])
+  item         InventoryItem     @relation(fields: [itemId], references: [id])
+  user         User              @relation(fields: [userId], references: [id])
+
+  @@map("stock_movements")
+}
+
+model ReorderRule {
+  id              String        @id @default(cuid())
+  branchId        String
+  itemId          String
+  userId          String
+  reorderLevel    Int
+  reorderQuantity Int
+  isActive        Boolean       @default(true)
+  metadata        String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  branch          Branch        @relation(fields: [branchId], references: [id])
+  item            InventoryItem @relation(fields: [itemId], references: [id])
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@map("reorder_rules")
+}
+
+model InventoryAudit {
+  id            String        @id @default(cuid())
+  branchId      String
+  itemId        String
+  auditorId     String
+  auditDate     DateTime      @default(now())
+  physicalStock Int
+  systemStock   Int
+  variance      Int
+  notes         String?
+  status        String        @default("PENDING")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  auditor       User          @relation(fields: [auditorId], references: [id])
+  item          InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("inventory_audits")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String
+  oldValues String?
+  newValues String?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+model Drug {
+  id           String   @id @default(cuid())
+  name         String
+  genericName  String?
+  strength     String?
+  form         String?
+  route        String?
+  manufacturer String?
+  composition  String?
+  brandNames   String?
+  aliases      String?
+  hsnCode      String?
+  rxRequired   Boolean  @default(true)
+  isGeneric    Boolean  @default(false)
+  metadata     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([name, strength, form])
+  @@index([name])
+  @@index([genericName])
 }
 
 enum UserRole {
@@ -66,7 +723,6 @@ enum Language {
   HI
 }
 
-// Inventory Management Enums
 enum InventoryItemType {
   MEDICINE
   EQUIPMENT
@@ -133,698 +789,4 @@ enum PurchaseOrderStatus {
   ORDERED
   RECEIVED
   CANCELLED
-}
-
-// Core Entities
-model User {
-  id                String     @id @default(cuid())
-  firstName         String
-  lastName          String
-  email             String     @unique
-  password          String
-  phone             String?
-  role              UserRole
-  status            UserStatus @default(ACTIVE)
-  branchId          String
-  employeeId        String?
-  designation       String?
-  department        String?
-  dateOfJoining    DateTime?
-  address           String?
-  city              String?
-  state             String?
-  pincode           String?
-  emergencyContact  String?
-  emergencyPhone    String?
-  permissions       String?    // JSON array
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  statusReason      String?
-  isActive          Boolean    @default(true)
-  metadata          String?    // JSON object
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-
-  branch            Branch             @relation(fields: [branchId], references: [id])
-  appointments      Appointment[]
-  visits            Visit[]
-  deviceLogs        DeviceLog[]
-  stockTransactions StockTransaction[]
-  purchaseOrders    PurchaseOrder[]
-  stockAdjustments  StockAdjustment[]
-  stockMovements    StockMovement[]
-  reorderRules      ReorderRule[]
-  inventoryAudits   InventoryAudit[]
-  patientProfile    Patient?           @relation("PatientPortalUser")
-
-  @@map("users")
-}
-
-model Branch {
-  id             String  @id @default(cuid())
-  name           String
-  description    String?
-  address        String
-  city            String?
-  state           String?
-  pincode         String?
-  phone           String?
-  email           String?
-  website         String?
-  gstNumber       String?
-  licenseNumber   String?
-  isActive        Boolean @default(true)
-  metadata        String? // JSON object
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  users           User[]
-  patients        Patient[]
-  appointments    Appointment[]
-  services        Service[]
-  rooms           Room[]
-  inventoryItems  InventoryItem[]
-  suppliers       Supplier[]
-  purchaseOrders  PurchaseOrder[]
-  stockAdjustments StockAdjustment[]
-  stockMovements  StockMovement[]
-  reorderRules    ReorderRule[]
-  newInvoices     NewInvoice[]
-
-  @@map("branches")
-}
-
-model Permission {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-  resource    String
-  action      String
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("permissions")
-}
-
-model Role {
-  id          String  @id @default(cuid())
-  name        String  @unique
-  description String?
-  permissions String? // JSON array
-  isActive    Boolean @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@map("roles")
-}
-
-model Room {
-  id          String   @id @default(cuid())
-  name        String   // e.g., "Room 1", "Consultation Room A"
-  type        String   // "Consultation", "Procedure", "Waiting"
-  capacity    Int      @default(1)
-  isActive    Boolean  @default(true)
-  branchId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  branch       Branch        @relation(fields: [branchId], references: [id])
-  appointments Appointment[]
-
-  @@map("rooms")
-}
-
-model Patient {
-  id                 String   @id @default(cuid())
-  abhaId             String?  @unique
-  name               String
-  gender             String
-  dob                DateTime
-  phone              String
-  email              String?
-  address            String?
-  city               String?
-  state              String?
-  pincode            String?
-  emergencyContact   String?
-  allergies          String?
-  photoUrl           String?
-  referralSource     String?  // Instagram/Twitter/Google/Doctor/Friends & Family
-  // New demographics/contact fields
-  secondaryPhone     String?
-  maritalStatus      String?
-  bloodGroup         String?
-  occupation         String?
-  guardianName       String?
-  medicalHistory     String?  // JSON object: comorbidities, surgeries, family history, medications, habits
-  // Portal user link
-  portalUserId       String?  @unique
-  branchId           String
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  branch             Branch        @relation(fields: [branchId], references: [id])
-  appointments       Appointment[]
-  visits             Visit[]
-  consents           Consent[]
-  invoices           Invoice[]
-  newInvoices        NewInvoice[]
-  deviceLogs         DeviceLog[]
-  labOrders          LabOrder[]
-  referrals          Referral[]
-  portalUser         User?         @relation("PatientPortalUser", fields: [portalUserId], references: [id])
-
-  @@map("patients")
-}
-
-model Appointment {
-  id          String            @id @default(cuid())
-  patientId   String
-  doctorId    String
-  date        DateTime
-  slot        String            // e.g., "10:00-10:30"
-  status      AppointmentStatus @default(SCHEDULED)
-  visitType   VisitType         @default(OPD)
-  notes       String?
-  source      String?           // Lead/Walk-in/WhatsApp
-  branchId    String
-  roomId      String?
-  tokenNumber Int?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  patient     Patient          @relation(fields: [patientId], references: [id])
-  doctor      User             @relation(fields: [doctorId], references: [id])
-  branch      Branch           @relation(fields: [branchId], references: [id])
-  room        Room?            @relation(fields: [roomId], references: [id])
-  visit       Visit?
-  newInvoices NewInvoice[]
-
-  @@map("appointments")
-}
-
-model Visit {
-  id             String   @id @default(cuid())
-  patientId      String
-  doctorId       String
-  appointmentId  String?  @unique
-  vitals         String?  // JSON - BP, HR, Temp, etc.
-  complaints     String   // JSON - Array of complaints
-  history        String?  // JSON - Medical history
-  exam           String?  // JSON - Physical examination
-  diagnosis      String?  // JSON - ICD10 codes
-  plan           String?  // JSON - Treatment plan
-  followUp       DateTime?
-  attachments    String?  // JSON - File references
-  scribeJson     String?  // JSON - AI scribe data
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  patient        Patient         @relation(fields: [patientId], references: [id])
-  doctor         User            @relation(fields: [doctorId], references: [id])
-  appointment    Appointment?    @relation(fields: [appointmentId], references: [id])
-  prescription   Prescription?
-  deviceLogs     DeviceLog[]
-  labOrders      LabOrder[]
-  consents       Consent[]
-  newInvoices    NewInvoice[]
-
-  @@map("visits")
-}
-
-model Prescription {
-  id             String   @id @default(cuid())
-  visitId        String   @unique
-  language       Language @default(EN)
-  items          String   // JSON - Array of medication items
-  instructions   String?  // JSON - Additional instructions
-  genericFirst   Boolean  @default(true)
-  pharmacistNotes String?
-  qrcode         String?
-  signature      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  visit          Visit    @relation(fields: [visitId], references: [id])
-
-  @@map("prescriptions")
-}
-
-model Service {
-  id          String  @id @default(cuid())
-  name        String
-  type        String  // Consult/Procedure/Package/Aesthetic
-  taxable     Boolean @default(false)
-  gstRate     Float   @default(0)
-  priceMrp    Float
-  priceNet    Float
-  deviceId    String?
-  branchId    String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  branch      Branch     @relation(fields: [branchId], references: [id])
-  invoiceItems InvoiceItem[]
-  newInvoiceItems NewInvoiceItem[]
-
-  @@map("services")
-}
-
-model Invoice {
-  id           String      @id @default(cuid())
-  patientId    String
-  visitId      String?
-  items        InvoiceItem[]
-  mode         PaymentMode @default(CASH)
-  gstBreakup   String?     // JSON - GST calculation details
-  exemptBreakup String?    // JSON - Exempt service details
-  total        Float
-  received     Float       @default(0)
-  balance      Float
-  invoiceNo    String      @unique
-  gstin        String?
-  hsn          String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  patient      Patient     @relation(fields: [patientId], references: [id])
-  payments     Payment[]
-
-  @@map("invoices")
-}
-
-model InvoiceItem {
-  id        String  @id @default(cuid())
-  invoiceId String
-  serviceId String
-  qty       Int     @default(1)
-  unitPrice Float
-  gstRate   Float   @default(0)
-  total     Float
-
-  invoice   Invoice @relation(fields: [invoiceId], references: [id])
-  service   Service @relation(fields: [serviceId], references: [id])
-
-  @@map("invoice_items")
-}
-
-// New enhanced invoice models with all required fields
-model NewInvoice {
-  id              String      @id @default(cuid())
-  invoiceNo       String      @unique
-  patientId       String
-  visitId         String?
-  appointmentId   String?
-  branchId        String
-  total           Float
-  balance         Float
-  received        Float       @default(0)
-  discount        Float       @default(0)
-  discountReason  String?
-  notes           String?
-  dueDate         DateTime?
-  metadata        String?     // JSON string
-  mode            String?
-  gstin           String?
-  hsn             String?
-  status          String      @default("DRAFT")
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  patient         Patient     @relation(fields: [patientId], references: [id])
-  visit           Visit?      @relation(fields: [visitId], references: [id])
-  appointment     Appointment? @relation(fields: [appointmentId], references: [id])
-  branch          Branch      @relation(fields: [branchId], references: [id])
-  items           NewInvoiceItem[]
-  payments        NewPayment[]
-
-  @@map("new_invoices")
-}
-
-model NewInvoiceItem {
-  id          String      @id @default(cuid())
-  invoiceId   String
-  serviceId   String
-  name        String
-  description String?
-  qty         Int         @default(1)
-  unitPrice   Float
-  discount    Float       @default(0)
-  gstRate     Float       @default(0)
-  total       Float
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  invoice     NewInvoice  @relation(fields: [invoiceId], references: [id])
-  service     Service     @relation(fields: [serviceId], references: [id])
-
-  @@map("new_invoice_items")
-}
-
-model NewPayment {
-  id          String      @id @default(cuid())
-  invoiceId   String
-  amount      Float
-  mode        PaymentMode
-  reference   String?     // UPI RRn, transaction ID
-  gateway     String?     // Razorpay/Cashfree/PhonePe
-  reconStatus String      @default("PENDING")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  invoice     NewInvoice  @relation(fields: [invoiceId], references: [id])
-
-  @@map("new_payments")
-}
-
-model Payment {
-  id          String      @id @default(cuid())
-  invoiceId   String
-  amount      Float
-  mode        PaymentMode
-  reference   String?     // UPI RRn, transaction ID
-  gateway     String?     // Razorpay/Cashfree/PhonePe
-  reconStatus String      @default("PENDING")
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
-
-  invoice     Invoice     @relation(fields: [invoiceId], references: [id])
-
-  @@map("payments")
-}
-
-model DeviceLog {
-  id            String   @id @default(cuid())
-  patientId     String
-  visitId       String
-  deviceModel   String
-  serialNo      String
-  parameters    String   // JSON - fluence, spot, passes, pulsewidth
-  operatorId    String
-  photoRefs     String?  // JSON - Before/after image references
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  patient       Patient  @relation(fields: [patientId], references: [id])
-  visit         Visit    @relation(fields: [visitId], references: [id])
-  operator      User     @relation(fields: [operatorId], references: [id])
-
-  @@map("device_logs")
-}
-
-model LabOrder {
-  id          String   @id @default(cuid())
-  patientId   String
-  visitId     String
-  tests       String   // JSON - Array of test names/codes
-  partner     String   // Vijaya/Apollo/Lucid
-  status      String   @default("ORDERED")
-  resultsRef  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  patient     Patient  @relation(fields: [patientId], references: [id])
-  visit       Visit    @relation(fields: [visitId], references: [id])
-
-  @@map("lab_orders")
-}
-
-model Consent {
-  id           String      @id @default(cuid())
-  patientId    String
-  visitId      String?
-  consentType  ConsentType
-  language     Language    @default(EN)
-  text         String
-  signedAt     DateTime?
-  signer       String?     // Patient name or authorized person
-  method       String?     // OTP/QR
-  pdfUrl       String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  patient      Patient     @relation(fields: [patientId], references: [id])
-  visit        Visit?      @relation(fields: [visitId], references: [id])
-
-  @@map("consents")
-}
-
-model Referral {
-  id             String   @id @default(cuid())
-  patientId      String
-  source         String   // Doctor/Influencer/Partner
-  commissionScheme String?
-  payoutStatus   String   @default("PENDING")
-  amount         Float?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  patient        Patient  @relation(fields: [patientId], references: [id])
-
-  @@map("referrals")
-}
-
-// Inventory Management Models
-model InventoryItem {
-  id                  String            @id @default(cuid())
-  branchId            String
-  name                String
-  description         String?
-  genericName         String?
-  brandName           String?
-  type                InventoryItemType
-  category            String?
-  subCategory         String?
-  manufacturer        String?
-  supplier            String?
-  barcode             String?           @unique
-  sku                 String?           @unique
-  costPrice           Float
-  sellingPrice        Float
-  mrp                 Float?
-  unit                UnitType
-  packSize            Int?
-  packUnit            String?
-  currentStock        Int               @default(0)
-  minStockLevel       Int?
-  maxStockLevel       Int?
-  reorderLevel        Int?
-  reorderQuantity     Int?
-  expiryDate          DateTime?
-  batchNumber         String?
-  hsnCode             String?
-  gstRate             Float?
-  requiresPrescription Boolean          @default(false)
-  isControlled        Boolean           @default(false)
-  storageLocation     String?
-  storageConditions   String?
-  tags                String?           // JSON array
-  status              InventoryStatus   @default(ACTIVE)
-  stockStatus         StockStatus       @default(OUT_OF_STOCK)
-  metadata            String?           // JSON object
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-
-  branch              Branch            @relation(fields: [branchId], references: [id])
-  transactions        StockTransaction[]
-  stockAdjustments    StockAdjustment[]
-  stockMovements      StockMovement[]
-  reorderRules        ReorderRule[]
-  inventoryAudits     InventoryAudit[]
-
-
-  @@map("inventory_items")
-}
-
-model StockTransaction {
-  id          String          @id @default(cuid())
-  branchId    String
-  itemId      String
-  userId      String
-  type        TransactionType
-  quantity    Int
-  unitPrice   Float
-  totalAmount Float
-  reference   String?
-  notes       String?
-  batchNumber String?
-  expiryDate  DateTime?
-  supplier    String?
-  customer    String?
-  reason      String?
-  location    String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  item        InventoryItem   @relation(fields: [itemId], references: [id])
-  user        User            @relation(fields: [userId], references: [id])
-
-  @@map("stock_transactions")
-}
-
-model PurchaseOrder {
-  id                    String   @id @default(cuid())
-  branchId              String
-  userId                String
-  supplier              String
-  orderDate             DateTime @default(now())
-  expectedDeliveryDate  DateTime?
-  status                PurchaseOrderStatus @default(DRAFT)
-  items                 String   // JSON array
-  totalAmount           Float
-  notes                 String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  branch                Branch   @relation(fields: [branchId], references: [id])
-  user                  User     @relation(fields: [userId], references: [id])
-
-  @@map("purchase_orders")
-}
-
-model Supplier {
-  id            String   @id @default(cuid())
-  branchId      String
-  name          String
-  contactPerson String?
-  email         String?
-  phone         String?
-  address       String?
-  city          String?
-  state         String?
-  pincode       String?
-  gstNumber     String?
-  panNumber     String?
-  bankDetails   String?
-  paymentTerms  String?
-  notes         String?
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  branch        Branch   @relation(fields: [branchId], references: [id])
-
-  @@map("suppliers")
-}
-
-model StockAdjustment {
-  id              String   @id @default(cuid())
-  branchId        String
-  itemId          String
-  userId          String
-  type            StockAdjustmentType
-  quantity        Int
-  reason          String?
-  notes           String?
-  metadata        String?   // JSON object
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  branch          Branch   @relation(fields: [branchId], references: [id])
-  item            InventoryItem @relation(fields: [itemId], references: [id])
-  user            User     @relation(fields: [userId], references: [id])
-
-  @@map("stock_adjustments")
-}
-
-model StockMovement {
-  id              String   @id @default(cuid())
-  branchId        String
-  itemId          String
-  userId          String
-  type            StockMovementType
-  quantity        Int
-  fromLocation    String?
-  toLocation      String?
-  reason          String?
-  notes           String?
-  metadata        String?   // JSON object
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  branch          Branch   @relation(fields: [branchId], references: [id])
-  item            InventoryItem @relation(fields: [itemId], references: [id])
-  user            User     @relation(fields: [userId], references: [id])
-
-  @@map("stock_movements")
-}
-
-model ReorderRule {
-  id              String   @id @default(cuid())
-  branchId        String
-  itemId          String
-  userId          String
-  reorderLevel    Int
-  reorderQuantity Int
-  isActive        Boolean  @default(true)
-  metadata        String?   // JSON object
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  branch          Branch   @relation(fields: [branchId], references: [id])
-  item            InventoryItem @relation(fields: [itemId], references: [id])
-  user            User     @relation(fields: [userId], references: [id])
-
-  @@map("reorder_rules")
-}
-
-model InventoryAudit {
-  id              String   @id @default(cuid())
-  branchId        String
-  itemId          String
-  auditorId       String
-  auditDate       DateTime @default(now())
-  physicalStock   Int
-  systemStock     Int
-  variance        Int
-  notes           String?
-  status          String   @default("PENDING")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  item            InventoryItem @relation(fields: [itemId], references: [id])
-  auditor         User          @relation(fields: [auditorId], references: [id])
-
-  @@map("inventory_audits")
-}
-
-// Audit & Compliance
-model AuditLog {
-  id        String   @id @default(cuid())
-  userId    String?
-  action    String   // CREATE/READ/UPDATE/DELETE
-  entity    String   // Table name
-  entityId  String
-  oldValues String?  // JSON
-  newValues String?  // JSON
-  ipAddress String?
-  userAgent String?
-  timestamp DateTime @default(now())
-
-  @@map("audit_logs")
-}
-
-// India-focused drug database for prescription autocomplete
-model Drug {
-  id             String   @id @default(cuid())
-  name           String   // Brand or trade name
-  genericName    String?  // INN/Generic name
-  strength       String?  // e.g., 500 mg
-  form           String?  // e.g., Tablet, Capsule, Syrup
-  route          String?  // Oral, Topical, Injection
-  manufacturer   String?
-  composition    String?  // Full composition string
-  brandNames     String?  // JSON array of known brand names
-  aliases        String?  // JSON array of synonyms
-  hsnCode        String?
-  rxRequired     Boolean  @default(true)
-  isGeneric      Boolean  @default(false)
-  metadata       String?  // JSON
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-
-  @@unique([name, strength, form])
-  @@index([name])
-  @@index([genericName])
 }

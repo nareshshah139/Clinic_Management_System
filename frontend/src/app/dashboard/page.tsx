@@ -13,6 +13,8 @@ import {
   AlertTriangle,
   Clock,
   DollarSign,
+  Database,
+  Download,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
@@ -22,15 +24,21 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         
-        // Fetch system statistics
-        const stats = await apiClient.getSystemStatistics();
-        setStatistics(stats);
+        // Fetch system statistics and current user
+        const [stats, user] = await Promise.all([
+          apiClient.getSystemStatistics(),
+          apiClient.get('/auth/me')
+        ]);
+        setStatistics(stats as SystemStatistics);
+        setCurrentUser(user as any);
 
         // For now, provide mock data for alerts and appointments since these endpoints aren't available in minimal mode
         setAlerts([
@@ -95,6 +103,24 @@ export default function DashboardPage() {
 
     fetchDashboardData();
   }, []);
+
+  const handleBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const result = await apiClient.createDatabaseBackup();
+      
+      // Show success message
+      const backupInfo = (result as any).backup;
+      alert(`✅ Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`);
+      
+    } catch (error: any) {
+      console.error('Backup failed:', error);
+      const message = error.message || 'Backup creation failed';
+      alert(`❌ Backup Failed\n\n${message}`);
+    } finally {
+      setBackupLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -171,6 +197,51 @@ export default function DashboardPage() {
           </Card>
         ))}
       </div>
+
+      {/* Admin Controls */}
+      {currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Database className="h-5 w-5 text-purple-500 mr-2" />
+              Admin Controls
+            </CardTitle>
+            <CardDescription>
+              Administrative tools and system management
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <h4 className="font-medium text-gray-900">Database Backup</h4>
+                  <p className="text-sm text-gray-600">Create a complete backup of the database</p>
+                </div>
+                <Button 
+                  onClick={handleBackup} 
+                  disabled={backupLoading}
+                  className="flex items-center"
+                >
+                  {backupLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Creating...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Create Backup
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="text-xs text-gray-500">
+                ⚠️ Backups are stored locally on the server and contain sensitive data.
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* System Alerts */}

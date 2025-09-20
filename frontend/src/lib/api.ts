@@ -337,6 +337,11 @@ export class ApiClient {
   async oneMgCreateOrder(payload: any) {
     return this.post('/pharmacy/1mg/orders', payload);
   }
+
+  // Admin operations
+  async createDatabaseBackup() {
+    return this.post('/auth/backup', {});
+  }
 }
 
 export const apiClient = new ApiClient();
