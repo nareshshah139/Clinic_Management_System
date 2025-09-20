@@ -1003,3 +1003,35 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Added vitals auto-propagation from Visits to Prescription Builder with preview fallback and BMI computation
 - Visit Photos: Full-image preview (object-contain) and native iPhone camera capture (capture=environment) with dedicated buttons
 - Patients: Added referral source capture (Instagram/Twitter/Google/Doctor/Friends & Family/Other) in create/edit and persisted in DB
+
+### 1.3.1 Sample Data Utilities
+- Implemented: Backdated sample invoice generator for dermatology offers/packages that reuses existing patients only (no new patients created). Exposed at `POST /billing/invoices/generate-samples` and wired to frontend Billing page action to quickly populate demo data.
+
+### September 2025: Enhanced Billing System with Professional Invoicing
+**Achievement:** Complete billing system overhaul with professional invoicing capabilities and enhanced database schema.
+**Impact:**
+- Professional invoice generation with comprehensive dermatology packages and services
+- Advanced invoice builder with real-time calculations and item-level customization
+- Print-optimized invoice templates with clinic branding and GST compliance
+- Enhanced database schema with new invoice models supporting complete billing workflows
+- Sample data generation for testing and demonstration purposes
+
+**Technical Highlights:**
+- **Database Schema Enhancement**: Added `NewInvoice`, `NewInvoiceItem`, and `NewPayment` models with complete field support (name, description, discount, received, balance)
+- **Professional Invoice Builder**: Dual-tab interface (Simple Invoice vs Invoice Builder) with real-time calculations, item-level discounts, GST management
+- **Dermatology-Focused Packages**: 4 comprehensive treatment packages (Acne Complete ₹8K, Laser Hair Removal ₹12K, Anti-Aging Premium ₹15K, Pigmentation ₹10K) and 24 individual services across 8 categories
+- **Print System**: Professional invoice template with clinic header, gradient branding, GSTIN compliance, itemized breakdowns, and print-optimized CSS
+- **Enhanced Error Handling**: Comprehensive logging and debugging throughout billing service for reliable invoice creation
+- **GST Flexibility**: Editable GST rates per invoice (simple form) or per item (invoice builder) with 0-30% range support
+- **Sample Data Generation**: Backend endpoint for creating realistic backdated invoices with various payment statuses for testing
+
+**Key Features:**
+- Professional invoice templates with clinic branding and legal compliance
+- Real-time calculation engine for subtotals, discounts, GST, and totals
+- Package auto-expansion into constituent services for transparent billing
+- Print preview with A4 optimization and letterhead support
+- Comprehensive error handling and validation
+- Sample invoice generation for testing and demonstrations
+- Editable GST rates with per-item or per-invoice control
+
+*Last updated: September 2025 - Professional billing system with enhanced invoicing, print capabilities, and flexible GST management.*

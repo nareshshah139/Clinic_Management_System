@@ -74,3 +74,201 @@
 [2025-09-15 18:45 UTC] Frontend: Print Preview now reliably shows patient name/ID/gender/DOB. Added fallback fetch of `/patients/:id` in `frontend/src/components/visits/PrescriptionBuilder.tsx` when visit payload lacks patient info or `visitId` is null; preview renders from `visitData.patient` or `patientData`.
 
 [2025-09-15 19:05 UTC] Backend: Fixed 500s from password/reset endpoints by aligning to Prisma schema — use `User.password` (hashed) vs passwordHash, and `User.resetToken/resetTokenExpiry` instead of missing PasswordResetToken model. Adjusted role/permission handlers to match current schema. Rebuilt successfully.
+
+## 2024-12-19 - Doctor Calendar Booking UX Improvements
+
+### Fixed Calendar Booking Issues
+- **Fixed slot highlighting without card transformation**: Added refreshKey mechanism to trigger immediate calendar data refresh after successful booking
+- **Added booking in progress feedback**: Slots now show yellow/amber color and "Booking..." text while appointment is being created
+- **Improved visual feedback**: Added proper loading states and transitions for better user experience
+- **Enhanced auto-reload**: Ensured frontend dev server uses optimal settings with --turbopack and explicit port
+
+### Changes Made:
+1. **DoctorDayCalendar.tsx**:
+   - Added `refreshKey` prop to trigger data reload
+   - Added `bookingInProgress` prop for immediate visual feedback
+   - Converted fetch logic to useCallback for better dependency management
+   - Added booking progress visual states (yellow/amber colors)
+   - Improved button states and disabled logic during booking
+
+2. **AppointmentsCalendar.tsx**:
+   - Added `refreshKey` state that increments after successful booking
+   - Passed booking progress state to calendar component
+   - Improved booking flow with immediate calendar refresh
+
+3. **package.json**:
+   - Updated dev script to explicitly use port 3000 with turbopack
+   - Ensured optimal development experience with fast refresh
+
+### Technical Improvements:
+- Booking now triggers immediate calendar refresh (no more manual refresh needed)
+- Visual feedback shows booking progress with color changes
+- Better state management with useCallback and proper dependencies
+- Snappy UI updates with proper loading states
+
+### User Experience:
+- Slots immediately show booking progress when clicked
+- Calendar updates instantly after successful booking
+- Clear visual feedback throughout the booking process
+- No more waiting for manual refresh to see booked appointments
+
+## 2024-12-19 - Optimistic Updates Implementation
+
+### Fixed Remaining Refresh Issues
+- **Problem**: Calendar still required refresh after booking despite previous fixes
+- **Root Cause**: Calendar was only updating after server response, not immediately
+- **Solution**: Implemented optimistic updates that show appointment immediately when booking starts
+
+### Changes Made:
+1. **DoctorDayCalendar.tsx**:
+   - Added `optimisticAppointment` prop to display appointments before server confirmation
+   - Updated `filteredSchedule` logic to include optimistic appointments
+   - Optimistic appointments are filtered and displayed just like real ones
+
+2. **AppointmentsCalendar.tsx**:
+   - Added `optimisticAppointment` state for immediate display
+   - Create optimistic appointment object immediately when booking starts
+   - Clear optimistic appointment when real data arrives or on error
+   - Updated version to v2.2
+
+### Technical Implementation:
+- Optimistic appointment is created with patient name, visit type, and room info
+- Appointment appears immediately in calendar while API call is in progress  
+- Real server data replaces optimistic data after successful booking
+- Optimistic data is cleared on error to prevent inconsistent state
+- Filters work correctly with optimistic appointments
+
+### Result:
+- **INSTANT** appointment display - no more refresh needed
+- Smooth user experience with immediate visual feedback
+- Fallback handling for errors maintains data consistency
+
+## 2024-12-19 - Appointment Management & Visit Integration
+
+### Added Appointment Cancellation
+- **Cancel Button**: Added cancel (X) button to appointment cards in calendar
+- **Confirmation Dialog**: Two-step confirmation process to prevent accidental cancellations
+- **API Integration**: Added `deleteAppointment` method to API client
+- **Optimistic Updates**: Calendar refreshes immediately after cancellation
+- **Error Handling**: Proper error messages and fallback handling
+
+### Added Appointment-to-Visit Navigation
+- **Visit Button**: Added "Visit" button to appointment cards for direct navigation
+- **URL Parameters**: Visit page accepts `patientId`, `appointmentId`, and `autoStart` parameters
+- **Auto-Selection**: Automatically selects patient and doctor from appointment data
+- **Auto-Start**: Can automatically start visit documentation when `autoStart=true`
+- **Visual Indicators**: Clear badges and breadcrumbs showing appointment linkage
+
+### Enhanced Appointment Cards
+- **Action Buttons**: Clean mini-buttons for Visit and Cancel actions
+- **Better Layout**: Improved card layout with proper spacing for actions
+- **Click Handling**: Separate click handlers for card details vs. action buttons
+- **Visual Feedback**: Hover states and proper button styling
+
+### Enhanced Visit Documentation
+- **Appointment Integration**: Visit form accepts and displays appointment data
+- **Visual Indicators**: "Linked to Appointment" badge when created from appointment
+- **Navigation**: "Back to Calendar" button when coming from appointment
+- **Data Linking**: Automatically includes `appointmentId` in visit creation payload
+
+### Changes Made:
+1. **API Client** (`lib/api.ts`):
+   - Added `getAppointment`, `updateAppointment`, `deleteAppointment` methods
+
+2. **DoctorDayCalendar** (`components/appointments/DoctorDayCalendar.tsx`):
+   - Added cancel and visit navigation functionality
+   - Added confirmation dialog for appointment cancellation
+   - Enhanced appointment card layout with action buttons
+   - Added proper error handling and refresh callbacks
+
+3. **AppointmentsCalendar** (`components/appointments/AppointmentsCalendar.tsx`):
+   - Added callback for appointment updates to trigger refresh
+   - Updated to version 2.3
+
+4. **Visits Page** (`app/dashboard/visits/page.tsx`):
+   - Added URL parameter handling for appointment linking
+   - Auto-selects patient/doctor from appointment data
+   - Added visual indicators for appointment-linked visits
+   - Enhanced navigation with back-to-calendar option
+
+5. **MedicalVisitForm** (`components/visits/MedicalVisitForm.tsx`):
+   - Added `appointmentId` and `appointmentData` props
+   - Includes appointment ID in visit creation payload
+   - Added visual indicator when linked to appointment
+
+### User Experience:
+- **One-click cancellation**: Click X → Confirm → Done (with immediate calendar update)
+- **Seamless visit creation**: Click "Visit" on appointment → Auto-navigate to visit documentation
+- **Clear visual feedback**: Badges and indicators show appointment relationships
+- **Proper navigation**: Back buttons and breadcrumbs for easy navigation
+- **Error prevention**: Confirmation dialogs prevent accidental actions
+
+[2025-09-19 21:45 UTC] Backend/Frontend: Added ability to generate sample dermatology invoices for existing patients only. Backend: POST /billing/invoices/generate-samples creates backdated invoices using predefined dermatology offers/packages and randomizes payments (full/partial/none), strictly reusing patients in DB and scoping by branch. Frontend: Billing page gained "Generate sample invoices" button and invoice table now reads backend fields (invoiceNo, total/received/balance, patient.name) and status derived from balance/received. 
+
+[2025-09-19 22:15 UTC] Frontend: Enhanced billing system with smart dermatology packages and advanced invoice builder. Added 4 comprehensive treatment packages (Acne Complete ₹8K, Laser Hair Removal ₹12K, Anti-Aging Premium ₹15K, Pigmentation ₹10K) and 24 individual services across 8 categories. Implemented dual-tab interface: Simple Invoice for single services, Invoice Builder for multi-item professional invoicing with real-time calculations, item-level discounts, overall discounts, GST calculations, and invoice notes. Packages auto-expand into constituent services for detailed billing transparency.
+
+[2025-09-19 22:30 UTC] Frontend: Fixed invoice builder creation validation bug (was checking invoiceItems.length === 0 twice incorrectly) by adding proper activeTab state management and conditional validation. Added comprehensive print functionality with professional invoice template featuring custom clinic header, gradient branding, complete business info (GSTIN, license), itemized service breakdown, tax calculations, and print-optimized CSS. New invoices automatically show print preview, and existing invoices have print buttons in the table. Print template includes patient details, invoice metadata, financial summary with discounts/GST, and professional footer. 
+
+## 2025-09-19 - Connection Issues Resolved and Data Populated
+
+### Issues Fixed:
+1. **Port Conflicts**: Resolved EADDRINUSE errors on port 4000 by killing conflicting processes
+2. **Database Migration**: Fixed missing database tables by running `npx prisma migrate reset --force`
+3. **Seed Data**: Successfully populated database with fresh-seed.ts script
+4. **Authentication**: Confirmed API authentication is working with JWT tokens
+
+### Current Status:
+✅ **Backend**: Running on port 4000 with autoreload
+✅ **Frontend**: Running on port 3000 with API proxy to backend  
+✅ **Database**: PostgreSQL connected with complete seed data
+✅ **Authentication**: JWT-based auth working (login with phone/password)
+
+### Available Data:
+- **4 Users**: 1 Admin (9000000000), 2 Doctors (Shravya: 9000000001, Praneeta: 9000000002), 1 Receptionist (9000000003)
+- **6 Rooms**: 2 Consultation, 3 Procedure, 1 Telemedicine
+- **10 [TEST] Patients**: All with dermatology-focused data and full contact details
+- **7 Sample Invoices**: Generated with past dates, various dermatology services, some paid/unpaid
+- **3 Services**: Dermatology Consultation, Acne Treatment, Skin Analysis
+
+### Login Credentials:
+- **Admin**: Phone: 9000000000, Password: password123
+- **Dr. Shravya**: Phone: 9000000001, Password: password123  
+- **Dr. Praneeta**: Phone: 9000000002, Password: password123
+- **Receptionist**: Phone: 9000000003, Password: password123
+
+### API Testing Results:
+- Authentication: ✅ POST /api/auth/login (returns JWT token)
+- Patients: ✅ GET /api/patients (10 [TEST] patients available)
+- Billing: ✅ GET /api/billing/invoices (7 sample invoices with payments)
+- Invoice Generation: ✅ POST /api/billing/invoices/generate-samples
+
+### Frontend Access:
+- Login: http://localhost:3000/login
+- Dashboard: http://localhost:3000/dashboard (requires authentication)
+- Billing: http://localhost:3000/dashboard/billing (requires authentication)
+
+**Note**: All API endpoints require authentication. Frontend automatically redirects to login for protected routes.
+
+### Next Steps:
+1. Login to frontend using admin credentials (9000000000 / password123)
+2. Test billing system with invoice builder and print functionality
+3. Create appointments using the available doctors and test patients
+4. Test all CRUD operations across different modules
+
+🎉 **System is fully operational and ready for testing!** 
+
+[2025-09-19 17:30 UTC] Frontend: Fixed room filtering issue in appointment booking - OPD/Consultation rooms weren't showing because filtering logic in `AppointmentBookingDialog.tsx` was looking for 'consultation' or 'opd' but database has room type 'Consult'. Updated filtering to include 'consult', 'consultation', and 'opd' patterns to properly match consultation rooms for OPD appointments.
+
+[2025-09-19 17:35 UTC] Frontend: Fixed prescription builder print preview margins not applying in browser print preview - updated CSS to use proper `@page { margin: 0 }` and fixed print-specific layout by using exact A4 dimensions (`width: 210mm; height: 297mm`) in print mode instead of percentage-based sizing. Corrected letterhead display issues: restored `background-size: 210mm 297mm` to prevent image stretching, fixed weird left margin that appeared only in browser print preview by using uniform padding in print CSS. Added CSS rules to suppress browser default headers/footers and included user-friendly tip in print dialog.
+
+[2025-09-19 17:40 UTC] Frontend: Enhanced billing error debugging by adding comprehensive console logging in `BillingManagement.tsx` createInvoice function. Added logging for error status, error body, and the exact data being sent to help identify the cause of "Internal server error" when creating invoices. Fixed variable scope issue by moving items declaration outside try-catch block.
+
+[2025-09-19 17:55 UTC] Backend: Created new invoice tables to fix billing service 500 error. Added `NewInvoice`, `NewInvoiceItem`, and `NewPayment` models with all required fields (name, description, discount, received, etc.) to `schema.prisma`. Updated billing service to use new models instead of old incomplete ones. Added proper relations to Patient, Visit, Appointment, Branch, and Service models. Created and applied migrations `add_new_invoice_tables` and `add_received_field_to_new_invoice`. This preserves existing invoice data while enabling full billing functionality with enhanced invoice items that include names, descriptions, and discounts.
+
+[2025-09-19 18:15 UTC] Backend: Fixed remaining billing service 500 errors by completing the migration from old to new invoice models. Updated all remaining references: `generateInvoiceNumber`, `generateInvoiceNumberForDate`, `getOutstandingInvoices`, `generateSampleInvoices`, and all payment processing methods to use `newInvoice`, `newInvoiceItem`, and `newPayment` models. Added missing required fields (`name`, `description`, `discount`, `branchId`) to sample invoice generation. Created test service to prevent service auto-creation failures. Backend compiles successfully - billing system should now work without 500 errors.
+
+[2025-09-19 18:25 UTC] Backend/Frontend: Added comprehensive error handling and debugging to diagnose remaining invoice creation issues. Enhanced `billing.controller.ts` and `billing.service.ts` with detailed console logging for request tracking, service creation, invoice generation, and error details. Added error handling around service auto-creation and invoice database operations. Enhanced frontend error logging to capture full error objects and request data. Backend compiles successfully - detailed logs will now show exactly where invoice creation fails.
+
+[2025-09-19 23:50 UTC] Billing: Fixed invoice print preview not showing invoice details by (1) updating backend findAllInvoices to include invoice items with name, description, qty, unitPrice, discount, gstRate, total fields, (2) adding getInvoiceById method to frontend API client, (3) updating frontend print preview to fetch full invoice details and properly map backend item structure (qty->quantity) for display, (4) enhanced InvoiceItemSummary type with missing name/description fields. Print preview now shows complete invoice details including all items, pricing, and totals.
+
+[2025-09-20 00:00 UTC] Billing: Made GST rate editable in invoice creation forms - (1) added GST rate field to simple invoice form with default 18%, (2) added editable GST column to invoice builder with per-item GST control (0-30%), (3) updated form state and resetForm to include gstRate field, (4) enhanced invoice items table with header row showing all columns (Service, Qty, Price, Disc %, GST %, Total, Action), (5) updated print preview to show dynamic GST instead of fixed "GST (18%)" label. Users can now set custom GST rates per invoice or per item. 

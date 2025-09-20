@@ -74,3 +74,33 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
+
+// Billing
+export interface InvoiceItemSummary {
+  id?: string;
+  serviceId?: string;
+  name?: string;
+  description?: string;
+  qty: number;
+  unitPrice: number;
+  discount?: number;
+  gstRate: number;
+  total: number;
+}
+
+export interface InvoicePatientSummary {
+  id: string;
+  name?: string;
+  phone?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNo: string;
+  total: number;
+  received: number;
+  balance: number;
+  createdAt: string;
+  patient?: InvoicePatientSummary;
+  items?: InvoiceItemSummary[];
+}

@@ -45,11 +45,26 @@ export class BillingController {
 
   // Invoice endpoints
   @Post('invoices')
-  createInvoice(
+  async createInvoice(
     @Body() createInvoiceDto: CreateInvoiceDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.billingService.createInvoice(createInvoiceDto, req.user.branchId);
+    try {
+      console.log('🔥 Invoice creation request received:', {
+        patientId: createInvoiceDto.patientId,
+        items: createInvoiceDto.items,
+        branchId: req.user.branchId,
+        userId: req.user.id
+      });
+      
+      const result = await this.billingService.createInvoice(createInvoiceDto, req.user.branchId);
+      console.log('✅ Invoice created successfully:', result.id);
+      return result;
+    } catch (error) {
+      console.error('❌ Invoice creation failed:', error);
+      console.error('Error stack:', error.stack);
+      throw error;
+    }
   }
 
   @Get('invoices')
@@ -162,5 +177,14 @@ export class BillingController {
       { startDate, endDate },
       req.user.branchId,
     );
+  }
+
+  // Utility: generate sample invoices for existing patients
+  @Post('invoices/generate-samples')
+  generateSamples(
+    @Body() body: { maxPatients?: number; perPatient?: number },
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.billingService.generateSampleInvoices(body || {}, req.user.branchId);
   }
 }

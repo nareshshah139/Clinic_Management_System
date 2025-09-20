@@ -1253,52 +1253,98 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
           <div className="h-full min-h-0 flex flex-col">
             <DialogTitle className="sr-only">Prescription Preview</DialogTitle>
             {/* Scoped print CSS to only print the preview container */}
-            <style>{`
-            @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-            @page {
-              size: A4 portrait;
-              margin: 0;
-            }
-            @media print {
-              body *:not(#prescription-print-root):not(#prescription-print-root *) {
-                visibility: hidden !important;
+            <style dangerouslySetInnerHTML={{
+              __html: `
+              @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
+              @page {
+                size: A4 portrait;
+                margin: 0;
+                @top-left { content: ""; }
+                @top-center { content: ""; }
+                @top-right { content: ""; }
+                @bottom-left { content: ""; }
+                @bottom-center { content: ""; }
+                @bottom-right { content: ""; }
               }
-              #prescription-print-root, #prescription-print-root * {
-                visibility: visible !important;
+              @media print {
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                html, body {
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                @page :first {
+                  margin-top: 0 !important;
+                }
+                @page :left {
+                  margin-left: 0 !important;
+                }
+                @page :right {
+                  margin-right: 0 !important;
+                }
+                body *:not(#prescription-print-root):not(#prescription-print-root *) {
+                  visibility: hidden !important;
+                }
+                #prescription-print-root, #prescription-print-root * {
+                  visibility: visible !important;
+                }
+                #prescription-print-root {
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 210mm !important;
+                  height: 297mm !important;
+                  margin: 0 !important;
+                  padding: 12mm !important;
+                  padding-top: ${12 + Math.max(0, printTopMarginPx)/3.78}mm !important;
+                  box-sizing: border-box !important;
+                  background: white !important;
+                  background-repeat: no-repeat !important;
+                  background-position: 0 0 !important;
+                  background-size: 210mm 297mm !important;
+                  ${printBgUrl ? `background-image: url('${printBgUrl}') !important;` : ''}
+                }
+                #prescription-print-content {
+                  width: 100% !important;
+                  height: 100% !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                  box-sizing: border-box !important;
+                }
               }
-              #prescription-print-root {
-                position: absolute !important;
-                left: 0 !important;
-                top: 0 !important;
-                width: 210mm !important;
-                min-height: 297mm !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-            }
-          `}</style>
+              `
+            }} />
           <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
             <div
               id="prescription-print-root"
               ref={printRef}
-              className="bg-white text-gray-900 w-full"
+              className="bg-white text-gray-900"
               style={{
                 fontFamily: 'Fira Sans, sans-serif',
                 fontSize: '14px',
-                backgroundImage: printBgUrl ? `url(${printBgUrl})` : undefined,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'top center',
-                backgroundSize: 'cover',
                 width: '210mm',
                 minHeight: '297mm',
                 margin: '0 auto',
-                padding: '12mm',
-                paddingTop: `${12 + Math.max(0, printTopMarginPx)/3.78}mm`,
+                padding: '0',
+                paddingTop: `${Math.max(0, printTopMarginPx)/3.78}mm`,
+                paddingLeft: '12mm',
+                paddingRight: '12mm',
+                paddingBottom: '12mm',
+                boxSizing: 'border-box',
+                backgroundImage: printBgUrl ? `url(${printBgUrl})` : undefined,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'top left',
+                backgroundSize: '210mm 297mm',
               }}
             >
-              <div className="mx-auto w-full">
+              <div 
+                id="prescription-print-content" 
+                className="w-full h-full"
+              >
 
 
                 {/* Patient Info */}
@@ -1496,9 +1542,18 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
             </div>
           </div>
           </div>
-          <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 flex justify-end gap-2 z-10">
-            <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-            <Button onClick={() => window.print()}>Print</Button>
+          <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 z-10">
+            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
+              <div className="text-xs text-blue-700">
+                To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
+                turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+              <Button onClick={() => window.print()}>Print</Button>
+            </div>
           </div>
           </div>
         </DialogContent>

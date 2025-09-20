@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History } from 'lucide-react';
+import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History, Calendar } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 
@@ -19,6 +19,8 @@ interface Props {
   visitNumber?: number;
   patientName?: string;
   visitDate?: string; // ISO string; falls back to today if not provided
+  appointmentId?: string;
+  appointmentData?: any;
 }
 
 interface VisitPhoto {
@@ -56,7 +58,7 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
-export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate }: Props) {
+export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData }: Props) {
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
@@ -301,6 +303,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const payload: any = {
       patientId,
       doctorId,
+      appointmentId, // Include appointment ID if available
       visitNumber: currentVisitNumber,
       status: visitStatus,
       complaints: basicComplaints || subjective ? 
@@ -440,6 +443,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 <Badge variant={visitStatus === 'completed' ? 'default' : visitStatus === 'in-progress' ? 'secondary' : 'outline'}>
                   {visitStatus.replace('-', ' ').toUpperCase()}
                 </Badge>
+                {appointmentData && (
+                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    <Calendar className="h-3 w-3 mr-1" />
+                    Linked to Appointment
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription>
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%

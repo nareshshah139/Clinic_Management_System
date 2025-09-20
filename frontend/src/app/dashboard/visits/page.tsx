@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
@@ -10,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, Clock, FileText, Calendar, Activity } from 'lucide-react';
+import { User, Users, Stethoscope, Clock, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
@@ -189,10 +190,48 @@ export default function VisitsPage() {
   const [patientOptions, setPatientOptions] = useState<any[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientMenu, setShowPatientMenu] = useState(false);
+  const [appointmentData, setAppointmentData] = useState<any>(null);
+
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Handle URL parameters for appointment linking
+  useEffect(() => {
+    const patientId = searchParams.get('patientId');
+    const appointmentId = searchParams.get('appointmentId');
+    const autoStart = searchParams.get('autoStart') === 'true';
+
+    if (patientId) {
+      setSelectedPatientId(patientId);
+      
+      // If we have an appointment ID, fetch appointment details
+      if (appointmentId) {
+        fetchAppointmentData(appointmentId);
+      }
+      
+      // Auto-start visit documentation if requested
+      if (autoStart) {
+        setShowForm(true);
+      }
+    }
+  }, [searchParams]);
+
+  const fetchAppointmentData = async (appointmentId: string) => {
+    try {
+      const appointment = await apiClient.getAppointment(appointmentId);
+      setAppointmentData(appointment);
+      
+      // Set doctor from appointment
+      if (appointment.doctorId) {
+        setSelectedDoctorId(appointment.doctorId);
+      }
+    } catch (error) {
+      console.error('Failed to fetch appointment data:', error);
+    }
+  };
 
   const loadData = async () => {
       setLoading(true);
@@ -606,15 +645,36 @@ export default function VisitsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Visit Documentation</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-gray-900">Visit Documentation</h1>
+            {appointmentData && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                <Calendar className="h-3 w-3 mr-1" />
+                From Appointment
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-gray-600">
-                            Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
+            Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
             Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
+            {appointmentData && (
+              <span className="ml-2 text-blue-600">
+                • {appointmentData.slot} • {appointmentData.visitType}
+              </span>
+            )}
           </p>
         </div>
-        <Button variant="outline" onClick={() => setShowForm(false)}>
-          Back to Setup
-        </Button>
+        <div className="flex gap-2">
+          {appointmentData && (
+            <Button variant="outline" onClick={() => window.history.back()}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Calendar
+            </Button>
+          )}
+          <Button variant="outline" onClick={() => setShowForm(false)}>
+            Back to Setup
+          </Button>
+        </div>
       </div>
 
       <MedicalVisitForm 
@@ -623,6 +683,8 @@ export default function VisitsPage() {
         userRole={currentUserRole}
         patientName={patients.find(p => p.id === selectedPatientId)?.name || ''}
         visitDate={new Date().toISOString()}
+        appointmentId={appointmentData?.id}
+        appointmentData={appointmentData}
       />
       
       {recentVisitId && <VisitPhotos visitId={recentVisitId} />}

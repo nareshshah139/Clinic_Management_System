@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+import { X, FileText, AlertTriangle } from 'lucide-react';
 
 type AppointmentInSchedule = {
   slot: string;
@@ -24,6 +26,15 @@ export interface DoctorDayCalendarProps {
   visitTypeFilter?: string;
   roomFilter?: string;
   onSelectSlot?: (slot: string) => void;
+  refreshKey?: number; // Add refresh key to trigger data reload
+  bookingInProgress?: string; // Add slot being booked for immediate feedback
+  optimisticAppointment?: { // Add optimistic appointment for immediate display
+    slot: string;
+    patient: { name: string };
+    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
+    room?: { id: string; name: string; type: string };
+  };
+  onAppointmentUpdate?: () => void; // Callback for appointment changes
 }
 
 function generateSlots(startHour = 9, endHour = 18, stepMinutes = 30): string[] {
@@ -45,22 +56,50 @@ export default function DoctorDayCalendar({
   recentBookedSlot, 
   visitTypeFilter = 'ALL',
   roomFilter = 'ALL',
-  onSelectSlot 
+  onSelectSlot,
+  refreshKey = 0,
+  bookingInProgress,
+  optimisticAppointment,
+  onAppointmentUpdate
 }: DoctorDayCalendarProps) {
+  const router = useRouter();
   const [schedule, setSchedule] = useState<AppointmentInSchedule[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSchedule | null>(null);
+  const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
 
   const slots = useMemo(() => generateSlots(9, 18, 30), []);
 
   // Filter appointments based on visitType and room filters
   const filteredSchedule = useMemo(() => {
-    return schedule.filter(apt => {
+    let appointments = [...schedule];
+    
+    // Add optimistic appointment if it exists and matches filters
+    if (optimisticAppointment) {
+      const visitTypeMatch = visitTypeFilter === 'ALL' || optimisticAppointment.visitType === visitTypeFilter;
+      const roomMatch = roomFilter === 'ALL' || optimisticAppointment.room?.id === roomFilter;
+      
+      if (visitTypeMatch && roomMatch) {
+        // Remove any existing appointment for this slot and add optimistic one
+        appointments = appointments.filter(apt => apt.slot !== optimisticAppointment.slot);
+        appointments.push({
+          slot: optimisticAppointment.slot,
+          patient: optimisticAppointment.patient,
+          visitType: optimisticAppointment.visitType,
+          room: optimisticAppointment.room,
+          id: 'optimistic-' + optimisticAppointment.slot,
+          status: 'SCHEDULED'
+        });
+      }
+    }
+    
+    return appointments.filter(apt => {
       const visitTypeMatch = visitTypeFilter === 'ALL' || apt.visitType === visitTypeFilter;
       const roomMatch = roomFilter === 'ALL' || apt.room?.id === roomFilter;
       return visitTypeMatch && roomMatch;
     });
-  }, [schedule, visitTypeFilter, roomFilter]);
+  }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
 
@@ -86,37 +125,81 @@ export default function DoctorDayCalendar({
     return slotMinutes <= nowMinutes;
   };
 
-  useEffect(() => {
-    const fetch = async () => {
-      if (!doctorId || !date) return;
-      try {
-        setLoading(true);
-        const res: any = await apiClient.getDoctorSchedule(doctorId, date);
-        // Map backend appointments to slot-wise entries
-        const items = (res.appointments || []).map((a: any) => ({
-          slot: a.slot,
-          patient: a.patient ? { 
-            id: a.patient.id, 
-            name: a.patient.name,
-            phone: a.patient.phone,
-            email: a.patient.email
-          } : undefined,
-          doctor: a.doctor,
-          visitType: a.visitType,
-          room: a.room,
-          id: a.id,
-          status: a.status,
-        }));
-        setSchedule(items);
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('Failed to load schedule', e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void fetch();
+  const fetchSchedule = useCallback(async () => {
+    if (!doctorId || !date) return;
+    try {
+      setLoading(true);
+      const res: any = await apiClient.getDoctorSchedule(doctorId, date);
+      // Map backend appointments to slot-wise entries
+      const items = (res.appointments || []).map((a: any) => ({
+        slot: a.slot,
+        patient: a.patient ? { 
+          id: a.patient.id, 
+          name: a.patient.name,
+          phone: a.patient.phone,
+          email: a.patient.email
+        } : undefined,
+        doctor: a.doctor,
+        visitType: a.visitType,
+        room: a.room,
+        id: a.id,
+        status: a.status,
+      }));
+      setSchedule(items);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to load schedule', e);
+    } finally {
+      setLoading(false);
+    }
   }, [doctorId, date]);
+
+  useEffect(() => {
+    void fetchSchedule();
+  }, [fetchSchedule, refreshKey]); // Include refreshKey in dependency array
+
+  const handleCancelAppointment = async (appointment: AppointmentInSchedule) => {
+    if (!appointment.id) return;
+    
+    setCancellingAppointment(appointment.id);
+    setSelectedAppointment(appointment);
+    setShowCancelDialog(true);
+  };
+
+  const confirmCancelAppointment = async () => {
+    if (!cancellingAppointment) return;
+    
+    try {
+      await apiClient.deleteAppointment(cancellingAppointment);
+      
+      // Refresh the schedule
+      await fetchSchedule();
+      
+      // Notify parent component
+      onAppointmentUpdate?.();
+      
+      // Close dialogs
+      setShowCancelDialog(false);
+      setSelectedAppointment(null);
+      setCancellingAppointment(null);
+    } catch (error) {
+      console.error('Failed to cancel appointment:', error);
+      alert('Failed to cancel appointment. Please try again.');
+    }
+  };
+
+  const handleStartVisit = (appointment: AppointmentInSchedule) => {
+    if (!appointment.patient?.id || !appointment.id) return;
+    
+    // Navigate to visits page with appointment data
+    const searchParams = new URLSearchParams({
+      patientId: appointment.patient.id,
+      appointmentId: appointment.id,
+      autoStart: 'true'
+    });
+    
+    router.push(`/dashboard/visits?${searchParams.toString()}`);
+  };
 
   return (
     <>
@@ -138,6 +221,7 @@ export default function DoctorDayCalendar({
               const appt = bookedBySlot.get(slot);
               const past = isPastSlot(slot);
               const isNewlyBooked = recentBookedSlot === slot;
+              const isBookingInProgress = bookingInProgress === slot;
               
               return (
                 <div 
@@ -146,12 +230,20 @@ export default function DoctorDayCalendar({
                   style={{
                     backgroundColor: booked 
                       ? (isNewlyBooked ? '#22c55e' : '#3b82f6')
+                      : isBookingInProgress
+                      ? '#fbbf24'
                       : (past ? '#f3f4f6' : 'white'),
                     borderColor: booked 
                       ? (isNewlyBooked ? '#16a34a' : '#2563eb')
+                      : isBookingInProgress
+                      ? '#f59e0b'
                       : (past ? '#d1d5db' : '#e5e7eb'),
                     opacity: past && !booked ? 0.6 : 1,
-                    boxShadow: isNewlyBooked ? '0 0 0 2px rgba(34, 197, 94, 0.3)' : 'none'
+                    boxShadow: isNewlyBooked 
+                      ? '0 0 0 2px rgba(34, 197, 94, 0.3)' 
+                      : isBookingInProgress 
+                      ? '0 0 0 2px rgba(251, 191, 36, 0.3)' 
+                      : 'none'
                   }}
                 >
                   <div 
@@ -162,7 +254,7 @@ export default function DoctorDayCalendar({
                   </div>
                   
                   {booked && appt ? (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-2">
                       <div 
                         className="text-xs truncate cursor-pointer font-medium"
                         style={{ color: 'rgba(255, 255, 255, 0.95)' }}
@@ -197,21 +289,48 @@ export default function DoctorDayCalendar({
                           </div>
                         )}
                       </div>
+                      
+                      {/* Action buttons */}
+                      <div className="flex gap-1 mt-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartVisit(appt);
+                          }}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Visit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:bg-opacity-80"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelAppointment(appt);
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                   ) : (
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      disabled={past}
+                      disabled={past || isBookingInProgress}
                       style={{
-                        backgroundColor: past ? '#f3f4f6' : 'white',
-                        color: past ? '#9ca3af' : '#374151',
-                        borderColor: past ? '#d1d5db' : '#d1d5db',
-                        cursor: past ? 'not-allowed' : 'pointer'
+                        backgroundColor: past ? '#f3f4f6' : isBookingInProgress ? '#fbbf24' : 'white',
+                        color: past ? '#9ca3af' : isBookingInProgress ? '#92400e' : '#374151',
+                        borderColor: past ? '#d1d5db' : isBookingInProgress ? '#f59e0b' : '#d1d5db',
+                        cursor: past ? 'not-allowed' : isBookingInProgress ? 'wait' : 'pointer'
                       }}
-                      onClick={() => !past && onSelectSlot?.(slot)}
+                      onClick={() => !past && !isBookingInProgress && onSelectSlot?.(slot)}
                     >
-                      {past ? 'Past' : 'Book'}
+                      {past ? 'Past' : isBookingInProgress ? 'Booking...' : 'Book'}
                     </Button>
                   )}
                 </div>
@@ -227,7 +346,8 @@ export default function DoctorDayCalendar({
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedAppointment} onOpenChange={(v) => { if (!v) setSelectedAppointment(null); }}>
+      {/* Appointment Details Dialog */}
+      <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v) => { if (!v) setSelectedAppointment(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>
@@ -257,6 +377,69 @@ export default function DoctorDayCalendar({
               )}
             </div>
           )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelectedAppointment(null)}>
+              Close
+            </Button>
+            {selectedAppointment && (
+              <>
+                <Button onClick={() => handleStartVisit(selectedAppointment)}>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Start Visit
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={() => handleCancelAppointment(selectedAppointment)}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cancel Appointment
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Confirmation Dialog */}
+      <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Cancel Appointment
+            </DialogTitle>
+          </DialogHeader>
+          {selectedAppointment && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">
+                Are you sure you want to cancel this appointment? This action cannot be undone.
+              </p>
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
+                <div><span className="font-medium">Patient:</span> {selectedAppointment.patient?.name}</div>
+                <div><span className="font-medium">Date:</span> {date}</div>
+                <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>
+                <div><span className="font-medium">Type:</span> {selectedAppointment.visitType}</div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowCancelDialog(false);
+                setCancellingAppointment(null);
+              }}
+            >
+              Keep Appointment
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={confirmCancelAppointment}
+              disabled={!cancellingAppointment}
+            >
+              Yes, Cancel Appointment
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>

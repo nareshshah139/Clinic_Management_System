@@ -26,13 +26,20 @@ export default function AppointmentsCalendar() {
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [refreshKey, setRefreshKey] = useState<number>(0); // Add refresh key state
+  const [optimisticAppointment, setOptimisticAppointment] = useState<{
+    slot: string;
+    patient: { name: string };
+    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
+    room?: { id: string; name: string; type: string };
+  } | null>(null);
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
 
   // Debug log to confirm component is loading with changes
-  console.log('🎨 AppointmentsCalendar loaded with booking dialog - Version 2024-12-10-v3');
+  console.log('🎨 AppointmentsCalendar loaded with appointment management - Version 2024-12-19-v6');
 
   useEffect(() => {
     void fetchDoctors();
@@ -43,6 +50,7 @@ export default function AppointmentsCalendar() {
     // Clear transient highlights when doctor/date changes
     setRecentBookedSlot('');
     setBookingDetails(null);
+    setOptimisticAppointment(null);
     // Fetch rooms when doctor/date changes
     if (doctorId && date) {
       void fetchRooms();
@@ -97,6 +105,24 @@ export default function AppointmentsCalendar() {
   }) => {
     try {
       setLoading(true);
+      
+      // Create optimistic appointment immediately
+      const selectedRoom = appointmentData.roomId 
+        ? rooms.find(r => r.id === appointmentData.roomId) 
+        : undefined;
+        
+      const optimisticAppt = {
+        slot: pendingBookingSlot,
+        patient: { 
+          name: `${selectedPatient?.firstName || ''} ${selectedPatient?.lastName || ''}`.trim() || 'Unknown'
+        },
+        visitType: appointmentData.visitType,
+        room: selectedRoom
+      };
+      
+      setOptimisticAppointment(optimisticAppt);
+      setRecentBookedSlot(pendingBookingSlot);
+      
       const created: any = await apiClient.createAppointment({ 
         doctorId, 
         patientId: selectedPatientId, 
@@ -106,8 +132,11 @@ export default function AppointmentsCalendar() {
         roomId: appointmentData.roomId
       });
       
+      // Clear optimistic appointment and refresh with real data
+      setOptimisticAppointment(null);
+      setRefreshKey(prev => prev + 1);
+      
       // Set success feedback
-      setRecentBookedSlot(pendingBookingSlot);
       setBookingDetails(created);
       
       // Refresh rooms after booking
@@ -124,6 +153,10 @@ export default function AppointmentsCalendar() {
       setPendingBookingSlot('');
       
     } catch (e: any) {
+      // Reset optimistic update on error
+      setOptimisticAppointment(null);
+      setRecentBookedSlot('');
+      
       const status = e?.status;
       const body = e?.body || {};
       if (status === 409) {
@@ -160,7 +193,7 @@ export default function AppointmentsCalendar() {
               fontSize: '10px',
               marginLeft: '8px'
             }}>
-              v2.0
+              v2.3
             </span>
           </CardTitle>
           <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
@@ -264,6 +297,10 @@ export default function AppointmentsCalendar() {
             visitTypeFilter={visitTypeFilter}
             roomFilter={roomFilter}
             onSelectSlot={handleBookingRequest}
+            refreshKey={refreshKey}
+            bookingInProgress={loading ? pendingBookingSlot : undefined}
+            optimisticAppointment={optimisticAppointment || undefined}
+            onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
           />
         </CardContent>
       </Card>

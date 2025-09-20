@@ -24,14 +24,144 @@ async function main() {
     });
     }
 
-    // Users: create demo doctor and receptionist only if no users exist
+    // Users: create demo users for all roles
     const userCount = await prisma.user.count();
-    let doctor = await prisma.user.findFirst({ where: { role: UserRole.DOCTOR, branchId: branch.id } });
+    let doctor1 = await prisma.user.findFirst({ where: { role: UserRole.DOCTOR, branchId: branch.id } });
+    let doctor2: any = null;
     let receptionist = await prisma.user.findFirst({ where: { role: UserRole.RECEPTION, branchId: branch.id } });
+    let admin = await prisma.user.findFirst({ where: { role: UserRole.ADMIN, branchId: branch.id } });
+    
     if (userCount === 0) {
-    const passwordHash = await bcrypt.hash('password123', 10);
-      doctor = await prisma.user.create({
+      const passwordHash = await bcrypt.hash('password123', 10);
+      
+      // Create Admin
+      admin = await prisma.user.create({
         data: {
+          firstName: 'Admin',
+          lastName: 'User',
+          email: 'admin@clinic.test',
+          phone: '9000000000',
+          password: passwordHash,
+          role: UserRole.ADMIN,
+          status: UserStatus.ACTIVE,
+          branchId: branch.id,
+          isActive: true,
+        },
+      });
+
+      // Create Doctor 1 - Dr. Shravya
+      doctor1 = await prisma.user.create({
+        data: {
+          firstName: 'Shravya',
+          lastName: 'Dermatologist',
+          email: 'shravya@clinic.test',
+          phone: '9000000001',
+          password: passwordHash,
+          role: UserRole.DOCTOR,
+          status: UserStatus.ACTIVE,
+          branchId: branch.id,
+          isActive: true,
+        },
+      });
+
+      // Create Doctor 2 - Dr. Praneeta
+      doctor2 = await prisma.user.create({
+        data: {
+          firstName: 'Praneeta',
+          lastName: 'Jain',
+          email: 'praneeta@clinic.test',
+          phone: '9000000002',
+          password: passwordHash,
+          role: UserRole.DOCTOR,
+          status: UserStatus.ACTIVE,
+          branchId: branch.id,
+          isActive: true,
+        },
+      });
+
+      // Create Receptionist
+      receptionist = await prisma.user.create({
+        data: {
+          firstName: 'Riya',
+          lastName: 'Sharma',
+          email: 'reception@clinic.test',
+          phone: '9000000003',
+          password: passwordHash,
+          role: UserRole.RECEPTION,
+          status: UserStatus.ACTIVE,
+          branchId: branch.id,
+          isActive: true,
+        },
+      });
+
+      console.log('Created users: 1 Admin, 2 Doctors (Shravya, Praneeta), 1 Receptionist');
+    }
+
+    // Rooms: create specific room configuration
+    const roomCount = await prisma.room.count();
+    let room = await prisma.room.findFirst({ where: { branchId: branch.id } });
+    if (roomCount === 0) {
+      const rooms = await Promise.all([
+        // 2 Consultation Rooms
+        prisma.room.create({
+          data: {
+            id: 'room-consult-1',
+            name: 'Consultation Room 1',
+            type: 'Consult',
+            capacity: 3,
+            isActive: true,
+            branchId: branch.id,
+          },
+        }),
+        prisma.room.create({
+          data: {
+            id: 'room-consult-2',
+            name: 'Consultation Room 2',
+            type: 'Consult',
+            capacity: 3,
+            isActive: true,
+            branchId: branch.id,
+          },
+        }),
+        // 3 Procedure Rooms
+        prisma.room.create({
+          data: {
+            id: 'room-procedure-1',
+            name: 'Procedure Room 1',
+            type: 'Procedure',
+            capacity: 2,
+            isActive: true,
+            branchId: branch.id,
+          },
+        }),
+        prisma.room.create({
+          data: {
+            id: 'room-procedure-2',
+            name: 'Procedure Room 2',
+            type: 'Procedure',
+            capacity: 2,
+            isActive: true,
+            branchId: branch.id,
+          },
+        }),
+        prisma.room.create({
+          data: {
+            id: 'room-procedure-3',
+            name: 'Procedure Room 3',
+            type: 'Procedure',
+            capacity: 2,
+            isActive: true,
+            branchId: branch.id,
+          },
+        }),
+        // 1 Telemedicine Room
+        prisma.room.create({
+          data: {
+            id: 'room-telemedicine-1',
+            name: 'Telemedicine Suite',
+            type: 'Telemed',
+            capacity: 1,
+            isActive: true,
         firstName: 'Asha',
         lastName: 'Rao',
         email: 'doctor1@clinic.test',
@@ -333,8 +463,8 @@ async function main() {
          await prisma.visit.create({
            data: {
              id: visitData.id,
-             patientId: 'cmfdqx5t40001ag7yr7jyyuiz', // Use existing test patient: Rajesh Kumar - Acne Patient
-             doctorId: 'cmfatxzee0001ag9d9rr8zvfo', // Use existing test doctor: Dr. Praneeta Jain
+             patientId: patient!.id, // Use the created patient
+             doctorId: doctor!.id, // Use the created doctor
              appointmentId: null, // These are historical visits without appointments
              vitals: visitData.vitals,
              complaints: JSON.stringify([{
@@ -596,23 +726,23 @@ async function main() {
         {
           mode: PaymentMode.CASH,
           items: [
-            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
+            { serviceId: consultationSvc.id, name: consultationSvc.name, qty: 1, unitPrice: 500, gstRate: 0 },
           ],
           pay: 'FULL',
         },
         {
           mode: PaymentMode.UPI,
           items: [
-            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
-            { serviceId: moleExcisionSvc.id, qty: 1, unitPrice: 2500, gstRate: 18 },
+            { serviceId: consultationSvc.id, name: consultationSvc.name, qty: 1, unitPrice: 500, gstRate: 0 },
+            { serviceId: moleExcisionSvc.id, name: moleExcisionSvc.name, qty: 1, unitPrice: 2500, gstRate: 18 },
           ],
           pay: 'PARTIAL',
         },
         {
           mode: PaymentMode.CARD,
           items: [
-            { serviceId: consultationSvc.id, qty: 1, unitPrice: 500, gstRate: 0 },
-            { serviceId: acnePackageSvc.id, qty: 1, unitPrice: 1200, gstRate: 18 },
+            { serviceId: consultationSvc.id, name: consultationSvc.name, qty: 1, unitPrice: 500, gstRate: 0 },
+            { serviceId: acnePackageSvc.id, name: acnePackageSvc.name, qty: 1, unitPrice: 1200, gstRate: 18 },
           ],
           pay: 'FULL',
         },

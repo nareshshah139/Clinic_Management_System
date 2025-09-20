@@ -101,8 +101,11 @@ export default function AppointmentBookingDialog({
         if (visitType === 'TELEMED') {
           return room.type.toLowerCase().includes('telemed') || room.type.toLowerCase().includes('virtual');
         }
-        // For OPD, show consultation rooms
-        return room.type.toLowerCase().includes('consultation') || room.type.toLowerCase().includes('opd');
+        // For OPD, show consultation rooms (including 'Consult', 'Consultation', 'OPD')
+        const roomTypeLower = room.type.toLowerCase();
+        return roomTypeLower.includes('consultation') || 
+               roomTypeLower.includes('consult') || 
+               roomTypeLower.includes('opd');
       });
 
       // If no specific room type found, show all rooms
@@ -139,8 +142,11 @@ export default function AppointmentBookingDialog({
       if (visitType === 'TELEMED') {
         return room.type.toLowerCase().includes('telemed') || room.type.toLowerCase().includes('virtual');
       }
-      // For OPD, show consultation rooms
-      return room.type.toLowerCase().includes('consultation') || room.type.toLowerCase().includes('opd');
+      // For OPD, show consultation rooms (including 'Consult', 'Consultation', 'OPD')
+      const roomTypeLower = room.type.toLowerCase();
+      return roomTypeLower.includes('consultation') || 
+             roomTypeLower.includes('consult') || 
+             roomTypeLower.includes('opd');
     });
   };
 

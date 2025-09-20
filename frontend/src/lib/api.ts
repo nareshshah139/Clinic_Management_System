@@ -158,6 +158,18 @@ export class ApiClient {
     return this.post('/appointments', data);
   }
 
+  async getAppointment(id: string) {
+    return this.get(`/appointments/${id}`);
+  }
+
+  async updateAppointment(id: string, data: any) {
+    return this.patch(`/appointments/${id}`, data);
+  }
+
+  async deleteAppointment(id: string) {
+    return this.delete(`/appointments/${id}`);
+  }
+
   async getAvailableSlots(params: any) {
     return this.get('/appointments/available-slots', params);
   }
@@ -220,12 +232,20 @@ export class ApiClient {
     return this.get('/billing/invoices', params);
   }
 
+  async getInvoiceById(id: string) {
+    return this.get(`/billing/invoices/${id}`);
+  }
+
   async createInvoice(data: any) {
     return this.post('/billing/invoices', data);
   }
 
   async processPayment(data: any) {
     return this.post('/billing/payments', data);
+  }
+
+  async generateSampleInvoices(payload?: { maxPatients?: number; perPatient?: number }) {
+    return this.post('/billing/invoices/generate-samples', payload || {});
   }
 
   // Inventory

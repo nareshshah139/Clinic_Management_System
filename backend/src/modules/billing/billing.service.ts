@@ -23,7 +23,22 @@ export class BillingService {
   constructor(private prisma: PrismaService) {}
 
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
-    const { patientId, visitId, items, mode, gstin, hsn, notes } = createInvoiceDto as any;
+    try {
+      console.log('🔧 BillingService.createInvoice called with:', {
+        patientId: createInvoiceDto.patientId,
+        itemsCount: createInvoiceDto.items?.length,
+        branchId,
+        discount: createInvoiceDto.discount
+      });
+
+      const { patientId, visitId, items, discount, discountReason, notes, dueDate, metadata, mode, gstin, hsn } = createInvoiceDto as any;
+
+      if (!items || items.length === 0) {
+        console.error('❌ No items provided for invoice');
+        throw new BadRequestException('Invoice must have at least one item');
+      }
+
+      console.log('📋 Invoice items:', items);
 
     // Verify patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
@@ -47,38 +62,67 @@ export class BillingService {
 
     const invoiceNumber = await this.generateInvoiceNumber(branchId);
 
-    // Calculate totals
-    const { subtotal, discount, gstAmount, totalAmount } = this.calculateInvoiceTotals(items);
+    // Calculate totals with overall discount
+    const { subtotal, discount: calculatedDiscount, gstAmount, totalAmount } = this.calculateInvoiceTotals(items, discount || 0);
 
     // Prepare services for items and build invoice items create payload
-    const invoiceItemsData = [] as Array<{ serviceId: string; qty: number; unitPrice: number; gstRate: number; total: number }>;
+    const invoiceItemsData = [] as Array<{ 
+      serviceId: string; 
+      name: string;
+      description?: string;
+      qty: number; 
+      unitPrice: number; 
+      discount: number;
+      gstRate: number; 
+      total: number;
+    }>;
+    
     for (const it of items) {
       const qty: number = (it.qty ?? it.quantity ?? 1) as number;
       const unitPrice: number = Number(it.unitPrice ?? 0);
+      const itemDiscount: number = Number(it.discount ?? 0);
       const gstRate: number = Number(it.gstRate ?? 0);
+      const name: string = (it.name || it.description || 'Service') as string;
+      const description: string = it.description || it.name || '';
+      
       // Create a simple Service if not provided
       let serviceId: string = it.serviceId as string;
       if (!serviceId) {
-        const name: string = (it.name || it.description || 'Service') as string;
-        const createdService = await this.prisma.service.create({
-          data: {
-            name,
-            type: 'Consult',
-            taxable: gstRate > 0,
-            gstRate: gstRate,
-            priceMrp: unitPrice,
-            priceNet: unitPrice,
-            branchId,
-          },
-        });
-        serviceId = createdService.id;
+        console.log('🔧 Creating new service:', { name, unitPrice, gstRate, branchId });
+        try {
+          const createdService = await this.prisma.service.create({
+            data: {
+              name,
+              type: 'Consult',
+              taxable: gstRate > 0,
+              gstRate: gstRate,
+              priceMrp: unitPrice,
+              priceNet: unitPrice,
+              branchId,
+            },
+          });
+          serviceId = createdService.id;
+          console.log('✅ Service created:', serviceId);
+        } catch (serviceError) {
+          console.error('❌ Failed to create service:', serviceError);
+          throw new BadRequestException(`Failed to create service: ${serviceError.message}`);
+        }
       }
+      
+      // Calculate item total with discount
+      const baseTotal = qty * unitPrice;
+      const itemDiscountAmount = (itemDiscount / 100) * baseTotal;
+      const itemTotal = baseTotal - itemDiscountAmount;
+      
       invoiceItemsData.push({
         serviceId,
+        name,
+        description,
         qty,
         unitPrice,
+        discount: itemDiscount,
         gstRate,
-        total: qty * unitPrice,
+        total: itemTotal,
       });
     }
 
@@ -87,26 +131,63 @@ export class BillingService {
       total: totalAmount,
       balance: totalAmount,
       invoiceNo: invoiceNumber,
+      discount: discount || 0,
+      discountReason: discountReason || null,
+      notes: notes || null,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      metadata: metadata ? JSON.stringify(metadata) : null,
       items: { create: invoiceItemsData },
     };
+    
     if (visitId) data.visitId = visitId;
     if (mode) data.mode = mode;
     if (gstin) data.gstin = gstin;
     if (hsn) data.hsn = hsn;
-    if (notes) data.notes = notes;
 
-    const invoice = await this.prisma.invoice.create({
-      data,
+    console.log('🔧 Creating invoice with data:', {
+      patientId: data.patientId,
+      branchId: data.branchId,
+      total: data.total,
+      itemsCount: invoiceItemsData.length,
+      invoiceNo: data.invoiceNo
+    });
+
+    console.log('📋 Invoice items data:', invoiceItemsData);
+
+    const invoice = await this.prisma.newInvoice.create({
+      data: {
+        ...data,
+        branchId, // Add branchId to the data
+      },
       include: {
         patient: {
-          select: { id: true, name: true, phone: true },
+          select: { id: true, name: true, phone: true, email: true },
         },
-        items: true,
+        items: {
+          include: {
+            service: {
+              select: { id: true, name: true, type: true }
+            }
+          }
+        },
         payments: true,
       },
     });
 
+    console.log('✅ Invoice created successfully in service:', invoice.id);
     return invoice;
+    
+    } catch (error) {
+      console.error('❌ Error in BillingService.createInvoice:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // Re-throw the error so it can be handled by the controller
+      throw error;
+    }
   }
 
   async findAllInvoices(query: QueryInvoicesDto, branchId: string) {
@@ -123,10 +204,8 @@ export class BillingService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      patient: {
-        branchId,
-        ...(patientId && { id: patientId }),
-      },
+      branchId,
+      ...(patientId && { patientId }),
     };
 
     // Apply filters (only fields that exist in schema)
@@ -153,11 +232,23 @@ export class BillingService {
     }
 
     const [invoices, total] = await Promise.all([
-      this.prisma.invoice.findMany({
+      this.prisma.newInvoice.findMany({
         where,
         include: {
           patient: {
             select: { id: true, name: true, phone: true },
+          },
+          items: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              qty: true,
+              unitPrice: true,
+              discount: true,
+              gstRate: true,
+              total: true,
+            },
           },
           payments: {
             select: {
@@ -175,7 +266,7 @@ export class BillingService {
           [sortBy]: sortOrder,
         },
       }),
-      this.prisma.invoice.count({ where }),
+      this.prisma.newInvoice.count({ where }),
     ]);
 
     return {
@@ -190,10 +281,10 @@ export class BillingService {
   }
 
   async findInvoiceById(id: string, branchId: string) {
-    const invoice = await this.prisma.invoice.findFirst({
+    const invoice = await this.prisma.newInvoice.findFirst({
       where: {
         id,
-        patient: { branchId },
+        branchId,
       },
       include: {
         patient: { select: { id: true, name: true, phone: true } },
@@ -258,7 +349,7 @@ export class BillingService {
       updateData.balance = Math.max(totalAmount - invoice.received, 0);
     }
 
-    const updated = await this.prisma.invoice.update({
+    const updated = await this.prisma.newInvoice.update({
       where: { id },
       data: updateData,
       include: {
@@ -282,7 +373,7 @@ export class BillingService {
     const invoice = await this.findInvoiceById(invoiceId, branchId);
 
     // Create payment with supported fields
-    const payment = await this.prisma.payment.create({
+    const payment = await this.prisma.newPayment.create({
       data: {
         invoiceId,
         amount,
@@ -298,7 +389,7 @@ export class BillingService {
     // Update invoice received/balance
     const newReceived = (invoice.received ?? 0) + amount;
     const newBalance = Math.max((invoice.total ?? 0) - newReceived, 0);
-    await this.prisma.invoice.update({
+    await this.prisma.newInvoice.update({
       where: { id: invoiceId },
       data: { received: newReceived, balance: newBalance },
     });
@@ -307,10 +398,10 @@ export class BillingService {
   }
 
   async confirmPayment(paymentId: string, branchId: string, _gatewayResponse?: Record<string, any>) {
-    const payment = await this.prisma.payment.findFirst({
+    const payment = await this.prisma.newPayment.findFirst({
       where: {
         id: paymentId,
-        invoice: { patient: { branchId } },
+        invoice: { branchId },
       },
     });
 
@@ -318,7 +409,7 @@ export class BillingService {
       throw new NotFoundException('Payment not found');
     }
 
-    const confirmed = await this.prisma.payment.update({
+    const confirmed = await this.prisma.newPayment.update({
       where: { id: paymentId },
       data: { reconStatus: 'COMPLETED' },
     });
@@ -330,7 +421,7 @@ export class BillingService {
     const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
 
     // Fetch payment and validate branch via invoice → patient.branchId
-    const payment = await this.prisma.payment.findFirst({
+    const payment = await this.prisma.newPayment.findFirst({
       where: {
         id: paymentId,
         invoice: { patient: { branchId } },
@@ -356,7 +447,7 @@ export class BillingService {
     }
 
     // Represent refund as a negative payment (cash refund)
-    const refundPayment = await this.prisma.payment.create({
+    const refundPayment = await this.prisma.newPayment.create({
       data: {
         invoiceId: payment.invoiceId,
         amount: -amount,
@@ -371,11 +462,11 @@ export class BillingService {
     });
 
     // Update invoice received/balance (subtract refunded amount)
-    const invoice = await this.prisma.invoice.findFirst({ where: { id: payment.invoiceId, patient: { branchId } } });
+    const invoice = await this.prisma.newInvoice.findFirst({ where: { id: payment.invoiceId, branchId } });
     const newReceived = Math.max(0, (invoice?.received ?? 0) - amount);
     const newBalance = Math.max((invoice?.total ?? 0) - newReceived, 0);
 
-    await this.prisma.invoice.update({
+    await this.prisma.newInvoice.update({
       where: { id: payment.invoiceId },
       data: { received: newReceived, balance: newBalance },
     });
@@ -387,10 +478,10 @@ export class BillingService {
     const { invoiceIds, totalAmount, method, transactionId, reference, notes } = bulkPaymentDto;
 
     // Verify all invoices exist and belong to the branch
-    const invoices = await this.prisma.invoice.findMany({
+    const invoices = await this.prisma.newInvoice.findMany({
       where: {
         id: { in: invoiceIds },
-        patient: { branchId },
+        branchId,
       },
       include: { payments: true },
     });
@@ -480,7 +571,7 @@ export class BillingService {
     }
 
     const [payments, total] = await Promise.all([
-      this.prisma.payment.findMany({
+              this.prisma.newPayment.findMany({
         where,
         include: {
           invoice: {
@@ -496,7 +587,7 @@ export class BillingService {
         take: limit,
         orderBy: { [sortBy]: sortOrder },
       }),
-      this.prisma.payment.count({ where }),
+      this.prisma.newPayment.count({ where }),
     ]);
 
     return {
@@ -523,10 +614,10 @@ export class BillingService {
     if (patientId) where.invoice = { patientId };
 
     const [sumAgg, count, methodBreakdown, dailyBreakdown] = await Promise.all([
-      this.prisma.payment.aggregate({ where, _sum: { amount: true } }),
-      this.prisma.payment.count({ where }),
-      this.prisma.payment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
-      this.prisma.payment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.aggregate({ where, _sum: { amount: true } }),
+      this.prisma.newPayment.count({ where }),
+      this.prisma.newPayment.groupBy({ by: ['mode'], where, _sum: { amount: true }, _count: { id: true } }),
+      this.prisma.newPayment.groupBy({ by: ['createdAt'], where, _sum: { amount: true }, _count: { id: true } }),
     ]);
 
     return {
@@ -552,7 +643,7 @@ export class BillingService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    const payments = await this.prisma.payment.findMany({ where, orderBy: { createdAt: 'asc' } });
+    const payments = await this.prisma.newPayment.findMany({ where, orderBy: { createdAt: 'asc' } });
 
     const grouped = this.groupPaymentsByPeriod(payments as any, groupBy);
 
@@ -571,11 +662,12 @@ export class BillingService {
     const { patientId, limit = 50 } = query;
 
     const where: any = {
-      patient: { branchId, ...(patientId && { id: patientId }) },
+      branchId,
+      ...(patientId && { patientId }),
       balance: { gt: 0 },
     };
 
-    const invoices = await this.prisma.invoice.findMany({
+    const invoices = await this.prisma.newInvoice.findMany({
       where,
       include: {
         patient: { select: { id: true, name: true, phone: true } },
@@ -629,9 +721,9 @@ export class BillingService {
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const date = String(today.getDate()).padStart(2, '0');
 
-    const lastInvoice = await this.prisma.invoice.findFirst({
+    const lastInvoice = await this.prisma.newInvoice.findFirst({
       where: {
-        patient: { branchId },
+        branchId,
         createdAt: {
           gte: new Date(today.setHours(0, 0, 0, 0)),
           lte: new Date(today.setHours(23, 59, 59, 999)),
@@ -696,5 +788,179 @@ export class BillingService {
     });
 
     return Object.values(groups).sort((a: any, b: any) => a.period.localeCompare(b.period));
+  }
+
+  // Helper to generate invoice number for a specific date (used for sample/backdated invoices)
+  private async generateInvoiceNumberForDate(branchId: string, forDate: Date): Promise<string> {
+    const year = forDate.getFullYear();
+    const month = String(forDate.getMonth() + 1).padStart(2, '0');
+    const date = String(forDate.getDate()).padStart(2, '0');
+
+    const start = new Date(forDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(forDate);
+    end.setHours(23, 59, 59, 999);
+
+    const lastInvoice = await this.prisma.newInvoice.findFirst({
+      where: {
+        branchId,
+        createdAt: { gte: start, lte: end },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let sequence = 1;
+    if (lastInvoice?.invoiceNo) {
+      const lastSequence = parseInt((lastInvoice.invoiceNo as any).split('-').pop() || '0');
+      sequence = lastSequence + 1;
+    }
+
+    return `INV-${year}${month}${date}-${String(sequence).padStart(3, '0')}`;
+  }
+
+  // Generate sample invoices for existing patients with dermatology offers/packages
+  async generateSampleInvoices(
+    options: { maxPatients?: number; perPatient?: number } = {},
+    branchId: string,
+  ) {
+    const maxPatients = Math.max(1, Math.min(options.maxPatients ?? 5, 50));
+    const perPatient = Math.max(1, Math.min(options.perPatient ?? 2, 5));
+
+    // Fetch patients from this branch
+    const patients = await this.prisma.patient.findMany({
+      where: { branchId },
+      take: maxPatients,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (patients.length === 0) {
+      throw new NotFoundException('No patients found to generate invoices for');
+    }
+
+    // Dermatology offers / packages
+    const offers: Array<{ name: string; type: string; unitPrice: number; gstRate: number }> = [
+      { name: 'Dermatology Consultation', type: 'Consult', unitPrice: 500, gstRate: 0 },
+      { name: 'Acne Treatment Package (4 sessions)', type: 'Package', unitPrice: 8000, gstRate: 18 },
+      { name: 'Chemical Peel', type: 'Procedure', unitPrice: 2500, gstRate: 18 },
+      { name: 'Laser Hair Removal - Underarms (1 session)', type: 'Aesthetic', unitPrice: 1500, gstRate: 18 },
+      { name: 'PRP Therapy - Scalp', type: 'Procedure', unitPrice: 6000, gstRate: 18 },
+      { name: 'Skin Glow Facial', type: 'Aesthetic', unitPrice: 2000, gstRate: 18 },
+      { name: 'Wart Removal', type: 'Procedure', unitPrice: 3000, gstRate: 18 },
+    ];
+
+    // Ensure a Service exists per offer for this branch, reuse if present
+    const serviceCache = new Map<string, string>();
+    for (const offer of offers) {
+      const existing = await this.prisma.service.findFirst({ where: { branchId, name: offer.name } });
+      if (existing) {
+        serviceCache.set(offer.name, existing.id);
+      } else {
+        const created = await this.prisma.service.create({
+          data: {
+            name: offer.name,
+            type: offer.type,
+            taxable: offer.gstRate > 0,
+            gstRate: offer.gstRate,
+            priceMrp: offer.unitPrice,
+            priceNet: offer.unitPrice,
+            branchId,
+          },
+        });
+        serviceCache.set(offer.name, created.id);
+      }
+    }
+
+    const createdInvoices: any[] = [];
+
+    // Helper to pick random int in range
+    const randInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+    for (const patient of patients) {
+      const toCreate = randInt(1, perPatient);
+      for (let i = 0; i < toCreate; i++) {
+        // Random past date within last 120 days
+        const daysAgo = randInt(5, 120);
+        const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+        createdAt.setHours(randInt(9, 19), randInt(0, 59), randInt(0, 59), randInt(0, 999));
+
+        // Select 1-2 random offers
+        const itemsSample = Array.from({ length: randInt(1, 2) }).map(() => offers[randInt(0, offers.length - 1)]);
+        const itemsForTotals = itemsSample.map((it) => ({ quantity: 1, unitPrice: it.unitPrice, gstRate: it.gstRate, discount: 0 }));
+        const { totalAmount } = this.calculateInvoiceTotals(itemsForTotals);
+
+        const invoiceNo = await this.generateInvoiceNumberForDate(branchId, createdAt);
+
+        const invoiceItemsData = itemsSample.map((it) => ({
+          serviceId: serviceCache.get(it.name)!,
+          name: it.name,
+          description: it.name,
+          qty: 1,
+          unitPrice: it.unitPrice,
+          discount: 0,
+          gstRate: it.gstRate,
+          total: it.unitPrice,
+        }));
+
+        const invoice = await this.prisma.newInvoice.create({
+          data: {
+            patientId: patient.id,
+            branchId,
+            total: totalAmount,
+            received: 0,
+            balance: totalAmount,
+            invoiceNo,
+            createdAt,
+            items: { create: invoiceItemsData },
+          },
+          include: {
+            patient: { select: { id: true, name: true, phone: true } },
+            items: true,
+            payments: true,
+          },
+        });
+
+        // Randomly add payment: 50% full, 30% partial, 20% none
+        const paymentRoll = Math.random();
+        if (paymentRoll < 0.5) {
+          // Full payment
+          const paymentDate = new Date(createdAt.getTime() + randInt(1, 7) * 24 * 60 * 60 * 1000);
+          await this.prisma.newPayment.create({
+            data: {
+              invoiceId: invoice.id,
+              amount: invoice.total,
+              mode: PaymentMethod.CASH as any,
+              reference: 'SAMPLE',
+              createdAt: paymentDate,
+              reconStatus: 'COMPLETED',
+            },
+          });
+          await this.prisma.newInvoice.update({ where: { id: invoice.id }, data: { received: invoice.total, balance: 0 } });
+        } else if (paymentRoll < 0.8) {
+          // Partial payment 30-70%
+          const part = Math.round(invoice.total * (randInt(30, 70) / 100));
+          const paymentDate = new Date(createdAt.getTime() + randInt(1, 10) * 24 * 60 * 60 * 1000);
+          await this.prisma.newPayment.create({
+            data: {
+              invoiceId: invoice.id,
+              amount: part,
+              mode: PaymentMethod.UPI as any,
+              reference: 'SAMPLE',
+              createdAt: paymentDate,
+              reconStatus: 'COMPLETED',
+            },
+          });
+          await this.prisma.newInvoice.update({ where: { id: invoice.id }, data: { received: part, balance: Math.max(invoice.total - part, 0) } });
+        }
+
+        createdInvoices.push(invoice);
+      }
+    }
+
+    // Return a summary and created count
+    return {
+      createdCount: createdInvoices.length,
+      patientsProcessed: patients.length,
+      invoices: createdInvoices,
+    };
   }
 }
