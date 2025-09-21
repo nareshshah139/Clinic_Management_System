@@ -1120,7 +1120,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
                 {Object.keys(includeSections).map((k) => (
                   <label key={k} className="flex items-center gap-2">
-                    <input type="checkbox" checked={includeSections[k]} onChange={(e) => setIncludeSections({ ...includeSections, [k]: e.target.checked })} />
+                    <input type="checkbox" checked={includeSections[k]} onChange={(e) => setIncludeSections(prev => ({ ...prev, [k]: e.target.checked }))} />
                     <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
                   </label>
                 ))}
