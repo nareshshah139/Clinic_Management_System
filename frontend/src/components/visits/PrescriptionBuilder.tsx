@@ -967,7 +967,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
                 </div>
 
                 {/* Chief Complaints */}
-                <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className={`${includeSections.vitals ? '' : 'opacity-60'}`}>
                   <label className="text-xs text-gray-600">Chief Complaints</label>
                   <div className="relative">
                     <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
@@ -992,7 +992,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
               highlight={hasHistories}
               badge={hasHistories ? "Has Data" : ""}
             >
-              <div className={`${includeSections.histories ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className={`${includeSections.histories ? '' : 'opacity-60'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-600">Past History</label>
@@ -1026,7 +1026,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
               highlight={hasTopicals}
               badge={hasTopicals ? "Has Data" : ""}
             >
-              <div className={`${includeSections.topicals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className={`${includeSections.topicals ? '' : 'opacity-60'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <div className="font-medium text-sm">Facewash/Soap</div>
@@ -1061,7 +1061,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
               highlight={hasPostProcedure || hasProcedurePlanned || hasProcedureParams}
               badge={(hasPostProcedure || hasProcedurePlanned || hasProcedureParams) ? "Has Data" : ""}
             >
-              <div className={`space-y-3 ${includeSections.postProcedure ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className={`space-y-3 ${includeSections.postProcedure ? '' : 'opacity-60'}`}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
@@ -1103,7 +1103,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
             >
-              <div className={`${includeSections.investigations ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className={`${includeSections.investigations ? '' : 'opacity-60'}`}>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {investigationOptions.map((opt) => (
                     <label key={opt} className="flex items-center gap-2 text-sm">
@@ -1190,7 +1190,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
             </CollapsibleSection>
 
             {/* Drug search */}
-            <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+            <div className={`${includeSections.vitals ? '' : 'opacity-60'}`}>
               <label className="text-sm text-gray-700">Add Drug</label>
               <Input 
                 placeholder="Search drug name or brand (min 2 chars)" 
@@ -1233,7 +1233,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
             </div>
 
             {/* Items table */}
-            <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+            <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60'}`}>
               {items.length === 0 && (
                 <div className="text-sm text-gray-500">No items added yet</div>
               )}
@@ -1352,14 +1352,14 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
             </div>
 
             {/* Review Date (bottom of builder) */}
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60'}`}>
               <div className="md:col-span-1">
                 <label className="text-sm text-gray-700">Review Date</label>
                 <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
               </div>
             </div>
 
-            <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+            <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60'}`}>
               <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
