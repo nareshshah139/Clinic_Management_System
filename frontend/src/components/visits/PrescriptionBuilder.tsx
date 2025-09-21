@@ -451,12 +451,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [chiefComplaints, patientId, visitId]);
 
   const [isComposingNotes, setIsComposingNotes] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement | null>(null);
   useEffect(() => {
     if (isComposingNotes) return;
+    const q = (notes || '').trim();
+    if (q.length < 2) {
+      setNotesOptions([]);
+      return;
+    }
     const t = setTimeout(async () => {
       try {
         if (!patientId) return;
-        const res = await apiClient.autocompletePrescriptionField({ field: 'notes', patientId, visitId: visitId || undefined, q: notes, limit: 8 });
+        const res = await apiClient.autocompletePrescriptionField({ field: 'notes', patientId, visitId: visitId || undefined, q, limit: 8 });
         setNotesOptions(Array.isArray(res) ? (res as string[]) : []);
       } catch {
         setNotesOptions([]);
@@ -948,20 +954,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       rows={3}
                       placeholder="Instructions, cautions, lifestyle advice..."
                       value={notes}
+                      ref={notesRef}
                       onCompositionStart={() => setIsComposingNotes(true)}
                       onCompositionEnd={() => setIsComposingNotes(false)}
                       onChange={(e) => setNotes(e.target.value)}
                     />
                     {notesOptions.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
+                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto" role="listbox" onMouseDown={(e) => e.preventDefault()}>
                         {notesOptions.map((opt) => (
-                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setNotes(opt)}>
-                            {opt}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" role="option" onClick={() => setNotes(opt)}>
+                             {opt}
+                           </div>
+                         ))}
+                       </div>
+                     )}
+                   </div>
                 </div>
               </div>
             </CollapsibleSection>
