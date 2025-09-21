@@ -877,7 +877,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
             )}
             {/* Basic Information */}
             <CollapsibleSection title="Basic Information" section="basic">
-              <div className={`space-y-4 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-sm text-gray-700">Language</label>
