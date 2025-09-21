@@ -27,6 +27,9 @@ import {
 } from './dto/query-billing.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { Permissions } from '../../shared/decorators/permissions.decorator';
+import { UserRole } from '@prisma/client';
 
 interface AuthenticatedRequest {
   user: {
@@ -45,6 +48,8 @@ export class BillingController {
 
   // Invoice endpoints
   @Post('invoices')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:invoice:create')
   async createInvoice(
     @Body() createInvoiceDto: CreateInvoiceDto,
     @Request() req: AuthenticatedRequest,
@@ -68,6 +73,8 @@ export class BillingController {
   }
 
   @Get('invoices')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Permissions('billing:invoice:read')
   findAllInvoices(
     @Query() query: QueryInvoicesDto,
     @Request() req: AuthenticatedRequest,
@@ -76,6 +83,8 @@ export class BillingController {
   }
 
   @Get('invoices/outstanding')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:invoice:read')
   getOutstandingInvoices(
     @Query() query: OutstandingInvoicesDto,
     @Request() req: AuthenticatedRequest,
@@ -84,11 +93,15 @@ export class BillingController {
   }
 
   @Get('invoices/:id')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
+  @Permissions('billing:invoice:read')
   findInvoiceById(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.billingService.findInvoiceById(id, req.user.branchId);
   }
 
   @Patch('invoices/:id')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:invoice:update')
   updateInvoice(
     @Param('id') id: string,
     @Body() updateInvoiceDto: UpdateInvoiceDto,
@@ -98,6 +111,8 @@ export class BillingController {
   }
 
   @Delete('invoices/:id')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:invoice:delete')
   cancelInvoice(
     @Param('id') id: string,
     @Query('reason') reason?: string,
@@ -108,6 +123,8 @@ export class BillingController {
 
   // Payment endpoints
   @Post('payments')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:payment:process')
   processPayment(
     @Body() paymentDto: PaymentDto,
     @Request() req: AuthenticatedRequest,
@@ -116,6 +133,8 @@ export class BillingController {
   }
 
   @Post('payments/bulk')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:payment:bulk')
   processBulkPayment(
     @Body() bulkPaymentDto: BulkPaymentDto,
     @Request() req: AuthenticatedRequest,
@@ -124,6 +143,8 @@ export class BillingController {
   }
 
   @Post('payments/:id/confirm')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:payment:confirm')
   confirmPayment(
     @Param('id') id: string,
     @Body() gatewayResponse: Record<string, any>,
@@ -133,6 +154,8 @@ export class BillingController {
   }
 
   @Get('payments')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('billing:payment:read')
   findAllPayments(
     @Query() query: QueryPaymentsDto,
     @Request() req: AuthenticatedRequest,
@@ -141,6 +164,8 @@ export class BillingController {
   }
 
   @Get('payments/summary')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:payment:summary')
   getPaymentSummary(
     @Query() query: PaymentSummaryDto,
     @Request() req: AuthenticatedRequest,
@@ -150,6 +175,8 @@ export class BillingController {
 
   // Refund endpoints
   @Post('refunds')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:refund:create')
   processRefund(
     @Body() refundDto: RefundDto,
     @Request() req: AuthenticatedRequest,
@@ -159,6 +186,8 @@ export class BillingController {
 
   // Report endpoints
   @Get('reports/revenue')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:revenue:read')
   getRevenueReport(
     @Query() query: RevenueReportDto,
     @Request() req: AuthenticatedRequest,
@@ -168,6 +197,8 @@ export class BillingController {
 
   // Statistics endpoint
   @Get('statistics')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:statistics:read')
   getStatistics(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -181,6 +212,8 @@ export class BillingController {
 
   // Utility: generate sample invoices for existing patients
   @Post('invoices/generate-samples')
+  @Roles(UserRole.ADMIN)
+  @Permissions('billing:invoice:generateSamples')
   generateSamples(
     @Body() body: { maxPatients?: number; perPatient?: number },
     @Request() req: AuthenticatedRequest,

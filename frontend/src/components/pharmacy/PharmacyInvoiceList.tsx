@@ -86,7 +86,7 @@ export function PharmacyInvoiceList() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('all');
+  const [dateRange, setDateRange] = useState('today');
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -97,6 +97,17 @@ export function PharmacyInvoiceList() {
   useEffect(() => {
     loadInvoices();
   }, [searchQuery, statusFilter, paymentStatusFilter, paymentMethodFilter, dateRange, pagination.page]);
+
+  useEffect(() => {
+    const handler = () => {
+      // Reset to first page, keep filters, ensure dateRange is today
+      setDateRange('today');
+      setPagination(prev => ({ ...prev, page: 1 }));
+      loadInvoices();
+    };
+    window.addEventListener('pharmacy-invoices-refresh', handler);
+    return () => window.removeEventListener('pharmacy-invoices-refresh', handler);
+  }, []);
 
   const loadInvoices = async () => {
     try {
@@ -446,7 +457,7 @@ export function PharmacyInvoiceList() {
                         <div className="space-y-1">
                           {invoice.items.slice(0, 2).map((item) => (
                             <p key={item.id} className="text-sm text-gray-600">
-                              • {item.drug.name} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
+                              • {(item.drug?.name || item.package?.name || 'Item')} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
                             </p>
                           ))}
                           {invoice.items.length > 2 && (

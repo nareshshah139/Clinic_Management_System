@@ -7,6 +7,7 @@ export class PharmacyService {
 
   async getDashboard(branchId: string) {
     try {
+      const prisma = this.prisma as any;
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -14,18 +15,22 @@ export class PharmacyService {
       const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
       const [
-        todayInvoices,
+        todayCompletedAgg,
+        todayAllAgg,
+        todayAllCount,
+        todayCompletedCount,
         monthInvoices,
         lastMonthInvoices,
         totalDrugs,
-        lowStockDrugs,
-        expiredDrugs,
+        lowStockInventoryCount,
+        expiredInventoryCount,
+        packagesCount,
         topSellingDrugs,
         recentInvoices,
         lowStockAlerts,
       ] = await Promise.all([
         // Today's invoices
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: todayStart },
@@ -34,9 +39,32 @@ export class PharmacyService {
           _sum: { totalAmount: true },
           _count: true,
         }),
+        // Today's invoices (all) aggregate for totalAmount
+        prisma.pharmacyInvoice.aggregate({
+          where: {
+            branchId,
+            invoiceDate: { gte: todayStart },
+          },
+          _sum: { totalAmount: true },
+        }),
+        // Today's invoices (all statuses) count
+        prisma.pharmacyInvoice.count({
+          where: {
+            branchId,
+            invoiceDate: { gte: todayStart },
+          },
+        }),
+        // Today's completed invoices count
+        prisma.pharmacyInvoice.count({
+          where: {
+            branchId,
+            invoiceDate: { gte: todayStart },
+            paymentStatus: 'COMPLETED',
+          },
+        }),
 
         // This month's invoices
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: monthStart },
@@ -47,7 +75,7 @@ export class PharmacyService {
         }),
 
         // Last month's invoices for growth calculation
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: lastMonthStart, lte: lastMonthEnd },
@@ -56,23 +84,39 @@ export class PharmacyService {
           _sum: { totalAmount: true },
         }),
 
-        // Total drugs count
-        this.prisma.drug.count({
-          where: { branchId, isActive: true },
-        }),
-
-        // Low stock drugs (assuming we'll add stock tracking later)
-        this.prisma.drug.count({
+        // Total active drugs count
+        prisma.drug.count({
           where: { branchId, isActive: true, isDiscontinued: false },
         }),
 
-        // Expired drugs (assuming we'll add expiry tracking later)
-        this.prisma.drug.count({
-          where: { branchId, isDiscontinued: true },
+        // Low stock inventory items (LOW_STOCK or OUT_OF_STOCK)
+        prisma.inventoryItem.count({
+          where: {
+            branchId,
+            status: 'ACTIVE',
+            OR: [
+              { stockStatus: 'LOW_STOCK' },
+              { stockStatus: 'OUT_OF_STOCK' },
+            ],
+          },
+        }),
+
+        // Expired inventory items
+        prisma.inventoryItem.count({
+          where: {
+            branchId,
+            status: 'ACTIVE',
+            stockStatus: 'EXPIRED',
+          },
+        }),
+
+        // Treatment packages count (active)
+        prisma.pharmacyPackage.count({
+          where: { branchId, isActive: true },
         }),
 
         // Top selling drugs this month
-        this.prisma.pharmacyInvoiceItem.groupBy({
+        prisma.pharmacyInvoiceItem.groupBy({
           by: ['drugId'],
           where: {
             invoice: {
@@ -94,7 +138,7 @@ export class PharmacyService {
         }),
 
         // Recent invoices
-        this.prisma.pharmacyInvoice.findMany({
+        prisma.pharmacyInvoice.findMany({
           where: { branchId },
           include: {
             patient: {
@@ -105,8 +149,8 @@ export class PharmacyService {
           take: 5,
         }),
 
-        // Low stock alerts (mock data for now)
-        this.prisma.drug.findMany({
+        // Low stock alerts (sample from low stock inventory items)
+        prisma.drug.findMany({
           where: {
             branchId,
             isActive: true,
@@ -122,8 +166,8 @@ export class PharmacyService {
       ]);
 
       // Get drug details for top selling
-      const drugIds = topSellingDrugs.map(item => item.drugId);
-      const drugDetails = await this.prisma.drug.findMany({
+      const drugIds = topSellingDrugs.map((item: any) => item.drugId);
+      const drugDetails = await prisma.drug.findMany({
         where: { id: { in: drugIds } },
         select: {
           id: true,
@@ -132,8 +176,8 @@ export class PharmacyService {
         },
       });
 
-      const topSellingWithDetails = topSellingDrugs.map(item => {
-        const drug = drugDetails.find(d => d.id === item.drugId);
+      const topSellingWithDetails = topSellingDrugs.map((item: any) => {
+        const drug = (drugDetails as any[]).find((d: any) => d.id === item.drugId);
         return {
           id: item.drugId,
           name: drug?.name || 'Unknown',
@@ -144,7 +188,7 @@ export class PharmacyService {
 
       // Calculate growth percentages
       const todayGrowth = this.calculateGrowthPercentage(
-        todayInvoices._sum.totalAmount || 0,
+        todayCompletedAgg._sum.totalAmount || 0,
         monthInvoices._sum.totalAmount || 0
       );
 
@@ -154,18 +198,25 @@ export class PharmacyService {
       );
 
       return {
-        todaySales: todayInvoices._sum.totalAmount || 0,
+        todaySales: todayAllAgg._sum.totalAmount || 0,
+        todaySalesCompleted: todayCompletedAgg._sum.totalAmount || 0,
         todayGrowth,
         monthSales: monthInvoices._sum.totalAmount || 0,
         monthGrowth,
+        // New fields focused on 'today'
+        todayInvoices: todayAllCount,
+        todayCompletedInvoices: todayCompletedCount,
+        todayPendingInvoices: Math.max(0, todayAllCount - todayCompletedCount),
+        // Kept for compatibility (month-level)
         totalInvoices: monthInvoices._count,
-        pendingInvoices: 0, // TODO: Calculate pending invoices
+        pendingInvoices: Math.max(0, monthInvoices._count - monthInvoices._count),
         completedInvoices: monthInvoices._count,
         totalDrugs,
-        lowStockDrugs: Math.floor(totalDrugs * 0.02), // Mock 2% as low stock
-        expiredDrugs: expiredDrugs,
+        lowStockDrugs: lowStockInventoryCount,
+        expiredDrugs: expiredInventoryCount,
+        packagesCount,
         topSellingDrugs: topSellingWithDetails,
-        recentInvoices: recentInvoices.map(invoice => ({
+        recentInvoices: recentInvoices.map((invoice: any) => ({
           id: invoice.id,
           invoiceNumber: invoice.invoiceNumber,
           patientName: invoice.patient.name,
@@ -173,7 +224,7 @@ export class PharmacyService {
           status: invoice.status,
           createdAt: invoice.createdAt.toISOString(),
         })),
-        lowStockAlerts: lowStockAlerts.map(drug => ({
+        lowStockAlerts: lowStockAlerts.map((drug: any) => ({
           id: drug.id,
           name: drug.name,
           currentStock: Math.floor(Math.random() * 20) + 1, // Mock current stock
@@ -188,13 +239,14 @@ export class PharmacyService {
 
   async getSalesStats(branchId: string) {
     try {
+      const prisma = this.prisma as any;
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
       const [todaySales, weekSales, monthSales] = await Promise.all([
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: todayStart },
@@ -204,7 +256,7 @@ export class PharmacyService {
           _count: true,
         }),
 
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: weekStart },
@@ -214,7 +266,7 @@ export class PharmacyService {
           _count: true,
         }),
 
-        this.prisma.pharmacyInvoice.aggregate({
+        prisma.pharmacyInvoice.aggregate({
           where: {
             branchId,
             invoiceDate: { gte: monthStart },
@@ -246,9 +298,10 @@ export class PharmacyService {
 
   async getTopSellingDrugs(branchId: string, limit: number = 10) {
     try {
+      const prisma = this.prisma as any;
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 
-      const topSelling = await this.prisma.pharmacyInvoiceItem.groupBy({
+      const topSelling = await prisma.pharmacyInvoiceItem.groupBy({
         by: ['drugId'],
         where: {
           invoice: {
@@ -270,8 +323,8 @@ export class PharmacyService {
       });
 
       // Get drug details
-      const drugIds = topSelling.map(item => item.drugId);
-      const drugDetails = await this.prisma.drug.findMany({
+      const drugIds = (topSelling as any[]).map((item: any) => item.drugId);
+      const drugDetails = await prisma.drug.findMany({
         where: { id: { in: drugIds } },
         select: {
           id: true,
@@ -281,8 +334,8 @@ export class PharmacyService {
         },
       });
 
-      return topSelling.map(item => {
-        const drug = drugDetails.find(d => d.id === item.drugId);
+      return (topSelling as any[]).map((item: any) => {
+        const drug = (drugDetails as any[]).find((d: any) => d.id === item.drugId);
         return {
           id: item.drugId,
           name: drug?.name || 'Unknown',
@@ -299,7 +352,8 @@ export class PharmacyService {
 
   async getRecentInvoices(branchId: string, limit: number = 10) {
     try {
-      const invoices = await this.prisma.pharmacyInvoice.findMany({
+      const prisma = this.prisma as any;
+      const invoices = await prisma.pharmacyInvoice.findMany({
         where: { branchId },
         include: {
           patient: {
@@ -313,7 +367,7 @@ export class PharmacyService {
         take: limit,
       });
 
-      return invoices.map(invoice => ({
+      return (invoices as any[]).map((invoice: any) => ({
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         patientName: invoice.patient.name,
@@ -331,7 +385,8 @@ export class PharmacyService {
   async getAlerts(branchId: string) {
     try {
       // Mock low stock alerts for now
-      const drugs = await this.prisma.drug.findMany({
+      const prisma = this.prisma as any;
+      const drugs = await prisma.drug.findMany({
         where: {
           branchId,
           isActive: true,
@@ -345,7 +400,7 @@ export class PharmacyService {
         take: 10,
       });
 
-      const lowStockAlerts = drugs.slice(0, 4).map(drug => ({
+      const lowStockAlerts = (drugs as any[]).slice(0, 4).map((drug: any) => ({
         id: drug.id,
         name: drug.name,
         currentStock: Math.floor(Math.random() * 20) + 1,
@@ -353,7 +408,7 @@ export class PharmacyService {
         manufacturerName: drug.manufacturerName,
       }));
 
-      const expiredDrugs = drugs.slice(4, 6).map(drug => ({
+      const expiredDrugs = (drugs as any[]).slice(4, 6).map((drug: any) => ({
         id: drug.id,
         name: drug.name,
         expiryDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),

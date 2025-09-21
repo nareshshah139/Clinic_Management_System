@@ -5,6 +5,8 @@ import { DrugController } from './drug.controller';
 import { DrugService } from './drug.service';
 import { PharmacyInvoiceController } from './pharmacy-invoice.controller';
 import { PharmacyInvoiceService } from './pharmacy-invoice.service';
+import { PharmacyPackageController } from './pharmacy-package.controller';
+import { PharmacyPackageService } from './pharmacy-package.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
 
 @Module({
@@ -13,16 +15,19 @@ import { PrismaModule } from '../../shared/database/prisma.module';
     PharmacyController,
     DrugController,
     PharmacyInvoiceController,
+    PharmacyPackageController,
   ],
   providers: [
     PharmacyService,
     DrugService,
     PharmacyInvoiceService,
+    PharmacyPackageService,
   ],
   exports: [
     PharmacyService,
     DrugService,
     PharmacyInvoiceService,
+    PharmacyPackageService,
   ],
 })
 export class PharmacyModule {} 

@@ -58,7 +58,7 @@ const navigation = [
     icon: CreditCard,
   },
   {
-    name: 'Pharmacy Billing',
+    name: 'Pharmacy',
     href: '/dashboard/pharmacy',
     icon: Pill,
   },

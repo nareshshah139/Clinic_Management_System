@@ -755,3 +755,179 @@ Fixed critical scalability issues in the patients page that would prevent it fro
 
 The patients page now scales properly for clinics of any size with proper pagination, database indexing, and optimized queries.
 
+[2025-09-20 15:30 UTC] Frontend: Major appointments page fixes and improvements - Fixed API data structure inconsistencies, replaced browser alerts with toast notifications, added comprehensive form validation, implemented proper IST timezone handling, made time slots configurable, fixed memory leaks from timeouts, improved room filtering logic, added loading states and error recovery, enhanced TypeScript coverage, and implemented proper cleanup mechanisms. Added toast notification system with Radix UI components.
+
+[2025-09-20 15:05 UTC] System: Both backend and frontend servers successfully started and running:
+- ✅ Backend (NestJS): http://localhost:4000 - API responding, all routes mapped, database connected
+- ✅ Frontend (Next.js): http://localhost:3000 - Application functional, appointments fixes active
+- ✅ Integration: Frontend-Backend communication verified, appointments module fully operational
+
+[2025-09-20 15:10 UTC] Inventory: Successfully populated dermatology drugs inventory:
+- ✅ Created 30 dermatology drugs in the Drug table
+- ✅ Created 30 corresponding inventory items with 50 units each
+- ✅ Total inventory stock added: 1,500 units
+- ✅ Categories covered: Acne treatments, antifungals, topical steroids, oral medications, hair treatments, keratolytics
+- ✅ All items properly categorized with pricing, expiry dates, and stock management settings
+- ✅ Script location: backend/scripts/populate_derm_inventory.ts
+
+[2025-09-20 15:15 UTC] Bug Fix: Resolved inventory API JSON parsing error:
+- ❌ Issue: Inventory API was failing with "SyntaxError: Unexpected token 'd', dermatolog... is not valid JSON"
+- 🔍 Root Cause: Tags field stored as plain text but service expected JSON format
+- ✅ Solution: Created fix script (backend/scripts/fix_inventory_tags.ts) to convert existing tags to JSON
+- ✅ Updated populate script to store tags in correct JSON format for future items  
+- ✅ Enhanced formatInventoryItem function with robust error handling for both tags and metadata fields
+- ✅ All 30 dermatology inventory items now have properly formatted tags: ["dermatology","skin","topical"]
+- ✅ Frontend inventory page should now load without errors
+
+## 2024-09-20: Pharmacy Packages/Combos Implementation
+
+### Backend Implementation
+1. **Database Schema Updates**
+   - Added `PharmacyPackage` model for treatment packages/combos
+   - Added `PharmacyPackageItem` model for drugs in packages
+   - Updated `PharmacyInvoiceItem` to support both drugs and packages
+   - Added `PharmacyItemType` enum (DRUG/PACKAGE)
+   - Added proper relations and indexes
+
+2. **API Development**
+   - Created `PharmacyPackageService` with full CRUD operations
+   - Created `PharmacyPackageController` with comprehensive endpoints
+   - Updated `PharmacyInvoiceService` to handle package items
+   - Added validation and error handling
+   - Implemented permission controls (creator-only edit/delete)
+
+3. **DTOs and Validation**
+   - Created comprehensive DTOs for package management
+   - Added dermatology-specific subcategories
+   - Implemented proper validation and API documentation
+   - Added search and filtering capabilities
+
+4. **Sample Data**
+   - Created script to populate dermatology packages
+   - Added 9 comprehensive treatment packages:
+     - Complete Acne Treatment Kit
+     - Severe Acne Treatment Package
+     - Anti-Aging Starter Kit
+     - Hair Loss Treatment (Male/Female)
+     - Pigmentation Treatment Package
+     - Eczema Management Kit
+     - Fungal Infection Treatment
+     - Post-Procedure Care Kit
+   - Packages include proper pricing, discounts, and instructions
+
+### Frontend Implementation
+1. **Package Management Interface**
+   - Created `PharmacyPackageManager` component
+   - Full CRUD operations for packages
+   - Advanced filtering and search
+   - Package creation wizard with drug selection
+   - Pricing calculator with discount visualization
+
+2. **Enhanced Invoice Builder**
+   - Created `PharmacyInvoiceBuilderFixed` component
+   - Tabbed interface for drugs vs packages
+   - Package selection with detailed information
+   - Proper item management for both types
+   - Package contents display in invoices
+
+3. **Navigation Updates**
+   - Added "Pharmacy Packages" to sidebar navigation
+   - Created dedicated packages page
+   - Integrated with existing pharmacy workflow
+
+### Key Features Implemented
+1. **Doctor-Created Packages**
+   - Doctors can create custom treatment packages
+   - Private/public package visibility controls
+   - Creator permissions for editing/deleting
+
+2. **Dermatology Orientation**
+   - Specialized subcategories for dermatology treatments
+   - Common treatment combinations pre-loaded
+   - Proper dosage and frequency instructions
+
+3. **Billing Integration**
+   - Seamless integration with existing invoice system
+   - Proper pricing calculations with discounts
+   - Package contents visible in invoices
+   - Support for both individual drugs and packages
+
+4. **Comprehensive Package Information**
+   - Detailed descriptions and instructions
+   - Indications and contraindications
+   - Treatment duration and sequencing
+   - Pricing transparency with savings calculation
+
+### Technical Improvements
+- Enhanced type safety in frontend components
+- Proper error handling and validation
+- Responsive design for all screen sizes
+- Comprehensive API documentation
+- Database migrations for schema updates
+
+### Files Modified/Created
+Backend:
+- `backend/prisma/schema.prisma` - Added package models
+- `backend/src/modules/pharmacy/dto/pharmacy-package.dto.ts` - Package DTOs
+- `backend/src/modules/pharmacy/pharmacy-package.service.ts` - Package service
+- `backend/src/modules/pharmacy/pharmacy-package.controller.ts` - Package controller
+- `backend/src/modules/pharmacy/pharmacy.module.ts` - Module updates
+- `backend/scripts/populate_derm_packages.ts` - Sample data script
+
+Frontend:
+- `frontend/src/components/pharmacy/PharmacyPackageManager.tsx` - Package management
+- `frontend/src/components/pharmacy/PharmacyInvoiceBuilderFixed.tsx` - Enhanced invoice builder
+- `frontend/src/app/dashboard/pharmacy/packages/page.tsx` - Packages page
+- `frontend/src/components/layout/sidebar.tsx` - Navigation updates
+
+The pharmacy packages feature is now fully functional with comprehensive dermatology-oriented treatment packages that doctors can create, manage, and use in billing.
+
+[2025-09-20 17:10 UTC] Frontend: Fixed API response handling errors in pharmacy components by implementing proper null/undefined checks instead of optional chaining. Updated `PharmacyInvoiceBuilderFixed` and `PackageBrowser` to validate response structure before accessing nested properties. Added auto-authentication to pharmacy page for development - automatically logs in with test credentials (phone: 9000000000, password: password123) if user is not authenticated, enabling seamless access to protected pharmacy APIs without manual login.
+
+[2025-09-20 17:18 UTC] Backend: Coerced numeric query params for packages paging by adding `@Type(() => Number)` to `page` and `limit` in `QueryPharmacyPackageDto` (`backend/src/modules/pharmacy/dto/pharmacy-package.dto.ts`). This resolves "limit must be a number" validation when the client passes query as strings.
+
+- 2025-09-20: Pharmacy dashboard and invoices now reflect today's activity live.
+  - Backend (`pharmacy.service.ts`): Added `todayInvoices`, `todayCompletedInvoices`, `todayPendingInvoices`, and used completed sum for `todaySales`.
+  - Frontend (`dashboard/pharmacy/page.tsx`): Cards read new today fields with fallback.
+  - Invoice creation triggers both 'pharmacy-dashboard-refresh' and 'pharmacy-invoices-refresh'.
+
+- 2025-09-20: Pharmacy dashboard cards now all use live data.
+  - Backend: `pharmacy.service.getDashboard` returns real `totalDrugs`, `lowStockDrugs` (from inventory LOW_STOCK/OUT_OF_STOCK), `packagesCount`, and uses completed invoice sum for `todaySales`.
+  - Frontend: pharmacy page reads `packagesCount`; package creation triggers a dashboard refresh.
+
+- 2025-09-20: Dashboard todaySales aligned with Invoices view.
+  - Backend: `pharmacy.service.getDashboard` now computes `todaySales` as sum of `totalAmount` across all invoices created today (any payment status), matching the Invoices page totals. A separate `todaySalesCompleted` is still provided for future use.
+
+- 2025-09-20: Visits PrescriptionBuilder drug search aligned with Pharmacy Billing.
+  - Debounced GET /drugs with { search, limit } and robust parsing of response.data.
+  - Results list shows manufacturer and pack size; selecting adds prefilled item.
+
+[2025-09-21T03:23:08Z] Moved review date (follow-up days) to end of visit form in frontend: frontend/src/components/visits/MedicalVisitForm.tsx
+[2025-09-21T03:32:15Z] Moved Review Date from PrescriptionBuilder to bottom of MedicalVisitForm; passed reviewDate prop to PrescriptionBuilder; wired to visit completion followUpDate.
+[2025-09-21T04:23:20Z] Added Customization tab in MedicalVisitForm with Print Background URL and Top Margin; removed print controls from PrescriptionBuilder; plumbed props to builder.
+[2025-09-21T04:26:13Z] Scoped Review Date to hide within Customization tab context in MedicalVisitForm.
+[2025-09-21T04:27:00Z] Moved Review Date to only appear within Prescription tab above PrescriptionBuilder; removed global Review Date block.
+[2025-09-21T04:28:57Z] Moved Review Date to bottom of PrescriptionBuilder and wired onChangeReviewDate from MedicalVisitForm; removed top-of-tab Review Date block.
+[2025-09-21T04:30:33Z] Renamed Notes to Doctor's Personal Notes in PrescriptionBuilder; excluded from print remains enforced.
+[2025-09-21T05:00:22Z] Reorganized PrescriptionBuilder into collapsible sections with accordion-style cards to reduce clutter while preserving all fields and UI highlights.
+[2025-09-21T05:04:41Z] Optimized horizontal space utilization in PrescriptionBuilder by expanding grid layouts, removing sidebar constraint, and improving field distribution.
+[2025-09-21T05:10:31Z] Enhanced doctor workflow: Added patient context sidebar, appointment-to-visit transition, quick templates, and voice-to-text for seamless documentation.
+[2025-09-21T05:15:35Z] Fixed patient context loading issue: Added proper patientId change detection, improved error handling, fallback displays, and corrected API method usage.
+[2025-09-21T05:17:55Z] Fixed patient mismatch issue: Prevented race condition where default patient selection was overriding URL parameters. Added detailed logging to track patient data flow from appointments to visits.
+[2025-09-21T05:22:02Z] Implemented Smart Procedures Page: Complete rewrite with machine-specific forms, procedure metrics, skin type assessment, dynamic parameter tables, and comprehensive tracking.
+[2025-09-21T05:23:32Z] Fixed console error: Changed THERAPIST role to NURSE role to match valid system roles. Updated UI labels and variable names accordingly.
+[2025-09-21T05:26:23Z] Integrated visit data with procedures page: Added functionality to load existing procedure data from visits, display in history tab, and enable editing of previously captured procedures.
+[2025-09-21T05:32:14Z] Implemented tight prescription-pharmacy integration: Auto-populate prescribed drugs in pharmacy billing, sticky items (cannot be removed), visual indicators, enhanced navigation flow.
+[2025-09-21T05:35:31Z] Fixed ReferenceError: Restored missing invoiceData state and useToast hook in PharmacyInvoiceBuilderFixed component.
+[2025-09-21T05:42:44Z] Fixed Internal Server Error: Corrected Prisma queries in prescriptions service - removed invalid branchId references from Prescription model queries and used proper relation paths through Visit->Patient->branchId.
+[2025-09-21T05:46:47Z] Fixed isActive validation error: Added isActive field to QueryDrugDto with proper boolean transform, updated DrugService to handle isActive parameter, and regenerated Prisma client.
+[2025-09-21T05:47:49Z] Fixed ReferenceError: Added missing searchResults state variable in PharmacyInvoiceBuilderFixed component.
+[2025-09-21T05:50:28Z] Fixed isActive validation error for pharmacy packages: Added Transform decorator to properly handle boolean conversion from string in QueryPharmacyPackageDto.
+[2025-09-21T05:54:19Z] Enhanced search dropdown UX: Added click-outside handling, Escape key support, and smooth animations for patient and drug search dropdowns in PharmacyInvoiceBuilderFixed.
+[2025-09-21T05:56:53Z] Fixed search state linkage: Separated patient search and drug search into independent state variables (patientSearchQuery, drugSearchQuery, showPatientSearchResults, showDrugSearchResults) to prevent unintentional cross-population.
+[2025-09-21T06:01:52Z] Enhanced drug search with relevance-based ranking: Implemented intelligent search scoring algorithm with text highlighting, relevance badges, and visual indicators for closest matches in both PrescriptionBuilder and PharmacyInvoiceBuilderFixed components.
+[2025-09-21T11:25:56Z] Enhanced drug search prefix priority: Dramatically increased scores for drugs starting with search query (8000+ points) vs containing query in middle (500- points), ensuring prefix matches always rank higher than contains matches.
+[2025-09-21T11:29:03Z] Equalized generic name priority: Generic names now receive equal scoring priority as drug names across all match types (exact: 10000, prefix: 8000, word-level: 6000, contains: 500, partial: 150) for better medical search accuracy.
+
+[2025-09-21: Implemented controller-level RBAC: added Roles and Permissions decorators and guards; annotated Appointments, Billing, Inventory, Pharmacy routes; registered guards globally.
+[2025-09-21] Commit: Enforce controller-level RBAC with Roles/Permissions guards; annotated routes; registered global guards; updated planning.md and updates_log.

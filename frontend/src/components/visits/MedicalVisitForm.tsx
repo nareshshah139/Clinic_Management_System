@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History, Calendar } from 'lucide-react';
+import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History, Calendar, ChevronUp, ChevronDown } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 
@@ -59,6 +59,8 @@ const ROLE_PERMISSIONS = {
 };
 
 export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData }: Props) {
+  console.log('🏥 MedicalVisitForm props:', { patientId, patientName, appointmentId, appointmentData: !!appointmentData });
+  
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
@@ -72,7 +74,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [vitals, setVitals] = useState({
     bpS: '', bpD: '', hr: '', temp: '', weight: '', height: '', spo2: '', rr: ''
   });
-  const [basicComplaints, setBasicComplaints] = useState('');
   const [painScore, setPainScore] = useState('');
   const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
   
@@ -125,13 +126,126 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [topicals, setTopicals] = useState<string>('');
   const [systemics, setSystemics] = useState<string>('');
   const [counseling, setCounseling] = useState<string>('');
-  const [followUpDays, setFollowUpDays] = useState<string>('');
+  const [reviewDate, setReviewDate] = useState<string>('');
   
   // Patient history
   const [patientHistory, setPatientHistory] = useState<PatientHistory[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+
+  // Print customization (moved from PrescriptionBuilder)
+  const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
+  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+
+  // Patient context sidebar
+  const [showPatientContext, setShowPatientContext] = useState(true);
+  const [patientDetails, setPatientDetails] = useState<any>(null);
+  const [recentVisits, setRecentVisits] = useState<any[]>([]);
+
+  // Quick templates for common scenarios
+  const [showQuickTemplates, setShowQuickTemplates] = useState(false);
+  
+  // Voice-to-text functionality
+  const [isListening, setIsListening] = useState(false);
+  const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
+  
+  const startVoiceInput = (fieldName: string) => {
+    if (!('webkitSpeechRecognition' in window)) {
+      alert('Voice input not supported in this browser');
+      return;
+    }
+    
+    const recognition = new (window as any).webkitSpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    
+    setIsListening(true);
+    setActiveVoiceField(fieldName);
+    
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      
+      if (finalTranscript) {
+        switch (fieldName) {
+          case 'subjective':
+            setSubjective(prev => prev + ' ' + finalTranscript);
+            break;
+          case 'objective':
+            setObjective(prev => prev + ' ' + finalTranscript);
+            break;
+          case 'assessment':
+            setAssessment(prev => prev + ' ' + finalTranscript);
+            break;
+          case 'plan':
+            setPlan(prev => prev + ' ' + finalTranscript);
+            break;
+        }
+      }
+    };
+    
+    recognition.onerror = () => {
+      setIsListening(false);
+      setActiveVoiceField(null);
+    };
+    
+    recognition.onend = () => {
+      setIsListening(false);
+      setActiveVoiceField(null);
+    };
+    
+    recognition.start();
+  };
+  
+  const VoiceButton = ({ fieldName }: { fieldName: string }) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      onClick={() => startVoiceInput(fieldName)}
+      disabled={isListening && activeVoiceField !== fieldName}
+    >
+      {activeVoiceField === fieldName ? '🔴' : '🎤'}
+    </Button>
+  );
+
+  const quickTemplates = [
+    {
+      name: 'Acne Follow-up',
+      condition: () => recentVisits.some(v => v.diagnosis?.some((d: string) => d.toLowerCase().includes('acne'))),
+      apply: () => {
+        setSubjective('Follow-up for acne treatment. Patient reports improvement/worsening.');
+        setDermDx(new Set(['Acne vulgaris']));
+        setMorphology(new Set(['Papule', 'Pustule', 'Comedo']));
+        setDistribution(new Set(['Face']));
+      }
+    },
+    {
+      name: 'Routine Dermatology Check',
+      condition: () => true,
+      apply: () => {
+        setSubjective('General dermatological consultation. Patient seeking skin assessment.');
+        setSkinConcerns(new Set(['General assessment']));
+      }
+    },
+    {
+      name: 'Pigmentation Concern',
+      condition: () => recentVisits.some(v => v.diagnosis?.some((d: string) => d.toLowerCase().includes('melasma') || d.toLowerCase().includes('pigment'))),
+      apply: () => {
+        setSubjective('Pigmentation concerns. Patient reports dark spots/patches.');
+        setDermDx(new Set(['Melasma', 'Post-inflammatory hyperpigmentation']));
+        setMorphology(new Set(['Macule']));
+        setDistribution(new Set(['Face']));
+      }
+    }
+  ];
 
   // Check permissions for current user role
   const hasPermission = (section: string) => {
@@ -142,14 +256,55 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Load visit number and patient history
   useEffect(() => {
     loadPatientHistory();
+    loadPatientContext();
   }, [patientId]);
 
+  // Reload patient context when patientId changes (for appointment transitions)
+  useEffect(() => {
+    if (patientId && patientId !== patientDetails?.id) {
+      console.log('�� Patient ID changed, reloading context. New ID:', patientId, 'Current:', patientDetails?.id);
+      loadPatientContext();
+    }
+  }, [patientId, patientDetails?.id]);
+
+  const loadPatientContext = async () => {
+    if (!patientId) {
+      console.warn('⚠️ No patientId provided for patient context loading');
+      return;
+    }
+    
+    console.log('📥 Loading patient context for patientId:', patientId);
+    try {
+      const [patient, visits] = await Promise.all([
+        apiClient.getPatient(patientId),
+        apiClient.get(`/visits/patient/${patientId}/history?limit=3`)
+      ]);
+      console.log('✅ Patient data loaded:', patient);
+      console.log('📚 Recent visits loaded:', visits);
+      setPatientDetails(patient);
+      setRecentVisits((visits as any).visits || []);
+    } catch (error) {
+      console.error('❌ Failed to load patient context:', error);
+      // Try to get basic patient info from appointment data if available
+      if (appointmentData?.patient) {
+        console.log('�� Using patient data from appointment:', appointmentData.patient);
+        setPatientDetails(appointmentData.patient);
+      }
+    }
+  };
+
   const loadPatientHistory = async () => {
+    if (!patientId) {
+      console.warn('No patientId provided for patient history loading');
+      return;
+    }
+    
     try {
       setLoadingHistory(true);
       const response = await apiClient.get(`/visits/patient/${patientId}/history`);
-      setPatientHistory(response.visits || []);
-      setCurrentVisitNumber((response.visits?.length || 0) + 1);
+      const responseData = response as any;
+      setPatientHistory(responseData.visits || []);
+      setCurrentVisitNumber((responseData.visits?.length || 0) + 1);
     } catch (error) {
       console.error('Failed to load patient history:', error);
       setPatientHistory([]);
@@ -232,7 +387,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         let activeVisitId = visitId;
         if (!activeVisitId) {
           const newVisit = await apiClient.createVisit(buildPayload());
-          activeVisitId = newVisit.id;
+          activeVisitId = (newVisit as any).id;
           setVisitId(activeVisitId);
         }
 
@@ -306,8 +461,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       appointmentId, // Include appointment ID if available
       visitNumber: currentVisitNumber,
       status: visitStatus,
-      complaints: basicComplaints || subjective ? 
-        [{ complaint: basicComplaints || subjective }] : 
+      complaints: (subjective && subjective.trim()) ?
+        [{ complaint: subjective }] :
         [{ complaint: 'General consultation' }],
       examination: {
         ...(objective ? { generalAppearance: objective } : {}),
@@ -339,7 +494,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             systemics: systemics || undefined,
           },
           counseling: counseling || undefined,
-          followUpDays: followUpDays ? Number(followUpDays) : undefined,
+          // follow-up date handled at visit completion; prescription gets reviewDate via prop
         }
       },
       vitals: {
@@ -377,11 +532,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         visit = await apiClient.updateVisit(visitId, payload);
       } else {
         visit = await apiClient.createVisit(payload);
-        setVisitId(visit.id);
+        setVisitId((visit as any).id);
       }
       
       if (complete) {
-        await apiClient.completeVisit(visit.id, {});
+        const completePayload: any = {};
+        if (reviewDate) completePayload.followUpDate = reviewDate;
+        await apiClient.completeVisit((visit as any).id, completePayload);
         setVisitStatus('completed');
       } else {
         setVisitStatus('in-progress');
@@ -423,6 +580,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         { id: 'treatment', label: 'Treatment', icon: FileText, always: false }
       );
       tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
+      tabs.push({ id: 'customization', label: 'Customization', icon: FileText, always: false });
     }
 
     tabs.push({ id: 'history', label: 'History', icon: History, always: true });
@@ -431,7 +589,136 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex gap-6">
+      {/* Patient Context Sidebar */}
+      {showPatientContext && (
+        <div className="w-80 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Patient Context</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowPatientContext(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {patientDetails && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-gray-500" />
+                    <span className="font-medium">{patientDetails.name}</span>
+                    <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Age: {patientDetails.dob ? new Date().getFullYear() - new Date(patientDetails.dob).getFullYear() : 'N/A'} • {patientDetails.gender || 'N/A'}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    Phone: {patientDetails.phone || 'N/A'}
+                  </div>
+                  {patientDetails.allergies && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded">
+                      <div className="text-xs font-medium text-red-800">⚠️ ALLERGIES</div>
+                      <div className="text-sm text-red-700">{patientDetails.allergies}</div>
+                    </div>
+                  )}
+                  {patientDetails.medicalHistory && (
+                    <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                      <div className="text-xs font-medium text-blue-800">Medical History</div>
+                      <div className="text-sm text-blue-700">{patientDetails.medicalHistory}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {!patientDetails && patientId && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <div className="text-xs font-medium text-yellow-800">⚠️ Patient Loading</div>
+                  <div className="text-sm text-yellow-700">
+                    Loading patient data for ID: {patientId}
+                    {patientName && <div className="mt-1">Name: {patientName}</div>}
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="mt-2"
+                    onClick={loadPatientContext}
+                  >
+                    Retry Loading
+                  </Button>
+                </div>
+              )}
+              
+              {!patientDetails && !patientId && (
+                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
+                  <div className="text-xs font-medium text-gray-600">No Patient Selected</div>
+                  <div className="text-sm text-gray-500">
+                    Patient context will appear when a patient is selected
+                  </div>
+                </div>
+              )}
+              
+              {recentVisits.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Recent Visits</div>
+                  {recentVisits.slice(0, 2).map((visit, index) => (
+                    <div key={visit.id} className="p-2 bg-gray-50 rounded text-xs">
+                      <div className="font-medium">
+                        {new Date(visit.date).toLocaleDateString()}
+                      </div>
+                      <div className="text-gray-600">
+                        {visit.diagnosis?.slice(0, 2).join(', ') || 'No diagnosis'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+      
+      {/* Main Content */}
+      <div className={`flex-1 space-y-6 ${showPatientContext ? '' : 'max-w-none'}`}>
+        {!showPatientContext && (
+          <Button variant="outline" size="sm" onClick={() => setShowPatientContext(true)} className="mb-4">
+            <User className="h-4 w-4 mr-2" />
+            Show Patient Context
+          </Button>
+        )}
+        
+        {/* Quick Templates */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base">Quick Start Templates</CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowQuickTemplates(!showQuickTemplates)}>
+                {showQuickTemplates ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </Button>
+            </div>
+          </CardHeader>
+          {showQuickTemplates && (
+            <CardContent className="pt-0">
+              <div className="space-y-2">
+                {quickTemplates
+                  .filter(template => template.condition())
+                  .map((template, index) => (
+                    <Button
+                      key={index}
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={template.apply}
+                    >
+                      <FileText className="h-3 w-3 mr-2" />
+                      {template.name}
+                    </Button>
+                  ))}
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
       {/* Visit Header */}
       <Card>
         <CardHeader className="pb-4">
@@ -663,14 +950,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       onChange={(e) => setPainScore(e.target.value)} 
                     />
                   </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Basic Complaints</label>
-                    <Textarea 
-                      placeholder="Patient's main concerns..." 
-                      value={basicComplaints} 
-                      onChange={(e) => setBasicComplaints(e.target.value)} 
-                    />
-                  </div>
                 </div>
 
                 <div className="flex justify-end">
@@ -786,12 +1065,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">Initial Assessment Notes</label>
-                  <Textarea 
-                    placeholder="Basic observations, patient concerns, preliminary findings..."
-                    value={subjective}
-                    onChange={(e) => setSubjective(e.target.value)}
-                    rows={4}
-                  />
+                  <div className="flex items-center">
+                    <Textarea 
+                      placeholder="Basic observations, patient concerns, preliminary findings..."
+                      value={subjective}
+                      onChange={(e) => setSubjective(e.target.value)}
+                      rows={4}
+                    />
+                    <VoiceButton fieldName="subjective" />
+                  </div>
                 </div>
 
                 <div className="flex justify-end">
@@ -836,14 +1118,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       placeholder="0-10" 
                       value={itchScore} 
                       onChange={(e) => setItchScore(e.target.value)} 
-                    />
-              </div>
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Follow-up (days)</label>
-                    <Input 
-                      placeholder="e.g., 30" 
-                      value={followUpDays} 
-                      onChange={(e) => setFollowUpDays(e.target.value)} 
                     />
               </div>
             </div>
@@ -920,12 +1194,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">Detailed Examination</label>
-                  <Textarea 
-                    placeholder="Detailed physical examination findings..."
-                    value={objective}
-                    onChange={(e) => setObjective(e.target.value)}
-                    rows={3}
-                  />
+                  <div className="flex items-center">
+                    <Textarea 
+                      placeholder="Detailed physical examination findings..."
+                      value={objective}
+                      onChange={(e) => setObjective(e.target.value)}
+                      rows={3}
+                    />
+                    <VoiceButton fieldName="objective" />
+                  </div>
                 </div>
 
                 <div className="flex justify-end">
@@ -1035,8 +1312,36 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       patientId={patientId}
                       doctorId={doctorId}
                       visitId={visitId}
+                      reviewDate={reviewDate}
+                      printBgUrl={printBgUrl}
+                      printTopMarginPx={printTopMarginPx}
+                      onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                     />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
+
+            {/* Customization Tab - Doctor Only */}
+            {hasPermission('all') && (
+              <TabsContent value="customization" className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Customization Options</CardTitle>
+                    <CardDescription>Configure print background and layout (affects Prescription Preview)</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2">
+                        <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+                        <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-sm text-gray-700">Top Margin (px)</label>
+                        <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1131,7 +1436,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               <div className="space-y-2">
                                 <div className="flex items-center text-sm">
                                   <User className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className="text-gray-600">Dr. {(visit.doctor?.firstName || '')} {(visit.doctor?.lastName || visit.doctor?.name || '')}</span>
+                                  <span className="text-gray-600">Dr. {typeof visit.doctor === 'string' ? visit.doctor : `${(visit.doctor as any)?.firstName || ''} ${(visit.doctor as any)?.lastName || ''}`}</span>
                                 </div>
                                 
                                 <div className="flex items-center text-sm">
@@ -1185,5 +1490,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       </CardContent>
     </Card>
     </div>
+  </div>
   );
 } 

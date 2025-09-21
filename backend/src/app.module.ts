@@ -18,6 +18,8 @@ import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
+import { RolesGuard } from './shared/guards/roles.guard';
+import { PermissionsGuard } from './shared/guards/permissions.guard';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -62,6 +64,14 @@ const minimalModules = [AuthModule];
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: PermissionsGuard,
     },
   ],
 })

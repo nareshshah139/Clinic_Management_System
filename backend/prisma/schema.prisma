@@ -47,6 +47,7 @@ model User {
   branch            Branch             @relation(fields: [branchId], references: [id])
   visits            Visit[]
   pharmacyInvoices  PharmacyInvoice[] @relation("PharmacyInvoiceDoctor")
+  createdPackages   PharmacyPackage[]    @relation("PharmacyPackageCreator")
 
   @@map("users")
 }
@@ -82,6 +83,7 @@ model Branch {
   users            User[]
   drugs            Drug[]
   pharmacyInvoices PharmacyInvoice[]
+  pharmacyPackages PharmacyPackage[]
 
   @@map("branches")
 }
@@ -687,6 +689,7 @@ model Drug {
   branch            Branch                 @relation(fields: [branchId], references: [id])
   invoiceItems      PharmacyInvoiceItem[]
   inventoryItems    InventoryItem[]
+  packageItems      PharmacyPackageItem[]
   
   @@map("drugs")
   @@index([name])
@@ -757,7 +760,8 @@ model PharmacyInvoice {
 model PharmacyInvoiceItem {
   id              String           @id @default(cuid())
   invoiceId       String
-  drugId          String
+  drugId          String?          // Made optional for package items
+  packageId       String?          // New field for package reference
   
   // Item Details
   quantity        Int
@@ -767,6 +771,9 @@ model PharmacyInvoiceItem {
   taxPercent      Float            @default(0)
   taxAmount       Float            @default(0)
   totalAmount     Float
+  
+  // Item Type
+  itemType        PharmacyItemType @default(DRUG)  // New enum
   
   // Dosage Instructions
   dosage          String?
@@ -779,11 +786,14 @@ model PharmacyInvoiceItem {
   
   // Relations
   invoice         PharmacyInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  drug            Drug             @relation(fields: [drugId], references: [id])
+  drug            Drug?            @relation(fields: [drugId], references: [id])
+  package         PharmacyPackage? @relation(fields: [packageId], references: [id])
   
   @@map("pharmacy_invoice_items")
   @@index([invoiceId])
   @@index([drugId])
+  @@index([packageId])
+  @@index([itemType])
 }
 
 // Pharmacy Payments
@@ -961,4 +971,80 @@ enum PurchaseOrderStatus {
   ORDERED
   RECEIVED
   CANCELLED
+}
+
+// Pharmacy Package Model (for dermatology treatment combos)
+model PharmacyPackage {
+  id               String                      @id @default(cuid())
+  name             String
+  description      String?
+  category         String                      @default("Dermatology")
+  subcategory      String?                     // e.g., "Acne Treatment", "Anti-aging", "Hair Care"
+  
+  // Pricing
+  originalPrice    Float                       // Sum of individual drug prices
+  packagePrice     Float                       // Discounted package price
+  discountPercent  Float                       @default(0)
+  
+  // Package Details
+  duration         String?                     // e.g., "4 weeks", "3 months"
+  instructions     String?                     // Usage instructions for the combo
+  indications      String?                     // What conditions this package treats
+  contraindications String?                    // When not to use
+  
+  // Creator & Status
+  createdBy        String?                     // Doctor who created this package
+  isActive         Boolean                     @default(true)
+  isPublic         Boolean                     @default(false)  // If false, only creator can use
+  branchId         String
+  
+  // Timestamps
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+  
+  // Relations
+  creator          User?                       @relation("PharmacyPackageCreator", fields: [createdBy], references: [id])
+  branch           Branch                      @relation(fields: [branchId], references: [id])
+  items            PharmacyPackageItem[]
+  invoiceItems     PharmacyInvoiceItem[]
+  
+  @@map("pharmacy_packages")
+  @@index([branchId])
+  @@index([category])
+  @@index([subcategory])
+  @@index([createdBy])
+  @@index([isActive])
+  @@index([isPublic])
+}
+
+// Pharmacy Package Items (drugs included in a package)
+model PharmacyPackageItem {
+  id              String            @id @default(cuid())
+  packageId       String
+  drugId          String
+  
+  // Item Details
+  quantity        Int
+  dosage          String?           // e.g., "Apply twice daily"
+  frequency       String?           // e.g., "Morning and Evening"
+  duration        String?           // e.g., "Use for 4 weeks"
+  instructions    String?           // Special instructions for this drug in the combo
+  sequence        Int               @default(0)  // Order of application/usage
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  
+  // Relations
+  package         PharmacyPackage   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  drug            Drug              @relation(fields: [drugId], references: [id])
+  
+  @@map("pharmacy_package_items")
+  @@index([packageId])
+  @@index([drugId])
+}
+
+// Add new enum for pharmacy item types
+enum PharmacyItemType {
+  DRUG
+  PACKAGE
 }

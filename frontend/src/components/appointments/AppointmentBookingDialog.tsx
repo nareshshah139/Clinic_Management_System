@@ -7,27 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
-import type { Patient } from '@/lib/types';
-
-interface Room {
-  id: string;
-  name: string;
-  type: string;
-  capacity: number;
-  isActive: boolean;
-}
-
-interface RoomSchedule {
-  roomId: string;
-  roomName: string;
-  roomType: string;
-  date: string;
-  appointments: Array<{
-    slot: string;
-    patient: { id: string; name: string; phone?: string };
-    doctor: { id: string; firstName: string; lastName: string };
-  }>;
-}
+import { useToast } from '@/hooks/use-toast';
+import { getErrorMessage, filterRoomsByVisitType, formatPatientName } from '@/lib/utils';
+import type { 
+  Patient, 
+  Room, 
+  RoomSchedule, 
+  VisitType,
+  GetRoomsResponse 
+} from '@/lib/types';
 
 interface AppointmentBookingDialogProps {
   open: boolean;
@@ -37,7 +25,7 @@ interface AppointmentBookingDialogProps {
   slot: string;
   patient: Patient | null;
   onConfirm: (appointmentData: { 
-    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED'; 
+    visitType: VisitType; 
     roomId?: string;
   }) => Promise<void>;
   onCancel: () => void;
@@ -53,12 +41,15 @@ export default function AppointmentBookingDialog({
   onConfirm,
   onCancel
 }: AppointmentBookingDialogProps) {
-  const [visitType, setVisitType] = useState<'OPD' | 'PROCEDURE' | 'TELEMED'>('OPD');
+  const { toast } = useToast();
+  const [visitType, setVisitType] = useState<VisitType>('OPD');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule>>({});
   const [loading, setLoading] = useState(false);
   const [fetchingRooms, setFetchingRooms] = useState(false);
+  const [fetchingSchedules, setFetchingSchedules] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
@@ -68,6 +59,7 @@ export default function AppointmentBookingDialog({
       setVisitType('OPD');
       setSelectedRoomId('');
       setRoomSchedules({});
+      setErrors([]);
     }
   }, [open]);
 
@@ -80,10 +72,15 @@ export default function AppointmentBookingDialog({
   const fetchRooms = async () => {
     try {
       setFetchingRooms(true);
-      const res: any = await apiClient.getRooms();
+      const res: GetRoomsResponse = await apiClient.getRooms();
       setRooms(res.rooms || []);
     } catch (e) {
-      console.error('Failed to fetch rooms', e);
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to fetch rooms",
+        description: errorMessage,
+      });
     } finally {
       setFetchingRooms(false);
     }
@@ -91,25 +88,14 @@ export default function AppointmentBookingDialog({
 
   const fetchRoomSchedules = async () => {
     try {
+      setFetchingSchedules(true);
       const schedules: Record<string, RoomSchedule> = {};
       
-      // Filter rooms based on appointment type
-      const relevantRooms = rooms.filter(room => {
-        if (visitType === 'PROCEDURE') {
-          return room.type.toLowerCase().includes('procedure') || room.type.toLowerCase().includes('operation');
-        }
-        if (visitType === 'TELEMED') {
-          return room.type.toLowerCase().includes('telemed') || room.type.toLowerCase().includes('virtual');
-        }
-        // For OPD, show consultation rooms (including 'Consult', 'Consultation', 'OPD')
-        const roomTypeLower = room.type.toLowerCase();
-        return roomTypeLower.includes('consultation') || 
-               roomTypeLower.includes('consult') || 
-               roomTypeLower.includes('opd');
-      });
+      // Filter rooms based on appointment type using improved logic
+      const relevantRooms = filterRoomsByVisitType(rooms, visitType);
 
-      // If no specific room type found, show all rooms
-      const roomsToCheck = relevantRooms.length > 0 ? relevantRooms : rooms;
+      // If no specific room type found, show all active rooms
+      const roomsToCheck = relevantRooms.length > 0 ? relevantRooms : rooms.filter(r => r.isActive);
 
       await Promise.all(
         roomsToCheck.map(async (room) => {
@@ -117,6 +103,7 @@ export default function AppointmentBookingDialog({
             const schedule: RoomSchedule = await apiClient.getRoomSchedule(room.id, date);
             schedules[room.id] = schedule;
           } catch (e) {
+            // Log error but don't show toast for individual room failures
             console.error(`Failed to fetch schedule for room ${room.name}`, e);
           }
         })
@@ -124,7 +111,14 @@ export default function AppointmentBookingDialog({
       
       setRoomSchedules(schedules);
     } catch (e) {
-      console.error('Failed to fetch room schedules', e);
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to fetch room schedules",
+        description: errorMessage,
+      });
+    } finally {
+      setFetchingSchedules(false);
     }
   };
 
@@ -135,29 +129,54 @@ export default function AppointmentBookingDialog({
   };
 
   const getRelevantRooms = () => {
-    return rooms.filter(room => {
-      if (visitType === 'PROCEDURE') {
-        return room.type.toLowerCase().includes('procedure') || room.type.toLowerCase().includes('operation');
-      }
-      if (visitType === 'TELEMED') {
-        return room.type.toLowerCase().includes('telemed') || room.type.toLowerCase().includes('virtual');
-      }
-      // For OPD, show consultation rooms (including 'Consult', 'Consultation', 'OPD')
-      const roomTypeLower = room.type.toLowerCase();
-      return roomTypeLower.includes('consultation') || 
-             roomTypeLower.includes('consult') || 
-             roomTypeLower.includes('opd');
-    });
+    return filterRoomsByVisitType(rooms.filter(r => r.isActive), visitType);
   };
 
-  const handleConfirm = async () => {
+  const validateForm = (): string[] => {
+    const validationErrors: string[] = [];
+    
     if (!visitType) {
-      alert('Please select an appointment type');
-      return;
+      validationErrors.push('Please select an appointment type');
+    }
+    
+    if (!patient) {
+      validationErrors.push('Patient information is missing');
+    }
+    
+    if (!doctorId) {
+      validationErrors.push('Doctor information is missing');
+    }
+    
+    if (!date) {
+      validationErrors.push('Date information is missing');
+    }
+    
+    if (!slot) {
+      validationErrors.push('Time slot information is missing');
     }
 
     if (visitType === 'PROCEDURE' && !selectedRoomId) {
-      alert('Please select a room for the procedure');
+      validationErrors.push('Please select a room for the procedure');
+    }
+    
+    // Check if selected room is available
+    if (selectedRoomId && !isSlotAvailable(selectedRoomId, slot)) {
+      validationErrors.push('Selected room is not available at this time');
+    }
+
+    return validationErrors;
+  };
+
+  const handleConfirm = async () => {
+    const validationErrors = validateForm();
+    setErrors(validationErrors);
+    
+    if (validationErrors.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validationErrors[0],
+      });
       return;
     }
 
@@ -167,6 +186,10 @@ export default function AppointmentBookingDialog({
         visitType, 
         roomId: selectedRoomId || undefined 
       });
+    } catch (error) {
+      // Error handling is done in parent component
+      // Just re-throw to maintain error flow
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -184,16 +207,34 @@ export default function AppointmentBookingDialog({
         <div className="space-y-6">
           {/* Appointment Details */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div><span className="font-medium">Patient:</span> {patient?.firstName} {patient?.lastName}</div>
-            <div><span className="font-medium">Phone:</span> {patient?.phone}</div>
+            <div><span className="font-medium">Patient:</span> {formatPatientName(patient)}</div>
+            <div><span className="font-medium">Phone:</span> {patient?.phone || 'N/A'}</div>
             <div><span className="font-medium">Date:</span> {date}</div>
             <div><span className="font-medium">Time Slot:</span> {slot}</div>
           </div>
 
+          {/* Validation Errors */}
+          {errors.length > 0 && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <div className="text-sm text-red-800">
+                <div className="font-medium mb-1">Please fix the following errors:</div>
+                <ul className="list-disc list-inside space-y-1">
+                  {errors.map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* Appointment Type Selection */}
           <div>
             <label className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
-            <Select value={visitType} onValueChange={(value: 'OPD' | 'PROCEDURE' | 'TELEMED') => setVisitType(value)}>
+            <Select value={visitType} onValueChange={(value: VisitType) => {
+              setVisitType(value);
+              setSelectedRoomId(''); // Reset room selection when visit type changes
+              setErrors([]);
+            }}>
               <SelectTrigger>
                 <SelectValue placeholder="Select appointment type" />
               </SelectTrigger>
@@ -219,9 +260,14 @@ export default function AppointmentBookingDialog({
               
               {fetchingRooms ? (
                 <div className="text-center py-8">Loading rooms...</div>
+              ) : fetchingSchedules ? (
+                <div className="text-center py-8">Loading room schedules...</div>
               ) : relevantRooms.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  No {visitType.toLowerCase()} rooms available
+                  <p>No {visitType.toLowerCase()} rooms available</p>
+                  <p className="text-xs mt-2">
+                    You can still book this appointment. Room assignment can be done later.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -243,6 +289,7 @@ export default function AppointmentBookingDialog({
                         onClick={() => {
                           if (isAvailable) {
                             setSelectedRoomId(selectedRoomId === room.id ? '' : room.id);
+                            setErrors([]); // Clear errors when selecting a room
                           }
                         }}
                       >
@@ -256,7 +303,7 @@ export default function AppointmentBookingDialog({
                               {isAvailable ? 'Available' : 'Occupied'}
                             </Badge>
                           </div>
-                          <p className="text-sm text-gray-600">{room.type}</p>
+                          <p className="text-sm text-gray-600">{room.type} • Capacity: {room.capacity}</p>
                         </CardHeader>
                         <CardContent className="pt-0">
                           {!isAvailable && conflictingAppointment && (
@@ -279,6 +326,12 @@ export default function AppointmentBookingDialog({
               {visitType === 'PROCEDURE' && relevantRooms.length > 0 && (
                 <p className="text-xs text-gray-500 mt-2">
                   * Room selection is required for procedures. Click on an available room to select it.
+                </p>
+              )}
+              
+              {visitType !== 'PROCEDURE' && (
+                <p className="text-xs text-gray-500 mt-2">
+                  Room selection is optional for {visitType.toLowerCase()} appointments.
                 </p>
               )}
             </div>

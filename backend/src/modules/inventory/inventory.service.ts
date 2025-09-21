@@ -1105,10 +1105,35 @@ export class InventoryService {
   }
 
   private formatInventoryItem(item: any) {
+    let tags = [];
+    let metadata = null;
+
+    // Safely parse tags
+    if (item.tags) {
+      try {
+        tags = JSON.parse(item.tags);
+      } catch (error) {
+        // If parsing fails, treat as comma-separated string
+        if (typeof item.tags === 'string') {
+          tags = item.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+        }
+      }
+    }
+
+    // Safely parse metadata
+    if (item.metadata) {
+      try {
+        metadata = JSON.parse(item.metadata);
+      } catch (error) {
+        // If parsing fails, keep as string
+        metadata = item.metadata;
+      }
+    }
+
     return {
       ...item,
-      tags: item.tags ? JSON.parse(item.tags) : [],
-      metadata: item.metadata ? JSON.parse(item.metadata) : null,
+      tags,
+      metadata,
     };
   }
 

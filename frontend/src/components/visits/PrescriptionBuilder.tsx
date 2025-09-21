@@ -7,7 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore } from '@/lib/utils';
 
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
@@ -64,14 +67,17 @@ interface Props {
   doctorId: string;
   userRole?: string;
   onCreated?: (id?: string) => void;
+  reviewDate?: string;
+  printBgUrl?: string;
+  printTopMarginPx?: number;
+  onChangeReviewDate?: (v: string) => void;
 }
 
-export default function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated }: Props) {
+export default function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate }: Props) {
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
   const [followUpInstructions, setFollowUpInstructions] = useState('');
-  const [validUntil, setValidUntil] = useState<string>('');
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
@@ -188,9 +194,47 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
   const [oneMgChecking, setOneMgChecking] = useState(false);
   const [oneMgTotals, setOneMgTotals] = useState<any>(null);
 
-  // Print background configuration
-  const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
-  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    basic: true,
+    clinical: false,
+    histories: false,
+    topicals: false,
+    procedures: false,
+    investigations: false,
+    templates: false,
+    sections: false,
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
+
+  const CollapsibleSection = ({ title, section, children, badge, highlight = false }: {
+    title: string;
+    section: string;
+    children: React.ReactNode;
+    badge?: string;
+    highlight?: boolean;
+  }) => (
+    <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleSection(section)}>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base">{title}</CardTitle>
+            {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
+            {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
+          </div>
+          {expandedSections[section] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </div>
+      </CardHeader>
+      {expandedSections[section] && (
+        <CardContent className="pt-0">
+          {children}
+        </CardContent>
+      )}
+    </Card>
+  );
 
   // Fallback patient data (used when visit data is not available or before saving visit)
   const [patientData, setPatientData] = useState<any>(null);
@@ -396,21 +440,55 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
     return () => clearTimeout(t);
   }, [notes, patientId, visitId]);
 
-  const searchDrugs = async (q: string) => {
+  // Debounced drug search with relevance-based sorting
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const q = (drugQuery || '').trim();
+      if (q.length < 2) {
+        setDrugResults([]);
+        return;
+      }
+      try {
+        setLoadingDrugs(true);
+        const res: any = await apiClient.get('/drugs', { search: q, limit: 30, isActive: true }); // Increased limit for better sorting
+        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        // Apply relevance-based sorting and take top 10 results
+        const sortedResults = sortDrugsByRelevance(list, q);
+        setDrugResults(sortedResults.slice(0, 10));
+      } catch (e) {
+        setDrugResults([]);
+      } finally {
+        setLoadingDrugs(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [drugQuery]);
+
+  const searchDrugs = (q: string) => {
     setDrugQuery(q);
-    if (!q || q.length < 2) {
-      setDrugResults([]);
-      return;
-    }
-    try {
-      setLoadingDrugs(true);
-      const res: any = await apiClient.searchDrugs({ query: q, limit: 10 });
-      setDrugResults(res || []);
-    } catch (e) {
-      setDrugResults([]);
-    } finally {
-      setLoadingDrugs(false);
-    }
+  };
+
+  // Highlight matching text in search results
+  const highlightMatch = (text: string, query: string) => {
+    if (!query.trim() || !text) return text;
+    
+    const regex = new RegExp(`(${query.split(/\s+/).map(word => 
+      word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    ).join('|')})`, 'gi');
+    
+    const parts = text.split(regex);
+    return parts.map((part, index) => 
+      regex.test(part) ? 
+        <span key={index} className="bg-yellow-200 font-semibold">{part}</span> : 
+        part
+    );
+  };
+
+  // Get relevance badge for search results
+  const getRelevanceBadge = (drug: any, query: string, index: number) => {
+    if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-green-100 text-green-800">Best Match</Badge>;
+    if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-blue-100 text-blue-800">High Match</Badge>;
+    return null;
   };
 
   const addItemFromDrug = (drug: any) => {
@@ -496,7 +574,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
         diagnosis: diagnosis || undefined,
         notes: notes || undefined,
         language,
-        validUntil: validUntil || undefined,
+        validUntil: reviewDate || undefined,
         followUpInstructions: followUpInstructions || undefined,
         procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
         metadata: {
@@ -525,12 +603,36 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
       };
       const res: any = await apiClient.createPrescription(payload);
       onCreated?.(res?.id);
+      
+      // Enhanced navigation to Pharmacy with automatic integration
+      try {
+        const prescriptionId = res?.id || '';
+        const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(prescriptionId)}`;
+        
+        // Show enhanced confirmation dialog
+        const shouldNavigate = confirm(
+          `✅ Prescription created successfully!\n\n` +
+          `📋 ${items.length} medications prescribed\n` +
+          `🏥 Patient: Ready for billing\n\n` +
+          `Would you like to go to Pharmacy to automatically bill these prescribed drugs?\n\n` +
+          `(The prescribed medications will be pre-loaded and locked in the pharmacy billing)`
+        );
+        
+        if (shouldNavigate) {
+          console.log('🔗 Navigating to pharmacy with prescription:', prescriptionId);
+          window.location.href = url;
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to navigate to pharmacy:', error);
+      }
+      
+      // Reset form only if not navigating to pharmacy
       setItems([]);
       setDiagnosis('');
       setNotes('');
       setFollowUpInstructions('');
-      setValidUntil('');
-      alert('Prescription created');
+      alert('Prescription created successfully!');
     } catch (e: any) {
       const msg = e?.body?.message || 'Failed to create prescription';
       alert(msg);
@@ -747,152 +849,151 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
   };
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>Prescription Builder</span>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">Visit-linked</Badge>
-              <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {loadingVisit && (
-            <div className="text-xs text-gray-500">Loading visit details…</div>
-          )}
-          {/* Formatting & Meta */}
-          <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <div>
-              <label className="text-sm text-gray-700">Language</label>
-              <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="EN">English</SelectItem>
-                  <SelectItem value="TE">Telugu</SelectItem>
-                  <SelectItem value="HI">Hindi</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Review Date</label>
-              <Input type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Top Margin (px)</label>
-              <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
-            </div>
-          </div>
-
-          {/* Print background controls */}
-          <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <div className="md:col-span-2">
-              <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
-              <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Top Margin (px)</label>
-              <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
-            </div>
-          </div>
-
-          <div className={`grid grid-cols-1 md:grid-cols-2 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <div>
-              <label className="text-sm text-gray-700">Diagnosis (optional)</label>
-              <div className="relative">
-                <Input placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
-                {diagOptions.length > 0 && (
-                  <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
-                    {diagOptions.map((opt) => (
-                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setDiagnosis(opt)}>
-                        {opt}
-                      </div>
-                    ))}
+    <div className="space-y-6">
+      {items.length > 0 && (
+        <div className="sticky top-0 z-10 bg-white border-b py-2 flex justify-end">
+          <Button variant="outline" size="sm" onClick={() => {
+            const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
+            window.location.href = url;
+          }}>
+            Go to Pharmacy
+          </Button>
+        </div>
+      )}
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>Prescription Builder</span>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">Visit-linked</Badge>
+                <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loadingVisit && (
+              <div className="text-xs text-gray-500">Loading visit details…</div>
+            )}
+            {/* Basic Information */}
+            <CollapsibleSection title="Basic Information" section="basic">
+              <div className={`space-y-4 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-700">Language</label>
+                    <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EN">English</SelectItem>
+                        <SelectItem value="TE">Telugu</SelectItem>
+                        <SelectItem value="HI">Hindi</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Follow-up Instructions</label>
-              <Input placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
-            </div>
-          </div>
+                </div>
 
-          <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <label className="text-sm text-gray-700">Notes (patient-facing)</label>
-            <div className="relative">
-              <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
-              {notesOptions.length > 0 && (
-                <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
-                  {notesOptions.map((opt) => (
-                    <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setNotes(opt)}>
-                      {opt}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Clinical Details */}
-          <Card>
-            <CardContent className="p-3 space-y-3">
-              <div className="font-medium">Clinical Details</div>
-              {/* Vitals */}
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-                <div>
-                  <label className="text-xs text-gray-600">Height (cm)</label>
-                  <Input type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Weight (kg)</label>
-                  <Input type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">BMI</label>
-                  <Input value={vitalsBmi ?? ''} readOnly />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">BP (Sys)</label>
-                  <Input type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">BP (Dia)</label>
-                  <Input type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600">Pulse (bpm)</label>
-                  <Input type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
-                </div>
-              </div>
-
-              {/* Chief Complaints */}
-              <div className={`relative ${hasChiefComplaints ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasChiefComplaints && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <label className="text-xs text-gray-600">Chief Complaints</label>
-                <div className="relative">
-                  <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
-                  {complaintOptions.length > 0 && (
-                    <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto">
-                      {complaintOptions.map((opt) => (
-                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setChiefComplaints(opt)}>
-                          {opt}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-700">Diagnosis (optional)</label>
+                    <div className="relative">
+                      <Input placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+                      {diagOptions.length > 0 && (
+                        <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
+                          {diagOptions.map((opt) => (
+                            <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setDiagnosis(opt)}>
+                              {opt}
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
                     </div>
-                  )}
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-700">Follow-up Instructions</label>
+                    <Input placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
+                  </div>
+                  <div></div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-700">Doctor's Personal Notes</label>
+                  <div className="relative">
+                    <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    {notesOptions.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
+                        {notesOptions.map((opt) => (
+                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setNotes(opt)}>
+                            {opt}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+            </CollapsibleSection>
 
-              {/* Histories */}
-              <div className={`relative ${hasHistories ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.histories ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasHistories && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {/* Clinical Details */}
+            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
+              <div className="space-y-3">
+                {/* Vitals */}
+                <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Height (cm)</label>
+                    <Input type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Weight (kg)</label>
+                    <Input type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BMI</label>
+                    <Input value={vitalsBmi ?? ''} readOnly />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BP (Sys)</label>
+                    <Input type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">BP (Dia)</label>
+                    <Input type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Pulse (bpm)</label>
+                    <Input type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                  </div>
+                  <div></div>
+                  <div></div>
+                </div>
+
+                {/* Chief Complaints */}
+                <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                  <label className="text-xs text-gray-600">Chief Complaints</label>
+                  <div className="relative">
+                    <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                    {complaintOptions.length > 0 && (
+                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto">
+                        {complaintOptions.map((opt) => (
+                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setChiefComplaints(opt)}>
+                            {opt}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CollapsibleSection>
+
+            {/* Histories */}
+            <CollapsibleSection 
+              title="Patient History" 
+              section="histories" 
+              highlight={hasHistories}
+              badge={hasHistories ? "Has Data" : ""}
+            >
+              <div className={`${includeSections.histories ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-600">Past History</label>
                     <Textarea rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
@@ -905,29 +1006,28 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
                     <label className="text-xs text-gray-600">Menstrual History</label>
                     <Textarea rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
                   </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Family History</label>
+                    <div className="flex flex-wrap gap-2 text-xs mt-1">
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid</label>
+                    </div>
+                    <Input className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
+                  </div>
                 </div>
               </div>
+            </CollapsibleSection>
 
-              {/* Family History */}
-              <div className={`relative ${hasFamilyHistory ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.familyHistory ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasFamilyHistory && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <label className="text-xs text-gray-600">Family History</label>
-                <div className="flex flex-wrap gap-4 text-sm mt-1">
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid disorder</label>
-                </div>
-                <Input className="mt-2" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
-              </div>
-
-              {/* Topicals */}
-              <div className={`relative ${hasTopicals ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.topicals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasTopicals && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* Topicals */}
+            <CollapsibleSection 
+              title="Topical Care Instructions" 
+              section="topicals" 
+              highlight={hasTopicals}
+              badge={hasTopicals ? "Has Data" : ""}
+            >
+              <div className={`${includeSections.topicals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <div className="font-medium text-sm">Facewash/Soap</div>
                     <Input placeholder="Frequency" value={topicalFacewash.frequency || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, frequency: e.target.value })} />
@@ -949,49 +1049,31 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
                     <Input placeholder="Duration" value={topicalActives.duration || ''} onChange={(e) => setTopicalActives({ ...topicalActives, duration: e.target.value })} />
                     <Input placeholder="Instructions" value={topicalActives.instructions || ''} onChange={(e) => setTopicalActives({ ...topicalActives, instructions: e.target.value })} />
                   </div>
+                  <div></div>
                 </div>
               </div>
+            </CollapsibleSection>
 
-              {/* Post Procedure */}
-              <div className={`relative ${hasPostProcedure ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.postProcedure ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasPostProcedure && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
-                <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
-              </div>
-
-              {/* Investigations */}
-              <div className={`relative ${hasInvestigations ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.investigations ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasInvestigations && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <label className="text-xs text-gray-600">Investigations</label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-                  {investigationOptions.map((opt) => (
-                    <label key={opt} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={investigations.includes(opt)} onChange={(e) => setInvestigations((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))} />
-                      <span>{opt}</span>
-                    </label>
-                  ))}
+            {/* Procedures */}
+            <CollapsibleSection 
+              title="Procedures & Post-Care" 
+              section="procedures" 
+              highlight={hasPostProcedure || hasProcedurePlanned || hasProcedureParams}
+              badge={(hasPostProcedure || hasProcedurePlanned || hasProcedureParams) ? "Has Data" : ""}
+            >
+              <div className={`space-y-3 ${includeSections.postProcedure ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
+                    <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Procedure Planned</label>
+                    <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
+                  </div>
                 </div>
-              </div>
 
-              {/* Procedure Planned */}
-              <div className={`relative ${hasProcedurePlanned ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.procedurePlanned ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasProcedurePlanned && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <label className="text-xs text-gray-600">Procedure Planned</label>
-                <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
-              </div>
-
-              {/* Procedure Parameters (additional) */}
-              <div className={`relative ${hasProcedureParams ? 'bg-green-50 border border-green-300 rounded p-2' : ''} ${includeSections.procedureParameters ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-                {hasProcedureParams && (
-                  <div className="absolute right-2 top-2 text-[10px] text-green-700">Auto-included in preview</div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
                   <div>
                     <label className="text-xs text-gray-600">Passes</label>
                     <Input value={procedureParams.passes || ''} onChange={(e) => setProcedureParams({ ...procedureParams, passes: e.target.value })} />
@@ -1008,638 +1090,682 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
                     <label className="text-xs text-gray-600">Others</label>
                     <Input value={procedureParams.others || ''} onChange={(e) => setProcedureParams({ ...procedureParams, others: e.target.value })} />
                   </div>
+                  <div></div>
+                  <div></div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </CollapsibleSection>
 
-          {/* Section Toggles */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <div className="font-medium">Sections</div>
-              <Button size="sm" variant="outline" onClick={addCustomSection}>Add Custom Section</Button>
+            {/* Investigations */}
+            <CollapsibleSection 
+              title="Investigations" 
+              section="investigations" 
+              highlight={hasInvestigations}
+              badge={hasInvestigations ? "Has Data" : ""}
+            >
+              <div className={`${includeSections.investigations ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {investigationOptions.map((opt) => (
+                    <label key={opt} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={investigations.includes(opt)} onChange={(e) => setInvestigations((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))} />
+                      <span>{opt}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </CollapsibleSection>
+
+            {/* Section Toggles */}
+            <CollapsibleSection title="Print Sections" section="sections">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
+                {Object.keys(includeSections).map((k) => (
+                  <label key={k} className="flex items-center gap-2">
+                    <input type="checkbox" checked={includeSections[k]} onChange={(e) => setIncludeSections({ ...includeSections, [k]: e.target.checked })} />
+                    <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
+                  </label>
+                ))}
+              </div>
+              {customSections.length > 0 && (
+                <div className="mt-3 space-y-3">
+                  {customSections.map((s) => (
+                    <Card key={s.id}>
+                      <CardContent className="p-3 space-y-2">
+                        <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
+                          <div className="md:col-span-2">
+                            <label className="text-xs text-gray-600">Section Title</label>
+                            <Input value={s.title} onChange={(e) => updateCustomSection(s.id, { title: e.target.value })} />
+                          </div>
+                          <div className="md:col-span-3">
+                            <label className="text-xs text-gray-600">Content</label>
+                            <Input value={s.content} onChange={(e) => updateCustomSection(s.id, { content: e.target.value })} />
+                          </div>
+                          <div className="md:col-span-1 flex justify-end">
+                            <Button variant="outline" onClick={() => removeCustomSection(s.id)}>Remove</Button>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center justify-between mt-2">
+                <Button size="sm" variant="outline" onClick={addCustomSection}>Add Custom Section</Button>
+              </div>
+            </CollapsibleSection>
+
+            {/* Templates Panel */}
+            <CollapsibleSection title="Templates" section="templates">
+              <div className="space-y-2">
+                <div className="flex gap-2 mb-3">
+                  <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
+                    {loadingTemplates ? 'Loading…' : 'Refresh'}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {(templates || []).slice(0, 6).map((t) => (
+                    <div key={`srv-${t.id}`} className="border rounded p-2">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-2 text-xs text-gray-600">Suggested Templates</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {defaultDermTemplates.map((t) => (
+                    <div key={t.id} className="border rounded p-2">
+                      <div className="font-medium text-sm">{t.name}</div>
+                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
+                        <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CollapsibleSection>
+
+            {/* Drug search */}
+            <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <label className="text-sm text-gray-700">Add Drug</label>
+              <Input 
+                placeholder="Search drug name or brand (min 2 chars)" 
+                value={drugQuery}
+                onChange={(e) => void searchDrugs(e.target.value)}
+              />
+              {loadingDrugs && <div className="text-xs text-gray-500 mt-1">Searching…</div>}
+              {!loadingDrugs && drugResults.length > 0 && (
+                <div className="mt-2 border rounded divide-y max-h-48 overflow-auto">
+                  {drugResults.map((d: any, index: number) => (
+                    <div 
+                      key={`${d.id}-${d.name}`} 
+                      className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
+                        index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
+                        index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center">
+                          <div className="font-medium">
+                            {highlightMatch(d.name, drugQuery)}
+                          </div>
+                          {getRelevanceBadge(d, drugQuery, index)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {highlightMatch(d.manufacturerName || d.genericName || '', drugQuery)}
+                          {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
+                        </div>
+                        {d.composition1 && (
+                          <div className="text-xs text-gray-400 mt-1">
+                            {highlightMatch(d.composition1, drugQuery)}
+                          </div>
+                        )}
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => addItemFromDrug(d)}>Add</Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-              {Object.keys(includeSections).map((k) => (
-                <label key={k} className="flex items-center gap-2">
-                  <input type="checkbox" checked={includeSections[k]} onChange={(e) => setIncludeSections({ ...includeSections, [k]: e.target.checked })} />
-                  <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
-                </label>
+
+            {/* Items table */}
+            <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              {items.length === 0 && (
+                <div className="text-sm text-gray-500">No items added yet</div>
+              )}
+              {items.map((it, idx) => (
+                <Card key={idx}>
+                  <CardContent className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Drug</label>
+                      <Input value={it.drugName} onChange={(e) => updateItem(idx, { drugName: e.target.value })} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Dosage</label>
+                      <div className="grid grid-cols-2 gap-1">
+                        <Input type="number" value={it.dosage} onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })} />
+                        <Select value={it.dosageUnit} onValueChange={(v: DosageUnit) => updateItem(idx, { dosageUnit: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['MG','ML','MCG','IU','TABLET','CAPSULE','DROP','SPRAY','PATCH','INJECTION'].map(u => (
+                              <SelectItem key={u} value={u as DosageUnit}>{u}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Frequency</label>
+                      <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','EVERY_4_HOURS','EVERY_6_HOURS','EVERY_8_HOURS','EVERY_12_HOURS','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
+                            <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Duration</label>
+                      <div className="grid grid-cols-2 gap-1">
+                        <Input type="number" value={it.duration} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} />
+                        <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
+                              <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Qty</label>
+                      <Input type="number" value={it.quantity ?? ''} onChange={(e) => updateItem(idx, { quantity: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    </div>
+                    <div className="md:col-span-10">
+                      <label className="text-xs text-gray-600">Instructions</label>
+                      <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., After meals, avoid alcohol" />
+                    </div>
+                    {/* Dermatology-specific fields */}
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Application Site</label>
+                      <Input value={it.applicationSite || ''} onChange={(e) => updateItem(idx, { applicationSite: e.target.value })} placeholder="Face / Scalp / Folds" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Amount</label>
+                      <Input value={it.applicationAmount || ''} onChange={(e) => updateItem(idx, { applicationAmount: e.target.value })} placeholder="e.g., 1 FTU" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Day Part</label>
+                      <Input value={it.dayPart || ''} onChange={(e) => updateItem(idx, { dayPart: e.target.value })} placeholder="AM/PM/QHS" />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs text-gray-600">Leave-on</label>
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" checked={!!it.leaveOn} onChange={(e) => updateItem(idx, { leaveOn: e.target.checked })} />
+                        <span className="text-xs text-gray-600">If unchecked, set wash-off time</span>
+                      </div>
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Wash-off After (min)</label>
+                      <Input type="number" value={it.washOffAfterMinutes ?? ''} onChange={(e) => updateItem(idx, { washOffAfterMinutes: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    </div>
+                    <div className="md:col-span-6">
+                      <label className="text-xs text-gray-600">Taper Schedule (Steroids)</label>
+                      <Input value={it.taperSchedule || ''} onChange={(e) => updateItem(idx, { taperSchedule: e.target.value })} placeholder="e.g., OD×7d → Alt days×7d" />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Isotretinoin mg/kg/day</label>
+                      <Input type="number" value={it.weightMgPerKgPerDay ?? ''} onChange={(e) => updateItem(idx, { weightMgPerKgPerDay: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Calculated Daily Dose (mg)</label>
+                      <Input type="number" value={it.calculatedDailyDoseMg ?? ''} onChange={(e) => updateItem(idx, { calculatedDailyDoseMg: e.target.value === '' ? '' : Number(e.target.value) })} />
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Pregnancy Warning</label>
+                      <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.pregnancyWarning} onChange={(e) => updateItem(idx, { pregnancyWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
+                    </div>
+                    <div className="md:col-span-3">
+                      <label className="text-xs text-gray-600">Photosensitivity</label>
+                      <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.photosensitivityWarning} onChange={(e) => updateItem(idx, { photosensitivityWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
+                    </div>
+                    <div className="md:col-span-6">
+                      <label className="text-xs text-gray-600">Food Instructions</label>
+                      <Input value={it.foodInstructions || ''} onChange={(e) => updateItem(idx, { foodInstructions: e.target.value })} placeholder="With food / avoid dairy / hydrate well" />
+                    </div>
+                    <div className="md:col-span-6">
+                      <label className="text-xs text-gray-600">Pulse Regimen</label>
+                      <Input value={it.pulseRegimen || ''} onChange={(e) => updateItem(idx, { pulseRegimen: e.target.value })} placeholder="e.g., Itraconazole 200 mg BD 1 week/month × 3 months" />
+                    </div>
+                    <div className="md:col-span-2 flex justify-end">
+                      <Button variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
-            {customSections.length > 0 && (
-              <div className="mt-3 space-y-3">
-                {customSections.map((s) => (
-                  <Card key={s.id}>
-                    <CardContent className="p-3 space-y-2">
-                      <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">
-                        <div className="md:col-span-2">
-                          <label className="text-xs text-gray-600">Section Title</label>
-                          <Input value={s.title} onChange={(e) => updateCustomSection(s.id, { title: e.target.value })} />
-                        </div>
-                        <div className="md:col-span-3">
-                          <label className="text-xs text-gray-600">Content</label>
-                          <Input value={s.content} onChange={(e) => updateCustomSection(s.id, { content: e.target.value })} />
-                        </div>
-                        <div className="md:col-span-1 flex justify-end">
-                          <Button variant="outline" onClick={() => removeCustomSection(s.id)}>Remove</Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+
+            {/* Review Date (bottom of builder) */}
+            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className="md:col-span-1">
+                <label className="text-sm text-gray-700">Review Date</label>
+                <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
               </div>
-            )}
-          </div>
-
-          {/* Templates Panel */}
-          <div className={`w-full ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base">
-                  <span>Templates</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
-                      {loadingTemplates ? 'Loading…' : 'Refresh'}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 p-3">
-                {(templates || []).slice(0, 6).map((t) => (
-                  <div key={`srv-${t.id}`} className="border rounded p-2">
-                    <div className="font-medium text-sm">{t.name}</div>
-                    {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                    </div>
-                  </div>
-                ))}
-                <div className="pt-2 text-xs text-gray-600">Suggested</div>
-                {defaultDermTemplates.map((t) => (
-                  <div key={t.id} className="border rounded p-2">
-                    <div className="font-medium text-sm">{t.name}</div>
-                    {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                      <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Drug search */}
-          <div className={`${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <label className="text-sm text-gray-700">Add Drug</label>
-            <Input 
-              placeholder="Search drug name or brand (min 2 chars)" 
-              value={drugQuery}
-              onChange={(e) => void searchDrugs(e.target.value)}
-            />
-            {loadingDrugs && <div className="text-xs text-gray-500 mt-1">Searching…</div>}
-            {!loadingDrugs && drugResults.length > 0 && (
-              <div className="mt-2 border rounded divide-y max-h-48 overflow-auto">
-                {drugResults.map((d: any) => (
-                  <div key={`${d.id}-${d.name}`} className="px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50">
-                    <div>
-                      <div className="font-medium">{d.name}</div>
-                      <div className="text-xs text-gray-500">{d.genericName} • {Array.isArray(d.brandNames) ? d.brandNames.join(', ') : ''}</div>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => addItemFromDrug(d)}>Add</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Items table */}
-          <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            {items.length === 0 && (
-              <div className="text-sm text-gray-500">No items added yet</div>
-            )}
-            {items.map((it, idx) => (
-              <Card key={idx}>
-                <CardContent className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Drug</label>
-                    <Input value={it.drugName} onChange={(e) => updateItem(idx, { drugName: e.target.value })} />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Dosage</label>
-                    <div className="grid grid-cols-2 gap-1">
-                      <Input type="number" value={it.dosage} onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })} />
-                      <Select value={it.dosageUnit} onValueChange={(v: DosageUnit) => updateItem(idx, { dosageUnit: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['MG','ML','MCG','IU','TABLET','CAPSULE','DROP','SPRAY','PATCH','INJECTION'].map(u => (
-                            <SelectItem key={u} value={u as DosageUnit}>{u}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Frequency</label>
-                    <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','EVERY_4_HOURS','EVERY_6_HOURS','EVERY_8_HOURS','EVERY_12_HOURS','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
-                          <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Duration</label>
-                    <div className="grid grid-cols-2 gap-1">
-                      <Input type="number" value={it.duration} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} />
-                      <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
-                            <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Qty</label>
-                    <Input type="number" value={it.quantity ?? ''} onChange={(e) => updateItem(idx, { quantity: e.target.value === '' ? '' : Number(e.target.value) })} />
-                  </div>
-                  <div className="md:col-span-10">
-                    <label className="text-xs text-gray-600">Instructions</label>
-                    <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., After meals, avoid alcohol" />
-                  </div>
-                  {/* Dermatology-specific fields */}
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Application Site</label>
-                    <Input value={it.applicationSite || ''} onChange={(e) => updateItem(idx, { applicationSite: e.target.value })} placeholder="Face / Scalp / Folds" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Amount</label>
-                    <Input value={it.applicationAmount || ''} onChange={(e) => updateItem(idx, { applicationAmount: e.target.value })} placeholder="e.g., 1 FTU" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Day Part</label>
-                    <Input value={it.dayPart || ''} onChange={(e) => updateItem(idx, { dayPart: e.target.value })} placeholder="AM/PM/QHS" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="text-xs text-gray-600">Leave-on</label>
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" checked={!!it.leaveOn} onChange={(e) => updateItem(idx, { leaveOn: e.target.checked })} />
-                      <span className="text-xs text-gray-600">If unchecked, set wash-off time</span>
-                    </div>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Wash-off After (min)</label>
-                    <Input type="number" value={it.washOffAfterMinutes ?? ''} onChange={(e) => updateItem(idx, { washOffAfterMinutes: e.target.value === '' ? '' : Number(e.target.value) })} />
-                  </div>
-                  <div className="md:col-span-6">
-                    <label className="text-xs text-gray-600">Taper Schedule (Steroids)</label>
-                    <Input value={it.taperSchedule || ''} onChange={(e) => updateItem(idx, { taperSchedule: e.target.value })} placeholder="e.g., OD×7d → Alt days×7d" />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Isotretinoin mg/kg/day</label>
-                    <Input type="number" value={it.weightMgPerKgPerDay ?? ''} onChange={(e) => updateItem(idx, { weightMgPerKgPerDay: e.target.value === '' ? '' : Number(e.target.value) })} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Calculated Daily Dose (mg)</label>
-                    <Input type="number" value={it.calculatedDailyDoseMg ?? ''} onChange={(e) => updateItem(idx, { calculatedDailyDoseMg: e.target.value === '' ? '' : Number(e.target.value) })} />
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Pregnancy Warning</label>
-                    <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.pregnancyWarning} onChange={(e) => updateItem(idx, { pregnancyWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="text-xs text-gray-600">Photosensitivity</label>
-                    <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.photosensitivityWarning} onChange={(e) => updateItem(idx, { photosensitivityWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
-                  </div>
-                  <div className="md:col-span-6">
-                    <label className="text-xs text-gray-600">Food Instructions</label>
-                    <Input value={it.foodInstructions || ''} onChange={(e) => updateItem(idx, { foodInstructions: e.target.value })} placeholder="With food / avoid dairy / hydrate well" />
-                  </div>
-                  <div className="md:col-span-6">
-                    <label className="text-xs text-gray-600">Pulse Regimen</label>
-                    <Input value={it.pulseRegimen || ''} onChange={(e) => updateItem(idx, { pulseRegimen: e.target.value })} placeholder="e.g., Itraconazole 200 mg BD 1 week/month × 3 months" />
-                  </div>
-                  <div className="md:col-span-2 flex justify-end">
-                    <Button variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
-            <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
-              <Button variant="outline" onClick={() => setPreviewOpen(true)}>Print Preview</Button>
-              <Button onClick={create} disabled={!canCreate}>
-                {visitId ? 'Create Prescription' : 'Save visit first'}
-              </Button>
             </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Print Preview Dialog */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
-          <div className="h-full min-h-0 flex flex-col">
-            <DialogTitle className="sr-only">Prescription Preview</DialogTitle>
-            {/* Scoped print CSS to only print the preview container */}
-            <style dangerouslySetInnerHTML={{
-              __html: `
-              @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-              @page {
-                size: A4 portrait;
-                margin: 0;
-                @top-left { content: ""; }
-                @top-center { content: ""; }
-                @top-right { content: ""; }
-                @bottom-left { content: ""; }
-                @bottom-center { content: ""; }
-                @bottom-right { content: ""; }
-              }
-              @media print {
-                * {
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
+            <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60 pointer-events-none select-none'}`}>
+              <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
+                <Button variant="outline" onClick={() => setPreviewOpen(true)}>Print Preview</Button>
+                <Button onClick={create} disabled={!canCreate}>
+                  {visitId ? 'Create Prescription' : 'Save visit first'}
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Print Preview Dialog */}
+        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+            <div className="h-full min-h-0 flex flex-col">
+              <DialogTitle className="sr-only">Prescription Preview</DialogTitle>
+              {/* Scoped print CSS to only print the preview container */}
+              <style dangerouslySetInnerHTML={{
+                __html: `
+                @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
+                @page {
+                  size: A4 portrait;
+                  margin: 0;
+                  @top-left { content: ""; }
+                  @top-center { content: ""; }
+                  @top-right { content: ""; }
+                  @bottom-left { content: ""; }
+                  @bottom-center { content: ""; }
+                  @bottom-right { content: ""; }
                 }
-                html, body {
-                  margin: 0 !important;
-                  padding: 0 !important;
-                  -webkit-print-color-adjust: exact !important;
-                  print-color-adjust: exact !important;
+                @media print {
+                  * {
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  html, body {
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                  }
+                  @page :first {
+                    margin-top: 0 !important;
+                  }
+                  @page :left {
+                    margin-left: 0 !important;
+                  }
+                  @page :right {
+                    margin-right: 0 !important;
+                  }
+                  body *:not(#prescription-print-root):not(#prescription-print-root *) {
+                    visibility: hidden !important;
+                  }
+                  #prescription-print-root, #prescription-print-root * {
+                    visibility: visible !important;
+                  }
+                  #prescription-print-root {
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
+                    width: 210mm !important;
+                    height: 297mm !important;
+                    margin: 0 !important;
+                    padding: 12mm !important;
+                    padding-top: ${12 + Math.max(0, (printTopMarginPx ?? 150))/3.78}mm !important;
+                    box-sizing: border-box !important;
+                    background: white !important;
+                    background-repeat: no-repeat !important;
+                    background-position: 0 0 !important;
+                    background-size: 210mm 297mm !important;
+                    ${(printBgUrl ?? '/letterhead.png') ? `background-image: url('${printBgUrl ?? '/letterhead.png'}') !important;` : ''}
+                  }
+                  #prescription-print-content {
+                    width: 100% !important;
+                    height: 100% !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    box-sizing: border-box !important;
+                  }
                 }
-                @page :first {
-                  margin-top: 0 !important;
-                }
-                @page :left {
-                  margin-left: 0 !important;
-                }
-                @page :right {
-                  margin-right: 0 !important;
-                }
-                body *:not(#prescription-print-root):not(#prescription-print-root *) {
-                  visibility: hidden !important;
-                }
-                #prescription-print-root, #prescription-print-root * {
-                  visibility: visible !important;
-                }
-                #prescription-print-root {
-                  position: absolute !important;
-                  left: 0 !important;
-                  top: 0 !important;
-                  width: 210mm !important;
-                  height: 297mm !important;
-                  margin: 0 !important;
-                  padding: 12mm !important;
-                  padding-top: ${12 + Math.max(0, printTopMarginPx)/3.78}mm !important;
-                  box-sizing: border-box !important;
-                  background: white !important;
-                  background-repeat: no-repeat !important;
-                  background-position: 0 0 !important;
-                  background-size: 210mm 297mm !important;
-                  ${printBgUrl ? `background-image: url('${printBgUrl}') !important;` : ''}
-                }
-                #prescription-print-content {
-                  width: 100% !important;
-                  height: 100% !important;
-                  margin: 0 !important;
-                  padding: 0 !important;
-                  box-sizing: border-box !important;
-                }
-              }
-              `
-            }} />
-          <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
-            <div
-              id="prescription-print-root"
-              ref={printRef}
-              className="bg-white text-gray-900"
-              style={{
-                fontFamily: 'Fira Sans, sans-serif',
-                fontSize: '14px',
-                width: '210mm',
-                minHeight: '297mm',
-                margin: '0 auto',
-                padding: '0',
-                paddingTop: `${Math.max(0, printTopMarginPx)/3.78}mm`,
-                paddingLeft: '12mm',
-                paddingRight: '12mm',
-                paddingBottom: '12mm',
-                boxSizing: 'border-box',
-                backgroundImage: printBgUrl ? `url(${printBgUrl})` : undefined,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'top left',
-                backgroundSize: '210mm 297mm',
-              }}
-            >
-              <div 
-                id="prescription-print-content" 
-                className="w-full h-full"
+                `
+              }} />
+            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
+              <div
+                id="prescription-print-root"
+                ref={printRef}
+                className="bg-white text-gray-900"
+                style={{
+                  fontFamily: 'Fira Sans, sans-serif',
+                  fontSize: '14px',
+                  width: '210mm',
+                  minHeight: '297mm',
+                  margin: '0 auto',
+                  padding: '0',
+                  paddingTop: `${Math.max(0, (printTopMarginPx ?? 150))/3.78}mm`,
+                  paddingLeft: '12mm',
+                  paddingRight: '12mm',
+                  paddingBottom: '12mm',
+                  boxSizing: 'border-box',
+                  backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'top left',
+                  backgroundSize: '210mm 297mm',
+                }}
               >
+                <div 
+                  id="prescription-print-content" 
+                  className="w-full h-full"
+                >
 
 
-                {/* Patient Info */}
-                {includeSections.patientInfo && (
-                <div className="flex justify-between text-sm py-3">
-                  <div>
-                    <div className="text-gray-600">Patient</div>
-                    <div className="font-medium">{visitData?.patient?.name || patientData?.name || '—'}</div>
+                  {/* Patient Info */}
+                  {includeSections.patientInfo && (
+                  <div className="flex justify-between text-sm py-3">
+                    <div>
+                      <div className="text-gray-600">Patient</div>
+                      <div className="font-medium">{visitData?.patient?.name || patientData?.name || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Patient ID</div>
+                      <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Gender / DOB</div>
+                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-gray-600">Patient ID</div>
-                    <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-gray-600">Gender / DOB</div>
-                    <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
-                  </div>
-                </div>
-              )}
+                )}
 
-              {/* Vitals (manual override) */}
-              {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Vitals</div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                    {((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) && (
-                      <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</span></div>
-                    )}
-                    {((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) && (
-                      <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</span></div>
-                    )}
-                    {(() => {
-                      const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
-                      const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
-                      const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
-                      return bmi !== '' ? (<div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{bmi}</span></div>) : null;
-                    })()}
-                    {(((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) && (
-                      <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</span></div>
-                    )}
-                    {((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) && (
-                      <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</span></div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Diagnosis */}
-              {includeSections.diagnosis && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Diagnosis</div>
-                  <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? diagnosis : '—'}</div>
-                </div>
-              )}
-
-              {/* Chief Complaints */}
-              {(chiefComplaints?.trim()?.length > 0) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Chief Complaints</div>
-                  <div className="text-sm whitespace-pre-wrap">{chiefComplaints}</div>
-                </div>
-              )}
-
-              {/* Histories */}
-              {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">History</div>
-                  <div className="space-y-1 text-sm">
-                    {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {pastHistory}</div>) : null}
-                    {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {medicationHistory}</div>) : null}
-                    {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {menstrualHistory}</div>) : null}
-                  </div>
-                </div>
-              )}
-
-              {/* Family History */}
-              {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Family History</div>
-                  <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? familyHistoryOthers : null].filter(Boolean).join(', ')}</div>
-                </div>
-              )}
-
-              {/* Medications */}
-              {includeSections.medications && (
-                <div className="py-3">
-                  <div className="font-semibold mb-2">Rx</div>
-                  {items.length > 0 ? (
-                    <ol className="list-decimal ml-5 space-y-1 text-sm">
-                      {items.map((it, idx) => (
-                        <li key={`rx-${idx}`}>
-                          <span className="font-medium">{it.drugName}</span>
-                          {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
-                          {it.instructions && <span> — {it.instructions}</span>}
-                          {/* Dermatology addenda */}
-                          {(it.applicationSite || it.applicationAmount || it.dayPart) && (
-                            <div className="text-gray-600">
-                              {it.applicationSite && <span> • Site: {it.applicationSite}</span>}
-                              {it.applicationAmount && <span> • Amount: {it.applicationAmount}</span>}
-                              {it.dayPart && <span> • {it.dayPart}</span>}
-                            </div>
-                          )}
-                          {it.leaveOn === false && it.washOffAfterMinutes !== '' && (
-                            <div className="text-gray-600"> • Wash off after {it.washOffAfterMinutes} min</div>
-                          )}
-                          {it.taperSchedule && (
-                            <div className="text-gray-600"> • Taper: {it.taperSchedule}</div>
-                          )}
-                          {(it.pregnancyWarning || it.photosensitivityWarning) && (
-                            <div className="text-red-600">{it.pregnancyWarning ? 'Pregnancy warning. ' : ''}{it.photosensitivityWarning ? 'Photosensitivity — use sunscreen.' : ''}</div>
-                          )}
-                          {it.foodInstructions && (
-                            <div className="text-gray-600">Food: {it.foodInstructions}</div>
-                          )}
-                          {it.pulseRegimen && (
-                            <div className="text-gray-600">Pulse: {it.pulseRegimen}</div>
-                          )}
-                        </li>
-                      ))}
-                    </ol>
-                  ) : (
-                    <div className="text-sm text-gray-600">—</div>
-                  )}
-                </div>
-              )}
-
-              {/* Topicals */}
-              {(
-                (topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions || topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions || topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
+                {/* Vitals (manual override) */}
+                {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
                   <div className="py-3">
-                    <div className="font-semibold mb-1">Topicals</div>
+                    <div className="font-semibold mb-1">Vitals</div>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                      {((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) && (
+                        <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</span></div>
+                      )}
+                      {((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) && (
+                        <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</span></div>
+                      )}
+                      {(() => {
+                        const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
+                        const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
+                        const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
+                        return bmi !== '' ? (<div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{bmi}</span></div>) : null;
+                      })()}
+                      {(((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) && (
+                        <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</span></div>
+                      )}
+                      {((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) && (
+                        <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</span></div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Diagnosis */}
+                {includeSections.diagnosis && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Diagnosis</div>
+                    <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? diagnosis : '—'}</div>
+                  </div>
+                )}
+
+                {/* Chief Complaints */}
+                {(chiefComplaints?.trim()?.length > 0) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Chief Complaints</div>
+                    <div className="text-sm whitespace-pre-wrap">{chiefComplaints}</div>
+                  </div>
+                )}
+
+                {/* Histories */}
+                {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">History</div>
+                    <div className="space-y-1 text-sm">
+                      {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {pastHistory}</div>) : null}
+                      {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {medicationHistory}</div>) : null}
+                      {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {menstrualHistory}</div>) : null}
+                    </div>
+                  </div>
+                )}
+
+                {/* Family History */}
+                {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Family History</div>
+                    <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? familyHistoryOthers : null].filter(Boolean).join(', ')}</div>
+                  </div>
+                )}
+
+                {/* Medications */}
+                {includeSections.medications && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-2">Rx</div>
+                    {items.length > 0 ? (
+                      <ol className="list-decimal ml-5 space-y-1 text-sm">
+                        {items.map((it, idx) => (
+                          <li key={`rx-${idx}`}>
+                            <span className="font-medium">{it.drugName}</span>
+                            {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
+                            {it.instructions && <span> — {it.instructions}</span>}
+                            {/* Dermatology addenda */}
+                            {(it.applicationSite || it.applicationAmount || it.dayPart) && (
+                              <div className="text-gray-600">
+                                {it.applicationSite && <span> • Site: {it.applicationSite}</span>}
+                                {it.applicationAmount && <span> • Amount: {it.applicationAmount}</span>}
+                                {it.dayPart && <span> • {it.dayPart}</span>}
+                              </div>
+                            )}
+                            {it.leaveOn === false && it.washOffAfterMinutes !== '' && (
+                              <div className="text-gray-600"> • Wash off after {it.washOffAfterMinutes} min</div>
+                            )}
+                            {it.taperSchedule && (
+                              <div className="text-gray-600"> • Taper: {it.taperSchedule}</div>
+                            )}
+                            {(it.pregnancyWarning || it.photosensitivityWarning) && (
+                              <div className="text-red-600">{it.pregnancyWarning ? 'Pregnancy warning. ' : ''}{it.photosensitivityWarning ? 'Photosensitivity — use sunscreen.' : ''}</div>
+                            )}
+                            {it.foodInstructions && (
+                              <div className="text-gray-600">Food: {it.foodInstructions}</div>
+                            )}
+                            {it.pulseRegimen && (
+                              <div className="text-gray-600">Pulse: {it.pulseRegimen}</div>
+                            )}
+                          </li>
+                        ))}
+                      </ol>
+                    ) : (
+                      <div className="text-sm text-gray-600">—</div>
+                    )}
+                  </div>
+                )}
+
+                {/* Topicals */}
+                {(
+                  (topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions || topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions || topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
+                    <div className="py-3">
+                      <div className="font-semibold mb-1">Topicals</div>
+                      <ul className="list-disc ml-5 text-sm space-y-1">
+                        {(topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions) && (
+                          <li><span className="font-medium">Facewash/Soap:</span> {[topicalFacewash.frequency, topicalFacewash.timing, topicalFacewash.duration, topicalFacewash.instructions].filter(Boolean).join(' • ')}</li>
+                        )}
+                        {(topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions) && (
+                          <li><span className="font-medium">Moisturiser & Sunscreen:</span> {[topicalMoisturiserSunscreen.frequency, topicalMoisturiserSunscreen.timing, topicalMoisturiserSunscreen.duration, topicalMoisturiserSunscreen.instructions].filter(Boolean).join(' • ')}</li>
+                        )}
+                        {(topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
+                          <li><span className="font-medium">Actives:</span> {[topicalActives.frequency, topicalActives.timing, topicalActives.duration, topicalActives.instructions].filter(Boolean).join(' • ')}</li>
+                        )}
+                      </ul>
+                    </div>
+                  )
+                )}
+
+                {/* Post Procedure */}
+                {(postProcedureCare?.trim()?.length > 0) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Post Procedure</div>
+                    <div className="text-sm whitespace-pre-wrap">{postProcedureCare}</div>
+                  </div>
+                )}
+
+                {/* Investigations */}
+                {(Array.isArray(investigations) && investigations.length > 0) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Investigations</div>
                     <ul className="list-disc ml-5 text-sm space-y-1">
-                      {(topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions) && (
-                        <li><span className="font-medium">Facewash/Soap:</span> {[topicalFacewash.frequency, topicalFacewash.timing, topicalFacewash.duration, topicalFacewash.instructions].filter(Boolean).join(' • ')}</li>
-                      )}
-                      {(topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions) && (
-                        <li><span className="font-medium">Moisturiser & Sunscreen:</span> {[topicalMoisturiserSunscreen.frequency, topicalMoisturiserSunscreen.timing, topicalMoisturiserSunscreen.duration, topicalMoisturiserSunscreen.instructions].filter(Boolean).join(' • ')}</li>
-                      )}
-                      {(topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
-                        <li><span className="font-medium">Actives:</span> {[topicalActives.frequency, topicalActives.timing, topicalActives.duration, topicalActives.instructions].filter(Boolean).join(' • ')}</li>
-                      )}
+                      {investigations.map((inv) => (<li key={inv}>{inv}</li>))}
                     </ul>
                   </div>
-                )
-              )}
+                )}
 
-              {/* Post Procedure */}
-              {(postProcedureCare?.trim()?.length > 0) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Post Procedure</div>
-                  <div className="text-sm whitespace-pre-wrap">{postProcedureCare}</div>
-                </div>
-              )}
-
-              {/* Investigations */}
-              {(Array.isArray(investigations) && investigations.length > 0) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Investigations</div>
-                  <ul className="list-disc ml-5 text-sm space-y-1">
-                    {investigations.map((inv) => (<li key={inv}>{inv}</li>))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Procedure Planned */}
-              {(procedurePlanned?.trim()?.length > 0) && (
-                <div className="py-3">
-                  <div className="font-semibold mb-1">Procedure Planned</div>
-                  <div className="text-sm">{procedurePlanned}</div>
-                </div>
-              )}
-
-              {/* Custom Sections */}
-              {customSections.length > 0 && customSections.map((s) => (
-                (s.title?.trim() || s.content?.trim()) ? (
-                  <div key={`cs-${s.id}`} className="py-3">
-                    <div className="font-semibold mb-1">{s.title}</div>
-                    <div className="text-sm whitespace-pre-wrap">{s.content}</div>
+                {/* Procedure Planned */}
+                {(procedurePlanned?.trim()?.length > 0) && (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Procedure Planned</div>
+                    <div className="text-sm">{procedurePlanned}</div>
                   </div>
-                ) : null
-              ))}
+                )}
 
-              {/* Signature */}
-              {includeSections.doctorSignature && (
-                <div className="pt-6 mt-4 border-t">
-                  <div className="flex justify-end text-sm">
-                    <div className="text-right">
-                      <div className="h-10" />
-                      <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                      <div className="text-gray-600">Signature</div>
+                {/* Custom Sections */}
+                {customSections.length > 0 && customSections.map((s) => (
+                  (s.title?.trim() || s.content?.trim()) ? (
+                    <div key={`cs-${s.id}`} className="py-3">
+                      <div className="font-semibold mb-1">{s.title}</div>
+                      <div className="text-sm whitespace-pre-wrap">{s.content}</div>
+                    </div>
+                  ) : null
+                ))}
+
+                {/* Signature */}
+                {includeSections.doctorSignature && (
+                  <div className="pt-6 mt-4 border-t">
+                    <div className="flex justify-end text-sm">
+                      <div className="text-right">
+                        <div className="h-10" />
+                        <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
+                        <div className="text-gray-600">Signature</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-          </div>
-          <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 z-10">
-            <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
-              <div className="text-xs text-blue-700">
-                To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
-                turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
+                )}
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-              <Button onClick={() => window.print()}>Print</Button>
             </div>
-          </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 z-10">
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
+                <div className="text-xs text-blue-700">
+                  To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
+                  turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                <Button onClick={() => window.print()}>Print</Button>
+              </div>
+            </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
-      {/* 1MG Order Dialog (placeholder) */}
-      <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
-        <DialogContent className="sm:max-w-4xl">
-          <DialogHeader>
-            <DialogTitle>Order via 1MG</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="lg:col-span-2 max-h-[60vh] overflow-auto mt-1 pr-1">
-              {items.map((it, idx) => (
-                <div key={`map-${idx}`} className="border rounded p-2 mb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="font-medium">{it.drugName}</div>
-                      <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
+        {/* 1MG Order Dialog (placeholder) */}
+        <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
+          <DialogContent className="sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>Order via 1MG</DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div className="lg:col-span-2 max-h-[60vh] overflow-auto mt-1 pr-1">
+                {items.map((it, idx) => (
+                  <div key={`map-${idx}`} className="border rounded p-2 mb-2">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="font-medium">{it.drugName}</div>
+                        <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600">Qty</span>
+                        <Input className="h-8 w-20" type="number" min={1} value={oneMgMap[idx]?.qty ?? 1} onChange={(e) => updateOneMgQty(idx, Number(e.target.value) || 1)} />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-gray-600">Qty</span>
-                      <Input className="h-8 w-20" type="number" min={1} value={oneMgMap[idx]?.qty ?? 1} onChange={(e) => updateOneMgQty(idx, Number(e.target.value) || 1)} />
+                    <div className="mt-2">
+                      <Input placeholder="Search 1MG product" value={oneMgMap[idx]?.q || ''} onChange={(e) => void handleOneMgSearch(idx, e.target.value)} />
+                      {oneMgMap[idx]?.loading && (<div className="text-xs text-gray-500 mt-1">Searching…</div>)}
+                      {!oneMgMap[idx]?.loading && (oneMgMap[idx]?.results?.length || 0) > 0 && (
+                        <div className="mt-2 border rounded divide-y max-h-40 overflow-auto">
+                          {oneMgMap[idx]?.results?.map((p: any) => (
+                            <div key={`${p.sku || p.id || p.code}`} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => selectOneMgProduct(idx, p)}>
+                              <div className="font-medium">{p.name || p.title}</div>
+                              <div className="text-xs text-gray-500">{p.manufacturer || ''} {p.mrp ? `• ₹${p.mrp}` : ''}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <div className="mt-2">
-                    <Input placeholder="Search 1MG product" value={oneMgMap[idx]?.q || ''} onChange={(e) => void handleOneMgSearch(idx, e.target.value)} />
-                    {oneMgMap[idx]?.loading && (<div className="text-xs text-gray-500 mt-1">Searching…</div>)}
-                    {!oneMgMap[idx]?.loading && (oneMgMap[idx]?.results?.length || 0) > 0 && (
-                      <div className="mt-2 border rounded divide-y max-h-40 overflow-auto">
-                        {oneMgMap[idx]?.results?.map((p: any) => (
-                          <div key={`${p.sku || p.id || p.code}`} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => selectOneMgProduct(idx, p)}>
-                            <div className="font-medium">{p.name || p.title}</div>
-                            <div className="text-xs text-gray-500">{p.manufacturer || ''} {p.mrp ? `• ₹${p.mrp}` : ''}</div>
-                          </div>
-                        ))}
+                    {oneMgMap[idx]?.selection && (
+                      <div className="mt-2 text-xs">
+                        Selected: <span className="font-medium">{oneMgMap[idx].selection?.name}</span> {oneMgMap[idx].selection?.price ? `• ₹${oneMgMap[idx].selection?.price}` : ''}
                       </div>
                     )}
                   </div>
-                  {oneMgMap[idx]?.selection && (
-                    <div className="mt-2 text-xs">
-                      Selected: <span className="font-medium">{oneMgMap[idx].selection?.name}</span> {oneMgMap[idx].selection?.price ? `• ₹${oneMgMap[idx].selection?.price}` : ''}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="lg:col-span-1">
-              <div className="border rounded p-3 sticky top-2">
-                <div className="font-medium mb-2">Cart Summary</div>
-                <div className="space-y-1 text-sm max-h-[40vh] overflow-auto">
-                  {oneMgMap.filter((r) => !!r.selection).length === 0 && (<div className="text-xs text-gray-500">No items selected yet</div>)}
-                  {oneMgMap.map((r, i) => r.selection ? (
-                    <div key={`sel-${i}`} className="flex items-center justify-between">
-                      <div className="mr-2 truncate">
-                        <div className="font-medium truncate max-w-[180px]" title={r.selection?.name}>{r.selection?.name}</div>
-                        <div className="text-xs text-gray-500">SKU: {r.selection?.sku}</div>
+                ))}
+              </div>
+              <div className="lg:col-span-1">
+                <div className="border rounded p-3 sticky top-2">
+                  <div className="font-medium mb-2">Cart Summary</div>
+                  <div className="space-y-1 text-sm max-h-[40vh] overflow-auto">
+                    {oneMgMap.filter((r) => !!r.selection).length === 0 && (<div className="text-xs text-gray-500">No items selected yet</div>)}
+                    {oneMgMap.map((r, i) => r.selection ? (
+                      <div key={`sel-${i}`} className="flex items-center justify-between">
+                        <div className="mr-2 truncate">
+                          <div className="font-medium truncate max-w-[180px]" title={r.selection?.name}>{r.selection?.name}</div>
+                          <div className="text-xs text-gray-500">SKU: {r.selection?.sku}</div>
+                        </div>
+                        <div className="text-right">
+                          <div>x{r.qty}</div>
+                          {r.selection?.price ? <div className="text-xs text-gray-600">₹{(r.selection.price * r.qty).toFixed(2)}</div> : null}
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <div>x{r.qty}</div>
-                        {r.selection?.price ? <div className="text-xs text-gray-600">₹{(r.selection.price * r.qty).toFixed(2)}</div> : null}
+                    ) : null)}
+                  </div>
+                  <div className="mt-3">
+                    <Button variant="outline" size="sm" className="w-full" onClick={checkOneMgInventory} disabled={oneMgChecking || oneMgMap.filter((r) => !!r.selection).length === 0}>{oneMgChecking ? 'Checking…' : 'Check Inventory & Totals'}</Button>
+                    {oneMgTotals && (
+                      <div className="mt-2 text-sm">
+                        <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>₹{oneMgTotals?.subtotal ?? '—'}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span>₹{oneMgTotals?.delivery ?? '—'}</span></div>
+                        <div className="flex justify-between font-medium border-t pt-1"><span>Total</span><span>₹{oneMgTotals?.total ?? '—'}</span></div>
                       </div>
-                    </div>
-                  ) : null)}
-                </div>
-                <div className="mt-3">
-                  <Button variant="outline" size="sm" className="w-full" onClick={checkOneMgInventory} disabled={oneMgChecking || oneMgMap.filter((r) => !!r.selection).length === 0}>{oneMgChecking ? 'Checking…' : 'Check Inventory & Totals'}</Button>
-                  {oneMgTotals && (
-                    <div className="mt-2 text-sm">
-                      <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>₹{oneMgTotals?.subtotal ?? '—'}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span>₹{oneMgTotals?.delivery ?? '—'}</span></div>
-                      <div className="flex justify-between font-medium border-t pt-1"><span>Total</span><span>₹{oneMgTotals?.total ?? '—'}</span></div>
-                    </div>
-                  )}
-                </div>
-                <div className="mt-3 flex justify-end">
-                  <Button onClick={placeOneMgOrder} disabled={oneMgMap.filter((r) => !!r.selection).length === 0}>Place Order</Button>
+                    )}
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <Button onClick={placeOneMgOrder} disabled={oneMgMap.filter((r) => !!r.selection).length === 0}>Place Order</Button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="mt-3 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setOrderOpen(false)}>Close</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="mt-3 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setOrderOpen(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 } 

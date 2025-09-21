@@ -8,16 +8,20 @@ import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { X, FileText, AlertTriangle } from 'lucide-react';
-
-type AppointmentInSchedule = {
-  slot: string;
-  patient?: { id: string; name: string; phone?: string; email?: string };
-  doctor?: { firstName: string; lastName: string };
-  visitType?: 'OPD' | 'TELEMED' | 'PROCEDURE';
-  room?: { id: string; name: string; type: string };
-  id?: string;
-  status?: string;
-};
+import { useToast } from '@/hooks/use-toast';
+import {
+  generateTimeSlots,
+  isSlotInPast,
+  getErrorMessage,
+  formatPatientName,
+  createCleanupTimeouts,
+  getISTDateString
+} from '@/lib/utils';
+import type {
+  AppointmentInSlot,
+  TimeSlotConfig,
+  GetDoctorScheduleResponse
+} from '@/lib/types';
 
 export interface DoctorDayCalendarProps {
   doctorId: string;
@@ -26,28 +30,16 @@ export interface DoctorDayCalendarProps {
   visitTypeFilter?: string;
   roomFilter?: string;
   onSelectSlot?: (slot: string) => void;
-  refreshKey?: number; // Add refresh key to trigger data reload
-  bookingInProgress?: string; // Add slot being booked for immediate feedback
-  optimisticAppointment?: { // Add optimistic appointment for immediate display
+  refreshKey?: number;
+  bookingInProgress?: string;
+  optimisticAppointment?: {
     slot: string;
     patient: { name: string };
     visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
     room?: { id: string; name: string; type: string };
   };
-  onAppointmentUpdate?: () => void; // Callback for appointment changes
-}
-
-function generateSlots(startHour = 9, endHour = 18, stepMinutes = 30): string[] {
-  const slots: string[] = [];
-  for (let h = startHour; h < endHour; h += stepMinutes / 60) {
-    const startH = Math.floor(h);
-    const startM = Math.round((h - startH) * 60);
-    const endH = Math.floor(h + stepMinutes / 60);
-    const endM = Math.round(((h + stepMinutes / 60) - endH) * 60);
-    const fmt = (x: number) => x.toString().padStart(2, '0');
-    slots.push(`${fmt(startH)}:${fmt(startM)}-${fmt(endH)}:${fmt(endM)}`);
-  }
-  return slots;
+  onAppointmentUpdate?: () => void;
+  timeSlotConfig?: TimeSlotConfig;
 }
 
 export default function DoctorDayCalendar({ 
@@ -60,16 +52,25 @@ export default function DoctorDayCalendar({
   refreshKey = 0,
   bookingInProgress,
   optimisticAppointment,
-  onAppointmentUpdate
+  onAppointmentUpdate,
+  timeSlotConfig = {
+    startHour: 9,
+    endHour: 18,
+    stepMinutes: 30,
+    timezone: 'Asia/Kolkata'
+  }
 }: DoctorDayCalendarProps) {
   const router = useRouter();
-  const [schedule, setSchedule] = useState<AppointmentInSchedule[]>([]);
+  const { toast } = useToast();
+  const [schedule, setSchedule] = useState<AppointmentInSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSchedule | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
 
-  const slots = useMemo(() => generateSlots(9, 18, 30), []);
+  const slots = useMemo(() => generateTimeSlots(timeSlotConfig), [timeSlotConfig]);
+  const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
   // Filter appointments based on visitType and room filters
   const filteredSchedule = useMemo(() => {
@@ -89,7 +90,8 @@ export default function DoctorDayCalendar({
           visitType: optimisticAppointment.visitType,
           room: optimisticAppointment.room,
           id: 'optimistic-' + optimisticAppointment.slot,
-          status: 'SCHEDULED'
+          status: 'SCHEDULED',
+          doctor: { firstName: 'Dr.', lastName: 'Unknown' }
         });
       }
     }
@@ -103,63 +105,58 @@ export default function DoctorDayCalendar({
 
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
 
-  const getLocalDateStr = (d: Date): string => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const da = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${da}`;
-  };
-
-  const isPastSlot = (slotTime: string): boolean => {
-    // If selected date is in the past, all slots are past
-    const todayStr = getLocalDateStr(new Date());
-    if (date < todayStr) return true;
-    if (date > todayStr) return false;
-    // Same day: compare slot start with now
-    const [hStr, mStr] = slotTime.split('-')[0].split(':');
-    const h = parseInt(hStr, 10);
-    const m = parseInt(mStr, 10);
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const slotMinutes = h * 60 + m;
-    return slotMinutes <= nowMinutes;
-  };
-
   const fetchSchedule = useCallback(async () => {
     if (!doctorId || !date) return;
+    
     try {
       setLoading(true);
-      const res: any = await apiClient.getDoctorSchedule(doctorId, date);
-      // Map backend appointments to slot-wise entries
-      const items = (res.appointments || []).map((a: any) => ({
+      setError(null);
+      
+      const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
+      
+      // Map backend appointments to slot-wise entries with proper type safety
+      const items: AppointmentInSlot[] = (res.appointments || []).map((a) => ({
         slot: a.slot,
         patient: a.patient ? { 
           id: a.patient.id, 
-          name: a.patient.name,
+          name: formatPatientName(a.patient),
           phone: a.patient.phone,
           email: a.patient.email
-        } : undefined,
-        doctor: a.doctor,
-        visitType: a.visitType,
+        } : { id: '', name: 'Unknown Patient' },
+        doctor: a.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
+        visitType: a.visitType || 'OPD',
         room: a.room,
         id: a.id,
-        status: a.status,
+        status: a.status || 'SCHEDULED',
       }));
+      
       setSchedule(items);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to load schedule', e);
+      const errorMessage = getErrorMessage(e);
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Failed to load schedule",
+        description: errorMessage,
+      });
     } finally {
       setLoading(false);
     }
-  }, [doctorId, date]);
+  }, [doctorId, date, toast]);
 
   useEffect(() => {
     void fetchSchedule();
-  }, [fetchSchedule, refreshKey]); // Include refreshKey in dependency array
+  }, [fetchSchedule, refreshKey]);
 
-  const handleCancelAppointment = async (appointment: AppointmentInSchedule) => {
-    if (!appointment.id) return;
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      cleanupTimeouts.clearAll();
+    };
+  }, [cleanupTimeouts]);
+
+  const handleCancelAppointment = async (appointment: AppointmentInSlot) => {
+    if (!appointment.id || appointment.id.startsWith('optimistic-')) return;
     
     setCancellingAppointment(appointment.id);
     setSelectedAppointment(appointment);
@@ -172,6 +169,12 @@ export default function DoctorDayCalendar({
     try {
       await apiClient.deleteAppointment(cancellingAppointment);
       
+      toast({
+        variant: "success",
+        title: "Appointment Cancelled",
+        description: "The appointment has been successfully cancelled.",
+      });
+      
       // Refresh the schedule
       await fetchSchedule();
       
@@ -183,13 +186,17 @@ export default function DoctorDayCalendar({
       setSelectedAppointment(null);
       setCancellingAppointment(null);
     } catch (error) {
-      console.error('Failed to cancel appointment:', error);
-      alert('Failed to cancel appointment. Please try again.');
+      const errorMessage = getErrorMessage(error);
+      toast({
+        variant: "destructive",
+        title: "Failed to cancel appointment",
+        description: errorMessage,
+      });
     }
   };
 
-  const handleStartVisit = (appointment: AppointmentInSchedule) => {
-    if (!appointment.patient?.id || !appointment.id) return;
+  const handleStartVisit = (appointment: AppointmentInSlot) => {
+    if (!appointment.patient?.id || !appointment.id || appointment.id.startsWith('optimistic-')) return;
     
     // Navigate to visits page with appointment data
     const searchParams = new URLSearchParams({
@@ -200,6 +207,29 @@ export default function DoctorDayCalendar({
     
     router.push(`/dashboard/visits?${searchParams.toString()}`);
   };
+
+  if (loading && schedule.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <div className="text-gray-500">Loading schedule...</div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error && schedule.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <div className="text-red-600 mb-4">Failed to load schedule</div>
+          <Button onClick={() => void fetchSchedule()} variant="outline">
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <>
@@ -219,7 +249,7 @@ export default function DoctorDayCalendar({
             {slots.map((slot) => {
               const booked = bookedBySlot.has(slot);
               const appt = bookedBySlot.get(slot);
-              const past = isPastSlot(slot);
+              const past = isSlotInPast(slot, date);
               const isNewlyBooked = recentBookedSlot === slot;
               const isBookingInProgress = bookingInProgress === slot;
               
@@ -260,7 +290,7 @@ export default function DoctorDayCalendar({
                         style={{ color: 'rgba(255, 255, 255, 0.95)' }}
                         onClick={() => setSelectedAppointment(appt)}
                       >
-                        {appt.patient?.name || 'Booked'}
+                        {formatPatientName(appt.patient)}
                       </div>
                       
                       <div className="flex flex-col gap-1">
@@ -300,6 +330,7 @@ export default function DoctorDayCalendar({
                             e.stopPropagation();
                             handleStartVisit(appt);
                           }}
+                          disabled={appt.id?.startsWith('optimistic-')}
                         >
                           <FileText className="h-3 w-3 mr-1" />
                           Visit
@@ -312,6 +343,7 @@ export default function DoctorDayCalendar({
                             e.stopPropagation();
                             handleCancelAppointment(appt);
                           }}
+                          disabled={appt.id?.startsWith('optimistic-')}
                         >
                           <X className="h-3 w-3" />
                         </Button>
@@ -356,7 +388,7 @@ export default function DoctorDayCalendar({
             <div className="space-y-3 text-sm">
               <div><span className="text-gray-600">Date:</span> {date}</div>
               <div><span className="text-gray-600">Slot:</span> {selectedAppointment.slot}</div>
-              <div><span className="text-gray-600">Patient:</span> {selectedAppointment.patient?.name || 'Unknown'}</div>
+              <div><span className="text-gray-600">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
               {selectedAppointment.patient?.phone && (
                 <div><span className="text-gray-600">Phone:</span> {selectedAppointment.patient.phone}</div>
               )}
@@ -381,7 +413,7 @@ export default function DoctorDayCalendar({
             <Button variant="outline" onClick={() => setSelectedAppointment(null)}>
               Close
             </Button>
-            {selectedAppointment && (
+            {selectedAppointment && !selectedAppointment.id?.startsWith('optimistic-') && (
               <>
                 <Button onClick={() => handleStartVisit(selectedAppointment)}>
                   <FileText className="h-4 w-4 mr-2" />
@@ -415,7 +447,7 @@ export default function DoctorDayCalendar({
                 Are you sure you want to cancel this appointment? This action cannot be undone.
               </p>
               <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
-                <div><span className="font-medium">Patient:</span> {selectedAppointment.patient?.name}</div>
+                <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
                 <div><span className="font-medium">Date:</span> {date}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>
                 <div><span className="font-medium">Type:</span> {selectedAppointment.visitType}</div>

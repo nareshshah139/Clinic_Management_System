@@ -25,6 +25,9 @@ import {
 } from './dto/query-appointment.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { Permissions } from '../../shared/decorators/permissions.decorator';
+import { UserRole } from '@prisma/client';
 
 interface AuthenticatedRequest {
   user: {
@@ -42,6 +45,8 @@ export class AppointmentsController {
   constructor(private readonly appointmentsService: AppointmentsService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:create')
   create(
     @Body() createAppointmentDto: CreateAppointmentDto,
     @Request() req: AuthenticatedRequest,
@@ -53,6 +58,8 @@ export class AppointmentsController {
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:read')
   findAll(
     @Query() query: QueryAppointmentsDto,
     @Request() req: AuthenticatedRequest,
@@ -61,6 +68,8 @@ export class AppointmentsController {
   }
 
   @Get('available-slots')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:read')
   getAvailableSlots(
     @Query() query: AvailableSlotsDto,
     @Request() req: AuthenticatedRequest,
@@ -69,6 +78,8 @@ export class AppointmentsController {
   }
 
   @Get('doctor/:doctorId/schedule')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:read')
   getDoctorSchedule(
     @Param('doctorId') doctorId: string,
     @Query('date') date: string,
@@ -82,6 +93,8 @@ export class AppointmentsController {
   }
 
   @Get('room/:roomId/schedule')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('appointments:read')
   getRoomSchedule(
     @Param('roomId') roomId: string,
     @Query('date') date: string,
@@ -95,16 +108,22 @@ export class AppointmentsController {
   }
 
   @Get('rooms')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('rooms:read')
   getRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getRooms(req.user.branchId);
   }
 
   @Get('rooms/all')
+  @Roles(UserRole.ADMIN)
+  @Permissions('rooms:read')
   getAllRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getAllRooms(req.user.branchId);
   }
 
   @Post('rooms')
+  @Roles(UserRole.ADMIN)
+  @Permissions('rooms:manage')
   createRoom(
     @Body() roomData: { name: string; type: string; capacity: number; isActive: boolean },
     @Request() req: AuthenticatedRequest
@@ -113,6 +132,8 @@ export class AppointmentsController {
   }
 
   @Patch('rooms/:roomId')
+  @Roles(UserRole.ADMIN)
+  @Permissions('rooms:manage')
   updateRoom(
     @Param('roomId') roomId: string,
     @Body() roomData: { name: string; type: string; capacity: number; isActive: boolean },
@@ -122,6 +143,8 @@ export class AppointmentsController {
   }
 
   @Delete('rooms/:roomId')
+  @Roles(UserRole.ADMIN)
+  @Permissions('rooms:manage')
   deleteRoom(
     @Param('roomId') roomId: string,
     @Request() req: AuthenticatedRequest
@@ -130,11 +153,15 @@ export class AppointmentsController {
   }
 
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:read')
   findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.appointmentsService.findOne(id, req.user.branchId);
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.NURSE, UserRole.RECEPTION)
+  @Permissions('appointments:update')
   update(
     @Param('id') id: string,
     @Body() updateAppointmentDto: UpdateAppointmentDto,
@@ -148,6 +175,8 @@ export class AppointmentsController {
   }
 
   @Post(':id/reschedule')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('appointments:reschedule')
   reschedule(
     @Param('id') id: string,
     @Body() rescheduleDto: RescheduleAppointmentDto,
@@ -161,6 +190,8 @@ export class AppointmentsController {
   }
 
   @Post('bulk-update')
+  @Roles(UserRole.ADMIN)
+  @Permissions('appointments:bulkUpdate')
   bulkUpdate(
     @Body() bulkUpdateDto: BulkUpdateAppointmentsDto,
     @Request() req: AuthenticatedRequest,
@@ -172,6 +203,8 @@ export class AppointmentsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Permissions('appointments:delete')
   remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.appointmentsService.remove(id, req.user.branchId);
   }

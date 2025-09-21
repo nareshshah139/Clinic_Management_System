@@ -36,8 +36,8 @@ export class ApiClient {
   // Auth
   async login(phone: string, password: string) {
     const res = await this.post<{ access_token: string }>(`/auth/login`, { phone, password });
-    if ((res as any)?.access_token) {
-      this.setToken((res as any).access_token);
+    if (res?.access_token) {
+      this.setToken(res.access_token);
     }
     return res;
   }
@@ -73,9 +73,9 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      let body: any = null;
+      let body: { message?: string } | null = null;
       try {
-        body = await response.json();
+        body = (await response.json()) as { message?: string };
       } catch {
         try {
           const text = await response.text();
@@ -84,17 +84,17 @@ export class ApiClient {
           body = { message: 'Network error' };
         }
       }
-      const err: any = new Error((body && body.message) || `HTTP ${response.status}`);
-      err.status = response.status;
-      err.body = body;
+      const err = new Error((body && body.message) || `HTTP ${response.status}`);
+      (err as any).status = response.status;
+      (err as any).body = body;
       throw err;
     }
 
-    return response.json();
+    return (await response.json()) as T;
   }
 
   // Generic CRUD operations
-  async get<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
+  async get<T>(endpoint: string, params?: Record<string, unknown>): Promise<T> {
     let url = endpoint;
     if (params) {
       const sp = new URLSearchParams();
@@ -111,14 +111,14 @@ export class ApiClient {
     return this.request<T>(url);
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
     });
   }
 
-  async patch<T>(endpoint: string, data: any): Promise<T> {
+  async patch<T>(endpoint: string, data: unknown): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -133,11 +133,11 @@ export class ApiClient {
 
   // Specific API methods
   // Patients
-  async getPatients(params?: any) {
+  async getPatients(params?: Record<string, unknown>) {
     return this.get('/patients', params);
   }
 
-  async createPatient(data: any) {
+  async createPatient(data: Record<string, unknown>) {
     return this.post('/patients', data);
   }
 
@@ -145,16 +145,16 @@ export class ApiClient {
     return this.get(`/patients/${id}`);
   }
 
-  async updatePatient(id: string, data: any) {
+  async updatePatient(id: string, data: Record<string, unknown>) {
     return this.patch(`/patients/${id}`, data);
   }
 
   // Appointments
-  async getAppointments(params?: any) {
+  async getAppointments(params?: Record<string, unknown>) {
     return this.get('/appointments', params);
   }
 
-  async createAppointment(data: any) {
+  async createAppointment(data: Record<string, unknown>) {
     return this.post('/appointments', data);
   }
 
@@ -162,7 +162,7 @@ export class ApiClient {
     return this.get(`/appointments/${id}`);
   }
 
-  async updateAppointment(id: string, data: any) {
+  async updateAppointment(id: string, data: Record<string, unknown>) {
     return this.patch(`/appointments/${id}`, data);
   }
 
@@ -170,11 +170,11 @@ export class ApiClient {
     return this.delete(`/appointments/${id}`);
   }
 
-  async getAvailableSlots(params: any) {
+  async getAvailableSlots(params: Record<string, unknown>) {
     return this.get('/appointments/available-slots', params);
   }
 
-  async rescheduleAppointment(id: string, data: any) {
+  async rescheduleAppointment(id: string, data: Record<string, unknown>) {
     return this.post(`/appointments/${id}/reschedule`, data);
   }
 
@@ -207,28 +207,28 @@ export class ApiClient {
   }
 
   // Visits
-  async getVisits(params?: any) {
+  async getVisits(params?: Record<string, unknown>) {
     return this.get('/visits', params);
   }
 
-  async createVisit(data: any) {
+  async createVisit(data: Record<string, unknown>) {
     return this.post('/visits', data);
   }
 
-  async updateVisit(id: string, data: any) {
+  async updateVisit(id: string, data: Record<string, unknown>) {
     return this.patch(`/visits/${id}`, data);
   }
 
-  async completeVisit(id: string, data: any) {
+  async completeVisit(id: string, data: Record<string, unknown>) {
     return this.post(`/visits/${id}/complete`, data);
   }
 
   async getPatientVisitHistory(patientId: string, params?: { limit?: number; offset?: number }) {
-    return this.get(`/visits/patient/${patientId}/history`, params as any);
+    return this.get(`/visits/patient/${patientId}/history`, params || {});
   }
 
   // Billing
-  async getInvoices(params?: any) {
+  async getInvoices(params?: Record<string, unknown>) {
     return this.get('/billing/invoices', params);
   }
 
@@ -236,11 +236,11 @@ export class ApiClient {
     return this.get(`/billing/invoices/${id}`);
   }
 
-  async createInvoice(data: any) {
+  async createInvoice(data: Record<string, unknown>) {
     return this.post('/billing/invoices', data);
   }
 
-  async processPayment(data: any) {
+  async processPayment(data: Record<string, unknown>) {
     return this.post('/billing/payments', data);
   }
 
@@ -249,11 +249,11 @@ export class ApiClient {
   }
 
   // Inventory
-  async getInventoryItems(params?: any) {
+  async getInventoryItems(params?: Record<string, unknown>) {
     return this.get('/inventory/items', params);
   }
 
-  async createInventoryItem(data: any) {
+  async createInventoryItem(data: Record<string, unknown>) {
     return this.post('/inventory/items', data);
   }
 
@@ -262,15 +262,15 @@ export class ApiClient {
   }
 
   // Reports
-  async getRevenueReport(params: any) {
+  async getRevenueReport(params: Record<string, unknown>) {
     return this.get('/reports/revenue', params);
   }
 
-  async getPatientReport(params: any) {
+  async getPatientReport(params: Record<string, unknown>) {
     return this.get('/reports/patients', params);
   }
 
-  async getDoctorReport(params: any) {
+  async getDoctorReport(params: Record<string, unknown>) {
     return this.get('/reports/doctors', params);
   }
 
@@ -283,15 +283,15 @@ export class ApiClient {
   }
 
   // Users
-  async getUsers(params?: any) {
+  async getUsers(params?: Record<string, unknown>) {
     return this.get('/users', params);
   }
 
-  async createUser(data: any) {
+  async createUser(data: Record<string, unknown>) {
     return this.post('/users', data);
   }
 
-  async updateUser(id: string, data: any) {
+  async updateUser(id: string, data: Record<string, unknown>) {
     return this.patch(`/users/${id}`, data);
   }
 
@@ -304,37 +304,41 @@ export class ApiClient {
   }
 
   // Prescriptions
-  async createPrescription(data: any) {
+  async createPrescription(data: Record<string, unknown>) {
     return this.post('/prescriptions', data);
   }
 
-  async searchDrugs(params: any) {
+  async getPrescription(id: string) {
+    return this.get(`/prescriptions/${id}`);
+  }
+
+  async searchDrugs(params: Record<string, unknown>) {
     return this.get('/prescriptions/drugs/autocomplete', params);
   }
 
-  async getPrescriptionTemplates(params?: any) {
+  async getPrescriptionTemplates(params?: Record<string, unknown>) {
     return this.get('/prescriptions/templates', params || {});
   }
 
-  async createPrescriptionTemplate(data: any) {
+  async createPrescriptionTemplate(data: Record<string, unknown>) {
     return this.post('/prescriptions/templates', data);
   }
 
   async autocompletePrescriptionField(params: { field: string; patientId: string; visitId?: string; q?: string; limit?: number }) {
-    return this.get('/prescriptions/fields/autocomplete', params as any);
+    return this.get('/prescriptions/fields/autocomplete', params);
   }
 
   // 1MG proxy endpoints
   async oneMgSearch(query: string, limit = 10) {
-    return this.get('/pharmacy/1mg/search', { q: query, limit } as any);
+    return this.get('/pharmacy/1mg/search', { q: query, limit });
   }
   async oneMgProduct(sku: string) {
     return this.get(`/pharmacy/1mg/products/${sku}`);
   }
-  async oneMgCheckInventory(payload: any) {
+  async oneMgCheckInventory(payload: Record<string, unknown>) {
     return this.post('/pharmacy/1mg/check-inventory', payload);
   }
-  async oneMgCreateOrder(payload: any) {
+  async oneMgCreateOrder(payload: Record<string, unknown>) {
     return this.post('/pharmacy/1mg/orders', payload);
   }
 

@@ -193,6 +193,7 @@ export default function VisitsPage() {
   const [appointmentData, setAppointmentData] = useState<any>(null);
 
   const searchParams = useSearchParams();
+  const urlPatientId = searchParams.get('patientId');
 
   useEffect(() => {
     loadData();
@@ -200,11 +201,14 @@ export default function VisitsPage() {
 
   // Handle URL parameters for appointment linking
   useEffect(() => {
-    const patientId = searchParams.get('patientId');
+    const patientId = urlPatientId;
     const appointmentId = searchParams.get('appointmentId');
     const autoStart = searchParams.get('autoStart') === 'true';
 
+    console.log('🔗 URL Parameters:', { patientId, appointmentId, autoStart });
+
     if (patientId) {
+      console.log('🎯 Setting patient from URL:', patientId);
       setSelectedPatientId(patientId);
       
       // If we have an appointment ID, fetch appointment details
@@ -247,7 +251,9 @@ export default function VisitsPage() {
         console.log('🏥 Processed patients data:', patientsData);
         setPatients(patientsData);
         setPatientOptions(patientsData.slice(0, 10));
-        if (patientsData.length > 0 && !selectedPatientId) {
+        // Only set default patient if no URL patient ID is present
+        if (patientsData.length > 0 && !selectedPatientId && !urlPatientId) {
+          console.log('🔄 Setting default patient (no URL patient):', patientsData[0].id);
           setSelectedPatientId(patientsData[0].id);
           }
         }

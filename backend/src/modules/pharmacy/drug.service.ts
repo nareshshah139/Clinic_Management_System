@@ -68,6 +68,7 @@ export class DrugService {
       limit = 20,
       sortBy = 'name',
       sortOrder = 'asc',
+      isActive,
     } = query;
 
     const skip = (page - 1) * limit;
@@ -75,7 +76,7 @@ export class DrugService {
     // Build where clause
     const where: Prisma.DrugWhereInput = {
       branchId,
-      isActive: true,
+      ...(isActive !== undefined ? { isActive } : { isActive: true }),
       ...(includeDiscontinued ? {} : { isDiscontinued: false }),
     };
 

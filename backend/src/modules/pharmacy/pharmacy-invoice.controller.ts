@@ -11,6 +11,9 @@ import {
   Request,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { Permissions } from '../../shared/decorators/permissions.decorator';
+import { UserRole } from '@prisma/client';
 import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import { 
   CreatePharmacyInvoiceDto, 
@@ -28,15 +31,19 @@ export class PharmacyInvoiceController {
   constructor(private readonly pharmacyInvoiceService: PharmacyInvoiceService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:create')
   @ApiOperation({ summary: 'Create a new pharmacy invoice' })
   @ApiResponse({ status: 201, description: 'Invoice created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid invoice data' })
   @ApiResponse({ status: 404, description: 'Patient or doctor not found' })
   async create(@Body() createInvoiceDto: CreatePharmacyInvoiceDto, @Request() req: any) {
-    return this.pharmacyInvoiceService.create(createInvoiceDto, req.user.branchId);
+    return this.pharmacyInvoiceService.create(createInvoiceDto, req.user.branchId, req.user.id);
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
+  @Permissions('pharmacy:invoice:read')
   @ApiOperation({ summary: 'Get all pharmacy invoices with filtering and pagination' })
   @ApiResponse({ status: 200, description: 'Invoices retrieved successfully' })
   async findAll(@Query() query: QueryPharmacyInvoiceDto, @Request() req: any) {
@@ -44,6 +51,8 @@ export class PharmacyInvoiceController {
   }
 
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
+  @Permissions('pharmacy:invoice:read')
   @ApiOperation({ summary: 'Get a specific pharmacy invoice by ID' })
   @ApiResponse({ status: 200, description: 'Invoice retrieved successfully' })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
@@ -52,6 +61,8 @@ export class PharmacyInvoiceController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:update')
   @ApiOperation({ summary: 'Update a pharmacy invoice' })
   @ApiResponse({ status: 200, description: 'Invoice updated successfully' })
   @ApiResponse({ status: 400, description: 'Invalid update data or invoice not in draft status' })
@@ -65,6 +76,8 @@ export class PharmacyInvoiceController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:delete')
   @ApiOperation({ summary: 'Delete a pharmacy invoice' })
   @ApiResponse({ status: 200, description: 'Invoice deleted successfully' })
   @ApiResponse({ status: 400, description: 'Invoice not in draft status' })
@@ -74,6 +87,8 @@ export class PharmacyInvoiceController {
   }
 
   @Post(':id/payments')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:payment:add')
   @ApiOperation({ summary: 'Add a payment to an invoice' })
   @ApiResponse({ status: 201, description: 'Payment added successfully' })
   @ApiResponse({ status: 400, description: 'Invalid payment amount' })

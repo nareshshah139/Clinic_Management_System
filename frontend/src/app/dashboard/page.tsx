@@ -19,12 +19,14 @@ import {
 import { apiClient } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 
+type MinimalUser = { role?: string } | null;
+
 export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<MinimalUser>(null);
   const [backupLoading, setBackupLoading] = useState(false);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function DashboardPage() {
           apiClient.get('/auth/me')
         ]);
         setStatistics(stats as SystemStatistics);
-        setCurrentUser(user as any);
+        setCurrentUser((user as MinimalUser) ?? null);
 
         // For now, provide mock data for alerts and appointments since these endpoints aren't available in minimal mode
         setAlerts([
@@ -101,7 +103,7 @@ export default function DashboardPage() {
       }
     };
 
-    fetchDashboardData();
+    void fetchDashboardData();
   }, []);
 
   const handleBackup = async () => {
@@ -110,12 +112,12 @@ export default function DashboardPage() {
       const result = await apiClient.createDatabaseBackup();
       
       // Show success message
-      const backupInfo = (result as any).backup;
+      const backupInfo = (result as unknown as { backup: { timestamp: string; directory: string; size: number } }).backup;
       alert(`✅ Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`);
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Backup failed:', error);
-      const message = error.message || 'Backup creation failed';
+      const message = (error as { message?: string })?.message || 'Backup creation failed';
       alert(`❌ Backup Failed\n\n${message}`);
     } finally {
       setBackupLoading(false);
@@ -127,7 +129,7 @@ export default function DashboardPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back! Here's what's happening at your clinic today.</p>
+          <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
         </div>
         <div className="animate-pulse">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -176,7 +178,7 @@ export default function DashboardPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome back! Here's what's happening at your clinic today.</p>
+        <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
       </div>
 
       {/* Statistics Cards */}
@@ -305,7 +307,7 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Clock className="h-5 w-5 text-blue-500 mr-2" />
-              Today's Appointments
+              Today&apos;s Appointments
             </CardTitle>
             <CardDescription>
               Upcoming appointments for today

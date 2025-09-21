@@ -3,10 +3,31 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
 import { PharmacyInvoiceStatus, PharmacyPaymentMethod, PharmacyPaymentStatus } from '@prisma/client';
 
+// Enum for invoice item types
+export enum PharmacyInvoiceItemType {
+  DRUG = 'DRUG',
+  PACKAGE = 'PACKAGE'
+}
+
 export class PharmacyInvoiceItemDto {
-  @ApiProperty({ description: 'Drug ID', example: 'drug-123' })
+  @ApiPropertyOptional({ description: 'Drug ID (required if itemType is DRUG)', example: 'drug-123' })
+  @IsOptional()
   @IsString()
-  drugId: string;
+  drugId?: string;
+
+  @ApiPropertyOptional({ description: 'Package ID (required if itemType is PACKAGE)', example: 'package-123' })
+  @IsOptional()
+  @IsString()
+  packageId?: string;
+
+  @ApiPropertyOptional({ 
+    description: 'Item type', 
+    enum: PharmacyInvoiceItemType, 
+    default: PharmacyInvoiceItemType.DRUG 
+  })
+  @IsOptional()
+  @IsEnum(PharmacyInvoiceItemType)
+  itemType?: PharmacyInvoiceItemType = PharmacyInvoiceItemType.DRUG;
 
   @ApiProperty({ description: 'Quantity', example: 2 })
   @Transform(({ value }) => {

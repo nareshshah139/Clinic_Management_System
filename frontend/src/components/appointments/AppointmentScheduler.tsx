@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,21 +8,47 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiClient } from '@/lib/api';
-import type { User, Patient } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import {
+  generateTimeSlots,
+  isSlotInPast,
+  getErrorMessage,
+  formatPatientName,
+  createCleanupTimeouts,
+  getISTDateString,
+  validateAppointmentForm,
+  getConflictSuggestions,
+  isConflictError
+} from '@/lib/utils';
+import type { 
+  User, 
+  Patient, 
+  AppointmentInSlot, 
+  AvailableSlot,
+  TimeSlotConfig,
+  GetUsersResponse,
+  GetPatientsResponse,
+  GetRoomsResponse,
+  GetAvailableSlotsResponse,
+  GetDoctorScheduleResponse,
+  VisitType
+} from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 
-type AppointmentInSlot = {
-  id: string;
-  slot: string;
-  patient: { id: string; name: string; phone?: string; email?: string };
-  doctor: { firstName: string; lastName: string };
-  visitType: 'OPD' | 'TELEMED' | 'PROCEDURE';
-  room?: { id: string; name: string; type: string };
-  status: string;
-};
+interface AppointmentSchedulerProps {
+  timeSlotConfig?: TimeSlotConfig;
+}
 
-export default function AppointmentScheduler() {
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+export default function AppointmentScheduler({ 
+  timeSlotConfig = {
+    startHour: 9,
+    endHour: 18,
+    stepMinutes: 30,
+    timezone: 'Asia/Kolkata'
+  }
+}: AppointmentSchedulerProps) {
+  const { toast } = useToast();
+  const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -31,7 +57,7 @@ export default function AppointmentScheduler() {
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
-  const [slots, setSlots] = useState<{ time: string; available: boolean }[]>([]);
+  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [appointments, setAppointments] = useState<AppointmentInSlot[]>([]);
   const [appointmentsBySlot, setAppointmentsBySlot] = useState<Record<string, AppointmentInSlot>>({});
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
@@ -40,13 +66,14 @@ export default function AppointmentScheduler() {
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [isBooking, setIsBooking] = useState<boolean>(false);
   const [bookingSlot, setBookingSlot] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
 
-  // Debug log to confirm component is loading with changes
-  console.log('🎨 AppointmentScheduler loaded with booking dialog - Version 2024-12-10-v3');
+  const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
   useEffect(() => {
     void fetchDoctors();
@@ -63,42 +90,81 @@ export default function AppointmentScheduler() {
     // Clear transient highlights when doctor/date changes
     setRecentBookedSlot('');
     setBookingDetails(null);
+    setError(null);
   }, [doctorId, date]);
 
-  const fetchDoctors = async () => {
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      cleanupTimeouts.clearAll();
+    };
+  }, [cleanupTimeouts]);
+
+  const fetchDoctors = useCallback(async () => {
     try {
-      const res: any = await apiClient.getUsers({ limit: 100 });
-      const list: User[] = (res.users || res.data || []).filter((u: User) => u.role === 'DOCTOR');
+      setLoading(true);
+      const res: GetUsersResponse = await apiClient.getUsers({ limit: 100 });
+      const list: User[] = (res.users || []).filter((u: User) => u.role === 'DOCTOR');
       setDoctors(list);
       if (list[0]?.id) setDoctorId(list[0].id);
     } catch (e) {
-      console.error('Failed to fetch doctors', e);
+      const errorMessage = getErrorMessage(e);
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Failed to fetch doctors",
+        description: errorMessage,
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [toast]);
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     try {
-      const res: any = await apiClient.getRooms();
+      const res: GetRoomsResponse = await apiClient.getRooms();
       setRooms(res.rooms || []);
     } catch (e) {
-      console.error('Failed to fetch rooms', e);
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to fetch rooms",
+        description: errorMessage,
+      });
     }
-  };
+  }, [toast]);
 
-  const fetchSlots = async () => {
+  const fetchSlots = useCallback(async () => {
+    if (!doctorId || !date) return;
+    
     try {
-      const res: any = await apiClient.getAvailableSlots({ doctorId, date, durationMinutes: 30 });
-      setSlots(res.slots || []);
+      setLoading(true);
+      setError(null);
       
-      const scheduleRes: any = await apiClient.getDoctorSchedule(doctorId, date);
-      const appts: AppointmentInSlot[] = (scheduleRes.appointments || []).map((a: any) => ({
+      const res: GetAvailableSlotsResponse = await apiClient.getAvailableSlots({ 
+        doctorId, 
+        date, 
+        durationMinutes: timeSlotConfig.stepMinutes 
+      });
+      
+      // Handle both possible response formats
+      const availableSlots = res.slots || res.availableSlots?.map(slot => ({ time: slot, available: true })) || [];
+      setSlots(availableSlots);
+      
+      const scheduleRes: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
+      const appts: AppointmentInSlot[] = (scheduleRes.appointments || []).map((a) => ({
         id: a.id,
         slot: a.slot,
-        patient: a.patient,
-        doctor: a.doctor,
-        visitType: a.visitType,
+        patient: a.patient ? {
+          id: a.patient.id,
+          name: formatPatientName(a.patient),
+          phone: a.patient.phone,
+          email: a.patient.email
+        } : { id: '', name: 'Unknown Patient' },
+        doctor: a.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
+        visitType: a.visitType || 'OPD',
         room: a.room,
-        status: a.status,
+        status: a.status || 'SCHEDULED',
       }));
       
       setAppointments(appts);
@@ -107,44 +173,61 @@ export default function AppointmentScheduler() {
       appts.forEach(a => { bySlot[a.slot] = a; });
       setAppointmentsBySlot(bySlot);
     } catch (e) {
-      console.error('Failed to fetch slots', e);
+      const errorMessage = getErrorMessage(e);
+      setError(errorMessage);
+      toast({
+        variant: "destructive",
+        title: "Failed to fetch slots",
+        description: errorMessage,
+      });
+    } finally {
+      setLoading(false);
     }
-  };
+  }, [doctorId, date, timeSlotConfig.stepMinutes, toast]);
 
-  const searchPatients = async (q: string) => {
-    setPatientSearch(q);
-    const res: any = await apiClient.getPatients({ search: q, limit: 10 });
-    setPatients((res.data || res.patients || []).map((p: any) => ({
-      ...p,
-      firstName: p.firstName || p.name?.split(' ')[0] || '',
-      lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-    })));
-  };
-
-  const getLocalDateStr = (d: Date): string => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const da = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${da}`;
-  };
-
-  const isPastSlot = (slotTime: string): boolean => {
-    const todayStr = getLocalDateStr(new Date());
-    if (date < todayStr) return true;
-    if (date > todayStr) return false;
-    const [hStr, mStr] = slotTime.split('-')[0].split(':');
-    const h = parseInt(hStr, 10);
-    const m = parseInt(mStr, 10);
-    const now = new Date();
-    const nowMinutes = now.getHours() * 60 + now.getMinutes();
-    const slotMinutes = h * 60 + m;
-    return slotMinutes <= nowMinutes;
-  };
+  const searchPatients = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setPatients([]);
+      return;
+    }
+    
+    try {
+      setPatientSearch(q);
+      const res: GetPatientsResponse = await apiClient.getPatients({ search: q, limit: 10 });
+      const patientsData = res.data || res.patients || [];
+      
+      setPatients(patientsData.map((p) => ({
+        ...p,
+        name: formatPatientName(p),
+        firstName: p.firstName || p.name?.split(' ')[0] || '',
+        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+      })));
+    } catch (e) {
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to search patients",
+        description: errorMessage,
+      });
+    }
+  }, [toast]);
 
   const handleBookingRequest = (slot: string) => {
-    const pid = selectedPatientId?.trim();
-    if (!pid) {
-      alert('Please select a patient first');
+    // Validate the appointment form
+    const validationErrors = validateAppointmentForm({
+      doctorId,
+      patientId: selectedPatientId,
+      date,
+      slot,
+      visitType: 'OPD' // Default for initial validation
+    });
+    
+    if (validationErrors.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validationErrors[0],
+      });
       return;
     }
     
@@ -153,12 +236,12 @@ export default function AppointmentScheduler() {
   };
 
   const handleBookingConfirm = async (appointmentData: { 
-    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED'; 
+    visitType: VisitType; 
     roomId?: string;
   }) => {
     try {
       setIsBooking(true);
-      const created: any = await apiClient.createAppointment({ 
+      const created = await apiClient.createAppointment({ 
         doctorId, 
         patientId: selectedPatientId, 
         date, 
@@ -167,17 +250,24 @@ export default function AppointmentScheduler() {
         roomId: appointmentData.roomId
       });
       
-      // Optimistic UI update
+      // Success toast
+      toast({
+        variant: "success",
+        title: "Appointment Booked Successfully",
+        description: `${formatPatientName(selectedPatient)} scheduled for ${pendingBookingSlot}`,
+      });
+      
+      // Optimistic UI update with better error handling
       const newAppt: AppointmentInSlot = {
         id: created.id || 'temp',
         slot: pendingBookingSlot,
         patient: selectedPatient ? {
           id: selectedPatient.id,
-          name: selectedPatient.name || 'Unknown Patient',
+          name: formatPatientName(selectedPatient),
           phone: selectedPatient.phone,
           email: selectedPatient.email,
-        } : { id: selectedPatientId, name: 'Unknown' },
-        doctor: { firstName: 'Dr.', lastName: 'Unknown' },
+        } : { id: selectedPatientId, name: 'Unknown Patient' },
+        doctor: created.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: created.room,
         status: 'SCHEDULED',
@@ -190,25 +280,35 @@ export default function AppointmentScheduler() {
       setRecentBookedSlot(pendingBookingSlot);
       setBookingDetails(created);
       
-      setTimeout(() => {
+      // Use cleanup timeout management
+      const timeoutId = setTimeout(() => {
         setBookingDetails(null);
         setRecentBookedSlot('');
       }, 5000);
+      cleanupTimeouts.addTimeout(timeoutId);
       
       // Close dialog
       setBookingDialogOpen(false);
       setPendingBookingSlot('');
       
     } catch (e: any) {
-      const status = e?.status;
-      const body = e?.body || {};
-      if (status === 409) {
-        const suggestions = Array.isArray(body?.suggestions) ? body.suggestions : [];
-        const msg = body?.message || 'Scheduling conflict detected';
-        alert(`${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`);
+      if (isConflictError(e)) {
+        const suggestions = getConflictSuggestions(e);
+        const msg = getErrorMessage(e);
+        toast({
+          variant: "destructive",
+          title: "Scheduling Conflict",
+          description: `${msg}${suggestions.length ? ` Try: ${suggestions.join(', ')}` : ''}`,
+        });
         return;
       }
-      alert('Failed to book appointment');
+      
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to book appointment",
+        description: errorMessage,
+      });
     } finally {
       setIsBooking(false);
     }
@@ -236,12 +336,55 @@ export default function AppointmentScheduler() {
 
   const booked = filteredAppointments.map(a => a.slot);
 
+  const handleStartVisit = async (appointment: AppointmentInSlot) => {
+    try {
+      console.log('🚀 Starting visit for appointment:', appointment);
+      console.log('📋 Patient data:', {
+        id: appointment.patient.id,
+        name: appointment.patient.name,
+        phone: appointment.patient.phone
+      });
+      
+      // Auto-create visit if doesn't exist
+      if (!appointment.visit) {
+        const visitPayload = {
+          patientId: appointment.patient.id,
+          doctorId: appointment.doctor?.id || doctorId,
+          appointmentId: appointment.id,
+          complaints: [{ complaint: 'General consultation' }],
+        };
+        
+        console.log('💾 Creating new visit with payload:', visitPayload);
+        const newVisit = await apiClient.createVisit(visitPayload);
+        console.log('✅ New visit created:', newVisit);
+        
+        // Navigate to visit form with pre-populated data
+        const visitUrl = `/dashboard/visits?visitId=${(newVisit as any).id}&patientId=${appointment.patient.id}&appointmentId=${appointment.id}&autoStart=true`;
+        console.log('🔗 Navigating to:', visitUrl);
+        console.log('🎯 Patient ID in URL:', appointment.patient.id);
+        window.location.href = visitUrl;
+      } else {
+        // Navigate to existing visit
+        const visitUrl = `/dashboard/visits?visitId=${appointment.visit.id}&patientId=${appointment.patient.id}&appointmentId=${appointment.id}`;
+        console.log('Navigating to existing visit:', visitUrl);
+        window.location.href = visitUrl;
+      }
+    } catch (error) {
+      console.error('Failed to start visit:', error);
+      toast({
+        variant: "destructive",
+        title: "Failed to start visit",
+        description: "Please try again or create the visit manually.",
+      });
+    }
+  };
+
   return (
     <>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            📅 Appointment Slots
+            �� Appointment Slots
             <span style={{ 
               backgroundColor: '#22c55e', 
               color: 'white', 
@@ -298,28 +441,50 @@ export default function AppointmentScheduler() {
 
           <div>
             <label className="text-sm text-gray-700">Patient</label>
-            <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
+            <Input 
+              placeholder="Search patient by name/phone" 
+              value={patientSearch} 
+              onChange={(e) => { 
+                setSelectedPatientId(''); 
+                setSelectedPatient(null); 
+                void searchPatients(e.target.value); 
+              }} 
+            />
             {selectedPatient && (
               <div className="mt-2 p-3 bg-green-50 rounded border border-green-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium text-green-800">✓ Selected Patient</div>
-                    <div className="text-green-700 font-medium">{selectedPatient.name || `Patient ${selectedPatient.id?.slice(-4) || 'Unknown'}`}</div>
+                    <div className="text-green-700 font-medium">{formatPatientName(selectedPatient)}</div>
                     <div className="text-xs text-green-600 flex items-center gap-3 mt-1">
                       <span>ID: {selectedPatient.id}</span>
                       {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
                       {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); }}>Clear</Button>
+                  <Button variant="outline" size="sm" onClick={() => { 
+                    setSelectedPatientId(''); 
+                    setSelectedPatient(null); 
+                    setPatientSearch(''); 
+                    setPatients([]); 
+                  }}>Clear</Button>
                 </div>
               </div>
             )}
             {patientSearch && patients.length > 0 && (
               <div className="mt-2 max-h-40 overflow-auto border rounded">
                 {patients.map((p) => (
-                  <div key={p.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setPatientSearch(`${p.name || 'Unknown'} — ${p.phone}`); setSelectedPatientId(p.id); setSelectedPatient(p); setPatients([]); }}>
-                    <div className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || 'Unknown'}`}</div>
+                  <div 
+                    key={p.id} 
+                    className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" 
+                    onClick={() => { 
+                      setPatientSearch(`${formatPatientName(p)} — ${p.phone}`); 
+                      setSelectedPatientId(p.id); 
+                      setSelectedPatient(p); 
+                      setPatients([]); 
+                    }}
+                  >
+                    <div className="font-medium">{formatPatientName(p)}</div>
                     <div className="text-xs text-gray-500 flex items-center gap-3">
                       <span>ID: {p.id}</span>
                       {p.phone && <span>📞 {p.phone}</span>}
@@ -411,13 +576,26 @@ export default function AppointmentScheduler() {
                         {appt.room && (
                           <div className="text-gray-600 truncate">{appt.room.name}</div>
                         )}
+                        <div className="flex items-center gap-2 mt-2">
+                          <Button size="sm" variant="outline" onClick={() => console.log('Reschedule clicked for:', appt.id)}>
+                            Reschedule
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="default" 
+                            onClick={() => handleStartVisit(appt)}
+                            disabled={appt.status === 'COMPLETED'}
+                          >
+                            {appt.visit ? 'Continue Visit' : 'Start Visit'}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
                 );
               })}
               {slots.map((s) => {
-                const past = isPastSlot(s.time);
+                const past = isSlotInPast(s.time, date);
                 const isThisBooking = isBooking && bookingSlot === s.time;
                 return (
                   <Button

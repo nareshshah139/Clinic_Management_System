@@ -324,6 +324,17 @@ export class QueryDrugDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc' = 'asc';
+
+  @ApiPropertyOptional({ description: 'Filter by active status', example: true })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return value;
+  })
+  @IsBoolean()
+  isActive?: boolean;
 }
 
 export class DrugAutocompleteDto {

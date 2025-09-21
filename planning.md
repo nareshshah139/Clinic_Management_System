@@ -25,6 +25,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Backend Infrastructure** - Fixed iconv-lite dependencies, Express platform configuration, minimal boot mode
 - **Frontend Implementation** - Complete dashboard, authentication flow, API integration, error handling
 - Patient demographics extended; patient portal linkage to user accounts implemented (September 2025)
+- **RBAC Enforcement** - Controller-level Roles and Permissions guards enforced across Appointments, Billing, Inventory, Pharmacy modules; route annotations added
 
 ✅ **Recently Completed (September 2025):**
 - Global search functionality in header (patients, appointments, users)
@@ -1067,3 +1068,15 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Ensured TypeScript requirement that required parameters cannot follow optional ones
 - No functional changes to API endpoints or business logic
 
+[2025-09-21T03:23:10Z] Implemented: Move review date to end of visit form (updated MedicalVisitForm).
+[2025-09-21T03:32:21Z] Implemented feature: Review Date moved to end of visit form and removed from PrescriptionBuilder. Visit completion now sends followUpDate. Updated components: MedicalVisitForm.tsx, PrescriptionBuilder.tsx.
+[2025-09-21T04:23:25Z] Feature implemented: Customization tab for Prescription print settings (defaults preserved). Updated: MedicalVisitForm.tsx, PrescriptionBuilder.tsx.
+[2025-09-21T04:26:19Z] Adjusted: Review Date hidden while Customization tab is active to avoid confusion. No change in functionality.
+[2025-09-21T04:27:04Z] Update: Review Date restricted to Prescription tab in MedicalVisitForm. Defaults unchanged; still passed to PrescriptionBuilder and visit completion.
+[2025-09-21T04:29:03Z] Update: Review Date positioned at bottom of Prescription Builder UI. MedicalVisitForm controls the value via prop callback.
+[2025-09-21T04:30:38Z] Update: 'Notes' renamed to 'Doctor's Personal Notes' (not printed).
+[2025-09-21T05:00:28Z] Feature: Collapsible sections in PrescriptionBuilder for space optimization. All fields preserved, UI highlights maintained, accordion-style navigation added.
+[2025-09-21T05:04:48Z] Update: Optimized PrescriptionBuilder layout for better horizontal space utilization. Expanded grids, removed sidebar constraints, improved field distribution.
+[2025-09-21T05:10:38Z] Feature: Doctor workflow optimization - patient context sidebar, smart templates, voice input, seamless appointment transitions.
+[2025-09-21T05:22:09Z] Feature: Smart Procedures Management - Dynamic machine forms, comprehensive metrics, tabular parameter input, skin type assessment, and intelligent workflow.
+[2025-09-21T05:32:21Z] Feature: Prescription-Pharmacy Integration - Seamless workflow from prescription creation to pharmacy billing with auto-populated sticky drugs.

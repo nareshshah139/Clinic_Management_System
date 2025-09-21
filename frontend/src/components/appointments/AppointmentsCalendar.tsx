@@ -1,24 +1,54 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
-import type { User, Patient } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import {
+  getErrorMessage,
+  formatPatientName,
+  createCleanupTimeouts,
+  getISTDateString,
+  isConflictError,
+  getConflictSuggestions
+} from '@/lib/utils';
+import type { 
+  User, 
+  Patient, 
+  TimeSlotConfig,
+  GetUsersResponse,
+  GetPatientsResponse,
+  GetRoomsResponse,
+  VisitType
+} from '@/lib/types';
 import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 
-export default function AppointmentsCalendar() {
-  const [date, setDate] = useState<string>(new Date().toISOString().split('T')[0]);
+interface AppointmentsCalendarProps {
+  timeSlotConfig?: TimeSlotConfig;
+}
+
+export default function AppointmentsCalendar({
+  timeSlotConfig = {
+    startHour: 9,
+    endHour: 18,
+    stepMinutes: 30,
+    timezone: 'Asia/Kolkata'
+  }
+}: AppointmentsCalendarProps) {
+  const { toast } = useToast();
+  const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
@@ -26,11 +56,11 @@ export default function AppointmentsCalendar() {
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
-  const [refreshKey, setRefreshKey] = useState<number>(0); // Add refresh key state
+  const [refreshKey, setRefreshKey] = useState<number>(0);
   const [optimisticAppointment, setOptimisticAppointment] = useState<{
     slot: string;
     patient: { name: string };
-    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
+    visitType: VisitType;
     room?: { id: string; name: string; type: string };
   } | null>(null);
 
@@ -38,8 +68,7 @@ export default function AppointmentsCalendar() {
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
 
-  // Debug log to confirm component is loading with changes
-  console.log('🎨 AppointmentsCalendar loaded with appointment management - Version 2024-12-19-v6');
+  const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
   useEffect(() => {
     void fetchDoctors();

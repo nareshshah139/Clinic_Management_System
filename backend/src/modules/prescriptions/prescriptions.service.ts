@@ -49,7 +49,12 @@ export class PrescriptionsService {
 
     // Validate visit exists and belongs to branch
     const visit = await this.prisma.visit.findFirst({
-      where: { id: visitId, branchId },
+      where: { 
+        id: visitId,
+        patient: {
+          branchId: branchId
+        }
+      },
     });
     if (!visit) {
       throw new NotFoundException('Visit not found in this branch');
@@ -172,7 +177,9 @@ export class PrescriptionsService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      branchId,
+      visit: {
+        branchId: branchId,
+      },
     };
 
     // Apply filters
@@ -313,7 +320,12 @@ export class PrescriptionsService {
 
   async findPrescriptionById(id: string, branchId: string) {
     const prescription = await this.prisma.prescription.findFirst({
-      where: { id, branchId },
+      where: { 
+        id,
+        visit: {
+          branchId: branchId
+        }
+      },
       include: {
         patient: {
           select: { 

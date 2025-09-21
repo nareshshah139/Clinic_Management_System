@@ -21,7 +21,8 @@ import {
   Phone,
   MapPin,
   CreditCard,
-  Pill
+  Pill,
+  Package
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
@@ -52,10 +53,39 @@ interface Doctor {
   name?: string;
 }
 
+interface PharmacyPackage {
+  id: string;
+  name: string;
+  description?: string;
+  category: string;
+  subcategory?: string;
+  originalPrice: number;
+  packagePrice: number;
+  discountPercent: number;
+  duration?: string;
+  instructions?: string;
+  indications?: string;
+  contraindications?: string;
+  items: {
+    id: string;
+    drugId: string;
+    quantity: number;
+    dosage?: string;
+    frequency?: string;
+    duration?: string;
+    instructions?: string;
+    sequence: number;
+    drug: Drug;
+  }[];
+}
+
 interface InvoiceItem {
   id?: string;
-  drugId: string;
+  drugId?: string;
+  packageId?: string;
+  itemType: 'DRUG' | 'PACKAGE';
   drug?: Drug;
+  package?: PharmacyPackage;
   quantity: number;
   unitPrice: number;
   discountPercent: number;
@@ -296,15 +326,16 @@ export function PharmacyInvoiceBuilder() {
   }, []);
 
   const addDrugToInvoice = (drug: Drug) => {
-    const existingItem = items.find(item => item.drugId === drug.id);
+    const existingItem = items.find(item => item.drugId === drug.id && item.itemType === 'DRUG');
     
-    if (existingItem) {
+    if (existingItem && existingItem.drugId) {
       // Increase quantity if already exists
-      updateItemQuantity(existingItem.drugId, existingItem.quantity + 1);
+      updateItemQuantity(existingItem.drugId, existingItem.quantity + 1, 'DRUG');
     } else {
       // Add new item
       const newItem: InvoiceItem = {
         drugId: drug.id,
+        itemType: 'DRUG',
         drug,
         quantity: 1,
         unitPrice: drug.price,
@@ -324,9 +355,9 @@ export function PharmacyInvoiceBuilder() {
     searchInputRef.current?.focus();
   };
 
-  const updateItemQuantity = (drugId: string, quantity: number) => {
+  const updateItemQuantity = (itemId: string, quantity: number, itemType: 'DRUG' | 'PACKAGE' = 'DRUG') => {
     setItems(items.map(item => {
-      if (item.drugId === drugId) {
+      if ((itemType === 'DRUG' && item.drugId === itemId) || (itemType === 'PACKAGE' && item.packageId === itemId)) {
         const updatedItem = { ...item, quantity: Math.max(1, quantity) };
         calculateItemTotal(updatedItem);
         return updatedItem;

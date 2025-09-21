@@ -12,10 +12,11 @@ import { Prisma } from '@prisma/client';
 export class PharmacyInvoiceService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createInvoiceDto: CreatePharmacyInvoiceDto, branchId: string) {
+  async create(createInvoiceDto: CreatePharmacyInvoiceDto, branchId: string, userId?: string) {
     try {
+      const prismaAny = this.prisma as any;
       // Validate patient exists
-      const patient = await this.prisma.patient.findFirst({
+      const patient = await prismaAny.patient.findFirst({
         where: { id: createInvoiceDto.patientId, branchId },
       });
 
@@ -25,7 +26,7 @@ export class PharmacyInvoiceService {
 
       // Validate doctor if provided
       if (createInvoiceDto.doctorId) {
-        const doctor = await this.prisma.user.findFirst({
+        const doctor = await prismaAny.user.findFirst({
           where: { id: createInvoiceDto.doctorId, branchId },
         });
 
@@ -34,30 +35,76 @@ export class PharmacyInvoiceService {
         }
       }
 
-      // Validate drugs exist
-      const drugIds = createInvoiceDto.items.map(item => item.drugId);
-      const drugs = await this.prisma.drug.findMany({
-        where: { id: { in: drugIds }, branchId, isActive: true },
-      });
+      // Validate prescription if provided
+      if (createInvoiceDto.prescriptionId) {
+        const prescription = await prismaAny.prescription.findFirst({
+          where: { id: createInvoiceDto.prescriptionId },
+        });
+        if (!prescription) {
+          throw new NotFoundException('Prescription not found');
+        }
+      }
 
-      if (drugs.length !== drugIds.length) {
-        throw new BadRequestException('One or more drugs not found or inactive');
+      // Validate items and get drug/package information
+      const drugIds = createInvoiceDto.items
+        .filter(item => item.itemType === 'DRUG' || !item.itemType)
+        .map(item => item.drugId)
+        .filter(id => id);
+      
+      const packageIds = createInvoiceDto.items
+        .filter(item => item.itemType === 'PACKAGE')
+        .map(item => item.packageId)
+        .filter(id => id);
+
+      // Validate drugs
+      let drugs = [];
+      if (drugIds.length > 0) {
+        drugs = await prismaAny.drug.findMany({
+          where: { id: { in: drugIds }, branchId, isActive: true },
+        });
+
+        if (drugs.length !== drugIds.length) {
+          throw new BadRequestException('One or more drugs not found or inactive');
+        }
+      }
+
+      // Validate packages
+      let packages = [];
+      if (packageIds.length > 0) {
+        packages = await prismaAny.pharmacyPackage.findMany({
+          where: {
+            id: { in: packageIds },
+            branchId,
+            isActive: true,
+          },
+          include: {
+            items: {
+              include: {
+                drug: true
+              }
+            }
+          }
+        });
+
+        if (packages.length !== packageIds.length) {
+          throw new BadRequestException('One or more packages not found or inactive');
+        }
       }
 
       // Generate invoice number
       const invoiceNumber = await this.generateInvoiceNumber(branchId);
 
       // Calculate totals
-      const { subtotal, totalDiscount, totalTax, grandTotal } = this.calculateInvoiceTotals(createInvoiceDto);
+      const { subtotal, totalDiscount, totalTax, grandTotal } = this.calculateInvoiceTotals(createInvoiceDto, packages);
 
-      return await this.prisma.$transaction(async (prisma) => {
+      return await prismaAny.$transaction(async (tx: any) => {
         // Create invoice
-        const invoice = await prisma.pharmacyInvoice.create({
+        const invoice = await tx.pharmacyInvoice.create({
           data: {
             invoiceNumber,
             patientId: createInvoiceDto.patientId,
-            doctorId: createInvoiceDto.doctorId,
-            prescriptionId: createInvoiceDto.prescriptionId,
+            doctorId: createInvoiceDto.doctorId || undefined,
+            prescriptionId: createInvoiceDto.prescriptionId || undefined,
             branchId,
             subtotal,
             discountAmount: totalDiscount,
@@ -93,21 +140,31 @@ export class PharmacyInvoiceService {
         // Create invoice items
         const invoiceItems = await Promise.all(
           createInvoiceDto.items.map(async (item) => {
-            const drug = drugs.find(d => d.id === item.drugId)!;
-            const discountAmount = (item.quantity * item.unitPrice * item.discountPercent) / 100;
-            const discountedAmount = (item.quantity * item.unitPrice) - discountAmount;
-            const taxAmount = (discountedAmount * item.taxPercent) / 100;
+            // Resolve unit price (fallback to package price for package items)
+            let resolvedUnitPrice = item.unitPrice;
+            if ((item.itemType === 'PACKAGE') && item.packageId && (resolvedUnitPrice === undefined || resolvedUnitPrice === null)) {
+              const pkg = (packages as any[]).find((p: any) => p.id === item.packageId);
+              if (pkg) {
+                resolvedUnitPrice = pkg.packagePrice;
+              }
+            }
+
+            const discountAmount = (item.quantity * resolvedUnitPrice * (item.discountPercent || 0)) / 100;
+            const discountedAmount = (item.quantity * resolvedUnitPrice) - discountAmount;
+            const taxAmount = (discountedAmount * (item.taxPercent || 0)) / 100;
             const totalAmount = discountedAmount + taxAmount;
 
-            return prisma.pharmacyInvoiceItem.create({
+            const createdItem = await tx.pharmacyInvoiceItem.create({
               data: {
                 invoiceId: invoice.id,
                 drugId: item.drugId,
+                packageId: item.packageId,
+                itemType: item.itemType || 'DRUG',
                 quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                discountPercent: item.discountPercent,
+                unitPrice: resolvedUnitPrice,
+                discountPercent: item.discountPercent || 0,
                 discountAmount,
-                taxPercent: item.taxPercent,
+                taxPercent: item.taxPercent || 0,
                 taxAmount,
                 totalAmount,
                 dosage: item.dosage,
@@ -116,16 +173,75 @@ export class PharmacyInvoiceService {
                 instructions: item.instructions,
               },
               include: {
-                drug: {
+                drug: item.drugId ? {
                   select: {
                     id: true,
                     name: true,
                     manufacturerName: true,
                     packSizeLabel: true,
                   },
-                },
+                } : undefined,
+                package: item.packageId ? {
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    subcategory: true,
+                    packagePrice: true,
+                    originalPrice: true,
+                    discountPercent: true,
+                  },
+                } : undefined,
               },
             });
+            // Decrement inventory: for DRUG directly; for PACKAGE, decrement all package items proportionally
+            if (createdItem.itemType === 'DRUG' && createdItem.drugId) {
+              const drug = await tx.drug.findFirst({ where: { id: createdItem.drugId, branchId } });
+              if (drug) {
+                const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
+                if (invItem) {
+                  await tx.stockTransaction.create({
+                    data: {
+                      itemId: invItem.id,
+                      type: 'SALE',
+                      quantity: createdItem.quantity,
+                      unitPrice: invItem.sellingPrice || invItem.costPrice,
+                      totalAmount: (invItem.sellingPrice || invItem.costPrice) * createdItem.quantity,
+                      reference: `INV-${invoice.invoiceNumber}`,
+                      notes: 'Pharmacy invoice sale',
+                      branchId,
+                      userId: userId || 'system',
+                    },
+                  });
+                }
+              }
+            } else if (createdItem.itemType === 'PACKAGE' && createdItem.packageId) {
+              const pkg = (packages as any[]).find((p: any) => p.id === createdItem.packageId);
+              if (pkg) {
+                for (const pkgItem of pkg.items) {
+                  const drug = pkgItem.drug;
+                  const totalQty = (pkgItem.quantity || 1) * createdItem.quantity;
+                  const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
+                  if (invItem) {
+                    await tx.stockTransaction.create({
+                      data: {
+                        itemId: invItem.id,
+                        type: 'SALE',
+                        quantity: totalQty,
+                        unitPrice: invItem.sellingPrice || invItem.costPrice,
+                        totalAmount: (invItem.sellingPrice || invItem.costPrice) * totalQty,
+                        reference: `INV-${invoice.invoiceNumber}`,
+                        notes: `Package sale: ${pkg.name}`,
+                        branchId,
+                        userId: userId || 'system',
+                      },
+                    });
+                  }
+                }
+              }
+            }
+
+            return createdItem;
           })
         );
 
@@ -163,7 +279,7 @@ export class PharmacyInvoiceService {
     const skip = (page - 1) * limit;
 
     // Build where clause
-    const where: Prisma.PharmacyInvoiceWhereInput = {
+    const where: any = {
       branchId,
     };
 
@@ -195,7 +311,7 @@ export class PharmacyInvoiceService {
     }
 
     // Build order clause
-    const orderBy: Prisma.PharmacyInvoiceOrderByWithRelationInput = {};
+    const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
 
     try {
@@ -228,6 +344,17 @@ export class PharmacyInvoiceService {
                     name: true,
                     manufacturerName: true,
                     packSizeLabel: true,
+                  },
+                },
+                package: {
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    subcategory: true,
+                    packagePrice: true,
+                    originalPrice: true,
+                    discountPercent: true,
                   },
                 },
               },
@@ -289,25 +416,36 @@ export class PharmacyInvoiceService {
               visitId: true,
             },
           },
-          items: {
-            include: {
-              drug: {
-                select: {
-                  id: true,
-                  name: true,
-                  manufacturerName: true,
-                  packSizeLabel: true,
-                  composition1: true,
-                  composition2: true,
-                  strength: true,
-                  dosageForm: true,
+                      items: {
+              include: {
+                drug: {
+                  select: {
+                    id: true,
+                    name: true,
+                    manufacturerName: true,
+                    packSizeLabel: true,
+                    composition1: true,
+                    composition2: true,
+                    strength: true,
+                    dosageForm: true,
+                  },
+                },
+                package: {
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    subcategory: true,
+                    packagePrice: true,
+                    originalPrice: true,
+                    discountPercent: true,
+                  },
                 },
               },
+              orderBy: {
+                createdAt: 'asc',
+              },
             },
-            orderBy: {
-              createdAt: 'asc',
-            },
-          },
           payments: {
             orderBy: {
               createdAt: 'desc',
@@ -535,16 +673,25 @@ export class PharmacyInvoiceService {
     }
   }
 
-  private calculateInvoiceTotals(invoiceDto: CreatePharmacyInvoiceDto) {
+  private calculateInvoiceTotals(invoiceDto: CreatePharmacyInvoiceDto, packages: any[] = []) {
     let subtotal = 0;
     let totalDiscount = 0;
     let totalTax = 0;
 
     for (const item of invoiceDto.items) {
-      const itemSubtotal = item.quantity * item.unitPrice;
-      const itemDiscount = (itemSubtotal * item.discountPercent) / 100;
+      // For packages, use the package price if not overridden
+      let unitPrice = item.unitPrice;
+      if (item.itemType === 'PACKAGE' && item.packageId) {
+        const package_ = packages.find(p => p.id === item.packageId);
+        if (package_ && !item.unitPrice) {
+          unitPrice = package_.packagePrice;
+        }
+      }
+
+      const itemSubtotal = item.quantity * unitPrice;
+      const itemDiscount = (itemSubtotal * (item.discountPercent || 0)) / 100;
       const discountedAmount = itemSubtotal - itemDiscount;
-      const itemTax = (discountedAmount * item.taxPercent) / 100;
+      const itemTax = (discountedAmount * (item.taxPercent || 0)) / 100;
 
       subtotal += itemSubtotal;
       totalDiscount += itemDiscount;
