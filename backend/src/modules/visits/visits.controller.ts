@@ -11,17 +11,19 @@ import {
   Request,
   UseInterceptors,
   UploadedFiles,
+  UploadedFile,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { diskStorage, memoryStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
+import type { Express } from 'express';
 
 interface AuthenticatedRequest {
   user: {
@@ -149,5 +151,44 @@ export class VisitsController {
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.visitsService.remove(id, req.user.branchId);
+  }
+
+  // Speech-to-text proxy to OpenAI Whisper
+  @Post('transcribe')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  async transcribeAudio(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() _req: AuthenticatedRequest,
+  ) {
+    if (!file || !file.buffer) {
+      return { text: '' };
+    }
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+    // Build multipart form-data for OpenAI Whisper
+    const form = new FormData();
+    const blob = new Blob([file.buffer], { type: file.mimetype || 'audio/webm' });
+    form.append('file', blob, file.originalname || 'audio.webm');
+    form.append('model', 'whisper-1');
+    try {
+      const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+        } as any,
+        body: form as any,
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`OpenAI error: ${resp.status} ${errText}`);
+      }
+      const data = await resp.json();
+      return { text: (data?.text as string) || '' };
+    } catch (e: any) {
+      return { text: '' };
+    }
   }
 }

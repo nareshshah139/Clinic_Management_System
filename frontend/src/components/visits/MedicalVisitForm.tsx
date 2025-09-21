@@ -153,57 +153,64 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [isListening, setIsListening] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   
-  const startVoiceInput = (fieldName: string) => {
-    if (!('webkitSpeechRecognition' in window)) {
-      alert('Voice input not supported in this browser');
+  const startVoiceInput = async (fieldName: string) => {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      alert('Microphone recording is not supported in this browser');
       return;
     }
-    
-    const recognition = new (window as any).webkitSpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    
     setIsListening(true);
     setActiveVoiceField(fieldName);
-    
-    recognition.onresult = (event: any) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks: BlobPart[] = [];
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        try {
+          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          const fd = new FormData();
+          fd.append('file', blob, 'speech.webm');
+          const res = await fetch(`${baseUrl}/visits/transcribe`, {
+            method: 'POST',
+            body: fd,
+            headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
+            credentials: 'include',
+          });
+          const data = await res.json();
+          const text = (data?.text as string) || '';
+          if (text) {
+            switch (fieldName) {
+              case 'subjective':
+                setSubjective(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'objective':
+                setObjective(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'assessment':
+                setAssessment(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'plan':
+                setPlan(prev => (prev ? prev + ' ' : '') + text);
+                break;
+            }
+          }
+        } catch {
+          // ignore
+        } finally {
+          setIsListening(false);
+          setActiveVoiceField(null);
         }
-      }
-      
-      if (finalTranscript) {
-        switch (fieldName) {
-          case 'subjective':
-            setSubjective(prev => prev + ' ' + finalTranscript);
-            break;
-          case 'objective':
-            setObjective(prev => prev + ' ' + finalTranscript);
-            break;
-          case 'assessment':
-            setAssessment(prev => prev + ' ' + finalTranscript);
-            break;
-          case 'plan':
-            setPlan(prev => prev + ' ' + finalTranscript);
-            break;
-        }
-      }
-    };
-    
-    recognition.onerror = () => {
+      };
+      recorder.start();
+      // Auto-stop after 30s or when button clicked again (toggle)
+      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 30000);
+    } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);
-    };
-    
-    recognition.onend = () => {
-      setIsListening(false);
-      setActiveVoiceField(null);
-    };
-    
-    recognition.start();
+    }
   };
   
   const VoiceButton = ({ fieldName }: { fieldName: string }) => (
