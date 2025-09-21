@@ -79,30 +79,32 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   
   // Photos
   const [photos, setPhotos] = useState<VisitPhoto[]>([]);
-  const [isCapturing, setIsCapturing] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   
   // Ensure camera is stopped on unmount and when the page loses visibility
   useEffect(() => {
     const onVisibilityChange = () => {
       if (document.visibilityState !== 'visible') {
-        stopCamera();
+        // stopCamera(); // Removed camera stop
       }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      stopCamera();
+      // stopCamera(); // Removed camera stop
     };
   }, []);
 
-  // Stop camera when navigating away from Photos tab
   useEffect(() => {
-    if (activeTab !== 'photos' && isCapturing) {
-      stopCamera();
-    }
-  }, [activeTab, isCapturing]);
+    const loadAttachments = async () => {
+      if (!visitId) return;
+      try {
+        const res: any = await apiClient.get(`/visits/${visitId}/photos`);
+        const atts: string[] = (res?.attachments || res?.data || []) as string[];
+        setPhotos(atts.map((path) => ({ id: path, url: path, description: path.split('/').pop() || '', capturedBy: userRole, capturedAt: '' })));
+      } catch {}
+    };
+    void loadAttachments();
+  }, [visitId]);
 
   // Doctor level (remaining 75-80%)
   const [subjective, setSubjective] = useState('');
@@ -314,120 +316,32 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
   };
 
-  // Camera functionality
-  const startCamera = async () => {
+  // Removed camera functionality
+  const onUploadPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
     try {
-      // If an old stream exists, stop it before starting anew
-      if (videoRef.current?.srcObject) {
-        const oldStream = videoRef.current.srcObject as MediaStream;
-        oldStream.getTracks().forEach(t => t.stop());
-        videoRef.current.srcObject = null;
+      let activeVisitId = visitId;
+      if (!activeVisitId) {
+        const newVisit = await apiClient.createVisit(buildPayload());
+        activeVisitId = (newVisit as any).id;
+        setVisitId(activeVisitId);
       }
-      setIsCapturing(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: 'environment' } // Use back camera if available
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const fd = new FormData();
+      Array.from(files).forEach(f => fd.append('files', f));
+      await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {
+        method: 'POST',
+        body: fd,
+        headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
+        credentials: 'include',
       });
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Wait for metadata and ensure playback to get valid frames
-        await new Promise<void>((resolve) => {
-          const v = videoRef.current!;
-          const onReady = () => {
-            v.removeEventListener('loadedmetadata', onReady);
-            v.play().then(() => resolve()).catch(() => resolve());
-          };
-          if (v.readyState >= 1) {
-            v.play().then(() => resolve()).catch(() => resolve());
-          } else {
-            v.addEventListener('loadedmetadata', onReady, { once: true });
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to start camera:', error);
-      alert('Failed to access camera. Please check permissions.');
-      setIsCapturing(false);
+      const res: any = await apiClient.get(`/visits/${activeVisitId}/photos`);
+      const atts: string[] = (res?.attachments || res?.data || []) as string[];
+      setPhotos(atts.map((p) => ({ id: p, url: p, description: p.split('/').pop() || '', capturedBy: userRole, capturedAt: '' })));
+    } catch (e) {
+      alert('Failed to upload photos');
     }
-  };
-
-  const capturePhoto = async () => {
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
-
-    if (!context) return;
-
-    // Ensure a frame is available
-    if (video.readyState < 2 || !video.videoWidth || !video.videoHeight) {
-      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    // Render the current frame
-    context.drawImage(video, 0, 0);
-
-    // Convert to blob
-    canvas.toBlob(async (blob) => {
-      if (!blob) return;
-      // Auto-generate default name: PatientName_VisitDate_X
-      const safeName = (patientName || 'Patient')
-        .trim()
-        .replace(/\s+/g, '_')
-        .replace(/[^A-Za-z0-9_\-]/g, '');
-      const dateObj = visitDate ? new Date(visitDate) : new Date();
-      const dateStr = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
-      const idx = photos.length + 1;
-      const baseName = `${safeName}_${dateStr}_${idx}`;
-      const description = baseName;
-      
-      try {
-        // Ensure we have a visit to attach photos to
-        let activeVisitId = visitId;
-        if (!activeVisitId) {
-          const newVisit = await apiClient.createVisit(buildPayload());
-          activeVisitId = (newVisit as any).id;
-          setVisitId(activeVisitId);
-        }
-
-        // Upload photo to /visits/:id/photos using FormData field 'files'
-        const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
-        const fd = new FormData();
-        fd.append('files', blob, `${baseName}.jpg`);
-        await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {
-          method: 'POST',
-          body: fd,
-          headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
-          credentials: 'include',
-        });
-        
-        const newPhoto: VisitPhoto = {
-          id: `temp-${Date.now()}`,
-          url: URL.createObjectURL(blob),
-          description,
-          capturedBy: userRole,
-          capturedAt: new Date().toISOString(),
-        };
-
-        setPhotos(prev => [...prev, newPhoto]);
-        stopCamera();
-      } catch (error) {
-        console.error('Failed to upload photo:', error);
-        alert('Failed to save photo. Please try again.');
-      }
-    }, 'image/jpeg', 0.8);
-  };
-
-  const stopCamera = () => {
-    if (videoRef.current?.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setIsCapturing(false);
   };
 
   const removePhoto = (photoId: string) => {
@@ -975,39 +889,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Visit Photos ({photos.length})</h3>
                   <div className="flex gap-2">
-                    {!isCapturing ? (
-                      <Button onClick={startCamera}>
-                        <Camera className="h-4 w-4 mr-2" />
-                        Start Camera
-                      </Button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <Button onClick={capturePhoto}>
-                          <Camera className="h-4 w-4 mr-2" />
-                          Capture
-                        </Button>
-                        <Button variant="outline" onClick={stopCamera}>
-                          <X className="h-4 w-4 mr-2" />
-                          Stop
-                        </Button>
-                      </div>
-                    )}
+                    <input type="file" multiple accept="image/*" onChange={(e) => onUploadPhotos(e.target.files)} />
                   </div>
                 </div>
-
-                {/* Camera View */}
-                {isCapturing && (
-                  <div className="relative bg-black rounded-lg overflow-hidden">
-                    <video 
-                      ref={videoRef} 
-                      autoPlay 
-                      playsInline 
-                      muted
-                      className="w-full h-64 object-contain"
-                    />
-                    <canvas ref={canvasRef} className="hidden" />
-                  </div>
-                )}
 
                 {/* Photos Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -1035,12 +919,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     </div>
                   ))}
                 </div>
-
                 {photos.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <Image className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No photos captured yet</p>
-                    <p className="text-sm">Use the camera to document the visit</p>
+                    <p>No photos uploaded yet</p>
+                    <p className="text-sm">Upload photos to document the visit</p>
                   </div>
                 )}
 
