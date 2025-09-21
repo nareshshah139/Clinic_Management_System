@@ -931,3 +931,6 @@ The pharmacy packages feature is now fully functional with comprehensive dermato
 
 [2025-09-21: Implemented controller-level RBAC: added Roles and Permissions decorators and guards; annotated Appointments, Billing, Inventory, Pharmacy routes; registered guards globally.
 [2025-09-21] Commit: Enforce controller-level RBAC with Roles/Permissions guards; annotated routes; registered global guards; updated planning.md and updates_log.
+[2025-09-21] Verification: Previous state was JWT-only with missing controller RBAC; now Roles/Permissions guards are registered and endpoints annotated (Appointments, Billing, Inventory, Pharmacy). Remaining: tighten Patients branch scoping and prescriptions ownership checks.
+
+2025-09-21: Seeded default RBAC permission sets per role (backend/scripts/seed_rbac.ts), updated assignRole to propagate defaults, added Users UI role/permissions toggle and API methods.

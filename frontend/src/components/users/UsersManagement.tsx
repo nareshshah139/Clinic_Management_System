@@ -10,12 +10,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/lib/api';
 import type { User, UserRole, UserStatus } from '@/lib/types';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [permOpen, setPermOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [allPermissions, setAllPermissions] = useState<string[]>([]);
+  const [rolePerms, setRolePerms] = useState<string[]>([]);
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: UserRole; status: UserStatus; password?: string }>({
     firstName: '', lastName: '', email: '', role: 'RECEPTIONIST' as UserRole, status: 'ACTIVE' as UserStatus,
   });
@@ -58,13 +62,46 @@ export default function UsersManagement() {
   };
 
   const onEdit = (u: User) => {
-    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role, status: u.status });
+    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role as any, status: u.status as any });
     setOpen(true);
   };
 
   const onDelete = async (u: User) => {
     if (!confirm('Delete user?')) return;
     await apiClient.deleteUser(u.id);
+    await fetchUsers();
+  };
+
+  const openRolePerms = async (u: User) => {
+    setSelectedUser(u);
+    setPermOpen(true);
+    try {
+      const [rolesRes, permsRes] = await Promise.all([
+        apiClient.getRoles({ limit: 100 }),
+        apiClient.getPermissions({ limit: 1000 }),
+      ]);
+      const perms = ((permsRes as any)?.data || (permsRes as any)?.permissions || []).map((p: any) => p.name || p);
+      setAllPermissions(perms);
+      // Suggest defaults based on current role from backend roles
+      const role = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === u.role);
+      const defaults = role?.permissions ? JSON.parse(role.permissions) : [];
+      setRolePerms(defaults);
+    } catch (e) {
+      // fallback: empty
+      setAllPermissions([]);
+      setRolePerms([]);
+    }
+  };
+
+  const applyRole = async (role: string) => {
+    if (!selectedUser) return;
+    await apiClient.assignRole(selectedUser.id, { role });
+    await fetchUsers();
+  };
+
+  const applyPermissions = async (perms: string[]) => {
+    if (!selectedUser) return;
+    await apiClient.updateUserPermissions(selectedUser.id, perms);
     await fetchUsers();
   };
 
@@ -102,8 +139,9 @@ export default function UsersManagement() {
                     <SelectItem value="ADMIN">Admin</SelectItem>
                     <SelectItem value="DOCTOR">Doctor</SelectItem>
                     <SelectItem value="NURSE">Nurse</SelectItem>
-                    <SelectItem value="RECEPTIONIST">Receptionist</SelectItem>
+                    <SelectItem value="RECEPTION">Receptionist</SelectItem>
                     <SelectItem value="MANAGER">Manager</SelectItem>
+                    <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -167,6 +205,42 @@ export default function UsersManagement() {
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                          <Dialog open={permOpen && selectedUser?.id === u.id} onOpenChange={(open) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm" onClick={() => openRolePerms(u)}><Settings className="h-3 w-3 mr-1" /> Role & Permissions</Button>
+                            </DialogTrigger>
+                            <DialogContent>
+                              <DialogHeader><DialogTitle>Role & Permissions</DialogTitle></DialogHeader>
+                              <div className="space-y-3">
+                                <div>
+                                  <Label>Role</Label>
+                                  <div className="flex gap-2 mt-1">
+                                    {['ADMIN','MANAGER','DOCTOR','NURSE','RECEPTION','PHARMACIST'].map((r) => (
+                                      <Button key={r} variant={u.role === r ? 'default' : 'outline'} size="sm" onClick={() => void applyRole(r)}>{r}</Button>
+                                    ))}
+                                  </div>
+                                </div>
+                                <div>
+                                  <Label>Permissions</Label>
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-72 overflow-auto mt-2">
+                                    {allPermissions.map((p) => (
+                                      <label key={p} className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox" defaultChecked={rolePerms.includes(p)} onChange={(e) => {
+                                          const next = new Set(rolePerms);
+                                          if (e.target.checked) next.add(p); else next.delete(p);
+                                          setRolePerms(Array.from(next));
+                                        }} />
+                                        <span>{p}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <div className="flex justify-end mt-3">
+                                    <Button size="sm" onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </TableCell>
                     </TableRow>

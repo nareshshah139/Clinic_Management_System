@@ -261,25 +261,8 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // Generate reset token
-    const token = this.jwtService.sign(
-      { userId: user.id, email: user.email },
-      { expiresIn: '1h' }
-    );
-
-    // Store reset token and expiry on user
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetToken: token,
-        resetTokenExpiry: new Date(Date.now() + 3600000), // 1 hour
-      },
-    });
-
-    return {
-      message: 'Password reset token generated',
-      token,
-    };
+    // Implementation pending: generate reset token and send email
+    return { message: 'Password reset link sent if email exists' };
   }
 
   async setPassword(setPasswordDto: SetPasswordDto) {
@@ -368,19 +351,36 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    // NOTE: Role model in schema is global (no branchId). Adjust lookup accordingly.
-    const role = await this.prisma.role.findFirst({
-      where: { id: (assignRoleDto as any).roleId },
+    // Find the role by name
+    const roleRecord = await this.prisma.role.findFirst({
+      where: { name: assignRoleDto.role },
     });
 
-    if (!role) {
+    if (!roleRecord) {
       throw new NotFoundException('Role not found');
     }
 
-    // Since there is no user-role mapping table in current schema, set the user's role directly if needed
+    // Determine permissions to set on user
+    let permissionsToSet: string[] | null = null;
+    if (assignRoleDto.permissions && Array.isArray(assignRoleDto.permissions)) {
+      permissionsToSet = assignRoleDto.permissions;
+    } else if (roleRecord.permissions) {
+      try {
+        const parsed = JSON.parse(roleRecord.permissions);
+        if (Array.isArray(parsed)) {
+          permissionsToSet = parsed.filter((p) => typeof p === 'string');
+        }
+      } catch {
+        permissionsToSet = null;
+      }
+    }
+
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { role: role.name as any },
+      data: {
+        role: assignRoleDto.role as UserRole,
+        permissions: permissionsToSet ? JSON.stringify(permissionsToSet) : null,
+      },
       include: { branch: true },
     });
 

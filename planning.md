@@ -25,7 +25,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **Backend Infrastructure** - Fixed iconv-lite dependencies, Express platform configuration, minimal boot mode
 - **Frontend Implementation** - Complete dashboard, authentication flow, API integration, error handling
 - Patient demographics extended; patient portal linkage to user accounts implemented (September 2025)
-- **RBAC Enforcement** - Controller-level Roles and Permissions guards enforced across Appointments, Billing, Inventory, Pharmacy modules; route annotations added
+- **RBAC Enforcement** - Controller-level Roles and Permissions guards enforced across Appointments, Billing, Inventory, Pharmacy modules; route annotations added; default role permission sets seeded; Users UI gained Role & Permissions toggle
 
 ✅ **Recently Completed (September 2025):**
 - Global search functionality in header (patients, appointments, users)

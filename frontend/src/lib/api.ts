@@ -299,6 +299,22 @@ export class ApiClient {
     return this.delete(`/users/${id}`);
   }
 
+  async getRoles(params?: Record<string, unknown>) {
+    return this.get('/users/roles', params || {});
+  }
+
+  async getPermissions(params?: Record<string, unknown>) {
+    return this.get('/users/permissions', params || {});
+  }
+
+  async assignRole(userId: string, payload: { role: string; permissions?: string[] }) {
+    return this.patch(`/users/${userId}/role`, payload);
+  }
+
+  async updateUserPermissions(userId: string, permissions: string[]) {
+    return this.patch(`/users/${userId}/permissions`, { permissions });
+  }
+
   async getUserStatistics() {
     return this.get('/users/statistics');
   }
