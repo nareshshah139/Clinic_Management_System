@@ -79,10 +79,18 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
 
 async function upsertPermission(name: string) {
   const [resource, action = 'read'] = name.split(':');
-  return prisma.permission.upsert({
-    where: { name },
-    update: {},
-    create: {
+  
+  // Check if permission already exists
+  const existing = await prisma.permission.findFirst({
+    where: { name, resource, action }
+  });
+  
+  if (existing) {
+    return existing;
+  }
+  
+  return prisma.permission.create({
+    data: {
       name,
       description: `${resource} ${action}`,
       resource,

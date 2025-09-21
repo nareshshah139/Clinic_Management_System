@@ -110,14 +110,36 @@ export default function UsersManagement() {
 
   const applyRole = async (role: string) => {
     if (!selectedUser) return;
-    await apiClient.assignRole(selectedUser.id, { role });
-    await fetchUsers();
+    try {
+      await apiClient.assignRole(selectedUser.id, { role });
+      await fetchUsers();
+      
+      // Update the selected user's role in the dialog
+      setSelectedUser({ ...selectedUser, role: role as any });
+      
+      // Fetch updated role permissions and apply them
+      const rolesRes = await apiClient.getRoles({ limit: 100 });
+      const roleRecord = ((rolesRes as any)?.data || (rolesRes as any)?.roles || []).find((r: any) => r.name === role);
+      const defaults = roleRecord?.permissions ? JSON.parse(roleRecord.permissions) : [];
+      setRolePerms(defaults);
+      
+      alert(`Role updated to ${role} successfully!`);
+    } catch (error) {
+      console.error('Error applying role:', error);
+      alert('Failed to update role. Please try again.');
+    }
   };
 
   const applyPermissions = async (perms: string[]) => {
     if (!selectedUser) return;
-    await apiClient.updateUserPermissions(selectedUser.id, perms);
-    await fetchUsers();
+    try {
+      await apiClient.updateUserPermissions(selectedUser.id, perms);
+      await fetchUsers();
+      alert('Permissions updated successfully!');
+    } catch (error) {
+      console.error('Error updating permissions:', error);
+      alert('Failed to update permissions. Please try again.');
+    }
   };
 
   return (
