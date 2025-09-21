@@ -26,6 +26,19 @@ export default function UsersManagement() {
     firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE',
   });
 
+  // Move useMemo before useEffect to maintain hook order
+  const groupedPermissions = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    const term = permSearch.trim().toLowerCase();
+    for (const p of allPermissions) {
+      if (term && !p.toLowerCase().includes(term)) continue;
+      const group = p.split(':')[0] || 'other';
+      if (!map[group]) map[group] = [];
+      map[group].push(p);
+    }
+    return map;
+  }, [allPermissions, permSearch]);
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -37,7 +50,9 @@ export default function UsersManagement() {
     }
   };
 
-  useEffect(() => { void fetchUsers(); }, []);
+  useEffect(() => {
+    void fetchUsers();
+  }, []);
 
   const submit = async () => {
     try {
@@ -245,17 +260,7 @@ export default function UsersManagement() {
                                 <div className="md:col-span-8">
                                   <Label>Permissions</Label>
                                   <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
-                                    {Object.entries(useMemo(() => {
-                                      const map: Record<string, string[]> = {};
-                                      const term = permSearch.trim().toLowerCase();
-                                      for (const p of allPermissions) {
-                                        if (term && !p.toLowerCase().includes(term)) continue;
-                                        const group = p.split(':')[0] || 'other';
-                                        if (!map[group]) map[group] = [];
-                                        map[group].push(p);
-                                      }
-                                      return map;
-                                    }, [allPermissions, permSearch])).map(([group, perms]) => (
+                                    {Object.entries(groupedPermissions).map(([group, perms]) => (
                                       <div key={group}>
                                         <div className="flex items-center justify-between">
                                           <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
