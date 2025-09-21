@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -73,7 +73,7 @@ interface Props {
   onChangeReviewDate?: (v: string) => void;
 }
 
-export default function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate }: Props) {
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
@@ -296,26 +296,30 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
   });
 
   // Derived flags to show inline UI feedback for auto-included sections
-  const hasChiefComplaints = Boolean(chiefComplaints?.trim()?.length);
-  const hasHistories = Boolean(
+  const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
+  const hasHistories = useMemo(() => Boolean(
     pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length
-  );
-  const hasFamilyHistory = Boolean(
+  ), [pastHistory, medicationHistory, menstrualHistory]);
+  
+  const hasFamilyHistory = useMemo(() => Boolean(
     familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
-  );
-  const hasTopicals = Boolean(
+  ), [familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers]);
+  
+  const hasTopicals = useMemo(() => Boolean(
     topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions ||
     topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions ||
     topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions
-  );
-  const hasPostProcedure = Boolean(postProcedureCare?.trim()?.length);
-  const hasInvestigations = Array.isArray(investigations) && investigations.length > 0;
-  const hasProcedurePlanned = Boolean(procedurePlanned?.trim()?.length);
-  const hasProcedureParams = Boolean(
+  ), [topicalFacewash, topicalMoisturiserSunscreen, topicalActives]);
+  
+  const hasPostProcedure = useMemo(() => Boolean(postProcedureCare?.trim()?.length), [postProcedureCare]);
+  const hasInvestigations = useMemo(() => Array.isArray(investigations) && investigations.length > 0, [investigations]);
+  const hasProcedurePlanned = useMemo(() => Boolean(procedurePlanned?.trim()?.length), [procedurePlanned]);
+  
+  const hasProcedureParams = useMemo(() => Boolean(
     procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others
-  );
+  ), [procedureParams]);
 
-  const canCreate = Boolean(patientId && visitId && doctorId && items.length > 0);
+  const canCreate = useMemo(() => Boolean(patientId && visitId && doctorId && items.length > 0), [patientId, visitId, doctorId, items.length]);
 
   useEffect(() => {
     void loadTemplates();
@@ -536,7 +540,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
     return items.reduce((sum, it) => sum + (Number(it.quantity || 0) || 0), 0);
   }, [items]);
 
-  const create = async () => {
+  const create = useCallback(async () => {
     if (!canCreate) return;
     try {
       const payload = {
@@ -637,7 +641,7 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
       const msg = e?.body?.message || 'Failed to create prescription';
       alert(msg);
     }
-  };
+  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, notes, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, topicalFacewash, topicalMoisturiserSunscreen, topicalActives, postProcedureCare, investigations, procedurePlanned, procedureParams, onCreated]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     try {
@@ -1768,4 +1772,6 @@ export default function PrescriptionBuilder({ patientId, visitId, doctorId, user
       </div>
     </div>
   );
-} 
+}
+
+export default React.memo(PrescriptionBuilder); 
