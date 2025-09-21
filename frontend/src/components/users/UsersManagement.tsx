@@ -20,24 +20,21 @@ export default function UsersManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
-  const [permSearch, setPermSearch] = useState('');
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE',
   });
 
-  // Move useMemo before useEffect to maintain hook order
+  // Group permissions by resource (e.g., appointments, billing, etc.)
   const groupedPermissions = useMemo(() => {
     const map: Record<string, string[]> = {};
-    const term = permSearch.trim().toLowerCase();
     for (const p of allPermissions) {
-      if (term && !p.toLowerCase().includes(term)) continue;
       const group = p.split(':')[0] || 'other';
       if (!map[group]) map[group] = [];
       map[group].push(p);
     }
     return map;
-  }, [allPermissions, permSearch]);
+  }, [allPermissions]);
 
   const fetchUsers = async () => {
     try {
@@ -252,13 +249,11 @@ export default function UsersManagement() {
                                     </div>
                                   </div>
                                   <div>
-                                    <Label>Search Permissions</Label>
-                                    <Input className="mt-1" placeholder="Type to filter…" value={permSearch} onChange={(e) => setPermSearch(e.target.value)} />
-                                    <div className="text-xs text-gray-500 mt-1">Selected: {rolePerms.length}</div>
+                                    <Label>Permissions</Label>
+                                    <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
                                   </div>
                                 </div>
                                 <div className="md:col-span-8">
-                                  <Label>Permissions</Label>
                                   <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
                                     {Object.entries(groupedPermissions).map(([group, perms]) => (
                                       <div key={group}>
