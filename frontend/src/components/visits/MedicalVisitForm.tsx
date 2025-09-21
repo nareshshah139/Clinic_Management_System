@@ -137,6 +137,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Print customization (moved from PrescriptionBuilder)
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+  const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
 
   // Patient context sidebar
   const [showPatientContext, setShowPatientContext] = useState(true);
@@ -504,7 +505,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         temperature: vitals.temp ? Number(vitals.temp) : undefined,
         weight: vitals.weight ? Number(vitals.weight) : undefined,
         height: vitals.height ? Number(vitals.height) : undefined,
-        oxygenSaturation: vitals.spo2 ? Number(vitals.spo2) : undefined,
         respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
       },
       photos: photos.map(p => ({
@@ -924,11 +924,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">SpO2</label>
-                    <Input 
-                      placeholder="%" 
-                      value={vitals.spo2} 
-                      onChange={(e) => setVitals({ ...vitals, spo2: e.target.value })} 
+                    <label className="text-sm font-medium text-gray-700">BMI</label>
+                    <Input
+                      placeholder="kg/m²"
+                      readOnly
+                      value={(() => {
+                        const h = Number(vitals.height);
+                        const w = Number(vitals.weight);
+                        if (h > 0 && w > 0) {
+                          const m = h / 100;
+                          const bmi = w / (m * m);
+                          return bmi.toFixed(1);
+                        }
+                        return '';
+                      })()}
                     />
                   </div>
                   <div>
@@ -953,7 +962,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={() => markSectionComplete('vitals')}>
+                  <Button onClick={async () => { await save(false); markSectionComplete('vitals'); setBuilderRefreshKey((k) => k + 1); }}>
                     Mark Vitals Complete
                   </Button>
                 </div>
@@ -1317,6 +1326,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       printTopMarginPx={printTopMarginPx}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
+                      refreshKey={builderRefreshKey}
                     />
                   </CardContent>
                 </Card>

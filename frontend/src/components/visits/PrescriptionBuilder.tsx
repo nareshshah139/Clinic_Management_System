@@ -71,6 +71,7 @@ interface Props {
   printBgUrl?: string;
   printTopMarginPx?: number;
   onChangeReviewDate?: (v: string) => void;
+  refreshKey?: number;
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -119,7 +120,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey }: Props) {
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
@@ -381,7 +382,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId]);
+  }, [visitId, refreshKey]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
