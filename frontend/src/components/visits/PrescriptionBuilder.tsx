@@ -73,6 +73,52 @@ interface Props {
   onChangeReviewDate?: (v: string) => void;
 }
 
+// Hoisted, memoized collapsible section to prevent remounting on parent re-render
+const CollapsibleSection = React.memo(function CollapsibleSection({
+  title,
+  section,
+  children,
+  badge,
+  highlight = false,
+  expanded,
+  onToggle,
+}: {
+  title: string;
+  section: string;
+  children: React.ReactNode;
+  badge?: string;
+  highlight?: boolean;
+  expanded: boolean;
+  onToggle: (s: string) => void;
+}) {
+  const headingId = `section-${section}-heading`;
+  const contentId = `section-${section}-content`;
+  return (
+    <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
+      <CardHeader className="pb-2">
+        <button
+          type="button"
+          className="flex items-center justify-between w-full cursor-pointer"
+          onClick={() => onToggle(section)}
+          aria-expanded={expanded}
+          aria-controls={contentId}
+          aria-labelledby={headingId}
+        >
+          <div className="flex items-center gap-2">
+            <CardTitle id={headingId} className="text-base">{title}</CardTitle>
+            {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
+            {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
+          </div>
+          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+      </CardHeader>
+      <CardContent id={contentId} className={`pt-0 ${expanded ? '' : 'hidden'}`}>
+        {children}
+      </CardContent>
+    </Card>
+  );
+});
+
 function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate }: Props) {
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
@@ -208,51 +254,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
-  };
-
-  const CollapsibleSection = ({ title, section, children, badge, highlight = false }: {
-    title: string;
-    section: string;
-    children: React.ReactNode;
-    badge?: string;
-    highlight?: boolean;
-  }) => {
-    const headingId = `section-${section}-heading`;
-    const contentId = `section-${section}-content`;
-    const expanded = Boolean(expandedSections[section]);
-    return (
-      <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CardTitle id={headingId} className="text-base">{title}</CardTitle>
-              {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
-              {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
-            </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              aria-expanded={expanded}
-              aria-controls={contentId}
-              aria-labelledby={headingId}
-              onClick={() => toggleSection(section)}
-            >
-              {expanded ? 'Hide' : 'Show'}
-              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent
-          id={contentId}
-          role="region"
-          aria-labelledby={headingId}
-          className="pt-0"
-          hidden={!expanded}
-        >
-          {children}
-        </CardContent>
-      </Card>
-    );
   };
 
   // Fallback patient data (used when visit data is not available or before saving visit)
@@ -907,7 +908,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="text-xs text-gray-500">Loading visit details…</div>
             )}
             {/* Basic Information */}
-            <CollapsibleSection title="Basic Information" section="basic">
+            <CollapsibleSection title="Basic Information" section="basic" expanded={expandedSections.basic} onToggle={toggleSection}>
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
@@ -974,7 +975,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </CollapsibleSection>
 
             {/* Clinical Details */}
-            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
+            <CollapsibleSection title="Clinical Details & Vitals" section="clinical" expanded={expandedSections.clinical} onToggle={toggleSection}>
               <div className="space-y-3">
                 {/* Vitals */}
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
@@ -1031,6 +1032,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="histories" 
               highlight={hasHistories}
               badge={hasHistories ? "Has Data" : ""}
+              expanded={expandedSections.histories}
+              onToggle={toggleSection}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1065,6 +1068,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="topicals" 
               highlight={hasTopicals}
               badge={hasTopicals ? "Has Data" : ""}
+              expanded={expandedSections.topicals}
+              onToggle={toggleSection}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -1100,6 +1105,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="procedures" 
               highlight={hasPostProcedure || hasProcedurePlanned || hasProcedureParams}
               badge={(hasPostProcedure || hasProcedurePlanned || hasProcedureParams) ? "Has Data" : ""}
+              expanded={expandedSections.procedures}
+              onToggle={toggleSection}
             >
               <div className="space-y-3 opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1142,6 +1149,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="investigations" 
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
+              expanded={expandedSections.investigations}
+              onToggle={toggleSection}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1156,7 +1165,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </CollapsibleSection>
 
             {/* Section Toggles */}
-            <CollapsibleSection title="Print Sections" section="sections">
+            <CollapsibleSection title="Print Sections" section="sections" expanded={expandedSections.sections} onToggle={toggleSection}>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
                 {Object.keys(includeSections).map((k) => (
                   <label key={k} className="flex items-center gap-2">
@@ -1194,7 +1203,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </CollapsibleSection>
 
             {/* Templates Panel */}
-            <CollapsibleSection title="Templates" section="templates">
+            <CollapsibleSection title="Templates" section="templates" expanded={expandedSections.templates} onToggle={toggleSection}>
               <div className="space-y-2">
                 <div className="flex gap-2 mb-3">
                   <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
