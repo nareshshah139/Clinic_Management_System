@@ -27,6 +27,8 @@ interface PatientFormState {
   address?: string;
   emergencyContact?: string;
   referralSource?: string;
+  patientType?: 'WALKIN' | 'NON_WALKIN';
+  walkinDoctorId?: string;
 }
 
 export default function PatientsManagement() {
@@ -40,6 +42,7 @@ export default function PatientsManagement() {
   const [totalPatients, setTotalPatients] = useState<number>(0);
   const [pageSize] = useState<number>(20); // Fixed page size
   const [error, setError] = useState<string | null>(null);
+  const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
   const [form, setForm] = useState<PatientFormState>({
     firstName: '',
     lastName: '',
@@ -50,6 +53,8 @@ export default function PatientsManagement() {
     address: '',
     emergencyContact: '',
     referralSource: '',
+    patientType: 'NON_WALKIN',
+    walkinDoctorId: '',
   });
 
   const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
@@ -129,6 +134,21 @@ export default function PatientsManagement() {
     }
   };
 
+  useEffect(() => {
+    // Load doctors when the form dialog is opened
+    if (!open) return;
+    (async () => {
+      try {
+        const res = await apiClient.getUsers({ role: 'DOCTOR', limit: 100 });
+        const data = (res as any)?.data || (res as any)?.users || [];
+        const mapped = data.map((u: any) => ({ id: u.id, firstName: u.firstName, lastName: u.lastName }));
+        setDoctors(mapped);
+      } catch {
+        setDoctors([]);
+      }
+    })();
+  }, [open]);
+
   const resetForm = () => {
     setForm({
       firstName: '',
@@ -140,6 +160,8 @@ export default function PatientsManagement() {
       address: '',
       emergencyContact: '',
       referralSource: '',
+      patientType: 'NON_WALKIN',
+      walkinDoctorId: '',
     });
     setError(null);
   };
@@ -167,10 +189,17 @@ export default function PatientsManagement() {
         referralSource: form.referralSource || undefined,
       };
       
+      let savedPatientId = form.id;
       if (form.id) {
         await apiClient.updatePatient(form.id, payload);
       } else {
-        await apiClient.createPatient(payload);
+        const created = (await apiClient.createPatient(payload)) as any;
+        savedPatientId = created?.id || created?.data?.id || savedPatientId;
+      }
+      
+      // Optional: auto-book next available slot for walk-in patients when doctor is selected
+      if (savedPatientId && form.patientType === 'WALKIN' && form.walkinDoctorId) {
+        await bookNextAvailableConsultation(savedPatientId, form.walkinDoctorId);
       }
       
       await fetchPatients(currentPage);
@@ -182,6 +211,44 @@ export default function PatientsManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${da}`;
+  };
+
+  const bookNextAvailableConsultation = async (patientId: string, doctorId: string) => {
+    // Try today and the next 7 days
+    const maxDaysAhead = 7;
+    for (let i = 0; i <= maxDaysAhead; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      const dateStr = formatDate(date);
+      try {
+        const slotsRes = (await apiClient.getAvailableSlots({ doctorId, date: dateStr, durationMinutes: 30 })) as any;
+        const availableSlots: string[] = slotsRes?.availableSlots || [];
+        if (availableSlots.length > 0) {
+          const slot = availableSlots[0];
+          await apiClient.createAppointment({
+            patientId,
+            doctorId,
+            date: dateStr,
+            slot,
+            visitType: 'OPD',
+            source: 'WALK_IN',
+            notes: 'Auto-booked next available slot for walk-in',
+          });
+          alert(`Walk-in appointment booked on ${dateStr} at ${slot}`);
+          return;
+        }
+      } catch (e) {
+        // Ignore and try next day
+      }
+    }
+    alert('No available consultation slots found in the next 7 days for the selected doctor.');
   };
 
   const onEdit = (p: Patient) => {
@@ -196,6 +263,8 @@ export default function PatientsManagement() {
       address: p.address || '',
       emergencyContact: '',
       referralSource: p.referralSource || '',
+      patientType: 'NON_WALKIN',
+      walkinDoctorId: '',
     });
     setOpen(true);
   };
@@ -281,6 +350,35 @@ export default function PatientsManagement() {
                     <SelectItem value="OTHER">Other</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              {/* Optional Walk-in booking */}
+              <div>
+                <Label>Patient Type</Label>
+                <Select value={form.patientType || 'NON_WALKIN'} onValueChange={(v: 'WALKIN' | 'NON_WALKIN') => setForm({ ...form, patientType: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="NON_WALKIN">Non walk-in</SelectItem>
+                    <SelectItem value="WALKIN">Walk-in</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Doctor (for walk-in)</Label>
+                <Select value={form.walkinDoctorId || ''} onValueChange={(v: string) => setForm({ ...form, walkinDoctorId: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {`Dr. ${(d.firstName || '').trim()} ${(d.lastName || '').trim()}`.trim() || 'Doctor'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-xs text-gray-500 mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-4">
