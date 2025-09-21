@@ -216,23 +216,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     children: React.ReactNode;
     badge?: string;
     highlight?: boolean;
-  }) => (
-    <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleSection(section)}>
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-base">{title}</CardTitle>
-            {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
-            {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
+  }) => {
+    const headingId = `section-${section}-heading`;
+    const contentId = `section-${section}-content`;
+    const expanded = Boolean(expandedSections[section]);
+    return (
+      <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CardTitle id={headingId} className="text-base">{title}</CardTitle>
+              {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
+              {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
+            </div>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              aria-expanded={expanded}
+              aria-controls={contentId}
+              aria-labelledby={headingId}
+              onClick={() => toggleSection(section)}
+            >
+              {expanded ? 'Hide' : 'Show'}
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </button>
           </div>
-          {expandedSections[section] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </div>
-      </CardHeader>
-      <CardContent className={`pt-0 ${expandedSections[section] ? '' : 'hidden'}`}>
-        {children}
-      </CardContent>
-    </Card>
-  );
+        </CardHeader>
+        <CardContent
+          id={contentId}
+          role="region"
+          aria-labelledby={headingId}
+          className="pt-0"
+          hidden={!expanded}
+        >
+          {children}
+        </CardContent>
+      </Card>
+    );
+  };
 
   // Fallback patient data (used when visit data is not available or before saving visit)
   const [patientData, setPatientData] = useState<any>(null);
@@ -429,7 +450,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => clearTimeout(t);
   }, [chiefComplaints, patientId, visitId]);
 
+  const [isComposingNotes, setIsComposingNotes] = useState(false);
   useEffect(() => {
+    if (isComposingNotes) return;
     const t = setTimeout(async () => {
       try {
         if (!patientId) return;
@@ -440,7 +463,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
     }, 250);
     return () => clearTimeout(t);
-  }, [notes, patientId, visitId]);
+  }, [notes, patientId, visitId, isComposingNotes]);
 
   // Debounced drug search with relevance-based sorting
   useEffect(() => {
@@ -920,7 +943,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div>
                   <label className="text-sm text-gray-700">Doctor's Personal Notes</label>
                   <div className="relative">
-                    <Textarea key="doctor-notes" rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <Textarea
+                      key="doctor-notes"
+                      rows={3}
+                      placeholder="Instructions, cautions, lifestyle advice..."
+                      value={notes}
+                      onCompositionStart={() => setIsComposingNotes(true)}
+                      onCompositionEnd={() => setIsComposingNotes(false)}
+                      onChange={(e) => setNotes(e.target.value)}
+                    />
                     {notesOptions.length > 0 && (
                       <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
                         {notesOptions.map((opt) => (
@@ -1378,8 +1409,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         {/* Print Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
           <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Prescription Preview</DialogTitle>
+            </DialogHeader>
             <div className="h-full min-h-0 flex flex-col">
-              <DialogTitle className="sr-only">Prescription Preview</DialogTitle>
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
