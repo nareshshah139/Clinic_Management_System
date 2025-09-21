@@ -152,9 +152,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Voice-to-text functionality
   const [isListening, setIsListening] = useState(false);
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
-  
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+   
   const startVoiceInput = async (fieldName: string) => {
-    if (!navigator.mediaDevices || !window.MediaRecorder) {
+    // Toggle: if already recording the same field, stop and finalize
+    if (isListening && activeVoiceField === fieldName && recorderRef.current && recorderRef.current.state !== 'inactive') {
+      try { recorderRef.current.stop(); } catch {}
+      return;
+    }
+
+    if (!navigator.mediaDevices || !(window as any).MediaRecorder) {
       alert('Microphone recording is not supported in this browser');
       return;
     }
@@ -162,17 +170,23 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     setActiveVoiceField(fieldName);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const chunks: BlobPart[] = [];
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const mimeType = (window as any).MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
+        ((window as any).MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } as any : undefined);
+      recorderRef.current = recorder;
       recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
       recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop());
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        streamRef.current = null;
+        recorderRef.current = null;
         const blob = new Blob(chunks, { type: 'audio/webm' });
         try {
           const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
           const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
           const fd = new FormData();
-          fd.append('file', blob, 'speech.webm');
+          fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
           const res = await fetch(`${baseUrl}/visits/transcribe`, {
             method: 'POST',
             body: fd,
@@ -210,6 +224,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);
+      try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
+      recorderRef.current = null;
+      streamRef.current = null;
     }
   };
   
