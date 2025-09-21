@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiClient } from '@/lib/api';
-import type { User, UserRole, UserStatus } from '@/lib/types';
+import type { User } from '@/lib/types';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 
 export default function UsersManagement() {
@@ -20,8 +20,10 @@ export default function UsersManagement() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
-  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: UserRole; status: UserStatus; password?: string }>({
-    firstName: '', lastName: '', email: '', role: 'RECEPTIONIST' as UserRole, status: 'ACTIVE' as UserStatus,
+  const [permSearch, setPermSearch] = useState('');
+  const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
+  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: string; status: string; password?: string }>({
+    firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE',
   });
 
   const fetchUsers = async () => {
@@ -54,7 +56,7 @@ export default function UsersManagement() {
         await apiClient.createUser(payload);
       }
       setOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', role: 'RECEPTIONIST' as UserRole, status: 'ACTIVE' as UserStatus });
+      setForm({ firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE' });
       await fetchUsers();
     } finally {
       setLoading(false);
@@ -62,7 +64,7 @@ export default function UsersManagement() {
   };
 
   const onEdit = (u: User) => {
-    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: u.role as any, status: u.status as any });
+    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: String(u.role), status: String(u.status) });
     setOpen(true);
   };
 
@@ -75,6 +77,7 @@ export default function UsersManagement() {
   const openRolePerms = async (u: User) => {
     setSelectedUser(u);
     setPermOpen(true);
+    setRoleSelect(u.role as any);
     try {
       const [rolesRes, permsRes] = await Promise.all([
         apiClient.getRoles({ limit: 100 }),
@@ -133,7 +136,7 @@ export default function UsersManagement() {
               </div>
               <div>
                 <Label>Role</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as UserRole })}>
+                <Select value={form.role} onValueChange={(v: string) => setForm({ ...form, role: v })}>
                   <SelectTrigger><SelectValue placeholder="Role" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ADMIN">Admin</SelectItem>
@@ -147,7 +150,7 @@ export default function UsersManagement() {
               </div>
               <div>
                 <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as UserStatus })}>
+                <Select value={form.status} onValueChange={(v: string) => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ACTIVE">Active</SelectItem>
@@ -205,37 +208,95 @@ export default function UsersManagement() {
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
-                          <Dialog open={permOpen && selectedUser?.id === u.id} onOpenChange={(open) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
+                          <Dialog open={permOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm" onClick={() => openRolePerms(u)}><Settings className="h-3 w-3 mr-1" /> Role & Permissions</Button>
                             </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader><DialogTitle>Role & Permissions</DialogTitle></DialogHeader>
-                              <div className="space-y-3">
-                                <div>
-                                  <Label>Role</Label>
-                                  <div className="flex gap-2 mt-1">
-                                    {['ADMIN','MANAGER','DOCTOR','NURSE','RECEPTION','PHARMACIST'].map((r) => (
-                                      <Button key={r} variant={u.role === r ? 'default' : 'outline'} size="sm" onClick={() => void applyRole(r)}>{r}</Button>
-                                    ))}
+                            <DialogContent className="sm:max-w-2xl">
+                              <DialogHeader>
+                                <DialogTitle>Role & Permissions</DialogTitle>
+                              </DialogHeader>
+                              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                <div className="md:col-span-4 space-y-3">
+                                  <div>
+                                    <Label>Role</Label>
+                                    <Select value={roleSelect} onValueChange={(v: string) => setRoleSelect(v)}>
+                                      <SelectTrigger className="mt-1"><SelectValue placeholder="Select role" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="ADMIN">Admin</SelectItem>
+                                        <SelectItem value="MANAGER">Manager</SelectItem>
+                                        <SelectItem value="DOCTOR">Doctor</SelectItem>
+                                        <SelectItem value="NURSE">Nurse</SelectItem>
+                                        <SelectItem value="RECEPTION">Receptionist</SelectItem>
+                                        <SelectItem value="PHARMACIST">Pharmacist</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <div className="flex gap-2 mt-2">
+                                      <Button size="sm" onClick={() => void applyRole(roleSelect as string)}>Apply Role</Button>
+                                      <Button size="sm" variant="outline" onClick={() => setRolePerms([])}>Clear All</Button>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <Label>Search Permissions</Label>
+                                    <Input className="mt-1" placeholder="Type to filter…" value={permSearch} onChange={(e) => setPermSearch(e.target.value)} />
+                                    <div className="text-xs text-gray-500 mt-1">Selected: {rolePerms.length}</div>
                                   </div>
                                 </div>
-                                <div>
+                                <div className="md:col-span-8">
                                   <Label>Permissions</Label>
-                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-72 overflow-auto mt-2">
-                                    {allPermissions.map((p) => (
-                                      <label key={p} className="flex items-center gap-2 text-sm">
-                                        <input type="checkbox" defaultChecked={rolePerms.includes(p)} onChange={(e) => {
-                                          const next = new Set(rolePerms);
-                                          if (e.target.checked) next.add(p); else next.delete(p);
-                                          setRolePerms(Array.from(next));
-                                        }} />
-                                        <span>{p}</span>
-                                      </label>
+                                  <div className="mt-2 max-h-80 overflow-auto space-y-4 pr-1">
+                                    {Object.entries(useMemo(() => {
+                                      const map: Record<string, string[]> = {};
+                                      const term = permSearch.trim().toLowerCase();
+                                      for (const p of allPermissions) {
+                                        if (term && !p.toLowerCase().includes(term)) continue;
+                                        const group = p.split(':')[0] || 'other';
+                                        if (!map[group]) map[group] = [];
+                                        map[group].push(p);
+                                      }
+                                      return map;
+                                    }, [allPermissions, permSearch])).map(([group, perms]) => (
+                                      <div key={group}>
+                                        <div className="flex items-center justify-between">
+                                          <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
+                                          <div className="flex gap-2">
+                                            <Button variant="outline" size="sm" onClick={() => {
+                                              const next = new Set(rolePerms);
+                                              perms.forEach((p) => next.add(p));
+                                              setRolePerms(Array.from(next));
+                                            }}>Select all</Button>
+                                            <Button variant="outline" size="sm" onClick={() => {
+                                              const next = new Set(rolePerms);
+                                              perms.forEach((p) => next.delete(p));
+                                              setRolePerms(Array.from(next));
+                                            }}>Clear</Button>
+                                          </div>
+                                        </div>
+                                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                          {perms.map((p) => {
+                                            const checked = rolePerms.includes(p);
+                                            return (
+                                              <label key={p} className="flex items-center gap-2 text-sm">
+                                                <input
+                                                  aria-label={p}
+                                                  type="checkbox"
+                                                  checked={checked}
+                                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                                    const next = new Set(rolePerms);
+                                                    if (e.target.checked) next.add(p); else next.delete(p);
+                                                    setRolePerms(Array.from(next));
+                                                  }}
+                                                />
+                                                <span className="truncate" title={p}>{p}</span>
+                                              </label>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
                                     ))}
                                   </div>
                                   <div className="flex justify-end mt-3">
-                                    <Button size="sm" onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
+                                    <Button onClick={() => void applyPermissions(rolePerms)}>Save Permissions</Button>
                                   </div>
                                 </div>
                               </div>
