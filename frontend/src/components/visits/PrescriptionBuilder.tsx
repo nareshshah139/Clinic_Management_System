@@ -228,11 +228,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           {expandedSections[section] ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </div>
       </CardHeader>
-      {expandedSections[section] && (
-        <CardContent className="pt-0">
-          {children}
-        </CardContent>
-      )}
+      <CardContent className={`pt-0 ${expandedSections[section] ? '' : 'hidden'}`}>
+        {children}
+      </CardContent>
     </Card>
   );
 
@@ -900,7 +898,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div>
                     <label className="text-sm text-gray-700">Diagnosis (optional)</label>
                     <div className="relative">
-                      <Input placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+                      <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                       {diagOptions.length > 0 && (
                         <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
                           {diagOptions.map((opt) => (
@@ -914,7 +912,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                   <div>
                     <label className="text-sm text-gray-700">Follow-up Instructions</label>
-                    <Input placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
+                    <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
                   </div>
                   <div></div>
                 </div>
@@ -922,7 +920,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div>
                   <label className="text-sm text-gray-700">Doctor's Personal Notes</label>
                   <div className="relative">
-                    <Textarea rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
+                    <Textarea key="doctor-notes" rows={3} placeholder="Instructions, cautions, lifestyle advice..." value={notes} onChange={(e) => setNotes(e.target.value)} />
                     {notesOptions.length > 0 && (
                       <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
                         {notesOptions.map((opt) => (
@@ -944,27 +942,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
                   <div>
                     <label className="text-xs text-gray-600">Height (cm)</label>
-                    <Input type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Weight (kg)</label>
-                    <Input type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BMI</label>
-                    <Input value={vitalsBmi ?? ''} readOnly />
+                    <Input key="vitals-bmi" value={vitalsBmi ?? ''} readOnly />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BP (Sys)</label>
-                    <Input type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-sys" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BP (Dia)</label>
-                    <Input type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-dia" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Pulse (bpm)</label>
-                    <Input type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div></div>
                   <div></div>
@@ -1197,6 +1195,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <div className="opacity-100">
               <label className="text-sm text-gray-700">Add Drug</label>
               <Input 
+                key="drug-search"
                 placeholder="Search drug name or brand (min 2 chars)" 
                 value={drugQuery}
                 onChange={(e) => void searchDrugs(e.target.value)}
