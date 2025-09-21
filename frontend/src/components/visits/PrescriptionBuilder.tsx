@@ -971,10 +971,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
 
                 {/* Chief Complaints */}
-                <div className={`${includeSections.vitals ? '' : 'opacity-60'}`}>
+                <div className="opacity-100">
                   <label className="text-xs text-gray-600">Chief Complaints</label>
                   <div className="relative">
-                    <Textarea rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                    <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
                     {complaintOptions.length > 0 && (
                       <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto">
                         {complaintOptions.map((opt) => (
@@ -996,19 +996,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               highlight={hasHistories}
               badge={hasHistories ? "Has Data" : ""}
             >
-              <div className={`${includeSections.histories ? '' : 'opacity-60'}`}>
+              <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-600">Past History</label>
-                    <Textarea rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
+                    <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Medication History</label>
-                    <Textarea rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
+                    <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Menstrual History</label>
-                    <Textarea rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
+                    <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Family History</label>
@@ -1017,7 +1017,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid</label>
                     </div>
-                    <Input className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
+                    <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -1030,7 +1030,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               highlight={hasTopicals}
               badge={hasTopicals ? "Has Data" : ""}
             >
-              <div className={`${includeSections.topicals ? '' : 'opacity-60'}`}>
+              <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div className="space-y-1">
                     <div className="font-medium text-sm">Facewash/Soap</div>
@@ -1065,7 +1065,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               highlight={hasPostProcedure || hasProcedurePlanned || hasProcedureParams}
               badge={(hasPostProcedure || hasProcedurePlanned || hasProcedureParams) ? "Has Data" : ""}
             >
-              <div className={`space-y-3 ${includeSections.postProcedure ? '' : 'opacity-60'}`}>
+              <div className="space-y-3 opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
@@ -1107,7 +1107,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
             >
-              <div className={`${includeSections.investigations ? '' : 'opacity-60'}`}>
+              <div className="opacity-100">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {investigationOptions.map((opt) => (
                     <label key={opt} className="flex items-center gap-2 text-sm">
@@ -1194,7 +1194,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </CollapsibleSection>
 
             {/* Drug search */}
-            <div className={`${includeSections.vitals ? '' : 'opacity-60'}`}>
+            <div className="opacity-100">
               <label className="text-sm text-gray-700">Add Drug</label>
               <Input 
                 placeholder="Search drug name or brand (min 2 chars)" 
@@ -1237,7 +1237,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
 
             {/* Items table */}
-            <div className={`space-y-3 ${includeSections.vitals ? '' : 'opacity-60'}`}>
+            <div className="space-y-3 opacity-100">
               {items.length === 0 && (
                 <div className="text-sm text-gray-500">No items added yet</div>
               )}
@@ -1356,14 +1356,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
 
             {/* Review Date (bottom of builder) */}
-            <div className={`grid grid-cols-1 md:grid-cols-3 gap-3 ${includeSections.vitals ? '' : 'opacity-60'}`}>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-100">
               <div className="md:col-span-1">
                 <label className="text-sm text-gray-700">Review Date</label>
                 <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
               </div>
             </div>
 
-            <div className={`flex items-center justify-between pt-2 ${includeSections.vitals ? '' : 'opacity-60'}`}>
+                          <div className="flex items-center justify-between pt-2 opacity-100">
               <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
