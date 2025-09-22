@@ -882,8 +882,27 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   visitId={visitId || 'temp'} 
                   onVisitNeeded={async () => {
                     if (!visitId) {
-                      const payload = buildPayload();
-                      const newVisit = await apiClient.createVisit(payload);
+                      // Create a minimal visit just for photo uploads
+                      const minimalPayload = {
+                        patientId,
+                        doctorId,
+                        appointmentId: appointmentId || undefined,
+                        complaints: [{ complaint: 'Photo documentation visit' }], // Minimal required complaint
+                        visitNumber: currentVisitNumber,
+                        status: visitStatus,
+                        vitals: {},
+                        examination: {},
+                        diagnosis: [],
+                        treatmentPlan: {},
+                        photos: [],
+                        metadata: {
+                          capturedBy: userRole,
+                          sections: ['photos'],
+                          progress: 10, // Minimal progress
+                          createdForPhotos: true, // Flag to indicate this was created for photos
+                        }
+                      };
+                      const newVisit = await apiClient.createVisit(minimalPayload);
                       const newVisitId = (newVisit as any).id;
                       setVisitId(newVisitId);
                       return newVisitId;
