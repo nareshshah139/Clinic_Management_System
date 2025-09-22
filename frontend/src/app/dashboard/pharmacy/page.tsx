@@ -13,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import {
   Receipt,
   Pill,
-  Users,
   DollarSign,
   TrendingUp,
   Package,
@@ -22,11 +21,23 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
+interface PharmacyDashboardData {
+  todaySales?: number;
+  todayGrowth?: number;
+  todayInvoices?: number;
+  totalInvoices?: number;
+  todayCompletedInvoices?: number;
+  completedInvoices?: number;
+  totalDrugs?: number;
+  lowStockDrugs?: number;
+  packagesCount?: number;
+}
+
 export default function PharmacyPage() {
   const router = useRouter();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [dash, setDash] = useState<any | null>(null);
+  const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
   const [prefill, setPrefill] = useState<{ patientId?: string; prescriptionId?: string } | null>(null);
 
@@ -65,8 +76,8 @@ export default function PharmacyPage() {
     const loadDashboard = async () => {
       if (!isAuthenticated) return;
       try {
-        const data = await apiClient.get('/pharmacy/dashboard');
-        setDash(data);
+        const data = await apiClient.get<PharmacyDashboardData>('/pharmacy/dashboard');
+        setDash(data ?? null);
       } catch (e) {
         console.error('Failed to load pharmacy dashboard', e);
         setDash(null);
@@ -137,7 +148,7 @@ export default function PharmacyPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Today's Sales</p>
+                <p className="text-sm text-muted-foreground">Today&#39;s Sales</p>
                 <p className="text-2xl font-bold">₹{todaySales.toFixed(2)}</p>
                 <p className={`text-xs flex items-center ${todayGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   <TrendingUp className="h-3 w-3 mr-1" />

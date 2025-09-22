@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
   Package, 
   Plus, 
@@ -134,15 +134,19 @@ export function PharmacyPackageManager() {
   const loadPackages = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/pharmacy/packages', {
-        params: {
-          search: searchQuery || undefined,
-          category: selectedCategory !== 'all' ? selectedCategory : undefined,
-          subcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
-          limit: 50
-        }
-      });
-      setPackages(response.data.packages || []);
+      const response = await apiClient.get<{ data?: { packages?: any[] } } | { packages?: any[] }>(
+        '/pharmacy/packages',
+        {
+          params: {
+            search: searchQuery || undefined,
+            category: selectedCategory !== 'all' ? selectedCategory : undefined,
+            subcategory: selectedSubcategory !== 'all' ? selectedSubcategory : undefined,
+            limit: 50,
+          },
+        } as any
+      );
+      const packagesList = (response as any)?.data?.packages ?? (response as any)?.packages ?? [];
+      setPackages(packagesList);
     } catch (error) {
       console.error('Error loading packages:', error);
       toast({
@@ -157,14 +161,20 @@ export function PharmacyPackageManager() {
 
   const loadDrugs = async () => {
     try {
-      const response = await apiClient.get('/drugs', {
-        params: {
-          category: 'Dermatology',
-          limit: 100,
-          isActive: true
-        }
-      });
-      setDrugs(response.data.drugs || []);
+      const response = await apiClient.get<{ data?: { drugs?: Drug[] } } | Drug[]>(
+        '/drugs',
+        {
+          params: {
+            category: 'Dermatology',
+            limit: 100,
+            isActive: true,
+          },
+        } as any
+      );
+      const drugsList = Array.isArray(response)
+        ? (response as Drug[])
+        : ((response as any)?.data?.drugs ?? []);
+      setDrugs(drugsList);
     } catch (error) {
       console.error('Error loading drugs:', error);
     }
@@ -547,7 +557,7 @@ export function PharmacyPackageManager() {
       {/* Create/Edit Package Dialog */}
       <Dialog 
         open={showCreateDialog || editingPackage !== null} 
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) {
             setShowCreateDialog(false);
             setEditingPackage(null);
@@ -578,7 +588,7 @@ export function PharmacyPackageManager() {
                 <Label htmlFor="subcategory">Subcategory</Label>
                 <Select 
                   value={formData.subcategory} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, subcategory: value }))}
+                  onValueChange={(value: string) => setFormData(prev => ({ ...prev, subcategory: value }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select subcategory" />
@@ -697,7 +707,7 @@ export function PharmacyPackageManager() {
                           <Label>Drug *</Label>
                           <Select
                             value={item.drugId}
-                            onValueChange={(value) => updatePackageItem(index, 'drugId', value)}
+                            onValueChange={(value: string) => updatePackageItem(index, 'drugId', value)}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select drug" />

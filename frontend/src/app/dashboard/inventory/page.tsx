@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,8 +14,8 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
-  Calendar,
-  Filter,
+  // Calendar,
+  // Filter,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { InventoryItem, ItemCategory } from '@/lib/types';
@@ -27,14 +27,10 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | 'ALL'>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
 
-  useEffect(() => {
-    fetchInventoryItems();
-  }, []);
-
-  const fetchInventoryItems = async () => {
+  const fetchInventoryItems = useCallback(async () => {
     try {
       setLoading(true);
-      console.log('🏪 Fetching inventory items...');
+      console.log('�� Fetching inventory items...');
       const response = await apiClient.getInventoryItems({
         search: searchTerm || undefined,
         category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
@@ -43,7 +39,9 @@ export default function InventoryPage() {
       console.log('🏪 Inventory response:', response, 'Type:', typeof response);
       
       // Backend might return { items, total } or just items array
-      const items = response?.items || response?.data || response || [];
+      const items: InventoryItem[] = Array.isArray(response)
+        ? response
+        : (response?.items ?? []);
       console.log('🏪 Extracted items:', items, 'Length:', Array.isArray(items) ? items.length : 'Not array');
       
       setItems(Array.isArray(items) ? items : []);
@@ -53,7 +51,11 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, categoryFilter, stockFilter]);
+
+  useEffect(() => {
+    fetchInventoryItems();
+  }, [fetchInventoryItems]);
 
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
@@ -61,7 +63,7 @@ export default function InventoryPage() {
     }, 300);
 
     return () => clearTimeout(debounceTimer);
-  }, [searchTerm, categoryFilter, stockFilter]);
+  }, [fetchInventoryItems]);
 
   const getStockStatus = (item: InventoryItem) => {
     if (item.currentStock === 0) {
@@ -79,9 +81,7 @@ export default function InventoryPage() {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN');
-  };
+  // formatDate removed (unused)
 
   const lowStockItems = items.filter(item => item.currentStock <= item.reorderLevel);
   const outOfStockItems = items.filter(item => item.currentStock === 0);
@@ -93,7 +93,7 @@ export default function InventoryPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
-          <p className="text-gray-600">Track and manage your clinic's inventory</p>
+          <p className="text-gray-600">Track and manage your clinic&#39;s inventory</p>
         </div>
         <Button>
           <Plus className="h-4 w-4 mr-2" />
@@ -168,7 +168,7 @@ export default function InventoryPage() {
                 />
               </div>
             </div>
-            <Select value={categoryFilter} onValueChange={(value) => setCategoryFilter(value as ItemCategory | 'ALL')}>
+            <Select value={categoryFilter} onValueChange={(value: ItemCategory | 'ALL') => setCategoryFilter(value)}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
@@ -180,7 +180,7 @@ export default function InventoryPage() {
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
-            <Select value={stockFilter} onValueChange={(value) => setStockFilter(value as 'ALL' | 'LOW' | 'OUT')}>
+            <Select value={stockFilter} onValueChange={(value: 'ALL' | 'LOW' | 'OUT') => setStockFilter(value)}>
               <SelectTrigger className="w-full sm:w-48">
                 <SelectValue placeholder="Stock Status" />
               </SelectTrigger>
@@ -258,7 +258,7 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell>{item.reorderLevel}</TableCell>
                         <TableCell>{formatCurrency(item.costPrice)}</TableCell>
-                        <TableCell>{formatCurrency(item.sellingPrice)}</TableCell>
+                        <TableCell>{formatCurrency(item.sellingPrice ?? item.costPrice)}</TableCell>
                         <TableCell>
                           <Badge variant={stockStatus.variant}>
                             {stockStatus.status}

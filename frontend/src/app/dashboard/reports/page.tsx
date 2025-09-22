@@ -252,9 +252,9 @@ export default function ReportsPage() {
   const loadSystemData = useCallback(async () => {
     try {
       const [alerts] = await Promise.all([
-        apiClient.get('/reports/alerts'),
+        apiClient.get<SystemAlerts>('/reports/alerts'),
       ]);
-      setSystemAlerts(alerts);
+      setSystemAlerts(alerts as SystemAlerts);
     } catch (error) {
       console.error('Error loading system data:', error);
     }
@@ -1211,7 +1211,7 @@ export default function ReportsPage() {
               <Button onClick={generateReport} disabled={loading}>
                 {loading ? 'Generating...' : 'Generate Report'}
               </Button>
-              <Select onValueChange={(format) => exportReport(format as ExportFormat)}>
+              <Select onValueChange={(format: ExportFormat) => exportReport(format)}>
                 <SelectTrigger className="w-32">
                   <SelectValue placeholder="Export" />
                 </SelectTrigger>

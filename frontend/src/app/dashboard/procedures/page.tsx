@@ -419,7 +419,6 @@ export default function SmartProceduresPage() {
                     {Array.from({ length: machine.maxPasses }, (_, passIndex) => (
                       <td key={passIndex} className="border border-gray-300 p-1">
                         <Input
-                          size="sm"
                           placeholder={`${param.toLowerCase()}`}
                           value={procedureData.machineParameters[param]?.[passIndex + 1] || ''}
                           onChange={(e) => updateMachineParameter(param, passIndex + 1, e.target.value)}
@@ -471,7 +470,7 @@ export default function SmartProceduresPage() {
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Patient *</label>
-                <Select value={procedureData.patientId} onValueChange={(value) => updateProcedureData('patientId', value)}>
+                <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select patient" />
                   </SelectTrigger>
@@ -487,7 +486,7 @@ export default function SmartProceduresPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700">Doctor *</label>
-                <Select value={procedureData.doctorId} onValueChange={(value) => updateProcedureData('doctorId', value)}>
+                <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select doctor" />
                   </SelectTrigger>
@@ -503,7 +502,7 @@ export default function SmartProceduresPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
-                <Select value={procedureData.therapistId} onValueChange={(value) => updateProcedureData('therapistId', value)}>
+                <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select nurse" />
                   </SelectTrigger>
@@ -531,32 +530,17 @@ export default function SmartProceduresPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="text-sm font-medium text-gray-700">Session No.</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    value={procedureData.sessionNo}
-                    onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)}
-                  />
+                  <Input placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
                 </div>
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={procedureData.shotCountBegin}
-                    onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)}
-                  />
+                  <Input placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
                   <label className="text-sm font-medium text-gray-700">Shot Count (End)</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={procedureData.shotCountEnd}
-                    onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)}
-                  />
+                  <Input placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
@@ -608,7 +592,7 @@ export default function SmartProceduresPage() {
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
-                <Select value={procedureData.fitzpatrickType} onValueChange={(value) => updateProcedureData('fitzpatrickType', value)}>
+                <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -624,7 +608,7 @@ export default function SmartProceduresPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700">Robert Type</label>
-                <Select value={procedureData.robertType} onValueChange={(value) => updateProcedureData('robertType', value)}>
+                <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -640,7 +624,7 @@ export default function SmartProceduresPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700">Scar Type</label>
-                <Select value={procedureData.scarType} onValueChange={(value) => updateProcedureData('scarType', value)}>
+                <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
@@ -656,7 +640,7 @@ export default function SmartProceduresPage() {
 
               <div>
                 <label className="text-sm font-medium text-gray-700">Herpes Status</label>
-                <Select value={procedureData.herpesStatus} onValueChange={(value) => updateProcedureData('herpesStatus', value)}>
+                <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
                   </SelectTrigger>

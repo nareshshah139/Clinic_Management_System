@@ -1,31 +1,16 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import {
-  getErrorMessage,
-  formatPatientName,
-  createCleanupTimeouts,
-  getISTDateString,
-  isConflictError,
-  getConflictSuggestions
-} from '@/lib/utils';
-import type { 
-  User, 
-  Patient, 
-  TimeSlotConfig,
-  GetUsersResponse,
-  GetPatientsResponse,
-  GetRoomsResponse,
-  VisitType
-} from '@/lib/types';
+import { createCleanupTimeouts, getISTDateString } from '@/lib/utils';
+import type { User, Patient, TimeSlotConfig } from '@/lib/types';
 import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
-import { Calendar as CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 
@@ -48,11 +33,11 @@ export default function AppointmentsCalendar({
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  // const [error, setError] = useState<string | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
-  const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
+  // const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
@@ -60,7 +45,7 @@ export default function AppointmentsCalendar({
   const [optimisticAppointment, setOptimisticAppointment] = useState<{
     slot: string;
     patient: { name: string };
-    visitType: VisitType;
+    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
     room?: { id: string; name: string; type: string };
   } | null>(null);
 
@@ -77,7 +62,6 @@ export default function AppointmentsCalendar({
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
-    setRecentBookedSlot('');
     setBookingDetails(null);
     setOptimisticAppointment(null);
     // Fetch rooms when doctor/date changes
@@ -150,7 +134,6 @@ export default function AppointmentsCalendar({
       };
       
       setOptimisticAppointment(optimisticAppt);
-      setRecentBookedSlot(pendingBookingSlot);
       
       const created: any = await apiClient.createAppointment({ 
         doctorId, 
@@ -174,7 +157,6 @@ export default function AppointmentsCalendar({
       // Clear success message after 5 seconds
       setTimeout(() => {
         setBookingDetails(null);
-        setRecentBookedSlot('');
       }, 5000);
       
       // Close dialog
@@ -184,7 +166,6 @@ export default function AppointmentsCalendar({
     } catch (e: any) {
       // Reset optimistic update on error
       setOptimisticAppointment(null);
-      setRecentBookedSlot('');
       
       const status = e?.status;
       const body = e?.body || {};
@@ -322,7 +303,7 @@ export default function AppointmentsCalendar({
           <DoctorDayCalendar
             doctorId={doctorId}
             date={date}
-            recentBookedSlot={recentBookedSlot}
+            recentBookedSlot={undefined}
             visitTypeFilter={visitTypeFilter}
             roomFilter={roomFilter}
             onSelectSlot={handleBookingRequest}

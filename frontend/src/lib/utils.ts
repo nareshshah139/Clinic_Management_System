@@ -1,13 +1,14 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { Patient, TimeSlotConfig } from './types'
+import type { TimeSlotConfig } from './types'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 // Patient name utilities
-export function formatPatientName(patient: Patient | null | undefined): string {
+type MinimalPatient = { id?: string; name?: string; firstName?: string; lastName?: string } | null | undefined;
+export function formatPatientName(patient: MinimalPatient): string {
   if (!patient) return 'Unknown Patient';
   
   // Use name if available, otherwise construct from firstName/lastName
@@ -214,17 +215,17 @@ export function calculateDrugRelevanceScore(drug: any, searchQuery: string): num
   // TIER 3: Word boundary prefix matches (6000+ points)
   // Each word in the drug name or generic name that starts with the query gets equal score
   const queryWords = query.split(/\s+/);
-  queryWords.forEach(word => {
+  queryWords.forEach((word: string) => {
     if (word.length >= 2) {
-      const drugWords = drugName.split(/\s+/);
-      const genericWords = genericName.split(/\s+/);
+      const drugWords: string[] = drugName.split(/\s+/);
+      const genericWords: string[] = genericName.split(/\s+/);
       
       // Equal scores for word-level prefix matches
-      drugWords.forEach(drugWord => {
+      drugWords.forEach((drugWord: string) => {
         if (drugWord.startsWith(word)) score += 6000;
       });
       
-      genericWords.forEach(genericWord => {
+      genericWords.forEach((genericWord: string) => {
         if (genericWord.startsWith(word)) score += 6000; // Same as drug name
       });
     }

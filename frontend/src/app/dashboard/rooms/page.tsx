@@ -4,7 +4,7 @@ import { useState } from 'react';
 import RoomsManagement from '@/components/rooms/RoomsManagement';
 import RoomCalendar from '@/components/rooms/RoomCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { MapPin, Calendar, Settings } from 'lucide-react';
+import { Calendar, Settings } from 'lucide-react';
 
 export default function RoomsPage() {
   const [activeTab, setActiveTab] = useState('calendar');

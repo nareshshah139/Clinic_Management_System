@@ -457,7 +457,7 @@ export function PharmacyInvoiceList() {
                         <div className="space-y-1">
                           {invoice.items.slice(0, 2).map((item) => (
                             <p key={item.id} className="text-sm text-gray-600">
-                              • {(item.drug?.name || item.package?.name || 'Item')} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
+                              • {((item as any)?.drug?.name) || ((item as any)?.package?.name) || 'Item'} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
                             </p>
                           ))}
                           {invoice.items.length > 2 && (

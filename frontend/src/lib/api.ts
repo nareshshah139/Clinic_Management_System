@@ -1,5 +1,12 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
+export interface ApiError extends Error {
+  status?: number;
+  body?: { message?: string } | null;
+}
+
+import type { InventoryItem } from './types';
+
 export class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -84,10 +91,10 @@ export class ApiClient {
           body = { message: 'Network error' };
         }
       }
-      const err = new Error((body && body.message) || `HTTP ${response.status}`);
-      (err as any).status = response.status;
-      (err as any).body = body;
-      throw err;
+      const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
+      apiErr.status = response.status;
+      apiErr.body = body;
+      throw apiErr;
     }
 
     return (await response.json()) as T;
@@ -134,7 +141,7 @@ export class ApiClient {
   // Specific API methods
   // Patients
   async getPatients(params?: Record<string, unknown>) {
-    return this.get('/patients', params);
+    return this.get<import('./types').GetPatientsResponse>('/patients', params);
   }
 
   async createPatient(data: Record<string, unknown>) {
@@ -155,11 +162,11 @@ export class ApiClient {
   }
 
   async createAppointment(data: Record<string, unknown>) {
-    return this.post('/appointments', data);
+    return this.post<import('./types').Appointment>('/appointments', data);
   }
 
-  async getAppointment(id: string) {
-    return this.get(`/appointments/${id}`);
+  async getAppointment<T = unknown>(id: string): Promise<T> {
+    return this.get<T>(`/appointments/${id}`);
   }
 
   async updateAppointment(id: string, data: Record<string, unknown>) {
@@ -171,23 +178,23 @@ export class ApiClient {
   }
 
   async getAvailableSlots(params: Record<string, unknown>) {
-    return this.get('/appointments/available-slots', params);
+    return this.get<import('./types').GetAvailableSlotsResponse>('/appointments/available-slots', params);
   }
 
   async rescheduleAppointment(id: string, data: Record<string, unknown>) {
-    return this.post(`/appointments/${id}/reschedule`, data);
+    return this.post<import('./types').Appointment>(`/appointments/${id}/reschedule`, data);
   }
 
   async getDoctorSchedule(doctorId: string, date: string) {
-    return this.get(`/appointments/doctor/${doctorId}/schedule`, { date });
+    return this.get<import('./types').GetDoctorScheduleResponse>(`/appointments/doctor/${doctorId}/schedule`, { date });
   }
 
   async getRooms() {
-    return this.get('/appointments/rooms');
+    return this.get<import('./types').GetRoomsResponse>('/appointments/rooms');
   }
 
   async getAllRooms() {
-    return this.get('/appointments/rooms/all');
+    return this.get<import('./types').GetRoomsResponse>('/appointments/rooms/all');
   }
 
   async createRoom(roomData: { name: string; type: string; capacity: number; isActive: boolean }) {
@@ -203,7 +210,7 @@ export class ApiClient {
   }
 
   async getRoomSchedule(roomId: string, date: string) {
-    return this.get(`/appointments/room/${roomId}/schedule`, { date });
+    return this.get<import('./types').RoomSchedule>(`/appointments/room/${roomId}/schedule`, { date });
   }
 
   // Visits
@@ -223,8 +230,8 @@ export class ApiClient {
     return this.post(`/visits/${id}/complete`, data);
   }
 
-  async getPatientVisitHistory(patientId: string, params?: { limit?: number; offset?: number }) {
-    return this.get(`/visits/patient/${patientId}/history`, params || {});
+  async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number }): Promise<T> {
+    return this.get<T>(`/visits/patient/${patientId}/history`, params || {});
   }
 
   // Billing
@@ -249,8 +256,10 @@ export class ApiClient {
   }
 
   // Inventory
-  async getInventoryItems(params?: Record<string, unknown>) {
-    return this.get('/inventory/items', params);
+  async getInventoryItems(
+    params?: Record<string, unknown>
+  ): Promise<{ items: InventoryItem[]; total?: number } | InventoryItem[]> {
+    return this.get<{ items: InventoryItem[]; total?: number } | InventoryItem[]>('/inventory/items', params);
   }
 
   async createInventoryItem(data: Record<string, unknown>) {
@@ -278,13 +287,13 @@ export class ApiClient {
     return this.get('/auth/statistics');
   }
 
-  async getSystemAlerts() {
-    return this.get('/reports/alerts');
+  async getSystemAlerts<T = unknown>() {
+    return this.get<T>('/reports/alerts');
   }
 
   // Users
   async getUsers(params?: Record<string, unknown>) {
-    return this.get('/users', params);
+    return this.get<import('./types').GetUsersResponse>('/users', params);
   }
 
   async createUser(data: Record<string, unknown>) {
@@ -324,8 +333,8 @@ export class ApiClient {
     return this.post('/prescriptions', data);
   }
 
-  async getPrescription(id: string) {
-    return this.get(`/prescriptions/${id}`);
+  async getPrescription<T = unknown>(id: string): Promise<T> {
+    return this.get<T>(`/prescriptions/${id}`);
   }
 
   async searchDrugs(params: Record<string, unknown>) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { User, Users, Stethoscope, Clock, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
+import type { Appointment } from '@/lib/types';
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
@@ -25,11 +26,14 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
       try {
         setLoading(true);
         console.log('🏥 Fetching patient visit history for:', patientId);
-        const response = await apiClient.getPatientVisitHistory(patientId, { limit: 10 });
+        type PatientVisitHistoryResponse = { visits: any[] } | any[] | { data?: any[] };
+        const response = await apiClient.getPatientVisitHistory<PatientVisitHistoryResponse>(patientId, { limit: 10 });
         console.log('🏥 Patient visit history response:', response);
         
         // Extract visits from response
-        const visits = response?.visits || response?.data || response || [];
+        const visits = Array.isArray(response)
+          ? response
+          : (((response as any)?.visits) ?? ((response as any)?.data) ?? []);
         console.log('🏥 Processed visit history:', visits);
         setHistory(visits);
       } catch (error) {
@@ -175,7 +179,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   );
 }
 
-export default function VisitsPage() {
+function VisitsPageInner() {
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -225,11 +229,11 @@ export default function VisitsPage() {
 
   const fetchAppointmentData = async (appointmentId: string) => {
     try {
-      const appointment = await apiClient.getAppointment(appointmentId);
+      const appointment = await apiClient.getAppointment<Appointment>(appointmentId);
       setAppointmentData(appointment);
       
       // Set doctor from appointment
-      if (appointment.doctorId) {
+      if (appointment?.doctorId) {
         setSelectedDoctorId(appointment.doctorId);
       }
     } catch (error) {
@@ -268,8 +272,8 @@ export default function VisitsPage() {
 
       // Get current user role (in a real app, this would come from auth context)
       try {
-        const currentUser = await apiClient.get('/auth/me');
-        setCurrentUserRole(currentUser.role || 'DOCTOR');
+        const currentUser = await apiClient.get<{ role?: string }>(' /auth/me'.replace(' ', ''));
+        setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
       } catch (error) {
         console.error('Failed to get current user:', error);
         setCurrentUserRole('DOCTOR');
@@ -695,5 +699,13 @@ export default function VisitsPage() {
       
       {recentVisitId && <VisitPhotos visitId={recentVisitId} />}
     </div>
+  );
+}
+
+export default function VisitsPage() {
+  return (
+    <Suspense fallback={<div className="p-4">Loading...</div>}>
+      <VisitsPageInner />
+    </Suspense>
   );
 } 

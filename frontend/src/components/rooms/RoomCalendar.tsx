@@ -5,8 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, User, Stethoscope } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import type { RoomSchedule } from '@/lib/types';
 
 interface Room {
   id: string;
@@ -14,29 +15,6 @@ interface Room {
   type: string;
   capacity: number;
   isActive: boolean;
-}
-
-interface RoomSchedule {
-  roomId: string;
-  appointments: Array<{
-    id: string;
-    slot: string;
-    patient: {
-      name: string;
-    };
-    doctor: {
-      firstName: string;
-      lastName: string;
-    };
-    visitType: string;
-    status: string;
-  }>;
-}
-
-interface TimeSlot {
-  time: string;
-  hour: number;
-  appointments: RoomSchedule['appointments'];
 }
 
 export default function RoomCalendar() {
@@ -81,7 +59,13 @@ export default function RoomCalendar() {
           schedules[room.id] = schedule;
         } catch (error) {
           console.error(`Error fetching schedule for room ${room.id}:`, error);
-          schedules[room.id] = { roomId: room.id, appointments: [] };
+          schedules[room.id] = {
+            roomId: room.id,
+            roomName: room.name,
+            roomType: room.type,
+            date: dateStr,
+            appointments: [],
+          };
         }
       }
       
@@ -234,7 +218,7 @@ export default function RoomCalendar() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-blue-600" />
+              <User className="h-5 w-5 text-blue-600" />
               <div>
                 <p className="text-sm text-gray-600">Total Rooms</p>
                 <p className="text-2xl font-bold">{filteredRooms.length}</p>
@@ -337,9 +321,9 @@ export default function RoomCalendar() {
                             <div className="flex items-start justify-between mb-1">
                               <Badge 
                                 variant="secondary" 
-                                className={`text-xs ${getVisitTypeColor(appointment.visitType)}`}
+                                className={`text-xs ${getVisitTypeColor(appointment.visitType || '')}`}
                               >
-                                {appointment.visitType}
+                                {appointment.visitType || 'APPOINTMENT'}
                               </Badge>
                               <Badge 
                                 variant={appointment.status === 'SCHEDULED' ? 'default' : 'secondary'}

@@ -355,7 +355,8 @@ export function PharmacyInvoiceBuilder() {
     searchInputRef.current?.focus();
   };
 
-  const updateItemQuantity = (itemId: string, quantity: number, itemType: 'DRUG' | 'PACKAGE' = 'DRUG') => {
+  const updateItemQuantity = (itemId: string | undefined, quantity: number, itemType: 'DRUG' | 'PACKAGE' = 'DRUG') => {
+    if (!itemId) return;
     setItems(items.map(item => {
       if ((itemType === 'DRUG' && item.drugId === itemId) || (itemType === 'PACKAGE' && item.packageId === itemId)) {
         const updatedItem = { ...item, quantity: Math.max(1, quantity) };
@@ -366,7 +367,8 @@ export function PharmacyInvoiceBuilder() {
     }));
   };
 
-  const updateItemDiscount = (drugId: string, discountPercent: number) => {
+  const updateItemDiscount = (drugId: string | undefined, discountPercent: number) => {
+    if (!drugId) return;
     setItems(items.map(item => {
       if (item.drugId === drugId) {
         const updatedItem = { ...item, discountPercent: Math.max(0, Math.min(100, discountPercent)) };
@@ -377,7 +379,8 @@ export function PharmacyInvoiceBuilder() {
     }));
   };
 
-  const updateItemTax = (drugId: string, taxPercent: number) => {
+  const updateItemTax = (drugId: string | undefined, taxPercent: number) => {
+    if (!drugId) return;
     setItems(items.map(item => {
       if (item.drugId === drugId) {
         const updatedItem = { ...item, taxPercent: Math.max(0, taxPercent) };
@@ -388,7 +391,8 @@ export function PharmacyInvoiceBuilder() {
     }));
   };
 
-  const updateItemInstructions = (drugId: string, field: string, value: string) => {
+  const updateItemInstructions = (drugId: string | undefined, field: string, value: string) => {
+    if (!drugId) return;
     setItems(items.map(item => {
       if (item.drugId === drugId) {
         return { ...item, [field]: value };
@@ -409,7 +413,8 @@ export function PharmacyInvoiceBuilder() {
     item.totalAmount = totalAmount;
   };
 
-  const removeItem = (drugId: string) => {
+  const removeItem = (drugId: string | undefined) => {
+    if (!drugId) return;
     setItems(items.filter(item => item.drugId !== drugId));
   };
 

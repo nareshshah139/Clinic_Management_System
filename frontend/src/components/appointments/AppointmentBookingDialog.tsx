@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +51,7 @@ export default function AppointmentBookingDialog({
   const [fetchingSchedules, setFetchingSchedules] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (open) {
       void fetchRooms();
@@ -63,13 +64,14 @@ export default function AppointmentBookingDialog({
     }
   }, [open]);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (rooms.length > 0 && visitType) {
       void fetchRoomSchedules();
     }
   }, [rooms, date, visitType]);
 
-  const fetchRooms = async () => {
+  const fetchRooms = useCallback(async () => {
     try {
       setFetchingRooms(true);
       const res: GetRoomsResponse = await apiClient.getRooms();
@@ -84,9 +86,9 @@ export default function AppointmentBookingDialog({
     } finally {
       setFetchingRooms(false);
     }
-  };
+  }, [toast]);
 
-  const fetchRoomSchedules = async () => {
+  const fetchRoomSchedules = useCallback(async () => {
     try {
       setFetchingSchedules(true);
       const schedules: Record<string, RoomSchedule> = {};
@@ -120,7 +122,7 @@ export default function AppointmentBookingDialog({
     } finally {
       setFetchingSchedules(false);
     }
-  };
+  }, [rooms, visitType, date, toast]);
 
   const isSlotAvailable = (roomId: string, slotTime: string): boolean => {
     const schedule = roomSchedules[roomId];

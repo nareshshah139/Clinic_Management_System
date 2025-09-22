@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { 
@@ -101,7 +101,7 @@ export function DrugManagement() {
         params.manufacturer = selectedManufacturer;
       }
 
-      const response = await apiClient.get('/drugs', params);
+      const response = await apiClient.get<{ data: Drug[]; pagination?: { total?: number; pages?: number } }>('/drugs', params);
       setDrugs(response.data || []);
       setPagination(prev => ({
         ...prev,
@@ -117,7 +117,7 @@ export function DrugManagement() {
 
   const loadCategories = async () => {
     try {
-      const response = await apiClient.get('/drugs/categories');
+      const response = await apiClient.get<string[]>('/drugs/categories');
       setCategories(response || []);
     } catch (error) {
       console.error('Failed to load categories:', error);
@@ -126,7 +126,7 @@ export function DrugManagement() {
 
   const loadManufacturers = async () => {
     try {
-      const response = await apiClient.get('/drugs/manufacturers');
+      const response = await apiClient.get<string[]>('/drugs/manufacturers');
       setManufacturers(response || []);
     } catch (error) {
       console.error('Failed to load manufacturers:', error);
@@ -470,7 +470,7 @@ export function DrugManagement() {
       </Card>
 
       {/* Add/Edit Drug Dialog */}
-      <Dialog open={showAddDialog || !!editingDrug} onOpenChange={(open) => {
+      <Dialog open={showAddDialog || !!editingDrug} onOpenChange={(open: boolean) => {
         if (!open) {
           setShowAddDialog(false);
           setEditingDrug(null);

@@ -1106,3 +1106,28 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Backend endpoint: `POST /visits/transcribe` (multipart/form-data, field `file`).
 
 *Last updated: September 2025 - Whisper transcription stabilized with native FormData/Blob; logging and env fixes applied.*
+
+### September 2025: Immutable Audit Logging and Frontend Build Stabilization
+**Achievement:** Added immutable audit logging across all database mutations and stabilized frontend build by typing API surfaces, fixing hook deps, and trimming warnings.
+**Impact:**
+- Regulatory-grade traceability for create/update/delete with who/when/what (before/after) and request metadata (IP, UA).
+- Frontend builds pass reliably; reduced type errors and noisy warnings; improved developer throughput.
+
+**Technical Highlights:**
+- Backend
+  - Introduced `RequestContextService` (AsyncLocalStorage) to carry `userId`, `ipAddress`, `userAgent` per request.
+  - Registered global `RequestContextInterceptor` to populate context from `req.user`, `x-forwarded-for`/`req.ip`, and headers.
+  - Implemented Prisma `$extends({ query })` audit middleware in `PrismaService` to log all mutating actions (create/update/upsert/delete, *Many variants) into `AuditLog`, skipping self-logging.
+  - Captures: `entity`, `entityId`, `action`, `oldValues`, `newValues`, `userId`, `ipAddress`, `userAgent`, `timestamp`; sensitive fields redacted.
+- Frontend
+  - Typed multiple `ApiClient` methods (`getRooms`, `getRoomSchedule`, `getUsers`, `getPatients`, `getAvailableSlots`, `getDoctorSchedule`, `getAppointment`, `getPatientVisitHistory`, `getPrescription`, invoicing endpoints) to eliminate `unknown`.
+  - Fixed implicit `any` in `Select`/`Tabs` handlers; escaped unescaped entities; adjusted optional fields and minimal types (e.g., `AppointmentInSlot.visit`, `doctor.id`).
+  - Wrapped `/dashboard/visits` and `/login` pages in `React.Suspense` to satisfy Next.js CSR bailout rules; cleared ENOENT tmp manifest error by fresh build and cache cleanup.
+  - Trimmed unused imports and tightened a few effects with `useCallback`/`useMemo` where appropriate.
+
+**Next Steps:**
+- Add export/reporting views for AuditLog with RBAC scoping and search by entity/date/user.
+- Extend redaction list (e.g., tokens, PII) and consider per-entity field allowlists.
+- Continue reducing lint warnings (hook deps, any types) and add CI to block regressions.
+
+*Last updated: September 2025 - Audit logging enabled backend-wide; frontend stabilized and warnings reduced.*

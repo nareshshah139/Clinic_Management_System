@@ -633,7 +633,7 @@ export default function AppointmentScheduler({
           </div>
         </CardContent>
 
-        <Dialog open={!!selectedAppointment} onOpenChange={(v) => { if (!v) setSelectedAppointment(null); }}>
+        <Dialog open={!!selectedAppointment} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Appointment Details</DialogTitle>

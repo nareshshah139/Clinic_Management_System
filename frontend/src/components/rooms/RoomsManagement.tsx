@@ -315,7 +315,7 @@ export default function RoomsManagement() {
 
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">Room Type *</label>
-              <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+              <Select value={formData.type} onValueChange={(value: string) => setFormData({ ...formData, type: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select room type" />
                 </SelectTrigger>

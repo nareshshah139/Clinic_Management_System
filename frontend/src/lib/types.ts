@@ -51,8 +51,10 @@ export interface RoomSchedule {
   appointments: Array<{
     id: string;
     slot: string;
-    patient: { id: string; name: string; phone?: string };
+    patient: { id: string; name: string; phone?: string; email?: string };
     doctor: { id: string; firstName: string; lastName: string };
+    visitType?: string;
+    status?: string;
   }>;
 }
 
@@ -93,10 +95,11 @@ export interface AppointmentInSlot {
   id: string;
   slot: string;
   patient: { id: string; name: string; phone?: string; email?: string };
-  doctor: { firstName: string; lastName: string };
+  doctor: { id?: string; firstName: string; lastName: string };
   visitType: VisitType;
   room?: { id: string; name: string; type: string };
   status: AppointmentStatus;
+  visit?: { id: string };
 }
 
 // Available Slots
@@ -240,4 +243,21 @@ export interface Invoice {
   createdAt: string;
   patient?: InvoicePatientSummary;
   items?: InvoiceItemSummary[];
+}
+
+export type ItemCategory = 'MEDICINE' | 'EQUIPMENT' | 'SUPPLIES' | 'OTHER';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  description?: string;
+  sku?: string;
+  barcode?: string;
+  category?: ItemCategory;
+  manufacturer?: string;
+  currentStock: number;
+  reorderLevel: number;
+  costPrice: number;
+  sellingPrice?: number;
+  updatedAt?: string;
 }

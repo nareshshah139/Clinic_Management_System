@@ -6,13 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Users,
-  Calendar,
-  CreditCard,
   Package,
   TrendingUp,
   AlertTriangle,
   Clock,
-  DollarSign,
   Database,
   Download,
 } from 'lucide-react';
@@ -68,24 +65,38 @@ export default function DashboardPage() {
             id: '1',
             patientId: 'patient-1',
             doctorId: 'test-doctor-1',
-            scheduledAt: new Date().toISOString(),
+            date: new Date().toISOString(),
+            slot: '10:00',
             status: 'SCHEDULED',
             visitType: 'OPD',
+            branchId: 'branch-1',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             patient: {
+              id: 'patient-1',
               firstName: 'John',
               lastName: 'Doe',
+              name: 'John Doe',
+              phone: '9000000000',
             },
           },
           {
             id: '2',
             patientId: 'patient-2',
             doctorId: 'test-doctor-1',
-            scheduledAt: new Date(Date.now() + 3600000).toISOString(),
+            date: new Date(Date.now() + 3600000).toISOString(),
+            slot: '11:00',
             status: 'CONFIRMED',
             visitType: 'OPD',
+            branchId: 'branch-1',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
             patient: {
+              id: 'patient-2',
               firstName: 'Jane',
               lastName: 'Smith',
+              name: 'Jane Smith',
+              phone: '9000000001',
             },
           },
         ]);
@@ -328,10 +339,10 @@ export default function DashboardPage() {
                         {appointment.patient?.firstName} {appointment.patient?.lastName}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {new Date(appointment.scheduledAt).toLocaleTimeString([], {
+                        {new Date(appointment.date).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit'
-                        })} - {appointment.visitType}
+                        })} - {appointment.slot}
                       </p>
                     </div>
                     <Badge variant={

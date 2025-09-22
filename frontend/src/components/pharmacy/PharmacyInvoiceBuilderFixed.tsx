@@ -170,15 +170,17 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
     setLoadingPrescription(true);
     try {
       console.log('📋 Loading prescription data for ID:', prescriptionId);
-      const prescription = await apiClient.getPrescription(prescriptionId);
+      type MinimalPrescription = { id?: string; items?: any[] | string } & Record<string, unknown>;
+      const prescription = await apiClient.getPrescription<MinimalPrescription>(prescriptionId);
       console.log('✅ Prescription data loaded:', prescription);
       
       setPrescriptionData(prescription);
       
       // Parse prescription items
-      const prescriptionItems = Array.isArray(prescription.items) 
-        ? prescription.items 
-        : JSON.parse(prescription.items || '[]');
+      const rawItems = (prescription as any)?.items;
+      const prescriptionItems = Array.isArray(rawItems) 
+        ? rawItems 
+        : JSON.parse((rawItems as string | undefined) || '[]');
       
       console.log('💊 Processing prescription items:', prescriptionItems);
       
@@ -189,14 +191,14 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
             // Try to find the drug in our database
             let drug = null;
             if (item.drugName) {
-              const drugSearchResult = await apiClient.get('/drugs', { 
+              const drugSearchResult = await apiClient.get<{ data?: Drug[] } | Drug[]>('/drugs', { 
                 search: item.drugName, 
                 limit: 1, 
                 isActive: true 
               });
-              const drugList = Array.isArray(drugSearchResult?.data) 
-                ? drugSearchResult.data 
-                : (Array.isArray(drugSearchResult) ? drugSearchResult : []);
+              const drugList = Array.isArray((drugSearchResult as any)?.data) 
+                ? ((drugSearchResult as any).data as Drug[]) 
+                : (Array.isArray(drugSearchResult) ? (drugSearchResult as Drug[]) : []);
               drug = drugList[0] || null;
             }
             
@@ -207,9 +209,9 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
               drug: drug || {
                 id: `temp_${Date.now()}_${index}`,
                 name: item.drugName || 'Unknown Drug',
-                genericName: item.genericName || '',
                 price: 0, // Will need to be set manually
-                isActive: true
+                manufacturerName: '',
+                packSizeLabel: '',
               },
               quantity: item.quantity || 1,
               unitPrice: drug?.price || 0,
@@ -732,9 +734,9 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
                   </div>
                   <div>
                     <Label htmlFor="doctor">Doctor</Label>
-                    <Select 
+                     <Select 
                       value={invoiceData.doctorId} 
-                      onValueChange={(value) => setInvoiceData(prev => ({ ...prev, doctorId: value }))}
+                      onValueChange={(value: string) => setInvoiceData(prev => ({ ...prev, doctorId: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Select doctor" />
@@ -759,7 +761,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
                 <CardTitle>Add Items to Invoice</CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs value={selectedTab} onValueChange={(value) => setSelectedTab(value as 'drugs' | 'packages')}>
+                <Tabs value={selectedTab} onValueChange={(value: 'drugs' | 'packages') => setSelectedTab(value)}>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="drugs" className="flex items-center gap-2">
                       <Pill className="h-4 w-4" />
@@ -1112,7 +1114,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
                   <Label htmlFor="paymentMethod">Payment Method</Label>
                   <Select 
                     value={invoiceData.paymentMethod} 
-                    onValueChange={(value) => setInvoiceData(prev => ({ ...prev, paymentMethod: value }))}
+                    onValueChange={(value: 'CASH' | 'CARD' | 'UPI' | 'NETBANKING') => setInvoiceData(prev => ({ ...prev, paymentMethod: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />

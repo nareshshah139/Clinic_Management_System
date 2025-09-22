@@ -86,7 +86,12 @@ export default function DoctorDayCalendar({
         appointments = appointments.filter(apt => apt.slot !== optimisticAppointment.slot);
         appointments.push({
           slot: optimisticAppointment.slot,
-          patient: optimisticAppointment.patient,
+          patient: {
+            id: (optimisticAppointment.patient as any)?.id ?? 'temp',
+            name: (optimisticAppointment.patient as any)?.name ?? 'Unknown Patient',
+            phone: (optimisticAppointment.patient as any)?.phone ?? undefined,
+            email: (optimisticAppointment.patient as any)?.email ?? undefined,
+          },
           visitType: optimisticAppointment.visitType,
           room: optimisticAppointment.room,
           id: 'optimistic-' + optimisticAppointment.slot,
@@ -379,7 +384,7 @@ export default function DoctorDayCalendar({
       </Card>
 
       {/* Appointment Details Dialog */}
-      <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v) => { if (!v) setSelectedAppointment(null); }}>
+      <Dialog open={!!selectedAppointment && !showCancelDialog} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Appointment Details</DialogTitle>

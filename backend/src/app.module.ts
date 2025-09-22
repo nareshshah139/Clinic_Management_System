@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { PrismaModule } from './shared/database/prisma.module';
@@ -20,6 +20,7 @@ import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
+import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -72,6 +73,10 @@ const minimalModules = [AuthModule];
     {
       provide: APP_GUARD,
       useClass: PermissionsGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestContextInterceptor,
     },
   ],
 })
