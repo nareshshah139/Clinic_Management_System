@@ -3,6 +3,8 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { Language } from '@prisma/client';
+import { join, posix as pathPosix } from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class VisitsService {
@@ -741,6 +743,30 @@ export class VisitsService {
     };
   }
 
+  private sanitizeAttachmentPaths(relPaths: string[] | null | undefined): string[] {
+    const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+    const results: string[] = [];
+    for (const candidate of relPaths || []) {
+      if (typeof candidate !== 'string') continue;
+      const normalized = pathPosix.normalize(candidate.trim());
+      if (!normalized.startsWith('/uploads/visits/')) continue;
+      const filename = pathPosix.basename(normalized);
+      if (!/^[A-Za-z0-9._-]+$/.test(filename)) continue;
+      const ext = pathPosix.extname(filename).toLowerCase();
+      if (!allowedExtensions.has(ext)) continue;
+      // Resolve absolute file path under project root
+      const absolutePath = join(process.cwd(), normalized.replace(/^\//, ''));
+      try {
+        const stat = fs.statSync(absolutePath);
+        if (!stat.isFile()) continue;
+      } catch {
+        continue;
+      }
+      results.push(`/uploads/visits/${filename}`);
+    }
+    return Array.from(new Set(results));
+  }
+
   async addAttachments(visitId: string, relPaths: string[], branchId: string) {
     const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
@@ -749,8 +775,10 @@ export class VisitsService {
       throw new NotFoundException('Visit not found in this branch');
     }
     const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
-    const merged = Array.from(new Set([...(existing || []), ...relPaths]));
-    const updated = await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(merged) } });
+    const sanitizedExisting = this.sanitizeAttachmentPaths(existing);
+    const sanitizedIncoming = this.sanitizeAttachmentPaths(relPaths);
+    const merged = Array.from(new Set([...(sanitizedExisting || []), ...(sanitizedIncoming || [])]));
+    await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(merged) } });
     return { attachments: merged };
   }
 
@@ -761,6 +789,13 @@ export class VisitsService {
       throw new NotFoundException('Visit not found in this branch');
     }
     const files = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
-    return { attachments: files };
+    const sanitized = this.sanitizeAttachmentPaths(files);
+    // Optionally self-heal stored data if it contained unsafe entries
+    if (sanitized.length !== files.length) {
+      try {
+        await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(sanitized) } });
+      } catch {}
+    }
+    return { attachments: sanitized };
   }
 }
