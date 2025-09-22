@@ -880,6 +880,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               <TabsContent value="photos" className="space-y-4">
                 <VisitPhotos 
                   visitId={visitId || 'temp'} 
+                  patientId={patientId}
                   onVisitNeeded={async () => {
                     if (!visitId) {
                       // Create a minimal visit just for photo uploads

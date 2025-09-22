@@ -40,6 +40,13 @@ function ensureUploadsDir() {
   return dir;
 }
 
+function ensurePatientDraftDir(patientId: string) {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return { absPath: dir, dateStr };
+}
+
 @ApiTags('Visits')
 @Controller('visits')
 @UseGuards(JwtAuthGuard)
@@ -62,6 +69,39 @@ export class VisitsController {
     @Request() req: AuthenticatedRequest,
   ) {
     return this.visitsService.findAll(query, req.user.branchId);
+  }
+
+  // Draft photo upload before a visit exists
+  @Post('photos/draft/:patientId')
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('files', 6, {
+    storage: diskStorage({
+      destination: (req: any, _file: any, cb: any) => {
+        const { absPath } = ensurePatientDraftDir(req.params.patientId);
+        cb(null, absPath);
+      },
+      filename: (_req: any, file: any, cb: any) => {
+        const unique = randomBytes(8).toString('hex');
+        cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
+      },
+    }),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  }))
+  async uploadDraftPhotos(
+    @Param('patientId') patientId: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ) {
+    const { dateStr } = ensurePatientDraftDir(patientId);
+    const relPaths = (files || []).map(f => `/uploads/patients/${patientId}/${dateStr}/${f.filename}`);
+    // Return sanitized/current list for today
+    return this.visitsService.listDraftAttachments(patientId, dateStr);
+  }
+
+  @Get('photos/draft/:patientId')
+  listDraftPhotos(@Param('patientId') patientId: string) {
+    // Default to today's folder
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
 
   @Get('statistics')
@@ -148,11 +188,6 @@ export class VisitsController {
   @Get(':id/photos')
   listPhotos(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.visitsService.listAttachments(id, req.user.branchId);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.visitsService.remove(id, req.user.branchId);
   }
 
   // Speech-to-text proxy to OpenAI Whisper

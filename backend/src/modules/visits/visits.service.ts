@@ -767,6 +767,37 @@ export class VisitsService {
     return Array.from(new Set(results));
   }
 
+  async listDraftAttachments(patientId: string, dateStr: string) {
+    const baseDir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
+    let files: string[] = [];
+    try {
+      const entries = fs.readdirSync(baseDir, { withFileTypes: true });
+      files = entries
+        .filter(e => e.isFile())
+        .map(e => `/uploads/patients/${patientId}/${dateStr}/${e.name}`);
+    } catch {
+      files = [];
+    }
+    // Sanitize and sort by mtime
+    const sanitized = this.sanitizeAttachmentPaths(files);
+    const items = sanitized
+      .map(url => {
+        const absolutePath = join(process.cwd(), url.replace(/^\//, ''));
+        let uploadedAt: string | null = null;
+        try {
+          const stat = fs.statSync(absolutePath);
+          uploadedAt = new Date(stat.mtimeMs).toISOString();
+        } catch {}
+        return { url, uploadedAt };
+      })
+      .sort((a, b) => {
+        const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+        const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+        return at - bt;
+      });
+    return { attachments: sanitized, items };
+  }
+
   async addAttachments(visitId: string, relPaths: string[], branchId: string) {
     const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
