@@ -15,13 +15,21 @@ import { UpdatePatientDto } from './dto/update-patient.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { LinkPatientUserDto } from './dto/link-patient-user.dto';
 
+interface AuthenticatedRequest {
+  user: {
+    id: string;
+    branchId: string;
+    role: string;
+  };
+}
+
 @Controller('patients')
 @UseGuards(JwtAuthGuard)
 export class PatientsController {
   constructor(private readonly patientsService: PatientsService) {}
 
   @Post()
-  create(@Body() createPatientDto: CreatePatientDto, @Request() req) {
+  create(@Body() createPatientDto: CreatePatientDto, @Request() req: AuthenticatedRequest) {
     return this.patientsService.create(createPatientDto, req.user.branchId);
   }
 
@@ -31,7 +39,7 @@ export class PatientsController {
     @Query('limit') limit = 10,
     @Query('search') search?: string,
     @Query('gender') gender?: string,
-    @Request() req,
+    @Request() req: AuthenticatedRequest,
   ) {
     // Validate and sanitize inputs
     const pageNum = Math.max(1, +page || 1);
@@ -51,27 +59,27 @@ export class PatientsController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.patientsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.findOne(id, req.user.branchId);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdatePatientDto) {
-    return this.patientsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdatePatientDto, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.update(id, dto, req.user.branchId);
   }
 
   @Post(':id/link-user')
-  linkUser(@Param('id') id: string, @Body() dto: LinkPatientUserDto, @Request() req) {
+  linkUser(@Param('id') id: string, @Body() dto: LinkPatientUserDto, @Request() req: AuthenticatedRequest) {
     return this.patientsService.linkUser(id, dto, req.user.branchId);
   }
 
   @Post(':id/unlink-user')
-  unlinkUser(@Param('id') id: string, @Request() req) {
+  unlinkUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.patientsService.unlinkUser(id, req.user.branchId);
   }
 
   @Get(':id/portal-user')
-  getPortalUser(@Param('id') id: string, @Request() req) {
+  getPortalUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.patientsService.getPortalUser(id, req.user.branchId);
   }
 }

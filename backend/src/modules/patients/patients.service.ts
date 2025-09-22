@@ -79,9 +79,9 @@ export class PatientsService {
     };
   }
 
-  async findOne(id: string) {
-    const patient = await this.prisma.patient.findUnique({
-      where: { id },
+  async findOne(id: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id, branchId },
       include: {
         appointments: {
           orderBy: { date: 'desc' },
@@ -98,7 +98,10 @@ export class PatientsService {
     return patient;
   }
 
-  async update(id: string, updatePatientDto: UpdatePatientDto) {
+  async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
+    // Ensure patient exists in this branch
+    await this.findOne(id, branchId);
+
     const { dob, ...rest } = updatePatientDto as any;
     return this.prisma.patient.update({
       where: { id },
