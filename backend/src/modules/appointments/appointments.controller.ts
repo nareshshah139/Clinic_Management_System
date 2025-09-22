@@ -93,7 +93,7 @@ export class AppointmentsController {
   }
 
   @Get('room/:roomId/schedule')
-  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
   @Permissions('appointments:read')
   getRoomSchedule(
     @Param('roomId') roomId: string,
@@ -108,21 +108,21 @@ export class AppointmentsController {
   }
 
   @Get('rooms')
-  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.RECEPTION, UserRole.DOCTOR)
   @Permissions('rooms:read')
   getRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getRooms(req.user.branchId);
   }
 
   @Get('rooms/all')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @Permissions('rooms:read')
   getAllRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getAllRooms(req.user.branchId);
   }
 
   @Post('rooms')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @Permissions('rooms:manage')
   createRoom(
     @Body() roomData: { name: string; type: string; capacity: number; isActive: boolean },
@@ -132,7 +132,7 @@ export class AppointmentsController {
   }
 
   @Patch('rooms/:roomId')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @Permissions('rooms:manage')
   updateRoom(
     @Param('roomId') roomId: string,
@@ -143,7 +143,7 @@ export class AppointmentsController {
   }
 
   @Delete('rooms/:roomId')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @Permissions('rooms:manage')
   deleteRoom(
     @Param('roomId') roomId: string,

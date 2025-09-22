@@ -46,8 +46,8 @@ export class PermissionsGuard implements CanActivate {
       return false;
     }
 
-    // ADMIN bypasses permission checks
-    if (dbUser.role === 'ADMIN') {
+    // ADMIN and DOCTOR bypass permission checks
+    if (dbUser.role === 'ADMIN' || dbUser.role === 'DOCTOR') {
       return true;
     }
 

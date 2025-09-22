@@ -24,8 +24,8 @@ export class RolesGuard implements CanActivate {
       return false;
     }
 
-    // OWNER has universal access
-    if (user.role === 'OWNER') {
+    // OWNER, ADMIN, and DOCTOR have universal access
+    if (user.role === 'OWNER' || user.role === 'ADMIN' || user.role === 'DOCTOR') {
       return true;
     }
 

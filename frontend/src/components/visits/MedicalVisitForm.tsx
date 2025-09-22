@@ -155,6 +155,18 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
    
+  const getAuthToken = (): string | null => {
+    if (typeof window === 'undefined') return null;
+    const localToken = localStorage.getItem('auth_token');
+    if (localToken) return localToken;
+    try {
+      const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    } catch {
+      return null;
+    }
+  };
+ 
   const startVoiceInput = async (fieldName: string) => {
     // Toggle: if already recording the same field, stop and finalize
     if (isListening && activeVoiceField === fieldName && recorderRef.current && recorderRef.current.state !== 'inactive') {
@@ -183,8 +195,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         recorderRef.current = null;
         const blob = new Blob(chunks, { type: 'audio/webm' });
         try {
-          const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+          const token = getAuthToken();
+          const baseUrl = '/api';
           const fd = new FormData();
           fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
           const res = await fetch(`${baseUrl}/visits/transcribe`, {
@@ -193,6 +205,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
             credentials: 'include',
           });
+          if (!res.ok) {
+            let errText = '';
+            try { errText = await res.text(); } catch {}
+            console.error('Transcription request failed:', res.status, errText);
+            alert(`Transcription failed (${res.status}).`);
+            return;
+          }
           const data = await res.json();
           const text = (data?.text as string) || '';
           if (text) {
@@ -211,8 +230,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 break;
             }
           }
-        } catch {
-          // ignore
+        } catch (e) {
+          console.error('Speech-to-text error:', e);
+          alert('Speech-to-text failed. Please try again.');
         } finally {
           setIsListening(false);
           setActiveVoiceField(null);
@@ -350,8 +370,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         activeVisitId = (newVisit as any).id;
         setVisitId(activeVisitId);
       }
-      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || '';
+      const token = getAuthToken();
+      const baseUrl = '/api';
       const fd = new FormData();
       Array.from(files).forEach(f => fd.append('files', f));
       await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {

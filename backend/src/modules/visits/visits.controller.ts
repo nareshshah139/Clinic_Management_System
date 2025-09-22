@@ -24,6 +24,7 @@ import { extname, join } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import type { Express } from 'express';
+import { Logger } from '@nestjs/common';
 
 interface AuthenticatedRequest {
   user: {
@@ -45,6 +46,7 @@ function ensureUploadsDir() {
 @ApiBearerAuth()
 export class VisitsController {
   constructor(private readonly visitsService: VisitsService) {}
+  private readonly logger = new Logger(VisitsController.name);
 
   @Post()
   create(
@@ -64,9 +66,9 @@ export class VisitsController {
 
   @Get('statistics')
   getStatistics(
+    @Request() req: AuthenticatedRequest,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Request() req: AuthenticatedRequest,
   ) {
     return this.visitsService.getVisitStatistics(
       req.user.branchId,
@@ -126,8 +128,8 @@ export class VisitsController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(FilesInterceptor('files', 6, {
     storage: diskStorage({
-      destination: (_req, _file, cb) => cb(null, ensureUploadsDir()),
-      filename: (_req, file, cb) => {
+      destination: (_req: any, _file: any, cb: any) => cb(null, ensureUploadsDir()),
+      filename: (_req: any, file: any, cb: any) => {
         const unique = randomBytes(8).toString('hex');
         cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
       },
@@ -161,19 +163,26 @@ export class VisitsController {
     @UploadedFile() file: Express.Multer.File,
     @Request() _req: AuthenticatedRequest,
   ) {
+    this.logger.log(
+      `transcribeAudio: received file name=${file?.originalname || 'n/a'} size=${file?.size || 0} type=${file?.mimetype || 'n/a'}`,
+    );
     if (!file || !file.buffer) {
+      this.logger.warn('transcribeAudio: no file buffer provided');
       return { text: '' };
     }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
+      this.logger.error('OPENAI_API_KEY is not configured');
       throw new Error('OPENAI_API_KEY is not configured');
     }
-    // Build multipart form-data for OpenAI Whisper
-    const form = new FormData();
-    const blob = new Blob([file.buffer], { type: file.mimetype || 'audio/webm' });
-    form.append('file', blob, file.originalname || 'audio.webm');
-    form.append('model', 'whisper-1');
     try {
+      // Build multipart form-data for OpenAI Whisper using native undici FormData/Blob
+      const form = new FormData();
+      const blob = new Blob([file.buffer], { type: file.mimetype || 'audio/webm' });
+      form.append('file', blob, file.originalname || 'audio.webm');
+      form.append('model', 'whisper-1');
+
+      this.logger.log('transcribeAudio: sending audio to OpenAI Whisper');
       const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
@@ -181,13 +190,22 @@ export class VisitsController {
         } as any,
         body: form as any,
       });
+      this.logger.log(`transcribeAudio: OpenAI responded status=${resp.status}`);
       if (!resp.ok) {
         const errText = await resp.text();
-        throw new Error(`OpenAI error: ${resp.status} ${errText}`);
+        this.logger.error(`OpenAI error response: ${resp.status} ${errText}`);
+        throw new Error(`OpenAI error: ${resp.status}`);
       }
       const data = await resp.json();
-      return { text: (data?.text as string) || '' };
+      const text = ((data as any)?.text as string) || '';
+      if (!text) {
+        this.logger.warn('transcribeAudio: received empty transcript text');
+      } else {
+        this.logger.log(`transcribeAudio: transcript length=${text.length}`);
+      }
+      return { text };
     } catch (e: any) {
+      this.logger.error(`transcribeAudio failed: ${e?.stack || e?.message || e}`);
       return { text: '' };
     }
   }
