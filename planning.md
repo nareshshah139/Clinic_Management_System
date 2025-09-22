@@ -1080,3 +1080,29 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 [2025-09-21T05:10:38Z] Feature: Doctor workflow optimization - patient context sidebar, smart templates, voice input, seamless appointment transitions.
 [2025-09-21T05:22:09Z] Feature: Smart Procedures Management - Dynamic machine forms, comprehensive metrics, tabular parameter input, skin type assessment, and intelligent workflow.
 [2025-09-21T05:32:21Z] Feature: Prescription-Pharmacy Integration - Seamless workflow from prescription creation to pharmacy billing with auto-populated sticky drugs.
+
+### September 2025: Voice Transcription (Whisper) Integration Stabilized
+**Achievement:** Backend speech-to-text endpoint stabilized; frontend mic input flows text into SOAP fields without errors.
+**Impact:**
+- Resolves 400 "Could not parse multipart form" and `form-data` stream errors.
+- Doctors can reliably dictate notes; improved speed and accuracy in documentation.
+
+**Technical Highlights:**
+- Switched to Node 22 native `fetch`, `FormData`, and `Blob` in `VisitsController.transcribeAudio`.
+- Removed `form-data` package usage (eliminated `DelayedStream` errors like `source.on is not a function`).
+- Constructed multipart body with native `Blob([file.buffer], { type })`; appended via `form.append('file', blob, filename)`.
+- Improved error logging with full stack traces; controller now returns `{ text: '' }` on failure instead of 500.
+- Fixed backend `package.json` invalid trailing field breaking config, enabling clean start.
+- Ensured `OPENAI_API_KEY` is single-line; restored `DATABASE_URL` in `.env` (not committed to git).
+
+**Verification (logs):**
+- `transcribeAudio: received file name=... size=... type=audio/webm`
+- `transcribeAudio: sending audio to OpenAI Whisper`
+- `transcribeAudio: OpenAI responded status=200`
+- `transcribeAudio: transcript length=...`
+
+**How to Use:**
+- Frontend Visits page → press mic → speak 2–3 seconds → stop; text appends to active field (Subjective/Objective/Assessment/Plan).
+- Backend endpoint: `POST /visits/transcribe` (multipart/form-data, field `file`).
+
+*Last updated: September 2025 - Whisper transcription stabilized with native FormData/Blob; logging and env fixes applied.*
