@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History, Calendar, ChevronUp, ChevronDown } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import VisitPhotos from '@/components/visits/VisitPhotos';
 
 interface Props {
   patientId: string;
@@ -21,14 +22,6 @@ interface Props {
   visitDate?: string; // ISO string; falls back to today if not provided
   appointmentId?: string;
   appointmentData?: any;
-}
-
-interface VisitPhoto {
-  id: string;
-  url: string;
-  description: string;
-  capturedBy: string;
-  capturedAt: string;
 }
 
 interface PatientHistory {
@@ -77,34 +70,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [painScore, setPainScore] = useState('');
   const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
   
-  // Photos
-  const [photos, setPhotos] = useState<VisitPhoto[]>([]);
-  
-  // Ensure camera is stopped on unmount and when the page loses visibility
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      if (document.visibilityState !== 'visible') {
-        // stopCamera(); // Removed camera stop
-      }
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      // stopCamera(); // Removed camera stop
-    };
-  }, []);
-
-  useEffect(() => {
-    const loadAttachments = async () => {
-      if (!visitId) return;
-      try {
-        const res: any = await apiClient.get(`/visits/${visitId}/photos`);
-        const atts: string[] = (res?.attachments || res?.data || []) as string[];
-        setPhotos(atts.map((path) => ({ id: path, url: path, description: path.split('/').pop() || '', capturedBy: userRole, capturedAt: '' })));
-      } catch {}
-    };
-    void loadAttachments();
-  }, [visitId]);
+  // Complaints (Nurse+ level - 35-40%)
+  const [complaints, setComplaints] = useState<string[]>([]);
 
   // Doctor level (remaining 75-80%)
   const [subjective, setSubjective] = useState('');
@@ -348,42 +315,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
   };
 
-  // Removed camera functionality
-  const onUploadPhotos = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    try {
-      let activeVisitId = visitId;
-      if (!activeVisitId) {
-        const newVisit = await apiClient.createVisit(buildPayload());
-        activeVisitId = (newVisit as any).id;
-        setVisitId(activeVisitId);
-      }
-      const baseUrl = '/api';
-      const fd = new FormData();
-      Array.from(files).forEach(f => fd.append('files', f));
-      await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {
-        method: 'POST',
-        body: fd,
-        credentials: 'include',
-      });
-      const res: any = await apiClient.get(`/visits/${activeVisitId}/photos`);
-      const atts: string[] = (res?.attachments || res?.data || []) as string[];
-      setPhotos(atts.map((p) => ({ id: p, url: p, description: p.split('/').pop() || '', capturedBy: userRole, capturedAt: '' })));
-    } catch (e) {
-      alert('Failed to upload photos');
-    }
-  };
-
-  const removePhoto = (photoId: string) => {
-    setPhotos(prev => prev.filter(p => p.id !== photoId));
-  };
-
-  const toggleSet = (s: Set<string>, value: string, setter: (next: Set<string>) => void) => {
-    const next = new Set(s);
-    if (next.has(value)) next.delete(value); else next.add(value);
-    setter(next);
-  };
-
   // Section completion tracking
   const markSectionComplete = (section: string) => {
     setCompletedSections(prev => new Set([...prev, section]));
@@ -406,9 +337,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       appointmentId, // Include appointment ID if available
       visitNumber: currentVisitNumber,
       status: visitStatus,
-      complaints: (subjective && subjective.trim()) ?
+      complaints: (complaints.length > 0 ? complaints : (subjective && subjective.trim()) ?
         [{ complaint: subjective }] :
-        [{ complaint: 'General consultation' }],
+        [{ complaint: 'General consultation' }]),
       examination: {
         ...(objective ? { generalAppearance: objective } : {}),
         dermatology: {
@@ -451,12 +382,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         height: vitals.height ? Number(vitals.height) : undefined,
         respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
       },
-      photos: photos.map(p => ({
-        url: p.url,
-        description: p.description,
-        capturedBy: p.capturedBy,
-        capturedAt: p.capturedAt,
-      })),
+      photos: [], // Photos are now managed by VisitPhotos component
       metadata: {
         capturedBy: userRole,
         sections: Array.from(completedSections),
@@ -686,7 +612,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">{photos.length} Photos</Badge>
+              <Badge variant="outline">0 Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
@@ -741,7 +667,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Photos Captured:</span>
-                      <span className="text-sm font-medium">{photos.length}</span>
+                      <span className="text-sm font-medium">0</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Captured By:</span>
@@ -916,52 +842,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
               <TabsContent value="photos" className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Visit Photos ({photos.length})</h3>
-                  <div className="flex gap-2">
-                    <input type="file" multiple accept="image/*" onChange={(e) => onUploadPhotos(e.target.files)} />
-                  </div>
-                </div>
-
-                {/* Photos Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {photos.map((photo) => (
-                    <div key={photo.id} className="relative group">
-                      <img 
-                        src={photo.url} 
-                        alt={photo.description}
-                        className="w-full h-32 object-contain bg-black rounded-lg border"
-                      />
-                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all rounded-lg flex items-center justify-center">
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => removePhoto(photo.id)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="mt-2">
-                        <p className="text-xs text-gray-600 truncate">{photo.description}</p>
-                        <p className="text-xs text-gray-400">By: {photo.capturedBy}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {photos.length === 0 && (
+                {visitId ? (
+                  <VisitPhotos visitId={visitId} />
+                ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <Image className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No photos uploaded yet</p>
-                    <p className="text-sm">Upload photos to document the visit</p>
+                    <FileImage className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                    <p>Save the visit first to upload photos</p>
                   </div>
                 )}
-
-                <div className="flex justify-end">
-                  <Button onClick={() => markSectionComplete('photos')}>
-                    Mark Photos Complete
-                  </Button>
-                </div>
               </TabsContent>
             )}
 
