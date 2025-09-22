@@ -65,9 +65,12 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded }: Props) 
     // If visitId is temp, create a real visit first
     if (visitId === 'temp' && onVisitNeeded) {
       try {
+        console.log('Creating visit for photo upload...');
         actualVisitId = await onVisitNeeded();
-      } catch (error) {
-        alert('Please fill out the visit details before uploading photos');
+        console.log('Visit created successfully:', actualVisitId);
+      } catch (error: any) {
+        console.error('Failed to create visit for photo upload:', error);
+        alert(`Failed to create visit for photo upload: ${error.message || error}`);
         return;
       }
     }
@@ -87,7 +90,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded }: Props) 
       await load();
       if (inputRef.current) inputRef.current.value = '';
       if (cameraRef.current) cameraRef.current.value = '';
-    } catch (e) {
+    } catch (e: any) {
       console.error('Upload error:', e);
       alert('Failed to upload photos. Please try again.');
     } finally {
