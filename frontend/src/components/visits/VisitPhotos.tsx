@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -9,9 +9,13 @@ interface Props {
   apiBase?: string; // optional override
 }
 
+interface PhotoItem { url: string; uploadedAt?: string | null }
+
 export default function VisitPhotos({ visitId, apiBase }: Props) {
-  const [files, setFiles] = useState<string[]>([]);
+  const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState<number>(0);
+  const [compareMode, setCompareMode] = useState<boolean>(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
@@ -22,7 +26,16 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
       credentials: 'include',
     });
     const data = await res.json();
-    setFiles(data.attachments || []);
+    const incoming: PhotoItem[] = (data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u }));
+    // Sort by uploadedAt ascending, fallback to URL alphabetical if missing
+    incoming.sort((a, b) => {
+      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      if (at === bt) return a.url.localeCompare(b.url);
+      return at - bt;
+    });
+    setItems(incoming);
+    setActiveIndex(0);
   };
 
   useEffect(() => { void load(); }, [visitId]);
@@ -50,29 +63,79 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
     }
   };
 
+  const active = items[activeIndex] || null;
+  const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Before / After Photos</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle>Before / After Photos</CardTitle>
+          <div className="space-x-2">
+            <Button variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>Upload</Button>
+            <Button variant="outline" size="sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>Camera</Button>
+            <Button variant={compareMode ? 'default' : 'outline'} size="sm" onClick={() => setCompareMode(v => !v)}>
+              {compareMode ? 'Compare: On' : 'Compare: Off'}
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div>
-          <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
-          <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
-          <Button variant="outline" size="sm" disabled={uploading} onClick={() => inputRef.current?.click()}>Upload from device</Button>
-          <Button className="ml-2" size="sm" disabled={uploading} onClick={() => cameraRef.current?.click()}>Take photo</Button>
-        </div>
-        {files.length === 0 ? (
+        <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
+
+        {items.length === 0 ? (
           <div className="text-sm text-gray-500">No photos uploaded yet</div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {files.map((p) => (
-              <a key={p} href={p} target="_blank" rel="noreferrer">
-                <div className="relative w-full h-48 bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  <img src={p} alt="visit" className="max-h-full max-w-full object-contain" />
+          <div className="space-y-3">
+            {/* Main viewer */}
+            {!compareMode ? (
+              <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
+                {active ? (
+                  <img src={active.url} alt="visit" className="max-h-full max-w-full object-contain" />
+                ) : null}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
+                  {previous ? <img src={previous.url} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
                 </div>
-              </a>
-            ))}
+                <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
+                  {active ? <img src={active.url} alt="after" className="max-h-full max-w-full object-contain" /> : null}
+                </div>
+              </div>
+            )}
+
+            {/* Meta */}
+            <div className="text-xs text-gray-500 flex items-center justify-between">
+              <div>
+                {active?.uploadedAt ? `Uploaded: ${new Date(active.uploadedAt).toLocaleString()}` : ''}
+              </div>
+              <div className="space-x-2">
+                <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))}>Prev</Button>
+                <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.min(items.length - 1, i + 1))}>Next</Button>
+              </div>
+            </div>
+
+            {/* Scrollable thumbnail strip */}
+            <div className="w-full overflow-x-auto">
+              <div className="flex gap-2 py-2">
+                {items.map((it, idx) => (
+                  <button
+                    key={it.url}
+                    type="button"
+                    onClick={() => setActiveIndex(idx)}
+                    className={`relative h-20 w-28 flex-shrink-0 rounded border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-blue-500' : ''}`}
+                    title={it.uploadedAt ? new Date(it.uploadedAt).toLocaleString() : it.url}
+                  >
+                    <img src={it.url} alt="thumb" className="h-full w-full object-cover" />
+                    <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
+                      {it.uploadedAt ? new Date(it.uploadedAt).toLocaleDateString() : ''}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
       </CardContent>

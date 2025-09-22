@@ -796,6 +796,21 @@ export class VisitsService {
         await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(sanitized) } });
       } catch {}
     }
-    return { attachments: sanitized };
+    const items = sanitized
+      .map(url => {
+        const absolutePath = join(process.cwd(), url.replace(/^\//, ''));
+        let uploadedAt: string | null = null;
+        try {
+          const stat = fs.statSync(absolutePath);
+          uploadedAt = new Date(stat.mtimeMs).toISOString();
+        } catch {}
+        return { url, uploadedAt };
+      })
+      .sort((a, b) => {
+        const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+        const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+        return at - bt;
+      });
+    return { attachments: sanitized, items };
   }
 }
