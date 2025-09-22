@@ -878,14 +878,19 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
               <TabsContent value="photos" className="space-y-4">
-                {visitId ? (
-                  <VisitPhotos visitId={visitId} />
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <FileImage className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                    <p>Save the visit first to upload photos</p>
-                  </div>
-                )}
+                <VisitPhotos 
+                  visitId={visitId || 'temp'} 
+                  onVisitNeeded={async () => {
+                    if (!visitId) {
+                      const payload = buildPayload();
+                      const newVisit = await apiClient.createVisit(payload);
+                      const newVisitId = (newVisit as any).id;
+                      setVisitId(newVisitId);
+                      return newVisitId;
+                    }
+                    return visitId;
+                  }}
+                />
               </TabsContent>
             )}
 

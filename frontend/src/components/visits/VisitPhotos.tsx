@@ -8,11 +8,12 @@ import { Camera, Upload, Image as ImageIcon } from 'lucide-react';
 interface Props {
   visitId: string;
   apiBase?: string; // optional override
+  onVisitNeeded?: () => Promise<string>; // Callback to create visit if needed
 }
 
 interface PhotoItem { url: string; uploadedAt?: string | null }
 
-export default function VisitPhotos({ visitId, apiBase }: Props) {
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded }: Props) {
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -23,6 +24,12 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
   const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '';
 
   const load = async () => {
+    // Don't try to load if visitId is temp
+    if (visitId === 'temp') {
+      setItems([]);
+      return;
+    }
+    
     try {
       const res = await fetch(`${baseUrl}/visits/${visitId}/photos`, {
         credentials: 'include',
@@ -52,11 +59,24 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
   const onUpload = async (evt: React.ChangeEvent<HTMLInputElement>) => {
     const f = evt.target.files;
     if (!f || f.length === 0) return;
+    
+    let actualVisitId = visitId;
+    
+    // If visitId is temp, create a real visit first
+    if (visitId === 'temp' && onVisitNeeded) {
+      try {
+        actualVisitId = await onVisitNeeded();
+      } catch (error) {
+        alert('Please fill out the visit details before uploading photos');
+        return;
+      }
+    }
+    
     const fd = new FormData();
     Array.from(f).forEach(file => fd.append('files', file));
     try {
       setUploading(true);
-      const response = await fetch(`${baseUrl}/visits/${visitId}/photos`, {
+      const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
         method: 'POST',
         body: fd,
         credentials: 'include',
