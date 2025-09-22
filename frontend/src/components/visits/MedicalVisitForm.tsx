@@ -39,7 +39,11 @@ import {
   XCircle,
   Printer,
   Camera,
-  Upload
+  Upload,
+  ChevronUp,
+  ChevronDown,
+  History,
+  Image
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
