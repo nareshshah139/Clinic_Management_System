@@ -40,10 +40,25 @@ export class AuthController {
     const { access_token } = await this.authService.login(user);
     res.cookie('auth_token', access_token, {
       httpOnly: true,
-      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
     return { access_token, user };
+  }
+
+  @Public()
+  @Post('logout')
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.cookie('auth_token', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      expires: new Date(0),
+    });
+    return { success: true };
   }
 
   @Get('statistics')

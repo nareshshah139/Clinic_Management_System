@@ -18,9 +18,7 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
   const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '';
 
   const load = async () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     const res = await fetch(`${baseUrl}/visits/${visitId}/photos`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       credentials: 'include',
     });
     const data = await res.json();
@@ -30,7 +28,6 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
   useEffect(() => { void load(); }, [visitId]);
 
   const onUpload = async (evt: React.ChangeEvent<HTMLInputElement>) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
     const f = evt.target.files;
     if (!f || f.length === 0) return;
     const fd = new FormData();
@@ -40,7 +37,6 @@ export default function VisitPhotos({ visitId, apiBase }: Props) {
       await fetch(`${baseUrl}/visits/${visitId}/photos`, {
         method: 'POST',
         body: fd,
-        headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
         credentials: 'include',
       });
       await load();

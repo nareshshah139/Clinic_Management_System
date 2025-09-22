@@ -155,17 +155,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
    
-  const getAuthToken = (): string | null => {
-    if (typeof window === 'undefined') return null;
-    const localToken = localStorage.getItem('auth_token');
-    if (localToken) return localToken;
-    try {
-      const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
-      return match ? decodeURIComponent(match[1]) : null;
-    } catch {
-      return null;
-    }
-  };
+  // Do not access JWT on client; rely on HttpOnly cookie sent automatically
  
   const startVoiceInput = async (fieldName: string) => {
     // Toggle: if already recording the same field, stop and finalize
@@ -195,41 +185,39 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         recorderRef.current = null;
         const blob = new Blob(chunks, { type: 'audio/webm' });
         try {
-          const token = getAuthToken();
-          const baseUrl = '/api';
-          const fd = new FormData();
-          fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
-          const res = await fetch(`${baseUrl}/visits/transcribe`, {
-            method: 'POST',
-            body: fd,
-            headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
-            credentials: 'include',
-          });
-          if (!res.ok) {
-            let errText = '';
-            try { errText = await res.text(); } catch {}
-            console.error('Transcription request failed:', res.status, errText);
-            alert(`Transcription failed (${res.status}).`);
-            return;
-          }
-          const data = await res.json();
-          const text = (data?.text as string) || '';
-          if (text) {
-            switch (fieldName) {
-              case 'subjective':
-                setSubjective(prev => (prev ? prev + ' ' : '') + text);
-                break;
-              case 'objective':
-                setObjective(prev => (prev ? prev + ' ' : '') + text);
-                break;
-              case 'assessment':
-                setAssessment(prev => (prev ? prev + ' ' : '') + text);
-                break;
-              case 'plan':
-                setPlan(prev => (prev ? prev + ' ' : '') + text);
-                break;
-            }
-          }
+           const baseUrl = '/api';
+           const fd = new FormData();
+           fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
+           const res = await fetch(`${baseUrl}/visits/transcribe`, {
+             method: 'POST',
+             body: fd,
+             credentials: 'include',
+           });
+           if (!res.ok) {
+             let errText = '';
+             try { errText = await res.text(); } catch {}
+             console.error('Transcription request failed:', res.status, errText);
+             alert(`Transcription failed (${res.status}).`);
+             return;
+           }
+           const data = await res.json();
+           const text = (data?.text as string) || '';
+           if (text) {
+             switch (fieldName) {
+               case 'subjective':
+                 setSubjective(prev => (prev ? prev + ' ' : '') + text);
+                 break;
+               case 'objective':
+                 setObjective(prev => (prev ? prev + ' ' : '') + text);
+                 break;
+               case 'assessment':
+                 setAssessment(prev => (prev ? prev + ' ' : '') + text);
+                 break;
+               case 'plan':
+                 setPlan(prev => (prev ? prev + ' ' : '') + text);
+                 break;
+             }
+           }
         } catch (e) {
           console.error('Speech-to-text error:', e);
           alert('Speech-to-text failed. Please try again.');
@@ -370,14 +358,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         activeVisitId = (newVisit as any).id;
         setVisitId(activeVisitId);
       }
-      const token = getAuthToken();
       const baseUrl = '/api';
       const fd = new FormData();
       Array.from(files).forEach(f => fd.append('files', f));
       await fetch(`${baseUrl}/visits/${activeVisitId}/photos`, {
         method: 'POST',
         body: fd,
-        headers: token ? { Authorization: `Bearer ${token}` } as any : undefined,
         credentials: 'include',
       });
       const res: any = await apiClient.get(`/visits/${activeVisitId}/photos`);

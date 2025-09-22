@@ -13,40 +13,36 @@ export class ApiClient {
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
-    if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('auth_token');
-      if (!this.token && typeof document !== 'undefined') {
-        const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
-        this.token = match ? decodeURIComponent(match[1]) : null;
-      }
-    }
+    // Do not read tokens from localStorage or document.cookie; rely on HttpOnly cookie set by server
+    this.token = null;
   }
 
-  setToken(token: string) {
-    this.token = token;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('auth_token', token);
-      // Also set cookie for middleware
-      document.cookie = `auth_token=${token}; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax`;
-    }
+  // Legacy method retained as no-op for compatibility
+  setToken(_token: string) {
+    // Intentionally not storing tokens on client to reduce XSS/CSRF risk
+    this.token = null;
+  }
+
+  async logout() {
+    try {
+      await this.post('/auth/logout', {});
+    } catch {}
+    this.clearToken();
   }
 
   clearToken() {
     this.token = null;
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('auth_token');
-      // Clear cookie
-      document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      try { localStorage.removeItem('auth_token'); } catch {}
+      // Clear any legacy non-HttpOnly cookie that may exist
+      try { document.cookie = 'auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'; } catch {}
     }
   }
 
   // Auth
   async login(phone: string, password: string) {
-    const res = await this.post<{ access_token: string }>(`/auth/login`, { phone, password });
-    if (res?.access_token) {
-      this.setToken(res.access_token);
-    }
-    return res;
+    // Server sets HttpOnly cookie via Set-Cookie. Do not persist token client-side.
+    return this.post<{ access_token?: string; user: any }>(`/auth/login`, { phone, password });
   }
 
   private async request<T>(
@@ -59,19 +55,7 @@ export class ApiClient {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // Ensure Authorization header is set from memory or cookie
-    let activeToken = this.token;
-    if (!activeToken && typeof document !== 'undefined') {
-      const match = document.cookie.match(/(?:^|; )auth_token=([^;]+)/);
-      activeToken = match ? decodeURIComponent(match[1]) : null;
-      if (activeToken) {
-        this.token = activeToken;
-      }
-    }
-
-    if (activeToken) {
-      headers.Authorization = `Bearer ${activeToken}`;
-    }
+    // Do not attach Authorization header; rely on HttpOnly cookie
 
     const response = await fetch(url, {
       ...options,
