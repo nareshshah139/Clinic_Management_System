@@ -8,7 +8,39 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Camera, Upload, X, Eye, Clock, User, Stethoscope, FileText, Image, History, Calendar, ChevronUp, ChevronDown } from 'lucide-react';
+import { 
+  Mic, 
+  MicOff, 
+  Save, 
+  FileText, 
+  User, 
+  Clock, 
+  Stethoscope, 
+  Activity, 
+  Heart, 
+  Thermometer, 
+  Scale, 
+  Gauge,
+  Plus,
+  X,
+  Check,
+  AlertCircle,
+  Calendar,
+  MapPin,
+  Phone,
+  Mail,
+  FileImage,
+  Trash2,
+  Eye,
+  Download,
+  Edit,
+  Copy,
+  CheckCircle,
+  XCircle,
+  Printer,
+  Camera,
+  Upload
+} from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
