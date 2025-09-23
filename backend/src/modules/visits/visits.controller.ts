@@ -12,6 +12,7 @@ import {
   UseInterceptors,
   UploadedFiles,
   UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
@@ -45,6 +46,19 @@ function ensurePatientDraftDir(patientId: string) {
   const dir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   return { absPath: dir, dateStr };
+}
+
+function getUploadLimitBytes(): number {
+  const mb = Number(process.env.UPLOAD_MAX_FILE_MB || 25);
+  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 25;
+  return safeMb * 1024 * 1024;
+}
+
+function imageFileFilter(_req: any, file: any, cb: any) {
+  if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  if (allowed.includes(file.mimetype)) return cb(null, true);
+  return cb(new BadRequestException('Only image files are allowed'), false);
 }
 
 @ApiTags('Visits')
@@ -85,7 +99,8 @@ export class VisitsController {
         cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
       },
     }),
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: getUploadLimitBytes() },
+    fileFilter: imageFileFilter,
   }))
   async uploadDraftPhotos(
     @Param('patientId') patientId: string,
@@ -174,7 +189,8 @@ export class VisitsController {
         cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
       },
     }),
-    limits: { fileSize: 10 * 1024 * 1024 },
+    limits: { fileSize: getUploadLimitBytes() },
+    fileFilter: imageFileFilter,
   }))
   uploadPhotos(
     @Param('id') id: string,
