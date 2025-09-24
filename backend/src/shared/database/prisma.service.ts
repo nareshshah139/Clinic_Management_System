@@ -35,45 +35,46 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     super();
 
     const base = this as any;
+    const getRequestContext = () => this.requestContext.get();
 
     const extended = this.$extends({
       query: {
         $allModels: {
           async create({ model, args, query }: any) {
             const result = await query(args);
-            await audit({ base, model, operation: 'create', args, result, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'create', args, result, getCtx: getRequestContext });
             return result;
           },
           async update({ model, args, query }: any) {
             const oldValues = await tryFindOld(base, model, args);
             const result = await query(args);
-            await audit({ base, model, operation: 'update', args, result, oldValues, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'update', args, result, oldValues, getCtx: getRequestContext });
             return result;
           },
           async upsert({ model, args, query }: any) {
             const result = await query(args);
-            await audit({ base, model, operation: 'upsert', args, result, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'upsert', args, result, getCtx: getRequestContext });
             return result;
           },
           async delete({ model, args, query }: any) {
             const oldValues = await tryFindOld(base, model, args);
             const result = await query(args);
-            await audit({ base, model, operation: 'delete', args, result, oldValues, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'delete', args, result, oldValues, getCtx: getRequestContext });
             return result;
           },
           async createMany({ model, args, query }: any) {
             const result = await query(args);
-            await audit({ base, model, operation: 'createMany', args, result, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'createMany', args, result, getCtx: getRequestContext });
             return result;
           },
           async updateMany({ model, args, query }: any) {
             const result = await query(args);
-            await audit({ base, model, operation: 'updateMany', args, result, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'updateMany', args, result, getCtx: getRequestContext });
             return result;
           },
           async deleteMany({ model, args, query }: any) {
             const result = await query(args);
-            await audit({ base, model, operation: 'deleteMany', args, result, getCtx: () => this.requestContext.get() });
+            await audit({ base, model, operation: 'deleteMany', args, result, getCtx: getRequestContext });
             return result;
           },
         },

@@ -37,6 +37,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Room calendar view with hourly time slots and occupancy visualization
 - Comprehensive inventory data integration (79 items across categories)
 - Branch isolation fixes for inventory and room data
+- Visits module test suite aligned with JSON serialization contract; Prisma audit middleware now receives seeded request context in tests
 
 ❌ **Missing/Incomplete:**
 - Consents Module
@@ -82,7 +83,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 
 ### 1.2 Visits Module
 **Status:** ✅ **COMPLETED** (Production Ready)
-**Test Coverage:** 42 tests, 100% pass rate
+**Test Coverage:** 65 tests, 100% pass rate
 **Completion Date:** December 2024
 **Dependencies:** Appointments module (✅ Complete)
 

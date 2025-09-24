@@ -7,6 +7,7 @@ import { PrismaService } from '../../../shared/database/prisma.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { Language, UserRole, AppointmentStatus } from '@prisma/client';
 import { ValidationPipe } from '@nestjs/common';
+import { RequestContextData, RequestContextService } from '../../../shared/context/request-context.service';
 
 describe('Visits E2E Tests', () => {
   let app: INestApplication;
@@ -17,55 +18,109 @@ describe('Visits E2E Tests', () => {
   let patientId: string;
   let doctorId: string;
   let appointmentId: string;
+  let requestContextStub: RequestContextService;
+
+  const mockAuthGuard = {
+    canActivate: jest.fn(() => true),
+  };
 
   beforeAll(async () => {
-    // Create a separate Prisma instance for setup
-    setupPrisma = new PrismaService();
-    await setupPrisma.onModuleInit();
-    
-    // Setup test data first (before creating the app)
-    await setupTestData();
-    
-    const mockAuthGuard = {
-      canActivate: jest.fn(() => true),
-    };
+    let store: RequestContextData | undefined;
+    requestContextStub = {
+      run: <T>(data: RequestContextData, callback: () => T) => {
+        const previous = store;
+        store = data;
+        const finalize = () => {
+          store = previous;
+        };
+
+        try {
+          const result = callback();
+          if (result && typeof (result as any).then === 'function') {
+            return (result as Promise<T>)
+              .finally(finalize) as unknown as T;
+          }
+          finalize();
+          return result;
+        } catch (error) {
+          finalize();
+          throw error;
+        }
+      },
+      get: () => store,
+    } as unknown as RequestContextService;
+
+    setupPrisma = new PrismaService(requestContextStub);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [VisitsModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(prisma)
+      .useValue(setupPrisma)
+      .overrideProvider(RequestContextService)
+      .useValue(requestContextStub)
       .overrideGuard(JwtAuthGuard)
       .useValue(mockAuthGuard)
       .compile();
 
     app = moduleFixture.createNestApplication();
     prisma = moduleFixture.get<PrismaService>(PrismaService);
-    
+
+    await setupPrisma.$connect?.();
+
+    // Setup test data first (before creating the app)
+    await requestContextStub.run(
+      {
+        userId: 'seed-user',
+        branchId: null,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      },
+      () => setupTestData(),
+    );
+
     // Ensure DTO validation runs as in prod
     app.useGlobalPipes(new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: false,
       transform: true,
     }));
-    
+
     // Mock the JWT auth guard for testing with actual test data
     app.use((req: Request, res: Response, next: NextFunction) => {
-      (req as any).user = {
+      const user = {
         id: doctorId,
         branchId: branchId,
         role: 'DOCTOR',
       };
-      next();
+      (req as any).user = user;
+
+      return requestContextStub.run(
+        {
+          userId: user.id,
+          branchId: user.branchId,
+          ipAddress: req.ip ?? null,
+          userAgent: req.get('user-agent') ?? 'jest',
+        },
+        () => next(),
+      );
     });
-    
+
     await app.init();
   });
 
   afterAll(async () => {
     // Cleanup test data
-    await cleanupTestData();
-    await setupPrisma.$disconnect();
+    await runWithContext(
+      {
+        userId: 'seed-user',
+        branchId: branchId ?? null,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
+      },
+      () => cleanupTestData(),
+    );
+    await setupPrisma?.$disconnect?.();
     if (app) {
       await app.close();
     }
@@ -75,71 +130,94 @@ describe('Visits E2E Tests', () => {
     // Reset any test-specific data
   });
 
+  async function runWithContext<T>(ctx: RequestContextData, fn: () => Promise<T> | T): Promise<T> {
+    const result = requestContextStub.run(ctx, fn);
+    return await Promise.resolve(result as any);
+  }
+
   async function setupTestData() {
     const timestamp = Date.now();
     
-    // Create a test branch
-    const branch = await setupPrisma.branch.create({
-      data: {
-        name: `Test Clinic E2E ${timestamp}`,
-        address: '123 Test Street',
-        city: 'Test City',
-        state: 'Test State',
-        pincode: '123456',
-        phone: `987654321${timestamp % 10}`,
-        email: `test${timestamp}@clinic.com`,
+    // Create a test branch without branch-scoped context
+    const branch = await runWithContext(
+      {
+        userId: 'seed-user',
+        branchId: null,
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
       },
-    });
+      () => setupPrisma.branch.create({
+        data: {
+          name: `Test Clinic E2E ${timestamp}`,
+          address: '123 Test Street',
+          city: 'Test City',
+          state: 'Test State',
+          pincode: '123456',
+          phone: `987654321${timestamp % 10}`,
+          email: `test${timestamp}@clinic.com`,
+        },
+      }),
+    );
     branchId = branch.id;
 
-    // Create a test doctor
-    const doctor = await setupPrisma.user.create({
-      data: {
-        firstName: 'Dr. Test',
-        lastName: 'Doctor',
-        email: `doctor${timestamp}@test.com`,
-        password: '$2b$10$hashedpassword',
-        phone: `987654321${timestamp % 100}`,
-        role: UserRole.DOCTOR,
+    await runWithContext(
+      {
+        userId: 'seed-user',
         branchId,
-        employeeId: `DOC${timestamp}`,
-        designation: 'Senior Physician',
-        department: 'General Medicine',
+        ipAddress: '127.0.0.1',
+        userAgent: 'jest',
       },
-    });
-    doctorId = doctor.id;
+      async () => {
+      // Create a test doctor
+      const doctor = await setupPrisma.user.create({
+        data: {
+          firstName: 'Dr. Test',
+          lastName: 'Doctor',
+          email: `doctor${timestamp}@test.com`,
+          password: '$2b$10$hashedpassword',
+          phone: `987654321${timestamp % 100}`,
+          role: UserRole.DOCTOR,
+          branchId,
+          employeeId: `DOC${timestamp}`,
+          designation: 'Senior Physician',
+          department: 'General Medicine',
+        },
+      });
+      doctorId = doctor.id;
 
-    // Create a test patient
-    const patient = await setupPrisma.patient.create({
-      data: {
-        name: `John Doe ${timestamp}`,
-        phone: `987654321${timestamp % 1000}`,
-        email: `patient${timestamp}@test.com`,
-        dob: new Date('1990-01-01'),
-        gender: 'Male',
-        address: '456 Patient Street',
-        city: 'Test City',
-        state: 'Test State',
-        pincode: '123456',
-        branchId,
-      },
-    });
-    patientId = patient.id;
+      // Create a test patient
+      const patient = await setupPrisma.patient.create({
+        data: {
+          name: `John Doe ${timestamp}`,
+          phone: `987654321${timestamp % 1000}`,
+          email: `patient${timestamp}@test.com`,
+          dob: new Date('1990-01-01'),
+          gender: 'Male',
+          address: '456 Patient Street',
+          city: 'Test City',
+          state: 'Test State',
+          pincode: '123456',
+          branchId,
+        },
+      });
+      patientId = patient.id;
 
-    // Create a test appointment
-    const appointment = await setupPrisma.appointment.create({
-      data: {
-        patientId,
-        doctorId,
-        date: new Date(),
-        slot: '10:00-10:30',
-        tokenNumber: 1,
-        status: AppointmentStatus.SCHEDULED,
-        branchId,
-        notes: 'Test appointment for E2E testing',
+      // Create a test appointment
+      const appointment = await setupPrisma.appointment.create({
+        data: {
+          patientId,
+          doctorId,
+          date: new Date(),
+          slot: '10:00-10:30',
+          tokenNumber: 1,
+          status: AppointmentStatus.SCHEDULED,
+          branchId,
+          notes: 'Test appointment for E2E testing',
+        },
+      });
+      appointmentId = appointment.id;
       },
-    });
-    appointmentId = appointment.id;
+    );
 
     // For E2E tests, we'll mock the authentication
     // In a real scenario, you'd create a proper JWT token
@@ -147,6 +225,9 @@ describe('Visits E2E Tests', () => {
   }
 
   async function cleanupTestData() {
+    if (!branchId) {
+      return;
+    }
     try {
       // Clean up in reverse order of dependencies
       // Find visits by patient/doctor that belong to our test branch
