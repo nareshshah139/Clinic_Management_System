@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api';
-import { Zap, User, Activity, Settings, Save, Plus, Trash2 } from 'lucide-react';
+import { Zap, User, Activity, Settings, Save } from 'lucide-react';
+import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
 
 // Machine configurations
 const MACHINES = {
@@ -71,22 +72,59 @@ interface ProcedureData {
   shotCountEnd: number;
   
   // Machine & Parameters
-  selectedMachine: string;
-  machineParameters: Record<string, any>;
+  selectedMachine: keyof typeof MACHINES | '';
+  machineParameters: Record<string, Record<number, string>>;
   
   // Notes
   notes: string;
 }
 
+const parseJsonValue = <T,>(value: unknown): T | undefined => {
+  if (!value) return undefined;
+  if (typeof value === 'object') {
+    return value as T;
+  }
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const normalizeVisitResponse = (payload: ProcedureVisitResponse | VisitSummary[] | undefined): VisitSummary[] => {
+  if (!payload) return [];
+  if (Array.isArray(payload)) return payload;
+  const { visits, data } = payload;
+  if (Array.isArray(visits)) return visits;
+  if (Array.isArray(data)) return data;
+  return [];
+};
+
+const stringifyPatientName = (patient?: Patient | { name?: string } | null): string => {
+  if (!patient) return 'Unknown Patient';
+  if ('name' in patient && patient.name) return patient.name;
+  const first = (patient as Patient).firstName;
+  const last = (patient as Patient).lastName;
+  return [first, last].filter(Boolean).join(' ') || 'Unknown Patient';
+};
+
+const formatDoctorName = (doctor?: StaffSummary | null): string => {
+  if (!doctor) return 'Unknown Doctor';
+  return ['Dr.', doctor.firstName, doctor.lastName].filter(Boolean).join(' ');
+};
+
 export default function SmartProceduresPage() {
-  const [patients, setPatients] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [nurses, setNurses] = useState<any[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [doctors, setDoctors] = useState<StaffSummary[]>([]);
+  const [nurses, setNurses] = useState<StaffSummary[]>([]);
   const [procedures, setProcedures] = useState<ProcedureData[]>([]);
   const [activeTab, setActiveTab] = useState('new');
-  const [visits, setVisits] = useState<any[]>([]);
+  const [visits, setVisits] = useState<VisitSummary[]>([]);
   const [loadingVisits, setLoadingVisits] = useState(false);
-  const [selectedVisit, setSelectedVisit] = useState<any>(null);
+  const [selectedVisit, setSelectedVisit] = useState<VisitSummary | null>(null);
   
   // Form state
   const [procedureData, setProcedureData] = useState<ProcedureData>({
@@ -109,58 +147,71 @@ export default function SmartProceduresPage() {
 
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [patientsRes, doctorsRes, nursesRes] = await Promise.all([
         apiClient.getPatients({ limit: 100 }),
         apiClient.getUsers({ role: 'DOCTOR', limit: 50 }),
         apiClient.getUsers({ role: 'NURSE', limit: 50 })
       ]);
-      
-      const patientsData = (patientsRes as any)?.data || (patientsRes as any)?.patients || [];
-      const doctorsData = (doctorsRes as any)?.users || [];
-      const nursesData = (nursesRes as any)?.users || [];
-      
+
+      const patientsData = Array.isArray((patientsRes as unknown as { data?: Patient[] }).data)
+        ? ((patientsRes as unknown as { data?: Patient[] }).data as Patient[])
+        : Array.isArray((patientsRes as unknown as { patients?: Patient[] }).patients)
+          ? ((patientsRes as unknown as { patients?: Patient[] }).patients as Patient[])
+          : (Array.isArray(patientsRes) ? (patientsRes as Patient[]) : []);
+
+      const doctorsData = Array.isArray((doctorsRes as { users?: StaffSummary[] }).users)
+        ? ((doctorsRes as { users?: StaffSummary[] }).users as StaffSummary[])
+        : (Array.isArray(doctorsRes) ? (doctorsRes as StaffSummary[]) : []);
+
+      const nursesData = Array.isArray((nursesRes as { users?: StaffSummary[] }).users)
+        ? ((nursesRes as { users?: StaffSummary[] }).users as StaffSummary[])
+        : (Array.isArray(nursesRes) ? (nursesRes as StaffSummary[]) : []);
+
       setPatients(patientsData);
       setDoctors(doctorsData);
       setNurses(nursesData);
-      
-      // Set defaults
+
       if (patientsData.length > 0) {
-        setProcedureData(prev => ({ ...prev, patientId: patientsData[0].id }));
-        loadVisitsWithProcedures(patientsData[0].id);
+        setProcedureData((prev) => {
+          const updated = { ...prev, patientId: prev.patientId || patientsData[0].id };
+          if (!prev.patientId) {
+            void loadVisitsWithProcedures(patientsData[0].id);
+          }
+          return updated;
+        });
       }
+
       if (doctorsData.length > 0) {
-        setProcedureData(prev => ({ ...prev, doctorId: doctorsData[0].id }));
+        setProcedureData((prev) => ({ ...prev, doctorId: prev.doctorId || doctorsData[0].id }));
       }
+
       if (nursesData.length > 0) {
-        setProcedureData(prev => ({ ...prev, therapistId: nursesData[0].id }));
+        setProcedureData((prev) => ({ ...prev, therapistId: prev.therapistId || nursesData[0].id }));
       }
     } catch (error) {
       console.error('Failed to load data:', error);
     }
-  };
+  }, []);
 
-  const loadVisitsWithProcedures = async (patientId?: string) => {
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const loadVisitsWithProcedures = useCallback(async (patientId?: string) => {
     if (!patientId) return;
     
     setLoadingVisits(true);
     try {
-      console.log('🔍 Loading visits with procedures for patient:', patientId);
-      const response = await apiClient.get(`/visits?patientId=${patientId}&limit=50`);
-      const visitsData = (response as any)?.visits || (response as any)?.data || [];
-      
-      // Filter visits that have procedure data
-      const visitsWithProcedures = visitsData.filter((visit: any) => {
-        const plan = typeof visit.plan === 'string' ? JSON.parse(visit.plan) : visit.plan;
-        return plan?.dermatology?.procedures?.length > 0 || plan?.notes;
+      const response = await apiClient.get(`/visits`, { patientId, limit: 50 });
+      const visitsData = normalizeVisitResponse(response as ProcedureVisitResponse | VisitSummary[]);
+
+      const visitsWithProcedures = visitsData.filter((visit) => {
+        const plan = parseJsonValue<{ dermatology?: { procedures?: unknown[]; notes?: string } }>(visit.plan);
+        return Boolean(plan?.dermatology?.procedures?.length || plan?.notes);
       });
-      
-      console.log('📋 Found visits with procedures:', visitsWithProcedures.length);
+
       setVisits(visitsWithProcedures);
     } catch (error) {
       console.error('❌ Failed to load visits:', error);
@@ -168,12 +219,12 @@ export default function SmartProceduresPage() {
     } finally {
       setLoadingVisits(false);
     }
-  };
+  }, []);
 
-  const updateProcedureData = (field: keyof ProcedureData, value: any) => {
+  const updateProcedureData = (field: keyof ProcedureData, value: string | number | string[] | Record<string, Record<number, string>>) => {
     // If patient changes, reload their visits
     if (field === 'patientId' && value !== procedureData.patientId) {
-      loadVisitsWithProcedures(value);
+      void loadVisitsWithProcedures(value as string);
     }
     
     setProcedureData(prev => ({
@@ -261,12 +312,11 @@ export default function SmartProceduresPage() {
     }
   };
 
-  const loadProcedureFromVisit = (visit: any) => {
+  const loadProcedureFromVisit = (visit: VisitSummary) => {
     try {
-      const plan = typeof visit.plan === 'string' ? JSON.parse(visit.plan) : visit.plan;
-      const exam = typeof visit.exam === 'string' ? JSON.parse(visit.exam) : visit.exam;
-      const vitals = typeof visit.vitals === 'string' ? JSON.parse(visit.vitals) : visit.vitals;
-      
+      const plan = parseJsonValue<{ dermatology?: { procedures?: Array<Record<string, unknown>>; notes?: string } }>(visit.plan);
+      const exam = parseJsonValue<{ dermatology?: { skinType?: string } }>(visit.exam);
+
       const procedure = plan?.dermatology?.procedures?.[0];
       if (!procedure) return;
 
@@ -297,19 +347,26 @@ export default function SmartProceduresPage() {
     }
   };
  
-  const renderVisitProcedureCard = (visit: any) => {
+  const renderVisitProcedureCard = (visit: VisitSummary) => {
     try {
-      const plan = typeof visit.plan === 'string' ? JSON.parse(visit.plan) : visit.plan;
-      const procedure = plan?.dermatology?.procedures?.[0];
-      const patient = patients.find(p => p.id === visit.patientId);
-      const doctor = doctors.find(d => d.id === visit.doctorId);
+      const plan = parseJsonValue<{ dermatology?: { procedures?: Array<Record<string, unknown>>; notes?: string } }>(visit.plan);
+      const procedure = plan?.dermatology?.procedures?.[0] as
+        | {
+            fluence?: string;
+            spotSize?: string;
+            passes?: string | number;
+            type?: string;
+          }
+        | undefined;
+      const patient = patients.find((p) => p.id === visit.patientId);
+      const doctor = doctors.find((d) => d.id === visit.doctorId);
       
       return (
         <Card key={visit.id} className="cursor-pointer hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">{patient?.name || 'Unknown Patient'}</CardTitle>
+                <CardTitle className="text-base">{stringifyPatientName(patient)}</CardTitle>
                 <CardDescription>
                   {new Date(visit.createdAt).toLocaleDateString('en-US', {
                     year: 'numeric',
@@ -329,7 +386,7 @@ export default function SmartProceduresPage() {
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm text-gray-600">
                 <User className="h-4 w-4" />
-                <span>Dr. {doctor?.firstName} {doctor?.lastName}</span>
+                <span>{formatDoctorName(doctor)}</span>
               </div>
               
               {procedure && (

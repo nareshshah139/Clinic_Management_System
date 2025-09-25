@@ -3,6 +3,29 @@ import { VisitsController } from '../visits.controller';
 import { VisitsService } from '../visits.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { Language } from '@prisma/client';
+import { BadRequestException } from '@nestjs/common';
+
+jest.mock('../visits.controller', () => {
+  const actual = jest.requireActual('../visits.controller');
+  return {
+    ...actual,
+    __esModule: true,
+  };
+});
+
+jest.mock('file-type', () => ({ fileTypeFromBuffer: jest.fn(async () => ({ ext: 'jpeg', mime: 'image/jpeg' })) }));
+jest.mock('sharp', () => {
+  const mockPipeline = {
+    rotate: jest.fn().mockReturnThis(),
+    withMetadata: jest.fn().mockReturnThis(),
+    metadata: jest.fn().mockResolvedValue({ width: 100, height: 100 }),
+    toFormat: jest.fn().mockReturnThis(),
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('processed')),
+  };
+
+  const sharpMock = jest.fn(() => mockPipeline);
+  return sharpMock;
+});
 
 describe('VisitsController', () => {
   let controller: VisitsController;
@@ -14,11 +37,14 @@ describe('VisitsController', () => {
     findOne: jest.fn(),
     update: jest.fn(),
     complete: jest.fn(),
-    remove: jest.fn(),
+    addAttachments: jest.fn(),
+    listAttachments: jest.fn(),
+    listDraftAttachments: jest.fn(),
     getPatientVisitHistory: jest.fn(),
     getDoctorVisits: jest.fn(),
     getVisitStatistics: jest.fn(),
-  };
+    remove: jest.fn(),
+  } as Record<string, jest.Mock>;
 
   const mockRequest = {
     user: {
@@ -81,6 +107,8 @@ describe('VisitsController', () => {
       const mockVisit = {
         id: 'visit-123',
         ...createVisitDto,
+        plan: JSON.stringify({ notes: 'Test notes' }),
+        notes: 'Test notes',
       };
 
       mockVisitsService.create.mockResolvedValue(mockVisit);
@@ -134,7 +162,7 @@ describe('VisitsController', () => {
 
       mockVisitsService.getVisitStatistics.mockResolvedValue(mockStats);
 
-      const result = await controller.getStatistics(undefined, undefined, mockRequest as any);
+      const result = await controller.getStatistics(mockRequest as any, undefined, undefined);
 
       expect(result).toEqual(mockStats);
       expect(service.getVisitStatistics).toHaveBeenCalledWith(
@@ -160,7 +188,7 @@ describe('VisitsController', () => {
 
       mockVisitsService.getVisitStatistics.mockResolvedValue(mockStats);
 
-      const result = await controller.getStatistics(startDate, endDate, mockRequest as any);
+      const result = await controller.getStatistics(mockRequest as any, startDate, endDate);
 
       expect(result).toEqual(mockStats);
       expect(service.getVisitStatistics).toHaveBeenCalledWith(
@@ -264,6 +292,7 @@ describe('VisitsController', () => {
       const mockUpdatedVisit = {
         id: visitId,
         ...updateDto,
+        plan: JSON.stringify({ notes: updateDto.notes }),
       };
 
       mockVisitsService.update.mockResolvedValue(mockUpdatedVisit);
@@ -292,6 +321,7 @@ describe('VisitsController', () => {
         id: visitId,
         notes: completeDto.finalNotes,
         followUp: new Date(completeDto.followUpDate),
+        plan: JSON.stringify({ finalNotes: completeDto.finalNotes }),
       };
 
       mockVisitsService.complete.mockResolvedValue(mockCompletedVisit);
@@ -318,6 +348,81 @@ describe('VisitsController', () => {
 
       expect(result).toEqual(mockResult);
       expect(service.remove).toHaveBeenCalledWith(visitId, mockRequest.user.branchId);
+    });
+  });
+
+  describe('uploadDraftPhotos', () => {
+    it('should delegate to service for draft listing after upload', async () => {
+      const patientId = 'patient-123';
+      const files: any[] = [
+        {
+          buffer: Buffer.from('processed'),
+          size: 10,
+          mimetype: 'image/jpeg',
+          originalname: 'test.jpg',
+          fieldname: 'files',
+        },
+      ];
+      mockVisitsService.listDraftAttachments.mockResolvedValue({ attachments: [], items: [] });
+
+      const result = await controller.uploadDraftPhotos(patientId, files as any);
+
+      expect(mockVisitsService.listDraftAttachments).toHaveBeenCalledWith(patientId, expect.any(String));
+      expect(result).toEqual({ attachments: [], items: [] });
+    });
+  });
+
+  describe('listDraftPhotos', () => {
+    it('should list draft photos', async () => {
+      const patientId = 'patient-123';
+      const mockResponse = { attachments: ['a'], items: [] };
+      mockVisitsService.listDraftAttachments.mockResolvedValue(mockResponse);
+
+      const result = await controller.listDraftPhotos(patientId);
+
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
+  describe('uploadPhotos', () => {
+    it('should add attachments via service', async () => {
+      const visitId = 'visit-123';
+      const files: any[] = [
+        {
+          buffer: Buffer.from('processed'),
+          size: 10,
+          mimetype: 'image/jpeg',
+          originalname: 'test.jpg',
+          fieldname: 'files',
+        },
+      ];
+      const mockResponse = { attachments: ['a'] };
+      mockVisitsService.addAttachments.mockResolvedValue(mockResponse);
+
+      const result = await controller.uploadPhotos(visitId, files as any, mockRequest as any);
+
+      expect(mockVisitsService.addAttachments).toHaveBeenCalledWith(visitId, expect.any(Array), mockRequest.user.branchId);
+      expect(result).toEqual(mockResponse);
+    });
+  });
+
+  describe('listPhotos', () => {
+    it('should list attachments for a visit', async () => {
+      const visitId = 'visit-123';
+      const mockResponse = { attachments: ['a'], items: [] };
+      mockVisitsService.listAttachments.mockResolvedValue(mockResponse);
+
+      const result = await controller.listPhotos(visitId, mockRequest as any);
+
+      expect(result).toEqual(mockResponse);
+      expect(mockVisitsService.listAttachments).toHaveBeenCalledWith(visitId, mockRequest.user.branchId);
+    });
+  });
+
+  describe('transcribeAudio', () => {
+    it('should return empty text when no file provided', async () => {
+      const result = await controller.transcribeAudio(undefined as any, mockRequest as any);
+      expect(result).toEqual({ text: '' });
     });
   });
 });

@@ -5,7 +5,7 @@ export interface ApiError extends Error {
   body?: { message?: string } | null;
 }
 
-import type { InventoryItem } from './types';
+import type { InventoryItem, RescheduleAppointmentPayload } from './types';
 
 export class ApiClient {
   private baseURL: string;
@@ -40,9 +40,9 @@ export class ApiClient {
   }
 
   // Auth
-  async login(phone: string, password: string) {
+  async login(identifier: string, password: string) {
     // Server sets HttpOnly cookie via Set-Cookie. Do not persist token client-side.
-    return this.post<{ access_token?: string; user: any }>(`/auth/login`, { phone, password });
+    return this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });
   }
 
   private async request<T>(
@@ -51,9 +51,11 @@ export class ApiClient {
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
       ...((options.headers as Record<string, string>) || {}),
     };
+    if (options.body !== undefined && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
 
     // Do not attach Authorization header; rely on HttpOnly cookie
 
@@ -81,6 +83,13 @@ export class ApiClient {
       throw apiErr;
     }
 
+    if (response.status === 204) {
+      return undefined as T;
+    }
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      return undefined as T;
+    }
     return (await response.json()) as T;
   }
 
@@ -165,7 +174,7 @@ export class ApiClient {
     return this.get<import('./types').GetAvailableSlotsResponse>('/appointments/available-slots', params);
   }
 
-  async rescheduleAppointment(id: string, data: Record<string, unknown>) {
+  async rescheduleAppointment(id: string, data: RescheduleAppointmentPayload) {
     return this.post<import('./types').Appointment>(`/appointments/${id}/reschedule`, data);
   }
 
@@ -229,6 +238,14 @@ export class ApiClient {
 
   async createInvoice(data: Record<string, unknown>) {
     return this.post('/billing/invoices', data);
+  }
+
+  async getPharmacyInvoices(params?: Record<string, unknown>) {
+    return this.get<import('./types').PharmacyInvoiceListResponse>('/pharmacy/invoices', params);
+  }
+
+  async getPharmacyInvoiceById(id: string) {
+    return this.get<import('./types').PharmacyInvoiceSummary>(`/pharmacy/invoices/${id}`);
   }
 
   async processPayment(data: Record<string, unknown>) {
@@ -317,8 +334,16 @@ export class ApiClient {
     return this.post('/prescriptions', data);
   }
 
+  async createQuickPrescription(data: Record<string, unknown>) {
+    return this.post('/prescriptions/pad', data);
+  }
+
   async getPrescription<T = unknown>(id: string): Promise<T> {
     return this.get<T>(`/prescriptions/${id}`);
+  }
+
+  async getPatientPrescriptionHistory<T = unknown>(patientId: string, params?: { limit?: number; drugName?: string }): Promise<T> {
+    return this.get<T>('/prescriptions/history', { patientId, ...(params || {}) });
   }
 
   async searchDrugs(params: Record<string, unknown>) {

@@ -21,8 +21,8 @@ export default function UsersManagement() {
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
-  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; role: string; status: string; password?: string }>({
-    firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE',
+  const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
+    firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
 
   // Group permissions by resource (e.g., appointments, billing, etc.)
@@ -54,7 +54,13 @@ export default function UsersManagement() {
   const submit = async () => {
     try {
       setLoading(true);
-      const payload = { firstName: form.firstName, lastName: form.lastName, email: form.email, role: form.role, status: form.status } as any;
+      const trimmedPhone = form.phone.trim();
+      if (!trimmedPhone) {
+        alert('Phone number is required');
+        return;
+      }
+
+      const payload = { firstName: form.firstName, lastName: form.lastName, email: form.email, phone: trimmedPhone, role: form.role, status: form.status } as any;
       if (!form.id) {
         if (!form.password || form.password.length < 8 || form.password.length > 20) {
           alert('Password must be 8-20 characters');
@@ -68,7 +74,7 @@ export default function UsersManagement() {
         await apiClient.createUser(payload);
       }
       setOpen(false);
-      setForm({ firstName: '', lastName: '', email: '', role: 'RECEPTION', status: 'ACTIVE' });
+      setForm({ firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE' });
       await fetchUsers();
     } finally {
       setLoading(false);
@@ -76,7 +82,7 @@ export default function UsersManagement() {
   };
 
   const onEdit = (u: User) => {
-    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, role: String(u.role), status: String(u.status) });
+    setForm({ id: u.id, firstName: u.firstName, lastName: u.lastName, email: u.email, phone: u.phone || '', role: String(u.role), status: String(u.status) });
     setOpen(true);
   };
 
@@ -167,6 +173,10 @@ export default function UsersManagement() {
               <div className="md:col-span-2">
                 <Label>Email</Label>
                 <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Phone</Label>
+                <Input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div>
                 <Label>Role</Label>

@@ -1,68 +1,39 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { 
-  Search, 
-  Filter, 
-  Eye, 
-  Edit, 
+import {
+  Search,
+  Filter,
+  Eye,
+  Edit,
   Trash2,
   Download,
-  Plus,
   Calendar,
-  User,
   CreditCard,
   FileText,
-  DollarSign
+  DollarSign,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import type {
+  PharmacyInvoiceListResponse,
+  PharmacyInvoiceSummary,
+  PharmacyInvoiceStatus,
+  PharmacyPaymentMethod,
+  PharmacyPaymentStatus,
+} from '@/lib/types';
 
-interface PharmacyInvoice {
-  id: string;
-  invoiceNumber: string;
-  patientId: string;
-  patient: {
-    id: string;
-    name: string;
-    phone?: string;
-  };
-  doctor?: {
-    id: string;
-    firstName: string;
-    lastName: string;
-  };
-  subtotal: number;
-  discountAmount: number;
-  taxAmount: number;
-  totalAmount: number;
-  paymentMethod: string;
-  paymentStatus: string;
-  status: string;
-  billingName: string;
-  billingPhone: string;
-  invoiceDate: string;
-  createdAt: string;
-  updatedAt: string;
-  items: {
-    id: string;
-    quantity: number;
-    unitPrice: number;
-    totalAmount: number;
-    drug: {
-      id: string;
-      name: string;
-      manufacturerName: string;
-    };
-  }[];
-}
+type StatusFilter = PharmacyInvoiceStatus | 'all';
+type PaymentStatusFilter = PharmacyPaymentStatus | 'all';
+type PaymentMethodFilter = PharmacyPaymentMethod | 'all';
+type DateRange = 'all' | 'today' | 'week' | 'month' | 'quarter';
 
-const statusColors = {
+const STATUS_COLORS: Record<PharmacyInvoiceStatus, string> = {
   DRAFT: 'bg-gray-100 text-gray-800',
   PENDING: 'bg-yellow-100 text-yellow-800',
   CONFIRMED: 'bg-blue-100 text-blue-800',
@@ -71,7 +42,7 @@ const statusColors = {
   CANCELLED: 'bg-red-100 text-red-800',
 };
 
-const paymentStatusColors = {
+const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatus, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800',
   COMPLETED: 'bg-green-100 text-green-800',
   FAILED: 'bg-red-100 text-red-800',
@@ -80,13 +51,13 @@ const paymentStatusColors = {
 };
 
 export function PharmacyInvoiceList() {
-  const [invoices, setInvoices] = useState<PharmacyInvoice[]>([]);
+  const [invoices, setInvoices] = useState<PharmacyInvoiceSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState('all');
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState('all');
-  const [dateRange, setDateRange] = useState('today');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
+  const [dateRange, setDateRange] = useState<DateRange>('today');
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,
@@ -94,88 +65,84 @@ export function PharmacyInvoiceList() {
     pages: 0
   });
 
+  const loadInvoices = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const page = Math.max(1, pagination.page);
+      const limit = Math.min(100, Math.max(1, pagination.limit));
+
+      const params: Record<string, unknown> = {
+        page,
+        limit,
+        sortBy: 'invoiceDate',
+        sortOrder: 'desc',
+      };
+
+      const trimmedSearch = searchQuery.trim();
+      if (trimmedSearch) params.search = trimmedSearch;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (paymentStatusFilter !== 'all') params.paymentStatus = paymentStatusFilter;
+      if (paymentMethodFilter !== 'all') params.paymentMethod = paymentMethodFilter;
+
+      if (dateRange !== 'all') {
+        const now = new Date();
+        let startDate: Date | undefined;
+        switch (dateRange) {
+          case 'today':
+            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            break;
+          case 'week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case 'month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            break;
+          case 'quarter':
+            startDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+            break;
+        }
+        if (startDate) params.startDate = startDate.toISOString();
+      }
+
+      const response: PharmacyInvoiceListResponse = await apiClient.getPharmacyInvoices(params);
+      const list = Array.isArray(response?.data) ? response.data : [];
+      const pg = response?.pagination ?? {
+        page,
+        limit,
+        total: list.length,
+        pages: Math.max(1, Math.ceil(list.length / limit)),
+      };
+
+      setInvoices(list);
+      setPagination(prev => ({
+        ...prev,
+        page: pg.page ?? page,
+        limit: pg.limit ?? limit,
+        total: pg.total ?? list.length,
+        pages: pg.pages ?? Math.max(1, Math.ceil((pg.total ?? list.length) / (pg.limit ?? limit))),
+      }));
+    } catch (error) {
+      console.error('Failed to load invoices:', error);
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange, pagination.limit, pagination.page, paymentMethodFilter, paymentStatusFilter, searchQuery, statusFilter]);
+
   useEffect(() => {
-    loadInvoices();
-  }, [searchQuery, statusFilter, paymentStatusFilter, paymentMethodFilter, dateRange, pagination.page]);
+    void loadInvoices();
+  }, [loadInvoices]);
 
   useEffect(() => {
     const handler = () => {
       // Reset to first page, keep filters, ensure dateRange is today
       setDateRange('today');
       setPagination(prev => ({ ...prev, page: 1 }));
-      loadInvoices();
     };
     window.addEventListener('pharmacy-invoices-refresh', handler);
     return () => window.removeEventListener('pharmacy-invoices-refresh', handler);
   }, []);
-
-  const loadInvoices = async () => {
-    try {
-      setLoading(true);
-      const params: Record<string, any> = {
-        page: Math.max(1, pagination.page), // Ensure page is at least 1
-        limit: Math.min(100, Math.max(1, pagination.limit)), // Ensure limit is between 1 and 100
-        sortBy: 'invoiceDate',
-        sortOrder: 'desc',
-      };
-
-      // Only add optional parameters if they have values
-      if (searchQuery && searchQuery.trim()) {
-        params.search = searchQuery.trim();
-      }
-      if (statusFilter && statusFilter !== 'all') {
-        params.status = statusFilter;
-      }
-      if (paymentStatusFilter && paymentStatusFilter !== 'all') {
-        params.paymentStatus = paymentStatusFilter;
-      }
-      if (paymentMethodFilter && paymentMethodFilter !== 'all') {
-        params.paymentMethod = paymentMethodFilter;
-      }
-
-      // Handle date range
-      if (dateRange && dateRange !== 'all') {
-        const now = new Date();
-        let startDate: Date;
-        switch (dateRange) {
-          case 'today':
-            startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            params.startDate = startDate.toISOString();
-            break;
-          case 'week':
-            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-            params.startDate = startDate.toISOString();
-            break;
-          case 'month':
-            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-            params.startDate = startDate.toISOString();
-            break;
-          case 'quarter':
-            const quarterStart = Math.floor(now.getMonth() / 3) * 3;
-            startDate = new Date(now.getFullYear(), quarterStart, 1);
-            params.startDate = startDate.toISOString();
-            break;
-        }
-      }
-
-      const response = await apiClient.get<{ data?: PharmacyInvoice[]; pagination?: { page: number; limit: number; total: number; pages: number } }>('/pharmacy/invoices', params);
-      const list = response?.data || [];
-      const pg = response?.pagination || { page: pagination.page, limit: pagination.limit, total: list.length, pages: Math.max(1, Math.ceil(list.length / pagination.limit)) };
-
-      setInvoices(list);
-      setPagination(prev => ({
-        ...prev,
-        page: pg.page,
-        limit: pg.limit,
-        total: pg.total,
-        pages: pg.pages,
-      }));
-    } catch (error) {
-      console.error('Failed to load invoices:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleViewInvoice = (invoiceId: string) => {
     // TODO: Implement view invoice functionality
@@ -193,7 +160,7 @@ export function PharmacyInvoiceList() {
     try {
       // TODO: Implement delete invoice API call
       // await apiClient.delete(`/pharmacy/invoices/${invoiceId}`);
-      loadInvoices();
+      await loadInvoices();
     } catch (error) {
       console.error('Failed to delete invoice:', error);
       alert('Failed to delete invoice. Please try again.');
@@ -224,7 +191,7 @@ export function PharmacyInvoiceList() {
     });
   };
 
-  const getTotalStats = () => {
+  const stats = useMemo(() => {
     const totalAmount = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
     const completedInvoices = invoices.filter(inv => inv.paymentStatus === 'COMPLETED').length;
     const pendingAmount = invoices
@@ -232,9 +199,7 @@ export function PharmacyInvoiceList() {
       .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
     return { totalAmount, completedInvoices, pendingAmount };
-  };
-
-  const stats = getTotalStats();
+  }, [invoices]);
 
   return (
     <div className="space-y-6">
@@ -308,7 +273,10 @@ export function PharmacyInvoiceList() {
                 <Input
                   placeholder="Invoice number, patient..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setPagination(prev => ({ ...prev, page: 1 }));
+                  }}
                   className="pl-10"
                 />
               </div>
@@ -316,7 +284,13 @@ export function PharmacyInvoiceList() {
             
             <div>
               <Label>Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value as StatusFilter);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
@@ -334,7 +308,13 @@ export function PharmacyInvoiceList() {
             
             <div>
               <Label>Payment Status</Label>
-              <Select value={paymentStatusFilter} onValueChange={setPaymentStatusFilter}>
+              <Select
+                value={paymentStatusFilter}
+                onValueChange={(value) => {
+                  setPaymentStatusFilter(value as PaymentStatusFilter);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All payments" />
                 </SelectTrigger>
@@ -351,7 +331,13 @@ export function PharmacyInvoiceList() {
             
             <div>
               <Label>Payment Method</Label>
-              <Select value={paymentMethodFilter} onValueChange={setPaymentMethodFilter}>
+              <Select
+                value={paymentMethodFilter}
+                onValueChange={(value) => {
+                  setPaymentMethodFilter(value as PaymentMethodFilter);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All methods" />
                 </SelectTrigger>
@@ -369,7 +355,13 @@ export function PharmacyInvoiceList() {
             
             <div>
               <Label>Date Range</Label>
-              <Select value={dateRange} onValueChange={setDateRange}>
+              <Select
+                value={dateRange}
+                onValueChange={(value) => {
+                  setDateRange(value as DateRange);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All dates" />
                 </SelectTrigger>
@@ -422,10 +414,10 @@ export function PharmacyInvoiceList() {
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <h3 className="font-semibold text-lg">{invoice.invoiceNumber}</h3>
-                        <Badge className={statusColors[invoice.status as keyof typeof statusColors]}>
+                        <Badge className={STATUS_COLORS[invoice.status]}>
                           {invoice.status}
                         </Badge>
-                        <Badge className={paymentStatusColors[invoice.paymentStatus as keyof typeof paymentStatusColors]}>
+                        <Badge className={PAYMENT_STATUS_COLORS[invoice.paymentStatus]}>
                           {invoice.paymentStatus}
                         </Badge>
                       </div>

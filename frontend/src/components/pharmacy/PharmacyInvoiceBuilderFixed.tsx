@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,10 +123,12 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
   const [selectedTab, setSelectedTab] = useState<'drugs' | 'packages'>('drugs');
   const [loading, setLoading] = useState(false);
   const [loadingPrescription, setLoadingPrescription] = useState(false);
+  const [prefillError, setPrefillError] = useState<string | null>(null);
 
   // Refs for click-outside handling
   const patientSearchRef = useRef<HTMLDivElement>(null);
   const drugSearchRef = useRef<HTMLDivElement>(null);
+  const invoiceItemsRef = useRef<InvoiceItem[]>([]);
 
   // Invoice state
   const [invoiceData, setInvoiceData] = useState({
@@ -147,18 +149,15 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
   useEffect(() => {
     loadInitialData();
-    if (prefill?.prescriptionId) {
-      loadPrescriptionData(prefill.prescriptionId);
-    }
   }, []);
 
   useEffect(() => {
     if (prefill?.patientId && selectedPatient) {
-      setInvoiceData(prev => ({ 
-        ...prev, 
-        patientId: prefill.patientId as string, 
-        billingName: selectedPatient.name, 
-        billingPhone: selectedPatient.phone || '' 
+      setInvoiceData(prev => ({
+        ...prev,
+        patientId: prefill.patientId as string,
+        billingName: selectedPatient.name,
+        billingPhone: selectedPatient.phone || ''
       }));
     }
     if (prefill?.prescriptionId) {
@@ -166,66 +165,164 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
     }
   }, [prefill, selectedPatient]);
 
-  const loadPrescriptionData = async (prescriptionId: string) => {
+  const fetchedPrefillPatientsRef = useRef<Set<string>>(new Set());
+  const lastPrefilledPrescriptionIdRef = useRef<string | null>(null);
+
+  const ensurePatientSelected = useCallback(
+    async (patientId?: string, fallback?: { name?: string; phone?: string }) => {
+      if (!patientId) {
+        if (fallback?.name || fallback?.phone) {
+          setInvoiceData((prev) => ({
+            ...prev,
+            billingName: fallback.name || prev.billingName,
+            billingPhone: fallback.phone || prev.billingPhone,
+          }));
+        }
+        return;
+      }
+
+      const existingPatient = patients.find((p) => p.id === patientId);
+      if (existingPatient) {
+        setSelectedPatient(existingPatient);
+        setInvoiceData((prev) => ({
+          ...prev,
+          patientId: existingPatient.id,
+          billingName: existingPatient.name,
+          billingPhone: existingPatient.phone || '',
+        }));
+        return;
+      }
+
+      if (fetchedPrefillPatientsRef.current.has(patientId)) {
+        return;
+      }
+
+      fetchedPrefillPatientsRef.current.add(patientId);
+      try {
+        const patient = await apiClient.getPatient(patientId);
+        if (!patient) {
+          throw new Error('Patient not found');
+        }
+        setPatients((prev) => (prev.some((p) => p.id === patient.id) ? prev : [...prev, patient]));
+        setSelectedPatient(patient);
+        setInvoiceData((prev) => ({
+          ...prev,
+          patientId: patient.id,
+          billingName: patient.name || fallback?.name || '',
+          billingPhone: patient.phone || fallback?.phone || '',
+        }));
+      } catch (error) {
+        console.error('Failed to fetch prefill patient', error);
+        toast({
+          variant: 'destructive',
+          title: 'Unable to prefill patient',
+          description: 'We could not load the patient linked to this prescription. Select a patient to continue.',
+        });
+        if (fallback?.name || fallback?.phone) {
+          setInvoiceData((prev) => ({
+            ...prev,
+            billingName: fallback.name || prev.billingName,
+            billingPhone: fallback.phone || prev.billingPhone,
+          }));
+        }
+      }
+    },
+    [patients, toast]
+  );
+
+  const loadPrescriptionData = useCallback(async (prescriptionId: string) => {
     setLoadingPrescription(true);
+    setPrefillError(null);
     try {
       console.log('📋 Loading prescription data for ID:', prescriptionId);
       type MinimalPrescription = { id?: string; items?: any[] | string } & Record<string, unknown>;
       const prescription = await apiClient.getPrescription<MinimalPrescription>(prescriptionId);
       console.log('✅ Prescription data loaded:', prescription);
-      
+
       setPrescriptionData(prescription);
-      
-      // Parse prescription items
+
+      const previousPrefilledMap = new Map<string, InvoiceItem>(
+        invoiceItemsRef.current
+          .filter((item) => item.id.startsWith('prescription_'))
+          .map((item) => [item.id, item])
+      );
+
+      setItems((prevItems) => {
+        const filtered = prevItems.filter((item) => !item.id.startsWith('prescription_'));
+        invoiceItemsRef.current = filtered;
+        return filtered;
+      });
+      setPrescriptionItems([]);
+
+      const patientFromPrescription = (prescription as any)?.patient;
+      const patientIdFromPrescription = (prescription as any)?.patientId || patientFromPrescription?.id;
+      await ensurePatientSelected(patientIdFromPrescription, {
+        name: patientFromPrescription?.name,
+        phone: patientFromPrescription?.phone,
+      });
+
       const rawItems = (prescription as any)?.items;
-      const prescriptionItems = Array.isArray(rawItems) 
-        ? rawItems 
+      const prescriptionItemsRaw = Array.isArray(rawItems)
+        ? rawItems
         : JSON.parse((rawItems as string | undefined) || '[]');
-      
-      console.log('💊 Processing prescription items:', prescriptionItems);
-      
-      // Convert prescription items to invoice items
+
+      if (!Array.isArray(prescriptionItemsRaw) || prescriptionItemsRaw.length === 0) {
+        setPrefillError('Prescription has no medications to prefill. Add items manually.');
+        toast({
+          variant: 'warning',
+          title: 'Prescription empty',
+          description: 'The linked prescription does not contain any medications.',
+        });
+        return;
+      }
+
+      console.log('💊 Processing prescription items:', prescriptionItemsRaw);
+
       const invoiceItems: InvoiceItem[] = await Promise.all(
-        prescriptionItems.map(async (item: any, index: number) => {
+        prescriptionItemsRaw.map(async (item: any, index: number) => {
           try {
-            // Try to find the drug in our database
             let drug = null;
             if (item.drugName) {
-              const drugSearchResult = await apiClient.get<{ data?: Drug[] } | Drug[]>('/drugs', { 
-                search: item.drugName, 
-                limit: 1, 
-                isActive: true 
+              const drugSearchResult = await apiClient.get<{ data?: Drug[] } | Drug[]>('/drugs', {
+                search: item.drugName,
+                limit: 1,
+                isActive: true,
               });
-              const drugList = Array.isArray((drugSearchResult as any)?.data) 
-                ? ((drugSearchResult as any).data as Drug[]) 
+              const drugList = Array.isArray((drugSearchResult as any)?.data)
+                ? ((drugSearchResult as any).data as Drug[])
                 : (Array.isArray(drugSearchResult) ? (drugSearchResult as Drug[]) : []);
               drug = drugList[0] || null;
             }
-            
+
+            const invoiceItemId = `prescription_${prescriptionId}_${index}`;
+            const existingItem = previousPrefilledMap.get(invoiceItemId);
+
             const invoiceItem: InvoiceItem = {
-              id: `prescription_${prescriptionId}_${index}`,
-              drugId: drug?.id || `temp_${Date.now()}_${index}`,
+              id: invoiceItemId,
+              drugId: drug?.id || existingItem?.drugId || `temp_${Date.now()}_${index}`,
               itemType: 'DRUG',
-              drug: drug || {
-                id: `temp_${Date.now()}_${index}`,
-                name: item.drugName || 'Unknown Drug',
-                price: 0, // Will need to be set manually
-                manufacturerName: '',
-                packSizeLabel: '',
-              },
-              quantity: item.quantity || 1,
-              unitPrice: drug?.price || 0,
-              discountPercent: 0,
-              taxPercent: 18,
-              discountAmount: 0,
-              taxAmount: 0,
-              totalAmount: 0,
-              dosage: item.dosage ? `${item.dosage} ${item.dosageUnit || ''}`.trim() : undefined,
-              frequency: item.frequency || undefined,
-              duration: item.duration ? `${item.duration} ${item.durationUnit || ''}`.trim() : undefined,
-              instructions: item.instructions || undefined,
+              drug:
+                drug ||
+                existingItem?.drug || {
+                  id: `temp_${Date.now()}_${index}`,
+                  name: item.drugName || 'Unknown Drug',
+                  price: existingItem?.drug?.price ?? 0,
+                  manufacturerName: existingItem?.drug?.manufacturerName ?? '',
+                  packSizeLabel: existingItem?.drug?.packSizeLabel ?? '',
+                },
+              quantity: existingItem?.quantity ?? item.quantity ?? 1,
+              unitPrice: existingItem?.unitPrice ?? drug?.price ?? 0,
+              discountPercent: existingItem?.discountPercent ?? 0,
+              taxPercent: existingItem?.taxPercent ?? 18,
+              discountAmount: existingItem?.discountAmount ?? 0,
+              taxAmount: existingItem?.taxAmount ?? 0,
+              totalAmount: existingItem?.totalAmount ?? 0,
+              dosage: item.dosage ? `${item.dosage} ${item.dosageUnit || ''}`.trim() : existingItem?.dosage,
+              frequency: item.frequency || existingItem?.frequency,
+              duration: item.duration ? `${item.duration} ${item.durationUnit || ''}`.trim() : existingItem?.duration,
+              instructions: item.instructions || existingItem?.instructions,
             };
-            
+
             calculateItemTotal(invoiceItem);
             return invoiceItem;
           } catch (error) {
@@ -234,20 +331,53 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
           }
         })
       );
-      
-      // Filter out null items and set as prescription items
-      const validItems = invoiceItems.filter(item => item !== null) as InvoiceItem[];
-      console.log('�� Valid prescription items created:', validItems.length);
-      
+
+      const validItems = invoiceItems.filter((item) => item !== null) as InvoiceItem[];
+      console.log('💊 Valid prescription items created:', validItems.length);
+
       setPrescriptionItems(validItems);
-      setItems(prevItems => [...validItems, ...prevItems]);
-      
+      setItems((prevItems) => {
+        const filtered = prevItems.filter((item) => !item.id.startsWith('prescription_'));
+        const merged = [...validItems, ...filtered];
+        invoiceItemsRef.current = merged;
+        return merged;
+      });
+
     } catch (error) {
       console.error('❌ Failed to load prescription data:', error);
+      setPrefillError('We could not load the prescription details. You can still bill manually.');
+      toast({
+        variant: 'destructive',
+        title: 'Prescription load failed',
+        description: 'The linked prescription could not be loaded. Add items manually or retry.',
+      });
     } finally {
       setLoadingPrescription(false);
     }
-  };
+  }, [ensurePatientSelected, toast]);
+
+  useEffect(() => {
+    const prefillPatientId = prefill?.patientId;
+    if (prefillPatientId) {
+      void ensurePatientSelected(prefillPatientId);
+    }
+  }, [prefill?.patientId, ensurePatientSelected]);
+
+  useEffect(() => {
+    const prefillPrescriptionId = prefill?.prescriptionId;
+    if (!prefillPrescriptionId) {
+      return;
+    }
+    if (lastPrefilledPrescriptionIdRef.current === prefillPrescriptionId) {
+      return;
+    }
+    lastPrefilledPrescriptionIdRef.current = prefillPrescriptionId;
+    void loadPrescriptionData(prefillPrescriptionId);
+  }, [prefill?.prescriptionId, loadPrescriptionData]);
+
+  useEffect(() => {
+    invoiceItemsRef.current = items;
+  }, [items]);
 
   const loadInitialData = async () => {
     try {
@@ -678,6 +808,13 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {prefillError && (
+            <div className="lg:col-span-3">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-900">
+                {prefillError}
+              </div>
+            </div>
+          )}
           {/* Left Column - Invoice Details */}
           <div className="lg:col-span-2 space-y-6">
             {/* Patient & Doctor Selection */}

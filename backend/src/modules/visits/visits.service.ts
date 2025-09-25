@@ -599,6 +599,9 @@ export class VisitsService {
         appointment: {
           select: { id: true, date: true, slot: true, tokenNumber: true },
         },
+        prescription: {
+          select: { id: true, createdAt: true },
+        },
       },
       orderBy: {
         createdAt: 'desc',
@@ -623,6 +626,15 @@ export class VisitsService {
               name: `${(visit.doctor as any).firstName} ${(visit.doctor as any).lastName}`.trim(),
             }
           : visit.doctor,
+        prescription: visit.prescription
+          ? {
+              id: visit.prescription.id,
+              createdAt:
+                visit.prescription.createdAt instanceof Date
+                  ? visit.prescription.createdAt.toISOString()
+                  : (visit.prescription.createdAt as any) ?? undefined,
+            }
+          : null,
       })),
     };
   }
@@ -743,18 +755,42 @@ export class VisitsService {
     };
   }
 
-  private sanitizeAttachmentPaths(relPaths: string[] | null | undefined): string[] {
+  private sanitizeAttachmentPaths(
+    relPaths: string[] | null | undefined,
+    options?: {
+      allowedPrefixes?: string[];
+    },
+  ): string[] {
     const allowedExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
-    const results: string[] = [];
+    const prefixes = (options?.allowedPrefixes || ['/uploads/visits/']).map(prefix => {
+      let normalizedPrefix = pathPosix.normalize(prefix);
+      if (!normalizedPrefix.startsWith('/')) {
+        normalizedPrefix = `/${normalizedPrefix}`;
+      }
+      if (!normalizedPrefix.endsWith('/')) {
+        normalizedPrefix = `${normalizedPrefix}/`;
+      }
+      return normalizedPrefix;
+    });
+
+    const results = new Set<string>();
+
     for (const candidate of relPaths || []) {
       if (typeof candidate !== 'string') continue;
-      const normalized = pathPosix.normalize(candidate.trim());
-      if (!normalized.startsWith('/uploads/visits/')) continue;
+
+      let normalized = pathPosix.normalize(candidate.trim());
+      if (!normalized.startsWith('/')) {
+        normalized = `/${normalized}`;
+      }
+
+      const matchedPrefix = prefixes.find(prefix => normalized.startsWith(prefix));
+      if (!matchedPrefix) continue;
+
       const filename = pathPosix.basename(normalized);
       if (!/^[A-Za-z0-9._-]+$/.test(filename)) continue;
       const ext = pathPosix.extname(filename).toLowerCase();
       if (!allowedExtensions.has(ext)) continue;
-      // Resolve absolute file path under project root
+
       const absolutePath = join(process.cwd(), normalized.replace(/^\//, ''));
       try {
         const stat = fs.statSync(absolutePath);
@@ -762,9 +798,12 @@ export class VisitsService {
       } catch {
         continue;
       }
-      results.push(`/uploads/visits/${filename}`);
+
+      const sanitizedPath = `${matchedPrefix}${filename}`;
+      results.add(sanitizedPath.startsWith('/') ? sanitizedPath : `/${sanitizedPath}`);
     }
-    return Array.from(new Set(results));
+
+    return Array.from(results);
   }
 
   async listDraftAttachments(patientId: string, dateStr: string) {
@@ -779,7 +818,9 @@ export class VisitsService {
       files = [];
     }
     // Sanitize and sort by mtime
-    const sanitized = this.sanitizeAttachmentPaths(files);
+    const sanitized = this.sanitizeAttachmentPaths(files, {
+      allowedPrefixes: [`/uploads/patients/${patientId}/${dateStr}/`],
+    });
     const items = sanitized
       .map(url => {
         const absolutePath = join(process.cwd(), url.replace(/^\//, ''));

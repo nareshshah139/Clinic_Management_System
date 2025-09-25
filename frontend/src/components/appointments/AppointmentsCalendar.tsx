@@ -8,11 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { createCleanupTimeouts, getISTDateString } from '@/lib/utils';
-import type { User, Patient, TimeSlotConfig } from '@/lib/types';
+import { createCleanupTimeouts, getISTDateString, formatPatientName } from '@/lib/utils';
+import type { User, Patient, TimeSlotConfig, AppointmentInSlot } from '@/lib/types';
 import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
+import PatientQuickCreateDialog from './PatientQuickCreateDialog';
+import { AlertCircle } from 'lucide-react';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -41,17 +43,18 @@ export default function AppointmentsCalendar({
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
+  const selectedRoom = useMemo(
+    () => rooms.find((room) => room.id === roomFilter),
+    [rooms, roomFilter]
+  );
   const [refreshKey, setRefreshKey] = useState<number>(0);
-  const [optimisticAppointment, setOptimisticAppointment] = useState<{
-    slot: string;
-    patient: { name: string };
-    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
-    room?: { id: string; name: string; type: string };
-  } | null>(null);
+  const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
+  const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
+  const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
@@ -93,21 +96,47 @@ export default function AppointmentsCalendar({
 
   const searchPatients = async (q: string) => {
     setPatientSearch(q);
-    const res: any = await apiClient.getPatients({ search: q, limit: 10 });
-    setPatients((res.data || res.patients || []).map((p: any) => ({
-      ...p,
-      firstName: p.firstName || p.name?.split(' ')[0] || '',
-      lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
-    })));
+
+    if (!q.trim()) {
+      setPatients([]);
+      setQuickCreateOpen(false);
+      setAutoPromptedForSearch(false);
+      return;
+    }
+
+    try {
+      const res: any = await apiClient.getPatients({ search: q, limit: 10 });
+      const matches = (res.data || res.patients || []).map((p: any) => ({
+        ...p,
+        firstName: p.firstName || p.name?.split(' ')[0] || '',
+        lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
+      }));
+      setPatients(matches);
+      if (matches.length === 0 && !autoPromptedForSearch) {
+        setQuickCreateOpen(true);
+        setAutoPromptedForSearch(true);
+      }
+      if (matches.length > 0) {
+        setQuickCreateOpen(false);
+        setAutoPromptedForSearch(false);
+      }
+    } catch (error) {
+      console.error('Failed to search patients', error);
+    }
   };
 
   const handleBookingRequest = (slot: string) => {
     const pid = selectedPatientId?.trim();
-    if (!pid) { 
-      alert('Please select a patient first'); 
-      return; 
+    if (!pid) {
+      toast({
+        variant: 'destructive',
+        title: 'Patient required',
+        description: 'Select an existing patient or add a new one before booking.',
+      });
+      setQuickCreateOpen(true);
+      return;
     }
-    
+
     setPendingBookingSlot(slot);
     setBookingDialogOpen(true);
   };
@@ -124,13 +153,30 @@ export default function AppointmentsCalendar({
         ? rooms.find(r => r.id === appointmentData.roomId) 
         : undefined;
         
-      const optimisticAppt = {
+      const optimisticPatient = selectedPatient
+        ? {
+            id: selectedPatient.id,
+            name: `${selectedPatient.firstName ?? ''} ${selectedPatient.lastName ?? ''}`.trim() || selectedPatient.name || 'Unknown',
+            phone: selectedPatient.phone,
+            email: selectedPatient.email,
+          }
+        : {
+            id: selectedPatientId,
+            name: patientSearch || 'Unknown Patient',
+          };
+
+      const optimisticDoctor = doctors.find((d) => d.id === doctorId);
+
+      const optimisticAppt: AppointmentInSlot = {
+        id: `optimistic-${pendingBookingSlot}`,
         slot: pendingBookingSlot,
-        patient: { 
-          name: `${selectedPatient?.firstName || ''} ${selectedPatient?.lastName || ''}`.trim() || 'Unknown'
-        },
+        patient: optimisticPatient,
+        doctor: optimisticDoctor
+          ? { id: optimisticDoctor.id, firstName: optimisticDoctor.firstName, lastName: optimisticDoctor.lastName }
+          : { id: doctorId, firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
-        room: selectedRoom
+        room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, type: selectedRoom.type } : undefined,
+        status: 'SCHEDULED',
       };
       
       setOptimisticAppointment(optimisticAppt);
@@ -258,17 +304,51 @@ export default function AppointmentsCalendar({
               <Badge variant="secondary">
                 Selected: {selectedPatient.firstName} {selectedPatient.lastName} — {selectedPatient.phone}
               </Badge>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); }}>Clear</Button>
+              <Button variant="outline" size="sm" onClick={() => { setSelectedPatientId(''); setSelectedPatient(null); setPatientSearch(''); setPatients([]); setQuickCreateOpen(false); }}>Clear</Button>
+            </div>
+          )}
+
+          {!selectedPatientId && patientSearch && (
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertCircle className="h-4 w-4" />
+              <span>Select a patient from the list or add them as new before booking.</span>
             </div>
           )}
 
           {patientSearch && patients.length > 0 && (
             <div className="max-h-40 overflow-auto border rounded">
               {patients.map((p) => (
-                <div key={p.id} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`); setSelectedPatientId(p.id); setSelectedPatient(p); setPatients([]); }}>
+                <div
+                  key={p.id}
+                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                  onClick={() => {
+                    setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
+                    setSelectedPatientId(p.id);
+                    setSelectedPatient(p);
+                    setPatients([]);
+                    setQuickCreateOpen(false);
+                    setAutoPromptedForSearch(false);
+                  }}
+                >
                   {p.firstName} {p.lastName} — {p.phone}
                 </div>
               ))}
+            </div>
+          )}
+
+          {patientSearch && patients.length === 0 && (
+            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+              <div className="flex items-center justify-between">
+                <span>No matching patients found.</span>
+                <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
+                  + Add "{patientSearch}" as a new patient
+                </Button>
+              </div>
+            </div>
+          )}
+          {patientSearch && !patients.length && !quickCreateOpen && (
+            <div className="text-xs text-gray-500">
+              Tip: enter patient name and phone, then use "Add" to create a new record instantly.
             </div>
           )}
 
@@ -311,6 +391,8 @@ export default function AppointmentsCalendar({
             bookingInProgress={loading ? pendingBookingSlot : undefined}
             optimisticAppointment={optimisticAppointment || undefined}
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
+            disableSlotBooking={!selectedPatientId}
+            selectedRoomName={selectedRoom?.name}
           />
         </CardContent>
       </Card>
@@ -324,6 +406,26 @@ export default function AppointmentsCalendar({
         patient={selectedPatient}
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
+      />
+
+      <PatientQuickCreateDialog
+        open={quickCreateOpen}
+        onOpenChange={(open) => {
+          setQuickCreateOpen(open);
+          if (!open && !selectedPatientId) {
+            setPatientSearch('');
+            setAutoPromptedForSearch(false);
+          }
+        }}
+        initialName={patientSearch}
+        onPatientCreated={(patient) => {
+          setSelectedPatientId(patient.id);
+          setSelectedPatient(patient);
+          setPatientSearch(`${patient.firstName ?? ''} ${patient.lastName ?? ''} — ${patient.phone ?? ''}`.trim());
+          setPatients([]);
+          setQuickCreateOpen(false);
+          setAutoPromptedForSearch(false);
+        }}
       />
     </>
   );

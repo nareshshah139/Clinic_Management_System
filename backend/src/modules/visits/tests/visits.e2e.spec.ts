@@ -26,6 +26,14 @@ describe('Visits E2E Tests', () => {
 
   beforeAll(async () => {
     let store: RequestContextData | undefined;
+    const isPromise = <TValue>(value: unknown): value is Promise<TValue> => {
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        typeof (value as any).then === 'function'
+      );
+    };
+
     requestContextStub = {
       run: <T>(data: RequestContextData, callback: () => T) => {
         const previous = store;
@@ -36,9 +44,8 @@ describe('Visits E2E Tests', () => {
 
         try {
           const result = callback();
-          if (result && typeof (result as any).then === 'function') {
-            return (result as Promise<T>)
-              .finally(finalize) as unknown as T;
+          if (isPromise<T>(result)) {
+            return result.finally(finalize) as unknown as T;
           }
           finalize();
           return result;

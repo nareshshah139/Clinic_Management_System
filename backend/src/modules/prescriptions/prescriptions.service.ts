@@ -9,6 +9,7 @@ import {
   PrescriptionStatus,
   PrescriptionLanguage,
   RefillStatus,
+  CreatePrescriptionPadDto,
 } from './dto/prescription.dto';
 import { 
   QueryPrescriptionsDto, 
@@ -1374,5 +1375,95 @@ export class PrescriptionsService {
     }
 
     return interactions;
+  }
+
+  async createPrescriptionPad(payload: CreatePrescriptionPadDto, branchId: string) {
+    const {
+      patientId,
+      doctorId,
+      items,
+      diagnosis,
+      notes,
+      language,
+      validUntil,
+      maxRefills,
+      followUpInstructions,
+      metadata,
+      procedureMetrics,
+      reason,
+    } = payload;
+
+    if (!items || items.length === 0) {
+      throw new BadRequestException('At least one prescription item is required');
+    }
+
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) {
+      throw new NotFoundException('Patient not found in this branch');
+    }
+
+    const doctor = await this.prisma.user.findFirst({ where: { id: doctorId, branchId, role: 'DOCTOR' } });
+    if (!doctor) {
+      throw new NotFoundException('Doctor not found in this branch');
+    }
+
+    const autoVisit = await this.prisma.visit.create({
+      data: {
+        patientId,
+        doctorId,
+        complaints: JSON.stringify([
+          {
+            complaint: reason || 'Prescription issued without full visit',
+            severity: 'MILD',
+            source: 'PRESCRIPTION_PAD',
+          },
+        ]),
+        history: JSON.stringify({ source: 'PRESCRIPTION_PAD', notes: reason || null }),
+        exam: null,
+        diagnosis: diagnosis ? JSON.stringify([{ diagnosis }]) : null,
+        plan: JSON.stringify({
+          notes: notes || undefined,
+          prescriptionOnly: true,
+          metadata: {
+            reason,
+            createdVia: 'PRESCRIPTION_PAD',
+          },
+        }),
+        scribeJson: JSON.stringify({ createdVia: 'PRESCRIPTION_PAD', reason }),
+      },
+    });
+
+    try {
+      const prescription = await this.createPrescription(
+        {
+          patientId,
+          visitId: autoVisit.id,
+          doctorId,
+          items,
+          diagnosis,
+          notes,
+          language,
+          validUntil,
+          maxRefills,
+          followUpInstructions,
+          metadata,
+          procedureMetrics,
+        },
+        branchId,
+      );
+
+      return {
+        ...prescription,
+        visitId: autoVisit.id,
+        visit: {
+          id: autoVisit.id,
+          createdAt: autoVisit.createdAt,
+        },
+      };
+    } catch (err) {
+      await this.prisma.prescription.deleteMany({ where: { visitId: autoVisit.id } }).catch(() => undefined);
+      await this.prisma.visit.delete({ where: { id: autoVisit.id } }).catch(() => undefined);
+      throw err;
+    }
   }
 }

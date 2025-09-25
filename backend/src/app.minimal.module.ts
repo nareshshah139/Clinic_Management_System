@@ -7,12 +7,14 @@ import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { PassportModule } from '@nestjs/passport';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
+import { validateEnv } from './shared/config/env.validation';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate: validateEnv,
     }),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PrismaModule,

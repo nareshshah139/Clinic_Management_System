@@ -9,31 +9,12 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import {
-  generateTimeSlots,
-  isSlotInPast,
-  getErrorMessage,
-  formatPatientName,
-  createCleanupTimeouts,
-  getISTDateString,
-  validateAppointmentForm,
-  getConflictSuggestions,
-  isConflictError
-} from '@/lib/utils';
-import type { 
-  User, 
-  Patient, 
-  AppointmentInSlot, 
-  AvailableSlot,
-  TimeSlotConfig,
-  GetUsersResponse,
-  GetPatientsResponse,
-  GetRoomsResponse,
-  GetAvailableSlotsResponse,
-  GetDoctorScheduleResponse,
-  VisitType
-} from '@/lib/types';
+import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError } from '@/lib/utils';
+import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
+import PatientQuickCreateDialog from './PatientQuickCreateDialog';
+import { AlertCircle } from 'lucide-react';
+import DoctorDayCalendar from './DoctorDayCalendar';
 
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -68,10 +49,15 @@ export default function AppointmentScheduler({
   const [bookingSlot, setBookingSlot] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [rescheduleContext, setRescheduleContext] = useState<{ appointment: AppointmentInSlot; originalDate: string } | null>(null);
+  const [rescheduleLoading, setRescheduleLoading] = useState<boolean>(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
+  const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
+  const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
 
@@ -165,6 +151,7 @@ export default function AppointmentScheduler({
         visitType: a.visitType || 'OPD',
         room: a.room,
         status: a.status || 'SCHEDULED',
+        visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
       }));
       
       setAppointments(appts);
@@ -186,22 +173,34 @@ export default function AppointmentScheduler({
   }, [doctorId, date, timeSlotConfig.stepMinutes, toast]);
 
   const searchPatients = useCallback(async (q: string) => {
+    setPatientSearch(q);
+
     if (!q.trim()) {
       setPatients([]);
+      setQuickCreateOpen(false);
+      setAutoPromptedForSearch(false);
       return;
     }
-    
+
     try {
-      setPatientSearch(q);
       const res: GetPatientsResponse = await apiClient.getPatients({ search: q, limit: 10 });
       const patientsData = res.data || res.patients || [];
-      
+
       setPatients(patientsData.map((p) => ({
         ...p,
         name: formatPatientName(p),
         firstName: p.firstName || p.name?.split(' ')[0] || '',
         lastName: p.lastName || p.name?.split(' ').slice(1).join(' ') || '',
       })));
+
+      if (patientsData.length === 0 && !autoPromptedForSearch) {
+        setQuickCreateOpen(true);
+        setAutoPromptedForSearch(true);
+      }
+      if (patientsData.length > 0) {
+        setQuickCreateOpen(false);
+        setAutoPromptedForSearch(false);
+      }
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       toast({
@@ -210,7 +209,7 @@ export default function AppointmentScheduler({
         description: errorMessage,
       });
     }
-  }, [toast]);
+  }, [autoPromptedForSearch, toast]);
 
   const handleBookingRequest = (slot: string) => {
     // Validate the appointment form
@@ -223,15 +222,22 @@ export default function AppointmentScheduler({
     });
     
     if (validationErrors.length > 0) {
+      const hasPatientError = validationErrors.includes('Please select a patient');
+
       toast({
         variant: "destructive",
         title: "Validation Error",
         description: validationErrors[0],
       });
+
+      if (hasPatientError) {
+        setQuickCreateOpen(true);
+      }
       return;
     }
     
     setPendingBookingSlot(slot);
+    setBookingSlot(slot);
     setBookingDialogOpen(true);
   };
 
@@ -271,6 +277,7 @@ export default function AppointmentScheduler({
         visitType: appointmentData.visitType,
         room: created.room,
         status: 'SCHEDULED',
+        visit: created.visit ? { id: created.visit.id, status: created.visit.status } : undefined,
       };
       
       setAppointments(prev => [...prev, newAppt]);
@@ -290,6 +297,7 @@ export default function AppointmentScheduler({
       // Close dialog
       setBookingDialogOpen(false);
       setPendingBookingSlot('');
+      setBookingSlot('');
       
     } catch (e: any) {
       if (isConflictError(e)) {
@@ -311,13 +319,68 @@ export default function AppointmentScheduler({
       });
     } finally {
       setIsBooking(false);
+      setBookingSlot('');
     }
   };
 
   const handleBookingCancel = () => {
     setBookingDialogOpen(false);
     setPendingBookingSlot('');
+    setBookingSlot('');
   };
+
+  const startReschedule = (appointment: AppointmentInSlot) => {
+    if (!appointment.id) return;
+    setRescheduleContext({ appointment, originalDate: date });
+  };
+
+  const cancelReschedule = () => {
+    setRescheduleContext(null);
+    setRescheduleLoading(false);
+  };
+
+  const handleRescheduleSlotSelect = useCallback(async (newSlot: string) => {
+    if (!rescheduleContext || !rescheduleContext.appointment.id || rescheduleLoading) return;
+
+    const targetDate = date;
+    if (newSlot === rescheduleContext.appointment.slot && targetDate === rescheduleContext.originalDate) {
+      toast({
+        variant: "default",
+        title: "No changes made",
+        description: "The appointment is already scheduled for this slot.",
+      });
+      cancelReschedule();
+      return;
+    }
+
+    setRescheduleLoading(true);
+    try {
+      await apiClient.rescheduleAppointment(rescheduleContext.appointment.id, {
+        date: targetDate,
+        slot: newSlot,
+        roomId: rescheduleContext.appointment.room?.id,
+      });
+
+      toast({
+        variant: "success",
+        title: "Appointment rescheduled",
+        description: `${formatPatientName(rescheduleContext.appointment.patient)} moved to ${newSlot} on ${targetDate}`,
+      });
+
+      setRescheduleContext(null);
+      setRecentBookedSlot(newSlot);
+      await fetchSlots();
+    } catch (e) {
+      const errorMessage = getErrorMessage(e);
+      toast({
+        variant: "destructive",
+        title: "Failed to reschedule appointment",
+        description: errorMessage,
+      });
+    } finally {
+      setRescheduleLoading(false);
+    }
+  }, [rescheduleContext, rescheduleLoading, date, fetchSlots, toast]);
 
   // Filter appointments based on visitType and room
   const filteredAppointments = appointments.filter(apt => {
@@ -451,37 +514,54 @@ export default function AppointmentScheduler({
               }} 
             />
             {selectedPatient && (
-              <div className="mt-2 p-3 bg-green-50 rounded border border-green-200">
+              <div className="mt-2 rounded border border-green-200 bg-green-50 p-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium text-green-800">✓ Selected Patient</div>
                     <div className="text-green-700 font-medium">{formatPatientName(selectedPatient)}</div>
-                    <div className="text-xs text-green-600 flex items-center gap-3 mt-1">
+                    <div className="mt-1 flex items-center gap-3 text-xs text-green-600">
                       <span>ID: {selectedPatient.id}</span>
                       {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
                       {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => { 
-                    setSelectedPatientId(''); 
-                    setSelectedPatient(null); 
-                    setPatientSearch(''); 
-                    setPatients([]); 
-                  }}>Clear</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedPatientId('');
+                      setSelectedPatient(null);
+                      setPatientSearch('');
+                      setPatients([]);
+                      setQuickCreateOpen(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
                 </div>
               </div>
             )}
+
+            {!selectedPatientId && patientSearch && (
+              <div className="mt-2 flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                <AlertCircle className="h-4 w-4" />
+                <span>Select a patient from the list or add them as new before booking a slot.</span>
+              </div>
+            )}
+
             {patientSearch && patients.length > 0 && (
               <div className="mt-2 max-h-40 overflow-auto border rounded">
                 {patients.map((p) => (
-                  <div 
-                    key={p.id} 
-                    className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" 
-                    onClick={() => { 
-                      setPatientSearch(`${formatPatientName(p)} — ${p.phone}`); 
-                      setSelectedPatientId(p.id); 
-                      setSelectedPatient(p); 
-                      setPatients([]); 
+                  <div
+                    key={p.id}
+                    className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                    onClick={() => {
+                      setPatientSearch(`${formatPatientName(p)} — ${p.phone}`);
+                      setSelectedPatientId(p.id);
+                      setSelectedPatient(p);
+                      setPatients([]);
+                      setQuickCreateOpen(false);
+                      setAutoPromptedForSearch(false);
                     }}
                   >
                     <div className="font-medium">{formatPatientName(p)}</div>
@@ -492,6 +572,19 @@ export default function AppointmentScheduler({
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+            {patientSearch && patients.length === 0 && (
+              <div className="mt-2 flex flex-col gap-2 rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+                <div>No matching patients found.</div>
+                <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
+                  + Add "{patientSearch}" as a new patient
+                </Button>
+              </div>
+            )}
+            {patientSearch && !patients.length && !quickCreateOpen && (
+              <div className="mt-2 text-xs text-gray-500">
+                Tip: enter patient name and phone, then use "Add" to create a new record instantly.
               </div>
             )}
           </div>
@@ -546,10 +639,25 @@ export default function AppointmentScheduler({
                 </div>
               </div>
             </div>
+            {rescheduleContext && (
+              <div className="mb-3 flex items-start justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                <div>
+                  <div className="font-medium text-amber-800">Rescheduling {formatPatientName(rescheduleContext.appointment.patient)}</div>
+                  <div className="text-amber-700">Select an available slot below to move this appointment{rescheduleContext.originalDate !== date ? ` to ${date}` : ''}.</div>
+                  {rescheduleContext.originalDate !== date && (
+                    <div className="mt-1 text-xs text-amber-600">Original date: {rescheduleContext.originalDate}</div>
+                  )}
+                </div>
+                <Button size="sm" variant="ghost" onClick={cancelReschedule} disabled={rescheduleLoading}>
+                  Cancel
+                </Button>
+              </div>
+            )}
             <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
               {booked.map((t) => {
                 const appt = filteredAppointmentsBySlot[t];
                 const isNewlyBooked = (recentBookedSlot === t) || (bookingDetails?.slot === t);
+                const isRescheduleTarget = rescheduleContext?.appointment.id === appt?.id;
                 return (
                   <div key={`booked-${t}`} className="flex flex-col">
                     <Button
@@ -577,8 +685,19 @@ export default function AppointmentScheduler({
                           <div className="text-gray-600 truncate">{appt.room.name}</div>
                         )}
                         <div className="flex items-center gap-2 mt-2">
-                          <Button size="sm" variant="outline" onClick={() => console.log('Reschedule clicked for:', appt.id)}>
-                            Reschedule
+                          <Button
+                            size="sm"
+                            variant={isRescheduleTarget ? "default" : "outline"}
+                            onClick={() => {
+                              if (isRescheduleTarget) {
+                                cancelReschedule();
+                              } else {
+                                startReschedule(appt);
+                              }
+                            }}
+                            disabled={rescheduleLoading}
+                          >
+                            {isRescheduleTarget ? 'Cancel' : 'Reschedule'}
                           </Button>
                           <Button 
                             size="sm" 
@@ -597,6 +716,7 @@ export default function AppointmentScheduler({
               {slots.map((s) => {
                 const past = isSlotInPast(s.time, date);
                 const isThisBooking = isBooking && bookingSlot === s.time;
+                const disabled = past || isThisBooking || (!selectedPatientId && !rescheduleContext);
                 return (
                   <Button
                     key={s.time}
@@ -606,24 +726,28 @@ export default function AppointmentScheduler({
                         ? '#f3f4f6'
                         : isThisBooking
                         ? '#fef3c7'
+                        : !selectedPatientId && !rescheduleContext
+                        ? '#f9fafb'
                         : 'white',
                       color: past
                         ? '#9ca3af'
                         : isThisBooking
                         ? '#92400e'
+                        : !selectedPatientId && !rescheduleContext
+                        ? '#94a3b8'
                         : '#374151',
                       borderColor: past
                         ? '#d1d5db'
                         : isThisBooking
                         ? '#f59e0b'
                         : '#d1d5db',
-                      opacity: past ? 0.6 : 1,
-                      cursor: past ? 'not-allowed' : isThisBooking ? 'wait' : 'pointer'
+                      opacity: disabled ? 0.6 : 1,
+                      cursor: disabled ? 'not-allowed' : 'pointer'
                     }}
                     className="justify-center text-sm font-medium transition-all duration-200"
-                    disabled={past || isThisBooking}
+                    disabled={disabled}
                     onClick={() => {
-                      if (past) return;
+                      if (disabled && !rescheduleContext) return;
                       handleBookingRequest(s.time);
                     }}
                   >{isThisBooking ? 'Booking…' : s.time}</Button>
@@ -632,38 +756,21 @@ export default function AppointmentScheduler({
             </div>
           </div>
         </CardContent>
-
-        <Dialog open={!!selectedAppointment} onOpenChange={(v: boolean) => { if (!v) setSelectedAppointment(null); }}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Appointment Details</DialogTitle>
-            </DialogHeader>
-            {selectedAppointment && (
-              <div className="space-y-3 text-sm">
-                <div><span className="text-gray-600">Date:</span> {date}</div>
-                <div><span className="text-gray-600">Slot:</span> {selectedAppointment.slot}</div>
-                <div><span className="text-gray-600">Patient:</span> {selectedAppointment.patient?.name || 'Unknown'}</div>
-                {selectedAppointment.patient?.phone && (
-                  <div><span className="text-gray-600">Phone:</span> {selectedAppointment.patient.phone}</div>
-                )}
-                {selectedAppointment.patient?.email && (
-                  <div><span className="text-gray-600">Email:</span> {selectedAppointment.patient.email}</div>
-                )}
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-600">Type:</span> 
-                  <Badge variant={selectedAppointment.visitType === 'PROCEDURE' ? 'destructive' : selectedAppointment.visitType === 'TELEMED' ? 'secondary' : 'default'}>
-                    {selectedAppointment.visitType}
-                  </Badge>
-                </div>
-                {selectedAppointment.room && (
-                  <div><span className="text-gray-600">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
-                )}
-                <div><span className="text-gray-600">Status:</span> {selectedAppointment.status}</div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </Card>
+
+      <DoctorDayCalendar
+        doctorId={doctorId}
+        date={date}
+        recentBookedSlot={recentBookedSlot}
+        visitTypeFilter={visitTypeFilter}
+        roomFilter={roomFilter}
+        onSelectSlot={handleBookingRequest}
+        refreshKey={refreshKey}
+        bookingInProgress={isBooking ? bookingSlot : undefined}
+        onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
+        timeSlotConfig={timeSlotConfig}
+        disableSlotBooking={!selectedPatientId && !rescheduleContext}
+      />
 
       <AppointmentBookingDialog
         open={bookingDialogOpen}
@@ -674,6 +781,26 @@ export default function AppointmentScheduler({
         patient={selectedPatient}
         onConfirm={handleBookingConfirm}
         onCancel={handleBookingCancel}
+      />
+
+      <PatientQuickCreateDialog
+        open={quickCreateOpen}
+        onOpenChange={(open) => {
+          setQuickCreateOpen(open);
+          if (!open && !selectedPatientId) {
+            setPatientSearch('');
+            setAutoPromptedForSearch(false);
+          }
+        }}
+        initialName={patientSearch}
+        onPatientCreated={(patient) => {
+          setSelectedPatient(patient);
+          setSelectedPatientId(patient.id);
+          setPatientSearch(`${formatPatientName(patient)}${patient.phone ? ` — ${patient.phone}` : ''}`);
+          setPatients([]);
+          setQuickCreateOpen(false);
+          setAutoPromptedForSearch(false);
+        }}
       />
     </>
   );

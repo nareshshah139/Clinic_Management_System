@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore } from '@/lib/utils';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
@@ -72,6 +73,8 @@ interface Props {
   printTopMarginPx?: number;
   onChangeReviewDate?: (v: string) => void;
   refreshKey?: number;
+  standalone?: boolean;
+  standaloneReason?: string;
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -120,7 +123,8 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason }: Props) {
+  const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
@@ -240,6 +244,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
   const [oneMgChecking, setOneMgChecking] = useState(false);
   const [oneMgTotals, setOneMgTotals] = useState<any>(null);
+  const [confirmPharmacy, setConfirmPharmacy] = useState<{
+    open: boolean;
+    prescriptionId: string;
+    summary: { medicationsCount: number } | null;
+  }>({ open: false, prescriptionId: '', summary: null });
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -340,7 +349,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others
   ), [procedureParams]);
 
-  const canCreate = useMemo(() => Boolean(patientId && visitId && doctorId && items.length > 0), [patientId, visitId, doctorId, items.length]);
+  const canCreate = useMemo(() => Boolean(patientId && doctorId && items.length > 0 && (visitId || standalone)), [patientId, visitId, doctorId, items.length, standalone]);
 
   useEffect(() => {
     void loadTemplates();
@@ -348,7 +357,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   useEffect(() => {
     const loadVisit = async () => {
-      if (!visitId) return;
+      if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
         const res: any = await apiClient.get(`/visits/${visitId}`);
@@ -382,7 +391,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey]);
+  }, [visitId, refreshKey, standalone]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
@@ -574,7 +583,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     try {
       const payload = {
         patientId,
-        visitId,
+        visitId: standalone ? undefined : visitId,
         doctorId,
         items: items.map(it => ({
           drugName: it.drugName,
@@ -634,41 +643,39 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           procedureParams: procedureParams,
         },
       };
-      const res: any = await apiClient.createPrescription(payload);
+      const res: any = standalone
+        ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
+        : await apiClient.createPrescription(payload);
       onCreated?.(res?.id);
-      
-      // Enhanced navigation to Pharmacy with automatic integration
-      try {
-        const prescriptionId = res?.id || '';
-        const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(prescriptionId)}`;
-        
-        // Show enhanced confirmation dialog
-        const shouldNavigate = confirm(
-          `✅ Prescription created successfully!\n\n` +
-          `📋 ${items.length} medications prescribed\n` +
-          `🏥 Patient: Ready for billing\n\n` +
-          `Would you like to go to Pharmacy to automatically bill these prescribed drugs?\n\n` +
-          `(The prescribed medications will be pre-loaded and locked in the pharmacy billing)`
-        );
-        
-        if (shouldNavigate) {
-          console.log('🔗 Navigating to pharmacy with prescription:', prescriptionId);
-          window.location.href = url;
-          return;
-        }
-      } catch (error) {
-        console.error('Failed to navigate to pharmacy:', error);
+
+      if (!standalone) {
+        setConfirmPharmacy({
+          open: true,
+          prescriptionId: res?.id || '',
+          summary: {
+            medicationsCount: items.length,
+          },
+        });
       }
-      
-      // Reset form only if not navigating to pharmacy
+
+      toast({
+        variant: 'success',
+        title: 'Prescription created',
+        description: `${items.length} medications recorded for the patient.`,
+      });
+
+      // Reset form
       setItems([]);
       setDiagnosis('');
       setNotes('');
       setFollowUpInstructions('');
-      alert('Prescription created successfully!');
     } catch (e: any) {
-      const msg = e?.body?.message || 'Failed to create prescription';
-      alert(msg);
+      const msg = getErrorMessage(e) || 'Failed to create prescription';
+      toast({
+        variant: 'destructive',
+        title: 'Unable to create prescription',
+        description: msg,
+      });
     }
   }, [canCreate, patientId, visitId, doctorId, items, diagnosis, notes, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, topicalFacewash, topicalMoisturiserSunscreen, topicalActives, postProcedureCare, investigations, procedurePlanned, procedureParams, onCreated]);
 
@@ -736,9 +743,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     } catch {}
   };
 
-  const saveCurrentAsTemplate = async () => {
-    const name = window.prompt('Template name');
-    if (!name) return;
+  const [templatePromptOpen, setTemplatePromptOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+
+  const persistTemplate = useCallback(async (name: string) => {
     try {
       const payload = {
         name,
@@ -788,11 +796,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       } as any;
       await apiClient.createPrescriptionTemplate(payload);
       await loadTemplates();
-      alert('Template saved');
+      toast({
+        variant: 'success',
+        title: 'Template saved',
+        description: 'Prescription template stored for future visits.',
+      });
     } catch (e: any) {
-      alert(e?.body?.message || 'Failed to save template');
+      toast({
+        variant: 'destructive',
+        title: 'Unable to save template',
+        description: getErrorMessage(e) || 'Please try again later.',
+      });
+      throw e;
     }
-  };
+  }, [
+    apiClient,
+    items,
+    chiefComplaints,
+    pastHistory,
+    medicationHistory,
+    menstrualHistory,
+    familyHistoryDM,
+    familyHistoryHTN,
+    familyHistoryThyroid,
+    familyHistoryOthers,
+    topicalFacewash,
+    topicalMoisturiserSunscreen,
+    topicalActives,
+    postProcedureCare,
+    investigations,
+    procedurePlanned,
+    procedureParams,
+    notes,
+    loadTemplates,
+    toast,
+  ]);
 
   useEffect(() => {
     if (!orderOpen) return;
@@ -863,7 +901,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         .map((r, idx) => (r.selection ? { rxIndex: idx, sku: r.selection.sku, name: r.selection.name, qty: r.qty, price: r.selection.price } : null))
         .filter(Boolean);
       if (itemsPayload.length === 0) {
-        alert('Select at least one product to order');
+        toast({
+          variant: 'warning',
+          title: 'No products selected',
+          description: 'Select at least one product to place an order.',
+        });
         return;
       }
       const payload = {
@@ -874,21 +916,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         paymentMode: 'COD',
       } as any;
       const res: any = await apiClient.oneMgCreateOrder(payload);
-      alert(res && (res as any).orderId ? `Order created: ${(res as any).orderId}` : 'Order created');
+      const orderId = res && (res as any).orderId ? `#${(res as any).orderId}` : 'successfully';
+      toast({
+        variant: 'success',
+        title: '1MG order created',
+        description: `Prescription items sent to pharmacy ${orderId}.`,
+      });
       setOrderOpen(false);
     } catch (e: any) {
-      alert(e?.body?.message || 'Failed to create 1MG order');
+      toast({
+        variant: 'destructive',
+        title: 'Unable to create 1MG order',
+        description: getErrorMessage(e) || 'Please retry shortly.',
+      });
     }
   };
 
   return (
     <div className="space-y-6">
-      {items.length > 0 && (
+      {!standalone && items.length > 0 && (
         <div className="sticky top-0 z-10 bg-white border-b py-2 flex justify-end">
-          <Button variant="outline" size="sm" onClick={() => {
-            const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
-            window.location.href = url;
-          }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
+              window.location.href = url;
+            }}
+          >
             Go to Pharmacy
           </Button>
         </div>
@@ -899,8 +954,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <CardTitle className="flex items-center justify-between">
               <span>Prescription Builder</span>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">Visit-linked</Badge>
-                <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
+                <Badge variant="outline" className="text-xs">
+                  {standalone ? 'Prescription Pad' : 'Visit-linked'}
+                </Badge>
+                {!standalone && (
+                  <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
+                )}
               </div>
             </CardTitle>
           </CardHeader>
@@ -1210,7 +1269,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
                     {loadingTemplates ? 'Loading…' : 'Refresh'}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={saveCurrentAsTemplate}>Save current</Button>
+                  <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {(templates || []).slice(0, 6).map((t) => (
@@ -1737,6 +1796,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           </DialogContent>
         </Dialog>
 
+        <Dialog open={confirmPharmacy.open} onOpenChange={(open) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Go to Pharmacy?</DialogTitle>
+              <DialogDescription>
+                {confirmPharmacy.summary?.medicationsCount || 0} medications were added to this prescription. Continue to
+                the pharmacy module to bill them now?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmPharmacy({ open: false, prescriptionId: '', summary: null })}
+              >
+                Stay Here
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!confirmPharmacy.prescriptionId) {
+                    setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
+                    return;
+                  }
+                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}`;
+                  window.location.href = url;
+                }}
+              >
+                Yes, go to Pharmacy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         {/* 1MG Order Dialog (placeholder) */}
         <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
           <DialogContent className="sm:max-w-4xl">
@@ -1818,6 +1909,59 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
           </DialogContent>
         </Dialog>
+        <Dialog
+          open={templatePromptOpen}
+          onOpenChange={(open) => {
+            setTemplatePromptOpen(open);
+            if (!open) setTemplateName('');
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save as Template</DialogTitle>
+              <DialogDescription>Provide a name to reuse this prescription layout later.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                placeholder="Dermatology follow-up"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setTemplatePromptOpen(false);
+                  setTemplateName('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  const trimmed = templateName.trim();
+                  if (!trimmed) {
+                    toast({
+                      variant: 'warning',
+                      title: 'Template name required',
+                      description: 'Please enter a name for the template.',
+                    });
+                    return;
+                  }
+                  await persistTemplate(trimmed);
+                  setTemplatePromptOpen(false);
+                  setTemplateName('');
+                }}
+              >
+                Save Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={confirmPharmacy.open} onOpenChange={(open) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
+        // ... existing code ...
       </div>
     </div>
   );

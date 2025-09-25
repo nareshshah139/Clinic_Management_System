@@ -5,6 +5,7 @@ import { VisitsModule } from '../visits.module';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
 import { Language } from '@prisma/client';
+import { RequestContextService, RequestContextData } from '../../../shared/context/request-context.service';
 
 describe('VisitsController (Integration)', () => {
   let app: INestApplication;
@@ -20,32 +21,38 @@ describe('VisitsController (Integration)', () => {
     canActivate: jest.fn(() => true),
   };
 
-  // Mock Prisma Service
-  const mockPrismaService = {
-    patient: {
-      findFirst: jest.fn(),
-    },
-    user: {
-      findFirst: jest.fn(),
-    },
-    appointment: {
-      findFirst: jest.fn(),
-      update: jest.fn(),
-    },
-    visit: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      update: jest.fn(),
-      count: jest.fn(),
-      groupBy: jest.fn(),
-    },
-    prescription: {
-      findFirst: jest.fn(),
-    },
-    onModuleInit: jest.fn(),
-    $connect: jest.fn(),
-    enableShutdownHooks: jest.fn(),
+  const createPrismaMock = () => {
+    let requestContextStore: RequestContextData | undefined;
+    const requestContext = {
+      run: <T>(data: RequestContextData, callback: () => T) => {
+        requestContextStore = data;
+        try {
+          return callback();
+        } finally {
+          requestContextStore = undefined;
+        }
+      },
+      get: () => requestContextStore ?? { userId: mockUser.id, ipAddress: '127.0.0.1', userAgent: 'jest' },
+    } as RequestContextService;
+
+    const prisma = new PrismaService(requestContext);
+    prisma.patient.findFirst = jest.fn();
+    prisma.user.findFirst = jest.fn();
+    prisma.appointment.findFirst = jest.fn();
+    prisma.appointment.update = jest.fn();
+    prisma.visit.create = jest.fn();
+    prisma.visit.findMany = jest.fn();
+    prisma.visit.findFirst = jest.fn();
+    prisma.visit.update = jest.fn();
+    prisma.visit.count = jest.fn();
+    prisma.visit.groupBy = jest.fn();
+    prisma.prescription.findFirst = jest.fn();
+    prisma.auditLog.create = jest.fn();
+    prisma.onModuleInit = jest.fn();
+    prisma.$connect = jest.fn();
+    prisma.enableShutdownHooks = jest.fn();
+    prisma.$disconnect = jest.fn();
+    return prisma;
   };
 
   beforeAll(async () => {
@@ -53,7 +60,9 @@ describe('VisitsController (Integration)', () => {
       imports: [VisitsModule],
     })
       .overrideProvider(PrismaService)
-      .useValue(mockPrismaService)
+      .useFactory({
+        factory: createPrismaMock,
+      })
       .overrideGuard(JwtAuthGuard)
       .useValue(mockAuthGuard)
       .compile();
@@ -126,7 +135,7 @@ describe('VisitsController (Integration)', () => {
       };
 
       const mockPatient = { id: 'patient-123', name: 'John Doe' };
-      const mockDoctor = { id: 'doctor-123', name: 'Dr. Smith', role: 'DOCTOR' };
+      const mockDoctor = { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith', role: 'DOCTOR' };
       const mockAppointment = { 
         id: 'appointment-123', 
         patientId: 'patient-123',
@@ -135,18 +144,32 @@ describe('VisitsController (Integration)', () => {
       };
       const mockVisit = {
         id: 'visit-123',
-        ...createVisitDto,
+        patientId: 'patient-123',
+        doctorId: 'doctor-123',
+        appointmentId: 'appointment-123',
+        vitals: JSON.stringify(createVisitDto.vitals),
+        complaints: JSON.stringify(createVisitDto.complaints),
+        history: JSON.stringify(createVisitDto.history),
+        exam: JSON.stringify(createVisitDto.examination),
+        diagnosis: JSON.stringify(createVisitDto.diagnosis),
+        plan: JSON.stringify({ ...createVisitDto.treatmentPlan, notes: createVisitDto.notes }),
+        attachments: null,
+        scribeJson: null,
         patient: mockPatient,
-        doctor: mockDoctor,
+        doctor: {
+          ...mockDoctor,
+          firstName: 'Dr.',
+          lastName: 'Smith',
+        },
         appointment: mockAppointment,
       };
 
-      mockPrismaService.patient.findFirst.mockResolvedValue(mockPatient);
-      mockPrismaService.user.findFirst.mockResolvedValue(mockDoctor);
-      mockPrismaService.appointment.findFirst.mockResolvedValue(mockAppointment);
-      mockPrismaService.visit.findFirst.mockResolvedValue(null);
-      mockPrismaService.visit.create.mockResolvedValue(mockVisit);
-      mockPrismaService.appointment.update.mockResolvedValue({
+      prisma.patient.findFirst.mockResolvedValue(mockPatient);
+      prisma.user.findFirst.mockResolvedValue(mockDoctor);
+      prisma.appointment.findFirst.mockResolvedValue(mockAppointment);
+      prisma.visit.findFirst.mockResolvedValue(null);
+      prisma.visit.create.mockResolvedValue(mockVisit);
+      prisma.appointment.update.mockResolvedValue({
         ...mockAppointment,
         status: 'IN_PROGRESS',
       });
@@ -160,7 +183,10 @@ describe('VisitsController (Integration)', () => {
         id: 'visit-123',
         patientId: 'patient-123',
         doctorId: 'doctor-123',
+        appointmentId: 'appointment-123',
       });
+      expect(response.body.plan).toEqual(JSON.stringify({ ...createVisitDto.treatmentPlan, notes: createVisitDto.notes }));
+      expect(response.body.notes).toBe(createVisitDto.notes);
     });
 
     it('should return 400 for missing complaints', async () => {
@@ -171,10 +197,10 @@ describe('VisitsController (Integration)', () => {
       };
 
       const mockPatient = { id: 'patient-123', name: 'John Doe' };
-      const mockDoctor = { id: 'doctor-123', name: 'Dr. Smith', role: 'DOCTOR' };
+      const mockDoctor = { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith', role: 'DOCTOR' };
 
-      mockPrismaService.patient.findFirst.mockResolvedValue(mockPatient);
-      mockPrismaService.user.findFirst.mockResolvedValue(mockDoctor);
+      prisma.patient.findFirst.mockResolvedValue(mockPatient);
+      prisma.user.findFirst.mockResolvedValue(mockDoctor);
 
       await request(app.getHttpServer())
         .post('/visits')
@@ -189,7 +215,7 @@ describe('VisitsController (Integration)', () => {
         complaints: [{ complaint: 'Headache' }],
       };
 
-      mockPrismaService.patient.findFirst.mockResolvedValue(null);
+      prisma.patient.findFirst.mockResolvedValue(null);
 
       await request(app.getHttpServer())
         .post('/visits')
@@ -204,13 +230,13 @@ describe('VisitsController (Integration)', () => {
         {
           id: 'visit-1',
           patient: { id: 'patient-1', name: 'John Doe' },
-          doctor: { id: 'doctor-1', name: 'Dr. Smith' },
+          doctor: { id: 'doctor-1', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
           appointment: { id: 'appointment-1', date: '2024-12-25', slot: '10:00-10:30' },
         },
       ];
 
-      mockPrismaService.visit.findMany.mockResolvedValue(mockVisits);
-      mockPrismaService.visit.count.mockResolvedValue(1);
+      prisma.visit.findMany.mockResolvedValue(mockVisits);
+      prisma.visit.count.mockResolvedValue(1);
 
       const response = await request(app.getHttpServer())
         .get('/visits')
@@ -223,15 +249,15 @@ describe('VisitsController (Integration)', () => {
     });
 
     it('should filter visits by patient', async () => {
-      mockPrismaService.visit.findMany.mockResolvedValue([]);
-      mockPrismaService.visit.count.mockResolvedValue(0);
+      prisma.visit.findMany.mockResolvedValue([]);
+      prisma.visit.count.mockResolvedValue(0);
 
       await request(app.getHttpServer())
         .get('/visits')
         .query({ patientId: 'patient-123' })
         .expect(200);
 
-      expect(mockPrismaService.visit.findMany).toHaveBeenCalledWith(
+      expect(prisma.visit.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({
             patientId: 'patient-123',
@@ -254,11 +280,11 @@ describe('VisitsController (Integration)', () => {
         },
       };
 
-      mockPrismaService.visit.count
+      prisma.visit.count
         .mockResolvedValueOnce(100)
         .mockResolvedValueOnce(80)
         .mockResolvedValueOnce(60);
-      mockPrismaService.visit.groupBy.mockResolvedValue([
+      prisma.visit.groupBy.mockResolvedValue([
         { createdAt: new Date('2024-12-01'), _count: { id: 5 } },
         { createdAt: new Date('2024-12-02'), _count: { id: 6 } },
       ]);
@@ -286,14 +312,14 @@ describe('VisitsController (Integration)', () => {
             vitals: JSON.stringify({ systolicBP: 120 }),
             complaints: JSON.stringify([{ complaint: 'Headache' }]),
             diagnosis: JSON.stringify([{ diagnosis: 'Tension headache' }]),
-            doctor: { id: 'doctor-1', name: 'Dr. Smith' },
+            doctor: { id: 'doctor-1', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
             appointment: { id: 'appointment-1', date: '2024-12-25', slot: '10:00-10:30' },
           },
         ],
       };
 
-      mockPrismaService.patient.findFirst.mockResolvedValue(mockHistory.patient);
-      mockPrismaService.visit.findMany.mockResolvedValue(mockHistory.visits);
+      prisma.patient.findFirst.mockResolvedValue(mockHistory.patient);
+      prisma.visit.findMany.mockResolvedValue(mockHistory.visits);
 
       const response = await request(app.getHttpServer())
         .get(`/visits/patient/${patientId}/history`)
@@ -312,6 +338,8 @@ describe('VisitsController (Integration)', () => {
         doctor: {
           id: 'doctor-123',
           name: 'Dr. Smith',
+          firstName: 'Dr.',
+          lastName: 'Smith',
         },
         visits: [
           {
@@ -325,8 +353,8 @@ describe('VisitsController (Integration)', () => {
         ],
       };
 
-      mockPrismaService.user.findFirst.mockResolvedValue(mockVisits.doctor);
-      mockPrismaService.visit.findMany.mockResolvedValue(mockVisits.visits);
+      prisma.user.findFirst.mockResolvedValue(mockVisits.doctor);
+      prisma.visit.findMany.mockResolvedValue(mockVisits.visits);
 
       const response = await request(app.getHttpServer())
         .get(`/visits/doctor/${doctorId}`)
@@ -346,8 +374,9 @@ describe('VisitsController (Integration)', () => {
         vitals: JSON.stringify({ systolicBP: 120, diastolicBP: 80 }),
         complaints: JSON.stringify([{ complaint: 'Headache' }]),
         diagnosis: JSON.stringify([{ diagnosis: 'Tension headache' }]),
+        plan: JSON.stringify({ notes: 'Patient cooperative' }),
         patient: { id: 'patient-123', name: 'John Doe' },
-        doctor: { id: 'doctor-123', name: 'Dr. Smith' },
+        doctor: { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
         appointment: { id: 'appointment-123', date: '2024-12-25', slot: '10:00-10:30' },
         prescription: null,
         consents: [],
@@ -355,7 +384,7 @@ describe('VisitsController (Integration)', () => {
         deviceLogs: [],
       };
 
-      mockPrismaService.visit.findFirst.mockResolvedValue(mockVisit);
+    prisma.visit.findFirst.mockResolvedValue(mockVisit);
 
       const response = await request(app.getHttpServer())
         .get(`/visits/${visitId}`)
@@ -363,14 +392,16 @@ describe('VisitsController (Integration)', () => {
 
       expect(response.body).toMatchObject({
         id: visitId,
+        vitals: JSON.parse(mockVisit.vitals),
+        complaints: JSON.parse(mockVisit.complaints),
+        diagnosis: JSON.parse(mockVisit.diagnosis),
+        plan: JSON.parse(mockVisit.plan),
       });
-      expect(response.body.vitals).toEqual({ systolicBP: 120, diastolicBP: 80 });
-      expect(response.body.complaints).toEqual([{ complaint: 'Headache' }]);
-      expect(response.body.diagnosis).toEqual([{ diagnosis: 'Tension headache' }]);
+      expect(response.body.notes).toBe('Patient cooperative');
     });
 
     it('should return 404 for non-existent visit', async () => {
-      mockPrismaService.visit.findFirst.mockResolvedValue(null);
+      prisma.visit.findFirst.mockResolvedValue(null);
 
       await request(app.getHttpServer())
         .get('/visits/non-existent')
@@ -394,25 +425,27 @@ describe('VisitsController (Integration)', () => {
         vitals: JSON.stringify({ systolicBP: 120 }),
         complaints: JSON.stringify([{ complaint: 'Headache' }]),
         patient: { id: 'patient-123', name: 'John Doe' },
-        doctor: { id: 'doctor-123', name: 'Dr. Smith' },
+        doctor: { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
         appointment: { id: 'appointment-123', date: '2024-12-25', slot: '10:00-10:30' },
+        plan: JSON.stringify({ notes: 'Original notes' }),
       };
 
       const mockUpdatedVisit = {
         ...mockVisit,
         vitals: JSON.stringify(updateDto.vitals),
-        notes: updateDto.notes,
+        plan: JSON.stringify({ notes: updateDto.notes }),
       };
 
-      mockPrismaService.visit.findFirst.mockResolvedValue(mockVisit);
-      mockPrismaService.visit.update.mockResolvedValue(mockUpdatedVisit);
+      prisma.visit.findFirst.mockResolvedValue(mockVisit);
+      prisma.visit.update.mockResolvedValue(mockUpdatedVisit);
 
       const response = await request(app.getHttpServer())
         .patch(`/visits/${visitId}`)
         .send(updateDto)
         .expect(200);
 
-      expect(response.body.vitals).toBe(JSON.stringify(updateDto.vitals));
+      expect(response.body.vitals).toEqual(JSON.stringify(updateDto.vitals));
+      expect(response.body.plan).toEqual(JSON.stringify({ notes: updateDto.notes }));
       expect(response.body.notes).toBe(updateDto.notes);
     });
   });
@@ -431,19 +464,18 @@ describe('VisitsController (Integration)', () => {
         appointmentId: 'appointment-123',
         plan: JSON.stringify({ medications: 'Paracetamol' }),
         patient: { id: 'patient-123', name: 'John Doe' },
-        doctor: { id: 'doctor-123', name: 'Dr. Smith' },
+        doctor: { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
         appointment: { id: 'appointment-123', date: '2024-12-25', slot: '10:00-10:30' },
       };
 
       const mockCompletedVisit = {
         ...mockVisit,
-        notes: completeDto.finalNotes,
-        followUp: new Date(completeDto.followUpDate),
+        plan: JSON.stringify({ finalNotes: completeDto.finalNotes }),
       };
 
-      mockPrismaService.visit.findFirst.mockResolvedValue(mockVisit);
-      mockPrismaService.visit.update.mockResolvedValue(mockCompletedVisit);
-      mockPrismaService.appointment.update.mockResolvedValue({
+      prisma.visit.findFirst.mockResolvedValue(mockVisit);
+      prisma.visit.update.mockResolvedValue(mockCompletedVisit);
+      prisma.appointment.update.mockResolvedValue({
         ...mockVisit.appointment,
         status: 'COMPLETED',
       });
@@ -454,6 +486,7 @@ describe('VisitsController (Integration)', () => {
         .expect(201);
 
       expect(response.body.notes).toBe(completeDto.finalNotes);
+      expect(response.body.plan).toEqual(JSON.stringify({ finalNotes: completeDto.finalNotes }));
     });
   });
 
@@ -462,17 +495,17 @@ describe('VisitsController (Integration)', () => {
       const visitId = 'visit-123';
       const mockVisit = {
         id: visitId,
-        notes: 'Original notes',
+        plan: JSON.stringify({ notes: 'Original notes' }),
         patient: { id: 'patient-123', name: 'John Doe' },
-        doctor: { id: 'doctor-123', name: 'Dr. Smith' },
+        doctor: { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
         appointment: { id: 'appointment-123', date: '2024-12-25', slot: '10:00-10:30' },
       };
 
-      mockPrismaService.visit.findFirst.mockResolvedValue(mockVisit);
-      mockPrismaService.prescription.findFirst.mockResolvedValue(null);
-      mockPrismaService.visit.update.mockResolvedValue({
+      prisma.visit.findFirst.mockResolvedValue(mockVisit);
+      prisma.prescription.findFirst.mockResolvedValue(null);
+      prisma.visit.update.mockResolvedValue({
         ...mockVisit,
-        notes: '[DELETED] Original notes',
+        plan: JSON.stringify({ deleted: true, deletedAt: '2025-01-01T00:00:00.000Z' }),
       });
 
       const response = await request(app.getHttpServer())
@@ -480,20 +513,33 @@ describe('VisitsController (Integration)', () => {
         .expect(200);
 
       expect(response.body.message).toBe('Visit deleted successfully');
+      expect(prisma.visit.update).toHaveBeenCalledWith({
+        where: { id: visitId },
+        data: { plan: expect.stringMatching(/"deleted":true/) },
+      });
+    });
+
+    it('should return 404 if visit not found', async () => {
+      const visitId = 'visit-123';
+      prisma.visit.findFirst.mockResolvedValue(null);
+
+      await request(app.getHttpServer())
+        .delete(`/visits/${visitId}`)
+        .expect(404);
     });
 
     it('should return 400 if visit has prescription', async () => {
       const visitId = 'visit-123';
       const mockVisit = {
         id: visitId,
-        notes: 'Original notes',
+        plan: JSON.stringify({ notes: 'Original notes' }),
         patient: { id: 'patient-123', name: 'John Doe' },
-        doctor: { id: 'doctor-123', name: 'Dr. Smith' },
+        doctor: { id: 'doctor-123', firstName: 'Dr.', lastName: 'Smith', name: 'Dr. Smith' },
         appointment: { id: 'appointment-123', date: '2024-12-25', slot: '10:00-10:30' },
       };
 
-      mockPrismaService.visit.findFirst.mockResolvedValue(mockVisit);
-      mockPrismaService.prescription.findFirst.mockResolvedValue({ id: 'prescription-123' });
+      prisma.visit.findFirst.mockResolvedValue(mockVisit);
+      prisma.prescription.findFirst.mockResolvedValue({ id: 'prescription-123' });
 
       await request(app.getHttpServer())
         .delete(`/visits/${visitId}`)

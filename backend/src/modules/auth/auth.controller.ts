@@ -29,14 +29,14 @@ export class AuthController {
   @Public()
   @Post('login')
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
-    const { phone, password } = body || {};
-    if (!phone || !password) {
-      throw new HttpException('phone and password are required', HttpStatus.BAD_REQUEST);
+    const { identifier, phone, email, password } = body || {};
+    const loginIdentifier = (identifier ?? phone ?? email)?.trim();
+
+    if (!loginIdentifier || !password) {
+      throw new HttpException('Login identifier and password are required', HttpStatus.BAD_REQUEST);
     }
-    const user = await this.authService.validateUser(phone, password);
-    if (!user) {
-      throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
-    }
+
+    const user = await this.authService.validateUser(loginIdentifier, password);
     const { access_token } = await this.authService.login(user);
     res.cookie('auth_token', access_token, {
       httpOnly: true,

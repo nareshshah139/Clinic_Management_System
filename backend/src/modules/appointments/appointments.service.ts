@@ -521,6 +521,9 @@ export class AppointmentsService {
         room: {
           select: { id: true, name: true, type: true },
         },
+        visit: {
+          select: { id: true, status: true },
+        },
       },
       orderBy: {
         slot: 'asc',
@@ -559,6 +562,9 @@ export class AppointmentsService {
         },
         doctor: {
           select: { id: true, firstName: true, lastName: true },
+        },
+        visit: {
+          select: { id: true, status: true },
         },
       },
       orderBy: {

@@ -13,19 +13,25 @@ import {
   UploadedFiles,
   UploadedFile,
   BadRequestException,
+  ServiceUnavailableException,
+  HttpException,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
-import { ApiTags, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage, memoryStorage } from 'multer';
-import { extname, join } from 'path';
+import { memoryStorage } from 'multer';
+import { join } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
+import { fileTypeFromBuffer } from 'file-type';
+import sharp from 'sharp';
 import type { Express } from 'express';
 import { Logger } from '@nestjs/common';
+
+const fsPromises = fs.promises;
 
 interface AuthenticatedRequest {
   user: {
@@ -35,31 +41,79 @@ interface AuthenticatedRequest {
   };
 }
 
-function ensureUploadsDir() {
+async function ensureUploadsDir() {
   const dir = join(process.cwd(), 'uploads', 'visits');
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  await fsPromises.mkdir(dir, { recursive: true, mode: 0o700 });
   return dir;
 }
 
-function ensurePatientDraftDir(patientId: string) {
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const dir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return { absPath: dir, dateStr };
+async function writeVisitFile(targetDir: string, buffer: Buffer, preferredExt: string) {
+  const ext = preferredExt.startsWith('.') ? preferredExt.toLowerCase() : `.${preferredExt.toLowerCase()}`;
+  const unique = randomBytes(8).toString('hex');
+  const filename = `${Date.now()}_${unique}${ext}`;
+  await fsPromises.writeFile(join(targetDir, filename), buffer, { mode: 0o600 });
+  return filename;
 }
 
-function getUploadLimitBytes(): number {
-  const mb = Number(process.env.UPLOAD_MAX_FILE_MB || 25);
-  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 25;
-  return safeMb * 1024 * 1024;
+async function processImageUpload(file: Express.Multer.File) {
+  if (!file || !file.buffer || file.size <= 0) {
+    throw new BadRequestException('Empty file upload');
+  }
+
+  const detected = await fileTypeFromBuffer(file.buffer);
+  if (!detected || !detected.mime.startsWith('image/') || !detected.ext) {
+    throw new BadRequestException('Unsupported image type');
+  }
+
+  const format = detected.ext === 'jpg' ? 'jpeg' : detected.ext;
+
+  try {
+    const pipeline = sharp(file.buffer, { failOn: 'error' }).rotate().withMetadata({ exif: undefined });
+    const { width = 0, height = 0 } = await pipeline.metadata();
+    if (width * height > 40_000_000) {
+      throw new BadRequestException('Image resolution too large');
+    }
+    const sanitizedBuffer = await pipeline.toFormat(format as keyof sharp.FormatEnum).toBuffer();
+
+    return {
+      buffer: sanitizedBuffer,
+      ext: format,
+    };
+  } catch (error) {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    throw new BadRequestException('Failed to process image upload');
+  }
+}
+
+async function ensurePatientDraftDir(patientId: string) {
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const dir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
+  await fsPromises.mkdir(dir, { recursive: true, mode: 0o700 });
+  return { absPath: dir, dateStr };
 }
 
 function imageFileFilter(_req: any, file: any, cb: any) {
   if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
   const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-  if (allowed.includes(file.mimetype)) return cb(null, true);
-  return cb(new BadRequestException('Only image files are allowed'), false);
+  if (!allowed.includes(file.mimetype)) {
+    return cb(new BadRequestException('Only image files are allowed'), false);
+  }
+  return cb(null, true);
 }
+
+const VISIT_UPLOAD_LIMIT_BYTES = (() => {
+  const mb = Number(process.env.UPLOAD_MAX_FILE_MB || 25);
+  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 25;
+  return safeMb * 1024 * 1024;
+})();
+
+const TRANSCRIBE_UPLOAD_LIMIT_BYTES = (() => {
+  const mb = Number(process.env.TRANSCRIBE_MAX_FILE_MB || 10);
+  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 10;
+  return safeMb * 1024 * 1024;
+})();
 
 @ApiTags('Visits')
 @Controller('visits')
@@ -87,35 +141,37 @@ export class VisitsController {
 
   // Draft photo upload before a visit exists
   @Post('photos/draft/:patientId')
-  @ApiConsumes('multipart/form-data')
   @UseInterceptors(FilesInterceptor('files', 6, {
-    storage: diskStorage({
-      destination: (req: any, _file: any, cb: any) => {
-        const { absPath } = ensurePatientDraftDir(req.params.patientId);
-        cb(null, absPath);
-      },
-      filename: (_req: any, file: any, cb: any) => {
-        const unique = randomBytes(8).toString('hex');
-        cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
-      },
-    }),
-    limits: { fileSize: getUploadLimitBytes() },
+    storage: memoryStorage(),
+    limits: {
+      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+      files: 6,
+    },
     fileFilter: imageFileFilter,
   }))
   async uploadDraftPhotos(
     @Param('patientId') patientId: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const { dateStr } = ensurePatientDraftDir(patientId);
-    const relPaths = (files || []).map(f => `/uploads/patients/${patientId}/${dateStr}/${f.filename}`);
-    // Return sanitized/current list for today
+    const { dateStr, absPath } = await ensurePatientDraftDir(patientId);
+    const relPaths: string[] = [];
+    let processedCount = 0;
+    for (const file of files || []) {
+      const { buffer, ext } = await processImageUpload(file);
+      const filename = await writeVisitFile(absPath, buffer, ext);
+      relPaths.push(`/uploads/patients/${patientId}/${dateStr}/${filename}`);
+      processedCount += 1;
+    }
+    if (relPaths.length === 0) {
+      throw new BadRequestException('No valid images uploaded');
+    }
+    this.logger.debug(`uploadDraftPhotos: processed ${processedCount}/${files?.length ?? 0} files for patient=${patientId}`);
     return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
 
   @Get('photos/draft/:patientId')
-  listDraftPhotos(@Param('patientId') patientId: string) {
-    // Default to today's folder
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  async listDraftPhotos(@Param('patientId') patientId: string) {
+    const { dateStr } = await ensurePatientDraftDir(patientId);
     return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
 
@@ -179,25 +235,38 @@ export class VisitsController {
     return this.visitsService.complete(id, completeVisitDto, req.user.branchId);
   }
 
+  @Delete(':id')
+  remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.visitsService.remove(id, req.user.branchId);
+  }
+
   @Post(':id/photos')
-  @ApiConsumes('multipart/form-data')
   @UseInterceptors(FilesInterceptor('files', 6, {
-    storage: diskStorage({
-      destination: (_req: any, _file: any, cb: any) => cb(null, ensureUploadsDir()),
-      filename: (_req: any, file: any, cb: any) => {
-        const unique = randomBytes(8).toString('hex');
-        cb(null, `${Date.now()}_${unique}${extname(file.originalname)}`);
-      },
-    }),
-    limits: { fileSize: getUploadLimitBytes() },
+    storage: memoryStorage(),
+    limits: {
+      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+      files: 6,
+    },
     fileFilter: imageFileFilter,
   }))
-  uploadPhotos(
+  async uploadPhotos(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Request() req: AuthenticatedRequest,
   ) {
-    const relPaths = files.map(f => `/uploads/visits/${f.filename}`);
+    const uploadDir = await ensureUploadsDir();
+    const relPaths: string[] = [];
+    let processedCount = 0;
+    for (const file of files || []) {
+      const { buffer, ext } = await processImageUpload(file);
+      const filename = await writeVisitFile(uploadDir, buffer, ext);
+      relPaths.push(`/uploads/visits/${filename}`);
+      processedCount += 1;
+    }
+    if (relPaths.length === 0) {
+      throw new BadRequestException('No valid images uploaded');
+    }
+    this.logger.debug(`uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`);
     return this.visitsService.addAttachments(id, relPaths, req.user.branchId);
   }
 
@@ -208,32 +277,42 @@ export class VisitsController {
 
   // Speech-to-text proxy to OpenAI Whisper
   @Post('transcribe')
-  @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    limits: {
+      fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
+      files: 1,
+    },
+  }))
   async transcribeAudio(
     @UploadedFile() file: Express.Multer.File,
     @Request() _req: AuthenticatedRequest,
   ) {
-    this.logger.log(
-      `transcribeAudio: received file name=${file?.originalname || 'n/a'} size=${file?.size || 0} type=${file?.mimetype || 'n/a'}`,
-    );
     if (!file || !file.buffer) {
       this.logger.warn('transcribeAudio: no file buffer provided');
       return { text: '' };
     }
+    if ((file.size || 0) <= 0) {
+      throw new BadRequestException('Empty audio upload');
+    }
+    const allowedAudioTypes = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg'];
+    if (!file.mimetype || !allowedAudioTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Unsupported audio type');
+    }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      this.logger.error('OPENAI_API_KEY is not configured');
-      throw new Error('OPENAI_API_KEY is not configured');
+      this.logger.warn('transcribeAudio skipped: OPENAI_API_KEY is not configured');
+      throw new ServiceUnavailableException('Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
     }
     try {
       // Build multipart form-data for OpenAI Whisper using native undici FormData/Blob
       const form = new FormData();
-      const blob = new Blob([file.buffer], { type: file.mimetype || 'audio/webm' });
+      const arrayBuffer = await (file.buffer as Buffer).buffer.slice(0);
+      const blob = new Blob([arrayBuffer], { type: file.mimetype || 'audio/webm' });
       form.append('file', blob, file.originalname || 'audio.webm');
       form.append('model', 'whisper-1');
 
-      this.logger.log('transcribeAudio: sending audio to OpenAI Whisper');
+      this.logger.debug('transcribeAudio: sending audio to OpenAI Whisper');
       const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
@@ -241,7 +320,7 @@ export class VisitsController {
         } as any,
         body: form as any,
       });
-      this.logger.log(`transcribeAudio: OpenAI responded status=${resp.status}`);
+      this.logger.debug(`transcribeAudio: OpenAI responded status=${resp.status}`);
       if (!resp.ok) {
         const errText = await resp.text();
         this.logger.error(`OpenAI error response: ${resp.status} ${errText}`);
@@ -252,7 +331,7 @@ export class VisitsController {
       if (!text) {
         this.logger.warn('transcribeAudio: received empty transcript text');
       } else {
-        this.logger.log(`transcribeAudio: transcript length=${text.length}`);
+        this.logger.debug(`transcribeAudio: transcript length=${text.length}`);
       }
       return { text };
     } catch (e: any) {

@@ -245,6 +245,125 @@ describe('AppointmentsService', () => {
     });
   });
 
+  describe('getDoctorSchedule', () => {
+    it('should include patient, room, and visit details', async () => {
+      const mockAppointments = [
+        {
+          id: 'appointment-1',
+          slot: '10:00-10:30',
+          patient: mockPatient,
+          room: mockRoom,
+          visit: { id: 'visit-1', status: 'IN_PROGRESS' },
+        },
+      ];
+
+      mockPrisma.user.findFirst.mockResolvedValue(mockDoctor);
+      mockPrisma.appointment.findMany.mockResolvedValue(mockAppointments);
+
+      const result = await service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId);
+
+      expect(result).toEqual({
+        doctorId: mockDoctor.id,
+        doctorName: `${mockDoctor.firstName} ${mockDoctor.lastName}`,
+        date: futureDateString,
+        appointments: mockAppointments,
+      });
+
+      expect(mockPrisma.appointment.findMany).toHaveBeenCalledWith({
+        where: {
+          doctorId: mockDoctor.id,
+          date: {
+            gte: new Date(`${futureDateString}T00:00:00.000Z`),
+            lte: new Date(`${futureDateString}T23:59:59.999Z`),
+          },
+          branchId: mockBranchId,
+        },
+        include: {
+          patient: {
+            select: { id: true, name: true, phone: true },
+          },
+          room: {
+            select: { id: true, name: true, type: true },
+          },
+          visit: {
+            select: { id: true, status: true },
+          },
+        },
+        orderBy: {
+          slot: 'asc',
+        },
+      });
+    });
+
+    it('should throw NotFoundException if doctor not found', async () => {
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getDoctorSchedule(mockDoctor.id, futureDateString, mockBranchId),
+      ).rejects.toThrow(new NotFoundException('Doctor not found in this branch'));
+    });
+  });
+
+  describe('getRoomSchedule', () => {
+    it('should include patient, doctor, and visit details', async () => {
+      const mockAppointments = [
+        {
+          id: 'appointment-1',
+          slot: '10:00-10:30',
+          patient: mockPatient,
+          doctor: mockDoctor,
+          visit: { id: 'visit-1', status: 'COMPLETED' },
+        },
+      ];
+
+      mockPrisma.room.findFirst.mockResolvedValue(mockRoom);
+      mockPrisma.appointment.findMany.mockResolvedValue(mockAppointments);
+
+      const result = await service.getRoomSchedule(mockRoom.id, futureDateString, mockBranchId);
+
+      expect(result).toEqual({
+        roomId: mockRoom.id,
+        roomName: mockRoom.name,
+        roomType: mockRoom.type,
+        date: futureDateString,
+        appointments: mockAppointments,
+      });
+
+      expect(mockPrisma.appointment.findMany).toHaveBeenCalledWith({
+        where: {
+          roomId: mockRoom.id,
+          date: {
+            gte: new Date(`${futureDateString}T00:00:00.000Z`),
+            lte: new Date(`${futureDateString}T23:59:59.999Z`),
+          },
+          branchId: mockBranchId,
+        },
+        include: {
+          patient: {
+            select: { id: true, name: true, phone: true },
+          },
+          doctor: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          visit: {
+            select: { id: true, status: true },
+          },
+        },
+        orderBy: {
+          slot: 'asc',
+        },
+      });
+    });
+
+    it('should throw NotFoundException if room not found', async () => {
+      mockPrisma.room.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.getRoomSchedule(mockRoom.id, futureDateString, mockBranchId),
+      ).rejects.toThrow(new NotFoundException('Room not found or inactive'));
+    });
+  });
+
   describe('getAvailableSlots', () => {
     it('should return available slots', async () => {
       const query = {

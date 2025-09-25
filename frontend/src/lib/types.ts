@@ -88,6 +88,10 @@ export interface Appointment {
     lastName: string;
   };
   room?: Room;
+  visit?: {
+    id: string;
+    status?: string | null;
+  } | null;
 }
 
 // Appointment in slot format (for UI)
@@ -99,7 +103,7 @@ export interface AppointmentInSlot {
   visitType: VisitType;
   room?: { id: string; name: string; type: string };
   status: AppointmentStatus;
-  visit?: { id: string };
+  visit?: { id: string; status?: string | null };
 }
 
 // Available Slots
@@ -131,6 +135,8 @@ export interface Patient {
   referralSource?: string;
   createdAt: string;
   updatedAt: string;
+  allergies?: string | null;
+  medicalHistory?: string | null;
 }
 
 // User
@@ -193,6 +199,13 @@ export interface GetDoctorScheduleResponse {
   date: string;
 }
 
+export interface RescheduleAppointmentPayload {
+  date: string;
+  slot: string;
+  roomId?: string;
+  notes?: string;
+}
+
 // Create Appointment DTO
 export interface CreateAppointmentDto {
   patientId: string;
@@ -247,6 +260,98 @@ export interface Invoice {
 
 export type ItemCategory = 'MEDICINE' | 'EQUIPMENT' | 'SUPPLIES' | 'OTHER';
 
+// Pharmacy Billing
+export type PharmacyInvoiceStatus = 'DRAFT' | 'PENDING' | 'CONFIRMED' | 'DISPENSED' | 'COMPLETED' | 'CANCELLED';
+export type PharmacyPaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED' | 'PARTIALLY_PAID';
+export type PharmacyPaymentMethod = 'CASH' | 'CARD' | 'UPI' | 'NETBANKING' | 'WALLET' | 'INSURANCE';
+
+export interface PharmacyInvoiceItem {
+  id: string;
+  quantity: number;
+  unitPrice: number;
+  totalAmount: number;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  instructions?: string;
+  itemType: 'DRUG' | 'PACKAGE';
+  drug?: {
+    id: string;
+    name: string;
+    manufacturerName?: string;
+    packSizeLabel?: string;
+    composition1?: string;
+    composition2?: string;
+    strength?: string;
+    dosageForm?: string;
+  } | null;
+  package?: {
+    id: string;
+    name: string;
+    category?: string;
+    subcategory?: string;
+    packagePrice?: number;
+    originalPrice?: number;
+    discountPercent?: number;
+  } | null;
+}
+
+export interface PharmacyInvoiceSummary {
+  id: string;
+  invoiceNumber: string;
+  patientId: string;
+  patient: {
+    id: string;
+    name: string;
+    phone?: string;
+  };
+  doctor?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+  } | null;
+  subtotal: number;
+  discountAmount: number;
+  taxAmount: number;
+  totalAmount: number;
+  paymentMethod: PharmacyPaymentMethod;
+  paymentStatus: PharmacyPaymentStatus;
+  status: PharmacyInvoiceStatus;
+  billingName: string;
+  billingPhone: string;
+  invoiceDate: string;
+  createdAt: string;
+  updatedAt: string;
+  items: PharmacyInvoiceItem[];
+}
+
+export interface PharmacyInvoiceListResponse {
+  data: PharmacyInvoiceSummary[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+export interface PharmacyInvoiceQueryParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
+  search?: string;
+  patientId?: string;
+  doctorId?: string;
+  status?: PharmacyInvoiceStatus | 'all';
+  paymentStatus?: PharmacyPaymentStatus | 'all';
+  paymentMethod?: PharmacyPaymentMethod | 'all';
+  startDate?: string;
+  endDate?: string;
+  minAmount?: number;
+  maxAmount?: number;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -260,4 +365,82 @@ export interface InventoryItem {
   costPrice: number;
   sellingPrice?: number;
   updatedAt?: string;
+}
+
+// Visit summaries used in procedures dashboard
+export interface VisitSummary {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  createdAt: string;
+  updatedAt?: string;
+  appointmentId?: string | null;
+  status?: string | null;
+  visitType?: string | null;
+  plan?: unknown;
+  exam?: unknown;
+  vitals?: unknown;
+  complaints?: unknown;
+  diagnosis?: unknown;
+}
+
+export interface ProcedureVisitResponse {
+  visits?: VisitSummary[];
+  data?: VisitSummary[];
+}
+
+export interface StaffSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role?: string;
+}
+
+export interface VisitTimelineEntry {
+  id: string;
+  createdAt?: string;
+  complaints?: unknown;
+  diagnosis?: unknown;
+  plan?: unknown;
+  followUp?: string | null;
+  scribeJson?: unknown;
+  vitals?: unknown;
+  doctor?: { firstName?: string; lastName?: string } | null;
+  prescription?: { id: string; createdAt?: string | null } | null;
+}
+
+export interface PatientVisitHistoryPayload {
+  visits?: VisitTimelineEntry[];
+  data?: VisitTimelineEntry[];
+}
+
+export type PatientVisitHistoryResponse = VisitTimelineEntry[] | PatientVisitHistoryPayload;
+
+export interface VisitPatientSummary {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+  gender?: string;
+  dob?: string;
+  allergies?: string | null;
+  medicalHistory?: string | null;
+}
+
+export interface VisitDetails {
+  id: string;
+  patientId: string;
+  doctorId: string;
+  appointmentId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  complaints?: unknown;
+  examination?: unknown;
+  diagnosis?: unknown;
+  plan?: unknown;
+  vitals?: unknown;
+  status?: string;
+  metadata?: Record<string, unknown>;
 }

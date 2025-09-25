@@ -21,6 +21,7 @@ import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
 import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
+import { validateEnv } from './shared/config/env.validation';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -28,6 +29,7 @@ const commonImports = [
   ConfigModule.forRoot({
     isGlobal: true,
     envFilePath: '.env',
+    validate: validateEnv,
   }),
   PrismaModule,
   PassportModule.register({ defaultStrategy: 'jwt' }),

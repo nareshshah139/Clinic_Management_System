@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Search, Settings, User, Calendar, Users, FileText, Phone, Mail } from 'lucide-react';
+import { Bell, Search, Settings, User, Calendar, Users, Phone, Mail } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
+import { useDashboardUser } from './dashboard-user-context';
 
 interface SearchResult {
   id: string;
@@ -26,6 +27,7 @@ export function Header() {
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const { user, loading } = useDashboardUser();
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -266,7 +268,9 @@ export function Header() {
             <User className="h-4 w-4 text-blue-600" />
           </div>
           <div className="text-sm">
-            <p className="font-medium text-gray-900">Dr. John Doe</p>
+            <p className="font-medium text-gray-900">
+              {loading ? 'Loading…' : `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || user?.email || 'Unknown User'}
+            </p>
           </div>
         </div>
       </div>

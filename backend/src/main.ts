@@ -1,5 +1,5 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import * as express from 'express';
@@ -12,11 +12,13 @@ iconv.encodingExists('utf-8');
 
 async function bootstrap() {
   const useMinimal = process.env.MINIMAL_BOOT === 'true';
+  const logger = new Logger('Bootstrap');
 
   if (useMinimal) {
     const mod = (await import(
       './app.minimal.module'
     )) as typeof import('./app.minimal.module');
+    logger.log('Starting Clinic Management System backend (minimal mode)');
     const app = await NestFactory.create(
       mod.AppMinimalModule,
       new ExpressAdapter(),
@@ -49,6 +51,7 @@ async function bootstrap() {
   }
 
   const mod = (await import('./app.module')) as typeof import('./app.module');
+  logger.log('Starting Clinic Management System backend');
   const app = await NestFactory.create(mod.AppModule, new ExpressAdapter());
   app.enableCors({
     origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
@@ -71,6 +74,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  await app.listen(process.env.PORT ?? 4000);
+  const port = Number(process.env.PORT ?? 4000);
+  await app.listen(port);
+  logger.log(`Clinic Management System backend listening on port ${port}`);
 }
 void bootstrap();

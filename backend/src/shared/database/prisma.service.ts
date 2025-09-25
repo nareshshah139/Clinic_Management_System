@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { RequestContextService } from '../context/request-context.service';
 
@@ -31,6 +31,8 @@ function redactSensitiveFields<T>(input: T): T {
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor(private readonly requestContext: RequestContextService) {
     super();
 
@@ -139,7 +141,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
   }
 
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+      this.logger.log('Successfully connected to database');
+    } catch (error) {
+      this.logger.error('Database connection failed – check DATABASE_URL configuration', error as any);
+      throw new Error('Database connection failed – verify DATABASE_URL');
+    }
   }
 
   async enableShutdownHooks(app: any) {

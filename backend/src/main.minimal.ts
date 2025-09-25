@@ -2,8 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppMinimalModule } from './app.minimal.module';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger } from '@nestjs/common';
 
 async function bootstrap() {
+  const logger = new Logger('BootstrapMinimal');
+  logger.log('Starting Clinic Management System backend (minimal entry)');
   const app = await NestFactory.create(AppMinimalModule, new ExpressAdapter());
   app.enableCors({
     origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
@@ -22,6 +25,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);
 
-  await app.listen(process.env.PORT ?? 4000);
+  const port = Number(process.env.PORT ?? 4000);
+  await app.listen(port);
+  logger.log(`Clinic Management System minimal backend listening on port ${port}`);
 }
 void bootstrap();

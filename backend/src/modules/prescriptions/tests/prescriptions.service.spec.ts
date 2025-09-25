@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrescriptionsService } from '../prescriptions.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
-import { PrescriptionStatus, PrescriptionLanguage, RefillStatus, DosageUnit, Frequency, DurationUnit } from '../dto/prescription.dto';
+import { PrescriptionStatus, PrescriptionLanguage, RefillStatus, DosageUnit, Frequency, DurationUnit, CreatePrescriptionPadDto } from '../dto/prescription.dto';
 
 describe('PrescriptionsService', () => {
   let service: PrescriptionsService;
@@ -11,6 +11,10 @@ describe('PrescriptionsService', () => {
   const mockPrisma = {
     patient: {
       findFirst: jest.fn(),
+    },
+    visit: {
+      create: jest.fn(),
+      delete: jest.fn(),
     },
     visit: {
       findFirst: jest.fn(),
@@ -39,7 +43,7 @@ describe('PrescriptionsService', () => {
       findMany: jest.fn(),
       count: jest.fn(),
     },
-  };
+  }; 
 
   const mockBranchId = 'branch-123';
   const mockPatient = {
@@ -54,6 +58,8 @@ describe('PrescriptionsService', () => {
   };
   const mockDoctor = {
     id: 'doctor-123',
+    firstName: 'Dr.',
+    lastName: 'Smith',
     name: 'Dr. Smith',
     role: 'DOCTOR',
     specialization: 'General Medicine',
@@ -190,6 +196,86 @@ describe('PrescriptionsService', () => {
       await expect(service.createPrescription(invalidDto, mockBranchId)).rejects.toThrow(
         new BadRequestException('At least one prescription item is required'),
       );
+    });
+  });
+
+  describe('createPrescriptionPad', () => {
+    const padDto: CreatePrescriptionPadDto = {
+      patientId: 'patient-123',
+      doctorId: 'doctor-123',
+      items: [
+        {
+          drugName: 'Paracetamol',
+          dosage: 500,
+          dosageUnit: DosageUnit.MG,
+          frequency: Frequency.ONCE_DAILY,
+          duration: 5,
+          durationUnit: DurationUnit.DAYS,
+        },
+      ],
+      diagnosis: 'Follow-up consult',
+      notes: 'Issued via quick pad',
+      reason: 'Phone consult',
+    };
+
+    it('should create a visit and prescription successfully', async () => {
+      const createdVisit = { id: 'generated-visit', createdAt: new Date() };
+      mockPrisma.patient.findFirst.mockResolvedValue(mockPatient);
+      mockPrisma.user.findFirst.mockResolvedValue(mockDoctor);
+      mockPrisma.visit.create.mockResolvedValue(createdVisit);
+      mockPrisma.prescription.create.mockResolvedValue({
+        id: 'prescription-xyz',
+        prescriptionNumber: 'RX-20241225-001',
+        patientId: padDto.patientId,
+        doctorId: padDto.doctorId,
+        visitId: createdVisit.id,
+        items: JSON.stringify(padDto.items),
+        status: PrescriptionStatus.ACTIVE,
+        metadata: null,
+      });
+
+      const result = await service.createPrescriptionPad(padDto, mockBranchId);
+
+      expect(mockPrisma.visit.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          patientId: padDto.patientId,
+          doctorId: padDto.doctorId,
+          complaints: expect.any(String),
+          plan: expect.any(String),
+        }),
+      });
+      expect(mockPrisma.prescription.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({
+          visitId: createdVisit.id,
+        }),
+      }));
+      expect(result).toMatchObject({
+        id: 'prescription-xyz',
+        visitId: createdVisit.id,
+      });
+    });
+
+    it('should rollback visit creation if prescription fails', async () => {
+      mockPrisma.patient.findFirst.mockResolvedValue(mockPatient);
+      mockPrisma.user.findFirst.mockResolvedValue(mockDoctor);
+      mockPrisma.visit.create.mockResolvedValue({ id: 'generated-visit', createdAt: new Date() });
+      mockPrisma.prescription.create.mockRejectedValue(new Error('Failed to create prescription'));
+
+      await expect(service.createPrescriptionPad(padDto, mockBranchId)).rejects.toThrow('Failed to create prescription');
+
+      expect(mockPrisma.prescription.deleteMany).toHaveBeenCalledWith({ where: { visitId: 'generated-visit' } });
+      expect(mockPrisma.visit.delete).toHaveBeenCalledWith({ where: { id: 'generated-visit' } });
+    });
+
+    it('should validate patient and doctor branch membership', async () => {
+      mockPrisma.patient.findFirst.mockResolvedValue(null);
+
+      await expect(service.createPrescriptionPad(padDto, mockBranchId)).rejects.toThrow('Patient not found in this branch');
+
+      mockPrisma.patient.findFirst.mockResolvedValue(mockPatient);
+      mockPrisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(service.createPrescriptionPad(padDto, mockBranchId)).rejects.toThrow('Doctor not found in this branch');
     });
   });
 

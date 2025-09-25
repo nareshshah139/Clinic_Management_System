@@ -32,14 +32,11 @@ export interface DoctorDayCalendarProps {
   onSelectSlot?: (slot: string) => void;
   refreshKey?: number;
   bookingInProgress?: string;
-  optimisticAppointment?: {
-    slot: string;
-    patient: { name: string };
-    visitType: 'OPD' | 'PROCEDURE' | 'TELEMED';
-    room?: { id: string; name: string; type: string };
-  };
+  optimisticAppointment?: AppointmentInSlot;
   onAppointmentUpdate?: () => void;
   timeSlotConfig?: TimeSlotConfig;
+  disableSlotBooking?: boolean;
+  selectedRoomName?: string;
 }
 
 export default function DoctorDayCalendar({ 
@@ -58,7 +55,9 @@ export default function DoctorDayCalendar({
     endHour: 18,
     stepMinutes: 30,
     timezone: 'Asia/Kolkata'
-  }
+  },
+  disableSlotBooking = false,
+  selectedRoomName,
 }: DoctorDayCalendarProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -71,33 +70,19 @@ export default function DoctorDayCalendar({
 
   const slots = useMemo(() => generateTimeSlots(timeSlotConfig), [timeSlotConfig]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
+  const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
   // Filter appointments based on visitType and room filters
   const filteredSchedule = useMemo(() => {
     let appointments = [...schedule];
     
-    // Add optimistic appointment if it exists and matches filters
     if (optimisticAppointment) {
       const visitTypeMatch = visitTypeFilter === 'ALL' || optimisticAppointment.visitType === visitTypeFilter;
       const roomMatch = roomFilter === 'ALL' || optimisticAppointment.room?.id === roomFilter;
       
       if (visitTypeMatch && roomMatch) {
-        // Remove any existing appointment for this slot and add optimistic one
         appointments = appointments.filter(apt => apt.slot !== optimisticAppointment.slot);
-        appointments.push({
-          slot: optimisticAppointment.slot,
-          patient: {
-            id: (optimisticAppointment.patient as any)?.id ?? 'temp',
-            name: (optimisticAppointment.patient as any)?.name ?? 'Unknown Patient',
-            phone: (optimisticAppointment.patient as any)?.phone ?? undefined,
-            email: (optimisticAppointment.patient as any)?.email ?? undefined,
-          },
-          visitType: optimisticAppointment.visitType,
-          room: optimisticAppointment.room,
-          id: 'optimistic-' + optimisticAppointment.slot,
-          status: 'SCHEDULED',
-          doctor: { firstName: 'Dr.', lastName: 'Unknown' }
-        });
+        appointments.push(optimisticAppointment);
       }
     }
     
@@ -109,6 +94,7 @@ export default function DoctorDayCalendar({
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
+  const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
   const fetchSchedule = useCallback(async () => {
     if (!doctorId || !date) return;
@@ -118,7 +104,7 @@ export default function DoctorDayCalendar({
       setError(null);
       
       const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
-      
+
       // Map backend appointments to slot-wise entries with proper type safety
       const items: AppointmentInSlot[] = (res.appointments || []).map((a) => ({
         slot: a.slot,
@@ -133,6 +119,7 @@ export default function DoctorDayCalendar({
         room: a.room,
         id: a.id,
         status: a.status || 'SCHEDULED',
+        visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
       }));
       
       setSchedule(items);
@@ -207,9 +194,14 @@ export default function DoctorDayCalendar({
     const searchParams = new URLSearchParams({
       patientId: appointment.patient.id,
       appointmentId: appointment.id,
-      autoStart: 'true'
     });
-    
+
+    if (appointment.visit?.id) {
+      searchParams.set('visitId', appointment.visit.id);
+    } else {
+      searchParams.set('autoStart', 'true');
+    }
+
     router.push(`/dashboard/visits?${searchParams.toString()}`);
   };
 
@@ -245,18 +237,33 @@ export default function DoctorDayCalendar({
               <div className="text-sm text-blue-700">
                 <span className="font-medium">Filters Active:</span>
                 {visitTypeFilter !== 'ALL' && <Badge variant="secondary" className="ml-2">{visitTypeFilter}</Badge>}
-                {roomFilter !== 'ALL' && <Badge variant="outline" className="ml-2">Room Filter</Badge>}
+                {roomFilterLabel && (
+                  <Badge variant="outline" className="ml-2">
+                    Room: {roomFilterLabel}
+                  </Badge>
+                )}
               </div>
             </div>
           )}
           
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="relative" aria-busy={loading}>
+            {showLoadingOverlay && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
+                <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span className="mt-2 text-sm font-medium text-blue-700">Refreshing schedule…</span>
+              </div>
+            )}
+            <div
+              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3"
+              style={showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
+            >
             {slots.map((slot) => {
               const booked = bookedBySlot.has(slot);
               const appt = bookedBySlot.get(slot);
               const past = isSlotInPast(slot, date);
               const isNewlyBooked = recentBookedSlot === slot;
               const isBookingInProgress = bookingInProgress === slot;
+              const isDisabled = past || isBookingInProgress || disableSlotBooking;
               
               return (
                 <div 
@@ -295,7 +302,7 @@ export default function DoctorDayCalendar({
                         style={{ color: 'rgba(255, 255, 255, 0.95)' }}
                         onClick={() => setSelectedAppointment(appt)}
                       >
-                        {formatPatientName(appt.patient)}
+                        {formatPatientName(appt.patient ?? { name: 'Unknown' })}
                       </div>
                       
                       <div className="flex flex-col gap-1">
@@ -338,7 +345,7 @@ export default function DoctorDayCalendar({
                           disabled={appt.id?.startsWith('optimistic-')}
                         >
                           <FileText className="h-3 w-3 mr-1" />
-                          Visit
+                          {appt.visit?.id ? 'Continue Visit' : 'Start Visit'}
                         </Button>
                         <Button
                           size="sm"
@@ -358,21 +365,22 @@ export default function DoctorDayCalendar({
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      disabled={past || isBookingInProgress}
+                      disabled={isDisabled}
                       style={{
-                        backgroundColor: past ? '#f3f4f6' : isBookingInProgress ? '#fbbf24' : 'white',
-                        color: past ? '#9ca3af' : isBookingInProgress ? '#92400e' : '#374151',
+                        backgroundColor: past ? '#f3f4f6' : isBookingInProgress ? '#fbbf24' : disableSlotBooking ? '#f9fafb' : 'white',
+                        color: past ? '#9ca3af' : isBookingInProgress ? '#92400e' : disableSlotBooking ? '#94a3b8' : '#374151',
                         borderColor: past ? '#d1d5db' : isBookingInProgress ? '#f59e0b' : '#d1d5db',
-                        cursor: past ? 'not-allowed' : isBookingInProgress ? 'wait' : 'pointer'
+                        cursor: isDisabled ? 'not-allowed' : 'pointer'
                       }}
-                      onClick={() => !past && !isBookingInProgress && onSelectSlot?.(slot)}
+                      onClick={() => !isDisabled && onSelectSlot?.(slot)}
                     >
-                      {past ? 'Past' : isBookingInProgress ? 'Booking...' : 'Book'}
+                      {past ? 'Past' : isBookingInProgress ? 'Booking...' : disableSlotBooking ? 'Select patient first' : 'Book'}
                     </Button>
                   )}
                 </div>
               );
             })}
+            </div>
           </div>
           
           {filteredSchedule.length === 0 && schedule.length > 0 && (

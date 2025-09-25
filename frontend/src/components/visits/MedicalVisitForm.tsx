@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,6 +48,9 @@ import {
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
+import type { Patient, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
+import { getErrorMessage } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   patientId: string;
@@ -57,7 +60,7 @@ interface Props {
   patientName?: string;
   visitDate?: string; // ISO string; falls back to today if not provided
   appointmentId?: string;
-  appointmentData?: any;
+  appointmentData?: VisitDetails | null;
 }
 
 interface PatientHistory {
@@ -69,6 +72,82 @@ interface PatientHistory {
   status: string;
   photos: number;
 }
+
+type VitalsState = {
+  bpS: string;
+  bpD: string;
+  hr: string;
+  temp: string;
+  weight: string;
+  height: string;
+  spo2: string;
+  rr: string;
+};
+
+type MedicalVisitDraftState = {
+  vitals: VitalsState;
+  painScore: string;
+  skinConcerns: string[];
+  complaints: string[];
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  skinType: string;
+  morphology: string[];
+  distribution: string[];
+  acneSeverity: string;
+  itchScore: string;
+  triggers: string;
+  priorTx: string;
+  dermDx: string[];
+  procType: string;
+  fluence: string;
+  spotSize: string;
+  passes: string;
+  topicals: string;
+  systemics: string;
+  counseling: string;
+  reviewDate: string;
+  activeTab: string;
+  completedSections: string[];
+  visitStatus: 'draft' | 'in-progress' | 'completed';
+};
+
+const INITIAL_VITALS: VitalsState = {
+  bpS: '',
+  bpD: '',
+  hr: '',
+  temp: '',
+  weight: '',
+  height: '',
+  spo2: '',
+  rr: '',
+};
+
+const AUTO_SAVE_INTERVAL_MS = 8000;
+const AUTO_SAVE_RETRY_MS = 15000;
+const DRAFT_STORAGE_VERSION = 1;
+
+const createDraftStorageKey = (
+  doctorId: string,
+  patientId: string,
+  visitId?: string | null,
+  appointmentId?: string,
+  visitDate?: string
+) => {
+  const parts = ['clinic', 'visit-draft', doctorId || 'unknown-doctor', patientId || 'unknown-patient'];
+  if (visitId) {
+    parts.push(`visit-${visitId}`);
+  } else if (appointmentId) {
+    parts.push(`appt-${appointmentId}`);
+  } else if (visitDate) {
+    parts.push(`date-${visitDate}`);
+  } else {
+    parts.push('new');
+  }
+  return parts.join(':');
+};
 
 const DERM_DIAGNOSES = [
   'Acne vulgaris','Atopic dermatitis','Psoriasis','Tinea corporis','Melasma','Post-inflammatory hyperpigmentation','Urticaria','Rosacea','Seborrheic dermatitis','Lichen planus','Vitiligo'
@@ -88,8 +167,20 @@ const ROLE_PERMISSIONS = {
 };
 
 export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData }: Props) {
-  console.log('🏥 MedicalVisitForm props:', { patientId, patientName, appointmentId, appointmentData: !!appointmentData });
-  
+  // Parse helper
+  const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'object') return value as T;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value) as T;
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  }, []);
+
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
@@ -100,9 +191,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
   
   // Basic info (Therapist/Nurse level - 20-25%)
-  const [vitals, setVitals] = useState({
-    bpS: '', bpD: '', hr: '', temp: '', weight: '', height: '', spo2: '', rr: ''
-  });
+  const [vitals, setVitals] = useState<VitalsState>({ ...INITIAL_VITALS });
   const [painScore, setPainScore] = useState('');
   const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
   
@@ -134,7 +223,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [reviewDate, setReviewDate] = useState<string>('');
   
   // Patient history
-  const [patientHistory, setPatientHistory] = useState<PatientHistory[]>([]);
+  const [patientHistory, setPatientHistory] = useState<VisitSummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
@@ -144,10 +233,348 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
 
+  const { toast } = useToast();
+
+  const draftStorageKey = useMemo(
+    () => createDraftStorageKey(doctorId, patientId, visitId, appointmentId, visitDate),
+    [doctorId, patientId, visitId, appointmentId, visitDate]
+  );
+
+  const isInitialLoadRef = useRef(true);
+  const hasUnsavedChangesRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSavePromiseRef = useRef<Promise<void> | null>(null);
+  const autoSaveSuccessNotifiedRef = useRef(false);
+  const autoSaveFailureNotifiedRef = useRef(false);
+  const lastDraftJsonRef = useRef<string | null>(null);
+  const lastStorageKeyRef = useRef<string | null>(null);
+  const justSavedRef = useRef(false);
+
+  const clearAutoSaveTimer = useCallback(() => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+  }, []);
+
+  const serializeDraft = useCallback((): MedicalVisitDraftState => ({
+    vitals,
+    painScore,
+    skinConcerns: Array.from(skinConcerns),
+    complaints,
+    subjective,
+    objective,
+    assessment,
+    plan,
+    skinType,
+    morphology: Array.from(morphology),
+    distribution: Array.from(distribution),
+    acneSeverity,
+    itchScore,
+    triggers,
+    priorTx,
+    dermDx: Array.from(dermDx),
+    procType,
+    fluence,
+    spotSize,
+    passes,
+    topicals,
+    systemics,
+    counseling,
+    reviewDate,
+    activeTab,
+    completedSections: Array.from(completedSections),
+    visitStatus,
+  }), [
+    activeTab,
+    assessment,
+    complaints,
+    completedSections,
+    counseling,
+    dermDx,
+    distribution,
+    fluence,
+    itchScore,
+    morphology,
+    objective,
+    painScore,
+    passes,
+    plan,
+    priorTx,
+    procType,
+    reviewDate,
+    skinConcerns,
+    skinType,
+    spotSize,
+    subjective,
+    systemics,
+    topicals,
+    triggers,
+    vitals,
+    visitStatus,
+    acneSeverity,
+  ]);
+
+  const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
+    setVitals(draft.vitals || { ...INITIAL_VITALS });
+    setPainScore(draft.painScore || '');
+    setSkinConcerns(new Set(draft.skinConcerns || []));
+    setComplaints(draft.complaints || []);
+    setSubjective(draft.subjective || '');
+    setObjective(draft.objective || '');
+    setAssessment(draft.assessment || '');
+    setPlan(draft.plan || '');
+    setSkinType(draft.skinType || '');
+    setMorphology(new Set(draft.morphology || []));
+    setDistribution(new Set(draft.distribution || []));
+    setAcneSeverity(draft.acneSeverity || '');
+    setItchScore(draft.itchScore || '');
+    setTriggers(draft.triggers || '');
+    setPriorTx(draft.priorTx || '');
+    setDermDx(new Set(draft.dermDx || []));
+    setProcType(draft.procType || '');
+    setFluence(draft.fluence || '');
+    setSpotSize(draft.spotSize || '');
+    setPasses(draft.passes || '');
+    setTopicals(draft.topicals || '');
+    setSystemics(draft.systemics || '');
+    setCounseling(draft.counseling || '');
+    setReviewDate(draft.reviewDate || '');
+    setActiveTab(draft.activeTab || 'overview');
+    setCompletedSections(new Set(draft.completedSections || []));
+    setVisitStatus(draft.visitStatus || 'draft');
+  }, []);
+
+  const persistDraftToStorage = useCallback(
+    (force = false, draftOverride?: MedicalVisitDraftState) => {
+      if (!draftStorageKey || typeof window === 'undefined') return false;
+      try {
+    const payload = draftOverride ?? serializeDraft();
+    const record = {
+      version: DRAFT_STORAGE_VERSION,
+      visitId,
+      doctorId,
+      patientId,
+      appointmentId,
+      visitDate,
+      data: payload,
+    };
+    const serialized = JSON.stringify(record);
+        if (!force && serialized === lastDraftJsonRef.current) {
+          return false;
+        }
+        window.localStorage.setItem(draftStorageKey, serialized);
+        lastDraftJsonRef.current = serialized;
+        lastStorageKeyRef.current = draftStorageKey;
+        if (force) {
+          hasUnsavedChangesRef.current = false;
+        }
+        return true;
+      } catch (error) {
+        console.warn('Failed to persist draft locally', error);
+        return false;
+      }
+    },
+    [
+      draftStorageKey,
+      serializeDraft,
+      visitId,
+      doctorId,
+      patientId,
+      appointmentId,
+      visitDate,
+    ]
+  );
+
+  const runAutoSave = useCallback(async () => {
+    if (!visitId || !hasUnsavedChangesRef.current) {
+      return;
+    }
+
+    const persisted = persistDraftToStorage();
+
+    if (autoSavePromiseRef.current) {
+      return;
+    }
+
+    const payload = buildPayload();
+    autoSavePromiseRef.current = (async () => {
+      try {
+        await apiClient.updateVisit(visitId, payload);
+        hasUnsavedChangesRef.current = false;
+        autoSaveFailureNotifiedRef.current = false;
+        justSavedRef.current = true;
+        if (!persisted) {
+          persistDraftToStorage(true);
+        }
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+        hasUnsavedChangesRef.current = true;
+        toast({
+          variant: 'warning',
+          title: 'Auto-save failed',
+          description: getErrorMessage(error) || 'We will retry shortly.',
+        });
+        clearAutoSaveTimer();
+        autoSaveTimerRef.current = window.setTimeout(() => {
+          autoSaveTimerRef.current = null;
+          void runAutoSave();
+        }, AUTO_SAVE_RETRY_MS);
+      } finally {
+        autoSavePromiseRef.current = null;
+      }
+    })();
+  }, [buildPayload, clearAutoSaveTimer, persistDraftToStorage, toast, visitId]);
+
+  const scheduleAutoSave = useCallback(
+    (delay = AUTO_SAVE_INTERVAL_MS) => {
+      if (typeof window === 'undefined') {
+        return;
+      }
+      if (!hasUnsavedChangesRef.current) {
+        return;
+      }
+      if (justSavedRef.current) {
+        clearAutoSaveTimer();
+        autoSaveTimerRef.current = window.setTimeout(() => {
+          autoSaveTimerRef.current = null;
+          justSavedRef.current = false;
+          void runAutoSave();
+        }, delay);
+        return;
+      }
+      clearAutoSaveTimer();
+      autoSaveTimerRef.current = window.setTimeout(() => {
+        autoSaveTimerRef.current = null;
+        void runAutoSave();
+      }, delay);
+    },
+    [clearAutoSaveTimer, runAutoSave]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !draftStorageKey) {
+      return;
+    }
+
+    try {
+      let stored = window.localStorage.getItem(draftStorageKey);
+      if (
+        !stored &&
+        lastDraftJsonRef.current &&
+        lastStorageKeyRef.current &&
+        lastStorageKeyRef.current !== draftStorageKey
+      ) {
+        stored = lastDraftJsonRef.current;
+        if (stored) {
+          window.localStorage.setItem(draftStorageKey, stored);
+          try {
+            window.localStorage.removeItem(lastStorageKeyRef.current);
+          } catch {}
+        }
+      }
+
+      if (stored) {
+        lastDraftJsonRef.current = stored;
+        const parsed = JSON.parse(stored) as {
+          version?: number;
+          data?: MedicalVisitDraftState;
+        };
+        if (parsed?.version === DRAFT_STORAGE_VERSION && parsed.data) {
+          applyDraft(parsed.data);
+          hasUnsavedChangesRef.current = false;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to restore visit draft', error);
+    }
+
+    lastStorageKeyRef.current = draftStorageKey;
+  }, [draftStorageKey, applyDraft]);
+
+  useEffect(() => {
+    if (isInitialLoadRef.current) {
+      isInitialLoadRef.current = false;
+      return;
+    }
+
+    if (justSavedRef.current) {
+      justSavedRef.current = false;
+      return;
+    }
+
+    hasUnsavedChangesRef.current = true;
+    autoSaveFailureNotifiedRef.current = false;
+    const changed = persistDraftToStorage();
+    if (changed) {
+      scheduleAutoSave();
+    }
+  }, [
+    persistDraftToStorage,
+    scheduleAutoSave,
+    vitals,
+    painScore,
+    skinConcerns,
+    complaints,
+    subjective,
+    objective,
+    assessment,
+    plan,
+    skinType,
+    morphology,
+    distribution,
+    acneSeverity,
+    itchScore,
+    triggers,
+    priorTx,
+    dermDx,
+    procType,
+    fluence,
+    spotSize,
+    passes,
+    topicals,
+    systemics,
+    counseling,
+    reviewDate,
+    activeTab,
+    completedSections,
+    visitStatus,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearAutoSaveTimer();
+      try {
+        persistDraftToStorage();
+      } catch {}
+    };
+  }, [clearAutoSaveTimer, persistDraftToStorage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChangesRef.current) {
+        return;
+      }
+      try {
+        persistDraftToStorage();
+      } catch {}
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [persistDraftToStorage]);
   // Patient context sidebar
   const [showPatientContext, setShowPatientContext] = useState(true);
-  const [patientDetails, setPatientDetails] = useState<any>(null);
-  const [recentVisits, setRecentVisits] = useState<any[]>([]);
+  const [patientDetails, setPatientDetails] = useState<VisitPatientSummary | null>(null);
+  const [recentVisits, setRecentVisits] = useState<VisitSummary[]>([]);
 
   // Quick templates for common scenarios
   const [showQuickTemplates, setShowQuickTemplates] = useState(false);
@@ -160,7 +587,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
    
   // Do not access JWT on client; rely on HttpOnly cookie sent automatically
  
-  const startVoiceInput = async (fieldName: string) => {
+  const startVoiceInput = useCallback(async (fieldName: string) => {
     // Toggle: if already recording the same field, stop and finalize
     if (isListening && activeVoiceField === fieldName && recorderRef.current && recorderRef.current.state !== 'inactive') {
       try { recorderRef.current.stop(); } catch {}
@@ -168,7 +595,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     if (!navigator.mediaDevices || !(window as any).MediaRecorder) {
-      alert('Microphone recording is not supported in this browser');
+      toast({
+        variant: 'warning',
+        title: 'Voice capture unavailable',
+        description: 'Microphone recording is not supported in this browser.',
+      });
       return;
     }
     setIsListening(true);
@@ -200,7 +631,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
              let errText = '';
              try { errText = await res.text(); } catch {}
              console.error('Transcription request failed:', res.status, errText);
-             alert(`Transcription failed (${res.status}).`);
+             toast({
+               variant: 'warning',
+               title: 'Transcription failed',
+               description: `Speech-to-text request returned ${res.status}.`,
+             });
              return;
            }
            const data = await res.json();
@@ -223,7 +658,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
            }
         } catch (e) {
           console.error('Speech-to-text error:', e);
-          alert('Speech-to-text failed. Please try again.');
+          toast({
+            variant: 'warning',
+            title: 'Speech-to-text error',
+            description: getErrorMessage(e) || 'Please try again.',
+          });
         } finally {
           setIsListening(false);
           setActiveVoiceField(null);
@@ -238,26 +677,47 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
       recorderRef.current = null;
       streamRef.current = null;
+      toast({
+        variant: 'warning',
+        title: 'Microphone access denied',
+        description: getErrorMessage(e) || 'Check browser permissions and try again.',
+      });
     }
-  };
+  }, [activeVoiceField, isListening, toast]);
   
-  const VoiceButton = ({ fieldName }: { fieldName: string }) => (
+  const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
     <Button
       type="button"
       variant="ghost"
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
-      onClick={() => startVoiceInput(fieldName)}
+      onClick={() => void startVoiceInput(fieldName)}
       disabled={isListening && activeVoiceField !== fieldName}
     >
       {activeVoiceField === fieldName ? '🔴' : '🎤'}
     </Button>
-  );
+  ), [activeVoiceField, isListening, startVoiceInput]);
 
-  const quickTemplates = [
+  const toggleSet = useCallback(<T,>(current: Set<T>, item: T, updater: (next: Set<T>) => void) => {
+    const next = new Set(current);
+    if (next.has(item)) {
+      next.delete(item);
+    } else {
+      next.add(item);
+    }
+    updater(next);
+  }, []);
+
+  const quickTemplates = useMemo(() => ([
     {
       name: 'Acne Follow-up',
-      condition: () => recentVisits.some(v => v.diagnosis?.some((d: string) => d.toLowerCase().includes('acne'))),
+      condition: () => recentVisits.some((visit) => {
+        const diagnosisEntries = Array.isArray(visit.diagnosis) ? visit.diagnosis : [];
+        return diagnosisEntries.some((d: any) => {
+          const label = typeof d === 'string' ? d : d?.diagnosis;
+          return label ? label.toLowerCase().includes('acne') : false;
+        });
+      }),
       apply: () => {
         setSubjective('Follow-up for acne treatment. Patient reports improvement/worsening.');
         setDermDx(new Set(['Acne vulgaris']));
@@ -275,7 +735,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     },
     {
       name: 'Pigmentation Concern',
-      condition: () => recentVisits.some(v => v.diagnosis?.some((d: string) => d.toLowerCase().includes('melasma') || d.toLowerCase().includes('pigment'))),
+      condition: () => recentVisits.some((visit) => {
+        const diagnosisEntries = Array.isArray(visit.diagnosis) ? visit.diagnosis : [];
+        return diagnosisEntries.some((d: any) => {
+          const label = typeof d === 'string' ? d : d?.diagnosis;
+          return label ? label.toLowerCase().includes('melasma') || label.toLowerCase().includes('pigment') : false;
+        });
+      }),
       apply: () => {
         setSubjective('Pigmentation concerns. Patient reports dark spots/patches.');
         setDermDx(new Set(['Melasma', 'Post-inflammatory hyperpigmentation']));
@@ -283,7 +749,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         setDistribution(new Set(['Face']));
       }
     }
-  ];
+  ]), [parseJsonValue, recentVisits]);
 
   // Check permissions for current user role
   const hasPermission = (section: string) => {
@@ -292,64 +758,55 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   };
 
   // Load visit number and patient history
-  useEffect(() => {
-    loadPatientHistory();
-    loadPatientContext();
-  }, [patientId]);
-
-  // Reload patient context when patientId changes (for appointment transitions)
-  useEffect(() => {
-    if (patientId && patientId !== patientDetails?.id) {
-      console.log('�� Patient ID changed, reloading context. New ID:', patientId, 'Current:', patientDetails?.id);
-      loadPatientContext();
-    }
-  }, [patientId, patientDetails?.id]);
-
-  const loadPatientContext = async () => {
+  const loadPatientContext = useCallback(async () => {
     if (!patientId) {
-      console.warn('⚠️ No patientId provided for patient context loading');
       return;
     }
-    
-    console.log('📥 Loading patient context for patientId:', patientId);
+
     try {
       const [patient, visits] = await Promise.all([
         apiClient.getPatient(patientId),
-        apiClient.get(`/visits/patient/${patientId}/history?limit=3`)
+        apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId, { limit: 3 })
       ]);
-      console.log('✅ Patient data loaded:', patient);
-      console.log('📚 Recent visits loaded:', visits);
-      setPatientDetails(patient);
-      setRecentVisits((visits as any).visits || []);
+
+      const visitList = Array.isArray(visits)
+        ? visits
+        : visits?.visits || visits?.data || [];
+
+      setPatientDetails(patient as VisitPatientSummary);
+      setRecentVisits(visitList.map((visit) => normalizeVisit(visit)));
     } catch (error) {
-      console.error('❌ Failed to load patient context:', error);
-      // Try to get basic patient info from appointment data if available
-      if (appointmentData?.patient) {
-        console.log('�� Using patient data from appointment:', appointmentData.patient);
-        setPatientDetails(appointmentData.patient);
+      console.error('Failed to load patient context:', error);
+      if (appointmentData && 'patient' in appointmentData && appointmentData.patient) {
+        setPatientDetails(appointmentData.patient as VisitPatientSummary);
       }
     }
-  };
+  }, [appointmentData, patientId]);
 
-  const loadPatientHistory = async () => {
+  const loadPatientHistory = useCallback(async () => {
     if (!patientId) {
-      console.warn('No patientId provided for patient history loading');
       return;
     }
-    
+
     try {
       setLoadingHistory(true);
-      const response = await apiClient.get(`/visits/patient/${patientId}/history`);
-      const responseData = response as any;
-      setPatientHistory(responseData.visits || []);
-      setCurrentVisitNumber((responseData.visits?.length || 0) + 1);
+      const response = await apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId);
+      const responseDataArray = Array.isArray(response) ? response : response?.visits || response?.data || [];
+      const historyEntries = (responseDataArray as VisitSummary[]).map((visit) => normalizeVisit(visit));
+      setPatientHistory(historyEntries);
+      setCurrentVisitNumber(historyEntries.length + 1);
     } catch (error) {
       console.error('Failed to load patient history:', error);
       setPatientHistory([]);
     } finally {
       setLoadingHistory(false);
     }
-  };
+  }, [patientId]);
+
+  useEffect(() => {
+    void loadPatientHistory();
+    void loadPatientContext();
+  }, [loadPatientContext, loadPatientHistory]);
 
   // Section completion tracking
   const markSectionComplete = (section: string) => {
@@ -361,21 +818,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   };
 
   // Calculate overall progress
-  const getProgress = () => {
+  const getProgress = useCallback(() => {
     const totalSections = hasPermission('all') ? 6 : 3; // Doctor vs Therapist/Nurse
     return Math.round((completedSections.size / totalSections) * 100);
-  };
+  }, [completedSections.size, hasPermission]);
 
-  const buildPayload = () => {
-    const payload: any = {
+  const buildPayload = useCallback(() => {
+    const payload: Record<string, unknown> = {
       patientId,
       doctorId,
       appointmentId, // Include appointment ID if available
       visitNumber: currentVisitNumber,
       status: visitStatus,
-      complaints: (complaints.length > 0 ? complaints : (subjective && subjective.trim()) ?
-        [{ complaint: subjective }] :
-        [{ complaint: 'General consultation' }]),
+      complaints: (complaints.length > 0 ? complaints : (subjective ? [subjective] : ['General consultation']))
+        .map((complaint) => ({ complaint })),
       examination: {
         ...(objective ? { generalAppearance: objective } : {}),
         dermatology: {
@@ -390,8 +846,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           skinConcerns: Array.from(skinConcerns),
         }
       },
-      diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : (assessment ? [assessment] : []))
-        .map((dx: string) => ({ diagnosis: dx, icd10Code: 'R69', type: 'Primary' })),
+      diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : assessment ? [assessment] : [])
+        .map((dx) => ({ diagnosis: dx, icd10Code: 'R69', type: 'Primary' })),
       treatmentPlan: {
         ...(plan ? { notes: plan } : {}),
         dermatology: {
@@ -425,8 +881,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         progress: getProgress(),
       }
     };
+
+    if (reviewDate) {
+      payload.followUp = { date: reviewDate };
+    }
+
     return payload;
-  };
+  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore]);
 
   const save = async (complete = false) => {
     try {
@@ -438,25 +899,45 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         visit = await apiClient.updateVisit(visitId, payload);
       } else {
         visit = await apiClient.createVisit(payload);
-        setVisitId((visit as any).id);
+        setVisitId((visit as VisitDetails).id);
       }
       
       if (complete) {
-        const completePayload: any = {};
+        const completePayload: Record<string, unknown> = {};
         if (reviewDate) completePayload.followUpDate = reviewDate;
-        await apiClient.completeVisit((visit as any).id, completePayload);
+        await apiClient.completeVisit((visit as VisitDetails).id, completePayload);
         setVisitStatus('completed');
+        if (typeof window !== 'undefined' && draftStorageKey) {
+          try {
+            window.localStorage.removeItem(draftStorageKey);
+          } catch {}
+        }
+        lastDraftJsonRef.current = null;
+        hasUnsavedChangesRef.current = false;
       } else {
         setVisitStatus('in-progress');
+        hasUnsavedChangesRef.current = false;
+        justSavedRef.current = true;
+        clearAutoSaveTimer();
+        persistDraftToStorage(true);
       }
       
-      alert(complete ? 'Visit completed successfully!' : 'Visit saved successfully!');
-      
-      // Refresh patient history
-      loadPatientHistory();
+      toast({
+        variant: 'success',
+        title: complete ? 'Visit completed' : 'Visit saved',
+        description: complete
+          ? 'All documentation has been marked complete.'
+          : 'Your draft was saved safely.',
+      });
+
+      void loadPatientHistory();
     } catch (e) {
       console.error('Save failed:', e);
-      alert('Failed to save visit. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Unable to save visit',
+        description: getErrorMessage(e) || 'Please try again.',
+      });
     } finally {
       setSaving(false);
     }
@@ -567,16 +1048,28 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               {recentVisits.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Recent Visits</div>
-                  {recentVisits.slice(0, 2).map((visit, index) => (
-                    <div key={visit.id} className="p-2 bg-gray-50 rounded text-xs">
-                      <div className="font-medium">
-                        {new Date(visit.date).toLocaleDateString()}
+                  {recentVisits.slice(0, 2).map((visit, index) => {
+                    const timestamp = visit.createdAt || (visit as any).date;
+                    const displayDate = timestamp ? new Date(timestamp).toLocaleDateString() : 'Unknown date';
+                    const diagnoses = Array.isArray(visit.diagnosis)
+                      ? visit.diagnosis
+                      : [];
+                    const diagnosesList = diagnoses
+                      .map((dx: any) => (typeof dx === 'string' ? dx : dx?.diagnosis))
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join(', ');
+                    return (
+                    <div key={visit.id || index} className="p-2 bg-gray-50 rounded text-xs">
+                        <div className="font-medium">
+                          {displayDate}
+                        </div>
+                        <div className="text-gray-600">
+                          {diagnosesList || 'No diagnosis'}
+                        </div>
                       </div>
-                      <div className="text-gray-600">
-                        {visit.diagnosis?.slice(0, 2).join(', ') || 'No diagnosis'}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -883,14 +1376,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   onVisitNeeded={async () => {
                     if (!visitId) {
-                      // Create a minimal visit just for photo uploads
-                      const minimalPayload = {
+                      const minimalPayload: Record<string, unknown> = {
                         patientId,
                         doctorId,
-                        appointmentId: appointmentId || undefined,
-                        complaints: [{ complaint: 'Photo documentation visit' }], // Minimal required complaint
+                        appointmentId,
                         visitNumber: currentVisitNumber,
-                        status: visitStatus,
+                        status: 'in-progress',
+                        complaints: [{ complaint: 'Photo documentation visit' }], // Minimal required complaint
                         vitals: {},
                         examination: {},
                         diagnosis: [],
@@ -904,7 +1396,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         }
                       };
                       const newVisit = await apiClient.createVisit(minimalPayload);
-                      const newVisitId = (newVisit as any).id;
+                      const newVisitId = (newVisit as VisitDetails).id;
                       setVisitId(newVisitId);
                       return newVisitId;
                     }
@@ -1269,7 +1761,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                     Visit #{patientHistory.length - index}
                                   </h4>
                                   <p className="text-xs text-gray-500">
-                                    {new Date(visit.date).toLocaleDateString('en-US', {
+                                    {new Date(visit.createdAt || (visit as any).date || Date.now()).toLocaleDateString('en-US', {
                                       year: 'numeric',
                                       month: 'long',
                                       day: 'numeric',

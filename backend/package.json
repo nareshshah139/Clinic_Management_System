@@ -5,6 +5,10 @@
   "author": "",
   "private": true,
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=18",
+    "npm": ">=9"
+  },
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -37,6 +41,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "csv-parser": "^3.2.0",
+    "file-type": "^18.7.0",
     "form-data": "^4.0.4",
     "iconv-lite": "^0.6.3",
     "node-fetch": "^3.3.2",
@@ -47,6 +52,7 @@
     "prisma": "^6.15.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.33.4",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
@@ -95,6 +101,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!(file-type|strtok3|token-types|readable-web-to-node-stream|peek-readable|multi-integer-range)/)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

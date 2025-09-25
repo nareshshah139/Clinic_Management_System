@@ -17,7 +17,8 @@ import {
   RefillPrescriptionDto, 
   ApproveRefillDto,
   PrescriptionTemplateDto,
-} from './dto/prescription.dto';
+  CreatePrescriptionPadDto,
+  } from './dto/prescription.dto';
 import { 
   QueryPrescriptionsDto, 
   QueryRefillsDto, 
@@ -49,6 +50,14 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId);
+  }
+
+  @Post('pad')
+  createPrescriptionPad(
+    @Body() createPrescriptionDto: CreatePrescriptionPadDto,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId);
   }
 
   @Get()

@@ -37,6 +37,9 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Room calendar view with hourly time slots and occupancy visualization
 - Comprehensive inventory data integration (79 items across categories)
 - Branch isolation fixes for inventory and room data
+- Standalone prescription pad flow with doctor/patient selection and printable output
+- Patient quick-create dialog embedded in appointments workflow with validation and toasts
+- Config validation guardrails at boot to fail fast on missing env keys and warn on optional AI integrations
 - Visits module test suite aligned with JSON serialization contract; Prisma audit middleware now receives seeded request context in tests
 
 ❌ **Missing/Incomplete:**

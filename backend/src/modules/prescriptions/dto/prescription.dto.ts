@@ -369,3 +369,54 @@ export class PrescriptionTemplateDto {
   @IsObject()
   metadata?: Record<string, any>;
 }
+
+export class CreatePrescriptionPadDto {
+  @IsUUID()
+  patientId: string;
+
+  @IsUUID()
+  doctorId: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PrescriptionItemDto)
+  items: PrescriptionItemDto[];
+
+  @IsOptional()
+  @IsString()
+  diagnosis?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsEnum(PrescriptionLanguage)
+  language?: PrescriptionLanguage = PrescriptionLanguage.EN;
+
+  @IsOptional()
+  @IsDateString()
+  validUntil?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  maxRefills?: number = 0;
+
+  @IsOptional()
+  @IsString()
+  followUpInstructions?: string;
+
+  @IsOptional()
+  @IsObject()
+  metadata?: Record<string, any>;
+
+  @IsOptional()
+  @IsObject()
+  procedureMetrics?: Record<string, any>;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}

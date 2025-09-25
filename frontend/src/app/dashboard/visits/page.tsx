@@ -1,23 +1,362 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+type PrescriptionSummaryProps = {
+  prescription: unknown;
+  onPrint?: () => void;
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const formatDateTime = (value?: string | Date | null) => {
+  if (!value) return null;
+  const date = typeof value === 'string' ? new Date(value) : value;
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
+
+function normalizePrescription(prescription: unknown) {
+  if (!isPlainObject(prescription)) {
+    return null;
+  }
+
+  const itemsRaw = prescription.items;
+  let items: Array<Record<string, unknown>> = [];
+  if (Array.isArray(itemsRaw)) {
+    items = itemsRaw as Array<Record<string, unknown>>;
+  } else if (typeof itemsRaw === 'string' && itemsRaw.trim()) {
+    try {
+      const parsed = JSON.parse(itemsRaw);
+      if (Array.isArray(parsed)) {
+        items = parsed as Array<Record<string, unknown>>;
+      }
+    } catch (error) {
+      console.error('Failed to parse prescription items', error);
+    }
+  }
+
+  return {
+    id: typeof prescription.id === 'string' ? prescription.id : undefined,
+    prescriptionNumber: typeof prescription.prescriptionNumber === 'string' ? prescription.prescriptionNumber : undefined,
+    createdAt: formatDateTime(prescription.createdAt as string | Date | undefined),
+    status: typeof prescription.status === 'string' ? prescription.status : undefined,
+    doctor:
+      isPlainObject(prescription.doctor) && typeof prescription.doctor.name === 'string'
+        ? prescription.doctor.name
+        : undefined,
+    patient:
+      isPlainObject(prescription.patient) && typeof prescription.patient.name === 'string'
+        ? prescription.patient.name
+        : undefined,
+    notes: typeof prescription.notes === 'string' ? prescription.notes : undefined,
+    instructions: typeof prescription.instructions === 'string' ? prescription.instructions : undefined,
+    pharmacistNotes: typeof prescription.pharmacistNotes === 'string' ? prescription.pharmacistNotes : undefined,
+    reviewDate: formatDateTime((prescription as Record<string, unknown>).reviewDate as string | Date | undefined),
+    metadata: isPlainObject(prescription.metadata) ? prescription.metadata : undefined,
+    items,
+  };
+}
+
+function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps) {
+  const normalized = normalizePrescription(prescription);
+
+  if (!normalized) {
+    return <p className="text-sm text-red-600">Unable to display prescription data.</p>;
+  }
+
+  const {
+    id,
+    prescriptionNumber,
+    createdAt,
+    status,
+    doctor,
+    patient,
+    notes,
+    instructions,
+    pharmacistNotes,
+    reviewDate,
+    items,
+  } = normalized;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-lg font-medium text-gray-900">Prescription Overview</h3>
+        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+          {prescriptionNumber && (
+            <div>
+              <span className="text-gray-600">Prescription #:</span>
+              <span className="ml-2 text-gray-900">{prescriptionNumber}</span>
+            </div>
+          )}
+          {id && (
+            <div>
+              <span className="text-gray-600">ID:</span>
+              <span className="ml-2 text-gray-900">{id}</span>
+            </div>
+          )}
+          {status && (
+            <div>
+              <span className="text-gray-600">Status:</span>
+              <span className="ml-2 text-gray-900 capitalize">{status.toLowerCase()}</span>
+            </div>
+          )}
+          {createdAt && (
+            <div>
+              <span className="text-gray-600">Created:</span>
+              <span className="ml-2 text-gray-900">{createdAt}</span>
+            </div>
+          )}
+          {reviewDate && (
+            <div>
+              <span className="text-gray-600">Review Date:</span>
+              <span className="ml-2 text-gray-900">{reviewDate}</span>
+            </div>
+          )}
+          {doctor && (
+            <div>
+              <span className="text-gray-600">Doctor:</span>
+              <span className="ml-2 text-gray-900">{doctor}</span>
+            </div>
+          )}
+          {patient && (
+            <div>
+              <span className="text-gray-600">Patient:</span>
+              <span className="ml-2 text-gray-900">{patient}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h4 className="text-md font-medium text-gray-900">Medications</h4>
+        {items.length === 0 ? (
+          <p className="mt-2 text-sm text-gray-500">No medication items recorded.</p>
+        ) : (
+          <div className="mt-3 space-y-3">
+            {items.map((item, idx) => {
+              const name = typeof item.drugName === 'string' ? item.drugName : typeof item.name === 'string' ? item.name : `Medication ${idx + 1}`;
+              const dosage = typeof item.dosage === 'string' ? item.dosage : item.dosage ? String(item.dosage) : undefined;
+              const frequency = typeof item.frequency === 'string' ? item.frequency : undefined;
+              const duration = typeof item.duration === 'string' ? item.duration : undefined;
+              const durationUnit = typeof item.durationUnit === 'string' ? item.durationUnit : undefined;
+              const instructionsText = typeof item.instructions === 'string' ? item.instructions : undefined;
+              const additional: string[] = [];
+
+              if (typeof item.applicationSite === 'string') {
+                additional.push(`Application site: ${item.applicationSite}`);
+              }
+              if (typeof item.applicationAmount === 'string') {
+                additional.push(`Amount: ${item.applicationAmount}`);
+              }
+              if (typeof item.dayPart === 'string') {
+                additional.push(`Day part: ${item.dayPart}`);
+              }
+              if (typeof item.pulseRegimen === 'string') {
+                additional.push(`Pulse regimen: ${item.pulseRegimen}`);
+              }
+              if (typeof item.foodInstructions === 'string') {
+                additional.push(`Food instructions: ${item.foodInstructions}`);
+              }
+              if (typeof item.taperSchedule === 'string') {
+                additional.push(`Taper schedule: ${item.taperSchedule}`);
+              }
+              if (item.pregnancyWarning) {
+                additional.push('Pregnancy warning');
+              }
+              if (item.photosensitivityWarning) {
+                additional.push('Photosensitivity warning');
+              }
+              if (typeof item.weightMgPerKgPerDay === 'number') {
+                additional.push(`Weight-based dose: ${item.weightMgPerKgPerDay} mg/kg/day`);
+              }
+              if (typeof item.calculatedDailyDoseMg === 'number') {
+                additional.push(`Calculated daily dose: ${item.calculatedDailyDoseMg} mg`);
+              }
+              if (typeof item.washOffAfterMinutes === 'number') {
+                additional.push(`Wash off after: ${item.washOffAfterMinutes} minutes`);
+              }
+
+              return (
+                <div key={idx} className="rounded border border-gray-200 p-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="font-medium text-gray-900">{name}</p>
+                      <p className="text-sm text-gray-600">
+                        {dosage && <span className="mr-2">Dosage: {dosage}</span>}
+                        {frequency && <span className="mr-2">Frequency: {frequency.replaceAll('_', ' ')}</span>}
+                        {duration && <span className="mr-2">Duration: {duration} {durationUnit ?? ''}</span>}
+                      </p>
+                      {instructionsText && (
+                        <p className="text-sm text-gray-700 mt-1">Instructions: {instructionsText}</p>
+                      )}
+                      {additional.length > 0 && (
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
+                          {additional.map((entry, additionalIdx) => (
+                            <li key={additionalIdx}>{entry}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {(notes || instructions || pharmacistNotes) && (
+        <div className="space-y-3">
+          {notes && (
+            <div>
+              <h4 className="text-md font-medium text-gray-900">Notes</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{notes}</p>
+            </div>
+          )}
+          {instructions && (
+            <div>
+              <h4 className="text-md font-medium text-gray-900">General Instructions</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{instructions}</p>
+            </div>
+          )}
+          {pharmacistNotes && (
+            <div>
+              <h4 className="text-md font-medium text-gray-900">Pharmacist Notes</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{pharmacistNotes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {onPrint && (
+        <DialogFooter>
+          <Button variant="outline" onClick={onPrint}>Print</Button>
+        </DialogFooter>
+      )}
+    </div>
+  );
+}
+'use client';
+
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
-import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Users, Stethoscope, Clock, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
-import type { Appointment } from '@/lib/types';
+import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import type {
+  Appointment,
+  GetPatientsResponse,
+  GetUsersResponse,
+  Patient,
+  PatientVisitHistoryResponse,
+  User as UserSummary,
+  VisitTimelineEntry,
+  VisitSummary,
+} from '@/lib/types';
+
+type AppointmentWithVisit = Appointment & { visit?: { id: string } | null };
+type DoctorSummary = UserSummary & { specialization?: string };
+type PatientMatch = Patient & { name?: string };
+
+type VisitComplaint = {
+  complaint?: string;
+  [key: string]: unknown;
+};
+
+type VisitDiagnosis = {
+  diagnosis?: string;
+  [key: string]: unknown;
+};
+
+type VisitMedication = string | { name?: string; dosage?: string; duration?: string };
+
+type VisitTreatment = {
+  medications?: VisitMedication[];
+  [key: string]: unknown;
+};
+
+type VisitScribeData = {
+  visitType?: string;
+  notes?: string;
+  [key: string]: unknown;
+};
+
+const parseJsonArray = <T,>(value: unknown): T[] => {
+  if (!value) return [];
+  if (Array.isArray(value)) return value as T[];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
+
+const parseJsonObject = <T extends Record<string, unknown>>(value: unknown): T | undefined => {
+  if (!value) return undefined;
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as T;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as T) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+};
+
+const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTimelineEntry[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (payload && typeof payload === 'object') {
+    const { visits, data } = payload;
+    if (Array.isArray(visits)) return visits;
+    if (Array.isArray(data)) return data;
+  }
+  return [];
+};
+
+const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
+  () => import('@/components/visits/VisitPhotos'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center py-6 text-sm text-gray-500">
+        Loading photos...
+      </div>
+    ),
+  }
+);
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<VisitTimelineEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [viewingPrescription, setViewingPrescription] = useState<{
+    visitId: string;
+    prescriptionId: string;
+  } | null>(null);
+  const [prescriptionsCache, setPrescriptionsCache] = useState<Record<string, unknown>>({});
+  const [prescriptionLoading, setPrescriptionLoading] = useState(false);
+  const [prescriptionError, setPrescriptionError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPatientHistory = async () => {
@@ -25,19 +364,11 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
       
       try {
         setLoading(true);
-        console.log('🏥 Fetching patient visit history for:', patientId);
-        type PatientVisitHistoryResponse = { visits: any[] } | any[] | { data?: any[] };
         const response = await apiClient.getPatientVisitHistory<PatientVisitHistoryResponse>(patientId, { limit: 10 });
-        console.log('🏥 Patient visit history response:', response);
-        
-        // Extract visits from response
-        const visits = Array.isArray(response)
-          ? response
-          : (((response as any)?.visits) ?? ((response as any)?.data) ?? []);
-        console.log('🏥 Processed visit history:', visits);
+        const visits = normalizePatientVisits(response);
         setHistory(visits);
       } catch (error) {
-        console.error('❌ Error fetching patient visit history:', error);
+        console.error('Failed to load patient visit history', error);
         setHistory([]);
       } finally {
         setLoading(false);
@@ -88,18 +419,18 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
         {/* Timeline items */}
         <div className="space-y-6">
           {history.map((visit, index) => {
-            // Handle JSON fields - some are already parsed, others need parsing
-            const complaints = Array.isArray(visit.complaints) ? visit.complaints : (visit.complaints ? JSON.parse(visit.complaints) : []);
-            const diagnosis = Array.isArray(visit.diagnosis) ? visit.diagnosis : (visit.diagnosis ? JSON.parse(visit.diagnosis) : []);
-            const treatment = typeof visit.plan === 'object' ? visit.plan : (visit.plan ? JSON.parse(visit.plan) : {});
-            const rawScribe = typeof visit.scribeJson === 'object' ? visit.scribeJson : (visit.scribeJson ? JSON.parse(visit.scribeJson) : {});
-            const scribeData = rawScribe && typeof rawScribe === 'object' ? rawScribe : {};
-            const vitals = typeof visit.vitals === 'object' ? visit.vitals : (visit.vitals ? JSON.parse(visit.vitals) : {});
-            
-            const visitDate = new Date(visit.createdAt);
-            const chiefComplaint = complaints.length > 0 ? complaints[0].complaint : 'No chief complaint recorded';
-            const primaryDiagnosis = diagnosis.length > 0 ? diagnosis[0].diagnosis : 'No diagnosis recorded';
-            const visitType = (scribeData as any)?.visitType || 'OPD Consultation';
+            const complaints = parseJsonArray<VisitComplaint>(visit.complaints);
+            const diagnosis = parseJsonArray<VisitDiagnosis>(visit.diagnosis);
+            const treatment = parseJsonObject<VisitTreatment>(visit.plan) ?? {};
+            const scribeData = parseJsonObject<VisitScribeData>(visit.scribeJson) ?? {};
+            const visitDate = visit.createdAt ? new Date(visit.createdAt) : new Date();
+            const chiefComplaint = complaints[0]?.complaint ?? 'No chief complaint recorded';
+            const primaryDiagnosis = diagnosis[0]?.diagnosis ?? 'No diagnosis recorded';
+            const visitTypeLabel = scribeData.visitType ?? 'OPD Consultation';
+            const medicationEntries = (Array.isArray(treatment.medications) ? treatment.medications : []) as VisitMedication[];
+            const isProcedure = visitTypeLabel.toLowerCase().includes('procedure');
+            const badgeVariant: 'default' | 'destructive' = isProcedure ? 'destructive' : 'default';
+            const hasPrescription = !!visit.prescription?.id;
             
             return (
               <div key={visit.id} className="relative flex items-start space-x-4">
@@ -109,7 +440,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                     ? 'bg-blue-100 border-blue-500 text-blue-600' 
                     : 'bg-gray-100 border-gray-300 text-gray-500'
                 }`}>
-                  {visitType === 'Procedure' ? (
+                  {isProcedure ? (
                     <Activity className="h-4 w-4" />
                   ) : (
                     <Stethoscope className="h-4 w-4" />
@@ -127,8 +458,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                             {visitDate.toLocaleDateString()} at {visitDate.toLocaleTimeString()}
                           </span>
                         </div>
-                        <Badge variant={visitType === 'Procedure' ? 'destructive' : 'default'}>
-                          {visitType}
+                        <Badge variant={badgeVariant}>
+                          {visitTypeLabel}
                         </Badge>
                       </div>
                       
@@ -150,21 +481,56 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                           <div className="text-sm text-gray-600">
                             <span className="font-medium">Treatment:</span>
                             <ul className="list-disc ml-5 mt-1 text-gray-700">
-                              {(Array.isArray(treatment.medications) ? treatment.medications : []).map((m: any, idx: number) => (
-                                <li key={idx}>
-                                  {typeof m === 'string' ? m : [m?.name, m?.dosage, m?.duration].filter(Boolean).join(' • ')}
-                                </li>
-                              ))}
-                            </ul>
+                                {medicationEntries.map((medication, idx) => {
+                                  const summary =
+                                    typeof medication === 'string'
+                                      ? medication
+                                      : [medication?.name, medication?.dosage, medication?.duration]
+                                          .filter(Boolean)
+                                          .join(' • ');
+                                  return <li key={idx}>{summary}</li>;
+                                })}
+                              </ul>
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      
+                        )}
+                        
                       {scribeData.notes && (
                         <div className="mt-2 pt-2 border-t border-gray-200">
                           <p className="text-sm text-gray-600">
                             <span className="font-medium">Notes:</span> {scribeData.notes}
                           </p>
+                        </div>
+                      )}
+
+                      {hasPrescription && (
+                        <div className="mt-4 pt-3 border-t border-gray-200">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const prescriptionId = visit.prescription!.id;
+                              setViewingPrescription({ visitId: visit.id, prescriptionId });
+                              if (!prescriptionsCache[prescriptionId]) {
+                                setPrescriptionError(null);
+                                setPrescriptionLoading(true);
+                                void apiClient
+                                  .getPrescription(prescriptionId)
+                                  .then((data) => {
+                                    setPrescriptionsCache((prev) => ({ ...prev, [prescriptionId]: data }));
+                                  })
+                                  .catch((error: unknown) => {
+                                    console.error('Failed to load prescription', error);
+                                    setPrescriptionError('Unable to load prescription. Please try again.');
+                                  })
+                                  .finally(() => {
+                                    setPrescriptionLoading(false);
+                                  });
+                              }
+                            }}
+                          >
+                            View Prescription
+                          </Button>
                         </div>
                       )}
                     </CardContent>
@@ -175,13 +541,42 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
           })}
         </div>
       </div>
+
+      <Dialog
+        open={!!viewingPrescription}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewingPrescription(null);
+            setPrescriptionError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Prescription Details</DialogTitle>
+            <DialogDescription>
+              Review the medications and instructions issued during this visit.
+            </DialogDescription>
+          </DialogHeader>
+
+          {prescriptionLoading && <p className="text-sm text-gray-500">Loading prescription...</p>}
+          {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
+
+          {!prescriptionLoading && viewingPrescription && !prescriptionError && (
+            <PrescriptionSummary
+              prescription={prescriptionsCache[viewingPrescription.prescriptionId]}
+              onPrint={() => window.print()}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 function VisitsPageInner() {
-  const [patients, setPatients] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
+  const [patients, setPatients] = useState<PatientMatch[]>([]);
+  const [doctors, setDoctors] = useState<DoctorSummary[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('DOCTOR');
@@ -191,88 +586,80 @@ function VisitsPageInner() {
 
   // Autocomplete state for patients
   const [patientQuery, setPatientQuery] = useState('');
-  const [patientOptions, setPatientOptions] = useState<any[]>([]);
+  const [patientOptions, setPatientOptions] = useState<PatientMatch[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientMenu, setShowPatientMenu] = useState(false);
-  const [appointmentData, setAppointmentData] = useState<any>(null);
+  const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
 
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
+  const appointmentIdParam = searchParams.get('appointmentId');
+  const autoStartParam = searchParams.get('autoStart') === 'true';
 
-  useEffect(() => {
-    loadData();
+  const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload as PatientMatch[];
+    if (typeof payload === 'object' && payload !== null) {
+      const data = payload as Partial<GetPatientsResponse> & { data?: PatientMatch[] };
+      if (Array.isArray(data.patients)) return data.patients as PatientMatch[];
+      if (Array.isArray(data.data)) return data.data as PatientMatch[];
+    }
+    return [];
   }, []);
 
-  // Handle URL parameters for appointment linking
-  useEffect(() => {
-    const patientId = urlPatientId;
-    const appointmentId = searchParams.get('appointmentId');
-    const autoStart = searchParams.get('autoStart') === 'true';
-
-    console.log('🔗 URL Parameters:', { patientId, appointmentId, autoStart });
-
-    if (patientId) {
-      console.log('🎯 Setting patient from URL:', patientId);
-      setSelectedPatientId(patientId);
-      
-      // If we have an appointment ID, fetch appointment details
-      if (appointmentId) {
-        fetchAppointmentData(appointmentId);
-      }
-      
-      // Auto-start visit documentation if requested
-      if (autoStart) {
-        setShowForm(true);
-      }
+  const extractDoctors = useCallback((payload: unknown): DoctorSummary[] => {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload as DoctorSummary[];
+    if (typeof payload === 'object' && payload !== null) {
+      const data = payload as Partial<GetUsersResponse>;
+      if (Array.isArray(data.users)) return data.users as DoctorSummary[];
     }
-  }, [searchParams]);
+    return [];
+  }, []);
 
-  const fetchAppointmentData = async (appointmentId: string) => {
+  const fetchAppointmentData = useCallback(async (appointmentId: string) => {
     try {
-      const appointment = await apiClient.getAppointment<Appointment>(appointmentId);
+      const appointment = await apiClient.getAppointment<AppointmentWithVisit>(appointmentId);
       setAppointmentData(appointment);
-      
-      // Set doctor from appointment
       if (appointment?.doctorId) {
         setSelectedDoctorId(appointment.doctorId);
       }
     } catch (error) {
       console.error('Failed to fetch appointment data:', error);
     }
-  };
+  }, []);
 
-  const loadData = async () => {
-      setLoading(true);
-      try {
-        const [patientsRes, usersRes] = await Promise.allSettled([
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [patientsRes, usersRes] = await Promise.allSettled([
         apiClient.getPatients({ page: 1, limit: 50 }),
-        apiClient.getUsers({ role: 'DOCTOR', limit: 20 }),
-        ]);
+        apiClient.getUsers({ role: 'DOCTOR', limit: 20 })
+      ]);
 
-        if (patientsRes.status === 'fulfilled') {
-        console.log('🏥 Patients API response:', patientsRes.value);
-        const patientsData = (patientsRes.value as any)?.data || (patientsRes.value as any)?.patients || (patientsRes.value as any) || [];
-        console.log('🏥 Processed patients data:', patientsData);
+      if (patientsRes.status === 'fulfilled') {
+        const patientsData = extractPatients(patientsRes.value);
         setPatients(patientsData);
         setPatientOptions(patientsData.slice(0, 10));
-        // Only set default patient if no URL patient ID is present
-        if (patientsData.length > 0 && !selectedPatientId && !urlPatientId) {
-          console.log('🔄 Setting default patient (no URL patient):', patientsData[0].id);
-          setSelectedPatientId(patientsData[0].id);
-          }
-        }
-
-        if (usersRes.status === 'fulfilled') {
-        const doctorsData = (usersRes.value as any)?.users || [];
-        setDoctors(doctorsData);
-        if (doctorsData.length > 0 && !selectedDoctorId) {
-          setSelectedDoctorId(doctorsData[0].id);
+        if (patientsData.length > 0) {
+          setSelectedPatientId((prev) => {
+            if (prev) return prev;
+            if (urlPatientId) return urlPatientId;
+            return patientsData[0]?.id ?? '';
+          });
         }
       }
 
-      // Get current user role (in a real app, this would come from auth context)
+      if (usersRes.status === 'fulfilled') {
+        const doctorsData = extractDoctors(usersRes.value);
+        setDoctors(doctorsData);
+        if (doctorsData.length > 0) {
+          setSelectedDoctorId((prev) => prev || doctorsData[0]?.id || '');
+        }
+      }
+
       try {
-        const currentUser = await apiClient.get<{ role?: string }>(' /auth/me'.replace(' ', ''));
+        const currentUser = await apiClient.get<{ role?: string }>('/auth/me');
         setCurrentUserRole(currentUser?.role ?? 'DOCTOR');
       } catch (error) {
         console.error('Failed to get current user:', error);
@@ -280,19 +667,43 @@ function VisitsPageInner() {
       }
     } catch (error) {
       console.error('Failed to load data:', error);
-      } finally {
-        setLoading(false);
+    } finally {
+      setLoading(false);
+    }
+  }, [extractDoctors, extractPatients, urlPatientId]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  // Handle URL parameters for appointment linking
+  useEffect(() => {
+    if (urlPatientId) {
+      setSelectedPatientId(urlPatientId);
+      if (appointmentIdParam) {
+        void fetchAppointmentData(appointmentIdParam);
       }
-    };
+      if (autoStartParam) {
+        setShowForm(true);
+      }
+    }
+  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlPatientId]);
+
+  useEffect(() => {
+    const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;
+    if (typeof visitId === 'string') {
+      setRecentVisitId(visitId);
+    }
+  }, [appointmentData]);
 
   // Debounced search for patients
   useEffect(() => {
-    let t: any;
+    let timeoutRef: ReturnType<typeof setTimeout>;
     const run = async () => {
       try {
         setSearchingPatients(true);
-        const res: any = await apiClient.getPatients({ search: patientQuery || undefined, limit: 10 });
-        const rows = res?.data || res?.patients || res || [];
+        const res = await apiClient.getPatients({ search: patientQuery || undefined, limit: 10 });
+        const rows = extractPatients(res);
         setPatientOptions(rows);
       } catch (e) {
         setPatientOptions([]);
@@ -300,17 +711,13 @@ function VisitsPageInner() {
         setSearchingPatients(false);
       }
     };
-    t = setTimeout(() => void run(), 250);
-    return () => clearTimeout(t);
-  }, [patientQuery]);
+    timeoutRef = setTimeout(() => {
+      void run();
+    }, 250);
+    return () => clearTimeout(timeoutRef);
+  }, [extractPatients, patientQuery]);
 
-  const startNewVisit = () => {
-    if (selectedPatientId && selectedDoctorId) {
-      setShowForm(true);
-    }
-  };
-
-  const getRolePermissions = () => {
+  const roleInfo = useMemo(() => {
     const permissions = {
       THERAPIST: { 
         label: 'Therapist',
@@ -334,8 +741,24 @@ function VisitsPageInner() {
       },
     };
     return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
-  };
+  }, [currentUserRole]);
 
+  const selectedPatient = useMemo(
+    () => patients.find((p) => p.id === selectedPatientId) ?? null,
+    [patients, selectedPatientId]
+  );
+
+  const selectedDoctor = useMemo(
+    () => doctors.find((d) => d.id === selectedDoctorId) ?? null,
+    [doctors, selectedDoctorId]
+  );
+
+  const startNewVisit = () => {
+    if (selectedPatientId && selectedDoctorId) {
+      setShowForm(true);
+    }
+  };
+ 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -344,7 +767,7 @@ function VisitsPageInner() {
       </div>
     );
   }
-
+ 
   if (patients.length === 0 || doctors.length === 0) {
     return (
       <Card>
@@ -397,8 +820,6 @@ function VisitsPageInner() {
   }
 
   if (!showForm) {
-    const roleInfo = getRolePermissions();
-    
     return (
       <div className="space-y-6">
         {/* Role Information */}
@@ -531,8 +952,8 @@ function VisitsPageInner() {
                           <div>
                             <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
                             <p className="text-xs text-gray-500 mt-1">
-                              Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
-                              Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
+                              Patient: {selectedPatient?.name ?? 'Unknown'} • 
+                              Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
                             </p>
                           </div>
                           <Button onClick={startNewVisit}>
@@ -665,8 +1086,8 @@ function VisitsPageInner() {
             )}
           </div>
           <p className="text-sm text-gray-600">
-            Patient: {patients.find(p => p.id === selectedPatientId)?.name} • 
-            Doctor: Dr. {doctors.find(d => d.id === selectedDoctorId)?.firstName} {doctors.find(d => d.id === selectedDoctorId)?.lastName}
+            Patient: {selectedPatient?.name ?? 'Unknown'} • 
+            Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
             {appointmentData && (
               <span className="ml-2 text-blue-600">
                 • {appointmentData.slot} • {appointmentData.visitType}
@@ -691,13 +1112,13 @@ function VisitsPageInner() {
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
         userRole={currentUserRole}
-        patientName={patients.find(p => p.id === selectedPatientId)?.name || ''}
+        patientName={selectedPatient?.name || ''}
         visitDate={new Date().toISOString()}
         appointmentId={appointmentData?.id}
         appointmentData={appointmentData}
       />
       
-      {recentVisitId && <VisitPhotos visitId={recentVisitId} />}
+      {recentVisitId && <PhotosPanel visitId={recentVisitId} />}
     </div>
   );
 }

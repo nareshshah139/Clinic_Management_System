@@ -5,6 +5,7 @@ export interface RequestContextData {
   userId: string | null;
   ipAddress: string | null;
   userAgent: string | null;
+  branchId?: string | null;
 }
 
 @Injectable()

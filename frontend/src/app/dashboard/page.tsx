@@ -1,48 +1,48 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Users,
-  Package,
-  TrendingUp,
-  AlertTriangle,
-  Clock,
-  Database,
-  Download,
-} from 'lucide-react';
+import { Users, Package, TrendingUp, AlertTriangle, Clock, Database, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
-
-type MinimalUser = { role?: string } | null;
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [todaysAppointments, setTodaysAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState<MinimalUser>(null);
   const [backupLoading, setBackupLoading] = useState(false);
+  const { user: currentUser, loading: userLoading } = useDashboardUser();
+  const router = useRouter();
+
+  const showAdminControls = useMemo(() => {
+    const role = currentUser?.role;
+    return role === 'ADMIN' || role === 'OWNER';
+  }, [currentUser?.role]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
+      if (userLoading) return;
       try {
         setLoading(true);
         
-        // Fetch system statistics and current user
-        const [stats, user] = await Promise.all([
-          apiClient.getSystemStatistics(),
-          apiClient.get('/auth/me')
-        ]);
-        setStatistics(stats as SystemStatistics);
-        setCurrentUser((user as MinimalUser) ?? null);
+        // Fetch system statistics (ignore if unauthorized for role)
+        try {
+          const stats = await apiClient.getSystemStatistics();
+          setStatistics(stats as SystemStatistics);
+        } catch (error: unknown) {
+          setStatistics(null);
+          console.warn('Unable to load system statistics', error);
+        }
 
-        // For now, provide mock data for alerts and appointments since these endpoints aren't available in minimal mode
+        // TODO: Replace placeholder alerts with real endpoint data once available
         setAlerts([
           {
-            id: '1',
+            id: 'system-status',
             title: 'System Status',
             message: 'All systems operational',
             severity: 'LOW',
@@ -50,7 +50,7 @@ export default function DashboardPage() {
             createdAt: new Date().toISOString(),
           },
           {
-            id: '2',
+            id: 'database-connection',
             title: 'Database Connection',
             message: 'PostgreSQL connection stable',
             severity: 'LOW',
@@ -59,47 +59,28 @@ export default function DashboardPage() {
           },
         ]);
 
-        // Mock today's appointments
-        setTodaysAppointments([
-          {
-            id: '1',
-            patientId: 'patient-1',
-            doctorId: 'test-doctor-1',
-            date: new Date().toISOString(),
-            slot: '10:00',
-            status: 'SCHEDULED',
-            visitType: 'OPD',
-            branchId: 'branch-1',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            patient: {
-              id: 'patient-1',
-              firstName: 'John',
-              lastName: 'Doe',
-              name: 'John Doe',
-              phone: '9000000000',
-            },
-          },
-          {
-            id: '2',
-            patientId: 'patient-2',
-            doctorId: 'test-doctor-1',
-            date: new Date(Date.now() + 3600000).toISOString(),
-            slot: '11:00',
-            status: 'CONFIRMED',
-            visitType: 'OPD',
-            branchId: 'branch-1',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            patient: {
-              id: 'patient-2',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              name: 'Jane Smith',
-              phone: '9000000001',
-            },
-          },
-        ]);
+        // Load today's appointments for the current user/role
+        const today = new Date();
+        const todayDate = today.toISOString().split('T')[0];
+        let appointments: Appointment[] = [];
+
+        if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
+          try {
+            const schedule = await apiClient.getDoctorSchedule(currentUser.id, todayDate);
+            appointments = schedule?.appointments ?? [];
+          } catch (error) {
+            console.error('Failed to load doctor schedule', error);
+          }
+        } else {
+          try {
+            const res: any = await apiClient.getAppointments({ date: todayDate, limit: 5, sortBy: 'slot', sortOrder: 'asc' });
+            appointments = res?.appointments || res?.data || [];
+          } catch (error) {
+            console.error('Failed to load appointments summary', error);
+          }
+        }
+
+        setTodaysAppointments(appointments);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
         // Set fallback data on error
@@ -115,7 +96,7 @@ export default function DashboardPage() {
     };
 
     void fetchDashboardData();
-  }, []);
+  }, [currentUser?.id, currentUser?.role, userLoading]);
 
   const handleBackup = async () => {
     try {
@@ -135,7 +116,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (loading) {
+  if (userLoading || loading) {
     return (
       <div className="space-y-6">
         <div>
@@ -212,7 +193,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Admin Controls */}
-      {currentUser?.role === 'ADMIN' || currentUser?.role === 'OWNER' ? (
+      {showAdminControls ? (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -358,7 +339,11 @@ export default function DashboardPage() {
                     </Badge>
                   </div>
                 ))}
-                <Button variant="outline" className="w-full mt-4">
+                <Button
+                  variant="outline"
+                  className="w-full mt-4"
+                  onClick={() => router.push('/dashboard/appointments')}
+                >
                   View All Appointments
                 </Button>
               </div>

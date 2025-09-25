@@ -10,16 +10,22 @@ import { apiClient } from '@/lib/api';
 function LoginPageInner() {
   const router = useRouter();
   const search = useSearchParams();
-  const [phone, setPhone] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
+    const trimmedIdentifier = identifier.trim();
+    if (!trimmedIdentifier || !password) {
+      setError('Phone or email and password are required');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
-      await apiClient.login(phone, password);
+      await apiClient.login(trimmedIdentifier, password);
       const next = search.get('next') || '/dashboard';
       router.replace(next);
     } catch (e: any) {
@@ -42,19 +48,20 @@ function LoginPageInner() {
             className="space-y-4"
           >
             <div>
-              <label className="text-sm text-gray-700" htmlFor="login-username">Phone</label>
+              <label className="text-sm text-gray-700" htmlFor="login-identifier">Phone or email</label>
               <Input
-                id="login-username"
+                id="login-identifier"
                 name="username"
-                type="tel"
-                inputMode="tel"
+                type="text"
+                inputMode="email"
                 autoComplete="username"
                 autoCapitalize="off"
                 autoCorrect="off"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="10-digit phone"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="Phone or email"
                 autoFocus
+                required
               />
             </div>
             <div>
@@ -67,13 +74,14 @@ function LoginPageInner() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                required
               />
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button className="w-full" type="submit" disabled={loading}>
+            <Button className="w-full" type="submit" disabled={loading || !identifier.trim() || !password}>
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
-            <p className="text-xs text-gray-500 text-center">Use your registered phone and password.</p>
+            <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
           </form>
         </CardContent>
       </Card>
