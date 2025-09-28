@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Search, Settings, User, Calendar, Users, Phone, Mail } from 'lucide-react';
+import { Bell, Search, Settings, User, Calendar, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,14 @@ import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { useDashboardUser } from './dashboard-user-context';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface SearchResult {
   id: string;
@@ -28,6 +36,215 @@ export function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user, loading } = useDashboardUser();
+
+  type NotificationItem = {
+    id: string;
+    title: string;
+    description?: string;
+    href: string;
+    variant?: 'default' | 'warning' | 'destructive' | 'success';
+  };
+
+  const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
+  const [notifLoading, setNotifLoading] = useState(false);
+
+  // Load system alerts and map to role-based notifications
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (loading) return;
+      if (!user) return;
+      try {
+        setNotifLoading(true);
+        const alerts: any = await apiClient.getSystemAlerts<any>();
+        if (!mounted) return;
+        const role = (user as any)?.role as string | undefined;
+        const items: NotificationItem[] = buildRoleNotifications(alerts, role);
+        setNotifItems(items);
+      } catch (e) {
+        // Fail silently; leave notifications empty
+        setNotifItems([]);
+      } finally {
+        setNotifLoading(false);
+      }
+    };
+    void load();
+
+    // Optional light polling to keep fresh
+    const interval = setInterval(() => {
+      void load();
+    }, 60_000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [loading, user]);
+
+  function buildRoleNotifications(alerts: any, role?: string): NotificationItem[] {
+    const items: NotificationItem[] = [];
+    const counts = alerts?.counts || {};
+    const lowStock = alerts?.lowStockAlerts || [];
+    const expiry = alerts?.expiryAlerts || [];
+    const overdue = alerts?.overdueInvoices || [];
+    const pending = alerts?.pendingPayments || [];
+    const upcoming = alerts?.upcomingAppointments || [];
+
+    const pushMany = (arr: NotificationItem[], max: number = 5) =>
+      arr.slice(0, max).forEach((it) => items.push(it));
+
+    const roleUpper = (role || '').toUpperCase();
+    switch (roleUpper) {
+      case 'DOCTOR': {
+        const list: NotificationItem[] = (upcoming || []).map((a: any) => ({
+          id: `appt-${a.id}`,
+          title: `${a.patientName || 'Patient'} at ${formatTime(a.time)}`,
+          description: `${a.visitType || 'Visit'} • ${a.status}`,
+          href: `/dashboard/visits?appointmentId=${encodeURIComponent(a.id)}`,
+          variant: 'default',
+        }));
+        pushMany(list, 6);
+        break;
+      }
+      case 'RECEPTION':
+      case 'RECEPTIONIST': {
+        const apptItems: NotificationItem[] = (upcoming || []).map((a: any) => ({
+          id: `appt-${a.id}`,
+          title: `Upcoming: ${a.patientName || 'Patient'} at ${formatTime(a.time)}`,
+          description: `${a.visitType || 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
+          href: `/dashboard/appointments`,
+        }));
+        const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
+          id: `inv-${inv.id}`,
+          title: `Overdue Invoice ${inv.invoiceNo}`,
+          description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
+          href: `/dashboard/billing?tab=invoices`,
+          variant: 'warning',
+        }));
+        pushMany(apptItems, 4);
+        pushMany(invItems, 3);
+        break;
+      }
+      case 'PHARMACIST':
+      case 'INVENTORY': {
+        const stockItems: NotificationItem[] = (lowStock || []).map((i: any) => ({
+          id: `stock-${i.itemId}`,
+          title: `Low stock: ${i.itemName}`,
+          description: `Stock ${i.currentStock} • Reorder ${i.reorderLevel}`,
+          href: `/dashboard/inventory?tab=low-stock`,
+          variant: 'destructive',
+        }));
+        const expItems: NotificationItem[] = (expiry || []).map((i: any) => ({
+          id: `exp-${i.itemId}`,
+          title: `Expiring soon: ${i.itemName}`,
+          description: `${i.daysUntilExpiry} days left • Qty ${i.currentStock}`,
+          href: `/dashboard/inventory?tab=expiry`,
+          variant: 'warning',
+        }));
+        pushMany(stockItems, 5);
+        pushMany(expItems, 3);
+        break;
+      }
+      case 'ACCOUNTANT':
+      case 'BILLING': {
+        const payItems: NotificationItem[] = (pending || []).map((p: any) => ({
+          id: `pay-${p.id}`,
+          title: `Pending ${formatCurrency(p.amount)} (${p.mode})`,
+          description: `Invoice ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
+          href: `/dashboard/billing?tab=payments`,
+          variant: 'warning',
+        }));
+        const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
+          id: `inv-${inv.id}`,
+          title: `Overdue Invoice ${inv.invoiceNo}`,
+          description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
+          href: `/dashboard/billing?tab=invoices`,
+          variant: 'destructive',
+        }));
+        pushMany(payItems, 5);
+        pushMany(invItems, 3);
+        break;
+      }
+      case 'OWNER':
+      case 'ADMIN':
+      default: {
+        // Summary items for admins/owners (and fallback)
+        const summary: NotificationItem[] = [];
+        if (counts.overdueInvoices > 0) {
+          summary.push({
+            id: 'summary-overdue',
+            title: `${counts.overdueInvoices} overdue invoice${counts.overdueInvoices === 1 ? '' : 's'}`,
+            description: 'Billing attention needed',
+            href: '/dashboard/billing?tab=invoices',
+            variant: 'destructive',
+          });
+        }
+        if (counts.pendingPayments > 0) {
+          summary.push({
+            id: 'summary-pending',
+            title: `${counts.pendingPayments} pending payment${counts.pendingPayments === 1 ? '' : 's'}`,
+            description: 'Reconciliation required',
+            href: '/dashboard/billing?tab=payments',
+            variant: 'warning',
+          });
+        }
+        if (counts.lowStockAlerts > 0) {
+          summary.push({
+            id: 'summary-stock',
+            title: `${counts.lowStockAlerts} low-stock item${counts.lowStockAlerts === 1 ? '' : 's'}`,
+            description: 'Restock inventory',
+            href: '/dashboard/inventory?tab=low-stock',
+          });
+        }
+        if (counts.expiryAlerts > 0) {
+          summary.push({
+            id: 'summary-expiry',
+            title: `${counts.expiryAlerts} near-expiry item${counts.expiryAlerts === 1 ? '' : 's'}`,
+            description: 'Check expirations',
+            href: '/dashboard/inventory?tab=expiry',
+            variant: 'warning',
+          });
+        }
+        if (counts.upcomingAppointments > 0) {
+          summary.push({
+            id: 'summary-appts',
+            title: `${counts.upcomingAppointments} upcoming appointment${counts.upcomingAppointments === 1 ? '' : 's'}`,
+            description: 'Within 48 hours',
+            href: '/dashboard/appointments',
+          });
+        }
+        pushMany(summary, 6);
+        break;
+      }
+    }
+    return items;
+  }
+
+  function formatTime(value: string | Date): string {
+    const d = new Date(value);
+    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  }
+  function formatDate(value: string | Date): string {
+    const d = new Date(value);
+    return d.toLocaleDateString();
+  }
+  function formatCurrency(amount: number): string {
+    try {
+      return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR' }).format(amount || 0);
+    } catch {
+      return `₹${(amount || 0).toFixed(2)}`;
+    }
+  }
+  function formatRelative(value: string | Date): string {
+    const d = new Date(value);
+    const diffMs = Date.now() - d.getTime();
+    const mins = Math.round(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.round(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.round(hrs / 24);
+    return `${days}d ago`;
+  }
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -244,18 +461,62 @@ export function Header() {
         )}
       </div>
 
-      {/* Right section */}
+      {/* Right section */
+      }
       <div className="flex items-center space-x-4">
         {/* Notifications */}
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="h-5 w-5" />
-          <Badge
-            variant="destructive"
-            className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 flex items-center justify-center text-xs"
-          >
-            3
-          </Badge>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="relative">
+              <Bell className="h-5 w-5" />
+              {notifItems.length > 0 && (
+                <Badge
+                  variant={notifItems.some((n) => n.variant === 'destructive') ? 'destructive' : 'default'}
+                  className="absolute -top-1 -right-1 h-5 min-w-5 rounded-full p-0 flex items-center justify-center text-[10px]"
+                >
+                  {notifItems.length > 9 ? '9+' : String(notifItems.length)}
+                </Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-80">
+            <DropdownMenuLabel>
+              Notifications {notifLoading ? '• Loading…' : ''}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {notifItems.length === 0 && !notifLoading && (
+              <div className="px-3 py-6 text-sm text-gray-500">No notifications</div>
+            )}
+            {notifItems.map((n) => (
+              <DropdownMenuItem
+                key={n.id}
+                onClick={() => router.push(n.href)}
+                className={
+                  n.variant === 'destructive'
+                    ? 'text-red-600'
+                    : n.variant === 'warning'
+                      ? 'text-yellow-700'
+                      : ''
+                }
+              >
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">{n.title}</span>
+                  {n.description && (
+                    <span className="text-xs text-gray-500">{n.description}</span>
+                  )}
+                </div>
+              </DropdownMenuItem>
+            ))}
+            {notifItems.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => router.push('/dashboard/reports')}>
+                  View reports & alerts
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Settings */}
         <Button variant="ghost" size="sm">
