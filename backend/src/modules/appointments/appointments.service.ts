@@ -243,7 +243,7 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true, capacity: true },
         },
         visit: {
-          select: { id: true, vitals: true, complaints: true },
+          select: { id: true },
         },
       },
     });
@@ -522,7 +522,7 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true },
         },
         visit: {
-          select: { id: true, status: true },
+          select: { id: true },
         },
       },
       orderBy: {
@@ -564,7 +564,7 @@ export class AppointmentsService {
           select: { id: true, firstName: true, lastName: true },
         },
         visit: {
-          select: { id: true, status: true },
+          select: { id: true },
         },
       },
       orderBy: {

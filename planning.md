@@ -571,6 +571,13 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 ## Recent Achievements
 
 ### September 2025: Backend Infrastructure & Frontend Integration Completion
+### September 2025: Visits Photos & Auto-save Stabilization
+- Fixed runtime TDZ error in `MedicalVisitForm.tsx` by moving and memoizing `buildPayload`, ensuring hooks reference initialized callbacks.
+- Removed duplicate helper definitions and aligned types in visit history rendering.
+- Implemented photo serving proxy in Next rewrites to expose `/uploads/**` from backend.
+- Normalized photo URLs in `VisitPhotos` and defaulted API base to `/api`; thumbnails and main images now display immediately after upload.
+- Hardened diagnosis rendering to accept both string and object forms.
+
 **Achievement:** Complete backend infrastructure fixes and frontend integration
 **Impact:** 
 - Fixed critical iconv-lite dependency issues preventing backend startup

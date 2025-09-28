@@ -242,7 +242,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const isInitialLoadRef = useRef(true);
   const hasUnsavedChangesRef = useRef(false);
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSaveTimerRef = useRef<number | null>(null);
   const autoSavePromiseRef = useRef<Promise<void> | null>(null);
   const autoSaveSuccessNotifiedRef = useRef(false);
   const autoSaveFailureNotifiedRef = useRef(false);
@@ -385,6 +385,85 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       visitDate,
     ]
   );
+
+  // Check permissions for current user role (moved up to avoid TDZ issues)
+  const hasPermission = useCallback((section: string) => {
+    const permissions = ROLE_PERMISSIONS[userRole as keyof typeof ROLE_PERMISSIONS] || [];
+    return permissions.includes('all') || permissions.includes(section);
+  }, [userRole]);
+
+  // Calculate overall progress (moved up to avoid TDZ issues)
+  const getProgress = useCallback(() => {
+    const totalSections = hasPermission('all') ? 6 : 3; // Doctor vs Therapist/Nurse
+    return Math.round((completedSections.size / totalSections) * 100);
+  }, [completedSections.size, hasPermission]);
+
+  // Build payload for save/update (moved up to avoid TDZ issues)
+  const buildPayload = useCallback(() => {
+    const payload: Record<string, unknown> = {
+      patientId,
+      doctorId,
+      appointmentId, // Include appointment ID if available
+      visitNumber: currentVisitNumber,
+      status: visitStatus,
+      complaints: (complaints.length > 0 ? complaints : (subjective ? [subjective] : ['General consultation']))
+        .map((complaint) => ({ complaint })),
+      examination: {
+        ...(objective ? { generalAppearance: objective } : {}),
+        dermatology: {
+          skinType: skinType || undefined,
+          morphology: Array.from(morphology),
+          distribution: Array.from(distribution),
+          acneSeverity: acneSeverity || undefined,
+          itchScore: itchScore ? Number(itchScore) : undefined,
+          painScore: painScore ? Number(painScore) : undefined,
+          triggers: triggers || undefined,
+          priorTreatments: priorTx || undefined,
+          skinConcerns: Array.from(skinConcerns),
+        }
+      },
+      diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : assessment ? [assessment] : [])
+        .map((dx) => ({ diagnosis: dx, icd10Code: 'R69', type: 'Primary' })),
+      treatmentPlan: {
+        ...(plan ? { notes: plan } : {}),
+        dermatology: {
+          procedures: procType ? [{ 
+            type: procType, 
+            fluence: fluence ? Number(fluence) : undefined, 
+            spotSize: spotSize ? Number(spotSize) : undefined, 
+            passes: passes ? Number(passes) : undefined 
+          }] : [],
+          medications: {
+            topicals: topicals || undefined,
+            systemics: systemics || undefined,
+          },
+          counseling: counseling || undefined,
+          // follow-up date handled at visit completion; prescription gets reviewDate via prop
+        }
+      },
+      vitals: {
+        systolicBP: vitals.bpS ? Number(vitals.bpS) : undefined,
+        diastolicBP: vitals.bpD ? Number(vitals.bpD) : undefined,
+        heartRate: vitals.hr ? Number(vitals.hr) : undefined,
+        temperature: vitals.temp ? Number(vitals.temp) : undefined,
+        weight: vitals.weight ? Number(vitals.weight) : undefined,
+        height: vitals.height ? Number(vitals.height) : undefined,
+        respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
+      },
+      photos: [], // Photos are now managed by VisitPhotos component
+      metadata: {
+        capturedBy: userRole,
+        sections: Array.from(completedSections),
+        progress: getProgress(),
+      }
+    };
+
+    if (reviewDate) {
+      payload.followUp = { date: reviewDate };
+    }
+
+    return payload;
+  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective]);
 
   const runAutoSave = useCallback(async () => {
     if (!visitId || !hasUnsavedChangesRef.current) {
@@ -751,12 +830,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
   ]), [parseJsonValue, recentVisits]);
 
-  // Check permissions for current user role
-  const hasPermission = (section: string) => {
-    const permissions = ROLE_PERMISSIONS[userRole as keyof typeof ROLE_PERMISSIONS] || [];
-    return permissions.includes('all') || permissions.includes(section);
-  };
-
   // Load visit number and patient history
   const loadPatientContext = useCallback(async () => {
     if (!patientId) {
@@ -774,7 +847,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         : visits?.visits || visits?.data || [];
 
       setPatientDetails(patient as VisitPatientSummary);
-      setRecentVisits(visitList.map((visit) => normalizeVisit(visit)));
+      setRecentVisits(visitList as VisitSummary[]);
     } catch (error) {
       console.error('Failed to load patient context:', error);
       if (appointmentData && 'patient' in appointmentData && appointmentData.patient) {
@@ -792,7 +865,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       setLoadingHistory(true);
       const response = await apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId);
       const responseDataArray = Array.isArray(response) ? response : response?.visits || response?.data || [];
-      const historyEntries = (responseDataArray as VisitSummary[]).map((visit) => normalizeVisit(visit));
+      const historyEntries = responseDataArray as VisitSummary[];
       setPatientHistory(historyEntries);
       setCurrentVisitNumber(historyEntries.length + 1);
     } catch (error) {
@@ -817,77 +890,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     return completedSections.has(section);
   };
 
-  // Calculate overall progress
-  const getProgress = useCallback(() => {
-    const totalSections = hasPermission('all') ? 6 : 3; // Doctor vs Therapist/Nurse
-    return Math.round((completedSections.size / totalSections) * 100);
-  }, [completedSections.size, hasPermission]);
-
-  const buildPayload = useCallback(() => {
-    const payload: Record<string, unknown> = {
-      patientId,
-      doctorId,
-      appointmentId, // Include appointment ID if available
-      visitNumber: currentVisitNumber,
-      status: visitStatus,
-      complaints: (complaints.length > 0 ? complaints : (subjective ? [subjective] : ['General consultation']))
-        .map((complaint) => ({ complaint })),
-      examination: {
-        ...(objective ? { generalAppearance: objective } : {}),
-        dermatology: {
-          skinType: skinType || undefined,
-          morphology: Array.from(morphology),
-          distribution: Array.from(distribution),
-          acneSeverity: acneSeverity || undefined,
-          itchScore: itchScore ? Number(itchScore) : undefined,
-          painScore: painScore ? Number(painScore) : undefined,
-          triggers: triggers || undefined,
-          priorTreatments: priorTx || undefined,
-          skinConcerns: Array.from(skinConcerns),
-        }
-      },
-      diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : assessment ? [assessment] : [])
-        .map((dx) => ({ diagnosis: dx, icd10Code: 'R69', type: 'Primary' })),
-      treatmentPlan: {
-        ...(plan ? { notes: plan } : {}),
-        dermatology: {
-          procedures: procType ? [{ 
-            type: procType, 
-            fluence: fluence ? Number(fluence) : undefined, 
-            spotSize: spotSize ? Number(spotSize) : undefined, 
-            passes: passes ? Number(passes) : undefined 
-          }] : [],
-          medications: {
-            topicals: topicals || undefined,
-            systemics: systemics || undefined,
-          },
-          counseling: counseling || undefined,
-          // follow-up date handled at visit completion; prescription gets reviewDate via prop
-        }
-      },
-      vitals: {
-        systolicBP: vitals.bpS ? Number(vitals.bpS) : undefined,
-        diastolicBP: vitals.bpD ? Number(vitals.bpD) : undefined,
-        heartRate: vitals.hr ? Number(vitals.hr) : undefined,
-        temperature: vitals.temp ? Number(vitals.temp) : undefined,
-        weight: vitals.weight ? Number(vitals.weight) : undefined,
-        height: vitals.height ? Number(vitals.height) : undefined,
-        respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
-      },
-      photos: [], // Photos are now managed by VisitPhotos component
-      metadata: {
-        capturedBy: userRole,
-        sections: Array.from(completedSections),
-        progress: getProgress(),
-      }
-    };
-
-    if (reviewDate) {
-      payload.followUp = { date: reviewDate };
-    }
-
-    return payload;
-  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore]);
 
   const save = async (complete = false) => {
     try {
@@ -1789,9 +1791,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                       </Badge>
                                     );
                                   })()}
-                                  {Number(visit.photos || 0) > 0 && (
+                                  {/* photos may be absent in VisitSummary; show if present */}
+                                  {typeof (visit as any).photos !== 'undefined' && Number((visit as any).photos || 0) > 0 && (
                                     <Badge variant="outline" className="text-xs">
-                                      {Number(visit.photos)} Photos
+                                      {Number((visit as any).photos)} Photos
                                     </Badge>
                                   )}
                                 </div>
@@ -1800,7 +1803,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               <div className="space-y-2">
                                 <div className="flex items-center text-sm">
                                   <User className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className="text-gray-600">Dr. {typeof visit.doctor === 'string' ? visit.doctor : `${(visit.doctor as any)?.firstName || ''} ${(visit.doctor as any)?.lastName || ''}`}</span>
+                                  <span className="text-gray-600">Dr. {(visit as any)?.doctor?.firstName || ''} {(visit as any)?.doctor?.lastName || ''}</span>
                                 </div>
                                 
                                 <div className="flex items-center text-sm">
@@ -1808,17 +1811,21 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                   <span className="text-gray-600">{visit.visitType}</span>
                                 </div>
                                 
-                                {visit.diagnosis.length > 0 && (
+                                {Array.isArray(visit.diagnosis) && visit.diagnosis.length > 0 && (
                                   <div className="flex items-start text-sm">
                                     <Stethoscope className="h-4 w-4 mr-2 text-gray-400 mt-0.5" />
                                     <div className="flex-1">
                                       <span className="text-gray-600">Diagnosis:</span>
                                       <div className="flex flex-wrap gap-1 mt-1">
-                                        {visit.diagnosis.map((dx, i) => (
-                                          <Badge key={i} variant="outline" className="text-xs">
-                                            {dx}
-                                          </Badge>
-                                        ))}
+                                        {(visit.diagnosis as unknown[]).map((dx: unknown, i: number) => {
+                                          const label = typeof dx === 'string' ? dx : (dx && typeof dx === 'object' && 'diagnosis' in (dx as any)) ? String((dx as any).diagnosis) : '';
+                                          if (!label) return null;
+                                          return (
+                                            <Badge key={i} variant="outline" className="text-xs">
+                                              {label}
+                                            </Badge>
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   </div>

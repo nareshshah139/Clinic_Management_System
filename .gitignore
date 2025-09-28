@@ -1,3 +1,14 @@
+# Ignore uploaded files and other runtime artifacts
+backend/uploads/
+frontend/.next/
+node_modules/
+*.log
+*.tsbuildinfo
+dist/
+coverage/
+*.local
+*.env.local
+*.env
 # dependencies
 node_modules
 **/node_modules

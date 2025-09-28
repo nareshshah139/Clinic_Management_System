@@ -1961,10 +1961,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           </DialogContent>
         </Dialog>
         <Dialog open={confirmPharmacy.open} onOpenChange={(open) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
-        // ... existing code ...
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Go to Pharmacy?</DialogTitle>
+              <DialogDescription>
+                {confirmPharmacy.summary?.medicationsCount || 0} medications were added to this prescription. Continue to the pharmacy module to bill them now?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setConfirmPharmacy({ open: false, prescriptionId: '', summary: null })}
+              >
+                Stay Here
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!confirmPharmacy.prescriptionId) {
+                    setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
+                    return;
+                  }
+                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}`;
+                  window.location.href = url;
+                }}
+              >
+                Yes, go to Pharmacy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
 }
 
-export default React.memo(PrescriptionBuilder); 
+export default React.memo(PrescriptionBuilder);

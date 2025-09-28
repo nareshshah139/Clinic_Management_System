@@ -238,7 +238,6 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
     </div>
   );
 }
-'use client';
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import type { ComponentType } from 'react';

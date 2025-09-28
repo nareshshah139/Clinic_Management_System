@@ -22,7 +22,14 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
-  const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '';
+  const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
+
+  const toAbsolute = (path: string) => {
+    if (!path) return path;
+    if (/^https?:\/\//i.test(path)) return path;
+    // Files are served under /uploads/... from the backend, proxied by Next rewrites
+    return path.startsWith('/uploads/') ? path : `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+  };
 
   const load = async () => {
     // Don't try to load if visitId is temp
@@ -48,7 +55,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         return;
       }
       const data = await res.json();
-      const incoming: PhotoItem[] = (data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u }));
+      const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
+        .map((it) => ({ ...it, url: toAbsolute(it.url) }));
       // Sort by uploadedAt ascending, fallback to URL alphabetical if missing
       incoming.sort((a, b) => {
         const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
@@ -170,16 +178,16 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             {!compareMode ? (
               <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
                 {active ? (
-                  <img src={active.url} alt="visit" className="max-h-full max-w-full object-contain" />
+                  <img src={toAbsolute(active.url)} alt="visit" className="max-h-full max-w-full object-contain" />
                 ) : null}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  {previous ? <img src={previous.url} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
+                  {previous ? <img src={toAbsolute(previous.url)} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
                 </div>
                 <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  {active ? <img src={active.url} alt="after" className="max-h-full max-w-full object-contain" /> : null}
+                  {active ? <img src={toAbsolute(active.url)} alt="after" className="max-h-full max-w-full object-contain" /> : null}
                 </div>
               </div>
             )}
@@ -206,7 +214,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                     className={`relative h-20 w-28 flex-shrink-0 rounded border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-blue-500' : ''}`}
                     title={it.uploadedAt ? new Date(it.uploadedAt).toLocaleString() : it.url}
                   >
-                    <img src={it.url} alt="thumb" className="h-full w-full object-cover" />
+                    <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
                       {it.uploadedAt ? new Date(it.uploadedAt).toLocaleDateString() : ''}
                     </span>
