@@ -372,22 +372,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     });
 
     if (plan.length === 0) {
+      console.debug('[PrescriptionBuilder] translateForPreview: no translatable fields');
       setTranslationsMap({});
       return;
     }
     try {
       const target = (language === 'HI' ? 'HI' : 'TE') as 'HI' | 'TE';
+      toast({
+        title: 'Translating…',
+        description: `Preparing ${plan.length} field(s) in ${target === 'HI' ? 'Hindi' : 'Telugu'}`,
+      });
+      console.debug('[PrescriptionBuilder] translateForPreview: sending', { target, count: plan.length });
       const { translations } = await apiClient.translateTexts(target, plan.map(p => p.text));
       const map: Record<string, string> = {};
       plan.forEach((p, idx) => {
         map[p.key] = translations[idx] ?? p.text;
       });
       setTranslationsMap(map);
+      console.debug('[PrescriptionBuilder] translateForPreview: received', { received: translations.length });
     } catch (e) {
       // Fallback to original content on any error
       const map: Record<string, string> = {};
       plan.forEach((p) => { map[p.key] = p.text; });
       setTranslationsMap(map);
+      console.warn('[PrescriptionBuilder] translateForPreview: failed, falling back to originals', e);
+      toast({
+        variant: 'warning',
+        title: 'Translation unavailable',
+        description: 'Showing original text. Check server OPENAI_API_KEY and network.',
+      });
     }
   }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, postProcedureCare, procedurePlanned, investigations, customSections, items]);
 
@@ -1543,6 +1556,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   variant="outline"
                   onClick={async () => {
                     if (language === 'EN') {
+                      console.debug('[PrescriptionBuilder] Print Preview: language EN, skipping translation');
+                      toast({ title: 'Print Preview', description: 'Language is English. Skipping translation.' });
                       setTranslationsMap({});
                       setPreviewOpen(true);
                       return;
