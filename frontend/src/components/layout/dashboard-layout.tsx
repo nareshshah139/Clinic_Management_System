@@ -21,8 +21,31 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const fetchCurrentUser = useCallback(async () => {
     try {
       setLoading(true);
-      const me = await apiClient.get<User>('/auth/me');
-      setUser(me ?? null);
+      const me = await apiClient.get<{ id?: string; role?: string; branchId?: string }>('/auth/me');
+      if (me?.id) {
+        try {
+          const fullUser = await apiClient.get<User>(`/users/${me.id}`);
+          setUser({ ...(fullUser as User), role: (me.role as any) ?? (fullUser as any).role });
+        } catch (innerError) {
+          console.error('Failed to load full user profile; using minimal identity', innerError);
+          setUser({
+            id: me.id!,
+            firstName: '',
+            lastName: '',
+            name: '',
+            email: '',
+            phone: '',
+            role: (me.role as any) || 'UNKNOWN',
+            status: 'ACTIVE',
+            branchId: (me.branchId as any) || '',
+            isActive: true,
+            createdAt: '',
+            updatedAt: '',
+          } as unknown as User);
+        }
+      } else {
+        setUser(null);
+      }
     } catch (error) {
       const apiError = error as ApiError | undefined;
       if (apiError?.status === 401) {
