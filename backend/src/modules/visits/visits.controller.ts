@@ -339,4 +339,90 @@ export class VisitsController {
       return { text: '' };
     }
   }
+
+  @Post('translate')
+  async translateTexts(
+    @Body()
+    body: {
+      target: 'HI' | 'TE';
+      texts: string[];
+    },
+  ) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      this.logger.warn('translateTexts skipped: OPENAI_API_KEY is not configured');
+      throw new ServiceUnavailableException('Translation is unavailable. Configure OPENAI_API_KEY.');
+    }
+
+    const target = body?.target;
+    const texts = Array.isArray(body?.texts) ? body.texts : [];
+    if (!target || !['HI', 'TE'].includes(target) || texts.length === 0) {
+      throw new BadRequestException('Invalid request. Provide target (HI|TE) and non-empty texts array.');
+    }
+
+    // Limit payload size defensively
+    const MAX_ITEMS = 200;
+    const MAX_TOTAL_CHARS = 8000;
+    const limited = texts.slice(0, MAX_ITEMS);
+    const totalChars = limited.reduce((sum, s) => sum + (typeof s === 'string' ? s.length : 0), 0);
+    if (totalChars > MAX_TOTAL_CHARS) {
+      throw new BadRequestException('Total text too large for translation. Reduce content.');
+    }
+
+    const langName = target === 'HI' ? 'Hindi' : 'Telugu';
+    try {
+      const messages = [
+        {
+          role: 'system',
+          content:
+            'You are a medical translation assistant. Translate patient-facing clinical free-form text clearly and simply. Preserve medication names, numbers, units, and formatting. Return strict JSON with a translations string array in the same order as input. No extra commentary.',
+        },
+        {
+          role: 'user',
+          content: JSON.stringify({ target: langName, texts: limited }),
+        },
+      ];
+
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: process.env.OPENAI_TRANSLATION_MODEL || 'gpt-4o-mini',
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        this.logger.error(`translateTexts OpenAI error: ${resp.status} ${errText}`);
+        throw new ServiceUnavailableException('Translation service error');
+      }
+      const data = (await resp.json()) as any;
+      const content = data?.choices?.[0]?.message?.content || '';
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(content);
+      } catch (e) {
+        this.logger.error('translateTexts: failed to parse JSON response from OpenAI');
+        throw new ServiceUnavailableException('Failed to parse translation response');
+      }
+      const translations = Array.isArray(parsed?.translations)
+        ? (parsed.translations as string[]).map((s) => (typeof s === 'string' ? s : ''))
+        : [];
+      if (translations.length !== limited.length) {
+        this.logger.warn(
+          `translateTexts: mismatched translations count. expected=${limited.length} got=${translations.length}`,
+        );
+      }
+      return { translations };
+    } catch (e: any) {
+      this.logger.error(`translateTexts failed: ${e?.stack || e?.message || e}`);
+      throw new ServiceUnavailableException('Translation failed');
+    }
+  }
 }

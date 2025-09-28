@@ -239,6 +239,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [visitData, setVisitData] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
+  const [translatingPreview, setTranslatingPreview] = useState(false);
+  const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   const [orderOpen, setOrderOpen] = useState(false);
   type OneMgSelection = { sku: string; name: string; price?: number };
   const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
@@ -324,6 +326,70 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     procedurePlanned: true,
     procedureParameters: true,
   });
+
+  const tt = useCallback((key: string, fallback?: string) => {
+    if (language === 'EN') return fallback ?? '';
+    return translationsMap[key] ?? (fallback ?? '');
+  }, [language, translationsMap]);
+
+  const translateForPreview = useCallback(async () => {
+    if (language === 'EN') {
+      setTranslationsMap({});
+      return;
+    }
+    const plan: Array<{ key: string; text: string }> = [];
+    const pushIf = (key: string, value?: string) => {
+      const v = (value ?? '').trim();
+      if (v) plan.push({ key, text: v });
+    };
+    // Top-level fields
+    pushIf('diagnosis', diagnosis);
+    pushIf('chiefComplaints', chiefComplaints);
+    pushIf('pastHistory', pastHistory);
+    pushIf('medicationHistory', medicationHistory);
+    pushIf('menstrualHistory', menstrualHistory);
+    pushIf('familyHistoryOthers', familyHistoryOthers);
+    pushIf('postProcedureCare', postProcedureCare);
+    pushIf('procedurePlanned', procedurePlanned);
+    // Investigations
+    (Array.isArray(investigations) ? investigations : []).forEach((inv, i) => {
+      if (typeof inv === 'string') pushIf(`investigations.${i}`, inv);
+    });
+    // Custom sections
+    (customSections || []).forEach((s, i) => {
+      pushIf(`custom.${i}.title`, s?.title as any);
+      pushIf(`custom.${i}.content`, s?.content as any);
+    });
+    // Medication item-level free-form fields
+    (items || []).forEach((it, i) => {
+      pushIf(`items.${i}.instructions`, it?.instructions as any);
+      pushIf(`items.${i}.applicationSite`, it?.applicationSite as any);
+      pushIf(`items.${i}.applicationAmount`, it?.applicationAmount as any);
+      pushIf(`items.${i}.dayPart`, it?.dayPart as any);
+      pushIf(`items.${i}.taperSchedule`, it?.taperSchedule as any);
+      pushIf(`items.${i}.foodInstructions`, it?.foodInstructions as any);
+      pushIf(`items.${i}.pulseRegimen`, it?.pulseRegimen as any);
+    });
+
+    if (plan.length === 0) {
+      setTranslationsMap({});
+      return;
+    }
+    try {
+      const target = (language === 'HI' ? 'HI' : 'TE') as 'HI' | 'TE';
+      const { translations } = await apiClient.translateTexts(target, plan.map(p => p.text));
+      const map: Record<string, string> = {};
+      plan.forEach((p, idx) => {
+        map[p.key] = translations[idx] ?? p.text;
+      });
+      setTranslationsMap(map);
+    } catch (e) {
+      // Fallback to original content on any error
+      const map: Record<string, string> = {};
+      plan.forEach((p) => { map[p.key] = p.text; });
+      setTranslationsMap(map);
+    }
+  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, postProcedureCare, procedurePlanned, investigations, customSections, items]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
@@ -1473,7 +1539,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
                 <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
-                <Button variant="outline" onClick={() => setPreviewOpen(true)}>Print Preview</Button>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (language === 'EN') {
+                      setTranslationsMap({});
+                      setPreviewOpen(true);
+                      return;
+                    }
+                    setTranslatingPreview(true);
+                    try {
+                      await translateForPreview();
+                      setPreviewOpen(true);
+                    } finally {
+                      setTranslatingPreview(false);
+                    }
+                  }}
+                >
+                  {translatingPreview ? 'Preparing…' : 'Print Preview'}
+                </Button>
                 <Button onClick={create} disabled={!canCreate}>
                   {visitId ? 'Create Prescription' : 'Save visit first'}
                 </Button>
@@ -1633,7 +1717,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {includeSections.diagnosis && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Diagnosis</div>
-                    <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? diagnosis : '—'}</div>
+                    <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</div>
                   </div>
                 )}
 
@@ -1641,7 +1725,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {(chiefComplaints?.trim()?.length > 0) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Chief Complaints</div>
-                    <div className="text-sm whitespace-pre-wrap">{chiefComplaints}</div>
+                    <div className="text-sm whitespace-pre-wrap">{tt('chiefComplaints', chiefComplaints)}</div>
                   </div>
                 )}
 
@@ -1650,9 +1734,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div className="py-3">
                     <div className="font-semibold mb-1">History</div>
                     <div className="space-y-1 text-sm">
-                      {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {pastHistory}</div>) : null}
-                      {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {medicationHistory}</div>) : null}
-                      {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {menstrualHistory}</div>) : null}
+                      {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {tt('pastHistory', pastHistory)}</div>) : null}
+                      {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {tt('medicationHistory', medicationHistory)}</div>) : null}
+                      {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {tt('menstrualHistory', menstrualHistory)}</div>) : null}
                     </div>
                   </div>
                 )}
@@ -1661,7 +1745,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Family History</div>
-                    <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? familyHistoryOthers : null].filter(Boolean).join(', ')}</div>
+                    <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? tt('familyHistoryOthers', familyHistoryOthers) : null].filter(Boolean).join(', ')}</div>
                   </div>
                 )}
 
@@ -1675,29 +1759,29 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <li key={`rx-${idx}`}>
                             <span className="font-medium">{it.drugName}</span>
                             {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
-                            {it.instructions && <span> — {it.instructions}</span>}
+                            {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
                             {/* Dermatology addenda */}
                             {(it.applicationSite || it.applicationAmount || it.dayPart) && (
                               <div className="text-gray-600">
-                                {it.applicationSite && <span> • Site: {it.applicationSite}</span>}
-                                {it.applicationAmount && <span> • Amount: {it.applicationAmount}</span>}
-                                {it.dayPart && <span> • {it.dayPart}</span>}
+                                {it.applicationSite && <span> • Site: {tt(`items.${idx}.applicationSite`, it.applicationSite)}</span>}
+                                {it.applicationAmount && <span> • Amount: {tt(`items.${idx}.applicationAmount`, it.applicationAmount)}</span>}
+                                {it.dayPart && <span> • {tt(`items.${idx}.dayPart`, it.dayPart)}</span>}
                               </div>
                             )}
                             {it.leaveOn === false && it.washOffAfterMinutes !== '' && (
                               <div className="text-gray-600"> • Wash off after {it.washOffAfterMinutes} min</div>
                             )}
                             {it.taperSchedule && (
-                              <div className="text-gray-600"> • Taper: {it.taperSchedule}</div>
+                              <div className="text-gray-600"> • Taper: {tt(`items.${idx}.taperSchedule`, it.taperSchedule)}</div>
                             )}
                             {(it.pregnancyWarning || it.photosensitivityWarning) && (
                               <div className="text-red-600">{it.pregnancyWarning ? 'Pregnancy warning. ' : ''}{it.photosensitivityWarning ? 'Photosensitivity — use sunscreen.' : ''}</div>
                             )}
                             {it.foodInstructions && (
-                              <div className="text-gray-600">Food: {it.foodInstructions}</div>
+                              <div className="text-gray-600">Food: {tt(`items.${idx}.foodInstructions`, it.foodInstructions)}</div>
                             )}
                             {it.pulseRegimen && (
-                              <div className="text-gray-600">Pulse: {it.pulseRegimen}</div>
+                              <div className="text-gray-600">Pulse: {tt(`items.${idx}.pulseRegimen`, it.pulseRegimen)}</div>
                             )}
                           </li>
                         ))}
@@ -1732,7 +1816,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {(postProcedureCare?.trim()?.length > 0) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Post Procedure</div>
-                    <div className="text-sm whitespace-pre-wrap">{postProcedureCare}</div>
+                    <div className="text-sm whitespace-pre-wrap">{tt('postProcedureCare', postProcedureCare)}</div>
                   </div>
                 )}
 
@@ -1741,7 +1825,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div className="py-3">
                     <div className="font-semibold mb-1">Investigations</div>
                     <ul className="list-disc ml-5 text-sm space-y-1">
-                      {investigations.map((inv) => (<li key={inv}>{inv}</li>))}
+                      {investigations.map((inv, i) => (<li key={inv}>{tt(`investigations.${i}`, inv)}</li>))}
                     </ul>
                   </div>
                 )}
@@ -1750,16 +1834,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {(procedurePlanned?.trim()?.length > 0) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Procedure Planned</div>
-                    <div className="text-sm">{procedurePlanned}</div>
+                    <div className="text-sm">{tt('procedurePlanned', procedurePlanned)}</div>
                   </div>
                 )}
 
                 {/* Custom Sections */}
-                {customSections.length > 0 && customSections.map((s) => (
+                {customSections.length > 0 && customSections.map((s, i) => (
                   (s.title?.trim() || s.content?.trim()) ? (
                     <div key={`cs-${s.id}`} className="py-3">
-                      <div className="font-semibold mb-1">{s.title}</div>
-                      <div className="text-sm whitespace-pre-wrap">{s.content}</div>
+                      <div className="font-semibold mb-1">{tt(`custom.${i}.title`, s.title)}</div>
+                      <div className="text-sm whitespace-pre-wrap">{tt(`custom.${i}.content`, s.content)}</div>
                     </div>
                   ) : null
                 ))}
@@ -1796,7 +1880,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           </DialogContent>
         </Dialog>
 
-        <Dialog open={confirmPharmacy.open} onOpenChange={(open) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
+        <Dialog open={confirmPharmacy.open} onOpenChange={(open: boolean) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Go to Pharmacy?</DialogTitle>
@@ -1911,7 +1995,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         </Dialog>
         <Dialog
           open={templatePromptOpen}
-          onOpenChange={(open) => {
+          onOpenChange={(open: boolean) => {
             setTemplatePromptOpen(open);
             if (!open) setTemplateName('');
           }}
@@ -1960,7 +2044,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        <Dialog open={confirmPharmacy.open} onOpenChange={(open) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
+        <Dialog open={confirmPharmacy.open} onOpenChange={(open: boolean) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Go to Pharmacy?</DialogTitle>

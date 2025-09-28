@@ -380,6 +380,11 @@ export class ApiClient {
   async createDatabaseBackup() {
     return this.post('/auth/backup', {});
   }
+
+  // Utilities
+  async translateTexts(target: 'HI' | 'TE', texts: string[]): Promise<{ translations: string[] }> {
+    return this.post<{ translations: string[] }>('/visits/translate', { target, texts });
+  }
 }
 
 export const apiClient = new ApiClient();
