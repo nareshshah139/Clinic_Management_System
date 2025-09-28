@@ -1063,6 +1063,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 </div>
 
+                {language !== 'EN' && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    <div className="font-medium mb-1">Translation enabled</div>
+                    <div>
+                      On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
+                      This includes: Diagnosis, Chief complaints, Histories, Family history (other), Post‑procedure care,
+                      Procedure planned, Investigations, Custom sections, and per‑medication notes. Medication names,
+                      numbers, and units remain unchanged.
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label className="text-sm text-gray-700">Diagnosis (optional)</label>
