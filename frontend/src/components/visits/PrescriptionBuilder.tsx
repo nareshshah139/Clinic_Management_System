@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Languages } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -1077,7 +1077,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
-                    <label className="text-sm text-gray-700">Diagnosis (optional)</label>
+                    <label className="text-sm text-gray-700 flex items-center gap-1">Diagnosis (optional){language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
                     <div className="relative">
                       <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                       {diagOptions.length > 0 && (
@@ -1092,14 +1092,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                   <div>
-                    <label className="text-sm text-gray-700">Follow-up Instructions</label>
+                    <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
                   </div>
                   <div></div>
                 </div>
 
                 <div>
-                  <label className="text-sm text-gray-700">Doctor's Personal Notes</label>
+                  <label className="text-sm text-gray-700 flex items-center gap-1">Doctor's Personal Notes{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
                   <div className="relative">
                     <Textarea
                       key="doctor-notes"
@@ -1160,7 +1160,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Chief Complaints */}
                 <div className="opacity-100">
-                  <label className="text-xs text-gray-600">Chief Complaints</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                   <div className="relative">
                     <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
                     {complaintOptions.length > 0 && (
@@ -1189,19 +1189,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs text-gray-600">Past History</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Medication History</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Menstrual History</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Family History</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <div className="flex flex-wrap gap-2 text-xs mt-1">
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
@@ -1262,11 +1262,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="space-y-3 opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-gray-600">Post Procedure Care (5-7 days)</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Post Procedure Care (5-7 days){language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-600">Procedure Planned</label>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
                   </div>
                 </div>
@@ -1296,7 +1296,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
             {/* Investigations */}
             <CollapsibleSection 
-              title="Investigations" 
+              title={`Investigations${language !== 'EN' ? ' (translates)' : ''}`} 
               section="investigations" 
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
@@ -1489,12 +1489,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <Input type="number" value={it.quantity ?? ''} onChange={(e) => updateItem(idx, { quantity: e.target.value === '' ? '' : Number(e.target.value) })} />
                     </div>
                     <div className="md:col-span-10">
-                      <label className="text-xs text-gray-600">Instructions</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Instructions{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., After meals, avoid alcohol" />
                     </div>
                     {/* Dermatology-specific fields */}
                     <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Application Site</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Application Site{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.applicationSite || ''} onChange={(e) => updateItem(idx, { applicationSite: e.target.value })} placeholder="Face / Scalp / Folds" />
                     </div>
                     <div className="md:col-span-2">
@@ -1502,7 +1502,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <Input value={it.applicationAmount || ''} onChange={(e) => updateItem(idx, { applicationAmount: e.target.value })} placeholder="e.g., 1 FTU" />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Day Part</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Day Part{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.dayPart || ''} onChange={(e) => updateItem(idx, { dayPart: e.target.value })} placeholder="AM/PM/QHS" />
                     </div>
                     <div className="md:col-span-2">
@@ -1517,7 +1517,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <Input type="number" value={it.washOffAfterMinutes ?? ''} onChange={(e) => updateItem(idx, { washOffAfterMinutes: e.target.value === '' ? '' : Number(e.target.value) })} />
                     </div>
                     <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600">Taper Schedule (Steroids)</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Taper Schedule (Steroids){language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.taperSchedule || ''} onChange={(e) => updateItem(idx, { taperSchedule: e.target.value })} placeholder="e.g., OD×7d → Alt days×7d" />
                     </div>
                     <div className="md:col-span-3">
@@ -1537,11 +1537,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.photosensitivityWarning} onChange={(e) => updateItem(idx, { photosensitivityWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
                     </div>
                     <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600">Food Instructions</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Food Instructions{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.foodInstructions || ''} onChange={(e) => updateItem(idx, { foodInstructions: e.target.value })} placeholder="With food / avoid dairy / hydrate well" />
                     </div>
                     <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600">Pulse Regimen</label>
+                      <label className="text-xs text-gray-600 flex items-center gap-1">Pulse Regimen{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                       <Input value={it.pulseRegimen || ''} onChange={(e) => updateItem(idx, { pulseRegimen: e.target.value })} placeholder="e.g., Itraconazole 200 mg BD 1 week/month × 3 months" />
                     </div>
                     <div className="md:col-span-2 flex justify-end">
