@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+npm-debug.log
+Dockerfile*
+.dockerignore
+.git
+.gitignore
+.cache
+.next
+frontend/.next/cache
+backend/dist
+backend/coverage
+frontend/coverage
+uploads
+.env
+.env.*

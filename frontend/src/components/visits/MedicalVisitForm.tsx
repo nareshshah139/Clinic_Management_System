@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +50,7 @@ import VisitPhotos from '@/components/visits/VisitPhotos';
 import type { Patient, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { isUuid } from '@/lib/id';
 
 interface Props {
   patientId: string;
@@ -232,6 +232,25 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
+  const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
+    patientInfo: true,
+    diagnosis: true,
+    medications: true,
+    procedures: true,
+    counseling: true,
+    vitals: true,
+    followUp: true,
+    notes: false,
+    doctorSignature: true,
+    chiefComplaints: true,
+    histories: true,
+    familyHistory: true,
+    topicals: false,
+    postProcedure: true,
+    investigations: true,
+    procedurePlanned: true,
+    procedureParameters: true,
+  });
 
   const { toast } = useToast();
 
@@ -394,7 +413,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   // Calculate overall progress (moved up to avoid TDZ issues)
   const getProgress = useCallback(() => {
-    const totalSections = hasPermission('all') ? 6 : 3; // Doctor vs Therapist/Nurse
+    const totalSections = hasPermission('all') ? 5 : 3; // Doctor vs Therapist/Nurse (Treatment tab removed)
     return Math.round((completedSections.size / totalSections) * 100);
   }, [completedSections.size, hasPermission]);
 
@@ -959,20 +978,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       tabs.push({ id: 'photos', label: 'Photos', icon: Camera, always: false });
     }
 
-    if (hasPermission('basic-assessment') || hasPermission('all')) {
-      tabs.push({ id: 'assessment', label: 'Assessment', icon: FileText, always: false });
-    }
+    // Assessment tab removed; moved into Prescription's Chief Complaints
 
     if (hasPermission('all')) {
-      tabs.push(
-        { id: 'dermatology', label: 'Dermatology', icon: User, always: false },
-        { id: 'treatment', label: 'Treatment', icon: FileText, always: false }
-      );
       tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
       tabs.push({ id: 'customization', label: 'Customization', icon: FileText, always: false });
     }
 
     tabs.push({ id: 'history', label: 'History', icon: History, always: true });
+
+    // On Examination is now part of Prescription tab UI
 
     return tabs;
   };
@@ -1212,8 +1227,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     <CardTitle className="text-lg">Progress Summary</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <div className="space-y-2">
-                      {renderTabs().slice(1, -1).map(tab => (
+                  <div className="space-y-2">
+                    {renderTabs().filter(tab => tab.id !== 'overview' && tab.id !== 'history').map(tab => (
                         <div key={tab.id} className="flex items-center justify-between">
                           <span className="text-sm text-gray-600">{tab.label}:</span>
                           <div className="flex items-center gap-2">
@@ -1261,12 +1276,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         Capture Photos
                       </Button>
                     )}
-                    {hasPermission('all') && (
-                      <Button variant="outline" onClick={() => setActiveTab('dermatology')}>
-                        <User className="h-4 w-4 mr-2" />
-                        Dermatology Assessment
-                      </Button>
-                    )}
+                    {/* On Examination is now inside Prescription tab */}
                   </div>
                 </CardContent>
               </Card>
@@ -1408,261 +1418,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               </TabsContent>
             )}
 
-            {/* Assessment Tab - Basic for Therapist/Nurse */}
-            {(hasPermission('basic-assessment') || hasPermission('all')) && (
-              <TabsContent value="assessment" className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Skin Concerns</label>
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {['Acne', 'Pigmentation', 'Aging', 'Dryness', 'Sensitivity', 'Redness', 'Scarring'].map(concern => (
-                      <Button
-                        key={concern}
-                        type="button"
-                        variant={skinConcerns.has(concern) ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => toggleSet(skinConcerns, concern, setSkinConcerns)}
-                      >
-                        {concern}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
+            
 
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Initial Assessment Notes</label>
-                  <div className="flex items-center">
-                    <Textarea 
-                      placeholder="Basic observations, patient concerns, preliminary findings..."
-                      value={subjective}
-                      onChange={(e) => setSubjective(e.target.value)}
-                      rows={4}
-                    />
-                    <VoiceButton fieldName="subjective" />
-                  </div>
-                </div>
 
-                <div className="flex justify-end">
-                  <Button onClick={() => markSectionComplete('assessment')}>
-                    Mark Assessment Complete
-                  </Button>
-                </div>
-              </TabsContent>
-            )}
-
-            {/* Dermatology Tab - Doctor Only */}
-            {hasPermission('all') && (
-              <TabsContent value="dermatology" className="space-y-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">Fitzpatrick Skin Type</label>
-                    <div className="flex flex-wrap gap-2 mt-1">
-                      {FITZPATRICK.map(ft => (
-                        <Button 
-                          key={ft} 
-                          type="button" 
-                          variant={skinType === ft ? 'default' : 'outline'} 
-                          size="sm" 
-                          onClick={() => setSkinType(skinType === ft ? '' : ft)}
-                        >
-                          {ft}
-                        </Button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Acne Severity</label>
-                    <Input 
-                      placeholder="mild/moderate/severe" 
-                      value={acneSeverity} 
-                      onChange={(e) => setAcneSeverity(e.target.value)} 
-                    />
-              </div>
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Itch Score (0-10)</label>
-                    <Input 
-                      placeholder="0-10" 
-                      value={itchScore} 
-                      onChange={(e) => setItchScore(e.target.value)} 
-                    />
-              </div>
-            </div>
-
-            <div>
-                  <label className="text-sm font-medium text-gray-700">Morphology</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {MORPHOLOGY.map(m => (
-                      <Button 
-                        key={m} 
-                        type="button" 
-                        variant={morphology.has(m) ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => toggleSet(morphology, m, setMorphology)}
-                      >
-                        {m}
-                      </Button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-                  <label className="text-sm font-medium text-gray-700">Distribution / Body Areas</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {DISTRIBUTION.map(d => (
-                      <Button 
-                        key={d} 
-                        type="button" 
-                        variant={distribution.has(d) ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => toggleSet(distribution, d, setDistribution)}
-                      >
-                        {d}
-                      </Button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Triggers</label>
-                    <Input 
-                      placeholder="Heat, stress, cosmetics..." 
-                      value={triggers} 
-                      onChange={(e) => setTriggers(e.target.value)} 
-                    />
-              </div>
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Prior Treatments</label>
-                    <Input 
-                      placeholder="Topicals/systemics tried" 
-                      value={priorTx} 
-                      onChange={(e) => setPriorTx(e.target.value)} 
-                    />
-              </div>
-            </div>
-
-            <div>
-                  <label className="text-sm font-medium text-gray-700">Dermatology Diagnoses</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {DERM_DIAGNOSES.map(dx => (
-                      <Button 
-                        key={dx} 
-                        type="button" 
-                        variant={dermDx.has(dx) ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => toggleSet(dermDx, dx, setDermDx)}
-                      >
-                        {dx}
-                      </Button>
-                ))}
-              </div>
-            </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Detailed Examination</label>
-                  <div className="flex items-center">
-                    <Textarea 
-                      placeholder="Detailed physical examination findings..."
-                      value={objective}
-                      onChange={(e) => setObjective(e.target.value)}
-                      rows={3}
-                    />
-                    <VoiceButton fieldName="objective" />
-                  </div>
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={() => markSectionComplete('dermatology')}>
-                    Mark Dermatology Complete
-                  </Button>
-                </div>
-              </TabsContent>
-            )}
-
-            {/* Treatment Tab - Doctor Only */}
-            {hasPermission('all') && (
-              <TabsContent value="treatment" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Planned Procedure</label>
-                    <Input 
-                      placeholder="e.g., Q-switched Nd:YAG, IPL, CO2, Diode" 
-                      value={procType} 
-                      onChange={(e) => setProcType(e.target.value)} 
-                    />
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                      <label className="text-sm font-medium text-gray-700">Fluence</label>
-                      <Input 
-                        placeholder="J/cm²" 
-                        value={fluence} 
-                        onChange={(e) => setFluence(e.target.value)} 
-                      />
-                </div>
-                <div>
-                      <label className="text-sm font-medium text-gray-700">Spot Size</label>
-                      <Input 
-                        placeholder="mm" 
-                        value={spotSize} 
-                        onChange={(e) => setSpotSize(e.target.value)} 
-                      />
-                </div>
-                <div>
-                      <label className="text-sm font-medium text-gray-700">Passes</label>
-                      <Input 
-                        placeholder="#" 
-                        value={passes} 
-                        onChange={(e) => setPasses(e.target.value)} 
-                      />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Topicals</label>
-                    <Textarea 
-                      placeholder="e.g., Adapalene, Benzoyl peroxide, Azelaic acid" 
-                      value={topicals} 
-                      onChange={(e) => setTopicals(e.target.value)} 
-                    />
-              </div>
-              <div>
-                    <label className="text-sm font-medium text-gray-700">Systemics</label>
-                    <Textarea 
-                      placeholder="e.g., Doxycycline, Isotretinoin, Antihistamines" 
-                      value={systemics} 
-                      onChange={(e) => setSystemics(e.target.value)} 
-                    />
-              </div>
-            </div>
-
-            <div>
-                  <label className="text-sm font-medium text-gray-700">Treatment Plan</label>
-                  <Textarea 
-                    placeholder="Comprehensive treatment plan and recommendations..."
-                    value={plan}
-                    onChange={(e) => setPlan(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700">Counseling / Lifestyle Advice</label>
-                  <Textarea 
-                    placeholder="Sun protection, emollients, trigger avoidance, adherence" 
-                    value={counseling} 
-                    onChange={(e) => setCounseling(e.target.value)} 
-                  />
-                </div>
-
-                <div className="flex justify-end">
-                  <Button onClick={() => markSectionComplete('treatment')}>
-                    Mark Treatment Complete
-                  </Button>
-            </div>
-          </TabsContent>
-            )}
+            {/* Treatment Tab removed; handled within Prescription where relevant */}
 
             {/* Prescription Tab - Doctor Only */}
             {hasPermission('all') && (
@@ -1677,12 +1436,47 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       patientId={patientId}
                       doctorId={doctorId}
                       visitId={visitId}
+                      ensureVisitId={async () => {
+                        if (visitId) return visitId;
+                        if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
+                          console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
+                          toast({
+                            variant: 'destructive',
+                            title: 'Invalid IDs',
+                            description: 'Patient or Doctor ID is missing. Please select valid records and try again.',
+                          });
+                          throw new Error('Missing IDs');
+                        }
+                        const minimalPayload: any = {
+                          patientId,
+                          doctorId,
+                          visitType: 'consultation',
+                          status: 'in-progress',
+                          complaints: [{ complaint: 'Consultation' }],
+                          diagnosis: [],
+                          plan: {},
+                          treatmentPlan: {},
+                          photos: [],
+                          metadata: {
+                            capturedBy: userRole,
+                            sections: ['prescription'],
+                            progress: 10,
+                            createdForPrescription: true,
+                          }
+                        };
+                        const newVisit = await apiClient.createVisit(minimalPayload);
+                        const newVisitId = (newVisit as VisitDetails).id;
+                        setVisitId(newVisitId);
+                        return newVisitId;
+                      }}
                       reviewDate={reviewDate}
                       printBgUrl={printBgUrl}
                       printTopMarginPx={printTopMarginPx}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}
+                      includeSections={rxIncludeSections}
+                      onChangeIncludeSections={setRxIncludeSections}
                     />
                   </CardContent>
                 </Card>
@@ -1707,6 +1501,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         <label className="text-sm text-gray-700">Top Margin (px)</label>
                         <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
                       </div>
+                  <div className="md:col-span-3">
+                    <label className="text-sm text-gray-700">Print Sections</label>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm mt-1">
+                      {Object.keys(rxIncludeSections).map((k) => (
+                        <label key={k} className="flex items-center gap-2">
+                          <input type="checkbox" checked={rxIncludeSections[k]} onChange={(e) => setRxIncludeSections(prev => ({ ...prev, [k]: e.target.checked }))} />
+                          <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -1845,7 +1650,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           {/* Action Buttons */}
           <div className="flex justify-between items-center pt-6 border-t">
             <div className="text-sm text-gray-500">
-              Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 6 : 3} sections complete
+              Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => void save(false)} disabled={saving}>

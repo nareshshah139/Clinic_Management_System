@@ -13,6 +13,7 @@ import { AlertTriangle, Loader2, Search, User as UserIcon, Stethoscope } from 'l
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn, formatPatientName } from '@/lib/utils';
+import { isValidId } from '@/lib/id';
 
 function PrescriptionPadSkeleton() {
   return (
@@ -201,7 +202,7 @@ function PrescriptionPadContent() {
     });
   }, [toast]);
 
-  const canCreate = useMemo(() => Boolean(selectedDoctorId && selectedPatient), [selectedDoctorId, selectedPatient]);
+  const canCreate = useMemo(() => Boolean(isValidId(selectedDoctorId) && selectedPatient), [selectedDoctorId, selectedPatient]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
@@ -233,7 +234,22 @@ function PrescriptionPadContent() {
                     <Loader2 className="h-4 w-4 animate-spin" /> Loading doctors...
                   </div>
                 ) : (
-                  <DoctorSelector doctors={doctors} selectedDoctorId={selectedDoctorId} onSelect={setSelectedDoctorId} />
+                  <DoctorSelector 
+                    doctors={doctors} 
+                    selectedDoctorId={selectedDoctorId} 
+                    onSelect={(id: string) => {
+                      if (isValidId(id)) {
+                        setSelectedDoctorId(id);
+                      } else {
+                        console.warn('[PrescriptionPad] Invalid Doctor ID selection', { id });
+                        toast({
+                          variant: 'destructive',
+                          title: 'Invalid Doctor ID',
+                          description: 'Selected doctor does not have a valid ID. Please choose another.',
+                        });
+                      }
+                    }} 
+                  />
                 )}
               </TabsContent>
             </Tabs>

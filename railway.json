@@ -1,0 +1,26 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "services": [
+    {
+      "name": "backend",
+      "rootDir": "backend",
+      "startCommand": "node dist/main.js",
+      "buildCommand": "npm ci && npx prisma generate && npm run build",
+      "healthcheckPath": "/health",
+      "envVarGroups": [],
+      "variables": {
+        "PORT": "4000"
+      }
+    },
+    {
+      "name": "frontend",
+      "rootDir": "frontend",
+      "startCommand": "npm run start",
+      "buildCommand": "npm ci && npm run build",
+      "envVarGroups": [],
+      "variables": {
+        "PORT": "3000"
+      }
+    }
+  ]
+}

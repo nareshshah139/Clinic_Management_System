@@ -34,10 +34,7 @@ export class PrescriptionsService {
       diagnosis,
       notes,
       language = PrescriptionLanguage.EN,
-      validUntil,
-      maxRefills = 0,
       followUpInstructions,
-      metadata,
     } = createPrescriptionDto;
 
     // Validate patient exists and belongs to branch
@@ -50,11 +47,9 @@ export class PrescriptionsService {
 
     // Validate visit exists and belongs to branch
     const visit = await this.prisma.visit.findFirst({
-      where: { 
+      where: {
         id: visitId,
-        patient: {
-          branchId: branchId
-        }
+        patient: { branchId },
       },
     });
     if (!visit) {
@@ -74,74 +69,27 @@ export class PrescriptionsService {
       throw new BadRequestException('At least one prescription item is required');
     }
 
-    // Check for drug interactions
+    // Check for drug interactions (mock)
     const interactions = await this.checkDrugInteractions(items);
 
-    // Generate prescription number
-    const prescriptionNumber = await this.generatePrescriptionNumber(branchId);
-
-    // Calculate validity period
-    const validUntilDate = validUntil ? new Date(validUntil) : this.calculateValidityPeriod(items);
-
-    // Create prescription
+    // Create prescription aligned to current Prisma schema
     const prescription = await this.prisma.prescription.create({
       data: {
-        prescriptionNumber,
-        patientId,
         visitId,
-        doctorId,
+        language: language as unknown as any,
         items: JSON.stringify(items),
-        diagnosis,
-        notes,
-        language,
-        validUntil: validUntilDate,
-        maxRefills,
-        followUpInstructions,
-        status: PrescriptionStatus.ACTIVE,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        branchId,
+        // Store textual guidance in instructions/pharmacistNotes for now
+        instructions: followUpInstructions || undefined,
+        pharmacistNotes: notes || (diagnosis ? `Dx: ${diagnosis}` : undefined),
+        genericFirst: true,
       },
       include: {
-        patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            phone: true, 
-            email: true,
-            address: true,
-            gender: true,
-            dob: true,
-          },
-        },
         visit: {
-          select: { 
-            id: true, 
-            createdAt: true,
-            complaints: true,
-            diagnosis: true,
-            doctor: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-        doctor: {
-          select: { 
-            id: true, 
-            name: true, 
-            email: true,
-            specialization: true,
-          },
-        },
-        refills: {
           select: {
             id: true,
-            status: true,
-            reason: true,
-            notes: true,
             createdAt: true,
-          },
-          orderBy: {
-            createdAt: 'desc',
+            doctor: { select: { id: true, firstName: true, lastName: true } },
+            patient: { select: { id: true, name: true, phone: true } },
           },
         },
       },
@@ -150,7 +98,6 @@ export class PrescriptionsService {
     return {
       ...prescription,
       items: JSON.parse(prescription.items as string),
-      metadata: prescription.metadata ? JSON.parse(prescription.metadata as string) : null,
       interactions,
     };
   }
@@ -321,55 +268,26 @@ export class PrescriptionsService {
 
   async findPrescriptionById(id: string, branchId: string) {
     const prescription = await this.prisma.prescription.findFirst({
-      where: { 
+      where: {
         id,
         visit: {
-          branchId: branchId
-        }
+          patient: { branchId },
+        },
       },
       include: {
-        patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            phone: true, 
-            email: true,
-            address: true,
-            gender: true,
-            dob: true,
-          },
-        },
         visit: {
-          select: { 
-            id: true, 
-            createdAt: true,
-            complaints: true,
-            diagnosis: true,
-            doctor: {
-              select: { id: true, name: true },
+          include: {
+            patient: {
+              select: {
+                id: true,
+                name: true,
+                phone: true,
+                email: true,
+              },
             },
-          },
-        },
-        doctor: {
-          select: { 
-            id: true, 
-            name: true, 
-            email: true,
-            specialization: true,
-          },
-        },
-        refills: {
-          select: {
-            id: true,
-            status: true,
-            reason: true,
-            notes: true,
-            createdAt: true,
-            approvedAt: true,
-            approvedBy: true,
-          },
-          orderBy: {
-            createdAt: 'desc',
+            doctor: {
+              select: { id: true, firstName: true, lastName: true },
+            },
           },
         },
       },
@@ -380,19 +298,28 @@ export class PrescriptionsService {
     }
 
     // Parse JSON fields
-    const parsedPrescription = {
-      ...prescription,
-      items: JSON.parse(prescription.items as string),
-      metadata: prescription.metadata ? JSON.parse(prescription.metadata as string) : null,
-    };
+    const items = JSON.parse(prescription.items as string);
 
-    // Check for drug interactions
-    const interactions = await this.checkDrugInteractions(parsedPrescription.items);
+    // Check for drug interactions (mock)
+    const interactions = await this.checkDrugInteractions(items);
+
+    // Project a patient at top-level for consumers expecting it
+    const patient = prescription.visit?.patient
+      ? {
+          id: prescription.visit.patient.id,
+          name: prescription.visit.patient.name,
+          phone: prescription.visit.patient.phone,
+          email: prescription.visit.patient.email,
+        }
+      : undefined;
 
     return {
-      ...parsedPrescription,
+      ...prescription,
+      items,
+      patient,
+      patientId: patient?.id,
       interactions,
-    };
+    } as any;
   }
 
   async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string) {
@@ -1183,16 +1110,14 @@ export class PrescriptionsService {
       metadata,
     } = templateDto;
 
-    // Validate items
-    if (!items || items.length === 0) {
-      throw new BadRequestException('At least one prescription item is required');
-    }
+    // Allow templates with only metadata (no items)
+    const safeItems = Array.isArray(items) ? items : [];
 
     const template = await this.prisma.prescriptionTemplate.create({
       data: {
         name,
         description,
-        items: JSON.stringify(items),
+        items: JSON.stringify(safeItems),
         category,
         specialty,
         isPublic,

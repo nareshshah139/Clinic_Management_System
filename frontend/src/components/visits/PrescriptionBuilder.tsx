@@ -12,6 +12,7 @@ import { ChevronDown, ChevronUp, Languages } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+// ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
@@ -40,6 +41,7 @@ interface PrescriptionItemForm {
   dosage: number | '';
   dosageUnit: DosageUnit;
   frequency: Frequency;
+  dosePattern?: string;
   duration: number | '';
   durationUnit: DurationUnit;
   instructions?: string;
@@ -75,6 +77,9 @@ interface Props {
   refreshKey?: number;
   standalone?: boolean;
   standaloneReason?: string;
+  includeSections?: Record<string, boolean>;
+  onChangeIncludeSections?: (next: Record<string, boolean>) => void;
+  ensureVisitId?: () => Promise<string>;
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -84,27 +89,20 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   children,
   badge,
   highlight = false,
-  expanded,
-  onToggle,
 }: {
   title: string;
   section: string;
   children: React.ReactNode;
   badge?: string;
   highlight?: boolean;
-  expanded: boolean;
-  onToggle: (s: string) => void;
 }) {
   const headingId = `section-${section}-heading`;
   const contentId = `section-${section}-content`;
   return (
     <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
       <CardHeader className="pb-2">
-        <button
-          type="button"
-          className="flex items-center justify-between w-full cursor-pointer"
-          onClick={() => onToggle(section)}
-          aria-expanded={expanded}
+        <div
+          className="flex items-center justify-between w-full"
           aria-controls={contentId}
           aria-labelledby={headingId}
         >
@@ -113,21 +111,20 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
             {badge && <Badge variant="outline" className="text-xs">{badge}</Badge>}
             {highlight && <div className="text-[10px] text-green-700">Auto-included in preview</div>}
           </div>
-          {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
+        </div>
       </CardHeader>
-      <CardContent id={contentId} className={`pt-0 ${expanded ? '' : 'hidden'}`}>
+      <CardContent id={contentId} className="pt-0">
         {children}
       </CardContent>
     </Card>
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId }: Props) {
   const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
-  const [notes, setNotes] = useState('');
+  // Removed doctor's personal notes field from UI; retain no top-level notes state
   const [followUpInstructions, setFollowUpInstructions] = useState('');
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
@@ -144,16 +141,143 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [familyHistoryThyroid, setFamilyHistoryThyroid] = useState<boolean>(false);
   const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
   // Topicals
-  const [topicalFacewash, setTopicalFacewash] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
-  const [topicalMoisturiserSunscreen, setTopicalMoisturiserSunscreen] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
-  const [topicalActives, setTopicalActives] = useState<{ frequency?: string; timing?: string; duration?: string; instructions?: string }>({});
-  const [postProcedureCare, setPostProcedureCare] = useState<string>('');
+  // Removed Topicals UI
+
+  // Voice-to-text functionality (Chief Complaints)
+  const [isListening, setIsListening] = useState(false);
+  const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const startVoiceInput = useCallback(async (fieldName: string) => {
+    if (isListening && activeVoiceField === fieldName && recorderRef.current && recorderRef.current.state !== 'inactive') {
+      try { recorderRef.current.stop(); } catch {}
+      return;
+    }
+
+    let mimeType = '';
+    let recorder: MediaRecorder;
+    const chunks: BlobPart[] = [];
+    const safeMimeTypes = ['audio/webm', 'audio/mp4'];
+    const tryInitRecorder = (stream: MediaStream) => {
+      for (const t of safeMimeTypes) {
+        if ((window as any).MediaRecorder?.isTypeSupported?.(t)) {
+          mimeType = t;
+          try {
+            recorder = new MediaRecorder(stream, { mimeType: t as any });
+            return recorder;
+          } catch {}
+        }
+      }
+      try {
+        recorder = new MediaRecorder(stream);
+        return recorder;
+      } catch (e) {
+        throw new Error('Unable to start audio recorder');
+      }
+    };
+
+    setIsListening(true);
+    setActiveVoiceField(fieldName);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const r = tryInitRecorder(stream);
+      if (!r) {
+        toast({ variant: 'warning', title: 'Recording error', description: 'Your browser does not support audio recording.' });
+        setIsListening(false);
+        setActiveVoiceField(null);
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        return;
+      }
+
+      recorderRef.current = r;
+      r.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      r.onstop = async () => {
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        streamRef.current = null;
+        recorderRef.current = null;
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        try {
+          const baseUrl = '/api';
+          const fd = new FormData();
+          fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
+          const res = await fetch(`${baseUrl}/visits/transcribe`, { method: 'POST', body: fd, credentials: 'include' });
+          if (!res.ok) {
+            let errText = '';
+            try { errText = await res.text(); } catch {}
+            // eslint-disable-next-line no-console
+            console.error('Transcription request failed:', res.status, errText);
+            toast({ variant: 'warning', title: 'Transcription failed', description: `Speech-to-text request returned ${res.status}.` });
+            return;
+          }
+          const data = await res.json();
+          const text = (data?.text as string) || '';
+          if (text) {
+            switch (fieldName) {
+              case 'chiefComplaints':
+                setChiefComplaints(prev => (prev ? prev + ' ' : '') + text);
+                break;
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('Speech-to-text error:', e);
+          toast({ variant: 'warning', title: 'Speech-to-text error', description: getErrorMessage(e) || 'Please try again.' });
+        } finally {
+          setIsListening(false);
+          setActiveVoiceField(null);
+        }
+      };
+
+      try { r.start(); } catch {
+        toast({ variant: 'warning', title: 'Recording error', description: 'Failed to start recording.' });
+        setIsListening(false);
+        setActiveVoiceField(null);
+        try { stream.getTracks().forEach(t => t.stop()); } catch {}
+        return;
+      }
+      setTimeout(() => { if (r.state !== 'inactive') r.stop(); }, 30000);
+    } catch (e) {
+      setIsListening(false);
+      setActiveVoiceField(null);
+      try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
+      recorderRef.current = null;
+      toast({ variant: 'warning', title: 'Microphone access denied', description: getErrorMessage(e) || 'Check browser permissions and try again.' });
+    }
+  }, [activeVoiceField, isListening, toast]);
+
+  const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      onClick={() => void startVoiceInput(fieldName)}
+      disabled={isListening && activeVoiceField !== fieldName}
+    >
+      {activeVoiceField === fieldName ? '🔴' : '🎤'}
+    </Button>
+  ), [activeVoiceField, isListening, startVoiceInput]);
+
+  // Skin Concerns moved from Assessment into Chief Complaints
+  const SKIN_CONCERNS = useMemo(() => (
+    ['Acne', 'Pigmentation', 'Aging', 'Dryness', 'Sensitivity', 'Redness', 'Scarring']
+  ), []);
+  const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
+  const toggleSet = useCallback(<T,>(current: Set<T>, item: T, updater: (next: Set<T>) => void) => {
+    const next = new Set(current);
+    if (next.has(item)) next.delete(item);
+    else next.add(item);
+    updater(next);
+  }, []);
+  // Removed Topicals UI
+  // Removed Post Procedure Care UI
   const investigationOptions: string[] = [
     'CBC', 'ESR', 'CRP', 'LFT', 'Fasting lipid profile', 'RFT', 'Creatinine', 'FBS', 'Fasting Insulin', 'HbA1c', 'RBS', 'CUE', 'Stool examination', 'Total Testosterone', 'S. Prolactin', 'Vitamin B12', 'Vitamin D', 'Ferritin', 'TSH', 'Thyroid profile', 'HIV-I,II', 'HbS Ag', 'Anti HCV', 'VDRL', 'RPR', 'TPHA', 'TB Gold Quantiferon Test', 'Montoux Test', 'Chest Xray PA view', '2D Echo', 'Skin Biopsy'
   ];
   const [investigations, setInvestigations] = useState<string[]>([]);
   const [procedurePlanned, setProcedurePlanned] = useState<string>('');
-  const [procedureParams, setProcedureParams] = useState<{ passes?: string; power?: string; machineUsed?: string; others?: string }>({});
   // Vitals (with BMI)
   const [vitalsHeightCm, setVitalsHeightCm] = useState<number | ''>('');
   const [vitalsWeightKg, setVitalsWeightKg] = useState<number | ''>('');
@@ -163,10 +287,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [vitalsPulse, setVitalsPulse] = useState<number | ''>('');
   // Restore drug search states
   const [drugQuery, setDrugQuery] = useState('');
+  const [drugStockById, setDrugStockById] = useState<Record<string, number>>({});
+  const [drugStockLoading, setDrugStockLoading] = useState<Record<string, boolean>>({});
   const [drugResults, setDrugResults] = useState<any[]>([]);
   const [loadingDrugs, setLoadingDrugs] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  // Removed local-only field templates in favor of server persistence
   // Default dermatology templates (client-side suggestions)
   const defaultDermTemplates: Array<any> = [
     {
@@ -179,16 +306,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       ],
       metadata: {
         chiefComplaints: 'Acne lesions on face',
-        histories: {},
-        topicals: {
-          facewash: { frequency: '2×/day', timing: 'AM/PM', duration: 'ongoing', instructions: 'Gentle, non-comedogenic' },
-          moisturiserSunscreen: { frequency: '2×/day', timing: 'AM/PM', duration: 'ongoing', instructions: 'Non-comedogenic, SPF 30+' },
-          actives: { frequency: 'as advised', timing: 'night', duration: '12 weeks', instructions: 'Introduce slowly, moisturize' },
-        },
-        procedurePlanned: '',
-        procedureParams: {},
-        postProcedureCare: '',
-        investigations: [],
+        diagnosis: 'Acne vulgaris (mild)',
+        examination: {
+          generalAppearance: 'Comedonal acne predominantly over T-zone',
+          dermatology: {
+            skinType: 'III',
+            morphology: ['Comedo', 'Papule'],
+            distribution: ['Face'],
+            acneSeverity: 'Mild',
+            itchScore: undefined,
+            skinConcerns: ['Post-acne marks']
+          }
+        }
       },
     },
     {
@@ -200,15 +329,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       ],
       metadata: {
         chiefComplaints: 'Itchy annular rash in folds',
-        histories: {},
-        notes: 'Keep area dry; separate towels/clothes; iron clothes; avoid steroids',
-        topicals: {
-          facewash: {},
-          moisturiserSunscreen: {},
-          actives: {},
-        },
-        postProcedureCare: '',
-        investigations: [],
+        diagnosis: 'Tinea corporis',
+        examination: {
+          generalAppearance: 'Erythematous annular plaques with peripheral scaling',
+          dermatology: {
+            skinType: 'IV',
+            morphology: ['Plaque', 'Scale'],
+            distribution: ['Flexures'],
+            acneSeverity: undefined,
+            itchScore: 5,
+            skinConcerns: []
+          }
+        }
       },
     },
     {
@@ -220,24 +352,28 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       ],
       metadata: {
         chiefComplaints: 'Itchy scaly patches',
-        histories: {},
-        notes: 'Liberal emollients; avoid hot water; fragrance-free products',
-        topicals: {
-          facewash: { frequency: 'as needed', timing: '—', duration: 'ongoing', instructions: 'Syndet gentle cleanser' },
-          moisturiserSunscreen: { frequency: '3-4×/day', timing: '—', duration: 'ongoing', instructions: 'Thick bland emollient' },
-          actives: {},
-        },
-        investigations: ['CBC', 'ESR', 'CRP'],
+        diagnosis: 'Atopic dermatitis',
+        examination: {
+          generalAppearance: 'Lichenified plaques with excoriations',
+          dermatology: {
+            skinType: 'III',
+            morphology: ['Plaque', 'Scale'],
+            distribution: ['Flexures', 'Hands'],
+            acneSeverity: undefined,
+            itchScore: 7,
+            skinConcerns: []
+          }
+        }
       },
     },
   ];
   // Autocomplete state for clinical fields
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
-  const [notesOptions, setNotesOptions] = useState<string[]>([]);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
@@ -255,13 +391,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     basic: true,
-    clinical: false,
-    histories: false,
-    topicals: false,
-    procedures: false,
-    investigations: false,
-    templates: false,
-    sections: false,
+    clinical: true,
+    histories: true,
+    procedures: true,
+    investigations: true,
+    templates: true,
+    sections: true,
   });
 
   const toggleSection = (section: string) => {
@@ -290,6 +425,53 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
   }, [visitData]);
 
+  // On Examination (Dermatology) - moved from Visit form into Prescription tab
+  const DERM_DIAGNOSES = useMemo(() => [
+    'Acne vulgaris','Atopic dermatitis','Psoriasis','Tinea corporis','Melasma','Post-inflammatory hyperpigmentation','Urticaria','Rosacea','Seborrheic dermatitis','Lichen planus','Vitiligo'
+  ], []);
+  const MORPHOLOGY = useMemo(() => ['Macule','Papule','Pustule','Nodule','Plaque','Vesicle','Scale','Erosion','Ulcer','Comedo'], []);
+  const DISTRIBUTION = useMemo(() => ['Face','Scalp','Neck','Trunk','Arms','Legs','Hands','Feet','Flexures','Extensors','Generalized'], []);
+  const FITZPATRICK = useMemo(() => ['I','II','III','IV','V','VI'], []);
+  const [exSkinType, setExSkinType] = useState<string>('');
+  const [exMorphology, setExMorphology] = useState<Set<string>>(new Set());
+  const [exDistribution, setExDistribution] = useState<Set<string>>(new Set());
+  const [exAcneSeverity, setExAcneSeverity] = useState<string>('');
+  const [exItchScore, setExItchScore] = useState<string>('');
+  const [exTriggers, setExTriggers] = useState<string>('');
+  const [exPriorTx, setExPriorTx] = useState<string>('');
+  const [exDermDx, setExDermDx] = useState<Set<string>>(new Set());
+  const [exObjective, setExObjective] = useState<string>('');
+
+  // Seed On Examination from visit if present
+  useEffect(() => {
+    try {
+      const exam = (visitData?.examination && typeof visitData.examination === 'object') ? visitData.examination : (visitData?.examination ? JSON.parse(visitData.examination) : null);
+      if (!exam) return;
+      const derm = exam.dermatology || {};
+      if (derm.skinType) setExSkinType(String(derm.skinType));
+      if (Array.isArray(derm.morphology)) setExMorphology(new Set(derm.morphology));
+      if (Array.isArray(derm.distribution)) setExDistribution(new Set(derm.distribution));
+      if (derm.acneSeverity) setExAcneSeverity(String(derm.acneSeverity));
+      if (typeof derm.itchScore !== 'undefined') setExItchScore(String(derm.itchScore ?? ''));
+      if (derm.triggers) setExTriggers(String(derm.triggers));
+      if (derm.priorTreatments) setExPriorTx(String(derm.priorTreatments));
+      if (Array.isArray(derm.skinConcerns)) setSkinConcerns(new Set(derm.skinConcerns));
+      if (Array.isArray(visitData?.diagnosis)) setExDermDx(new Set((visitData.diagnosis as any[]).map((d: any) => (typeof d === 'string' ? d : d?.diagnosis)).filter(Boolean)));
+      const generalAppearance = exam.generalAppearance || '';
+      if (generalAppearance) setExObjective(String(generalAppearance));
+    } catch {}
+  }, [visitData]);
+
+  // Also seed triggers/prior treatments from visit history if present
+  useEffect(() => {
+    try {
+      const hist = (visitData?.history && typeof visitData.history === 'object') ? visitData.history : (visitData?.history ? JSON.parse(visitData.history) : null);
+      if (!hist) return;
+      if (hist.triggers) setExTriggers(String(hist.triggers));
+      if (hist.priorTreatments) setExPriorTx(String(hist.priorTreatments));
+    } catch {}
+  }, [visitData]);
+
   // Seed local vitals from visit data (one-time when empty)
   useEffect(() => {
     if (!visitVitals) return;
@@ -307,7 +489,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visitVitals]);
 
-  const [includeSections, setIncludeSections] = useState<Record<string, boolean>>({
+  const [localIncludeSections, setLocalIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
     diagnosis: true,
     medications: true,
@@ -315,22 +497,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     counseling: true,
     vitals: true,
     followUp: true,
-    notes: true,
+    notes: false,
     doctorSignature: true,
     chiefComplaints: true,
     histories: true,
     familyHistory: true,
-    topicals: true,
+    topicals: false,
     postProcedure: true,
     investigations: true,
     procedurePlanned: true,
     procedureParameters: true,
   });
 
+  const includeSections = includeSectionsProp ?? localIncludeSections;
+  const setIncludeSections = onChangeIncludeSections ?? setLocalIncludeSections;
+
   const tt = useCallback((key: string, fallback?: string) => {
     if (language === 'EN') return fallback ?? '';
     return translationsMap[key] ?? (fallback ?? '');
   }, [language, translationsMap]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.diag-autocomplete')) setDiagOptions([]);
+      if (!target.closest('.complaint-autocomplete')) setComplaintOptions([]);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const translateForPreview = useCallback(async () => {
     if (language === 'EN') {
@@ -349,7 +544,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     pushIf('medicationHistory', medicationHistory);
     pushIf('menstrualHistory', menstrualHistory);
     pushIf('familyHistoryOthers', familyHistoryOthers);
-    pushIf('postProcedureCare', postProcedureCare);
+    pushIf('followUpInstructions', followUpInstructions);
     pushIf('procedurePlanned', procedurePlanned);
     // Investigations
     (Array.isArray(investigations) ? investigations : []).forEach((inv, i) => {
@@ -402,33 +597,30 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: 'Showing original text. Check server OPENAI_API_KEY and network.',
       });
     }
-  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, postProcedureCare, procedurePlanned, investigations, customSections, items]);
+  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedurePlanned, investigations, customSections, items]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
-    pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length
-  ), [pastHistory, medicationHistory, menstrualHistory]);
+    pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
+  ), [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
   
   const hasFamilyHistory = useMemo(() => Boolean(
     familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
   ), [familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers]);
   
-  const hasTopicals = useMemo(() => Boolean(
-    topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions ||
-    topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions ||
-    topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions
-  ), [topicalFacewash, topicalMoisturiserSunscreen, topicalActives]);
-  
-  const hasPostProcedure = useMemo(() => Boolean(postProcedureCare?.trim()?.length), [postProcedureCare]);
   const hasInvestigations = useMemo(() => Array.isArray(investigations) && investigations.length > 0, [investigations]);
   const hasProcedurePlanned = useMemo(() => Boolean(procedurePlanned?.trim()?.length), [procedurePlanned]);
-  
-  const hasProcedureParams = useMemo(() => Boolean(
-    procedureParams.passes || procedureParams.power || procedureParams.machineUsed || procedureParams.others
-  ), [procedureParams]);
-
-  const canCreate = useMemo(() => Boolean(patientId && doctorId && items.length > 0 && (visitId || standalone)), [patientId, visitId, doctorId, items.length, standalone]);
+  const validItems = useMemo(() => items.filter((it) => (it.drugName || '').trim().length > 0), [items]);
+  const canCreate = useMemo(
+    () => Boolean(
+      patientId &&
+      doctorId &&
+      validItems.length > 0 &&
+      (visitId || standalone || ensureVisitId)
+    ),
+    [patientId, visitId, doctorId, validItems.length, standalone, ensureVisitId]
+  );
 
   useEffect(() => {
     void loadTemplates();
@@ -452,16 +644,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           const plan = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
           const follow = plan?.dermatology?.followUpDays;
           if (!followUpInstructions && follow) setFollowUpInstructions(`Follow up in ${follow} days`);
-          const counseling = plan?.dermatology?.counseling;
-          if (!notes && counseling) setNotes(String(counseling));
         } catch {}
         // Enable sections based on visit content
-        setIncludeSections((prev) => ({
-          ...prev,
+        setIncludeSections({
+          ...includeSections,
           diagnosis: Boolean(res?.diagnosis),
           counseling: Boolean(res?.plan),
           vitals: Boolean(res?.vitals),
-        }));
+        });
       } catch (e) {
         setVisitData(null);
       } finally {
@@ -470,7 +660,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey, standalone]);
+  }, [visitId, refreshKey, standalone, includeSections, setIncludeSections]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
@@ -519,9 +709,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       try {
         if (!patientId) return;
         const res = await apiClient.autocompletePrescriptionField({ field: 'diagnosis', patientId, visitId: visitId || undefined, q: diagnosis, limit: 8 });
-        setDiagOptions(Array.isArray(res) ? (res as string[]) : []);
+        const server = Array.isArray(res) ? (res as string[]) : [];
+        const local = getLocalSuggestions('diagnosis', diagnosis, 8);
+        const merged: string[] = [];
+        const seen = new Set<string>();
+        [...local, ...server].forEach((s) => {
+          const k = (s || '').toLowerCase();
+          if (!seen.has(k)) { seen.add(k); merged.push(s); }
+        });
+        setDiagOptions(merged.slice(0, 8));
       } catch {
-        setDiagOptions([]);
+        setDiagOptions(getLocalSuggestions('diagnosis', diagnosis, 8));
       }
     }, 250);
     return () => clearTimeout(t);
@@ -532,36 +730,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       try {
         if (!patientId) return;
         const res = await apiClient.autocompletePrescriptionField({ field: 'chiefComplaints', patientId, visitId: visitId || undefined, q: chiefComplaints, limit: 8 });
-        setComplaintOptions(Array.isArray(res) ? (res as string[]) : []);
+        const server = Array.isArray(res) ? (res as string[]) : [];
+        const local = getLocalSuggestions('chiefComplaints', chiefComplaints, 8);
+        const merged: string[] = [];
+        const seen = new Set<string>();
+        [...local, ...server].forEach((s) => {
+          const k = (s || '').toLowerCase();
+          if (!seen.has(k)) { seen.add(k); merged.push(s); }
+        });
+        setComplaintOptions(merged.slice(0, 8));
       } catch {
-        setComplaintOptions([]);
+        setComplaintOptions(getLocalSuggestions('chiefComplaints', chiefComplaints, 8));
       }
     }, 250);
     return () => clearTimeout(t);
   }, [chiefComplaints, patientId, visitId]);
 
-  const [isComposingNotes, setIsComposingNotes] = useState(false);
-  const notesRef = useRef<HTMLTextAreaElement | null>(null);
-  useEffect(() => {
-    if (isComposingNotes) return;
-    const q = (notes || '').trim();
-    if (q.length < 2) {
-      setNotesOptions([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        if (!patientId) return;
-        const res = await apiClient.autocompletePrescriptionField({ field: 'notes', patientId, visitId: visitId || undefined, q, limit: 8 });
-        setNotesOptions(Array.isArray(res) ? (res as string[]) : []);
-      } catch {
-        setNotesOptions([]);
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [notes, patientId, visitId, isComposingNotes]);
+  // removed doctor's personal notes composition and autocomplete logic
 
-  // Debounced drug search with relevance-based sorting
+  // Debounced drug search (uses prescriptions autocomplete)
   useEffect(() => {
     const t = setTimeout(async () => {
       const q = (drugQuery || '').trim();
@@ -571,13 +758,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
       try {
         setLoadingDrugs(true);
-        const res: any = await apiClient.get('/drugs', { search: q, limit: 30, isActive: true }); // Increased limit for better sorting
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-        // Apply relevance-based sorting and take top 10 results
-        const sortedResults = sortDrugsByRelevance(list, q);
-        setDrugResults(sortedResults.slice(0, 10));
+        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        const primary = Array.isArray(res)
+          ? res
+          : (Array.isArray(res?.data)
+            ? res.data
+            : (Array.isArray(res?.items)
+              ? res.items
+              : (Array.isArray(res?.results) ? res.results : [])));
+        let list: any[] = primary;
+        if (!Array.isArray(list) || list.length === 0) {
+          // Fallback to pharmacy autocomplete which supports broader modes
+          try {
+            const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
+            list = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
+          } catch {}
+        }
+        // Sort by relevance if available
+        const sorted = sortDrugsByRelevance(Array.isArray(list) ? list : [], q);
+        setDrugResults(sorted.slice(0, 10));
       } catch (e) {
-        setDrugResults([]);
+        try {
+          const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
+          const list2 = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
+          const sorted2 = sortDrugsByRelevance(Array.isArray(list2) ? list2 : [], q);
+          setDrugResults(sorted2.slice(0, 10));
+        } catch {
+          setDrugResults([]);
+        }
       } finally {
         setLoadingDrugs(false);
       }
@@ -587,6 +795,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const searchDrugs = (q: string) => {
     setDrugQuery(q);
+    pushRecent('drugQueries', q);
   };
 
   // Highlight matching text in search results
@@ -605,11 +814,113 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     );
   };
 
+  // Prefetch remaining stock for a drug by id (uses /drugs/:id, accessible to doctors)
+  const prefetchDrugStockById = async (drugId?: string) => {
+    if (!drugId) return;
+    if (drugStockById[drugId] !== undefined || drugStockLoading[drugId]) return;
+    setDrugStockLoading((prev) => ({ ...prev, [drugId]: true }));
+    try {
+      const detail: any = await apiClient.get(`/drugs/${drugId}`);
+      const inv = Array.isArray(detail?.inventoryItems) ? detail.inventoryItems : [];
+      const stock = inv.length > 0 ? inv.reduce((sum: number, it: any) => sum + (Number(it?.currentStock || 0) || 0), 0) : 20;
+      setDrugStockById((prev) => ({ ...prev, [drugId]: stock }));
+    } catch {
+      // If inventory not configured or error, default to 20
+      setDrugStockById((prev) => ({ ...prev, [drugId]: 20 }));
+    } finally {
+      setDrugStockLoading((prev) => ({ ...prev, [drugId]: false }));
+    }
+  };
+
+  // Prefetch remaining stock for a drug by name (used in treatment table rows)
+  const prefetchDrugStockByName = async (name?: string) => {
+    const query = (name || '').trim();
+    if (!query) return;
+    const key = query.toLowerCase();
+    if (drugStockById[key] !== undefined || drugStockLoading[key]) return;
+    setDrugStockLoading((prev) => ({ ...prev, [key]: true }));
+    try {
+      const res: any = await apiClient.get('/drugs', { search: query, limit: 1, isActive: true });
+      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+      const first = list?.[0];
+      if (!first?.id) {
+        // No match found; assume default stock
+        setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
+      } else {
+        await prefetchDrugStockById(first.id);
+        const val = (typeof drugStockById[first.id] === 'number') ? drugStockById[first.id] : 20;
+        setDrugStockById((prev) => ({ ...prev, [key]: val }));
+      }
+    } catch {
+      setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
+    } finally {
+      setDrugStockLoading((prev) => ({ ...prev, [key]: false }));
+    }
+  };
+
   // Get relevance badge for search results
   const getRelevanceBadge = (drug: any, query: string, index: number) => {
     if (index === 0) return <Badge variant="default" className="text-xs ml-2 bg-green-100 text-green-800">Best Match</Badge>;
     if (index < 3) return <Badge variant="secondary" className="text-xs ml-2 bg-blue-100 text-blue-800">High Match</Badge>;
     return null;
+  };
+
+  // Local recent suggestions (last 50) utilities
+  const RECENT_KEY_PREFIX = 'rx_recent:';
+  const normalize = (s: string) => (s || '').trim();
+  const readRecent = (key: string): string[] => {
+    try {
+      const raw = localStorage.getItem(RECENT_KEY_PREFIX + key);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return Array.isArray(arr) ? arr.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  };
+  const writeRecent = (key: string, list: string[]) => {
+    try {
+      localStorage.setItem(RECENT_KEY_PREFIX + key, JSON.stringify(list.slice(0, 50)));
+    } catch {}
+  };
+  const pushRecent = (key: string, value?: string) => {
+    const v = normalize(value || '');
+    if (!v) return;
+    const list = readRecent(key);
+    const without = list.filter((x) => x.toLowerCase() !== v.toLowerCase());
+    writeRecent(key, [v, ...without].slice(0, 50));
+  };
+  const rankByQuery = (candidates: string[], q: string): string[] => {
+    const query = (q || '').toLowerCase().trim();
+    if (!query) return candidates;
+    return [...candidates]
+      .map((c) => {
+        const lc = c.toLowerCase();
+        let score = 0;
+        if (lc.startsWith(query)) score += 100;
+        const idx = lc.indexOf(query);
+        if (idx >= 0) score += 50 - idx;
+        // Shorter strings a bit higher if they match
+        score += Math.max(0, 20 - Math.abs(c.length - query.length));
+        return { c, score };
+      })
+      .sort((a, b) => b.score - a.score)
+      .map((x) => x.c);
+  };
+  const getLocalSuggestions = (key: string, q: string, limit = 8): string[] => {
+    const list = readRecent(key);
+    const ranked = rankByQuery(list, q);
+    // de-dup case-insensitive while preserving original casing
+    const seen = new Set<string>();
+    const uniq: string[] = [];
+    for (const s of ranked) {
+      const k = s.toLowerCase();
+      if (!seen.has(k)) {
+        seen.add(k);
+        uniq.push(s);
+      }
+      if (uniq.length >= limit) break;
+    }
+    return uniq;
   };
 
   const addItemFromDrug = (drug: any) => {
@@ -630,6 +941,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setItems(prev => [...prev, base]);
     setDrugResults([]);
     setDrugQuery('');
+    pushRecent('drugNames', drug.name);
+    if (drug.genericName) pushRecent('drugGeneric', drug.genericName);
   };
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
@@ -654,17 +967,95 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const totalQuantity = useMemo(() => {
-    return items.reduce((sum, it) => sum + (Number(it.quantity || 0) || 0), 0);
-  }, [items]);
+    return validItems.reduce((sum, it) => sum + (Number(it.quantity || 0) || 0), 0);
+  }, [validItems]);
 
   const create = useCallback(async () => {
     if (!canCreate) return;
     try {
+      // Prefer IDs from loaded visit if available
+      const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
+        ? ((visitData as any).patientId || (visitData as any)?.patient?.id)
+        : undefined;
+      const visitDoctorId: string | undefined = (visitData && typeof visitData === 'object')
+        ? ((visitData as any).doctorId || (visitData as any)?.doctor?.id)
+        : undefined;
+      const effectivePatientId = (typeof visitPatientId === 'string' && visitPatientId.trim()) ? visitPatientId : patientId;
+      const effectiveDoctorId = (typeof visitDoctorId === 'string' && visitDoctorId.trim()) ? visitDoctorId : doctorId;
+
+      // Validate essential IDs
+      if (typeof effectivePatientId !== 'string' || !effectivePatientId.trim() || typeof effectiveDoctorId !== 'string' || !effectiveDoctorId.trim()) {
+        console.warn('[PrescriptionBuilder] Invalid IDs on create', { patientId: effectivePatientId, doctorId: effectiveDoctorId, visitId });
+        toast({
+          variant: 'destructive',
+          title: 'Invalid IDs',
+          description: 'Patient or Doctor ID is missing. Please correct and try again.',
+        });
+        return;
+      }
+
+      // Ensure we have a visit when not in standalone mode
+      let ensuredVisitId: string | null = visitId;
+      if (!standalone && !ensuredVisitId && ensureVisitId) {
+        try {
+          ensuredVisitId = await ensureVisitId();
+        } catch (e) {
+          // If visit creation fails, continue as best-effort without blocking prescription if standalone allowed
+          console.warn('[PrescriptionBuilder] Failed to ensure visitId', e);
+        }
+      }
+
+      // Persist all builder fields to Visit for future autocomplete (DB-backed)
+      if (ensuredVisitId) {
+        const visitUpdatePayload: Record<string, unknown> = {
+          complaints: chiefComplaints || undefined,
+          history: {
+            pastHistory: pastHistory || undefined,
+            medicationHistory: medicationHistory || undefined,
+            menstrualHistory: menstrualHistory || undefined,
+            triggers: exTriggers || undefined,
+            priorTreatments: exPriorTx || undefined,
+            familyHistory: {
+              dm: familyHistoryDM || undefined,
+              htn: familyHistoryHTN || undefined,
+              thyroid: familyHistoryThyroid || undefined,
+              others: familyHistoryOthers || undefined,
+            },
+          },
+          diagnosis: diagnosis || undefined,
+          treatmentPlan: {
+            investigations: (investigations && investigations.length) ? investigations : undefined,
+            procedurePlanned: procedurePlanned || undefined,
+            followUp: followUpInstructions || undefined,
+          },
+          dermatology: {
+            skinConcerns: Array.from(skinConcerns),
+          },
+          examination: {
+            ...(exObjective ? { generalAppearance: exObjective } : {}),
+            dermatology: {
+              skinType: exSkinType || undefined,
+              morphology: Array.from(exMorphology),
+              distribution: Array.from(exDistribution),
+              acneSeverity: exAcneSeverity || undefined,
+              itchScore: exItchScore ? Number(exItchScore) : undefined,
+              skinConcerns: Array.from(skinConcerns),
+            }
+          },
+        };
+        try {
+          await apiClient.updateVisit(ensuredVisitId, visitUpdatePayload);
+        } catch (e) {
+          // Non-blocking: continue to create prescription even if visit update fails
+          console.warn('[PrescriptionBuilder] Failed to persist visit fields', e);
+        }
+      }
+
       const payload = {
-        patientId,
-        visitId: standalone ? undefined : visitId,
-        doctorId,
-        items: items.map(it => ({
+        patientId: effectivePatientId,
+        visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
+        doctorId: effectiveDoctorId,
+        items: validItems.map(it => ({
           drugName: it.drugName,
           genericName: it.genericName || undefined,
           brandName: it.brandName || undefined,
@@ -677,7 +1068,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           route: it.route || undefined,
           timing: it.timing || undefined,
           quantity: it.quantity ? Number(it.quantity) : undefined,
-          notes: it.notes || undefined,
           isGeneric: it.isGeneric ?? true,
           applicationSite: it.applicationSite || undefined,
           applicationAmount: it.applicationAmount || undefined,
@@ -693,7 +1083,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           pulseRegimen: it.pulseRegimen || undefined,
         })),
         diagnosis: diagnosis || undefined,
-        notes: notes || undefined,
         language,
         validUntil: reviewDate || undefined,
         followUpInstructions: followUpInstructions || undefined,
@@ -704,6 +1093,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             pastHistory: pastHistory || undefined,
             medicationHistory: medicationHistory || undefined,
             menstrualHistory: menstrualHistory || undefined,
+            triggers: exTriggers || undefined,
+            priorTreatments: exPriorTx || undefined,
           },
           familyHistory: {
             dm: familyHistoryDM || undefined,
@@ -711,15 +1102,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             thyroid: familyHistoryThyroid || undefined,
             others: familyHistoryOthers || undefined,
           },
-          topicals: {
-            facewash: topicalFacewash,
-            moisturiserSunscreen: topicalMoisturiserSunscreen,
-            actives: topicalActives,
-          },
-          postProcedureCare: postProcedureCare || undefined,
           investigations: investigations && investigations.length ? investigations : undefined,
           procedurePlanned: procedurePlanned || undefined,
-          procedureParams: procedureParams,
         },
       };
       const res: any = standalone
@@ -732,7 +1116,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           open: true,
           prescriptionId: res?.id || '',
           summary: {
-            medicationsCount: items.length,
+            medicationsCount: validItems.length,
           },
         });
       }
@@ -740,13 +1124,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       toast({
         variant: 'success',
         title: 'Prescription created',
-        description: `${items.length} medications recorded for the patient.`,
+        description: `${validItems.length} medications recorded for the patient.`,
       });
 
       // Reset form
       setItems([]);
       setDiagnosis('');
-      setNotes('');
       setFollowUpInstructions('');
     } catch (e: any) {
       const msg = getErrorMessage(e) || 'Failed to create prescription';
@@ -756,7 +1139,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: msg,
       });
     }
-  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, notes, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, topicalFacewash, topicalMoisturiserSunscreen, topicalActives, postProcedureCare, investigations, procedurePlanned, procedureParams, onCreated]);
+  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedurePlanned, onCreated]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     try {
@@ -793,11 +1176,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
       if (md) {
+        if (md.diagnosis) setDiagnosis(md.diagnosis);
         if (md.chiefComplaints) setChiefComplaints(md.chiefComplaints);
         if (md.histories) {
           if (md.histories.pastHistory) setPastHistory(md.histories.pastHistory);
           if (md.histories.medicationHistory) setMedicationHistory(md.histories.medicationHistory);
           if (md.histories.menstrualHistory) setMenstrualHistory(md.histories.menstrualHistory);
+          // triggers and prior treatments are no longer applied from templates
+        }
+        if (md.examination) {
+          if (md.examination.generalAppearance) setExObjective(md.examination.generalAppearance);
+          if (md.examination.dermatology) {
+            const der = md.examination.dermatology;
+            if (der.skinType) setExSkinType(der.skinType);
+            if (Array.isArray(der.morphology)) setExMorphology(new Set<string>(der.morphology));
+            if (Array.isArray(der.distribution)) setExDistribution(new Set<string>(der.distribution));
+            if (der.acneSeverity) setExAcneSeverity(der.acneSeverity);
+            if (der.itchScore !== undefined && der.itchScore !== null) setExItchScore(String(der.itchScore));
+            if (Array.isArray(der.skinConcerns)) setSkinConcerns(new Set<string>(der.skinConcerns));
+          }
         }
         if (md.familyHistory) {
           if (typeof md.familyHistory.dm === 'boolean') setFamilyHistoryDM(md.familyHistory.dm);
@@ -805,32 +1202,195 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           if (typeof md.familyHistory.thyroid === 'boolean') setFamilyHistoryThyroid(md.familyHistory.thyroid);
           if (md.familyHistory.others) setFamilyHistoryOthers(md.familyHistory.others);
         }
-        if (md.topicals) {
-          if (md.topicals.facewash) setTopicalFacewash(md.topicals.facewash);
-          if (md.topicals.moisturiserSunscreen) setTopicalMoisturiserSunscreen(md.topicals.moisturiserSunscreen);
-          if (md.topicals.actives) setTopicalActives(md.topicals.actives);
-        }
-        if (md.postProcedureCare) setPostProcedureCare(md.postProcedureCare);
+        // topicals removed
+        // postProcedureCare removed
         if (md.investigations) {
           if (Array.isArray(md.investigations)) setInvestigations(md.investigations as string[]);
           else if (typeof md.investigations === 'string') setInvestigations((md.investigations as string).split(',').map(s => s.trim()).filter(Boolean));
         }
         if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
-        if (md.procedureParams) setProcedureParams(md.procedureParams);
-        if (md.notes) setNotes((prev) => prev || md.notes);
+        // procedureParams removed
+        // doctor's personal notes removed from builder
       }
     } catch {}
   };
 
   const [templatePromptOpen, setTemplatePromptOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
+  const [fieldTemplateName, setFieldTemplateName] = useState('');
+  const [newTemplateOpen, setNewTemplateOpen] = useState(false);
+  const [newTplName, setNewTplName] = useState('');
+  const [newTplChiefComplaints, setNewTplChiefComplaints] = useState('');
+  const [newTplDiagnosis, setNewTplDiagnosis] = useState('');
+  const [newTplExObjective, setNewTplExObjective] = useState('');
+  const [newTplSkinType, setNewTplSkinType] = useState('');
+  const [newTplMorphology, setNewTplMorphology] = useState<Set<string>>(new Set());
+  const [newTplDistribution, setNewTplDistribution] = useState<Set<string>>(new Set());
+  // Removed triggers and prior treatments from templates (now part of Patient History)
+  const [newTplTriggers] = useState('');
+  const [newTplPriorTx] = useState('');
+  const [newTplItchScore, setNewTplItchScore] = useState<string>('');
+  const [newTplSkinConcerns, setNewTplSkinConcerns] = useState<Set<string>>(new Set());
+  const [newTplItems, setNewTplItems] = useState<Array<{
+    drugName: string;
+    dosage?: number | '';
+    dosageUnit?: string;
+    frequency?: string;
+    duration?: number | '';
+    durationUnit?: string;
+    route?: string;
+    instructions?: string;
+  }>>([{ drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
+  const [newTplDrugQuery, setNewTplDrugQuery] = useState('');
+  const [newTplDrugResults, setNewTplDrugResults] = useState<any[]>([]);
+  const [newTplLoadingDrugs, setNewTplLoadingDrugs] = useState(false);
+
+  const addNewTplItem = () => {
+    setNewTplItems((prev) => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
+  };
+  const removeNewTplItem = (idx: number) => {
+    setNewTplItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const setNewTplItemField = (idx: number, field: string, value: any) => {
+    setNewTplItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+
+  const updateNewTplItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
+    setNewTplItems((prev) => prev.map((it: any, i) => (i === index ? { ...it, ...patch } : it)));
+  };
+  const removeNewTplRxItem = (index: number) => {
+    setNewTplItems((prev) => prev.filter((_, i) => i !== index));
+  };
+  const addItemFromDrugToNewTpl = (drug: any) => {
+    const base: PrescriptionItemForm = {
+      drugName: drug.name,
+      genericName: drug.genericName,
+      brandName: drug.brandName,
+      dosage: '',
+      dosageUnit: 'TABLET',
+      frequency: 'ONCE_DAILY',
+      dosePattern: '',
+      duration: '',
+      durationUnit: 'DAYS',
+      instructions: '',
+      timing: '',
+      quantity: '',
+      route: drug.route || '',
+      notes: '',
+      isGeneric: true,
+    } as any;
+    setNewTplItems((prev: any[]) => [...prev, base as any]);
+    // Close the dialog search only upon selection
+    setNewTplDrugResults([]);
+    setNewTplDrugQuery('');
+  };
+
+  // Debounced search for New Template dialog (separate from main builder)
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      const q = (newTplDrugQuery || '').trim();
+      if (q.length < 2) {
+        setNewTplDrugResults([]);
+        return;
+      }
+      try {
+        setNewTplLoadingDrugs(true);
+        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        const primary = Array.isArray(res)
+          ? res
+          : (Array.isArray(res?.data)
+            ? res.data
+            : (Array.isArray(res?.items)
+              ? res.items
+              : (Array.isArray(res?.results) ? res.results : [])));
+        let list: any[] = primary;
+        if (!Array.isArray(list) || list.length === 0) {
+          try {
+            const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
+            list = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
+          } catch {}
+        }
+        const sorted = sortDrugsByRelevance(Array.isArray(list) ? list : [], q);
+        setNewTplDrugResults(sorted.slice(0, 10));
+      } catch (e) {
+        try {
+          const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
+          const list2 = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
+          const sorted2 = sortDrugsByRelevance(Array.isArray(list2) ? list2 : [], q);
+          setNewTplDrugResults(sorted2.slice(0, 10));
+        } catch {
+          setNewTplDrugResults([]);
+        }
+      } finally {
+        setNewTplLoadingDrugs(false);
+      }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [newTplDrugQuery]);
+
+  const allTemplates = useMemo(() => {
+    const server = (templates || []).map((t: any) => ({
+      id: String(t.id ?? t._id ?? t.name),
+      name: String(t.name || 'Untitled'),
+      source: 'server' as const,
+      tpl: t,
+    }));
+    const defaults = (defaultDermTemplates || []).map((t: any) => ({
+      id: `default-${t.id}`,
+      name: t.name,
+      source: 'default' as const,
+      tpl: t,
+    }));
+    // Prepend a "No template" option
+    const none = [{ id: 'none', name: 'No template', source: 'none' as const, tpl: { items: [], metadata: {} } }];
+    return [...none, ...server, ...defaults];
+  }, [templates, defaultDermTemplates]);
+
+  const persistLocalFieldTemplate = useCallback(async (name: string) => {
+    // Save as server-side template with no items
+    try {
+      const payload: any = {
+        name,
+        description: '',
+        items: [],
+        category: 'Dermatology',
+        specialty: 'Dermatology',
+        isPublic: true,
+        metadata: {
+          chiefComplaints,
+          diagnosis,
+          examination: {
+            generalAppearance: exObjective || undefined,
+            dermatology: {
+              skinType: exSkinType || undefined,
+              morphology: Array.from(exMorphology),
+              distribution: Array.from(exDistribution),
+              acneSeverity: exAcneSeverity || undefined,
+              itchScore: exItchScore ? Number(exItchScore) : undefined,
+              triggers: exTriggers || undefined,
+              priorTreatments: exPriorTx || undefined,
+              skinConcerns: Array.from(skinConcerns),
+            }
+          },
+        },
+      };
+      await apiClient.createPrescriptionTemplate(payload);
+      await loadTemplates();
+      toast({ variant: 'success', title: 'Fields template saved', description: 'Template stored on server.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Unable to save fields template', description: getErrorMessage(e) || 'Please try again later.' });
+      throw e;
+    }
+  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, skinConcerns, loadTemplates, apiClient, toast]);
 
   const persistTemplate = useCallback(async (name: string) => {
     try {
       const payload = {
         name,
         description: '',
-        items: items.map(it => ({
+        items: validItems.map(it => ({
           drugName: it.drugName,
           genericName: it.genericName,
           brandName: it.brandName,
@@ -845,32 +1405,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           quantity: it.quantity ? Number(it.quantity) : undefined,
           notes: it.notes,
           isGeneric: it.isGeneric ?? true,
-          applicationSite: it.applicationSite,
-          applicationAmount: it.applicationAmount,
-          dayPart: it.dayPart,
-          leaveOn: it.leaveOn,
-          washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
-          taperSchedule: it.taperSchedule,
-          weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
-          calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
-          pregnancyWarning: it.pregnancyWarning,
-          photosensitivityWarning: it.photosensitivityWarning,
-          foodInstructions: it.foodInstructions,
-          pulseRegimen: it.pulseRegimen,
         })),
         category: 'Dermatology',
         specialty: 'Dermatology',
         isPublic: true,
         metadata: {
           chiefComplaints,
-          histories: { pastHistory, medicationHistory, menstrualHistory },
-          familyHistory: { dm: familyHistoryDM, htn: familyHistoryHTN, thyroid: familyHistoryThyroid, others: familyHistoryOthers },
-          topicals: { facewash: topicalFacewash, moisturiserSunscreen: topicalMoisturiserSunscreen, actives: topicalActives },
-          postProcedureCare,
-          investigations,
-          procedurePlanned,
-          procedureParams,
-          notes,
+          diagnosis,
+          examination: {
+            generalAppearance: exObjective || undefined,
+            dermatology: {
+              skinType: exSkinType || undefined,
+              morphology: Array.from(exMorphology),
+              distribution: Array.from(exDistribution),
+              acneSeverity: exAcneSeverity || undefined,
+              itchScore: exItchScore ? Number(exItchScore) : undefined,
+              skinConcerns: Array.from(skinConcerns),
+            }
+          },
         },
       } as any;
       await apiClient.createPrescriptionTemplate(payload);
@@ -892,21 +1444,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     apiClient,
     items,
     chiefComplaints,
-    pastHistory,
-    medicationHistory,
-    menstrualHistory,
-    familyHistoryDM,
-    familyHistoryHTN,
-    familyHistoryThyroid,
-    familyHistoryOthers,
-    topicalFacewash,
-    topicalMoisturiserSunscreen,
-    topicalActives,
-    postProcedureCare,
-    investigations,
-    procedurePlanned,
-    procedureParams,
-    notes,
+    diagnosis,
+    exObjective,
+    exSkinType,
+    exMorphology,
+    exDistribution,
+    exAcneSeverity,
+    exItchScore,
+    exTriggers,
+    exPriorTx,
+    skinConcerns,
     loadTemplates,
     toast,
   ]);
@@ -914,7 +1461,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => {
     if (!orderOpen) return;
     // Initialize mapping state from current items when dialog opens
-    const next = items.map((it) => ({ q: it.drugName || '', loading: false, results: [], selection: undefined, qty: Number(it.quantity || 1) || 1 }));
+    const next = validItems.map((it) => ({ q: it.drugName || '', loading: false, results: [], selection: undefined, qty: Number(it.quantity || 1) || 1 }));
     setOneMgMap(next);
     // Auto-search initial queries
     next.forEach(async (_row, idx) => {
@@ -1013,7 +1560,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   return (
     <div className="space-y-6">
-      {!standalone && items.length > 0 && (
+      {!standalone && validItems.length > 0 && (
         <div className="sticky top-0 z-10 bg-white border-b py-2 flex justify-end">
           <Button
             variant="outline"
@@ -1046,87 +1593,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             {loadingVisit && (
               <div className="text-xs text-gray-500">Loading visit details…</div>
             )}
-            {/* Basic Information */}
-            <CollapsibleSection title="Basic Information" section="basic" expanded={expandedSections.basic} onToggle={toggleSection}>
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div>
-                    <label className="text-sm text-gray-700">Language</label>
-                    <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="EN">English</SelectItem>
-                        <SelectItem value="TE">Telugu</SelectItem>
-                        <SelectItem value="HI">Hindi</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
 
-                {language !== 'EN' && (
-                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
-                    <div className="font-medium mb-1">Translation enabled</div>
-                    <div>
-                      On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
-                      This includes: Diagnosis, Chief complaints, Histories, Family history (other), Post‑procedure care,
-                      Procedure planned, Investigations, Custom sections, and per‑medication notes. Medication names,
-                      numbers, and units remain unchanged.
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-sm text-gray-700 flex items-center gap-1">Diagnosis (optional){language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <div className="relative">
-                      <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
-                      {diagOptions.length > 0 && (
-                        <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto">
-                          {diagOptions.map((opt) => (
-                            <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setDiagnosis(opt)}>
-                              {opt}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} />
-                  </div>
-                  <div></div>
-                </div>
-
-                <div>
-                  <label className="text-sm text-gray-700 flex items-center gap-1">Doctor's Personal Notes{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
-                  <div className="relative">
-                    <Textarea
-                      key="doctor-notes"
-                      rows={3}
-                      placeholder="Instructions, cautions, lifestyle advice..."
-                      value={notes}
-                      ref={notesRef}
-                      onCompositionStart={() => setIsComposingNotes(true)}
-                      onCompositionEnd={() => setIsComposingNotes(false)}
-                      onChange={(e) => setNotes(e.target.value)}
-                    />
-                    {notesOptions.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto" role="listbox" onMouseDown={(e) => e.preventDefault()}>
-                        {notesOptions.map((opt) => (
-                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" role="option" onClick={() => setNotes(opt)}>
-                             {opt}
-                           </div>
-                         ))}
-                       </div>
-                     )}
-                   </div>
-                </div>
+            {/* Templates quick bar */}
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="min-w-[240px]">
+                <label className="text-xs text-gray-600">Templates</label>
+                <Select value={selectedTemplateId} onValueChange={(v: string) => setSelectedTemplateId(v)}>
+                  <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
+                  <SelectContent>
+                    {allTemplates.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CollapsibleSection>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const entry = allTemplates.find(t => t.id === selectedTemplateId);
+                  if (entry) applyTemplateToBuilder(entry.tpl);
+                }}
+                disabled={!selectedTemplateId}
+              >
+                Apply
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
+                <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
+                <Button size="sm" onClick={() => setNewTemplateOpen(true)}>New template</Button>
+              </div>
+            </div>
+
+            {/* Basic Information */}
+            {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
 
             {/* Clinical Details */}
-            <CollapsibleSection title="Clinical Details & Vitals" section="clinical" expanded={expandedSections.clinical} onToggle={toggleSection}>
+            <CollapsibleSection title="Clinical Details & Vitals" section="clinical">
               <div className="space-y-3">
                 {/* Vitals */}
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
@@ -1158,21 +1662,66 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div></div>
                 </div>
 
-                {/* Chief Complaints */}
-                <div className="opacity-100">
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                  <div className="relative">
-                    <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
-                    {complaintOptions.length > 0 && (
-                      <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto">
-                        {complaintOptions.map((opt) => (
-                          <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => setChiefComplaints(opt)}>
-                            {opt}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                
+              </div>
+            </CollapsibleSection>
+
+            {/* Chief Complaints - dedicated card */}
+            <CollapsibleSection 
+              title="Chief Complaints" 
+              section="chief-complaints" 
+              highlight={hasChiefComplaints}
+              badge={hasChiefComplaints ? 'Has Data' : ''}
+            >
+              <div className="opacity-100">
+                <label className="text-xs text-gray-600 flex items-center gap-1">Chief Complaints{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <div className="relative complaint-autocomplete flex items-start">
+                  <Textarea key="chief-complaints" rows={2} value={chiefComplaints} onChange={(e) => setChiefComplaints(e.target.value)} />
+                  <VoiceButton fieldName="chiefComplaints" />
+                </div>
+                <div className="mt-2">
+                  <div className="text-[11px] text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="flex flex-wrap gap-2">
+                    {SKIN_CONCERNS.map((c) => (
+                      <Button
+                        key={c}
+                        type="button"
+                        variant={skinConcerns.has(c) ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => toggleSet(skinConcerns, c, setSkinConcerns)}
+                      >
+                        {c}
+                      </Button>
+                    ))}
                   </div>
+                </div>
+                {complaintOptions.length > 0 && (
+                  <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-40 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                    {complaintOptions.map((opt) => (
+                      <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setChiefComplaints(opt); setComplaintOptions([]); pushRecent('chiefComplaints', opt); }}>
+                        {opt}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CollapsibleSection>
+
+            {/* Diagnosis */}
+            <CollapsibleSection title="Diagnosis" section="diagnosis">
+              <div className="opacity-100">
+                <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <div className="relative diag-autocomplete">
+                  <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+                  {diagOptions.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                      {diagOptions.map((opt) => (
+                        <div key={opt} className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => { setDiagnosis(opt); setDiagOptions([]); pushRecent('diagnosis', opt); }}>
+                          {opt}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </CollapsibleSection>
@@ -1183,22 +1732,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="histories" 
               highlight={hasHistories}
               badge={hasHistories ? "Has Data" : ""}
-              expanded={expandedSections.histories}
-              onToggle={toggleSection}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} />
+                    <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} />
+                    <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} />
+                    <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
@@ -1207,90 +1754,243 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid</label>
                     </div>
-                    <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} />
+                    <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Triggers{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <Input placeholder="Heat, stress, cosmetics..." value={exTriggers} onChange={(e) => setExTriggers(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 flex items-center gap-1">Prior Treatments{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <Input placeholder="Topicals/systemics tried" value={exPriorTx} onChange={(e) => setExPriorTx(e.target.value)} />
                   </div>
                 </div>
               </div>
             </CollapsibleSection>
 
-            {/* Topicals */}
-            <CollapsibleSection 
-              title="Topical Care Instructions" 
-              section="topicals" 
-              highlight={hasTopicals}
-              badge={hasTopicals ? "Has Data" : ""}
-              expanded={expandedSections.topicals}
-              onToggle={toggleSection}
-            >
-              <div className="opacity-100">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="space-y-1">
-                    <div className="font-medium text-sm">Facewash/Soap</div>
-                    <Input placeholder="Frequency" value={topicalFacewash.frequency || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, frequency: e.target.value })} />
-                    <Input placeholder="Timing" value={topicalFacewash.timing || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, timing: e.target.value })} />
-                    <Input placeholder="Duration" value={topicalFacewash.duration || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, duration: e.target.value })} />
-                    <Input placeholder="Instructions" value={topicalFacewash.instructions || ''} onChange={(e) => setTopicalFacewash({ ...topicalFacewash, instructions: e.target.value })} />
+            {/* On Examination - Dermatology */}
+            <CollapsibleSection title="On Examination" section="on-examination">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Fitzpatrick Skin Type</label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {FITZPATRICK.map(ft => (
+                        <Button key={ft} type="button" variant={exSkinType === ft ? 'default' : 'outline'} size="sm" onClick={() => setExSkinType(exSkinType === ft ? '' : ft)}>{ft}</Button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <div className="font-medium text-sm">Moisturiser & Sunscreen</div>
-                    <Input placeholder="Frequency" value={topicalMoisturiserSunscreen.frequency || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, frequency: e.target.value })} />
-                    <Input placeholder="Timing" value={topicalMoisturiserSunscreen.timing || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, timing: e.target.value })} />
-                    <Input placeholder="Duration" value={topicalMoisturiserSunscreen.duration || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, duration: e.target.value })} />
-                    <Input placeholder="Instructions" value={topicalMoisturiserSunscreen.instructions || ''} onChange={(e) => setTopicalMoisturiserSunscreen({ ...topicalMoisturiserSunscreen, instructions: e.target.value })} />
+                  <div>
+                    <label className="text-xs text-gray-600">Acne Severity</label>
+                    <Input placeholder="mild/moderate/severe" value={exAcneSeverity} onChange={(e) => setExAcneSeverity(e.target.value)} />
                   </div>
-                  <div className="space-y-1">
-                    <div className="font-medium text-sm">Actives</div>
-                    <Input placeholder="Frequency" value={topicalActives.frequency || ''} onChange={(e) => setTopicalActives({ ...topicalActives, frequency: e.target.value })} />
-                    <Input placeholder="Timing" value={topicalActives.timing || ''} onChange={(e) => setTopicalActives({ ...topicalActives, timing: e.target.value })} />
-                    <Input placeholder="Duration" value={topicalActives.duration || ''} onChange={(e) => setTopicalActives({ ...topicalActives, duration: e.target.value })} />
-                    <Input placeholder="Instructions" value={topicalActives.instructions || ''} onChange={(e) => setTopicalActives({ ...topicalActives, instructions: e.target.value })} />
+                  <div>
+                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <Input placeholder="0-10" value={exItchScore} onChange={(e) => setExItchScore(e.target.value)} />
                   </div>
-                  <div></div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-600">Morphology</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {MORPHOLOGY.map(m => (
+                      <Button key={m} type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-600">Distribution / Body Areas</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {DISTRIBUTION.map(d => (
+                      <Button key={d} type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
+                    ))}
+                  </div>
+                </div>
+
+                
+
+                <div>
+                  <label className="text-xs text-gray-600">Dermatology Diagnoses</label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {DERM_DIAGNOSES.map(dx => (
+                      <Button key={dx} type="button" variant={exDermDx.has(dx) ? 'default' : 'outline'} size="sm" onClick={() => setExDermDx(prev => { const next = new Set(prev); next.has(dx) ? next.delete(dx) : next.add(dx); return next; })}>{dx}</Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs text-gray-600">Detailed Examination</label>
+                  <div className="flex items-center">
+                    <Textarea placeholder="Detailed physical examination findings..." value={exObjective} onChange={(e) => setExObjective(e.target.value)} rows={3} />
+                    <VoiceButton fieldName="objective" />
+                  </div>
                 </div>
               </div>
             </CollapsibleSection>
+
+            {/* Treatment */}
+            <CollapsibleSection title="Treatment" section="treatment">
+              <div className="space-y-3">
+                {/* Drug search to add rows */}
+                <div>
+                  <label className="text-sm text-gray-700">Add Medicine</label>
+                  <Input 
+                    key="drug-search"
+                    placeholder="Search drug name or brand (min 2 chars)" 
+                    value={drugQuery}
+                    onChange={(e) => void searchDrugs(e.target.value)}
+                  />
+                  {drugQuery.trim().length >= 2 && (
+                    <div className="mt-2 border rounded divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                      {loadingDrugs && (
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                      )}
+                      {!loadingDrugs && drugResults.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                      )}
+                      {!loadingDrugs && drugResults.length > 0 && (
+                        <>
+                          {drugResults.map((d: any, index: number) => (
+                            <div 
+                              key={`${d.id}-${d.name}`} 
+                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
+                                index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
+                                index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                              onMouseEnter={() => prefetchDrugStockById(d.id)}
+                              title={((): string => {
+                                const stock = drugStockById[d.id];
+                                if (stock === undefined) return 'Checking stock…';
+                                return `Remaining stock: ${stock}`;
+                              })()}
+                            >
+                              <div className="flex-1">
+                                <div className="flex items-center">
+                                  <div className="font-medium">
+                                    {highlightMatch(d.name, drugQuery)}
+                                  </div>
+                                  {getRelevanceBadge(d, drugQuery, index)}
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', drugQuery)}
+                                  {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
+                                </div>
+                                <div className="text-xs mt-0.5">
+                                  <span className="text-gray-500">Stock:</span>{' '}
+                                  {drugStockById[d.id] !== undefined ? (
+                                    <span className={drugStockById[d.id] <= 5 ? 'text-red-600' : 'text-gray-700'}>
+                                      {drugStockById[d.id]}
+                                    </span>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </div>
+                              </div>
+                              <Button size="sm" variant="outline" onClick={() => { addItemFromDrug(d); }}>Add</Button>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+              <div className="text-sm text-gray-600">Total items: {validItems.length}</div>
+                  <Button size="sm" variant="outline" onClick={() => setItems(prev => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '', duration: '', durationUnit: 'DAYS', instructions: '', timing: '', quantity: '' }])}>Add Row</Button>
+                </div>
+                <div className="overflow-auto border rounded">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
+                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
+                        <th className="px-3 py-2 text-left font-medium">When</th>
+                        <th className="px-3 py-2 text-left font-medium">Duration</th>
+                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
+                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {validItems.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                        </tr>
+                      )}
+                      {validItems.map((it, idx) => (
+                        <tr key={idx} className="border-t">
+                          <td className="px-3 py-2 align-top" onMouseEnter={() => prefetchDrugStockByName(it.drugName)} title={(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; if (stock === undefined) return 'Remaining stock: —'; return `Remaining stock: ${stock}`; })()}>
+                            <div className="flex items-center gap-2">
+                              <Input value={it.drugName} onChange={(e) => updateItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
+                              <span className="text-xs text-gray-500 whitespace-nowrap">
+                                Stock:{' '}
+                                {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="grid grid-cols-2 gap-1">
+                              <Input value={it.dosePattern || ''} onChange={(e) => updateItem(idx, { dosePattern: e.target.value })} placeholder="e.g., 1-0-1" />
+                              <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
+                                    <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <Select value={it.timing || ''} onValueChange={(v: string) => updateItem(idx, { timing: v })}>
+                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectContent>
+                                {['AM','PM','After Breakfast','After Lunch','After Dinner','Before Meals','QHS','HS','With Food','Empty Stomach'].map(t => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="grid grid-cols-2 gap-1">
+                              <Input type="number" value={it.duration} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                              <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
+                                    <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                          </td>
+                          <td className="px-3 py-2 align-top text-right">
+                            <Button size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </CollapsibleSection>
+
 
             {/* Procedures */}
             <CollapsibleSection 
-              title="Procedures & Post-Care" 
+              title="Procedure Planned" 
               section="procedures" 
-              highlight={hasPostProcedure || hasProcedurePlanned || hasProcedureParams}
-              badge={(hasPostProcedure || hasProcedurePlanned || hasProcedureParams) ? "Has Data" : ""}
-              expanded={expandedSections.procedures}
-              onToggle={toggleSection}
+              highlight={hasProcedurePlanned}
+              badge={hasProcedurePlanned ? "Has Data" : ""}
             >
               <div className="space-y-3 opacity-100">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Post Procedure Care (5-7 days){language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea rows={2} value={postProcedureCare} onChange={(e) => setPostProcedureCare(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-600">Passes</label>
-                    <Input value={procedureParams.passes || ''} onChange={(e) => setProcedureParams({ ...procedureParams, passes: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">Power</label>
-                    <Input value={procedureParams.power || ''} onChange={(e) => setProcedureParams({ ...procedureParams, power: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">Machine Used</label>
-                    <Input value={procedureParams.machineUsed || ''} onChange={(e) => setProcedureParams({ ...procedureParams, machineUsed: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600">Others</label>
-                    <Input value={procedureParams.others || ''} onChange={(e) => setProcedureParams({ ...procedureParams, others: e.target.value })} />
-                  </div>
-                  <div></div>
-                  <div></div>
-                </div>
+                <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                <Textarea rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
               </div>
             </CollapsibleSection>
 
@@ -1300,8 +2000,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               section="investigations" 
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
-              expanded={expandedSections.investigations}
-              onToggle={toggleSection}
             >
               <div className="opacity-100">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
@@ -1315,17 +2013,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </CollapsibleSection>
 
-            {/* Section Toggles */}
-            <CollapsibleSection title="Print Sections" section="sections" expanded={expandedSections.sections} onToggle={toggleSection}>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm">
-                {Object.keys(includeSections).map((k) => (
-                  <label key={k} className="flex items-center gap-2">
-                    <input type="checkbox" checked={includeSections[k]} onChange={(e) => setIncludeSections(prev => ({ ...prev, [k]: e.target.checked }))} />
-                    <span className="capitalize">{k.replace(/([A-Z])/g, ' $1')}</span>
-                  </label>
-                ))}
-              </div>
-              {customSections.length > 0 && (
+            {/* Custom Sections (moved print toggles to Customization tab) */}
+            {customSections.length > 0 && (
                 <div className="mt-3 space-y-3">
                   {customSections.map((s) => (
                     <Card key={s.id}>
@@ -1351,206 +2040,45 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="flex items-center justify-between mt-2">
                 <Button size="sm" variant="outline" onClick={addCustomSection}>Add Custom Section</Button>
               </div>
-            </CollapsibleSection>
+            
 
-            {/* Templates Panel */}
-            <CollapsibleSection title="Templates" section="templates" expanded={expandedSections.templates} onToggle={toggleSection}>
-              <div className="space-y-2">
-                <div className="flex gap-2 mb-3">
-                  <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>
-                    {loadingTemplates ? 'Loading…' : 'Refresh'}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
+            {/* Basic Information */}
+            <CollapsibleSection title="Basic Information" section="basic">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-700">Language</label>
+                    <Select value={language} onValueChange={(v: Language) => setLanguage(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="EN">English</SelectItem>
+                        <SelectItem value="TE">Telugu</SelectItem>
+                        <SelectItem value="HI">Hindi</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {(templates || []).slice(0, 6).map((t) => (
-                    <div key={`srv-${t.id}`} className="border rounded p-2">
-                      <div className="font-medium text-sm">{t.name}</div>
-                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                      </div>
+
+                {language !== 'EN' && (
+                  <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                    <div className="font-medium mb-1">Translation enabled</div>
+                    <div>
+                      On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
+                      This includes: Diagnosis, Chief complaints, Histories, Family history (other), Post‑procedure care,
+                      Procedure planned, Investigations, Custom sections, and per‑medication notes. Medication names,
+                      numbers, and units remain unchanged.
                     </div>
-                  ))}
-                </div>
-                <div className="pt-2 text-xs text-gray-600">Suggested Templates</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {defaultDermTemplates.map((t) => (
-                    <div key={t.id} className="border rounded p-2">
-                      <div className="font-medium text-sm">{t.name}</div>
-                      {t.description && <div className="text-xs text-gray-600 mb-1">{t.description}</div>}
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => applyTemplateToBuilder(t)}>Apply</Button>
-                        <Button variant="outline" size="sm" onClick={async () => { await apiClient.createPrescriptionTemplate({ name: t.name, description: t.description, items: t.items, category: 'Dermatology', specialty: 'Dermatology', isPublic: true, metadata: t.metadata }); await loadTemplates(); }}>Save</Button>
-                      </div>
-                    </div>
-                  ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
+                    <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                  </div>
                 </div>
               </div>
             </CollapsibleSection>
-
-            {/* Drug search */}
-            <div className="opacity-100">
-              <label className="text-sm text-gray-700">Add Drug</label>
-              <Input 
-                key="drug-search"
-                placeholder="Search drug name or brand (min 2 chars)" 
-                value={drugQuery}
-                onChange={(e) => void searchDrugs(e.target.value)}
-              />
-              {loadingDrugs && <div className="text-xs text-gray-500 mt-1">Searching…</div>}
-              {!loadingDrugs && drugResults.length > 0 && (
-                <div className="mt-2 border rounded divide-y max-h-48 overflow-auto">
-                  {drugResults.map((d: any, index: number) => (
-                    <div 
-                      key={`${d.id}-${d.name}`} 
-                      className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
-                        index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
-                        index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                      }`}
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center">
-                          <div className="font-medium">
-                            {highlightMatch(d.name, drugQuery)}
-                          </div>
-                          {getRelevanceBadge(d, drugQuery, index)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {highlightMatch(d.manufacturerName || d.genericName || '', drugQuery)}
-                          {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
-                        </div>
-                        {d.composition1 && (
-                          <div className="text-xs text-gray-400 mt-1">
-                            {highlightMatch(d.composition1, drugQuery)}
-                          </div>
-                        )}
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => addItemFromDrug(d)}>Add</Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Items table */}
-            <div className="space-y-3 opacity-100">
-              {items.length === 0 && (
-                <div className="text-sm text-gray-500">No items added yet</div>
-              )}
-              {items.map((it, idx) => (
-                <Card key={idx}>
-                  <CardContent className="p-3 grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Drug</label>
-                      <Input value={it.drugName} onChange={(e) => updateItem(idx, { drugName: e.target.value })} />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Dosage</label>
-                      <div className="grid grid-cols-2 gap-1">
-                        <Input type="number" value={it.dosage} onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })} />
-                        <Select value={it.dosageUnit} onValueChange={(v: DosageUnit) => updateItem(idx, { dosageUnit: v })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {['MG','ML','MCG','IU','TABLET','CAPSULE','DROP','SPRAY','PATCH','INJECTION'].map(u => (
-                              <SelectItem key={u} value={u as DosageUnit}>{u}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Frequency</label>
-                      <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','EVERY_4_HOURS','EVERY_6_HOURS','EVERY_8_HOURS','EVERY_12_HOURS','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
-                            <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Duration</label>
-                      <div className="grid grid-cols-2 gap-1">
-                        <Input type="number" value={it.duration} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} />
-                        <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
-                              <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Qty</label>
-                      <Input type="number" value={it.quantity ?? ''} onChange={(e) => updateItem(idx, { quantity: e.target.value === '' ? '' : Number(e.target.value) })} />
-                    </div>
-                    <div className="md:col-span-10">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Instructions{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., After meals, avoid alcohol" />
-                    </div>
-                    {/* Dermatology-specific fields */}
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Application Site{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.applicationSite || ''} onChange={(e) => updateItem(idx, { applicationSite: e.target.value })} placeholder="Face / Scalp / Folds" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Amount</label>
-                      <Input value={it.applicationAmount || ''} onChange={(e) => updateItem(idx, { applicationAmount: e.target.value })} placeholder="e.g., 1 FTU" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Day Part{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.dayPart || ''} onChange={(e) => updateItem(idx, { dayPart: e.target.value })} placeholder="AM/PM/QHS" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="text-xs text-gray-600">Leave-on</label>
-                      <div className="flex items-center gap-2">
-                        <input type="checkbox" checked={!!it.leaveOn} onChange={(e) => updateItem(idx, { leaveOn: e.target.checked })} />
-                        <span className="text-xs text-gray-600">If unchecked, set wash-off time</span>
-                      </div>
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Wash-off After (min)</label>
-                      <Input type="number" value={it.washOffAfterMinutes ?? ''} onChange={(e) => updateItem(idx, { washOffAfterMinutes: e.target.value === '' ? '' : Number(e.target.value) })} />
-                    </div>
-                    <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Taper Schedule (Steroids){language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.taperSchedule || ''} onChange={(e) => updateItem(idx, { taperSchedule: e.target.value })} placeholder="e.g., OD×7d → Alt days×7d" />
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Isotretinoin mg/kg/day</label>
-                      <Input type="number" value={it.weightMgPerKgPerDay ?? ''} onChange={(e) => updateItem(idx, { weightMgPerKgPerDay: e.target.value === '' ? '' : Number(e.target.value) })} />
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Calculated Daily Dose (mg)</label>
-                      <Input type="number" value={it.calculatedDailyDoseMg ?? ''} onChange={(e) => updateItem(idx, { calculatedDailyDoseMg: e.target.value === '' ? '' : Number(e.target.value) })} />
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Pregnancy Warning</label>
-                      <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.pregnancyWarning} onChange={(e) => updateItem(idx, { pregnancyWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
-                    </div>
-                    <div className="md:col-span-3">
-                      <label className="text-xs text-gray-600">Photosensitivity</label>
-                      <div className="flex items-center gap-2"><input type="checkbox" checked={!!it.photosensitivityWarning} onChange={(e) => updateItem(idx, { photosensitivityWarning: e.target.checked })} /><span className="text-xs">Show warning</span></div>
-                    </div>
-                    <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Food Instructions{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.foodInstructions || ''} onChange={(e) => updateItem(idx, { foodInstructions: e.target.value })} placeholder="With food / avoid dairy / hydrate well" />
-                    </div>
-                    <div className="md:col-span-6">
-                      <label className="text-xs text-gray-600 flex items-center gap-1">Pulse Regimen{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                      <Input value={it.pulseRegimen || ''} onChange={(e) => updateItem(idx, { pulseRegimen: e.target.value })} placeholder="e.g., Itraconazole 200 mg BD 1 week/month × 3 months" />
-                    </div>
-                    <div className="md:col-span-2 flex justify-end">
-                      <Button variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
 
             {/* Review Date (bottom of builder) */}
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-100">
@@ -1561,9 +2089,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
 
                           <div className="flex items-center justify-between pt-2 opacity-100">
-              <div className="text-sm text-gray-600">Total items: {items.length} • Total qty: {totalQuantity}</div>
+              <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={items.length === 0}>Order via 1MG</Button>
+                <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={validItems.length === 0}>Order via 1MG</Button>
+                <div className="hidden sm:flex items-center gap-2">
+                  <span className="text-sm text-gray-700">Print</span>
+                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
+                    <SelectTrigger className="w-36 h-9">
+                      <SelectValue placeholder="Format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TABLE">Table</SelectItem>
+                      <SelectItem value="TEXT">Text</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <Button
                   variant="outline"
                   onClick={async () => {
@@ -1586,7 +2126,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   {translatingPreview ? 'Preparing…' : 'Print Preview'}
                 </Button>
                 <Button onClick={create} disabled={!canCreate}>
-                  {visitId ? 'Create Prescription' : 'Save visit first'}
+                  {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
               </div>
             </div>
@@ -1664,6 +2204,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     box-sizing: border-box !important;
                   }
                 }
+                ${rxPrintFormat === 'TEXT' ? `
+                  /* Text print mode */
+                  #prescription-print-content > :not(.rx-text) { display: none !important; }
+                  .rx-text { display: block !important; }
+                ` : `
+                  /* Table/normal mode */
+                  .rx-text { display: none !important; }
+                `}
                 `
               }} />
             <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
@@ -1693,6 +2241,43 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   id="prescription-print-content" 
                   className="w-full h-full"
                 >
+                  {/* Optional plain text preview block (shown only when TEXT format) */}
+                  {rxPrintFormat === 'TEXT' && (
+                    <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">
+                      {(() => {
+                        const headerLines = [
+                          'PRESCRIPTION',
+                          `${new Date().toLocaleString()}`
+                        ];
+                        const patientLines = [
+                          `Patient: ${visitData?.patient?.name || patientData?.name || '—'}`,
+                          `Patient ID: ${visitData?.patient?.id || patientData?.id || '—'}`,
+                        ];
+                        const medsLines = (items || []).map((it: any, idx: number) => {
+                          const parts: string[] = [];
+                          parts.push(`${idx + 1}. ${it.drugName}`);
+                          if (it.dosage) parts.push(`Dosage: ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`);
+                          parts.push(`Freq: ${(it.frequency || '').replaceAll('_',' ').toLowerCase()}`);
+                          parts.push(`Duration: ${it.duration} ${String(it.durationUnit || '').toLowerCase()}`);
+                          if (it.instructions) parts.push(`Notes: ${it.instructions}`);
+                          return parts.join(' | ');
+                        });
+                        const sections: string[] = [];
+                        sections.push(headerLines.join('\n'));
+                        sections.push('');
+                        sections.push(patientLines.join('\n'));
+                        sections.push('');
+                        sections.push('Rx:');
+                        sections.push(medsLines.length ? medsLines.join('\n') : '—');
+                        if ((followUpInstructions || '').trim().length > 0) {
+                          sections.push('');
+                          sections.push('Follow-up Instructions:');
+                          sections.push(tt('followUpInstructions', followUpInstructions));
+                        }
+                        return sections.join('\n');
+                      })()}
+                    </div>
+                  )}
 
 
                   {/* Patient Info */}
@@ -1757,13 +2342,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
 
                 {/* Histories */}
-                {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length)) && (
+                {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length)) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">History</div>
                     <div className="space-y-1 text-sm">
                       {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {tt('pastHistory', pastHistory)}</div>) : null}
                       {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {tt('medicationHistory', medicationHistory)}</div>) : null}
                       {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {tt('menstrualHistory', menstrualHistory)}</div>) : null}
+                      {exTriggers?.trim()?.length ? (<div><span className="text-gray-600">Triggers:</span> {tt('triggers', exTriggers)}</div>) : null}
+                      {exPriorTx?.trim()?.length ? (<div><span className="text-gray-600">Prior Treatments:</span> {tt('priorTreatments', exPriorTx)}</div>) : null}
                     </div>
                   </div>
                 )}
@@ -1780,72 +2367,52 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {includeSections.medications && (
                   <div className="py-3">
                     <div className="font-semibold mb-2">Rx</div>
-                    {items.length > 0 ? (
-                      <ol className="list-decimal ml-5 space-y-1 text-sm">
-                        {items.map((it, idx) => (
-                          <li key={`rx-${idx}`}>
-                            <span className="font-medium">{it.drugName}</span>
-                            {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
-                            {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
-                            {/* Dermatology addenda */}
-                            {(it.applicationSite || it.applicationAmount || it.dayPart) && (
-                              <div className="text-gray-600">
-                                {it.applicationSite && <span> • Site: {tt(`items.${idx}.applicationSite`, it.applicationSite)}</span>}
-                                {it.applicationAmount && <span> • Amount: {tt(`items.${idx}.applicationAmount`, it.applicationAmount)}</span>}
-                                {it.dayPart && <span> • {tt(`items.${idx}.dayPart`, it.dayPart)}</span>}
-                              </div>
-                            )}
-                            {it.leaveOn === false && it.washOffAfterMinutes !== '' && (
-                              <div className="text-gray-600"> • Wash off after {it.washOffAfterMinutes} min</div>
-                            )}
-                            {it.taperSchedule && (
-                              <div className="text-gray-600"> • Taper: {tt(`items.${idx}.taperSchedule`, it.taperSchedule)}</div>
-                            )}
-                            {(it.pregnancyWarning || it.photosensitivityWarning) && (
-                              <div className="text-red-600">{it.pregnancyWarning ? 'Pregnancy warning. ' : ''}{it.photosensitivityWarning ? 'Photosensitivity — use sunscreen.' : ''}</div>
-                            )}
-                            {it.foodInstructions && (
-                              <div className="text-gray-600">Food: {tt(`items.${idx}.foodInstructions`, it.foodInstructions)}</div>
-                            )}
-                            {it.pulseRegimen && (
-                              <div className="text-gray-600">Pulse: {tt(`items.${idx}.pulseRegimen`, it.pulseRegimen)}</div>
-                            )}
-                          </li>
-                        ))}
-                      </ol>
+                    {validItems.length > 0 ? (
+                      rxPrintFormat === 'TABLE' ? (
+                        <div className="overflow-auto border rounded">
+                          <table className="min-w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left font-medium">Medicine</th>
+                                <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
+                                <th className="px-3 py-2 text-left font-medium">When</th>
+                                <th className="px-3 py-2 text-left font-medium">Duration</th>
+                                <th className="px-3 py-2 text-left font-medium">Instructions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validItems.map((it: any, idx: number) => (
+                                <tr key={`rx-row-${idx}`} className="border-t">
+                                  <td className="px-3 py-2">{it.drugName}</td>
+                                  <td className="px-3 py-2">{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</td>
+                                  <td className="px-3 py-2">{it.timing || '—'}</td>
+                                  <td className="px-3 py-2">{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</td>
+                                  <td className="px-3 py-2">{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <ol className="list-decimal ml-5 space-y-1 text-sm">
+                          {validItems.map((it: any, idx: number) => (
+                            <li key={`rx-${idx}`}>
+                              <span className="font-medium">{it.drugName}</span>
+                              {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
+                              {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
+                            </li>
+                          ))}
+                        </ol>
+                      )
                     ) : (
                       <div className="text-sm text-gray-600">—</div>
                     )}
                   </div>
                 )}
 
-                {/* Topicals */}
-                {(
-                  (topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions || topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions || topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
-                    <div className="py-3">
-                      <div className="font-semibold mb-1">Topicals</div>
-                      <ul className="list-disc ml-5 text-sm space-y-1">
-                        {(topicalFacewash.frequency || topicalFacewash.timing || topicalFacewash.duration || topicalFacewash.instructions) && (
-                          <li><span className="font-medium">Facewash/Soap:</span> {[topicalFacewash.frequency, topicalFacewash.timing, topicalFacewash.duration, topicalFacewash.instructions].filter(Boolean).join(' • ')}</li>
-                        )}
-                        {(topicalMoisturiserSunscreen.frequency || topicalMoisturiserSunscreen.timing || topicalMoisturiserSunscreen.duration || topicalMoisturiserSunscreen.instructions) && (
-                          <li><span className="font-medium">Moisturiser & Sunscreen:</span> {[topicalMoisturiserSunscreen.frequency, topicalMoisturiserSunscreen.timing, topicalMoisturiserSunscreen.duration, topicalMoisturiserSunscreen.instructions].filter(Boolean).join(' • ')}</li>
-                        )}
-                        {(topicalActives.frequency || topicalActives.timing || topicalActives.duration || topicalActives.instructions) && (
-                          <li><span className="font-medium">Actives:</span> {[topicalActives.frequency, topicalActives.timing, topicalActives.duration, topicalActives.instructions].filter(Boolean).join(' • ')}</li>
-                        )}
-                      </ul>
-                    </div>
-                  )
-                )}
+                {/* Topicals removed */}
 
-                {/* Post Procedure */}
-                {(postProcedureCare?.trim()?.length > 0) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Post Procedure</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('postProcedureCare', postProcedureCare)}</div>
-                  </div>
-                )}
+        {/* Post Procedure removed */}
 
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
@@ -1858,7 +2425,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
 
                 {/* Procedure Planned */}
-                {(procedurePlanned?.trim()?.length > 0) && (
+        {(procedurePlanned?.trim()?.length > 0) && (
                   <div className="py-3">
                     <div className="font-semibold mb-1">Procedure Planned</div>
                     <div className="text-sm">{tt('procedurePlanned', procedurePlanned)}</div>
@@ -1874,6 +2441,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   ) : null
                 ))}
+
+                {/* Follow-up Instructions */}
+                {(followUpInstructions?.trim()?.length) ? (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Follow-up Instructions</div>
+                    <div className="text-sm whitespace-pre-wrap">{tt('followUpInstructions', followUpInstructions)}</div>
+                  </div>
+                ) : null}
 
                 {/* Signature */}
                 {includeSections.doctorSignature && (
@@ -1898,12 +2473,330 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
                 </div>
               </div>
-              <div className="flex justify-end gap-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">Print Format</span>
+                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="TABLE">Table</SelectItem>
+                      <SelectItem value="TEXT">Text</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
                 <Button onClick={() => window.print()}>Print</Button>
+                </div>
               </div>
             </div>
             </div>
+          </DialogContent>
+        </Dialog>
+        {/* New Template Dialog */}
+        <Dialog open={newTemplateOpen} onOpenChange={(open: boolean) => {
+          setNewTemplateOpen(open);
+          if (!open) {
+            setNewTplName('');
+            setNewTplChiefComplaints('');
+            setNewTplDiagnosis('');
+            setNewTplExObjective('');
+            setNewTplSkinType('');
+            setNewTplMorphology(new Set());
+            setNewTplDistribution(new Set());
+            setNewTplItchScore('');
+            setNewTplSkinConcerns(new Set());
+            setNewTplItems([{ drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
+          }
+        }}>
+          <DialogContent className="sm:max-w-5xl xl:max-w-6xl w-full max-h-[90vh] overflow-auto">
+            <DialogHeader>
+              <DialogTitle>Create New Template</DialogTitle>
+              <DialogDescription>Define a reusable template for Chief Complaints, Diagnosis, On Examination, and Treatment.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-600">Name</label>
+                <Input value={newTplName} onChange={(e) => setNewTplName(e.target.value)} placeholder="e.g., Acne follow-up (Derm)" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Chief Complaints</label>
+                <Textarea rows={2} value={newTplChiefComplaints} onChange={(e) => setNewTplChiefComplaints(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600">Diagnosis</label>
+                <Input value={newTplDiagnosis} onChange={(e) => setNewTplDiagnosis(e.target.value)} placeholder="e.g., Acne vulgaris" />
+              </div>
+              <div className="space-y-2">
+                <div className="text-sm font-medium">On Examination</div>
+                <div>
+                  <label className="text-xs text-gray-600">General Appearance</label>
+                  <Textarea rows={2} value={newTplExObjective} onChange={(e) => setNewTplExObjective(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-xs text-gray-600">Skin Type</label>
+                    <Select value={newTplSkinType} onValueChange={setNewTplSkinType}>
+                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {FITZPATRICK.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="text-xs text-gray-600">Itch Score (0-10)</label>
+                    <Input value={newTplItchScore} onChange={(e) => setNewTplItchScore(e.target.value)} placeholder="e.g., 4" />
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-600 mb-1">Morphology</div>
+                  <div className="flex flex-wrap gap-2">
+                    {MORPHOLOGY.map(m => (
+                      <Button key={m} type="button" variant={newTplMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplMorphology, m, setNewTplMorphology)}>{m}</Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-600 mb-1">Distribution</div>
+                  <div className="flex flex-wrap gap-2">
+                    {DISTRIBUTION.map(d => (
+                      <Button key={d} type="button" variant={newTplDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplDistribution, d, setNewTplDistribution)}>{d}</Button>
+                    ))}
+                  </div>
+                </div>
+                {/* Triggers and prior treatments removed from template form */}
+                <div>
+                  <div className="text-[11px] text-gray-600 mb-1">Skin Concerns</div>
+                  <div className="flex flex-wrap gap-2">
+                    {SKIN_CONCERNS.map((c) => (
+                      <Button key={c} type="button" variant={newTplSkinConcerns.has(c) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(newTplSkinConcerns, c, setNewTplSkinConcerns)}>{c}</Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-700">Add Medicine</label>
+                  <Input 
+                    key="newtpl-drug-search"
+                    placeholder="Search drug name or brand (min 2 chars)" 
+                    value={newTplDrugQuery}
+                    onChange={(e) => setNewTplDrugQuery(e.target.value)}
+                  />
+                  {newTplDrugQuery.trim().length >= 2 && (
+                    <div className="mt-2 border rounded divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
+                      {newTplLoadingDrugs && (
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                      )}
+                      {!newTplLoadingDrugs && newTplDrugResults.length === 0 && (
+                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
+                      )}
+                      {!newTplLoadingDrugs && newTplDrugResults.length > 0 && (
+                        <>
+                          {newTplDrugResults.map((d: any, index: number) => (
+                            <div 
+                              key={`${d.id}-${d.name}`} 
+                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
+                                index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
+                                index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                              }`}
+                              onMouseEnter={() => prefetchDrugStockById(d.id)}
+                            >
+                              <div className="flex-1">
+                                <div className="font-medium">{d.name}</div>
+                                <div className="text-xs text-gray-500">{d.manufacturer || d.manufacturerName || d.genericName || ''} {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}</div>
+                              </div>
+                              <Button size="sm" variant="outline" onClick={() => { addItemFromDrugToNewTpl(d); }}>Add</Button>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="text-sm text-gray-600">Total items: {newTplItems.length}</div>
+                  <Button size="sm" variant="outline" onClick={addNewTplItem}>Add Row</Button>
+                </div>
+                <div className="overflow-auto border rounded">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-50 text-gray-700">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-medium">Medicine</th>
+                        <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
+                        <th className="px-3 py-2 text-left font-medium">When</th>
+                        <th className="px-3 py-2 text-left font-medium">Duration</th>
+                        <th className="px-3 py-2 text-left font-medium">Instructions</th>
+                        <th className="px-3 py-2 text-right font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {newTplItems.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                        </tr>
+                      )}
+                      {newTplItems.map((it: any, idx: number) => (
+                        <tr key={`newtpl-row-${idx}`} className="border-t">
+                          <td className="px-3 py-2 align-top">
+                            <Input value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="grid grid-cols-2 gap-1">
+                              <Input value={it.dosePattern || ''} onChange={(e) => updateNewTplItem(idx, { dosePattern: e.target.value })} placeholder="e.g., 1-0-1" />
+                              <Select value={it.frequency} onValueChange={(v: Frequency) => updateNewTplItem(idx, { frequency: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
+                                    <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <Select value={it.timing || ''} onValueChange={(v: string) => updateNewTplItem(idx, { timing: v })}>
+                              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectContent>
+                                {['AM','PM','After Breakfast','After Lunch','After Dinner','Before Meals','QHS','HS','With Food','Empty Stomach'].map(t => (
+                                  <SelectItem key={t} value={t}>{t}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <div className="grid grid-cols-2 gap-1">
+                              <Input type="number" value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                              <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateNewTplItem(idx, { durationUnit: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
+                                    <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 align-top">
+                            <Input value={it.instructions || ''} onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                          </td>
+                          <td className="px-3 py-2 align-top text-right">
+                            <Button size="sm" variant="outline" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewTemplateOpen(false)}>Cancel</Button>
+              <Button
+                onClick={async () => {
+                  const name = newTplName.trim();
+                  if (!name) {
+                    toast({ variant: 'warning', title: 'Name required', description: 'Please enter a template name.' });
+                    return;
+                  }
+                  const payload: any = {
+                    name,
+                    description: '',
+                    items: newTplItems.filter(it => (it.drugName || '').trim()).map(it => ({
+                      drugName: it.drugName,
+                      dosage: it.dosage === '' ? undefined : Number(it.dosage),
+                      dosageUnit: it.dosageUnit || 'TABLET',
+                      frequency: it.frequency || 'ONCE_DAILY',
+                      duration: it.duration === '' ? undefined : Number(it.duration),
+                      durationUnit: it.durationUnit || 'DAYS',
+                      route: it.route || undefined,
+                      instructions: it.instructions || undefined,
+                    })),
+                    category: 'Dermatology',
+                    specialty: 'Dermatology',
+                    isPublic: true,
+                    metadata: {
+                      chiefComplaints: newTplChiefComplaints || undefined,
+                      diagnosis: newTplDiagnosis || undefined,
+                      examination: {
+                        generalAppearance: newTplExObjective || undefined,
+                        dermatology: {
+                          skinType: newTplSkinType || undefined,
+                          morphology: Array.from(newTplMorphology),
+                          distribution: Array.from(newTplDistribution),
+                          acneSeverity: undefined,
+                          itchScore: newTplItchScore ? Number(newTplItchScore) : undefined,
+                          skinConcerns: Array.from(newTplSkinConcerns),
+                        }
+                      },
+                    },
+                  };
+                  try {
+                    await apiClient.createPrescriptionTemplate(payload);
+                    await loadTemplates();
+                    toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
+                    setNewTemplateOpen(false);
+                  } catch (e: any) {
+                    toast({ variant: 'destructive', title: 'Failed to create template', description: getErrorMessage(e) || 'Please try again.' });
+                  }
+                }}
+              >
+                Create Template
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={fieldTemplatePromptOpen}
+          onOpenChange={(open: boolean) => {
+            setFieldTemplatePromptOpen(open);
+            if (!open) setFieldTemplateName('');
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save Fields as Template</DialogTitle>
+              <DialogDescription>Save only Chief Complaints, Diagnosis, and Examination as a reusable template on this device.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <Input
+                placeholder="E.g., Derm Fields: Acne follow-up"
+                value={fieldTemplateName}
+                onChange={(e) => setFieldTemplateName(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setFieldTemplatePromptOpen(false);
+                  setFieldTemplateName('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  const trimmed = fieldTemplateName.trim();
+                  if (!trimmed) {
+                    toast({
+                      variant: 'warning',
+                      title: 'Template name required',
+                      description: 'Please enter a name for the fields template.',
+                    });
+                    return;
+                  }
+                  await persistLocalFieldTemplate(trimmed);
+                  setFieldTemplatePromptOpen(false);
+                  setFieldTemplateName('');
+                }}
+              >
+                Save Fields Template
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
 
@@ -1947,7 +2840,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </DialogHeader>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               <div className="lg:col-span-2 max-h-[60vh] overflow-auto mt-1 pr-1">
-                {items.map((it, idx) => (
+                {validItems.map((it, idx) => (
                   <div key={`map-${idx}`} className="border rounded p-2 mb-2">
                     <div className="flex items-start justify-between">
                       <div>

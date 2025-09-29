@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError } from '@/lib/utils';
+import { isValidId } from '@/lib/id';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
@@ -408,11 +409,24 @@ export default function AppointmentScheduler({
         phone: appointment.patient.phone
       });
       
+      // Validate IDs
+      const pid = appointment.patient.id as string | undefined;
+      const did = (appointment.doctor?.id || doctorId) as string | undefined;
+      if (!pid || !did) {
+        console.warn('[AppointmentScheduler] Missing IDs when starting visit', { pid, did, appointmentId: appointment.id });
+        toast({
+          variant: 'destructive',
+          title: 'Invalid IDs',
+          description: 'Patient or Doctor ID is missing. Please refresh and try again.',
+        });
+        return;
+      }
+
       // Auto-create visit if doesn't exist
       if (!appointment.visit) {
         const visitPayload = {
-          patientId: appointment.patient.id,
-          doctorId: appointment.doctor?.id || doctorId,
+          patientId: pid,
+          doctorId: did,
           appointmentId: appointment.id,
           complaints: [{ complaint: 'General consultation' }],
         };

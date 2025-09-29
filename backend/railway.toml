@@ -1,0 +1,7 @@
+[service]
+name = "backend"
+start = "node dist/main.js"
+build = "npm ci && npx prisma generate && npm run build"
+
+[deploy]
+healthcheckPath = "/health"

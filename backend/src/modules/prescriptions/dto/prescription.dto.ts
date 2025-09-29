@@ -194,13 +194,13 @@ export class PrescriptionItemDto {
 }
 
 export class CreatePrescriptionDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
-  @IsUUID()
+  @IsString()
   visitId: string;
 
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsArray()
@@ -371,10 +371,10 @@ export class PrescriptionTemplateDto {
 }
 
 export class CreatePrescriptionPadDto {
-  @IsUUID()
+  @IsString()
   patientId: string;
 
-  @IsUUID()
+  @IsString()
   doctorId: string;
 
   @IsArray()

@@ -240,6 +240,8 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 }
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { isValidId } from '@/lib/id';
+import { isUuid } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -643,7 +645,7 @@ function VisitsPageInner() {
         if (patientsData.length > 0) {
           setSelectedPatientId((prev) => {
             if (prev) return prev;
-            if (urlPatientId) return urlPatientId;
+            if (urlPatientId && isValidId(urlPatientId)) return urlPatientId;
             return patientsData[0]?.id ?? '';
           });
         }
@@ -653,7 +655,11 @@ function VisitsPageInner() {
         const doctorsData = extractDoctors(usersRes.value);
         setDoctors(doctorsData);
         if (doctorsData.length > 0) {
-          setSelectedDoctorId((prev) => prev || doctorsData[0]?.id || '');
+          const candidate = doctorsData[0]?.id;
+          if (!candidate || !isValidId(candidate)) {
+            console.warn('[VisitsPage] First doctor has invalid id, requiring manual selection', { candidate });
+          }
+          setSelectedDoctorId((prev) => prev || (isValidId(candidate) ? candidate : ''));
         }
       }
 

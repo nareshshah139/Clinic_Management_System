@@ -1,0 +1,4 @@
+[service]
+name = "frontend"
+start = "npm run start"
+build = "npm ci && npm run build"

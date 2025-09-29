@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, AlertCircle, Package, Trash2, ShoppingCart, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { Invoice } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 // Dermatology packages and services
 const DERMATOLOGY_PACKAGES = [
@@ -123,6 +124,7 @@ export default function BillingManagement() {
   // Print state
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [printInvoice, setPrintInvoice] = useState<any>(null);
+  const [printFormat, setPrintFormat] = useState<'TABLE' | 'TEXT'>('TABLE');
 
   // Autocomplete state for patient selection
   const [patientQuery, setPatientQuery] = useState('');
@@ -444,6 +446,76 @@ export default function BillingManagement() {
       }, 0),
       finalTotal: printInvoice.total || itemsToDisplay.reduce((sum: number, item: any) => sum + item.total, 0)
     };
+
+    if (printFormat === 'TEXT') {
+      const headerLines = [
+        'DERMATOLOGY CLINIC',
+        'Advanced Skin Care & Aesthetic Treatments',
+        'Hyderabad, India | +91 9876543210 | info@dermclinic.com',
+        'GSTIN: 36XXXXX1234X1ZX | License: DL-12345'
+      ];
+
+      const billToLines = [
+        `Bill To: ${printInvoice.patient?.name || selectedPatient?.name || 'Patient'}`,
+        `ID: ${printInvoice.patient?.id || selectedPatient?.id || 'N/A'}`,
+        ...(printInvoice.patient?.phone || selectedPatient?.phone ? [`Phone: ${printInvoice.patient?.phone || selectedPatient?.phone}`] : []),
+        ...(printInvoice.patient?.email || selectedPatient?.email ? [`Email: ${printInvoice.patient?.email || selectedPatient?.email}`] : [])
+      ];
+
+      const detailsLines = [
+        `Invoice #: ${printInvoice.invoiceNo || 'DRAFT'}`,
+        `Date: ${new Date().toLocaleDateString('en-IN')}`,
+        `Time: ${new Date().toLocaleTimeString('en-IN')}`,
+        ...(invoiceNotes ? [`Notes: ${invoiceNotes}`] : [])
+      ];
+
+      const itemsLines = itemsToDisplay.map((item: any, idx: number) => {
+        const amount = item.total.toLocaleString('en-IN');
+        return `${idx + 1}. ${item.name} | Qty: ${item.quantity} | Rate: ₹${item.unitPrice.toLocaleString('en-IN')} | Disc: ${item.discount}% | GST: ${item.gstRate}% | Amt: ₹${amount}`;
+      });
+
+      const totalsLines = [
+        `Subtotal: ₹${subtotal.toLocaleString('en-IN')}`,
+        ...(discountAmount > 0 ? [`Discount (${customDiscount}%): -₹${discountAmount.toLocaleString('en-IN')}`] : []),
+        `GST: ₹${gstAmount.toLocaleString('en-IN')}`,
+        `Total Amount: ₹${finalTotal.toLocaleString('en-IN')}`
+      ];
+
+      const footerLines = [
+        'Thank you for choosing our dermatology services!',
+        'For queries: info@dermclinic.com or +91 9876543210',
+        'This is a computer-generated invoice and does not require a signature.'
+      ];
+
+      return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${printInvoice.invoiceNo || 'New Invoice'}</title>
+        <meta charset="utf-8" />
+        <style>
+          @media print { body { margin: 12mm; } }
+          body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; white-space: pre-wrap; line-height: 1.5; }
+          .section { margin-bottom: 12px; }
+          .divider { margin: 8px 0; border-top: 1px dashed #999; }
+        </style>
+      </head>
+      <body>
+<div class="section">${headerLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section">${billToLines.join('\n')}</div>
+<div class="section">${detailsLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section">Items:\n${itemsLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section">${totalsLines.join('\n')}</div>
+${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
+<div class="divider"></div>
+<div class="section">${footerLines.join('\n')}</div>
+      </body>
+      </html>
+      `;
+    }
 
     return `
       <!DOCTYPE html>
@@ -1104,14 +1176,28 @@ export default function BillingManagement() {
             <DialogTitle>Invoice Preview</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowPrintPreview(false)}>
-                Close
-              </Button>
-              <Button onClick={printInvoiceDocument} className="flex items-center gap-2">
-                <Printer className="h-4 w-4" />
-                Print Invoice
-              </Button>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Label>Print Format</Label>
+                <Select value={printFormat} onValueChange={(v) => setPrintFormat(v as 'TABLE' | 'TEXT')}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TABLE">Table</SelectItem>
+                    <SelectItem value="TEXT">Text</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowPrintPreview(false)}>
+                  Close
+                </Button>
+                <Button onClick={printInvoiceDocument} className="flex items-center gap-2">
+                  <Printer className="h-4 w-4" />
+                  Print Invoice
+                </Button>
+              </div>
             </div>
             <div 
               className="border rounded p-4 bg-white"

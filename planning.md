@@ -466,6 +466,12 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - ❌ Backup strategies
 - ❌ Health check endpoints
 
+#### Railway deployment notes
+- **Frontend URL**: When deployed as a separate service on Railway, the frontend gets a public URL (e.g., `https://<service>.up.railway.app`). In the frontend service, go to Settings → Networking → Generate Domain. You can add a custom domain there.
+- **Backend URL**: The backend service also gets its own public URL and exposes `GET /health` for health checks.
+- **Frontend → Backend proxy**: Set `NEXT_PUBLIC_API_PROXY` on the frontend service to the backend public URL (with trailing slash if used). The Next.js `rewrites()` in `next.config.ts` will forward `/api/*` and `/uploads/*` to the backend.
+- **Reference**: [Railway](https://railway.com/)
+
 ### 5.2 Security Hardening
 **Core Features Implemented:**
 - ✅ Appointments module: Input validation, JWT auth, branch isolation
@@ -1142,3 +1148,11 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Continue reducing lint warnings (hook deps, any types) and add CI to block regressions.
 
 *Last updated: September 2025 - Audit logging enabled backend-wide; frontend stabilized and warnings reduced.*
+
+### September 2025: Deployment Prep (Railway) and Prescription Follow-up
+- Backend: Added `/health` endpoint in `AppController` for PaaS healthchecks.
+- Backend: Added multi-stage Dockerfile and entrypoint to run Prisma migrations at boot.
+- Frontend: Enabled Next.js `output: 'standalone'` and added Dockerfile.
+- Monorepo: Added `.dockerignore` files, `railway.json`, and per-service `railway.toml` files.
+- Planning: Documented that the frontend gets a public URL on Railway; domain via Settings → Networking; set `NEXT_PUBLIC_API_PROXY` to backend URL.
+- Prescriptions: Print preview now shows Follow-up Instructions just before signature; included in translation plan and TEXT print output.

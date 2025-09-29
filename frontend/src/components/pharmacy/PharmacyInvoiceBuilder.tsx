@@ -137,6 +137,7 @@ export function PharmacyInvoiceBuilder() {
   });
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [printFormat, setPrintFormat] = useState<'TABLE' | 'TEXT'>('TABLE');
 
   // Load initial data
   // Load initial data when component mounts
@@ -537,6 +538,48 @@ export function PharmacyInvoiceBuilder() {
         <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${it.totalAmount.toFixed(2)}</td>
       </tr>
     `).join('');
+
+    if (printFormat === 'TEXT') {
+      const headerLines = [
+        'Pharmacy Invoice',
+        `${invoice?.invoiceNumber || ''} • ${dateStr}`
+      ];
+      const billToLines = [
+        `Bill To: ${invoiceData.billingName}`,
+        ...(invoiceData.billingPhone ? [`Phone: ${invoiceData.billingPhone}`] : []),
+        ...(invoiceData.billingAddress ? [invoiceData.billingAddress] : [])
+      ];
+      const itemsLines = items.map((it, idx) => {
+        return `${idx + 1}. ${it.drug?.name || ''} | Qty: ${it.quantity} | Unit: ₹${it.unitPrice.toFixed(2)} | Disc: ${it.discountPercent || 0}% | Tax: ${it.taxPercent || 0}% | Amt: ₹${it.totalAmount.toFixed(2)}`;
+      });
+      return `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          <style>
+            @media print { body { margin: 12mm; } }
+            body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; white-space: pre-wrap; line-height: 1.5; }
+            .section { margin-bottom: 12px; }
+            .divider { margin: 8px 0; border-top: 1px dashed #999; }
+          </style>
+        </head>
+        <body>
+<div class="section">${headerLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section">${billToLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section">Items:\n${itemsLines.join('\n')}</div>
+<div class="divider"></div>
+<div class="section" style="text-align:right;">
+Subtotal: <strong>₹${totals.subtotal.toFixed(2)}</strong>\n
+Discount: <strong>-₹${totals.totalDiscount.toFixed(2)}</strong>\n
+Tax: <strong>₹${totals.totalTax.toFixed(2)}</strong>\n
+Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
+</div>
+        </body>
+      </html>`;
+    }
 
     return `
       <html>
@@ -1030,6 +1073,18 @@ export function PharmacyInvoiceBuilder() {
 
             {/* Actions */}
             <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Label>Print Format</Label>
+                <Select value={printFormat} onValueChange={(v) => setPrintFormat(v as 'TABLE' | 'TEXT')}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TABLE">Table</SelectItem>
+                    <SelectItem value="TEXT">Text</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button 
                 onClick={() => saveInvoice('DRAFT')} 
                 variant="outline" 
