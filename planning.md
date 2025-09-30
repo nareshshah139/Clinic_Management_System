@@ -28,6 +28,18 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - **RBAC Enforcement** - Controller-level Roles and Permissions guards enforced across Appointments, Billing, Inventory, Pharmacy modules; route annotations added; default role permission sets seeded; Users UI gained Role & Permissions toggle
 
 ✅ **Recently Completed (September 2025):**
+- **ML-Powered Stock Prediction System** - AI-driven inventory forecasting with smart cold-start capabilities
+  - Time-series analysis with exponential smoothing and linear regression
+  - Top 30 drugs by sales volume analysis (handles large inventories efficiently)
+  - Multiple confidence levels: HIGH, MEDIUM, LOW, COLD_START
+  - Critical item detection and stockout warnings
+  - Bulk order generation with CSV export for procurement
+  - Interactive dashboard with Recharts visualizations
+  - Smart cold-start strategy for items with limited/no historical data
+  - Analyzes CONFIRMED/COMPLETED/DISPENSED invoices only
+  - Backend: StockPredictionModule with service, controller, DTOs, Prisma migration
+  - Frontend: Complete dashboard at /dashboard/stock-predictions with tabs for predictions, critical items, trends, and bulk orders
+  - Invoice status management: Added confirm button for DRAFT invoices to finalize them for analysis
 - Global search functionality in header (patients, appointments, users)
 - Enhanced medical visit forms with role-based sections (Therapist 20-25%, Nurse 40%, Doctor 100%)
 - Photo capture integration for medical visits
@@ -254,7 +266,67 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - `GET /inventory/storage-locations` - Get storage locations
 - `GET /inventory/dashboard` - Inventory dashboard
 
-### 1.6 Users & Auth Module Enhancement
+### 1.6 Stock Prediction Module
+**Status:** ✅ **COMPLETED** (Production Ready)
+**Completion Date:** September 30, 2025
+**Dependencies:** Pharmacy Invoice module (✅ Complete), Inventory module (✅ Complete)
+
+**Core Features Implemented:**
+- ✅ ML-powered inventory forecasting using time-series analysis
+- ✅ Exponential smoothing (α = 0.3) and linear regression for trend detection
+- ✅ Top 30 drugs by sales volume analysis (avoids PostgreSQL parameter limits)
+- ✅ Smart tie-breaking: sales volume → recent activity → consistent ordering
+- ✅ Multiple confidence levels: HIGH, MEDIUM, LOW, COLD_START
+- ✅ Smart cold-start strategy for items with limited/no historical data
+  - Uses reorder levels as baseline (quantity = reorderLevel × 1.5)
+  - Category-based defaults (Topical: 10, Oral: 15, Injectable: 5, Supplement: 20)
+  - Conservative safety buffers to prevent stockouts
+- ✅ Critical item detection (stockout < 7 days or below reorder level)
+- ✅ Days-until-stockout calculation (dailyUsage = avgMonthly / 30)
+- ✅ Bulk order generation with cost estimation and priority ranking
+- ✅ CSV export for procurement integration
+- ✅ Analyzes 6 months of historical CONFIRMED/COMPLETED/DISPENSED invoices
+
+**API Endpoints (4 total):**
+- `GET /stock-prediction/predictions` - Generate stock predictions with filtering
+- `GET /stock-prediction/bulk-order` - Generate purchase order suggestions
+- `GET /stock-prediction/critical-items` - Get items needing immediate attention
+- `GET /stock-prediction/trends` - Get trending items (increasing/decreasing usage)
+
+**Frontend Dashboard:**
+- Interactive dashboard at `/dashboard/stock-predictions`
+- 4 tabs: All Predictions, Critical Items, Trends, Bulk Order
+- Summary cards: Total drugs, critical items, cold start items, predicted orders
+- Historical sales charts using Recharts (LineChart for trends)
+- Confidence badges and trend indicators (📈 TrendingUp, 📉 TrendingDown)
+- Drug detail modal with reasoning and historical data visualization
+- CSV export functionality for bulk orders
+- Real-time filtering by months ahead (1-3), categories, low stock only
+
+**Algorithm Details:**
+- **Time-Series (3+ months data):** Exponential smoothing + trend + 20% safety buffer
+- **Similar Items (1-2 months):** Recent average × monthsAhead × 1.3 safety factor
+- **Cold Start (0 months):** Reorder level or category defaults with conservative estimates
+- **Confidence Calculation:** Coefficient of Variation (CV = σ/μ)
+  - CV < 0.3 → HIGH confidence
+  - CV < 0.6 → MEDIUM confidence  
+  - CV ≥ 0.6 → LOW confidence
+
+**Database:**
+- StockPrediction model with indexes on branchId, drugId, predictionDate, confidence
+- Stores predictions for historical analysis and audit trails
+
+**Pharmacy Enhancements:**
+- Added `PATCH /pharmacy/invoices/:id/status` endpoint for status updates
+- Confirm button in PharmacyInvoiceList to finalize DRAFT invoices
+- Status validation and transition rules
+
+**Documentation:**
+- Comprehensive feature guide: `STOCK_PREDICTION_FEATURE.md`
+- Quick start guide: `STOCK_PREDICTION_QUICK_START.md`
+- Technical README in module directory
+
+### 1.7 Users & Auth Module Enhancement
 **Status:** ✅ **COMPLETED** (Production Ready)
 **Test Coverage:** 394 tests, 95% pass rate
 **Completion Date:** December 2024
@@ -298,7 +370,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - `GET /users/statistics` - User statistics
 - `GET /users/dashboard` - User dashboard
 
-### 1.7 Reports Module
+### 1.8 Reports Module
 **Status:** ✅ **COMPLETED** (Production Ready)
 **Test Coverage:** Unit tests added for reports service features
 **Completion Date:** September 2025
