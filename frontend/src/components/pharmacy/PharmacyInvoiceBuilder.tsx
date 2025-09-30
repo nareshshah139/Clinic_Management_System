@@ -1075,7 +1075,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Label>Print Format</Label>
-                <Select value={printFormat} onValueChange={(v) => setPrintFormat(v as 'TABLE' | 'TEXT')}>
+                <Select value={printFormat} onValueChange={(v: string) => setPrintFormat(v as 'TABLE' | 'TEXT')}>
                   <SelectTrigger className="w-40">
                     <SelectValue placeholder="Select format" />
                   </SelectTrigger>

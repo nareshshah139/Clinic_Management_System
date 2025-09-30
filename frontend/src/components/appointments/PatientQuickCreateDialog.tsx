@@ -201,7 +201,7 @@ export default function PatientQuickCreateDialog({
               <Label>Gender *</Label>
               <Select
                 value={form.gender}
-                onValueChange={(value) => setForm((prev) => ({ ...prev, gender: value }))}
+                onValueChange={(value: string) => setForm((prev) => ({ ...prev, gender: value }))}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select gender" />

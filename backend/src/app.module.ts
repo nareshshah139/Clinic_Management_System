@@ -19,6 +19,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
 import { StockPredictionModule } from './modules/stock-prediction/stock-prediction.module';
+import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
 import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
@@ -55,6 +56,7 @@ const fullFeatureModules = [
   OneMgModule,
   PharmacyModule,
   StockPredictionModule,
+  AuditLogsModule,
 ];
 
 const minimalModules = [AuthModule];

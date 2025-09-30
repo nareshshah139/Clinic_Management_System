@@ -192,7 +192,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
               <div className="space-y-2">
                 <Label htmlFor="type">Type *</Label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <Select value={formData.type} onValueChange={(value: string) => setFormData({ ...formData, type: value })}>
                   <SelectTrigger id="type">
                     <SelectValue />
                   </SelectTrigger>
@@ -366,7 +366,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="unit">Unit *</Label>
-                <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
+                <Select value={formData.unit} onValueChange={(value: string) => setFormData({ ...formData, unit: value })}>
                   <SelectTrigger id="unit">
                     <SelectValue />
                   </SelectTrigger>
@@ -541,7 +541,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
                 <Checkbox
                   id="requiresPrescription"
                   checked={formData.requiresPrescription}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     setFormData({ ...formData, requiresPrescription: checked as boolean })
                   }
                 />
@@ -554,7 +554,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
                 <Checkbox
                   id="isControlled"
                   checked={formData.isControlled}
-                  onCheckedChange={(checked) =>
+                  onCheckedChange={(checked: boolean) =>
                     setFormData({ ...formData, isControlled: checked as boolean })
                   }
                 />

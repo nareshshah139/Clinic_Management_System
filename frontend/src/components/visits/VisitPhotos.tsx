@@ -56,7 +56,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       }
       const data = await res.json();
       const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
-        .map((it) => ({ ...it, url: toAbsolute(it.url) }));
+        .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
       // Sort by uploadedAt ascending, fallback to URL alphabetical if missing
       incoming.sort((a, b) => {
         const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;

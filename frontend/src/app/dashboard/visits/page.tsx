@@ -545,7 +545,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
       <Dialog
         open={!!viewingPrescription}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) {
             setViewingPrescription(null);
             setPrescriptionError(null);

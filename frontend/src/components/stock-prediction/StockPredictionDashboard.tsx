@@ -343,6 +343,7 @@ export function StockPredictionDashboard() {
                         <XAxis dataKey="month" />
                         <YAxis />
                         <Tooltip />
+                        {/* @ts-expect-error - recharts v3 Legend type compatibility with React 19 */}
                         <Legend />
                         <Line type="monotone" dataKey="quantity" stroke="#8884d8" name="Quantity Sold" />
                       </LineChart>

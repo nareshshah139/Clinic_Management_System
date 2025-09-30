@@ -209,7 +209,7 @@ export default function SmartProceduresPage() {
 
       const visitsWithProcedures = visitsData.filter((visit) => {
         const plan = parseJsonValue<{ dermatology?: { procedures?: unknown[]; notes?: string } }>(visit.plan);
-        return Boolean(plan?.dermatology?.procedures?.length || plan?.notes);
+        return Boolean(plan?.dermatology?.procedures?.length || plan?.dermatology?.notes);
       });
 
       setVisits(visitsWithProcedures);
@@ -322,6 +322,7 @@ export default function SmartProceduresPage() {
 
       // Extract Fitzpatrick type from examination data
       const fitzpatrickType = exam?.dermatology?.skinType || '';
+      const procedureType = typeof procedure.type === 'string' ? procedure.type : '';
       
       // Map visit data to procedure form
       setProcedureData(prev => ({
@@ -329,14 +330,14 @@ export default function SmartProceduresPage() {
         patientId: visit.patientId,
         doctorId: visit.doctorId,
         sessionNo: 1, // Default since we don't track this in visits yet
-        indications: plan?.notes || '',
+        indications: plan?.dermatology?.notes || '',
         fitzpatrickType: fitzpatrickType,
         // Map basic procedure parameters if available
-        selectedMachine: procedure.type?.toLowerCase().includes('endymed') ? 'endymed-pro-max' :
-                        procedure.type?.toLowerCase().includes('fotona') ? 'fotona-starwalker' :
-                        procedure.type?.toLowerCase().includes('soprano') ? 'soprano-platinum-lhr' :
-                        procedure.type?.toLowerCase().includes('hydra') ? 'hydrafacial' : '',
-        notes: plan?.notes || ''
+        selectedMachine: procedureType.toLowerCase().includes('endymed') ? 'endymed-pro-max' :
+                        procedureType.toLowerCase().includes('fotona') ? 'fotona-starwalker' :
+                        procedureType.toLowerCase().includes('soprano') ? 'soprano-platinum-lhr' :
+                        procedureType.toLowerCase().includes('hydra') ? 'hydrafacial' : '',
+        notes: plan?.dermatology?.notes || ''
       }));
       
       // Switch to new procedure tab for editing
@@ -409,8 +410,8 @@ export default function SmartProceduresPage() {
                 </div>
               )}
               
-              {plan?.notes && (
-                <p className="text-sm text-gray-600 line-clamp-2">{plan.notes}</p>
+              {plan?.dermatology?.notes && (
+                <p className="text-sm text-gray-600 line-clamp-2">{plan.dermatology.notes}</p>
               )}
             </div>
             

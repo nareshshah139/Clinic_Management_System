@@ -259,8 +259,8 @@ export class ApiClient {
   // Inventory
   async getInventoryItems(
     params?: Record<string, unknown>
-  ): Promise<{ items: InventoryItem[]; total?: number } | InventoryItem[]> {
-    return this.get<{ items: InventoryItem[]; total?: number } | InventoryItem[]>('/inventory/items', params);
+  ): Promise<{ items: InventoryItem[]; pagination?: { page: number; limit: number; total: number; totalPages: number }; total?: number } | InventoryItem[]> {
+    return this.get<{ items: InventoryItem[]; pagination?: { page: number; limit: number; total: number; totalPages: number }; total?: number } | InventoryItem[]>('/inventory/items', params);
   }
 
   async createInventoryItem(data: Record<string, unknown>) {

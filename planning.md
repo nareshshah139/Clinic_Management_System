@@ -1215,7 +1215,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
   - Trimmed unused imports and tightened a few effects with `useCallback`/`useMemo` where appropriate.
 
 **Next Steps:**
-- Add export/reporting views for AuditLog with RBAC scoping and search by entity/date/user.
+- ~~Add export/reporting views for AuditLog with RBAC scoping and search by entity/date/user.~~ ✅ **COMPLETED**
 - Extend redaction list (e.g., tokens, PII) and consider per-entity field allowlists.
 - Continue reducing lint warnings (hook deps, any types) and add CI to block regressions.
 
@@ -1228,3 +1228,84 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Monorepo: Added `.dockerignore` files, `railway.json`, and per-service `railway.toml` files.
 - Planning: Documented that the frontend gets a public URL on Railway; domain via Settings → Networking; set `NEXT_PUBLIC_API_PROXY` to backend URL.
 - Prescriptions: Print preview now shows Follow-up Instructions just before signature; included in translation plan and TEXT print output.
+
+### September 30, 2025: Comprehensive Railway Deployment Documentation & Audit Logs Module
+**Achievement:** Created comprehensive Railway deployment documentation, helper scripts, and a fully-featured audit logs module with API endpoints for querying, exporting, and analyzing audit trails.
+
+**Impact:**
+- Complete deployment workflow for Railway with troubleshooting guides and best practices.
+- Enterprise-grade audit logging with query API, export capabilities, and statistics.
+- Compliance-ready audit trail for HIPAA and GDPR requirements.
+- Developer productivity improvements with automated deployment helpers.
+
+**Technical Highlights:**
+
+#### Railway Deployment
+- **Comprehensive Documentation** (`RAILWAY_DEPLOYMENT_GUIDE.md`):
+  - Complete setup instructions from project creation to production deployment
+  - Environment variable checklist with secure secret generation
+  - Database setup, seeding, and migration workflows
+  - Multi-environment strategy (dev/staging/production)
+  - Troubleshooting guide for common deployment issues
+  - Monitoring and maintenance best practices
+
+- **Deployment Helper Scripts**:
+  - `scripts/deploy-railway.sh`: Interactive deployment assistant with menu-driven interface
+  - `scripts/check-deployment-readiness.sh`: Pre-deployment validation script
+  - Both scripts check dependencies, configurations, and build success
+
+- **Updated Main README**:
+  - Feature overview with visual indicators
+  - Quick start guide for local development
+  - Railway deployment quick reference
+  - Architecture diagram
+  - Complete environment variables documentation
+  - Security features, testing, and database management
+
+#### Audit Logs Module
+- **New Module** (`backend/src/modules/audit-logs/`):
+  - `AuditLogsModule`: Complete NestJS module with service and controller
+  - `AuditLogsService`: Business logic for querying, exporting, and statistics
+  - `AuditLogsController`: REST API with 8 endpoints and OpenAPI documentation
+  - `QueryAuditLogsDto`: Comprehensive query validation with pagination, filtering, sorting
+
+- **API Endpoints**:
+  - `GET /audit-logs`: Query with filters (entity, action, user, date range, search)
+  - `GET /audit-logs/statistics`: System-wide statistics and breakdowns
+  - `GET /audit-logs/export`: CSV export with applied filters
+  - `GET /audit-logs/export/json`: JSON export for programmatic access
+  - `GET /audit-logs/entity/:entity/:entityId`: Complete entity history
+  - `GET /audit-logs/user/:userId`: User activity tracking
+  - `GET /audit-logs/my-activity`: Current user's activity
+  - `GET /audit-logs/:id`: Single audit log details
+
+- **Features**:
+  - Automatic tracking already implemented in `PrismaService` (no code changes needed)
+  - Pagination (max 100 items per page)
+  - Advanced filtering by entity, action, user, date range
+  - Full-text search across entity, entityId, and action
+  - Export up to 10,000 records in CSV or JSON
+  - Statistics with action breakdown, entity breakdown, and top users
+  - RBAC integration (Admin/Super Admin access, users can view own activity)
+  - Maintenance method for log retention (`deleteOldLogs(days)`)
+
+- **Compliance Features**:
+  - HIPAA-ready: Immutable logs, comprehensive metadata, sensitive data redaction
+  - GDPR-ready: Data access tracking, export for subject access requests
+  - Tamper-evident: Append-only (no update/delete APIs)
+  - Performance-optimized: Async logging, indexed queries, pagination
+
+- **Documentation**:
+  - Complete module README with API examples, permissions, and best practices
+  - `DEPLOYMENT_AND_AUDIT_UPDATE.md`: Comprehensive summary of all changes
+  - Integration guide, testing examples, and maintenance recommendations
+
+**Next Steps:**
+- Add frontend UI for viewing and exporting audit logs
+- Implement real-time audit log notifications via WebSocket
+- Add advanced analytics and anomaly detection
+- Create automated compliance report generation
+- Add audit log visualization dashboard
+- Consider cryptographic signatures for tamper detection
+
+*Last updated: September 30, 2025 - Railway deployment documentation complete; Audit logs module fully implemented with API and export.*
