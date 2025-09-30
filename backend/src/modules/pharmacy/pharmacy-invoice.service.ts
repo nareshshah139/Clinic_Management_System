@@ -211,45 +211,11 @@ export class PharmacyInvoiceService {
                 } : undefined,
               },
             });
-            // Decrement inventory: for DRUG directly; for PACKAGE, decrement all package items proportionally
-            if (createdItem.itemType === 'DRUG' && createdItem.drugId) {
-              const drug = await tx.drug.findFirst({ where: { id: createdItem.drugId, branchId } });
-              if (drug) {
-                const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
-                if (invItem) {
-                  const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
-                  const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
-                    ? invPrice
-                    : (Number.isFinite(createdItem.unitPrice) ? createdItem.unitPrice : 0);
-                  if (Number.isFinite(price) && price > 0 && userId) {
-                    await tx.stockTransaction.create({
-                      data: {
-                        itemId: invItem.id,
-                        type: 'SALE',
-                        quantity: createdItem.quantity,
-                        unitPrice: price,
-                        totalAmount: price * createdItem.quantity,
-                        reference: `INV-${invoice.invoiceNumber}`,
-                        notes: 'Pharmacy invoice sale',
-                        branchId,
-                        userId,
-                      },
-                    });
-                  } else {
-                    console.warn('⚠️ Skipping stock transaction for DRUG due to invalid price/userId', {
-                      price,
-                      hasUserId: Boolean(userId),
-                      drugName: drug.name,
-                    });
-                  }
-                }
-              }
-            } else if (createdItem.itemType === 'PACKAGE' && createdItem.packageId) {
-              const pkg = (packages as any[]).find((p: any) => p.id === createdItem.packageId);
-              if (pkg) {
-                for (const pkgItem of pkg.items) {
-                  const drug = pkgItem.drug;
-                  const totalQty = (pkgItem.quantity || 1) * createdItem.quantity;
+            // Decrement inventory ONLY if invoice is CONFIRMED/COMPLETED/DISPENSED (not DRAFT)
+            if (createInvoiceDto.status && ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(createInvoiceDto.status)) {
+              if (createdItem.itemType === 'DRUG' && createdItem.drugId) {
+                const drug = await tx.drug.findFirst({ where: { id: createdItem.drugId, branchId } });
+                if (drug) {
                   const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
                   if (invItem) {
                     const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
@@ -261,23 +227,63 @@ export class PharmacyInvoiceService {
                         data: {
                           itemId: invItem.id,
                           type: 'SALE',
-                          quantity: totalQty,
+                          quantity: createdItem.quantity,
                           unitPrice: price,
-                          totalAmount: price * totalQty,
+                          totalAmount: price * createdItem.quantity,
                           reference: `INV-${invoice.invoiceNumber}`,
-                          notes: `Package sale: ${pkg.name}`,
+                          notes: 'Pharmacy invoice sale',
                           branchId,
                           userId,
                         },
                       });
+                      // Update inventory stock
+                      await this.updateInventoryStock(tx, invItem.id, createdItem.quantity, 'SALE');
                     } else {
-                      console.warn('⚠️ Skipping stock transaction for PACKAGE item due to invalid price/userId', {
+                      console.warn('⚠️ Skipping stock transaction for DRUG due to invalid price/userId', {
                         price,
                         hasUserId: Boolean(userId),
-                        packageName: pkg.name,
                         drugName: drug.name,
-                        totalQty,
                       });
+                    }
+                  }
+                }
+              } else if (createdItem.itemType === 'PACKAGE' && createdItem.packageId) {
+                const pkg = (packages as any[]).find((p: any) => p.id === createdItem.packageId);
+                if (pkg) {
+                  for (const pkgItem of pkg.items) {
+                    const drug = pkgItem.drug;
+                    const totalQty = (pkgItem.quantity || 1) * createdItem.quantity;
+                    const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
+                    if (invItem) {
+                      const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
+                      const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
+                        ? invPrice
+                        : (Number.isFinite(createdItem.unitPrice) ? createdItem.unitPrice : 0);
+                      if (Number.isFinite(price) && price > 0 && userId) {
+                        await tx.stockTransaction.create({
+                          data: {
+                            itemId: invItem.id,
+                            type: 'SALE',
+                            quantity: totalQty,
+                            unitPrice: price,
+                            totalAmount: price * totalQty,
+                            reference: `INV-${invoice.invoiceNumber}`,
+                            notes: `Package sale: ${pkg.name}`,
+                            branchId,
+                            userId,
+                          },
+                        });
+                        // Update inventory stock
+                        await this.updateInventoryStock(tx, invItem.id, totalQty, 'SALE');
+                      } else {
+                        console.warn('⚠️ Skipping stock transaction for PACKAGE item due to invalid price/userId', {
+                          price,
+                          hasUserId: Boolean(userId),
+                          packageName: pkg.name,
+                          drugName: drug.name,
+                          totalQty,
+                        });
+                      }
                     }
                   }
                 }
@@ -635,10 +641,26 @@ export class PharmacyInvoiceService {
     }
   }
 
-  async updateStatus(id: string, status: string, branchId: string) {
+  async updateStatus(id: string, status: string, branchId: string, userId?: string) {
     try {
       const existingInvoice = await this.prisma.pharmacyInvoice.findFirst({
         where: { id, branchId },
+        include: {
+          items: {
+            include: {
+              drug: true,
+              package: {
+                include: {
+                  items: {
+                    include: {
+                      drug: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       });
 
       if (!existingInvoice) {
@@ -651,22 +673,105 @@ export class PharmacyInvoiceService {
         throw new BadRequestException(`Invalid status: ${status}`);
       }
 
-      const updatedInvoice = await this.prisma.pharmacyInvoice.update({
-        where: { id },
-        data: { status: status as any },
-        include: {
-          items: {
-            include: {
-              drug: true,
-              package: true,
-            },
-          },
-          patient: true,
-          doctor: true,
-        },
-      });
+      const oldStatus = existingInvoice.status;
 
-      return updatedInvoice;
+      // Use transaction to update status and create stock transactions
+      return await this.prisma.$transaction(async (tx: any) => {
+        const updatedInvoice = await tx.pharmacyInvoice.update({
+          where: { id },
+          data: { status: status as any },
+          include: {
+            items: {
+              include: {
+                drug: true,
+                package: true,
+              },
+            },
+            patient: true,
+            doctor: true,
+          },
+        });
+
+        // If transitioning FROM DRAFT TO CONFIRMED/COMPLETED/DISPENSED, create stock transactions
+        if (
+          oldStatus === 'DRAFT' &&
+          ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(status) &&
+          userId
+        ) {
+          console.log(`✅ Creating stock transactions for invoice ${existingInvoice.invoiceNumber} (status: ${oldStatus} → ${status})`);
+
+          for (const item of existingInvoice.items) {
+            if (item.itemType === 'DRUG' && item.drugId && item.drug) {
+              const invItem = await tx.inventoryItem.findFirst({
+                where: { branchId, name: item.drug.name },
+              });
+
+              if (invItem) {
+                const invPrice = invItem.sellingPrice ?? invItem.costPrice;
+                const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
+                  ? invPrice
+                  : (Number.isFinite(item.unitPrice) ? item.unitPrice : 0);
+
+                if (Number.isFinite(price) && price > 0) {
+                  await tx.stockTransaction.create({
+                    data: {
+                      itemId: invItem.id,
+                      type: 'SALE',
+                      quantity: item.quantity,
+                      unitPrice: price,
+                      totalAmount: price * item.quantity,
+                      reference: `INV-${existingInvoice.invoiceNumber}`,
+                      notes: `Pharmacy invoice confirmed: ${item.drug.name}`,
+                      branchId,
+                      userId,
+                    },
+                  });
+
+                  // Update inventory stock
+                  await this.updateInventoryStock(tx, invItem.id, item.quantity, 'SALE');
+                  console.log(`  ✓ Deducted ${item.quantity} of ${item.drug.name} from inventory`);
+                }
+              }
+            } else if (item.itemType === 'PACKAGE' && item.packageId && item.package) {
+              for (const pkgItem of item.package.items) {
+                const totalQty = (pkgItem.quantity || 1) * item.quantity;
+                const invItem = await tx.inventoryItem.findFirst({
+                  where: { branchId, name: pkgItem.drug.name },
+                });
+
+                if (invItem) {
+                  const invPrice = invItem.sellingPrice ?? invItem.costPrice;
+                  const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
+                    ? invPrice
+                    : (Number.isFinite(item.unitPrice) ? item.unitPrice : 0);
+
+                  if (Number.isFinite(price) && price > 0) {
+                    await tx.stockTransaction.create({
+                      data: {
+                        itemId: invItem.id,
+                        type: 'SALE',
+                        quantity: totalQty,
+                        unitPrice: price,
+                        totalAmount: price * totalQty,
+                        reference: `INV-${existingInvoice.invoiceNumber}`,
+                        notes: `Package confirmed: ${item.package.name} - ${pkgItem.drug.name}`,
+                        branchId,
+                        userId,
+                      },
+                    });
+
+                    // Update inventory stock
+                    await this.updateInventoryStock(tx, invItem.id, totalQty, 'SALE');
+                    console.log(`  ✓ Deducted ${totalQty} of ${pkgItem.drug.name} from inventory (package)`);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        return updatedInvoice;
+      });
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
@@ -674,6 +779,44 @@ export class PharmacyInvoiceService {
       console.error('❌ PharmacyInvoiceService.updateStatus error:', error);
       throw new InternalServerErrorException(`Failed to update invoice status: ${error.message}`);
     }
+  }
+
+  // Helper method to update inventory stock
+  private async updateInventoryStock(tx: any, itemId: string, quantity: number, type: 'SALE' | 'RETURN') {
+    const item = await tx.inventoryItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) return;
+
+    let newStock = item.currentStock;
+
+    if (type === 'SALE') {
+      newStock -= quantity;
+    } else if (type === 'RETURN') {
+      newStock += quantity;
+    }
+
+    // Determine stock status
+    let stockStatus = 'IN_STOCK';
+    if (newStock <= 0) {
+      stockStatus = 'OUT_OF_STOCK';
+    } else if (item.reorderLevel && newStock <= item.reorderLevel) {
+      stockStatus = 'LOW_STOCK';
+    }
+
+    // Check for expiry
+    if (item.expiryDate && item.expiryDate < new Date()) {
+      stockStatus = 'EXPIRED';
+    }
+
+    await tx.inventoryItem.update({
+      where: { id: itemId },
+      data: {
+        currentStock: Math.max(0, newStock),
+        stockStatus,
+      },
+    });
   }
 
   async remove(id: string, branchId: string) {

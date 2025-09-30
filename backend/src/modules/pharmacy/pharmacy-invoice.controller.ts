@@ -85,7 +85,7 @@ export class PharmacyInvoiceController {
     @Body() body: { status: string },
     @Request() req: any,
   ) {
-    return this.pharmacyInvoiceService.updateStatus(id, body.status, req.user.branchId);
+    return this.pharmacyInvoiceService.updateStatus(id, body.status, req.user.branchId, req.user.id);
   }
 
   @Delete(':id')
