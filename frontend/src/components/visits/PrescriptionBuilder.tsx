@@ -301,8 +301,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       name: 'Acne (Mild) — Topical regimen',
       description: 'Adapalene night + BPO morning + gentle facewash + sunscreen',
       items: [
-        { drugName: 'Adapalene 0.1% Gel', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Bedtime', route: 'Topical', instructions: 'Apply a pea-sized amount to entire face at night' },
-        { drugName: 'Benzoyl Peroxide 2.5% Gel', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Morning', route: 'Topical', instructions: 'Apply thin layer to affected areas in the morning' },
+        { drugName: 'Adapalene Gel 0.1%', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Bedtime', route: 'Topical', instructions: 'Apply a pea-sized amount to entire face at night' },
+        { drugName: 'Benzoyl Peroxide Gel 2.5%', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 12, durationUnit: 'WEEKS', timing: 'Morning', route: 'Topical', instructions: 'Apply thin layer to affected areas in the morning' },
       ],
       metadata: {
         chiefComplaints: 'Acne lesions on face',
@@ -325,7 +325,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       name: 'Tinea (Fungal) — Topical + Hygiene',
       description: 'Clotrimazole cream + hygiene advice',
       items: [
-        { drugName: 'Clotrimazole 1% Cream', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 4, durationUnit: 'WEEKS', route: 'Topical', instructions: 'Apply to affected area and 2 cm beyond' },
+        { drugName: 'Clotrimazole Cream 1%', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 4, durationUnit: 'WEEKS', route: 'Topical', instructions: 'Apply to affected area and 2 cm beyond' },
       ],
       metadata: {
         chiefComplaints: 'Itchy annular rash in folds',
@@ -348,7 +348,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       name: 'Eczema — Emollients + Low-potency steroid',
       description: 'Hydrocortisone short course + moisturizers',
       items: [
-        { drugName: 'Hydrocortisone 1% Cream', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 14, durationUnit: 'DAYS', route: 'Topical', instructions: 'Thin layer to affected areas for 1-2 weeks then taper' },
+        { drugName: 'Hydrocortisone Cream 1%', dosage: 1, dosageUnit: 'TABLET', frequency: 'TWICE_DAILY', duration: 14, durationUnit: 'DAYS', route: 'Topical', instructions: 'Thin layer to affected areas for 1-2 weeks then taper' },
       ],
       metadata: {
         chiefComplaints: 'Itchy scaly patches',
@@ -1566,7 +1566,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             variant="outline"
             size="sm"
             onClick={() => {
-              const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
+              const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&doctorId=${encodeURIComponent(doctorId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
               window.location.href = url;
             }}
           >
@@ -2822,7 +2822,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
                     return;
                   }
-                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}`;
+                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}&doctorId=${encodeURIComponent(doctorId)}`;
                   window.location.href = url;
                 }}
               >
@@ -2985,7 +2985,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
                     return;
                   }
-                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}`;
+                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}&doctorId=${encodeURIComponent(doctorId)}`;
                   window.location.href = url;
                 }}
               >

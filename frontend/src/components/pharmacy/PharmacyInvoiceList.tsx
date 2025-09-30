@@ -18,6 +18,7 @@ import {
   CreditCard,
   FileText,
   DollarSign,
+  CheckCircle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type {
@@ -144,32 +145,273 @@ export function PharmacyInvoiceList() {
     return () => window.removeEventListener('pharmacy-invoices-refresh', handler);
   }, []);
 
-  const handleViewInvoice = (invoiceId: string) => {
-    // TODO: Implement view invoice functionality
-    console.log('View invoice:', invoiceId);
+  const renderPrintHtml = (invoice: any) => {
+    const dateStr = new Date(invoice.createdAt || invoice.invoiceDate || Date.now()).toLocaleDateString();
+    
+    const itemsRows = (invoice.items || []).map((item: any) => {
+      const itemName = item.itemType === 'PACKAGE' 
+        ? (item.package?.name || 'Unknown Package')
+        : (item.drug?.name || 'Unknown Drug');
+      
+      return `
+        <tr>
+          <td style="padding:6px;border:1px solid #ddd;">${itemName}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.unitPrice?.toFixed(2) || '0.00'}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.discountPercent || 0}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.taxPercent || 0}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.totalAmount?.toFixed(2) || '0.00'}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const patientName = invoice.patient?.name || invoice.billingName || 'N/A';
+    const patientPhone = invoice.patient?.phone || invoice.billingPhone || 'N/A';
+    const billingAddress = invoice.billingAddress || invoice.patient?.address || '';
+
+    return `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          <style>
+            @media print {
+              body { margin: 12mm; }
+              .no-print { display: none; }
+            }
+            body { 
+              font-family: Arial, sans-serif; 
+              padding: 20px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            h1 { 
+              margin-bottom: 8px;
+              color: #1a1a1a;
+            }
+            .invoice-header {
+              border-bottom: 2px solid #333;
+              padding-bottom: 12px;
+              margin-bottom: 20px;
+            }
+            .muted { 
+              color: #666;
+              font-size: 14px;
+            }
+            .billing-section {
+              margin: 20px 0;
+              padding: 15px;
+              background: #f9f9f9;
+              border-radius: 4px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 20px;
+            }
+            th { 
+              background: #f5f5f5;
+              font-weight: bold;
+              padding: 10px 6px !important;
+            }
+            th, td {
+              border: 1px solid #ddd;
+            }
+            .totals-section {
+              margin-top: 20px;
+              text-align: right;
+              padding: 15px;
+              background: #f9f9f9;
+              border-radius: 4px;
+            }
+            .totals-section div {
+              margin: 8px 0;
+            }
+            .grand-total {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1a1a1a;
+              border-top: 2px solid #333;
+              padding-top: 12px;
+              margin-top: 12px;
+            }
+            .print-button {
+              margin: 20px 0;
+              padding: 12px 24px;
+              background: #2563eb;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 16px;
+            }
+            .print-button:hover {
+              background: #1d4ed8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-header">
+            <h1>Pharmacy Invoice</h1>
+            <div class="muted">
+              <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
+              <strong>Date:</strong> ${dateStr}<br/>
+              <strong>Status:</strong> ${invoice?.status || 'N/A'}
+            </div>
+          </div>
+          
+          <div class="billing-section">
+            <strong>Bill To:</strong><br />
+            <div style="margin-top: 8px;">
+              ${patientName}<br/>
+              ${patientPhone}${billingAddress ? '<br/>' + billingAddress : ''}
+            </div>
+          </div>
+
+          <button class="print-button no-print" onclick="window.print()">🖨️ Print Invoice</button>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item</th>
+                <th style="width: 80px;">Qty</th>
+                <th style="text-align:right;width: 100px;">Unit Price</th>
+                <th style="text-align:right;width: 80px;">Disc%</th>
+                <th style="text-align:right;width: 80px;">Tax%</th>
+                <th style="text-align:right;width: 120px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <div><strong>Subtotal:</strong> ₹${invoice.subtotal?.toFixed(2) || '0.00'}</div>
+            <div><strong>Discount:</strong> -₹${invoice.discountAmount?.toFixed(2) || '0.00'}</div>
+            <div><strong>Tax:</strong> ₹${invoice.taxAmount?.toFixed(2) || '0.00'}</div>
+            <div class="grand-total"><strong>Grand Total:</strong> ₹${invoice.totalAmount?.toFixed(2) || '0.00'}</div>
+          </div>
+
+          ${invoice.notes ? `
+            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+              <strong>Notes:</strong><br/>
+              ${invoice.notes}
+            </div>
+          ` : ''}
+        </body>
+      </html>
+    `;
+  };
+
+  const handleViewInvoice = async (invoiceId: string) => {
+    try {
+      setLoading(true);
+      const invoice = await apiClient.get(`/pharmacy/invoices/${invoiceId}`);
+      
+      const win = window.open('', '_blank');
+      if (!win) {
+        alert('Please allow pop-ups to view the invoice');
+        return;
+      }
+      const html = renderPrintHtml(invoice);
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (error) {
+      console.error('Failed to load invoice:', error);
+      alert('Failed to load invoice. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEditInvoice = (invoiceId: string) => {
     // TODO: Implement edit invoice functionality
     console.log('Edit invoice:', invoiceId);
+    alert('Edit functionality coming soon');
+  };
+
+  const handleConfirmInvoice = async (invoiceId: string) => {
+    if (!confirm('Confirm this invoice? This will mark it as finalized and include it in stock predictions.')) {
+      return;
+    }
+
+    try {
+      await apiClient.patch(`/pharmacy/invoices/${invoiceId}/status`, { status: 'CONFIRMED' });
+      await loadInvoices();
+    } catch (error: any) {
+      const message = error?.body?.message || error?.message || 'Failed to confirm invoice';
+      alert(`Error: ${message}`);
+    }
   };
 
   const handleDeleteInvoice = async (invoiceId: string) => {
     if (!confirm('Are you sure you want to delete this invoice?')) return;
 
     try {
-      // TODO: Implement delete invoice API call
-      // await apiClient.delete(`/pharmacy/invoices/${invoiceId}`);
+      await apiClient.delete(`/pharmacy/invoices/${invoiceId}`);
       await loadInvoices();
+      alert('Invoice deleted successfully');
     } catch (error) {
       console.error('Failed to delete invoice:', error);
       alert('Failed to delete invoice. Please try again.');
     }
   };
 
-  const handleDownloadInvoice = (invoiceId: string) => {
-    // TODO: Implement download invoice functionality
-    console.log('Download invoice:', invoiceId);
+  const handleDownloadInvoice = async (invoiceId: string) => {
+    try {
+      setLoading(true);
+      const invoice = await apiClient.get(`/pharmacy/invoices/${invoiceId}`);
+      
+      // For now, open print dialog which allows save as PDF
+      const win = window.open('', '_blank');
+      if (!win) {
+        alert('Please allow pop-ups to download the invoice');
+        return;
+      }
+      const html = renderPrintHtml(invoice);
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      
+      // Auto-trigger print dialog
+      setTimeout(() => {
+        win.focus();
+        win.print();
+      }, 500);
+    } catch (error) {
+      console.error('Failed to download invoice:', error);
+      alert('Failed to download invoice. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (invoice: PharmacyInvoiceSummary) => {
+    if (!confirm(`Mark invoice ${invoice.invoiceNumber} as paid?\n\nAmount: ₹${invoice.totalAmount?.toFixed(2) || '0.00'}`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Add a payment for the full amount
+      await apiClient.post(`/pharmacy/invoices/${invoice.id}/payments`, {
+        amount: invoice.totalAmount || 0,
+        method: invoice.paymentMethod || 'CASH',
+        reference: `Payment for ${invoice.invoiceNumber}`,
+      });
+
+      // Reload invoices to show updated status
+      await loadInvoices();
+      alert('Invoice marked as paid successfully');
+    } catch (error) {
+      console.error('Failed to mark invoice as paid:', error);
+      alert('Failed to mark invoice as paid. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const clearFilters = () => {
@@ -286,7 +528,7 @@ export function PharmacyInvoiceList() {
               <Label>Status</Label>
               <Select
                 value={statusFilter}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   setStatusFilter(value as StatusFilter);
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
@@ -310,7 +552,7 @@ export function PharmacyInvoiceList() {
               <Label>Payment Status</Label>
               <Select
                 value={paymentStatusFilter}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   setPaymentStatusFilter(value as PaymentStatusFilter);
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
@@ -333,7 +575,7 @@ export function PharmacyInvoiceList() {
               <Label>Payment Method</Label>
               <Select
                 value={paymentMethodFilter}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   setPaymentMethodFilter(value as PaymentMethodFilter);
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
@@ -357,7 +599,7 @@ export function PharmacyInvoiceList() {
               <Label>Date Range</Label>
               <Select
                 value={dateRange}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   setDateRange(value as DateRange);
                   setPagination(prev => ({ ...prev, page: 1 }));
                 }}
@@ -478,15 +720,37 @@ export function PharmacyInvoiceList() {
                       >
                         <Download className="h-4 w-4" />
                       </Button>
-                      {invoice.status === 'DRAFT' && (
+                      {(invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID') && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditInvoice(invoice.id)}
-                          title="Edit Invoice"
+                          onClick={() => handleMarkAsPaid(invoice)}
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                          title="Mark as Paid"
                         >
-                          <Edit className="h-4 w-4" />
+                          <CheckCircle className="h-4 w-4" />
                         </Button>
+                      )}
+                      {invoice.status === 'DRAFT' && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleConfirmInvoice(invoice.id)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Confirm Invoice"
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditInvoice(invoice.id)}
+                            title="Edit Invoice"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="ghost"

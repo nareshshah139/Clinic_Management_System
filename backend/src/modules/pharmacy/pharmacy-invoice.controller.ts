@@ -75,6 +75,19 @@ export class PharmacyInvoiceController {
     return this.pharmacyInvoiceService.update(id, updateInvoiceDto, req.user.branchId);
   }
 
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:update')
+  @ApiOperation({ summary: 'Update invoice status' })
+  @ApiResponse({ status: 200, description: 'Invoice status updated successfully' })
+  async updateStatus(
+    @Param('id') id: string,
+    @Body() body: { status: string },
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.updateStatus(id, body.status, req.user.branchId);
+  }
+
   @Delete(':id')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
   @Permissions('pharmacy:invoice:delete')

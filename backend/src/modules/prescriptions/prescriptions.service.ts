@@ -313,11 +313,22 @@ export class PrescriptionsService {
         }
       : undefined;
 
+    // Project doctor at top-level for consumers expecting it
+    const doctor = prescription.visit?.doctor
+      ? {
+          id: prescription.visit.doctor.id,
+          firstName: prescription.visit.doctor.firstName,
+          lastName: prescription.visit.doctor.lastName,
+        }
+      : undefined;
+
     return {
       ...prescription,
       items,
       patient,
       patientId: patient?.id,
+      doctor,
+      doctorId: doctor?.id,
       interactions,
     } as any;
   }
@@ -1113,11 +1124,14 @@ export class PrescriptionsService {
     // Allow templates with only metadata (no items)
     const safeItems = Array.isArray(items) ? items : [];
 
+    // Enrich items with pricing (mrp) where missing
+    const enrichedItems = await this.enrichItemsWithDrugPricing(safeItems, branchId);
+
     const template = await this.prisma.prescriptionTemplate.create({
       data: {
         name,
         description,
-        items: JSON.stringify(safeItems),
+        items: JSON.stringify(enrichedItems),
         category,
         specialty,
         isPublic,
@@ -1193,12 +1207,18 @@ export class PrescriptionsService {
       this.prisma.prescriptionTemplate.count({ where }),
     ]);
 
-    // Parse JSON fields
-    const parsedTemplates = templates.map(template => ({
-      ...template,
-      items: JSON.parse(template.items as string),
-      metadata: template.metadata ? JSON.parse(template.metadata as string) : null,
-    }));
+    // Parse JSON fields and enrich with pricing for clients
+    const parsedTemplates = await Promise.all(
+      templates.map(async (template) => {
+        const rawItems = JSON.parse(template.items as string);
+        const itemsWithPrice = await this.enrichItemsWithDrugPricing(rawItems, branchId);
+        return {
+          ...template,
+          items: itemsWithPrice,
+          metadata: template.metadata ? JSON.parse(template.metadata as string) : null,
+        };
+      })
+    );
 
     return {
       templates: parsedTemplates,
@@ -1212,6 +1232,42 @@ export class PrescriptionsService {
   }
 
   // Private helper methods
+  private async enrichItemsWithDrugPricing(items: any[], branchId: string): Promise<any[]> {
+    if (!Array.isArray(items) || items.length === 0) return items;
+
+    // Build a unique set of names to look up once
+    const names = Array.from(
+      new Set(
+        items
+          .map((i) => (typeof i?.drugName === 'string' ? i.drugName.trim() : ''))
+          .filter((n) => !!n)
+      )
+    );
+
+    if (names.length === 0) return items;
+
+    const drugs = await this.prisma.drug.findMany({
+      where: { branchId, name: { in: names } },
+      select: { id: true, name: true, price: true },
+    });
+
+    const nameToPrice = new Map<string, number>();
+    for (const d of drugs) {
+      if (typeof d.price === 'number') nameToPrice.set(d.name, d.price);
+    }
+
+    return items.map((i) => {
+      if (!i || typeof i !== 'object') return i;
+      const hasMrp = i.mrp !== undefined && i.mrp !== null && !Number.isNaN(Number(i.mrp));
+      if (hasMrp) return i;
+      const name = typeof i.drugName === 'string' ? i.drugName.trim() : '';
+      const price = name ? nameToPrice.get(name) : undefined;
+      if (typeof price === 'number') {
+        return { ...i, mrp: price };
+      }
+      return i;
+    });
+  }
   private async generatePrescriptionNumber(branchId: string): Promise<string> {
     const today = new Date();
     const year = today.getFullYear();

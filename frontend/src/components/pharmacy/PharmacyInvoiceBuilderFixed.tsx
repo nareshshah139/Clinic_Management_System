@@ -27,7 +27,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore } from '@/lib/utils';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 interface Drug {
@@ -102,7 +102,7 @@ interface InvoiceItem {
   instructions?: string;
 }
 
-export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId?: string; prescriptionId?: string } }) {
+export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId?: string; prescriptionId?: string; doctorId?: string; visitId?: string } }) {
   console.log('🏥 PharmacyInvoiceBuilderFixed initialized with prefill:', prefill);
   
   const { toast } = useToast();
@@ -133,7 +133,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
   // Invoice state
   const [invoiceData, setInvoiceData] = useState({
     patientId: prefill?.patientId || '',
-    doctorId: '',
+    doctorId: prefill?.doctorId || '',
     prescriptionId: prefill?.prescriptionId || '',
     paymentMethod: 'CASH',
     billingName: '',
@@ -152,18 +152,14 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
   }, []);
 
   useEffect(() => {
-    if (prefill?.patientId && selectedPatient) {
-      setInvoiceData(prev => ({
-        ...prev,
-        patientId: prefill.patientId as string,
-        billingName: selectedPatient.name,
-        billingPhone: selectedPatient.phone || ''
-      }));
-    }
     if (prefill?.prescriptionId) {
       setInvoiceData(prev => ({ ...prev, prescriptionId: prefill.prescriptionId as string }));
     }
-  }, [prefill, selectedPatient]);
+  }, [prefill?.prescriptionId]);
+
+  
+
+  
 
   const fetchedPrefillPatientsRef = useRef<Set<string>>(new Set());
   const lastPrefilledPrescriptionIdRef = useRef<string | null>(null);
@@ -184,6 +180,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       const existingPatient = patients.find((p) => p.id === patientId);
       if (existingPatient) {
         setSelectedPatient(existingPatient);
+        setPatientSearchQuery(`${existingPatient.name}${existingPatient.phone ? ` (${existingPatient.phone})` : ''}`);
         setInvoiceData((prev) => ({
           ...prev,
           patientId: existingPatient.id,
@@ -199,12 +196,13 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
       fetchedPrefillPatientsRef.current.add(patientId);
       try {
-        const patient = await apiClient.getPatient(patientId);
+        const patient = await apiClient.getPatient(patientId) as Patient;
         if (!patient) {
           throw new Error('Patient not found');
         }
         setPatients((prev) => (prev.some((p) => p.id === patient.id) ? prev : [...prev, patient]));
         setSelectedPatient(patient);
+        setPatientSearchQuery(`${patient.name}${patient.phone ? ` (${patient.phone})` : ''}`);
         setInvoiceData((prev) => ({
           ...prev,
           patientId: patient.id,
@@ -261,6 +259,22 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
         phone: patientFromPrescription?.phone,
       });
 
+      // Extract and set doctor information from prescription
+      const doctorFromPrescription = (prescription as any)?.visit?.doctor || (prescription as any)?.doctor;
+      const doctorIdFromPrescription = (prescription as any)?.doctorId || doctorFromPrescription?.id;
+      if (doctorIdFromPrescription) {
+        console.log('📋 Setting doctor from prescription:', doctorIdFromPrescription);
+        setInvoiceData((prev) => ({
+          ...prev,
+          doctorId: doctorIdFromPrescription,
+        }));
+        // Try to find and set the selected doctor
+        const existingDoctor = doctors.find((d) => d.id === doctorIdFromPrescription);
+        if (existingDoctor) {
+          setSelectedDoctor(existingDoctor);
+        }
+      }
+
       const rawItems = (prescription as any)?.items;
       const prescriptionItemsRaw = Array.isArray(rawItems)
         ? rawItems
@@ -278,7 +292,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
       console.log('💊 Processing prescription items:', prescriptionItemsRaw);
 
-      const invoiceItems: InvoiceItem[] = await Promise.all(
+      const invoiceItems: (InvoiceItem | null)[] = await Promise.all(
         prescriptionItemsRaw.map(async (item: any, index: number) => {
           try {
             let drug = null;
@@ -299,12 +313,12 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
             const invoiceItem: InvoiceItem = {
               id: invoiceItemId,
-              drugId: drug?.id || existingItem?.drugId || `temp_${Date.now()}_${index}`,
+              drugId: drug?.id || existingItem?.drugId || undefined,
               itemType: 'DRUG',
               drug:
                 drug ||
                 existingItem?.drug || {
-                  id: `temp_${Date.now()}_${index}`,
+                  id: existingItem?.drug?.id || `temp_${Date.now()}_${index}`,
                   name: item.drugName || 'Unknown Drug',
                   price: existingItem?.drug?.price ?? 0,
                   manufacturerName: existingItem?.drug?.manufacturerName ?? '',
@@ -356,12 +370,42 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
     }
   }, [ensurePatientSelected, toast]);
 
+  // Ensure patient is selected when patients array is loaded
   useEffect(() => {
     const prefillPatientId = prefill?.patientId;
-    if (prefillPatientId) {
+    if (prefillPatientId && patients.length > 0 && !selectedPatient) {
       void ensurePatientSelected(prefillPatientId);
     }
-  }, [prefill?.patientId, ensurePatientSelected]);
+  }, [prefill?.patientId, patients, selectedPatient, ensurePatientSelected]);
+
+  // Handle visitId prefill: fetch visit to set patient/doctor; if visit has prescription, load items
+  useEffect(() => {
+    const run = async () => {
+      const visitId = prefill?.visitId;
+      if (!visitId) return;
+      try {
+        const visit: any = await apiClient.get(`/visits/${visitId}`);
+        const patient = visit?.patient;
+        if (patient?.id) {
+          await ensurePatientSelected(patient.id, { name: patient.name, phone: patient.phone });
+        }
+        const doc = visit?.doctor;
+        if (doc?.id) {
+          setSelectedDoctor((prev) => prev || { id: doc.id, firstName: doc.firstName, lastName: doc.lastName, department: doc.department });
+          setInvoiceData(prev => ({ ...prev, doctorId: doc.id }));
+        }
+        const prescId = visit?.prescription?.id;
+        if (prescId) {
+          lastPrefilledPrescriptionIdRef.current = prescId;
+          await loadPrescriptionData(prescId);
+          setInvoiceData(prev => ({ ...prev, prescriptionId: prescId }));
+        }
+      } catch (e) {
+        console.error('Failed to prefill from visitId', e);
+      }
+    };
+    void run();
+  }, [prefill?.visitId, ensurePatientSelected, loadPrescriptionData]);
 
   useEffect(() => {
     const prefillPrescriptionId = prefill?.prescriptionId;
@@ -403,7 +447,27 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
         const patient = patientsData.find((p: Patient) => p.id === prefill.patientId);
         if (patient) {
           setSelectedPatient(patient);
+          setPatientSearchQuery(`${patient.name}${patient.phone ? ` (${patient.phone})` : ''}`);
+          setInvoiceData(prev => ({
+            ...prev,
+            patientId: patient.id,
+            billingName: patient.name,
+            billingPhone: patient.phone || ''
+          }));
           console.log('🎯 Pre-selected patient:', patient.name);
+        }
+      }
+      
+      // Set prefilled doctor
+      if (prefill?.doctorId) {
+        const doctor = doctorsData.find((d: Doctor) => d.id === prefill.doctorId);
+        if (doctor) {
+          setSelectedDoctor(doctor);
+          setInvoiceData(prev => ({
+            ...prev,
+            doctorId: doctor.id
+          }));
+          console.log('🎯 Pre-selected doctor:', `${doctor.firstName} ${doctor.lastName}`);
         }
       }
     } catch (error) {
@@ -690,6 +754,10 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
   const handleCreateInvoice = async () => {
     try {
+      console.log('🔍 Starting invoice creation...');
+      console.log('🔍 Current invoice data:', invoiceData);
+      console.log('🔍 Current items:', items);
+      
       if (!invoiceData.patientId || items.length === 0) {
         toast({
           title: "Validation Error",
@@ -699,31 +767,75 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
         return;
       }
 
+      // Filter out items with temporary drugIds (not found in DB)
+      const validItems = items.filter(item => {
+        if (item.itemType === 'PACKAGE') return !!item.packageId;
+        // Check if drugId is valid (not temp)
+        const hasValidDrugId = item.drugId && !item.drugId.startsWith('temp_');
+        return hasValidDrugId;
+      });
+
+      if (validItems.length === 0) {
+        toast({
+          title: "Validation Error",
+          description: "No valid items to invoice. Please ensure all drugs exist in the database.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (validItems.length < items.length) {
+        const skippedCount = items.length - validItems.length;
+        toast({
+          title: "Warning",
+          description: `${skippedCount} item(s) skipped because the drug was not found in the database. Please add missing drugs first.`,
+          variant: "destructive",
+        });
+        return;
+      }
+
       setLoading(true);
 
-      const invoiceItems = items.map(item => ({
-        drugId: item.drugId,
-        packageId: item.packageId,
-        itemType: item.itemType,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discountPercent: item.discountPercent,
-        taxPercent: item.taxPercent,
-        dosage: item.dosage,
-        frequency: item.frequency,
-        duration: item.duration,
-        instructions: item.instructions,
-      }));
+      const invoiceItems = validItems
+        .filter((it) => (it.itemType === 'DRUG' ? Boolean(it.drugId) : Boolean(it.packageId)))
+        .map(item => ({
+          drugId: item.drugId,
+          packageId: item.packageId,
+          itemType: item.itemType,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent,
+          taxPercent: item.taxPercent,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          duration: item.duration,
+          instructions: item.instructions,
+        }));
 
-      await apiClient.post('/pharmacy/invoices', {
+      const invoicePayload = {
         ...invoiceData,
         items: invoiceItems,
+      };
+
+      console.log('📤 Sending invoice payload:', JSON.stringify(invoicePayload, null, 2));
+      console.log('📋 Invoice data includes:', {
+        patientId: invoicePayload.patientId,
+        doctorId: invoicePayload.doctorId,
+        prescriptionId: invoicePayload.prescriptionId,
+        itemCount: invoicePayload.items?.length
       });
+
+      const createdInvoice: any = await apiClient.post('/pharmacy/invoices', invoicePayload);
 
       toast({
         title: "Success",
-        description: "Invoice created successfully",
+        description: `Invoice ${createdInvoice?.invoiceNumber || ''} created successfully`,
       });
+
+      // Open print preview
+      if (createdInvoice) {
+        openPrintPreview(createdInvoice, validItems);
+      }
 
       // Notify dashboard to refresh stats
       if (typeof window !== 'undefined') {
@@ -750,14 +862,211 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       setItems([]);
 
     } catch (error: any) {
-      console.error('Error creating invoice:', error);
+      const message = getErrorMessage(error);
+      const status = error?.status;
+      const body = error?.body;
+      const meta: Record<string, unknown> = {};
+      if (typeof status === 'number') meta.status = status;
+      if (typeof body === 'string' && body.length > 0) meta.body = body;
+      if (body && typeof body === 'object' && Object.keys(body).length > 0) meta.body = body;
+      if (Object.keys(meta).length > 0) {
+        console.error('❌ Error creating invoice:', message, meta);
+      } else {
+        console.error('❌ Error creating invoice:', message);
+      }
       toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to create invoice",
+        title: "Error Creating Invoice",
+        description: message,
         variant: "destructive",
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const renderPrintHtml = (invoice: any, itemsData: InvoiceItem[]) => {
+    const dateStr = new Date(invoice.createdAt || invoice.invoiceDate || Date.now()).toLocaleDateString();
+    
+    const itemsRows = itemsData.map((item) => {
+      const itemName = item.itemType === 'PACKAGE' 
+        ? (item.package?.name || 'Unknown Package')
+        : (item.drug?.name || 'Unknown Drug');
+      
+      return `
+        <tr>
+          <td style="padding:6px;border:1px solid #ddd;">${itemName}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.unitPrice.toFixed(2)}</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.discountPercent || 0}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">${item.taxPercent || 0}%</td>
+          <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${item.totalAmount.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    const totals = {
+      subtotal: invoice.subtotal || 0,
+      totalDiscount: invoice.discountAmount || 0,
+      totalTax: invoice.taxAmount || 0,
+      grandTotal: invoice.totalAmount || 0,
+    };
+
+    return `
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          <style>
+            @media print {
+              body { margin: 12mm; }
+              .no-print { display: none; }
+            }
+            body { 
+              font-family: Arial, sans-serif; 
+              padding: 20px;
+              max-width: 800px;
+              margin: 0 auto;
+            }
+            h1 { 
+              margin-bottom: 8px;
+              color: #1a1a1a;
+            }
+            .invoice-header {
+              border-bottom: 2px solid #333;
+              padding-bottom: 12px;
+              margin-bottom: 20px;
+            }
+            .muted { 
+              color: #666;
+              font-size: 14px;
+            }
+            .billing-section {
+              margin: 20px 0;
+              padding: 15px;
+              background: #f9f9f9;
+              border-radius: 4px;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-top: 20px;
+            }
+            th { 
+              background: #f5f5f5;
+              font-weight: bold;
+              padding: 10px 6px !important;
+            }
+            th, td {
+              border: 1px solid #ddd;
+            }
+            .totals-section {
+              margin-top: 20px;
+              text-align: right;
+              padding: 15px;
+              background: #f9f9f9;
+              border-radius: 4px;
+            }
+            .totals-section div {
+              margin: 8px 0;
+            }
+            .grand-total {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1a1a1a;
+              border-top: 2px solid #333;
+              padding-top: 12px;
+              margin-top: 12px;
+            }
+            .print-button {
+              margin: 20px 0;
+              padding: 12px 24px;
+              background: #2563eb;
+              color: white;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+              font-size: 16px;
+            }
+            .print-button:hover {
+              background: #1d4ed8;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-header">
+            <h1>Pharmacy Invoice</h1>
+            <div class="muted">
+              <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
+              <strong>Date:</strong> ${dateStr}
+            </div>
+          </div>
+          
+          <div class="billing-section">
+            <strong>Bill To:</strong><br />
+            <div style="margin-top: 8px;">
+              ${invoiceData.billingName}<br/>
+              ${invoiceData.billingPhone}${invoiceData.billingAddress ? '<br/>' + invoiceData.billingAddress : ''}
+            </div>
+          </div>
+
+          <button class="print-button no-print" onclick="window.print()">🖨️ Print Invoice</button>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item</th>
+                <th style="width: 80px;">Qty</th>
+                <th style="text-align:right;width: 100px;">Unit Price</th>
+                <th style="text-align:right;width: 80px;">Disc%</th>
+                <th style="text-align:right;width: 80px;">Tax%</th>
+                <th style="text-align:right;width: 120px;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemsRows}
+            </tbody>
+          </table>
+
+          <div class="totals-section">
+            <div><strong>Subtotal:</strong> ₹${totals.subtotal.toFixed(2)}</div>
+            <div><strong>Discount:</strong> -₹${totals.totalDiscount.toFixed(2)}</div>
+            <div><strong>Tax:</strong> ₹${totals.totalTax.toFixed(2)}</div>
+            <div class="grand-total"><strong>Grand Total:</strong> ₹${totals.grandTotal.toFixed(2)}</div>
+          </div>
+
+          ${invoiceData.notes ? `
+            <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
+              <strong>Notes:</strong><br/>
+              ${invoiceData.notes}
+            </div>
+          ` : ''}
+        </body>
+      </html>
+    `;
+  };
+
+  const openPrintPreview = (invoice: any, itemsData: InvoiceItem[]) => {
+    try {
+      const win = window.open('', '_blank');
+      if (!win) {
+        toast({
+          title: "Print Preview Blocked",
+          description: "Please allow pop-ups to view the invoice",
+          variant: "destructive",
+        });
+        return;
+      }
+      const html = renderPrintHtml(invoice, itemsData);
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+    } catch (e) {
+      console.error('Failed to open print preview', e);
+      toast({
+        title: "Error",
+        description: "Failed to open print preview",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1051,6 +1360,11 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
                               <h4 className="font-medium">
                                 {item.itemType === 'DRUG' ? item.drug?.name : item.package?.name}
                               </h4>
+                              {item.drugId && item.drugId.startsWith('temp_') && (
+                                <Badge variant="destructive" className="text-xs">
+                                  ⚠️ Not in DB
+                                </Badge>
+                              )}
                               <Badge variant={item.itemType === 'DRUG' ? 'outline' : 'default'}>
                                 {item.itemType}
                               </Badge>

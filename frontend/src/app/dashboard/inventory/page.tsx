@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { InventoryItem, ItemCategory } from '@/lib/types';
+import { AddInventoryItemDialog } from '@/components/inventory/AddInventoryItemDialog';
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -26,44 +27,74 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | 'ALL'>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const pageSize = 20;
 
-  const fetchInventoryItems = useCallback(async () => {
+  const fetchInventoryItems = useCallback(async (page: number = currentPage) => {
     try {
       setLoading(true);
-      console.log('�� Fetching inventory items...');
+      console.log('🏪 Fetching inventory items...');
       const response = await apiClient.getInventoryItems({
+        page: Math.max(1, page),
+        limit: pageSize,
         search: searchTerm || undefined,
         category: categoryFilter !== 'ALL' ? categoryFilter : undefined,
         stockStatus: stockFilter !== 'ALL' ? stockFilter : undefined,
+        sortBy: 'name',
+        sortOrder: 'asc',
       });
       console.log('🏪 Inventory response:', response, 'Type:', typeof response);
       
-      // Backend might return { items, total } or just items array
+      // Backend returns { items, pagination: { page, limit, total, totalPages } }
       const items: InventoryItem[] = Array.isArray(response)
         ? response
         : (response?.items ?? []);
       console.log('🏪 Extracted items:', items, 'Length:', Array.isArray(items) ? items.length : 'Not array');
       
       setItems(Array.isArray(items) ? items : []);
+      
+      // Update pagination metadata
+      if (response && !Array.isArray(response) && response.pagination) {
+        setTotalPages(response.pagination.totalPages || 1);
+        setTotalItems(response.pagination.total || 0);
+      } else {
+        // Fallback if backend doesn't return pagination
+        setTotalPages(1);
+        setTotalItems(items.length);
+      }
     } catch (error) {
       console.error('❌ Error fetching inventory items:', error);
       setItems([]); // Ensure we always set an array
+      setTotalPages(1);
+      setTotalItems(0);
     } finally {
       setLoading(false);
     }
+  }, [searchTerm, categoryFilter, stockFilter, currentPage, pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
   }, [searchTerm, categoryFilter, stockFilter]);
 
+  // Fetch data when page changes
   useEffect(() => {
-    fetchInventoryItems();
-  }, [fetchInventoryItems]);
+    fetchInventoryItems(currentPage);
+  }, [currentPage]);
 
+  // Debounced fetch when filters change
   useEffect(() => {
     const debounceTimer = setTimeout(() => {
-      fetchInventoryItems();
+      fetchInventoryItems(1);
     }, 300);
 
     return () => clearTimeout(debounceTimer);
-  }, [fetchInventoryItems]);
+  }, [searchTerm, categoryFilter, stockFilter]);
 
   const getStockStatus = (item: InventoryItem) => {
     if (item.currentStock === 0) {
@@ -95,7 +126,7 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
           <p className="text-gray-600">Track and manage your clinic&#39;s inventory</p>
         </div>
-        <Button>
+        <Button onClick={() => setShowAddDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Item
         </Button>
@@ -213,7 +244,7 @@ export default function InventoryPage() {
             <div className="text-center py-8">
               <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <p className="text-gray-500">No inventory items found</p>
-              <Button className="mt-4">
+              <Button className="mt-4" onClick={() => setShowAddDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add First Item
               </Button>
@@ -281,8 +312,68 @@ export default function InventoryPage() {
               </Table>
             </div>
           )}
+          
+          {/* Pagination Controls */}
+          {!loading && items.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 mt-4 border-t">
+              <div className="text-sm text-gray-500">
+                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage - 1)}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(pageNum)}
+                        className="w-8 h-8 p-0"
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Add Item Dialog */}
+      <AddInventoryItemDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onSuccess={fetchInventoryItems}
+      />
     </div>
   );
 } 

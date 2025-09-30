@@ -19,6 +19,7 @@ import {
   Activity,
   Pill,
   FilePlus2,
+  TrendingUp,
 } from 'lucide-react';
 
 const navigation = [
@@ -80,6 +81,12 @@ const navigation = [
     name: 'Inventory',
     href: '/dashboard/inventory',
     icon: Package,
+    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'],
+  },
+  {
+    name: 'Stock Predictions',
+    href: '/dashboard/stock-predictions',
+    icon: TrendingUp,
     allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'],
   },
   {

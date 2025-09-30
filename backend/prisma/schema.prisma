@@ -1048,3 +1048,29 @@ enum PharmacyItemType {
   DRUG
   PACKAGE
 }
+
+// Stock Prediction Model for ML-based inventory forecasting
+model StockPrediction {
+  id                  String   @id @default(cuid())
+  branchId            String
+  drugId              String
+  predictionDate      DateTime @default(now())
+  predictedQuantity   Int
+  currentStock        Int
+  averageMonthlyUsage Float
+  trend               Float    @default(0)
+  confidence          String   // HIGH, MEDIUM, LOW, COLD_START
+  method              String   // TIME_SERIES, SIMILAR_ITEMS, CATEGORY_AVERAGE, MANUAL_RULE
+  daysUntilStockout   Int?
+  historicalData      Json?
+  reasoning           String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("stock_predictions")
+  @@index([branchId])
+  @@index([drugId])
+  @@index([predictionDate])
+  @@index([confidence])
+  @@index([branchId, predictionDate])
+}

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { 
   CreatePharmacyInvoiceDto, 
@@ -13,6 +13,16 @@ export class PharmacyInvoiceService {
   constructor(private prisma: PrismaService) {}
 
   async create(createInvoiceDto: CreatePharmacyInvoiceDto, branchId: string, userId?: string) {
+    console.log('🏥 PharmacyInvoiceService.create called with:', {
+      patientId: createInvoiceDto.patientId,
+      doctorId: createInvoiceDto.doctorId,
+      prescriptionId: createInvoiceDto.prescriptionId,
+      itemsCount: createInvoiceDto.items?.length,
+      branchId,
+      userId,
+    });
+    console.log('🔍 Full DTO:', JSON.stringify(createInvoiceDto, null, 2));
+    
     try {
       const prismaAny = this.prisma as any;
       // Validate patient exists
@@ -21,7 +31,8 @@ export class PharmacyInvoiceService {
       });
 
       if (!patient) {
-        throw new NotFoundException('Patient not found');
+        console.error('❌ Patient not found:', createInvoiceDto.patientId, 'in branch:', branchId);
+        throw new NotFoundException(`Patient not found: ${createInvoiceDto.patientId}`);
       }
 
       // Validate doctor if provided
@@ -31,8 +42,10 @@ export class PharmacyInvoiceService {
         });
 
         if (!doctor) {
-          throw new NotFoundException('Doctor not found');
+          console.error('❌ Doctor not found:', createInvoiceDto.doctorId, 'in branch:', branchId);
+          throw new NotFoundException(`Doctor not found: ${createInvoiceDto.doctorId}`);
         }
+        console.log('✅ Doctor found:', doctor.firstName, doctor.lastName);
       }
 
       // Validate prescription if provided
@@ -64,8 +77,12 @@ export class PharmacyInvoiceService {
         });
 
         if (drugs.length !== drugIds.length) {
-          throw new BadRequestException('One or more drugs not found or inactive');
+          const foundIds = drugs.map((d: any) => d.id);
+          const missingIds = drugIds.filter(id => !foundIds.includes(id));
+          console.error('❌ Drugs not found or inactive:', missingIds);
+          throw new BadRequestException(`Drugs not found or inactive: ${missingIds.join(', ')}`);
         }
+        console.log('✅ All drugs validated:', drugs.length);
       }
 
       // Validate packages
@@ -200,19 +217,31 @@ export class PharmacyInvoiceService {
               if (drug) {
                 const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
                 if (invItem) {
-                  await tx.stockTransaction.create({
-                    data: {
-                      itemId: invItem.id,
-                      type: 'SALE',
-                      quantity: createdItem.quantity,
-                      unitPrice: invItem.sellingPrice || invItem.costPrice,
-                      totalAmount: (invItem.sellingPrice || invItem.costPrice) * createdItem.quantity,
-                      reference: `INV-${invoice.invoiceNumber}`,
-                      notes: 'Pharmacy invoice sale',
-                      branchId,
-                      userId: userId || 'system',
-                    },
-                  });
+                  const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
+                  const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
+                    ? invPrice
+                    : (Number.isFinite(createdItem.unitPrice) ? createdItem.unitPrice : 0);
+                  if (Number.isFinite(price) && price > 0 && userId) {
+                    await tx.stockTransaction.create({
+                      data: {
+                        itemId: invItem.id,
+                        type: 'SALE',
+                        quantity: createdItem.quantity,
+                        unitPrice: price,
+                        totalAmount: price * createdItem.quantity,
+                        reference: `INV-${invoice.invoiceNumber}`,
+                        notes: 'Pharmacy invoice sale',
+                        branchId,
+                        userId,
+                      },
+                    });
+                  } else {
+                    console.warn('⚠️ Skipping stock transaction for DRUG due to invalid price/userId', {
+                      price,
+                      hasUserId: Boolean(userId),
+                      drugName: drug.name,
+                    });
+                  }
                 }
               }
             } else if (createdItem.itemType === 'PACKAGE' && createdItem.packageId) {
@@ -223,19 +252,33 @@ export class PharmacyInvoiceService {
                   const totalQty = (pkgItem.quantity || 1) * createdItem.quantity;
                   const invItem = await tx.inventoryItem.findFirst({ where: { branchId, name: drug.name } });
                   if (invItem) {
-                    await tx.stockTransaction.create({
-                      data: {
-                        itemId: invItem.id,
-                        type: 'SALE',
-                        quantity: totalQty,
-                        unitPrice: invItem.sellingPrice || invItem.costPrice,
-                        totalAmount: (invItem.sellingPrice || invItem.costPrice) * totalQty,
-                        reference: `INV-${invoice.invoiceNumber}`,
-                        notes: `Package sale: ${pkg.name}`,
-                        branchId,
-                        userId: userId || 'system',
-                      },
-                    });
+                    const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
+                    const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined
+                      ? invPrice
+                      : (Number.isFinite(createdItem.unitPrice) ? createdItem.unitPrice : 0);
+                    if (Number.isFinite(price) && price > 0 && userId) {
+                      await tx.stockTransaction.create({
+                        data: {
+                          itemId: invItem.id,
+                          type: 'SALE',
+                          quantity: totalQty,
+                          unitPrice: price,
+                          totalAmount: price * totalQty,
+                          reference: `INV-${invoice.invoiceNumber}`,
+                          notes: `Package sale: ${pkg.name}`,
+                          branchId,
+                          userId,
+                        },
+                      });
+                    } else {
+                      console.warn('⚠️ Skipping stock transaction for PACKAGE item due to invalid price/userId', {
+                        price,
+                        hasUserId: Boolean(userId),
+                        packageName: pkg.name,
+                        drugName: drug.name,
+                        totalQty,
+                      });
+                    }
                   }
                 }
               }
@@ -251,10 +294,12 @@ export class PharmacyInvoiceService {
         };
       });
     } catch (error) {
+      console.error('❌ PharmacyInvoiceService.create error:', error);
+      console.error('❌ Error stack:', error.stack);
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Failed to create invoice: ${error.message}`);
+      throw new InternalServerErrorException(`Failed to create invoice: ${error.message}`);
     }
   }
 
@@ -380,7 +425,8 @@ export class PharmacyInvoiceService {
         },
       };
     } catch (error) {
-      throw new Error(`Failed to fetch invoices: ${error.message}`);
+      console.error('❌ PharmacyInvoiceService.findAll error:', error);
+      throw new InternalServerErrorException(`Failed to fetch invoices: ${error.message}`);
     }
   }
 
@@ -472,7 +518,8 @@ export class PharmacyInvoiceService {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new Error(`Failed to fetch invoice: ${error.message}`);
+      console.error('❌ PharmacyInvoiceService.findOne error:', error);
+      throw new InternalServerErrorException(`Failed to fetch invoice: ${error.message}`);
     }
   }
 
@@ -583,7 +630,49 @@ export class PharmacyInvoiceService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Failed to update invoice: ${error.message}`);
+      console.error('❌ PharmacyInvoiceService.update error:', error);
+      throw new InternalServerErrorException(`Failed to update invoice: ${error.message}`);
+    }
+  }
+
+  async updateStatus(id: string, status: string, branchId: string) {
+    try {
+      const existingInvoice = await this.prisma.pharmacyInvoice.findFirst({
+        where: { id, branchId },
+      });
+
+      if (!existingInvoice) {
+        throw new NotFoundException('Invoice not found');
+      }
+
+      // Validate status transition
+      const validStatuses = ['DRAFT', 'PENDING', 'CONFIRMED', 'DISPENSED', 'COMPLETED', 'CANCELLED'];
+      if (!validStatuses.includes(status)) {
+        throw new BadRequestException(`Invalid status: ${status}`);
+      }
+
+      const updatedInvoice = await this.prisma.pharmacyInvoice.update({
+        where: { id },
+        data: { status: status as any },
+        include: {
+          items: {
+            include: {
+              drug: true,
+              package: true,
+            },
+          },
+          patient: true,
+          doctor: true,
+        },
+      });
+
+      return updatedInvoice;
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      console.error('❌ PharmacyInvoiceService.updateStatus error:', error);
+      throw new InternalServerErrorException(`Failed to update invoice status: ${error.message}`);
     }
   }
 
@@ -611,7 +700,8 @@ export class PharmacyInvoiceService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Failed to delete invoice: ${error.message}`);
+      console.error('❌ PharmacyInvoiceService.remove error:', error);
+      throw new InternalServerErrorException(`Failed to delete invoice: ${error.message}`);
     }
   }
 
@@ -669,7 +759,8 @@ export class PharmacyInvoiceService {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
       }
-      throw new Error(`Failed to add payment: ${error.message}`);
+      console.error('❌ PharmacyInvoiceService.addPayment error:', error);
+      throw new InternalServerErrorException(`Failed to add payment: ${error.message}`);
     }
   }
 

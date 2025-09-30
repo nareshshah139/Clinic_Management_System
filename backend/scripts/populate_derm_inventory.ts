@@ -30,6 +30,7 @@ const DERM_DRUGS = [
   // Topical Steroids
   { name: 'Mometasone Furoate Cream 0.1%', manufacturerName: 'Merck', price: 320.00, category: 'Dermatology', dosageForm: 'Cream', strength: '0.1%', description: 'Potent topical corticosteroid' },
   { name: 'Betamethasone Valerate Cream 0.1%', manufacturerName: 'GSK', price: 150.00, category: 'Dermatology', dosageForm: 'Cream', strength: '0.1%', description: 'Topical corticosteroid for inflammation' },
+  { name: 'Hydrocortisone Cream 1%', manufacturerName: 'HHC', price: 45.00, category: 'Dermatology', dosageForm: 'Cream', strength: '1%', description: 'Low-potency topical steroid' },
   { name: 'Tacrolimus Ointment 0.03%', manufacturerName: 'Astellas', price: 850.00, category: 'Dermatology', dosageForm: 'Ointment', strength: '0.03%', description: 'Calcineurin inhibitor for eczema' },
   { name: 'Tacrolimus Ointment 0.1%', manufacturerName: 'Astellas', price: 1200.00, category: 'Dermatology', dosageForm: 'Ointment', strength: '0.1%', description: 'Stronger calcineurin inhibitor' },
   { name: 'Pimecrolimus Cream 1%', manufacturerName: 'Novartis', price: 950.00, category: 'Dermatology', dosageForm: 'Cream', strength: '1%', description: 'Calcineurin inhibitor for eczema' },

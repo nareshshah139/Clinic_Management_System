@@ -18,6 +18,7 @@ import { JwtAuthGuard } from './shared/guards/jwt-auth.guard';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { OneMgModule } from './modules/pharmacy/one-mg/one-mg.module';
 import { PharmacyModule } from './modules/pharmacy/pharmacy.module';
+import { StockPredictionModule } from './modules/stock-prediction/stock-prediction.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
 import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
@@ -53,6 +54,7 @@ const fullFeatureModules = [
   NotificationsModule,
   OneMgModule,
   PharmacyModule,
+  StockPredictionModule,
 ];
 
 const minimalModules = [AuthModule];

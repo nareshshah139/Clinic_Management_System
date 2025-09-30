@@ -39,14 +39,16 @@ export default function PharmacyPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
-  const [prefill, setPrefill] = useState<{ patientId?: string; prescriptionId?: string } | null>(null);
+  const [prefill, setPrefill] = useState<{ patientId?: string; prescriptionId?: string; doctorId?: string; visitId?: string } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
     const patientId = params.get('patientId') || undefined;
     const prescriptionId = params.get('prescriptionId') || undefined;
-    if (patientId || prescriptionId) {
-      setPrefill({ patientId, prescriptionId });
+    const doctorId = params.get('doctorId') || undefined;
+    const visitId = params.get('visitId') || undefined;
+    if (patientId || prescriptionId || doctorId || visitId) {
+      setPrefill({ patientId, prescriptionId, doctorId, visitId });
     }
   }, []);
 
