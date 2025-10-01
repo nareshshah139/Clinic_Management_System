@@ -14,6 +14,13 @@ import {
 import { Type } from 'class-transformer';
 import { Language } from '@prisma/client';
 
+// Runtime enum for validator to avoid undefined at runtime
+export enum LanguageEnum {
+  EN = 'EN',
+  TE = 'TE',
+  HI = 'HI',
+}
+
 export class VitalsDto {
   @IsOptional()
   @IsNumber()
@@ -207,7 +214,7 @@ export class CreateVisitDto {
   scribeJson?: Record<string, any>; // AI scribe data
 
   @IsOptional()
-  @IsEnum(Language)
+  @IsEnum(LanguageEnum)
   language?: Language = Language.EN;
 
   @IsOptional()

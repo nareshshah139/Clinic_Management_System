@@ -63,6 +63,11 @@ export class PatientsController {
     return this.patientsService.findOne(id, req.user.branchId);
   }
 
+  @Get(':id/next-appointment')
+  getNextAppointment(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.getNextAppointment(id, req.user.branchId);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() dto: UpdatePatientDto, @Request() req: AuthenticatedRequest) {
     return this.patientsService.update(id, dto, req.user.branchId);
@@ -81,5 +86,10 @@ export class PatientsController {
   @Get(':id/portal-user')
   getPortalUser(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.patientsService.getPortalUser(id, req.user.branchId);
+  }
+
+  @Post(':id/send-appointment-reminder')
+  sendAppointmentReminder(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.sendAppointmentReminder(id, req.user.branchId);
   }
 }

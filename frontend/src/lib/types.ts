@@ -122,6 +122,7 @@ export interface DoctorSchedule {
 // Patient
 export interface Patient {
   id: string;
+  abhaId?: string;
   firstName: string;
   lastName: string;
   name: string; // Computed field for display
@@ -133,10 +134,13 @@ export interface Patient {
   city?: string;
   state?: string;
   referralSource?: string;
+  emergencyContact?: string;
   createdAt: string;
   updatedAt: string;
   allergies?: string | null;
   medicalHistory?: string | null;
+  portalUserId?: string | null;
+  lastVisitDate?: string | null;
 }
 
 // User
@@ -155,6 +159,7 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  metadata?: Record<string, any> | null;
 }
 
 // API Response wrappers

@@ -17,6 +17,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 
 interface SearchResult {
   id: string;
@@ -47,6 +49,11 @@ export function Header() {
 
   const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [whatsappAutoConfirm, setWhatsappAutoConfirm] = useState(false);
+  const [whatsappUseTemplate, setWhatsappUseTemplate] = useState(false);
+  const [whatsappTemplateName, setWhatsappTemplateName] = useState('');
+  const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState('en');
 
   // Load system alerts and map to role-based notifications
   useEffect(() => {
@@ -79,6 +86,19 @@ export function Header() {
       clearInterval(interval);
     };
   }, [loading, user]);
+
+  useEffect(() => {
+    try {
+      const enabled = Boolean((user as any)?.metadata?.whatsappAutoConfirmAppointments);
+      setWhatsappAutoConfirm(enabled);
+      const useTpl = Boolean((user as any)?.metadata?.whatsappUseTemplate);
+      setWhatsappUseTemplate(useTpl);
+      const tplName = String((user as any)?.metadata?.whatsappTemplateName || '');
+      setWhatsappTemplateName(tplName);
+      const tplLang = String((user as any)?.metadata?.whatsappTemplateLanguage || 'en');
+      setWhatsappTemplateLanguage(tplLang);
+    } catch {}
+  }, [user]);
 
   function buildRoleNotifications(alerts: any, role?: string): NotificationItem[] {
     const items: NotificationItem[] = [];
@@ -519,9 +539,84 @@ export function Header() {
         </DropdownMenu>
 
         {/* Settings */}
-        <Button variant="ghost" size="sm">
-          <Settings className="h-5 w-5" />
-        </Button>
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" aria-label="Open settings"><Settings className="h-5 w-5" /></Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle>My Settings</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {String((user as any)?.role || '').toUpperCase() === 'DOCTOR' && (
+                <>
+                  <div className="border rounded p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">Send WhatsApp on appointment creation</div>
+                        <div className="text-xs text-gray-500">Enable automatic WhatsApp confirmation to patients when you are the doctor.</div>
+                      </div>
+                      <Switch checked={whatsappAutoConfirm} onCheckedChange={(v: boolean) => setWhatsappAutoConfirm(v)} />
+                    </div>
+                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                  </div>
+
+                  <div className="border rounded p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-medium">Use WhatsApp Template</div>
+                        <div className="text-xs text-gray-500">Recommended for sending messages outside the 24h window.</div>
+                      </div>
+                      <Switch checked={whatsappUseTemplate} onCheckedChange={(v: boolean) => setWhatsappUseTemplate(v)} />
+                    </div>
+                    {whatsappUseTemplate && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-sm">Template Name</label>
+                          <Input value={whatsappTemplateName} onChange={(e) => setWhatsappTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
+                        </div>
+                        <div>
+                          <label className="text-sm">Language Code</label>
+                          <Input value={whatsappTemplateLanguage} onChange={(e) => setWhatsappTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border rounded p-3 bg-gray-50">
+                    <div className="font-medium mb-2">How to enable WhatsApp (Doctor steps)</div>
+                    <ol className="list-decimal ml-5 space-y-1 text-gray-600 text-sm">
+                      <li>Ask the admin to configure WhatsApp Cloud API credentials on the server.</li>
+                      <li>Toggle "Send WhatsApp on appointment creation" to enable automatic messages.</li>
+                      <li>Optional: Toggle "Use WhatsApp Template", then enter your approved template name and language.</li>
+                      <li>Book or receive a new appointment to test delivery.</li>
+                    </ol>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSettingsOpen(false)}>Close</Button>
+                <Button onClick={async () => {
+                  try {
+                    if (!user?.id) return;
+                    const metadata = {
+                      ...(user as any)?.metadata,
+                      whatsappAutoConfirmAppointments: whatsappAutoConfirm,
+                      whatsappUseTemplate,
+                      whatsappTemplateName: whatsappTemplateName || undefined,
+                      whatsappTemplateLanguage: whatsappTemplateLanguage || undefined,
+                    };
+                    await apiClient.updateUserProfile(user.id, { metadata });
+                    setSettingsOpen(false);
+                  } catch (e) {
+                    // optional toast could be added here if available
+                  }
+                }}>Save</Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* User menu */}
         <div className="flex items-center space-x-2">

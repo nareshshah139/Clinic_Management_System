@@ -5,10 +5,11 @@ import { UpdatePatientDto } from './dto/update-patient.dto';
 import { LinkPatientUserDto } from './dto/link-patient-user.dto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '@prisma/client';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PatientsService {
-  constructor(private prisma: PrismaService, private usersService: UsersService) {}
+  constructor(private prisma: PrismaService, private usersService: UsersService, private notifications: NotificationsService) {}
 
   async create(createPatientDto: CreatePatientDto, branchId: string) {
     return this.prisma.patient.create({
@@ -96,6 +97,51 @@ export class PatientsService {
     });
     if (!patient) throw new NotFoundException('Patient not found');
     return patient;
+  }
+
+  async getNextAppointment(patientId: string, branchId: string) {
+    const now = new Date();
+    const appt = await this.prisma.appointment.findFirst({
+      where: {
+        patientId,
+        branchId,
+        date: { gte: now },
+        status: { in: ['SCHEDULED', 'CONFIRMED'] as any },
+      },
+      orderBy: { date: 'asc' },
+      include: {
+        doctor: { select: { firstName: true, lastName: true } },
+        room: { select: { name: true } },
+      },
+    });
+    return appt;
+  }
+
+  async sendAppointmentReminder(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+
+    const appt = await this.getNextAppointment(patientId, branchId);
+    if (!appt) throw new NotFoundException('No upcoming appointment found');
+
+    if (!patient.phone) throw new BadRequestException('Patient has no phone number');
+
+    const doctorName = `Dr. ${[appt.doctor?.firstName || '', appt.doctor?.lastName || ''].join(' ').trim()}`.trim();
+    const humanDate = new Date(appt.date).toLocaleDateString('en-IN');
+    const summaryLines = [
+      `Hello ${patient.name},`,
+      '',
+      `Reminder: Appointment with ${doctorName} on ${humanDate} at ${appt.slot}.`,
+    ];
+    if (typeof appt.tokenNumber === 'number') summaryLines.push(`Token: #${appt.tokenNumber}`);
+    if (appt.room?.name) summaryLines.push(`Room: ${appt.room.name}`);
+    summaryLines.push('', 'Please arrive 10 minutes early.');
+    const text = summaryLines.join('\n');
+
+    const e164 = patient.phone.startsWith('+') ? patient.phone : `+91${patient.phone}`;
+    await this.notifications.sendWhatsApp({ toPhoneE164: e164, text });
+
+    return { success: true };
   }
 
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {

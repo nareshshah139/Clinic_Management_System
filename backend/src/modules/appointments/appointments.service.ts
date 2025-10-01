@@ -84,8 +84,22 @@ export class AppointmentsService {
       },
     });
 
-    // Fire-and-forget notifications (if configured)
+    // Fire-and-forget notifications (if configured and doctor has enabled)
     if (this.notifications) {
+      // Check if the doctor has enabled auto WhatsApp confirmations
+      const doctorSettings = await this.prisma.user.findUnique({ where: { id: doctorId }, select: { metadata: true, role: true } });
+      let allowWhatsApp = false;
+      let useTemplate = false;
+      let templateName: string | undefined;
+      let templateLanguage: string | undefined;
+      try {
+        const meta = doctorSettings?.metadata ? JSON.parse(doctorSettings.metadata) : null;
+        allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
+        useTemplate = !!meta?.whatsappUseTemplate;
+        templateName = typeof meta?.whatsappTemplateName === 'string' ? meta.whatsappTemplateName : undefined;
+        templateLanguage = typeof meta?.whatsappTemplateLanguage === 'string' ? meta.whatsappTemplateLanguage : undefined;
+      } catch {}
+
       const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
       const humanDate = new Date(date).toLocaleDateString();
       const summary = `Appointment confirmed with Dr. ${doctorName} on ${humanDate} at ${slot}. Token #${tokenNumber}.`;
@@ -100,15 +114,28 @@ export class AppointmentsService {
           })
           .catch(() => void 0);
       }
-      // WhatsApp
-      if (appointment.patient?.phone) {
+      // WhatsApp (only if doctor opted in)
+      if (allowWhatsApp && appointment.patient?.phone) {
         const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+91${appointment.patient.phone}`;
-        this.notifications
-          .sendWhatsApp({
-            toPhoneE164: e164,
-            text: summary,
-          })
-          .catch(() => void 0);
+        // Prefer template if configured on doctor
+        if (useTemplate && templateName && templateLanguage) {
+          this.notifications
+            .sendWhatsApp({
+              toPhoneE164: e164,
+              template: {
+                name: templateName,
+                language: templateLanguage,
+              },
+            })
+            .catch(() => void 0);
+        } else {
+          this.notifications
+            .sendWhatsApp({
+              toPhoneE164: e164,
+              text: summary,
+            })
+            .catch(() => void 0);
+        }
       }
     }
 

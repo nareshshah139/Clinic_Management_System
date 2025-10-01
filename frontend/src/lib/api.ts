@@ -149,6 +149,26 @@ export class ApiClient {
     return this.patch(`/patients/${id}`, data);
   }
 
+  async linkPortalUser(patientId: string, data: Record<string, unknown>) {
+    return this.post(`/patients/${patientId}/link-user`, data);
+  }
+
+  async unlinkPortalUser(patientId: string) {
+    return this.post(`/patients/${patientId}/unlink-user`, {});
+  }
+
+  async getPortalUser(patientId: string) {
+    return this.get(`/patients/${patientId}/portal-user`);
+  }
+
+  async getPatientNextAppointment(patientId: string) {
+    return this.get(`/patients/${patientId}/next-appointment`);
+  }
+
+  async sendAppointmentReminder(patientId: string) {
+    return this.post(`/patients/${patientId}/send-appointment-reminder`, {});
+  }
+
   // Appointments
   async getAppointments(params?: Record<string, unknown>) {
     return this.get('/appointments', params);
@@ -303,6 +323,10 @@ export class ApiClient {
 
   async updateUser(id: string, data: Record<string, unknown>) {
     return this.patch(`/users/${id}`, data);
+  }
+
+  async updateUserProfile(id: string, data: Record<string, unknown>) {
+    return this.patch(`/users/${id}/profile`, data);
   }
 
   async deleteUser(id: string) {

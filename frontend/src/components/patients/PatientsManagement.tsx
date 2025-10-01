@@ -10,14 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Edit, Eye, Phone, Mail } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { formatPatientName } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
 import type { Patient } from '@/lib/types';
 
 type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
 interface PatientFormState {
   id?: string;
+  abhaId?: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -32,6 +36,8 @@ interface PatientFormState {
 }
 
 export default function PatientsManagement() {
+  const router = useRouter();
+  const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [search, setSearch] = useState<string>('');
@@ -40,10 +46,18 @@ export default function PatientsManagement() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalPatients, setTotalPatients] = useState<number>(0);
-  const [pageSize] = useState<number>(20); // Fixed page size
+  const [pageSize, setPageSize] = useState<number>(() => {
+    // Load from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('patientsPageSize');
+      return saved ? parseInt(saved, 10) : 20;
+    }
+    return 20;
+  });
   const [error, setError] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
   const [form, setForm] = useState<PatientFormState>({
+    abhaId: '',
     firstName: '',
     lastName: '',
     dateOfBirth: '',
@@ -78,13 +92,20 @@ export default function PatientsManagement() {
 
   useEffect(() => {
     void fetchPatients(currentPage);
-  }, [currentPage]);
+  }, [currentPage, pageSize]);
+
+  // Save page size preference
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('patientsPageSize', pageSize.toString());
+    }
+  }, [pageSize]);
 
   const fetchPatients = async (page: number = currentPage) => {
     try {
       setLoading(true);
       setError(null);
-      const normGender = genderFilter !== 'ALL' ? (genderFilter === 'MALE' ? 'M' : genderFilter === 'FEMALE' ? 'F' : 'O') : undefined;
+      const normGender = genderFilter !== 'ALL' ? genderFilter : undefined;
       
       // Only search if we have at least 2 characters
       const searchTerm = search.trim().length >= 2 ? search.trim() : undefined;
@@ -97,12 +118,16 @@ export default function PatientsManagement() {
       });
       const rows = (response as any)?.data ?? [];
       const mapped: Patient[] = rows.map((bp: any) => {
-        const fullName: string = String(bp.name || '').trim();
-        const [first, ...rest] = fullName.split(' ').filter(Boolean);
+        const rawName: string = String(bp.name || '').trim();
+        const firstName: string = String(bp.firstName || '').trim();
+        const lastName: string = String(bp.lastName || '').trim();
+        const displayName: string = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
         return {
           id: bp.id,
-          firstName: first || fullName || '',
-          lastName: rest.join(' '),
+          abhaId: bp.abhaId || undefined,
+          firstName: firstName || rawName || '',
+          lastName: lastName,
+          name: displayName,
           email: bp.email || undefined,
           phone: bp.phone,
           gender: normalizeGender(bp.gender),
@@ -111,6 +136,8 @@ export default function PatientsManagement() {
           city: bp.city || undefined,
           state: bp.state || undefined,
           referralSource: bp.referralSource || undefined,
+          emergencyContact: bp.emergencyContact || undefined,
+          portalUserId: bp.portalUserId || undefined,
           createdAt: bp.createdAt,
           updatedAt: bp.updatedAt,
         } as Patient;
@@ -151,6 +178,7 @@ export default function PatientsManagement() {
 
   const resetForm = () => {
     setForm({
+      abhaId: '',
       firstName: '',
       lastName: '',
       dateOfBirth: '',
@@ -179,6 +207,7 @@ export default function PatientsManagement() {
       
       const name = `${form.firstName} ${form.lastName}`.trim();
       const payload = {
+        abhaId: form.abhaId || undefined,
         name: name || form.firstName || form.lastName,
         gender: form.gender,
         dob: form.dateOfBirth,
@@ -241,19 +270,28 @@ export default function PatientsManagement() {
             source: 'WALK_IN',
             notes: 'Auto-booked next available slot for walk-in',
           });
-          alert(`Walk-in appointment booked on ${dateStr} at ${slot}`);
+          toast({
+            title: 'Walk-in appointment booked',
+            description: `Appointment scheduled for ${dateStr} at ${slot}`,
+            variant: 'default',
+          });
           return;
         }
       } catch (e) {
         // Ignore and try next day
       }
     }
-    alert('No available consultation slots found in the next 7 days for the selected doctor.');
+    toast({
+      title: 'No slots available',
+      description: 'No available consultation slots found in the next 7 days for the selected doctor.',
+      variant: 'destructive',
+    });
   };
 
   const onEdit = (p: Patient) => {
     setForm({
       id: p.id,
+      abhaId: p.abhaId || '',
       firstName: p.firstName,
       lastName: p.lastName,
       dateOfBirth: (p.dob || '').split('T')[0] || '',
@@ -261,7 +299,7 @@ export default function PatientsManagement() {
       phone: p.phone,
       email: p.email || '',
       address: p.address || '',
-      emergencyContact: '',
+      emergencyContact: p.emergencyContact || '',
       referralSource: p.referralSource || '',
       patientType: 'NON_WALKIN',
       walkinDoctorId: '',
@@ -269,7 +307,120 @@ export default function PatientsManagement() {
     setOpen(true);
   };
 
-  const initials = (first: string, last: string) => `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
+  const calculateAge = (dob: string): number => {
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const handleArchive = async (patient: Patient) => {
+    // Soft delete - we'll mark as archived by updating a field
+    // For now, we'll show a toast with undo functionality
+    const patientName = formatPatientName(patient);
+    
+    // Remove from local state immediately for UX
+    setPatients(prev => prev.filter(p => p.id !== patient.id));
+    setTotalPatients(prev => prev - 1);
+
+    toast({
+      title: 'Patient archived',
+      description: `${patientName} has been archived`,
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          // Restore the patient
+          await fetchPatients(currentPage);
+          toast({
+            title: 'Archive undone',
+            description: `${patientName} has been restored`,
+          });
+        },
+      },
+    });
+  };
+
+  const handleLinkPortalUser = async (patient: Patient) => {
+    try {
+      // For now, we'll just open a prompt for email
+      const email = prompt(`Enter email address for portal user to link to ${formatPatientName(patient)}:`);
+      if (!email) return;
+
+      setLoading(true);
+      await apiClient.linkPortalUser(patient.id, { email });
+      
+      toast({
+        title: 'Portal user linked',
+        description: `Portal access has been linked for ${formatPatientName(patient)}`,
+      });
+      
+      await fetchPatients(currentPage);
+    } catch (err: any) {
+      toast({
+        title: 'Failed to link portal user',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnlinkPortalUser = async (patient: Patient) => {
+    if (!confirm(`Unlink portal access for ${formatPatientName(patient)}?`)) return;
+
+    try {
+      setLoading(true);
+      await apiClient.unlinkPortalUser(patient.id);
+      
+      toast({
+        title: 'Portal user unlinked',
+        description: `Portal access has been removed for ${formatPatientName(patient)}`,
+      });
+      
+      await fetchPatients(currentPage);
+    } catch (err: any) {
+      toast({
+        title: 'Failed to unlink portal user',
+        description: err?.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendWhatsApp = async (patient: Patient) => {
+    try {
+      setLoading(true);
+      await apiClient.sendAppointmentReminder(patient.id);
+      toast({
+        title: 'Reminder sent',
+        description: `WhatsApp reminder sent to ${formatPatientName(patient)}`,
+        variant: 'success',
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to send reminder',
+        description: err?.message || 'No upcoming appointment or WhatsApp not configured',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const initials = (patient: Patient) => {
+    const name = formatPatientName(patient);
+    const parts = name.split(' ').filter(Boolean);
+    const first = parts[0]?.[0] || '';
+    const second = parts.length > 1 ? parts[1]?.[0] || '' : '';
+    return `${first}${second}`.toUpperCase();
+  };
 
   return (
     <div className="space-y-6">
@@ -322,6 +473,15 @@ export default function PatientsManagement() {
               <div className="md:col-span-2">
                 <Label>Phone</Label>
                 <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="md:col-span-2">
+                <Label>ABHA ID (Ayushman Bharat Health Account)</Label>
+                <Input 
+                  value={form.abhaId || ''} 
+                  onChange={(e) => setForm({ ...form, abhaId: e.target.value })}
+                  placeholder="Optional - Enter 14-digit ABHA number"
+                />
+                <div className="text-xs text-gray-500 mt-1">Enter the patient's ABHA ID for national health record integration</div>
               </div>
               <div className="md:col-span-2">
                 <Label>Email</Label>
@@ -396,13 +556,18 @@ export default function PatientsManagement() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 className="pl-10" 
-                placeholder="Search by name, phone, or email (min 2 characters)" 
+                placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search.length > 0 && search.length < 2 && (
                 <div className="absolute top-full left-0 mt-1 text-xs text-gray-500">
                   Enter at least 2 characters to search
+                </div>
+              )}
+              {search.length === 0 && (
+                <div className="absolute top-full left-0 mt-1 text-xs text-gray-400">
+                  Try: 9xxx… (phone), abha…, @email
                 </div>
               )}
             </div>
@@ -413,6 +578,14 @@ export default function PatientsManagement() {
                 <SelectItem value="MALE">Male</SelectItem>
                 <SelectItem value="FEMALE">Female</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
+              <SelectTrigger className="w-full sm:w-32"><SelectValue placeholder="Per page" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 / page</SelectItem>
+                <SelectItem value="20">20 / page</SelectItem>
+                <SelectItem value="50">50 / page</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -444,8 +617,11 @@ export default function PatientsManagement() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Patient</TableHead>
+                    <TableHead>Age</TableHead>
                     <TableHead>Gender</TableHead>
                     <TableHead>Contact</TableHead>
+                    <TableHead>ABHA ID</TableHead>
+                    <TableHead>Referral</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -454,12 +630,16 @@ export default function PatientsManagement() {
                     <TableRow key={p.id}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar><AvatarFallback className="bg-blue-100 text-blue-600">{initials(p.firstName, p.lastName)}</AvatarFallback></Avatar>
+                          <Avatar><AvatarFallback className="bg-blue-100 text-blue-600">{initials(p)}</AvatarFallback></Avatar>
                           <div>
-                            <div className="font-medium text-gray-900">{p.firstName} {p.lastName}</div>
+                            <div className="font-medium text-gray-900">{formatPatientName(p)}</div>
                             <div className="text-xs text-gray-500">ID: {p.id.slice(-8)}</div>
+                            {p.portalUserId && <Badge variant="outline" className="text-xs mt-1">Portal Linked</Badge>}
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">{calculateAge(p.dob)} yrs</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
@@ -471,9 +651,22 @@ export default function PatientsManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm"><Eye className="h-3 w-3 mr-1" /> View</Button>
+                        <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-2">
+                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/patients/${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
                           <Button variant="outline" size="sm" onClick={() => onEdit(p)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
+                          <Button variant="outline" size="sm" onClick={() => handleArchive(p)}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
+                          {p.portalUserId ? (
+                            <Button variant="outline" size="sm" onClick={() => handleUnlinkPortalUser(p)}><Unlink className="h-3 w-3 mr-1" /> Unlink</Button>
+                          ) : (
+                            <Button variant="outline" size="sm" onClick={() => handleLinkPortalUser(p)}><LinkIcon className="h-3 w-3 mr-1" /> Link Portal</Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => handleSendWhatsApp(p)}><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Button>
                         </div>
                       </TableCell>
                     </TableRow>

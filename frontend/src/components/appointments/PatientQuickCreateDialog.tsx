@@ -26,6 +26,7 @@ interface QuickCreateFormState {
   dob: string;
   gender: string;
   email: string;
+  abhaId: string;
 }
 
 function parseInitialValues(initialName?: string, initialPhone?: string): Partial<QuickCreateFormState> {
@@ -70,6 +71,7 @@ export default function PatientQuickCreateDialog({
     dob: '',
     gender: 'OTHER',
     email: '',
+    abhaId: '',
   });
 
   useEffect(() => {
@@ -89,6 +91,7 @@ export default function PatientQuickCreateDialog({
         dob: '',
         gender: 'OTHER',
         email: '',
+        abhaId: '',
       });
     }
   }, [open, defaults]);
@@ -122,6 +125,7 @@ export default function PatientQuickCreateDialog({
         dob: form.dob,
         phone: form.phone,
         email: form.email || undefined,
+        abhaId: form.abhaId || undefined,
       };
 
       const created = (await apiClient.createPatient(payload)) as Patient & { data?: Patient };
@@ -229,6 +233,14 @@ export default function PatientQuickCreateDialog({
                 value={form.email}
                 onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
                 placeholder="Optional"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label>ABHA ID</Label>
+              <Input
+                value={form.abhaId}
+                onChange={(e) => setForm((prev) => ({ ...prev, abhaId: e.target.value }))}
+                placeholder="Optional - 14-digit ABHA number"
               />
             </div>
           </div>

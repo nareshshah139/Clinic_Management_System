@@ -1,5 +1,26 @@
 import { IsString, IsOptional, IsEnum, IsBoolean, IsUUID, IsDateString } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
+
+// Runtime enums for class-validator evaluation
+export enum UserRoleEnum {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  DOCTOR = 'DOCTOR',
+  NURSE = 'NURSE',
+  RECEPTION = 'RECEPTION',
+  ACCOUNTANT = 'ACCOUNTANT',
+  PHARMACIST = 'PHARMACIST',
+  LAB_TECH = 'LAB_TECH',
+  MANAGER = 'MANAGER',
+  PATIENT = 'PATIENT',
+}
+
+export enum UserStatusEnum {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING = 'PENDING',
+}
 import { PaginationDto } from '../../../shared/dto/pagination.dto';
 
 // User Query DTOs
@@ -8,11 +29,11 @@ export class QueryUsersDto extends PaginationDto {
   @IsOptional()
   search?: string;
 
-  @IsEnum(UserRole)
+  @IsEnum(UserRoleEnum)
   @IsOptional()
   role?: UserRole;
 
-  @IsEnum(UserStatus)
+  @IsEnum(UserStatusEnum)
   @IsOptional()
   status?: UserStatus;
 

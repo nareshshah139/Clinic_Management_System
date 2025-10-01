@@ -7,6 +7,13 @@ import {
 } from 'class-validator';
 import { VisitType } from '@prisma/client';
 
+// Runtime enum to ensure decorator evaluation doesn't receive undefined
+export enum VisitTypeEnum {
+  OPD = 'OPD',
+  TELEMED = 'TELEMED',
+  PROCEDURE = 'PROCEDURE',
+}
+
 export class CreateAppointmentDto {
   @IsString()
   patientId: string;
@@ -25,7 +32,7 @@ export class CreateAppointmentDto {
   slot: string; // e.g., "10:00-10:30"
 
   @IsOptional()
-  @IsEnum(VisitType)
+  @IsEnum(VisitTypeEnum)
   visitType?: VisitType;
 
   @IsOptional()

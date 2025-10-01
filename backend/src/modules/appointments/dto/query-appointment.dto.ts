@@ -10,6 +10,23 @@ import {
 import { Type } from 'class-transformer';
 import { AppointmentStatus, VisitType } from '@prisma/client';
 
+// Runtime enums for validator
+export enum AppointmentStatusEnum {
+  SCHEDULED = 'SCHEDULED',
+  CONFIRMED = 'CONFIRMED',
+  CHECKED_IN = 'CHECKED_IN',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+  NO_SHOW = 'NO_SHOW',
+}
+
+export enum VisitTypeEnum {
+  OPD = 'OPD',
+  TELEMED = 'TELEMED',
+  PROCEDURE = 'PROCEDURE',
+}
+
 export class QueryAppointmentsDto {
   @IsOptional()
   @IsString()
@@ -36,11 +53,11 @@ export class QueryAppointmentsDto {
   endDate?: string;
 
   @IsOptional()
-  @IsEnum(AppointmentStatus)
+  @IsEnum(AppointmentStatusEnum)
   status?: AppointmentStatus;
 
   @IsOptional()
-  @IsEnum(VisitType)
+  @IsEnum(VisitTypeEnum)
   visitType?: VisitType;
 
   @IsOptional()

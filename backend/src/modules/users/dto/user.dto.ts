@@ -1,6 +1,27 @@
 import { IsString, IsOptional, IsEmail, IsEnum, IsBoolean, IsUUID, IsArray, IsDateString, MinLength, MaxLength } from 'class-validator';
 import { UserRole, UserStatus } from '@prisma/client';
 
+// Runtime enums for class-validator to avoid undefined during decorator evaluation in some build environments
+export enum UserRoleEnum {
+  OWNER = 'OWNER',
+  ADMIN = 'ADMIN',
+  DOCTOR = 'DOCTOR',
+  NURSE = 'NURSE',
+  RECEPTION = 'RECEPTION',
+  ACCOUNTANT = 'ACCOUNTANT',
+  PHARMACIST = 'PHARMACIST',
+  LAB_TECH = 'LAB_TECH',
+  MANAGER = 'MANAGER',
+  PATIENT = 'PATIENT',
+}
+
+export enum UserStatusEnum {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  PENDING = 'PENDING',
+}
+
 // User Management DTOs
 export class CreateUserDto {
   @IsString()
@@ -25,7 +46,7 @@ export class CreateUserDto {
   @IsOptional()
   phone?: string;
 
-  @IsEnum(UserRole)
+  @IsEnum(UserRoleEnum)
   role: UserRole;
 
   @IsUUID()
@@ -101,7 +122,7 @@ export class UpdateUserDto {
   @IsOptional()
   phone?: string;
 
-  @IsEnum(UserRole)
+  @IsEnum(UserRoleEnum)
   @IsOptional()
   role?: UserRole;
 
@@ -230,10 +251,14 @@ export class UpdateProfileDto {
   @IsString()
   @IsOptional()
   emergencyPhone?: string;
+
+  // Arbitrary key-value metadata for user settings/preferences
+  @IsOptional()
+  metadata?: any;
 }
 
 export class AssignRoleDto {
-  @IsEnum(UserRole)
+  @IsEnum(UserRoleEnum)
   role: UserRole;
 
   @IsArray()
@@ -247,7 +272,7 @@ export class UpdatePermissionsDto {
 }
 
 export class UserStatusDto {
-  @IsEnum(UserStatus)
+  @IsEnum(UserStatusEnum)
   status: UserStatus;
 
   @IsString()

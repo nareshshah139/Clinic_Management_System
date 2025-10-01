@@ -11,6 +11,9 @@ const nextConfig: NextConfig = {
     // your project has type errors.
     ignoreBuildErrors: false,
   },
+  experimental: {
+    optimizeCss: false,
+  },
   async rewrites() {
     return [
       {

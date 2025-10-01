@@ -12,7 +12,8 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest start",
+    "start": "sh start.sh",
+    "seed": "node dist/scripts/seed-once.js",
     "start:dev": "nest start --watch",
     "start:minimal": "node -r ts-node/register src/main.minimal.ts",
     "start:debug": "nest start --debug --watch",
