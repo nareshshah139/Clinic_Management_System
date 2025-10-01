@@ -24,7 +24,11 @@ async function bootstrap() {
       new ExpressAdapter(),
     );
     app.enableCors({
-      origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
+      origin: [
+        /^http:\/\/localhost:(3000|3001|3002)$/,
+        /^https:\/\/.*\.railway\.app$/,
+        /^https:\/\/.*\.up\.railway\.app$/,
+      ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization'],
@@ -46,7 +50,9 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, document);
 
-    await app.listen(process.env.PORT ?? 4000);
+    const port = Number(process.env.PORT ?? 4000);
+    await app.listen(port, '0.0.0.0');
+    logger.log(`Clinic Management System backend (minimal) listening on port ${port}`);
     return;
   }
 
@@ -54,7 +60,11 @@ async function bootstrap() {
   logger.log('Starting Clinic Management System backend');
   const app = await NestFactory.create(mod.AppModule, new ExpressAdapter());
   app.enableCors({
-    origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
+    origin: [
+      /^http:\/\/localhost:(3000|3001|3002)$/,
+      /^https:\/\/.*\.railway\.app$/,
+      /^https:\/\/.*\.up\.railway\.app$/,
+    ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -75,7 +85,7 @@ async function bootstrap() {
   SwaggerModule.setup('docs', app, document);
 
   const port = Number(process.env.PORT ?? 4000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   logger.log(`Clinic Management System backend listening on port ${port}`);
 }
 void bootstrap();
