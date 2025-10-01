@@ -142,6 +142,9 @@ export class StockPredictionService {
       LIMIT 30
     `;
 
+    this.logger.log(`Raw query returned ${topDrugsQuery.length} results`);
+    
+    // Convert BigInt to Number for the drug IDs mapping
     const topDrugIds = topDrugsQuery.map((item) => item.drugId);
 
     if (topDrugIds.length === 0) {
@@ -167,6 +170,8 @@ export class StockPredictionService {
         minStockLevel: true,
       },
     });
+
+    this.logger.log(`Found ${drugs.length} drugs in drugs table matching top drug IDs`);
 
     // Fetch invoice items for these top drugs
     const invoiceItems = await this.prisma.pharmacyInvoiceItem.findMany({
