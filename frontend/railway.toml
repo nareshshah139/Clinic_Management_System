@@ -1,6 +1,6 @@
 [service]
 name = "frontend"
-start = "node .next/standalone/server.js"
+start = "npm run start"
 build = "npm ci && npm run build"
 
 [deploy]
