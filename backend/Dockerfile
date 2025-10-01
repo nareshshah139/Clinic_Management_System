@@ -20,7 +20,7 @@ RUN npm run build
 
 FROM base AS runner
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 RUN mkdir -p /app/uploads/patients /app/uploads/visits && chown -R node:node /app/uploads
