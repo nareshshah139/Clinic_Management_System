@@ -1,6 +1,6 @@
 [service]
 name = "backend"
-start = "npx prisma migrate deploy && node dist/main.js"
+start = "sh start.sh"
 build = "npm ci && npx prisma generate && npm run build"
 
 [deploy]
