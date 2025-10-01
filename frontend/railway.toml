@@ -1,4 +1,10 @@
 [service]
 name = "frontend"
-start = "npm run start"
+start = "node .next/standalone/server.js"
 build = "npm ci && npm run build"
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
