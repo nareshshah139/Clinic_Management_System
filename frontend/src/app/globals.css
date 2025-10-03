@@ -142,6 +142,19 @@
 
 /* Brand-consistent utility overrides so existing Tailwind classes reflect tokens */
 @layer utilities {
+  /* Gradient helpers using brand tokens */
+  .branded .bg-brand-gradient {
+    background-image: linear-gradient(135deg, color-mix(in_oklab, var(--accent) 86%, white), var(--primary));
+  }
+  .branded .bg-brand-gradient-soft {
+    background-image: linear-gradient(180deg, var(--background), color-mix(in_oklab, var(--accent-soft) 80%, white));
+  }
+  .branded .text-gradient-brand {
+    background-image: linear-gradient(120deg, var(--primary), color-mix(in_oklab, var(--accent) 75%, black));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
   /* Surfaces */
   .branded .bg-white { background-color: var(--card) !important; }
   .branded .bg-gray-50 { background-color: var(--background) !important; }
