@@ -56,6 +56,9 @@ export default function PatientsManagement() {
   });
   const [error, setError] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
+  const [linkPortalOpen, setLinkPortalOpen] = useState<boolean>(false);
+  const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
+  const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const [form, setForm] = useState<PatientFormState>({
     abhaId: '',
     firstName: '',
@@ -305,6 +308,18 @@ export default function PatientsManagement() {
       walkinDoctorId: '',
     });
     setOpen(true);
+    // Fetch full patient to preserve fields that might not be included in list response
+    (async () => {
+      try {
+        const full: any = await apiClient.getPatient(p.id);
+        if (full) {
+          setForm(prev => ({
+            ...prev,
+            emergencyContact: (full.emergencyContact ?? prev.emergencyContact) || '',
+          }));
+        }
+      } catch {}
+    })();
   };
 
   const calculateAge = (dob: string): number => {
@@ -344,21 +359,28 @@ export default function PatientsManagement() {
     });
   };
 
-  const handleLinkPortalUser = async (patient: Patient) => {
-    try {
-      // For now, we'll just open a prompt for email
-      const email = prompt(`Enter email address for portal user to link to ${formatPatientName(patient)}:`);
-      if (!email) return;
+  const handleLinkPortalUser = (patient: Patient) => {
+    setLinkPortalTarget(patient);
+    setLinkPortalEmail(patient.email || '');
+    setLinkPortalOpen(true);
+  };
 
+  const confirmLinkPortalUser = async () => {
+    if (!linkPortalTarget || !linkPortalEmail.trim()) {
+      toast({ title: 'Email required', description: 'Please enter an email address', variant: 'destructive' });
+      return;
+    }
+    try {
       setLoading(true);
-      await apiClient.linkPortalUser(patient.id, { email });
-      
+      await apiClient.linkPortalUser(linkPortalTarget.id, { email: linkPortalEmail.trim() });
       toast({
         title: 'Portal user linked',
-        description: `Portal access has been linked for ${formatPatientName(patient)}`,
+        description: `Portal access has been linked for ${formatPatientName(linkPortalTarget)}`,
       });
-      
       await fetchPatients(currentPage);
+      setLinkPortalOpen(false);
+      setLinkPortalTarget(null);
+      setLinkPortalEmail('');
     } catch (err: any) {
       toast({
         title: 'Failed to link portal user',
@@ -370,28 +392,34 @@ export default function PatientsManagement() {
     }
   };
 
-  const handleUnlinkPortalUser = async (patient: Patient) => {
-    if (!confirm(`Unlink portal access for ${formatPatientName(patient)}?`)) return;
-
-    try {
-      setLoading(true);
-      await apiClient.unlinkPortalUser(patient.id);
-      
-      toast({
-        title: 'Portal user unlinked',
-        description: `Portal access has been removed for ${formatPatientName(patient)}`,
-      });
-      
-      await fetchPatients(currentPage);
-    } catch (err: any) {
-      toast({
-        title: 'Failed to unlink portal user',
-        description: err?.message || 'An error occurred',
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
+  const handleUnlinkPortalUser = (patient: Patient) => {
+    const patientName = formatPatientName(patient);
+    toast({
+      title: 'Confirm unlink',
+      description: `Remove portal access for ${patientName}?`,
+      action: {
+        label: 'Confirm',
+        onClick: async () => {
+          try {
+            setLoading(true);
+            await apiClient.unlinkPortalUser(patient.id);
+            toast({
+              title: 'Portal user unlinked',
+              description: `Portal access has been removed for ${patientName}`,
+            });
+            await fetchPatients(currentPage);
+          } catch (err: any) {
+            toast({
+              title: 'Failed to unlink portal user',
+              description: err?.message || 'An error occurred',
+              variant: 'destructive',
+            });
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    });
   };
 
   const handleSendWhatsApp = async (patient: Patient) => {
@@ -591,6 +619,26 @@ export default function PatientsManagement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Link Portal User Dialog */}
+      <Dialog open={linkPortalOpen} onOpenChange={(v: boolean) => { if (!v) { setLinkPortalTarget(null); setLinkPortalEmail(''); } setLinkPortalOpen(v); }}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Link Portal Access</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
+            <div>
+              <Label>Email</Label>
+              <Input value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setLinkPortalOpen(false); setLinkPortalTarget(null); setLinkPortalEmail(''); }}>Cancel</Button>
+            <Button onClick={confirmLinkPortalUser} disabled={loading || !linkPortalEmail.trim()}>Link</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>

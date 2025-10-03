@@ -59,6 +59,7 @@ export class PatientsService {
           phone: true,
           email: true,
           address: true,
+          emergencyContact: true,
           city: true,
           state: true,
           referralSource: true,
