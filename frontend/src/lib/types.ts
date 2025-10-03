@@ -189,6 +189,41 @@ export interface GetPatientsResponse {
   total?: number;
 }
 
+// Backend select shape for patients listing
+export interface BackendPatientRow {
+  id: string;
+  abhaId?: string | null;
+  name?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  gender?: string | null;
+  dob: string;
+  phone: string;
+  email?: string | null;
+  address?: string | null;
+  emergencyContact?: string | null;
+  city?: string | null;
+  state?: string | null;
+  referralSource?: string | null;
+  portalUserId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface GetPatientsResponseWithMeta {
+  data: BackendPatientRow[];
+  meta?: PaginationMeta;
+  patients?: BackendPatientRow[]; // tolerate alternate naming
+  total?: number; // tolerate legacy total-only shape
+}
+
 export interface GetRoomsResponse {
   rooms: Room[];
 }

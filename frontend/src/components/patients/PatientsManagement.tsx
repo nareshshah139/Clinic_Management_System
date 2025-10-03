@@ -15,7 +15,7 @@ import { apiClient } from '@/lib/api';
 import { formatPatientName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import type { Patient } from '@/lib/types';
+import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/lib/types';
 
 type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
@@ -119,12 +119,22 @@ export default function PatientsManagement() {
         search: searchTerm,
         gender: normGender,
       });
-      const rows = (response as any)?.data ?? [];
-      const mapped: Patient[] = rows.map((bp: any) => {
-        const rawName: string = String(bp.name || '').trim();
-        const firstName: string = String(bp.firstName || '').trim();
-        const lastName: string = String(bp.lastName || '').trim();
-        const displayName: string = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
+
+      const extractRows = (payload: unknown): BackendPatientRow[] => {
+        if (!payload) return [];
+        const p = payload as Partial<GetPatientsResponseWithMeta> | BackendPatientRow[] | Patient[];
+        if (Array.isArray(p)) return p as BackendPatientRow[];
+        if (Array.isArray(p.data)) return p.data as BackendPatientRow[];
+        if (Array.isArray(p.patients)) return p.patients as BackendPatientRow[];
+        return [];
+      };
+
+      const rows = extractRows(response);
+      const mapped: Patient[] = rows.map((bp: BackendPatientRow) => {
+        const rawName = String(bp.name || '').trim();
+        const firstName = String(bp.firstName || '').trim();
+        const lastName = String(bp.lastName || '').trim();
+        const displayName = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
         return {
           id: bp.id,
           abhaId: bp.abhaId || undefined,
@@ -143,15 +153,17 @@ export default function PatientsManagement() {
           portalUserId: bp.portalUserId || undefined,
           createdAt: bp.createdAt,
           updatedAt: bp.updatedAt,
-        } as Patient;
+        };
       });
       setPatients(mapped);
       
       // Update pagination metadata
-      const meta = (response as any)?.meta;
-      if (meta) {
-        setTotalPages(meta.totalPages || 1);
-        setTotalPatients(meta.total || 0);
+      const meta = (response as Partial<GetPatientsResponseWithMeta>)?.meta;
+      if (meta && typeof meta.totalPages === 'number' && typeof meta.total === 'number') {
+        setTotalPages(meta.totalPages);
+        setTotalPatients(meta.total);
+      } else if (typeof (response as { total?: number }).total === 'number') {
+        setTotalPatients((response as { total: number }).total);
       }
     } catch (err: any) {
       console.error('Failed to fetch patients', err);
