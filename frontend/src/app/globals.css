@@ -112,6 +112,20 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/* Branded mode overrides: applied when html has class .branded */
+.branded {
+  /* Background and foreground remain as base; focus on brand accents */
+  /* Variables will be set inline by JS for dynamic palette, but these serve as safe defaults */
+  --primary: oklch(0.55 0.12 250);
+  --primary-foreground: oklch(0.98 0.003 247.858);
+  --accent: oklch(0.8 0.08 170);
+  --accent-foreground: oklch(0.2 0.03 180);
+  --ring: oklch(0.7 0.09 250);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

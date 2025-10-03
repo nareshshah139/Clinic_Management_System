@@ -43,9 +43,20 @@ export class PatientsService {
     };
     const normalizedGender = normalizeGender(gender);
 
+    // Support historical data that may store gender as single-letter or different casing
+    const genderVariants = normalizedGender
+      ? [
+          normalizedGender, // e.g., MALE
+          normalizedGender[0], // e.g., M
+          normalizedGender.toLowerCase(), // e.g., male
+          normalizedGender[0].toLowerCase(), // e.g., m
+          `${normalizedGender[0]}${normalizedGender.slice(1).toLowerCase()}`, // e.g., Male
+        ]
+      : undefined;
+
     const where = {
       branchId,
-      ...(normalizedGender ? { gender: { equals: normalizedGender, mode: 'insensitive' as const } } : {}),
+      ...(genderVariants ? { gender: { in: genderVariants } } : {}),
       ...(searchTerm && {
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },

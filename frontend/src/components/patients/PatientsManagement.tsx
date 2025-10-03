@@ -771,7 +771,7 @@ export default function PatientsManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/visits?patientId=${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
+                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/patients/${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
                           <Button variant="outline" size="sm" onClick={() => onEdit(p)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => handleArchive(p)}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
                           {p.portalUserId ? (

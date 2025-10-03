@@ -19,6 +19,7 @@ import DoctorDayCalendar from './DoctorDayCalendar';
 
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
+  prefillPatientId?: string;
 }
 
 export default function AppointmentScheduler({ 
@@ -27,7 +28,8 @@ export default function AppointmentScheduler({
     endHour: 18,
     stepMinutes: 30,
     timezone: 'Asia/Kolkata'
-  }
+  },
+  prefillPatientId,
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
   const [date, setDate] = useState<string>(getISTDateString());
@@ -56,6 +58,11 @@ export default function AppointmentScheduler({
   
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
+  useEffect(() => {
+    if (prefillPatientId) {
+      setSelectedPatientId(prefillPatientId);
+    }
+  }, [prefillPatientId]);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);

@@ -18,6 +18,7 @@ import { AlertCircle } from 'lucide-react';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
+  prefillPatientId?: string;
 }
 
 export default function AppointmentsCalendar({
@@ -26,7 +27,8 @@ export default function AppointmentsCalendar({
     endHour: 18,
     stepMinutes: 30,
     timezone: 'Asia/Kolkata'
-  }
+  },
+  prefillPatientId,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const [date, setDate] = useState<string>(getISTDateString());
@@ -62,6 +64,12 @@ export default function AppointmentsCalendar({
     void fetchDoctors();
     void fetchRooms();
   }, []);
+
+  useEffect(() => {
+    if (prefillPatientId) {
+      setSelectedPatientId(prefillPatientId);
+    }
+  }, [prefillPatientId]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes

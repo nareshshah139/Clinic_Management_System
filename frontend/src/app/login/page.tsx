@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, Suspense } from 'react';
+import { Switch } from '@/components/ui/switch';
+import { Palette } from 'lucide-react';
+import { useBrandedMode } from '@/components/layout/branded-mode-context';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
 
 function LoginPageInner() {
+  const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
   const router = useRouter();
   const search = useSearchParams();
   const [identifier, setIdentifier] = useState('');
@@ -36,7 +40,17 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6 relative">
+      <div className="absolute top-4 right-4 hidden sm:flex items-center gap-2">
+        <Palette className="h-4 w-4 text-gray-500" />
+        <span className="text-xs text-gray-600">Branded</span>
+        <Switch
+          checked={brandedEnabled}
+          onCheckedChange={() => toggleBranded()}
+          aria-label="Toggle branded mode"
+          disabled={brandedLoading}
+        />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-center">ClinicMS Login</CardTitle>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Search, Settings, User, Calendar, Users } from 'lucide-react';
+import { Bell, Search, Settings, User, Calendar, Users, Palette } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { useBrandedMode } from './branded-mode-context';
 
 interface SearchResult {
   id: string;
@@ -38,6 +39,7 @@ export function Header() {
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user, loading } = useDashboardUser();
+  const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
 
   type NotificationItem = {
     id: string;
@@ -484,6 +486,17 @@ export function Header() {
       {/* Right section */
       }
       <div className="flex items-center space-x-4">
+        {/* Branded mode toggle */}
+        <div className="hidden sm:flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
+          <Palette className="h-4 w-4 text-gray-500" />
+          <span className="text-xs text-gray-600">Branded</span>
+          <Switch
+            checked={brandedEnabled}
+            onCheckedChange={() => toggleBranded()}
+            aria-label="Toggle branded mode"
+            disabled={brandedLoading}
+          />
+        </div>
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
