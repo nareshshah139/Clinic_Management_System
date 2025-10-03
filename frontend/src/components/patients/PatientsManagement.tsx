@@ -82,6 +82,35 @@ export default function PatientsManagement() {
     return 'UNKNOWN';
   };
 
+  // Client-side fuzzy suggestions for pre-min-2 search
+  const suggestions = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return [] as string[];
+    // Only show suggestions when guard is active (< 2 chars)
+    if (q.length >= 2) return [] as string[];
+
+    const pool = patients || [];
+    const candidates = new Set<string>();
+
+    for (const p of pool) {
+      const name = formatPatientName(p);
+      const phone = p.phone || '';
+      const abha = p.abhaId || '';
+      const email = p.email || '';
+
+      // Prefer prefix matches, then includes
+      if (name.toLowerCase().startsWith(q)) candidates.add(name);
+      else if (name.toLowerCase().includes(q)) candidates.add(name);
+
+      if (phone.startsWith(q)) candidates.add(phone);
+      if (abha.toLowerCase().startsWith(q)) candidates.add(abha);
+      if (email.toLowerCase().startsWith(q)) candidates.add(email);
+      if (candidates.size >= 8) break; // cap to avoid long lists
+    }
+
+    return Array.from(candidates).slice(0, 8);
+  }, [search, patients]);
+
   useEffect(() => {
     void fetchPatients();
   }, []);
@@ -486,21 +515,21 @@ export default function PatientsManagement() {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>First Name</Label>
-                <Input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
+                <Label htmlFor="firstName">First Name</Label>
+                <Input id="firstName" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} />
               </div>
               <div>
-                <Label>Last Name</Label>
-                <Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input id="lastName" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
               <div>
-                <Label>Date of Birth</Label>
-                <Input type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+                <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                <Input id="dateOfBirth" type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
               </div>
               <div>
-                <Label>Gender</Label>
+                <Label id="gender-label" htmlFor="gender">Gender</Label>
                 <Select value={form.gender} onValueChange={(v: Gender) => setForm({ ...form, gender: v })}>
-                  <SelectTrigger>
+                  <SelectTrigger id="gender" aria-labelledby="gender-label">
                     <SelectValue placeholder="Select gender" />
                   </SelectTrigger>
                   <SelectContent>
@@ -511,12 +540,13 @@ export default function PatientsManagement() {
                 </Select>
               </div>
               <div className="md:col-span-2">
-                <Label>Phone</Label>
-                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Label htmlFor="phone">Phone</Label>
+                <Input id="phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>ABHA ID (Ayushman Bharat Health Account)</Label>
+                <Label htmlFor="abhaId">ABHA ID (Ayushman Bharat Health Account)</Label>
                 <Input 
+                  id="abhaId"
                   value={form.abhaId || ''} 
                   onChange={(e) => setForm({ ...form, abhaId: e.target.value })}
                   placeholder="Optional - Enter 14-digit ABHA number"
@@ -524,21 +554,21 @@ export default function PatientsManagement() {
                 <div className="text-xs text-gray-500 mt-1">Enter the patient's ABHA ID for national health record integration</div>
               </div>
               <div className="md:col-span-2">
-                <Label>Email</Label>
-                <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Label htmlFor="email">Email</Label>
+                <Input id="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>Address</Label>
-                <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <Label htmlFor="address">Address</Label>
+                <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>Emergency Contact</Label>
-                <Input value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+                <Label htmlFor="emergencyContact">Emergency Contact</Label>
+                <Input id="emergencyContact" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
               </div>
               <div className="md:col-span-2">
-                <Label>How did the patient hear about us?</Label>
+                <Label id="referralSource-label" htmlFor="referralSource">How did the patient hear about us?</Label>
                 <Select value={form.referralSource || ''} onValueChange={(v: string) => setForm({ ...form, referralSource: v })}>
-                  <SelectTrigger>
+                  <SelectTrigger id="referralSource" aria-labelledby="referralSource-label">
                     <SelectValue placeholder="Select source" />
                   </SelectTrigger>
                   <SelectContent>
@@ -553,9 +583,9 @@ export default function PatientsManagement() {
               </div>
               {/* Optional Walk-in booking */}
               <div>
-                <Label>Patient Type</Label>
+                <Label id="patientType-label" htmlFor="patientType">Patient Type</Label>
                 <Select value={form.patientType || 'NON_WALKIN'} onValueChange={(v: 'WALKIN' | 'NON_WALKIN') => setForm({ ...form, patientType: v })}>
-                  <SelectTrigger>
+                  <SelectTrigger id="patientType" aria-labelledby="patientType-label">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent>
@@ -565,9 +595,9 @@ export default function PatientsManagement() {
                 </Select>
               </div>
               <div>
-                <Label>Doctor (for walk-in)</Label>
+                <Label id="walkinDoctorId-label" htmlFor="walkinDoctorId">Doctor (for walk-in)</Label>
                 <Select value={form.walkinDoctorId || ''} onValueChange={(v: string) => setForm({ ...form, walkinDoctorId: v })}>
-                  <SelectTrigger>
+                  <SelectTrigger id="walkinDoctorId" aria-labelledby="walkinDoctorId-label">
                     <SelectValue placeholder="Select doctor" />
                   </SelectTrigger>
                   <SelectContent>
@@ -595,6 +625,7 @@ export default function PatientsManagement() {
             <div className="relative w-full sm:flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
+                id="patients-search"
                 className="pl-10" 
                 placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
                 value={search} 
@@ -608,6 +639,24 @@ export default function PatientsManagement() {
               {search.length === 0 && (
                 <div className="absolute top-full left-0 mt-1 text-xs text-gray-400">
                   Try: 9xxx… (phone), abha…, @email
+                </div>
+              )}
+              {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
+                <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
+                  <div className="text-xs text-gray-600 mb-1">Did you mean</div>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className="text-sm px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                        onClick={() => setSearch(s)}
+                        aria-label={`Search for ${s}`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -641,8 +690,8 @@ export default function PatientsManagement() {
           <div className="space-y-3">
             <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
             <div>
-              <Label>Email</Label>
-              <Input value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
+              <Label htmlFor="linkPortalEmail">Email</Label>
+              <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">
@@ -681,6 +730,7 @@ export default function PatientsManagement() {
                     <TableHead>Gender</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>ABHA ID</TableHead>
+                    <TableHead>Last Visit</TableHead>
                     <TableHead>Referral</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -714,11 +764,14 @@ export default function PatientsManagement() {
                         <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
                       </TableCell>
                       <TableCell>
+                        <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
+                      </TableCell>
+                      <TableCell>
                         <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/patients/${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
+                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/visits?patientId=${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
                           <Button variant="outline" size="sm" onClick={() => onEdit(p)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => handleArchive(p)}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
                           {p.portalUserId ? (
