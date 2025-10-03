@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatPatientName } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
@@ -780,6 +780,9 @@ export default function PatientsManagement() {
                             <Button variant="outline" size="sm" onClick={() => handleLinkPortalUser(p)}><LinkIcon className="h-3 w-3 mr-1" /> Link Portal</Button>
                           )}
                           <Button variant="outline" size="sm" onClick={() => handleSendWhatsApp(p)}><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Button>
+                          <Button size="sm" onClick={() => router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`)}>
+                            <Stethoscope className="h-3 w-3 mr-1" /> Start Visit
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>

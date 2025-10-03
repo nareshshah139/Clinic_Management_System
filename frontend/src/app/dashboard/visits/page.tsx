@@ -595,6 +595,7 @@ function VisitsPageInner() {
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get('patientId');
   const appointmentIdParam = searchParams.get('appointmentId');
+  const urlDoctorId = searchParams.get('doctorId');
   const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
@@ -685,6 +686,9 @@ function VisitsPageInner() {
   useEffect(() => {
     if (urlPatientId) {
       setSelectedPatientId(urlPatientId);
+      if (urlDoctorId && isValidId(urlDoctorId)) {
+        setSelectedDoctorId(urlDoctorId);
+      }
       if (appointmentIdParam) {
         void fetchAppointmentData(appointmentIdParam);
       }
@@ -692,7 +696,7 @@ function VisitsPageInner() {
         setShowForm(true);
       }
     }
-  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlPatientId]);
+  }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
 
   useEffect(() => {
     const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;

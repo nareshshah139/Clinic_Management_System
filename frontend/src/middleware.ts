@@ -7,7 +7,9 @@ export function middleware(req: NextRequest) {
     if (!token) {
       const url = req.nextUrl.clone();
       url.pathname = '/login';
-      url.searchParams.set('next', pathname);
+      // Preserve full path with query so we return exactly where user intended
+      const original = req.nextUrl.pathname + (req.nextUrl.search || '');
+      url.searchParams.set('next', original);
       return NextResponse.redirect(url);
     }
   }

@@ -31,9 +31,21 @@ export class PatientsService {
     // Optimize search by requiring minimum 2 characters and using more efficient queries
     const searchTerm = search && search.trim().length >= 2 ? search.trim() : undefined;
 
+    // Normalize gender to support inputs like M/F/O, male/female/other
+    const normalizeGender = (g?: string): string | undefined => {
+      if (!g) return undefined;
+      const s = g.trim().toUpperCase();
+      if (s === 'M') return 'MALE';
+      if (s === 'F') return 'FEMALE';
+      if (s === 'O') return 'OTHER';
+      if (s === 'MALE' || s === 'FEMALE' || s === 'OTHER') return s;
+      return undefined;
+    };
+    const normalizedGender = normalizeGender(gender);
+
     const where = {
       branchId,
-      ...(gender ? { gender: { equals: gender, mode: 'insensitive' as const } } : {}),
+      ...(normalizedGender ? { gender: { equals: normalizedGender, mode: 'insensitive' as const } } : {}),
       ...(searchTerm && {
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },

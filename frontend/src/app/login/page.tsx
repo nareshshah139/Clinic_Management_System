@@ -1,5 +1,89 @@
 'use client';
 
+import { useState, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { apiClient } from '@/lib/api';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams.get('next') || '/dashboard';
+
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!identifier.trim() || !password) {
+      setError('Please enter username/email and password');
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      await apiClient.login(identifier.trim(), password);
+      router.push(next);
+    } catch (err: any) {
+      const message = err?.body?.message || err?.message || 'Login failed';
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [identifier, password, next, router]);
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Sign in</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <div className="mb-4 p-3 rounded border border-red-200 bg-red-50 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="identifier">Email or Username</Label>
+              <Input
+                id="identifier"
+                type="text"
+                autoComplete="username"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="you@example.com"
+              />
+            </div>
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+'use client';
+
 import { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
