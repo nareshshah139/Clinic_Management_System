@@ -15,6 +15,8 @@ import {
   BadRequestException,
   ServiceUnavailableException,
   HttpException,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
@@ -28,7 +30,7 @@ import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
-import type { Express } from 'express';
+import type { Express, Response } from 'express';
 import { Logger } from '@nestjs/common';
 
 const fsPromises = fs.promises;
@@ -155,16 +157,18 @@ export class VisitsController {
     @Param('patientId') patientId: string,
     @UploadedFiles() files: Express.Multer.File[],
   ) {
-    const { dateStr, absPath } = await ensurePatientDraftDir(patientId);
-    const relPaths: string[] = [];
+    const { dateStr } = await ensurePatientDraftDir(patientId);
     let processedCount = 0;
     for (const file of files || []) {
       const { buffer, ext } = await processImageUpload(file);
-      const filename = await writeVisitFile(absPath, buffer, ext);
-      relPaths.push(`/uploads/patients/${patientId}/${dateStr}/${filename}`);
+      await this.visitsService.createDraftAttachment(patientId, dateStr, {
+        preferredExt: ext,
+        contentType: file.mimetype || 'image/jpeg',
+        buffer,
+      });
       processedCount += 1;
     }
-    if (relPaths.length === 0) {
+    if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
     this.logger.debug(`uploadDraftPhotos: processed ${processedCount}/${files?.length ?? 0} files for patient=${patientId}`);
@@ -175,6 +179,20 @@ export class VisitsController {
   async listDraftPhotos(@Param('patientId') patientId: string) {
     const { dateStr } = await ensurePatientDraftDir(patientId);
     return this.visitsService.listDraftAttachments(patientId, dateStr);
+  }
+
+  @Get('photos/draft/:patientId/:dateStr/:attachmentId')
+  async getDraftPhoto(
+    @Param('patientId') patientId: string,
+    @Param('dateStr') dateStr: string,
+    @Param('attachmentId') attachmentId: string,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const { data, contentType } = await this.visitsService.getDraftAttachmentBinary(patientId, dateStr, attachmentId);
+    if (res) {
+      res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    }
+    return new StreamableFile(data);
   }
 
   @Get('statistics')
@@ -256,25 +274,40 @@ export class VisitsController {
     @UploadedFiles() files: Express.Multer.File[],
     @Request() req: AuthenticatedRequest,
   ) {
-    const uploadDir = await ensureUploadsDir();
-    const relPaths: string[] = [];
     let processedCount = 0;
     for (const file of files || []) {
       const { buffer, ext } = await processImageUpload(file);
-      const filename = await writeVisitFile(uploadDir, buffer, ext);
-      relPaths.push(`/uploads/visits/${filename}`);
+      await this.visitsService.createVisitAttachment(id, req.user.branchId, {
+        preferredExt: ext,
+        contentType: file.mimetype || 'image/jpeg',
+        buffer,
+      });
       processedCount += 1;
     }
-    if (relPaths.length === 0) {
+    if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
     this.logger.debug(`uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`);
-    return this.visitsService.addAttachments(id, relPaths, req.user.branchId);
+    return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
   @Get(':id/photos')
   listPhotos(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.visitsService.listAttachments(id, req.user.branchId);
+  }
+
+  @Get(':id/photos/:attachmentId')
+  async getVisitPhoto(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) res?: Response,
+  ) {
+    const { data, contentType } = await this.visitsService.getVisitAttachmentBinary(id, attachmentId, req.user.branchId);
+    if (res) {
+      res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' });
+    }
+    return new StreamableFile(data);
   }
 
   // Speech-to-text proxy to OpenAI Whisper

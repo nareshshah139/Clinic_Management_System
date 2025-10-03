@@ -167,6 +167,7 @@ model Patient {
   referrals        Referral[]
   visits           Visit[]
   pharmacyInvoices PharmacyInvoice[]
+  draftAttachments DraftAttachment[]
 
   @@index([branchId])
   @@index([name])
@@ -227,8 +228,42 @@ model Visit {
   appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
   doctor        User          @relation(fields: [doctorId], references: [id])
   patient       Patient       @relation(fields: [patientId], references: [id])
+  visitAttachments VisitAttachment[]
 
   @@map("visits")
+}
+
+// Binary attachments stored in the database for visits
+model VisitAttachment {
+  id          String   @id @default(cuid())
+  visitId     String
+  filename    String
+  contentType String
+  sizeBytes   Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  visit Visit @relation(fields: [visitId], references: [id])
+
+  @@index([visitId])
+  @@map("visit_attachments")
+}
+
+// Draft photos linked to patient and date (pre-visit)
+model DraftAttachment {
+  id          String   @id @default(cuid())
+  patientId   String
+  dateStr     String   // yyyymmdd for grouping
+  filename    String
+  contentType String
+  sizeBytes   Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, dateStr])
+  @@map("draft_attachments")
 }
 
 model Prescription {

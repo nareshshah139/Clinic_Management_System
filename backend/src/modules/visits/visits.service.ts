@@ -4,6 +4,7 @@ import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-v
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { Language } from '@prisma/client';
 import { join, posix as pathPosix } from 'path';
+import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 
 @Injectable()
@@ -807,36 +808,37 @@ export class VisitsService {
   }
 
   async listDraftAttachments(patientId: string, dateStr: string) {
+    // DB-backed attachments
+    const dbItems = await this.prisma.draftAttachment.findMany({
+      where: { patientId, dateStr },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, filename: true, createdAt: true },
+    });
+
+    // Legacy filesystem attachments for backward compatibility
     const baseDir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
-    let files: string[] = [];
+    let legacyFiles: string[] = [];
     try {
       const entries = fs.readdirSync(baseDir, { withFileTypes: true });
-      files = entries
+      legacyFiles = entries
         .filter(e => e.isFile())
         .map(e => `/uploads/patients/${patientId}/${dateStr}/${e.name}`);
-    } catch {
-      files = [];
-    }
-    // Sanitize and sort by mtime
-    const sanitized = this.sanitizeAttachmentPaths(files, {
+    } catch {}
+    const sanitizedLegacy = this.sanitizeAttachmentPaths(legacyFiles, {
       allowedPrefixes: [`/uploads/patients/${patientId}/${dateStr}/`],
     });
-    const items = sanitized
-      .map(url => {
-        const absolutePath = join(process.cwd(), url.replace(/^\//, ''));
-        let uploadedAt: string | null = null;
-        try {
-          const stat = fs.statSync(absolutePath);
-          uploadedAt = new Date(stat.mtimeMs).toISOString();
-        } catch {}
-        return { url, uploadedAt };
-      })
-      .sort((a, b) => {
-        const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
-        const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
-        return at - bt;
-      });
-    return { attachments: sanitized, items };
+    const legacyItems = sanitizedLegacy.map(url => ({ url, uploadedAt: null as string | null }));
+
+    const items = [
+      ...dbItems.map(i => ({ url: `/visits/photos/draft/${patientId}/${dateStr}/${i.id}`, uploadedAt: i.createdAt.toISOString() })),
+      ...legacyItems,
+    ].sort((a, b) => {
+      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      return at - bt;
+    });
+
+    return { attachments: items.map(i => i.url), items };
   }
 
   async addAttachments(visitId: string, relPaths: string[], branchId: string) {
@@ -846,10 +848,12 @@ export class VisitsService {
     if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
       throw new NotFoundException('Visit not found in this branch');
     }
+    // Save any filesystem relPaths into legacy JSON for compatibility
     const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
     const sanitizedExisting = this.sanitizeAttachmentPaths(existing);
     const sanitizedIncoming = this.sanitizeAttachmentPaths(relPaths);
     const merged = Array.from(new Set([...(sanitizedExisting || []), ...(sanitizedIncoming || [])]));
+
     await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(merged) } });
     return { attachments: merged };
   }
@@ -860,29 +864,105 @@ export class VisitsService {
     if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
       throw new NotFoundException('Visit not found in this branch');
     }
+
+    // DB-backed attachments
+    const dbItems = await this.prisma.visitAttachment.findMany({
+      where: { visitId },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, createdAt: true },
+    });
+
+    // Legacy filesystem
     const files = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
     const sanitized = this.sanitizeAttachmentPaths(files);
-    // Optionally self-heal stored data if it contained unsafe entries
     if (sanitized.length !== files.length) {
       try {
         await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(sanitized) } });
       } catch {}
     }
-    const items = sanitized
-      .map(url => {
-        const absolutePath = join(process.cwd(), url.replace(/^\//, ''));
-        let uploadedAt: string | null = null;
-        try {
-          const stat = fs.statSync(absolutePath);
-          uploadedAt = new Date(stat.mtimeMs).toISOString();
-        } catch {}
-        return { url, uploadedAt };
-      })
-      .sort((a, b) => {
-        const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
-        const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
-        return at - bt;
-      });
-    return { attachments: sanitized, items };
+
+    const items = [
+      ...dbItems.map(i => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: i.createdAt.toISOString() })),
+      ...sanitized.map(url => ({ url, uploadedAt: null as string | null })),
+    ].sort((a, b) => {
+      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      return at - bt;
+    });
+
+    return { attachments: items.map(i => i.url), items };
+  }
+
+  private generateFilename(preferredExt: string): string {
+    const ext = preferredExt.startsWith('.') ? preferredExt.toLowerCase() : `.${preferredExt.toLowerCase()}`;
+    const unique = randomBytes(8).toString('hex');
+    return `${Date.now()}_${unique}${ext}`;
+  }
+
+  async createVisitAttachment(
+    visitId: string,
+    branchId: string,
+    params: { preferredExt: string; contentType: string; buffer: Buffer },
+  ) {
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    if (!visit) throw new NotFoundException('Visit not found');
+    if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
+      throw new NotFoundException('Visit not found in this branch');
+    }
+    const filename = this.generateFilename(params.preferredExt);
+    const created = await this.prisma.visitAttachment.create({
+      data: {
+        visitId,
+        filename,
+        contentType: params.contentType || 'image/jpeg',
+        sizeBytes: params.buffer.length,
+        data: params.buffer,
+      },
+      select: { id: true },
+    });
+    return { id: created.id, url: `/visits/${visitId}/photos/${created.id}` };
+  }
+
+  async createDraftAttachment(
+    patientId: string,
+    dateStr: string,
+    params: { preferredExt: string; contentType: string; buffer: Buffer },
+  ) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+    const filename = this.generateFilename(params.preferredExt);
+    const created = await this.prisma.draftAttachment.create({
+      data: {
+        patientId,
+        dateStr,
+        filename,
+        contentType: params.contentType || 'image/jpeg',
+        sizeBytes: params.buffer.length,
+        data: params.buffer,
+      },
+      select: { id: true },
+    });
+    return { id: created.id, url: `/visits/photos/draft/${patientId}/${dateStr}/${created.id}` };
+  }
+
+  async getVisitAttachmentBinary(visitId: string, attachmentId: string, branchId: string) {
+    const att = await this.prisma.visitAttachment.findFirst({
+      where: { id: attachmentId, visitId },
+      select: { data: true, contentType: true, visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } } },
+    });
+    if (!att) throw new NotFoundException('Attachment not found');
+    const pBranch = (att.visit as any).patient.branchId;
+    const dBranch = (att.visit as any).doctor.branchId;
+    if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
+    return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
+  }
+
+  async getDraftAttachmentBinary(patientId: string, dateStr: string, attachmentId: string) {
+    const att = await this.prisma.draftAttachment.findFirst({
+      where: { id: attachmentId, patientId, dateStr },
+      select: { data: true, contentType: true },
+    });
+    if (!att) throw new NotFoundException('Attachment not found');
+    return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
 }

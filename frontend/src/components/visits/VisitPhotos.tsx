@@ -76,53 +76,49 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const onUpload = async (evt: React.ChangeEvent<HTMLInputElement>) => {
     const f = evt.target.files;
     if (!f || f.length === 0) return;
-    
+
+    const files = Array.from(f);
     let actualVisitId = visitId;
-    
-    // If visitId is temp, create a real visit first or upload to draft by patient
-    if (visitId === 'temp') {
-      if (!patientId) { alert('Patient is required to upload draft photos'); return; }
-      const fd = new FormData();
-      Array.from(f).forEach(file => fd.append('files', file));
-      try {
-        setUploading(true);
-        const response = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, {
+
+    try {
+      setUploading(true);
+
+      // Draft (no visit yet): upload sequentially to draft endpoint
+      if (visitId === 'temp') {
+        if (!patientId) { alert('Patient is required to upload draft photos'); return; }
+        for (const file of files) {
+          const fd = new FormData();
+          fd.append('files', file);
+          const response = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+          if (!response.ok) throw new Error(`Draft upload failed: ${response.status}`);
+        }
+        await load();
+        return;
+      }
+
+      // Existing visit: upload sequentially to visit photos endpoint
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append('files', file);
+        const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
           method: 'POST',
           body: fd,
           credentials: 'include',
         });
-        if (!response.ok) throw new Error(`Draft upload failed: ${response.status}`);
-        await load();
-        if (inputRef.current) inputRef.current.value = '';
-        if (cameraRef.current) cameraRef.current.value = '';
-      } catch (e) {
-        console.error('Draft upload error:', e);
-        alert('Failed to upload photos. Please try again.');
-      } finally {
-        setUploading(false);
+        if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
       }
-      return;
-    }
-    
-    const fd = new FormData();
-    Array.from(f).forEach(file => fd.append('files', file));
-    try {
-      setUploading(true);
-      const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
-        method: 'POST',
-        body: fd,
-        credentials: 'include',
-      });
-      if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
-      }
+
       await load();
-      if (inputRef.current) inputRef.current.value = '';
-      if (cameraRef.current) cameraRef.current.value = '';
     } catch (e) {
       console.error('Upload error:', e);
       alert('Failed to upload photos. Please try again.');
     } finally {
+      if (inputRef.current) inputRef.current.value = '';
+      if (cameraRef.current) cameraRef.current.value = '';
       setUploading(false);
     }
   };
