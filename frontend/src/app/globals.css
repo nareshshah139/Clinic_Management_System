@@ -167,6 +167,14 @@
   .branded .text-gray-600,
   .branded .text-gray-500 { color: var(--muted-foreground) !important; }
 
+  /* Ensure hover states maintain contrast on brand surfaces */
+  .branded .hover\:bg-gray-100:hover { background-color: var(--accent-soft) !important; }
+  .branded .hover\:bg-blue-50:hover,
+  .branded .hover\:bg-blue-100:hover,
+  .branded .hover\:bg-green-50:hover,
+  .branded .hover\:bg-green-100:hover { background-color: var(--accent-soft) !important; }
+  .branded .hover\:text-gray-900:hover { color: var(--primary) !important; }
+
   /* Borders */
   .branded .border-gray-100,
   .branded .border-gray-200,
@@ -190,6 +198,12 @@
   .branded .ring-blue-600 { --tw-ring-color: var(--ring) !important; }
   .branded .border-blue-500,
   .branded .border-blue-600 { border-color: var(--ring) !important; }
+
+  /* Cards and content readability */
+  .branded [data-slot="card"],
+  .branded .card,
+  .branded .bg-card { background-color: var(--card) !important; color: var(--foreground) !important; }
+  .branded .bg-background { color: var(--foreground) !important; }
 }
 
 @layer base {

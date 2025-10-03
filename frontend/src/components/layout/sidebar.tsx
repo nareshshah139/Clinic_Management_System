@@ -151,7 +151,7 @@ export function Sidebar() {
                 'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors border',
                 isActive
                   ? 'bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--ring)] shadow-sm'
-                  : 'border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--primary)]'
+                  : 'border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]'
               )}
             >
               <item.icon
