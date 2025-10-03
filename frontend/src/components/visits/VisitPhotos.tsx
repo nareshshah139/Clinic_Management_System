@@ -22,7 +22,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
-  const baseUrl = apiBase || process.env.NEXT_PUBLIC_API_URL || '/api';
+  const baseUrl = apiBase || '/api';
 
   const toAbsolute = (path: string) => {
     if (!path) return path;

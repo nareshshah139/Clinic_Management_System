@@ -61,11 +61,13 @@ async function processImageUpload(file: Express.Multer.File) {
   }
 
   const detected = await fileTypeFromBuffer(file.buffer);
-  if (!detected || !detected.mime.startsWith('image/') || !detected.ext) {
+  if (!detected || !detected.mime.startsWith('image/')) {
     throw new BadRequestException('Unsupported image type');
   }
 
-  const format = detected.ext === 'jpg' ? 'jpeg' : detected.ext;
+  // Normalize unknown/HEIC-like formats to jpeg
+  const normalizedExt = !detected.ext || ['heic', 'heif', 'tif', 'tiff'].includes(detected.ext) ? 'jpeg' : (detected.ext === 'jpg' ? 'jpeg' : detected.ext);
+  const format = normalizedExt;
 
   try {
     const pipeline = sharp(file.buffer, { failOn: 'error' }).rotate().withMetadata({ exif: undefined });
@@ -96,7 +98,7 @@ async function ensurePatientDraftDir(patientId: string) {
 
 function imageFileFilter(_req: any, file: any, cb: any) {
   if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
   if (!allowed.includes(file.mimetype)) {
     return cb(new BadRequestException('Only image files are allowed'), false);
   }

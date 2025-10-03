@@ -1074,3 +1074,27 @@ model StockPrediction {
   @@index([confidence])
   @@index([branchId, predictionDate])
 }
+
+// WhatsApp Templates for outbound messages at various touchpoints
+model WhatsAppTemplate {
+  id          String   @id @default(cuid())
+  branchId    String
+  ownerId     String?  // null => branch-level template managed by admin
+  name        String
+  touchpoint  String   // e.g., appointment_confirmation, invoice_share, prescription_share
+  language    String?  // e.g., en, en_US, hi
+  contentHtml String?  // WYSIWYG HTML (stored as-is)
+  contentText String   // Fallback plain text (WhatsApp text messages)
+  variables   String?  // JSON array of variable keys used
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  owner       User?    @relation(fields: [ownerId], references: [id])
+  branch      Branch   @relation(fields: [branchId], references: [id])
+
+  @@map("whatsapp_templates")
+  @@index([branchId])
+  @@index([ownerId])
+  @@index([touchpoint])
+}

@@ -12,6 +12,7 @@ import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import React, { useRef } from 'react';
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([]);
@@ -29,6 +30,19 @@ export default function UsersManagement() {
   const [waTemplateLanguage, setWaTemplateLanguage] = useState('en');
   const [waPhoneNumberId, setWaPhoneNumberId] = useState('');
   const [waAccessToken, setWaAccessToken] = useState('');
+  // WhatsApp Template Editor state
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tplList, setTplList] = useState<any[]>([]);
+  const [tplLoading, setTplLoading] = useState(false);
+  const [tplEditing, setTplEditing] = useState<any | null>(null);
+  const [tplName, setTplName] = useState('');
+  const [tplTouchpoint, setTplTouchpoint] = useState('appointment_confirmation');
+  const [tplLanguage, setTplLanguage] = useState('en');
+  const [tplOwnerScope, setTplOwnerScope] = useState<'ME' | 'BRANCH'>('ME');
+  const [tplHtml, setTplHtml] = useState('');
+  const [tplText, setTplText] = useState('');
+  const [tplVars, setTplVars] = useState<string[]>(['patient_name','patient_phone','doctor_name','appointment_date','appointment_time','invoice_number','invoice_total','prescription_link']);
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -119,6 +133,109 @@ export default function UsersManagement() {
       setWaAccessToken('');
     }
     setWaOpen(true);
+  };
+
+  const stripHtml = (html: string) => {
+    try {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
+      return (tmp.textContent || tmp.innerText || '').trim();
+    } catch {
+      return html;
+    }
+  };
+
+  const loadTemplates = async () => {
+    try {
+      setTplLoading(true);
+      const res = await apiClient.getWhatsAppTemplates();
+      const list = (res as any)?.data || (res as any) || [];
+      setTplList(Array.isArray(list) ? list : []);
+    } finally {
+      setTplLoading(false);
+    }
+  };
+
+  const openTemplateEditor = async () => {
+    await loadTemplates();
+    setTplEditing(null);
+    setTplName('');
+    setTplTouchpoint('appointment_confirmation');
+    setTplLanguage('en');
+    setTplOwnerScope('ME');
+    setTplHtml('');
+    setTplText('');
+    setTplOpen(true);
+  };
+
+  const startEditTemplate = (tpl: any) => {
+    setTplEditing(tpl);
+    setTplName(String(tpl.name || ''));
+    setTplTouchpoint(String(tpl.touchpoint || 'appointment_confirmation'));
+    setTplLanguage(String(tpl.language || 'en'));
+    setTplOwnerScope(tpl.ownerId ? 'ME' : 'BRANCH');
+    setTplHtml(String(tpl.contentHtml || ''));
+    setTplText(String(tpl.contentText || ''));
+  };
+
+  const saveTemplate = async () => {
+    if (!tplName || !tplText) {
+      alert('Name and Plain Text are required');
+      return;
+    }
+    if (tplEditing?.id) {
+      await apiClient.updateWhatsAppTemplate(tplEditing.id, {
+        name: tplName,
+        touchpoint: tplTouchpoint,
+        language: tplLanguage,
+        contentHtml: tplHtml || undefined,
+        contentText: tplText,
+        variables: tplVars,
+      });
+    } else {
+      await apiClient.createWhatsAppTemplate({
+        name: tplName,
+        touchpoint: tplTouchpoint,
+        language: tplLanguage,
+        contentHtml: tplHtml || undefined,
+        contentText: tplText,
+        variables: tplVars,
+        ownerScope: tplOwnerScope,
+      });
+    }
+    await loadTemplates();
+    alert('Template saved');
+  };
+
+  const deleteTemplate = async (tpl: any) => {
+    if (!tpl?.id) return;
+    if (!confirm('Delete this template?')) return;
+    await apiClient.deleteWhatsAppTemplate(String(tpl.id));
+    await loadTemplates();
+  };
+
+  const applyEditorCommand = (cmd: string) => {
+    try {
+      document.execCommand(cmd, false);
+      if (editorRef.current) {
+        const html = editorRef.current.innerHTML;
+        setTplHtml(html);
+        setTplText(stripHtml(html));
+      }
+    } catch {}
+  };
+
+  const insertVariable = (v: string) => {
+    try {
+      const token = `{{${v}}}`;
+      if (editorRef.current) {
+        editorRef.current.focus();
+        document.execCommand('insertText', false, token);
+        const html = editorRef.current.innerHTML;
+        setTplHtml(html);
+        setTplText(stripHtml(html));
+      }
+    } catch {}
   };
 
   const saveWhatsAppSettings = async () => {
@@ -446,6 +563,16 @@ export default function UsersManagement() {
                                     )}
                                   </div>
 
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-medium">Templates</div>
+                                        <div className="text-xs text-gray-500">Create and customize WhatsApp templates for common actions.</div>
+                                      </div>
+                                      <Button size="sm" variant="outline" onClick={() => void openTemplateEditor()}>Manage</Button>
+                                    </div>
+                                  </div>
+
                                   <div className="flex justify-end gap-2">
                                     <Button variant="outline" onClick={() => setWaOpen(false)}>Close</Button>
                                     <Button onClick={() => void saveWhatsAppSettings()}>Save</Button>
@@ -464,6 +591,121 @@ export default function UsersManagement() {
           )}
         </CardContent>
       </Card>
+
+      {/* WhatsApp Template Editor Modal */}
+      <Dialog open={tplOpen} onOpenChange={setTplOpen}>
+        <DialogContent className="sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>WhatsApp Template Editor</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+            <div className="md:col-span-5 border rounded p-3">
+              <div className="flex items-center justify-between mb-2">
+                <div className="font-medium">Existing Templates</div>
+                <Button size="sm" variant="outline" onClick={() => startEditTemplate({})}>New</Button>
+              </div>
+              <div className="space-y-2 max-h-96 overflow-auto">
+                {tplLoading ? (
+                  <div className="text-sm text-gray-500">Loading templates...</div>
+                ) : tplList.length === 0 ? (
+                  <div className="text-sm text-gray-500">No templates yet.</div>
+                ) : (
+                  tplList.map((t) => (
+                    <div key={t.id} className={`border rounded p-2 ${tplEditing?.id === t.id ? 'ring-1 ring-blue-500' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-sm">{t.name}</div>
+                          <div className="text-xs text-gray-500">{t.touchpoint} • {t.language || 'en'} {t.ownerId ? '• Mine' : '• Branch'}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => startEditTemplate(t)}>Edit</Button>
+                          <Button size="sm" variant="outline" onClick={() => void deleteTemplate(t)}>Delete</Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+            <div className="md:col-span-7 border rounded p-3 space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-sm">Name</Label>
+                  <Input value={tplName} onChange={(e) => setTplName(e.target.value)} placeholder="e.g., Appointment Confirmation" />
+                </div>
+                <div>
+                  <Label className="text-sm">Touchpoint</Label>
+                  <Select value={tplTouchpoint} onValueChange={(v: string) => setTplTouchpoint(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="appointment_confirmation">Appointment Confirmation</SelectItem>
+                      <SelectItem value="appointment_reminder">Appointment Reminder</SelectItem>
+                      <SelectItem value="invoice_share">Invoice Share</SelectItem>
+                      <SelectItem value="prescription_share">Prescription Share</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-sm">Language</Label>
+                  <Input value={tplLanguage} onChange={(e) => setTplLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                </div>
+                <div>
+                  <Label className="text-sm">Ownership</Label>
+                  <Select value={tplOwnerScope} onValueChange={(v: string) => setTplOwnerScope(v as 'ME' | 'BRANCH')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ME">My Template</SelectItem>
+                      <SelectItem value="BRANCH">Branch Template (Admin)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Label className="text-sm">Designer (WYSIWYG)</Label>
+                  <div className="ml-auto flex gap-1">
+                    <Button size="sm" variant="outline" onClick={() => applyEditorCommand('bold')}>B</Button>
+                    <Button size="sm" variant="outline" onClick={() => applyEditorCommand('italic')}><span style={{ fontStyle: 'italic' }}>I</span></Button>
+                    <Button size="sm" variant="outline" onClick={() => applyEditorCommand('underline')}><span style={{ textDecoration: 'underline' }}>U</span></Button>
+                  </div>
+                </div>
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  className="border rounded min-h-32 p-2 prose prose-sm max-w-none"
+                  onInput={() => {
+                    const html = editorRef.current?.innerHTML || '';
+                    setTplHtml(html);
+                    setTplText(stripHtml(html));
+                  }}
+                  dangerouslySetInnerHTML={{ __html: tplHtml }}
+                />
+                <div className="text-xs text-gray-500 mt-1">Use variables to personalize messages.</div>
+              </div>
+
+              <div>
+                <Label className="text-sm">Variables</Label>
+                <div className="flex flex-wrap gap-2 mt-1">
+                  {tplVars.map((v) => (
+                    <Button key={v} size="sm" variant="outline" onClick={() => insertVariable(v)}>{`{{${v}}}`}</Button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-sm">Plain Text (fallback)</Label>
+                <Input value={tplText} onChange={(e) => setTplText(e.target.value)} placeholder="Auto-filled from WYSIWYG. You can edit." />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setTplOpen(false)}>Close</Button>
+                <Button onClick={() => void saveTemplate()}>Save Template</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 } 

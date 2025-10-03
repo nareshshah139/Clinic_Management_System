@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+const API_BASE_URL = '/api';
 
 export interface ApiError extends Error {
   status?: number;
@@ -408,6 +408,39 @@ export class ApiClient {
   // Utilities
   async translateTexts(target: 'HI' | 'TE', texts: string[]): Promise<{ translations: string[] }> {
     return this.post<{ translations: string[] }>('/visits/translate', { target, texts });
+  }
+
+  // WhatsApp Templates
+  async getWhatsAppTemplates(params?: { touchpoint?: string }) {
+    return this.get('/whatsapp/templates', params || {});
+  }
+
+  async createWhatsAppTemplate(data: {
+    name: string;
+    touchpoint: string;
+    language?: string;
+    contentHtml?: string;
+    contentText: string;
+    variables?: string[];
+    ownerScope?: 'ME' | 'BRANCH';
+  }) {
+    return this.post('/whatsapp/templates', data);
+  }
+
+  async updateWhatsAppTemplate(id: string, data: {
+    name?: string;
+    touchpoint?: string;
+    language?: string;
+    contentHtml?: string;
+    contentText?: string;
+    variables?: string[];
+    isActive?: boolean;
+  }) {
+    return this.patch(`/whatsapp/templates/${id}`, data);
+  }
+
+  async deleteWhatsAppTemplate(id: string) {
+    return this.delete(`/whatsapp/templates/${id}`);
   }
 }
 

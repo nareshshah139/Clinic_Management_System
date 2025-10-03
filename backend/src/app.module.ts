@@ -26,6 +26,7 @@ import { RequestContextInterceptor } from './shared/interceptors/request-context
 import { validateEnv } from './shared/config/env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { WhatsAppTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -59,6 +60,7 @@ const fullFeatureModules = [
   PharmacyModule,
   StockPredictionModule,
   AuditLogsModule,
+  WhatsAppTemplatesModule,
 ];
 
 const minimalModules = [AuthModule];

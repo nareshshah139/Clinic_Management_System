@@ -648,6 +648,21 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
     }
   };
 
+  const sendViaWhatsApp = async () => {
+    try {
+      if (!invoiceData.billingPhone) {
+        alert('Billing phone required to send via WhatsApp');
+        return;
+      }
+      const cleaned = invoiceData.billingPhone.startsWith('+') ? invoiceData.billingPhone : `+91${invoiceData.billingPhone}`;
+      const text = `Invoice ${new Date().toLocaleDateString()} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
+      alert(`This will send via backend: ${cleaned}\n${text}`);
+      // Backend endpoint could be added later to send with selected template
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -1101,6 +1116,10 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
               >
                 <Send className="h-4 w-4 mr-2" />
                 Confirm & Generate Invoice
+              </Button>
+              <Button onClick={() => void sendViaWhatsApp()} variant="outline" className="w-full">
+                <Send className="h-4 w-4 mr-2" />
+                Send via WhatsApp
               </Button>
             </div>
           </div>
