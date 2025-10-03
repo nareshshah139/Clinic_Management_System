@@ -487,7 +487,7 @@ export function Header() {
       }
       <div className="flex items-center space-x-4">
         {/* Branded mode toggle */}
-        <div className="hidden sm:flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
+        <div className="flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
           <Palette className="h-4 w-4 text-gray-500" />
           <span className="text-xs text-gray-600">Branded</span>
           <Switch

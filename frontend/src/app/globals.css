@@ -114,13 +114,18 @@
 
 /* Branded mode overrides: applied when html has class .branded */
 .branded {
-  /* Background and foreground remain as base; focus on brand accents */
-  /* Variables will be set inline by JS for dynamic palette, but these serve as safe defaults */
-  --primary: oklch(0.55 0.12 250);
-  --primary-foreground: oklch(0.98 0.003 247.858);
-  --accent: oklch(0.8 0.08 170);
-  --accent-foreground: oklch(0.2 0.03 180);
-  --ring: oklch(0.7 0.09 250);
+  /* Linaé brand mood: warm cream background, charcoal text, sage green accent */
+  /* Defaults here; JS may override via CSS variables when palette extracted from image */
+  /* Primary: Charcoal (logo text) */
+  --primary: #5b5d5d;
+  --primary-foreground: #ffffff;
+  /* Accent: Soft Sage (footer band) */
+  --accent: #98aa95;
+  --accent-foreground: #2e3730;
+  /* Ring/border slightly lighter than primary */
+  --ring: #74807b;
+  /* Optional subtle background tint toward cream; leave base background as-is for readability */
+  /* Sidebar alignment */
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-ring: var(--ring);
