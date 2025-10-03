@@ -135,6 +135,48 @@
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
   --sidebar-ring: var(--ring);
+  /* Soft tints for backgrounds using brand hues */
+  --primary-soft: #D8DED6;
+  --accent-soft: #E7EFE5;
+}
+
+/* Brand-consistent utility overrides so existing Tailwind classes reflect tokens */
+@layer utilities {
+  /* Surfaces */
+  .branded .bg-white { background-color: var(--card) !important; }
+  .branded .bg-gray-50 { background-color: var(--background) !important; }
+  .branded .bg-gray-100 { background-color: var(--surface, var(--card)) !important; }
+
+  /* Text */
+  .branded .text-gray-900 { color: var(--foreground) !important; }
+  .branded .text-gray-800,
+  .branded .text-gray-700,
+  .branded .text-gray-600,
+  .branded .text-gray-500 { color: var(--muted-foreground) !important; }
+
+  /* Borders */
+  .branded .border-gray-100,
+  .branded .border-gray-200,
+  .branded .border-gray-300 { border-color: var(--border) !important; }
+
+  /* Accents previously using Tailwind blues/greens/purples */
+  .branded .text-blue-600,
+  .branded .text-blue-700,
+  .branded .text-green-600,
+  .branded .text-purple-600 { color: var(--primary) !important; }
+
+  .branded .bg-blue-50,
+  .branded .bg-blue-100,
+  .branded .bg-green-50,
+  .branded .bg-green-100,
+  .branded .bg-purple-50,
+  .branded .bg-purple-100 { background-color: var(--accent-soft) !important; }
+
+  /* Rings and emphasis */
+  .branded .ring-blue-500,
+  .branded .ring-blue-600 { --tw-ring-color: var(--ring) !important; }
+  .branded .border-blue-500,
+  .branded .border-blue-600 { border-color: var(--ring) !important; }
 }
 
 @layer base {
