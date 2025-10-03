@@ -46,44 +46,46 @@ model User {
   stockTransactions StockTransaction[]
   branch            Branch             @relation(fields: [branchId], references: [id])
   visits            Visit[]
-  pharmacyInvoices  PharmacyInvoice[] @relation("PharmacyInvoiceDoctor")
-  createdPackages   PharmacyPackage[]    @relation("PharmacyPackageCreator")
+  pharmacyInvoices  PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
+  createdPackages   PharmacyPackage[]  @relation("PharmacyPackageCreator")
+  whatsappTemplates WhatsAppTemplate[]
 
   @@map("users")
 }
 
 model Branch {
-  id               String            @id @default(cuid())
-  name             String
-  description      String?
-  address          String
-  city             String?
-  state            String?
-  pincode          String?
-  phone            String?
-  email            String?
-  website          String?
-  gstNumber        String?
-  licenseNumber    String?
-  isActive         Boolean           @default(true)
-  metadata         String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  appointments     Appointment[]
-  inventoryItems   InventoryItem[]
-  newInvoices      NewInvoice[]
-  patients         Patient[]
-  purchaseOrders   PurchaseOrder[]
-  reorderRules     ReorderRule[]
-  rooms            Room[]
-  services         Service[]
-  stockAdjustments StockAdjustment[]
-  stockMovements   StockMovement[]
-  suppliers        Supplier[]
-  users            User[]
-  drugs            Drug[]
-  pharmacyInvoices PharmacyInvoice[]
-  pharmacyPackages PharmacyPackage[]
+  id                String             @id @default(cuid())
+  name              String
+  description       String?
+  address           String
+  city              String?
+  state             String?
+  pincode           String?
+  phone             String?
+  email             String?
+  website           String?
+  gstNumber         String?
+  licenseNumber     String?
+  isActive          Boolean            @default(true)
+  metadata          String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  appointments      Appointment[]
+  inventoryItems    InventoryItem[]
+  newInvoices       NewInvoice[]
+  patients          Patient[]
+  purchaseOrders    PurchaseOrder[]
+  reorderRules      ReorderRule[]
+  rooms             Room[]
+  services          Service[]
+  stockAdjustments  StockAdjustment[]
+  stockMovements    StockMovement[]
+  suppliers         Supplier[]
+  users             User[]
+  drugs             Drug[]
+  pharmacyInvoices  PharmacyInvoice[]
+  pharmacyPackages  PharmacyPackage[]
+  whatsappTemplates WhatsAppTemplate[]
 
   @@map("branches")
 }
@@ -129,8 +131,8 @@ model Room {
 }
 
 model Patient {
-  id               String        @id @default(cuid())
-  abhaId           String?       @unique
+  id               String            @id @default(cuid())
+  abhaId           String?           @unique
   name             String
   gender           String
   dob              DateTime
@@ -150,23 +152,22 @@ model Patient {
   occupation       String?
   guardianName     String?
   medicalHistory   String?
-  portalUserId     String?       @unique
+  portalUserId     String?           @unique
   branchId         String
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
   appointments     Appointment[]
   consents         Consent[]
   deviceLogs       DeviceLog[]
   invoices         Invoice[]
   labOrders        LabOrder[]
   newInvoices      NewInvoice[]
-  branch           Branch        @relation(fields: [branchId], references: [id])
-  portalUser       User?         @relation("PatientPortalUser", fields: [portalUserId], references: [id])
+  branch           Branch            @relation(fields: [branchId], references: [id])
+  portalUser       User?             @relation("PatientPortalUser", fields: [portalUserId], references: [id])
   referrals        Referral[]
   visits           Visit[]
   pharmacyInvoices PharmacyInvoice[]
 
-  @@map("patients")
   @@index([branchId])
   @@index([name])
   @@index([phone])
@@ -174,6 +175,7 @@ model Patient {
   @@index([createdAt])
   @@index([branchId, name])
   @@index([branchId, phone])
+  @@map("patients")
 }
 
 model Appointment {
@@ -230,18 +232,18 @@ model Visit {
 }
 
 model Prescription {
-  id              String   @id @default(cuid())
-  visitId         String   @unique
-  language        Language @default(EN)
-  items           String
-  instructions    String?
-  genericFirst    Boolean  @default(true)
-  pharmacistNotes String?
-  qrcode          String?
-  signature       String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  visit           Visit    @relation(fields: [visitId], references: [id])
+  id               String            @id @default(cuid())
+  visitId          String            @unique
+  language         Language          @default(EN)
+  items            String
+  instructions     String?
+  genericFirst     Boolean           @default(true)
+  pharmacistNotes  String?
+  qrcode           String?
+  signature        String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  visit            Visit             @relation(fields: [visitId], references: [id])
   pharmacyInvoices PharmacyInvoice[]
 
   @@map("prescriptions")
@@ -661,165 +663,165 @@ model AuditLog {
 
 // Drug Database Model
 model Drug {
-  id                String                 @id @default(cuid())
+  id                String   @id @default(cuid())
   name              String
   price             Float
-  isDiscontinued    Boolean                @default(false)
+  isDiscontinued    Boolean  @default(false)
   manufacturerName  String
-  type              String                 @default("allopathy")
+  type              String   @default("allopathy")
   packSizeLabel     String
   composition1      String?
   composition2      String?
-  barcode           String?                @unique
-  sku               String?                @unique
+  barcode           String?  @unique
+  sku               String?  @unique
   category          String?
   description       String?
   dosageForm        String?
   strength          String?
   storageConditions String?
-  expiryMonths      Int?                   @default(24)
-  minStockLevel     Int?                   @default(10)
-  maxStockLevel     Int?                   @default(1000)
-  isActive          Boolean                @default(true)
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
+  expiryMonths      Int?     @default(24)
+  minStockLevel     Int?     @default(10)
+  maxStockLevel     Int?     @default(1000)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
   branchId          String
-  
+
   // Relations
-  branch            Branch                 @relation(fields: [branchId], references: [id])
-  invoiceItems      PharmacyInvoiceItem[]
-  inventoryItems    InventoryItem[]
-  packageItems      PharmacyPackageItem[]
-  
-  @@map("drugs")
+  branch         Branch                @relation(fields: [branchId], references: [id])
+  invoiceItems   PharmacyInvoiceItem[]
+  inventoryItems InventoryItem[]
+  packageItems   PharmacyPackageItem[]
+
   @@index([name])
   @@index([manufacturerName])
   @@index([type])
   @@index([branchId])
   @@index([isActive])
   @@index([isDiscontinued])
+  @@map("drugs")
 }
 
 // Pharmacy Invoice Model
 model PharmacyInvoice {
-  id               String                    @id @default(cuid())
-  invoiceNumber    String                    @unique
-  patientId        String
-  doctorId         String?
-  prescriptionId   String?
-  branchId         String
-  
+  id             String  @id @default(cuid())
+  invoiceNumber  String  @unique
+  patientId      String
+  doctorId       String?
+  prescriptionId String?
+  branchId       String
+
   // Invoice Details
-  subtotal         Float
-  discountAmount   Float                     @default(0)
-  taxAmount        Float                     @default(0)
-  totalAmount      Float
-  
+  subtotal       Float
+  discountAmount Float @default(0)
+  taxAmount      Float @default(0)
+  totalAmount    Float
+
   // Payment Details
-  paymentMethod    PharmacyPaymentMethod
-  paymentStatus    PharmacyPaymentStatus     @default(PENDING)
-  paidAmount       Float                     @default(0)
-  balanceAmount    Float                     @default(0)
-  
+  paymentMethod PharmacyPaymentMethod
+  paymentStatus PharmacyPaymentStatus @default(PENDING)
+  paidAmount    Float                 @default(0)
+  balanceAmount Float                 @default(0)
+
   // Billing Address
-  billingName      String
-  billingPhone     String
-  billingAddress   String?
-  billingCity      String?
-  billingState     String?
-  billingPincode   String?
-  
+  billingName    String
+  billingPhone   String
+  billingAddress String?
+  billingCity    String?
+  billingState   String?
+  billingPincode String?
+
   // Invoice Status
-  status           PharmacyInvoiceStatus     @default(DRAFT)
-  notes            String?
-  
+  status PharmacyInvoiceStatus @default(DRAFT)
+  notes  String?
+
   // Timestamps
-  invoiceDate      DateTime                  @default(now())
-  dueDate          DateTime?
-  createdAt        DateTime                  @default(now())
-  updatedAt        DateTime                  @updatedAt
-  
+  invoiceDate DateTime  @default(now())
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   // Relations
-  patient          Patient                   @relation(fields: [patientId], references: [id])
-  doctor           User?                     @relation("PharmacyInvoiceDoctor", fields: [doctorId], references: [id])
-  prescription     Prescription?             @relation(fields: [prescriptionId], references: [id])
-  branch           Branch                    @relation(fields: [branchId], references: [id])
-  items            PharmacyInvoiceItem[]
-  payments         PharmacyPayment[]
-  
-  @@map("pharmacy_invoices")
+  patient      Patient               @relation(fields: [patientId], references: [id])
+  doctor       User?                 @relation("PharmacyInvoiceDoctor", fields: [doctorId], references: [id])
+  prescription Prescription?         @relation(fields: [prescriptionId], references: [id])
+  branch       Branch                @relation(fields: [branchId], references: [id])
+  items        PharmacyInvoiceItem[]
+  payments     PharmacyPayment[]
+
   @@index([patientId])
   @@index([doctorId])
   @@index([branchId])
   @@index([status])
   @@index([paymentStatus])
   @@index([invoiceDate])
+  @@map("pharmacy_invoices")
 }
 
 // Pharmacy Invoice Items
 model PharmacyInvoiceItem {
-  id              String           @id @default(cuid())
-  invoiceId       String
-  drugId          String?          // Made optional for package items
-  packageId       String?          // New field for package reference
-  
+  id        String  @id @default(cuid())
+  invoiceId String
+  drugId    String? // Made optional for package items
+  packageId String? // New field for package reference
+
   // Item Details
   quantity        Int
   unitPrice       Float
-  discountPercent Float            @default(0)
-  discountAmount  Float            @default(0)
-  taxPercent      Float            @default(0)
-  taxAmount       Float            @default(0)
+  discountPercent Float @default(0)
+  discountAmount  Float @default(0)
+  taxPercent      Float @default(0)
+  taxAmount       Float @default(0)
   totalAmount     Float
-  
+
   // Item Type
-  itemType        PharmacyItemType @default(DRUG)  // New enum
-  
+  itemType PharmacyItemType @default(DRUG) // New enum
+
   // Dosage Instructions
-  dosage          String?
-  frequency       String?
-  duration        String?
-  instructions    String?
-  
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  
+  dosage       String?
+  frequency    String?
+  duration     String?
+  instructions String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  invoice         PharmacyInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  drug            Drug?            @relation(fields: [drugId], references: [id])
-  package         PharmacyPackage? @relation(fields: [packageId], references: [id])
-  
-  @@map("pharmacy_invoice_items")
+  invoice PharmacyInvoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  drug    Drug?            @relation(fields: [drugId], references: [id])
+  package PharmacyPackage? @relation(fields: [packageId], references: [id])
+
   @@index([invoiceId])
   @@index([drugId])
   @@index([packageId])
   @@index([itemType])
+  @@map("pharmacy_invoice_items")
 }
 
 // Pharmacy Payments
 model PharmacyPayment {
-  id              String                 @id @default(cuid())
-  invoiceId       String
-  
+  id        String @id @default(cuid())
+  invoiceId String
+
   // Payment Details
-  amount          Float
-  method          PharmacyPaymentMethod
-  reference       String?
-  gateway         String?
-  status          PharmacyPaymentStatus  @default(PENDING)
-  
+  amount    Float
+  method    PharmacyPaymentMethod
+  reference String?
+  gateway   String?
+  status    PharmacyPaymentStatus @default(PENDING)
+
   // Timestamps
-  paymentDate     DateTime               @default(now())
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  
+  paymentDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   // Relations
-  invoice         PharmacyInvoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  
-  @@map("pharmacy_payments")
+  invoice PharmacyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
   @@index([invoiceId])
   @@index([status])
   @@index([paymentDate])
+  @@map("pharmacy_payments")
 }
 
 // Enums for Pharmacy System
@@ -975,72 +977,72 @@ enum PurchaseOrderStatus {
 
 // Pharmacy Package Model (for dermatology treatment combos)
 model PharmacyPackage {
-  id               String                      @id @default(cuid())
-  name             String
-  description      String?
-  category         String                      @default("Dermatology")
-  subcategory      String?                     // e.g., "Acne Treatment", "Anti-aging", "Hair Care"
-  
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  category    String  @default("Dermatology")
+  subcategory String? // e.g., "Acne Treatment", "Anti-aging", "Hair Care"
+
   // Pricing
-  originalPrice    Float                       // Sum of individual drug prices
-  packagePrice     Float                       // Discounted package price
-  discountPercent  Float                       @default(0)
-  
+  originalPrice   Float // Sum of individual drug prices
+  packagePrice    Float // Discounted package price
+  discountPercent Float @default(0)
+
   // Package Details
-  duration         String?                     // e.g., "4 weeks", "3 months"
-  instructions     String?                     // Usage instructions for the combo
-  indications      String?                     // What conditions this package treats
-  contraindications String?                    // When not to use
-  
+  duration          String? // e.g., "4 weeks", "3 months"
+  instructions      String? // Usage instructions for the combo
+  indications       String? // What conditions this package treats
+  contraindications String? // When not to use
+
   // Creator & Status
-  createdBy        String?                     // Doctor who created this package
-  isActive         Boolean                     @default(true)
-  isPublic         Boolean                     @default(false)  // If false, only creator can use
-  branchId         String
-  
+  createdBy String? // Doctor who created this package
+  isActive  Boolean @default(true)
+  isPublic  Boolean @default(false) // If false, only creator can use
+  branchId  String
+
   // Timestamps
-  createdAt        DateTime                    @default(now())
-  updatedAt        DateTime                    @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  creator          User?                       @relation("PharmacyPackageCreator", fields: [createdBy], references: [id])
-  branch           Branch                      @relation(fields: [branchId], references: [id])
-  items            PharmacyPackageItem[]
-  invoiceItems     PharmacyInvoiceItem[]
-  
-  @@map("pharmacy_packages")
+  creator      User?                 @relation("PharmacyPackageCreator", fields: [createdBy], references: [id])
+  branch       Branch                @relation(fields: [branchId], references: [id])
+  items        PharmacyPackageItem[]
+  invoiceItems PharmacyInvoiceItem[]
+
   @@index([branchId])
   @@index([category])
   @@index([subcategory])
   @@index([createdBy])
   @@index([isActive])
   @@index([isPublic])
+  @@map("pharmacy_packages")
 }
 
 // Pharmacy Package Items (drugs included in a package)
 model PharmacyPackageItem {
-  id              String            @id @default(cuid())
-  packageId       String
-  drugId          String
-  
+  id        String @id @default(cuid())
+  packageId String
+  drugId    String
+
   // Item Details
-  quantity        Int
-  dosage          String?           // e.g., "Apply twice daily"
-  frequency       String?           // e.g., "Morning and Evening"
-  duration        String?           // e.g., "Use for 4 weeks"
-  instructions    String?           // Special instructions for this drug in the combo
-  sequence        Int               @default(0)  // Order of application/usage
-  
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  
+  quantity     Int
+  dosage       String? // e.g., "Apply twice daily"
+  frequency    String? // e.g., "Morning and Evening"
+  duration     String? // e.g., "Use for 4 weeks"
+  instructions String? // Special instructions for this drug in the combo
+  sequence     Int     @default(0) // Order of application/usage
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  package         PharmacyPackage   @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  drug            Drug              @relation(fields: [drugId], references: [id])
-  
-  @@map("pharmacy_package_items")
+  package PharmacyPackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  drug    Drug            @relation(fields: [drugId], references: [id])
+
   @@index([packageId])
   @@index([drugId])
+  @@map("pharmacy_package_items")
 }
 
 // Add new enum for pharmacy item types
@@ -1059,42 +1061,42 @@ model StockPrediction {
   currentStock        Int
   averageMonthlyUsage Float
   trend               Float    @default(0)
-  confidence          String   // HIGH, MEDIUM, LOW, COLD_START
-  method              String   // TIME_SERIES, SIMILAR_ITEMS, CATEGORY_AVERAGE, MANUAL_RULE
+  confidence          String // HIGH, MEDIUM, LOW, COLD_START
+  method              String // TIME_SERIES, SIMILAR_ITEMS, CATEGORY_AVERAGE, MANUAL_RULE
   daysUntilStockout   Int?
   historicalData      Json?
   reasoning           String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  @@map("stock_predictions")
   @@index([branchId])
   @@index([drugId])
   @@index([predictionDate])
   @@index([confidence])
   @@index([branchId, predictionDate])
+  @@map("stock_predictions")
 }
 
 // WhatsApp Templates for outbound messages at various touchpoints
 model WhatsAppTemplate {
   id          String   @id @default(cuid())
   branchId    String
-  ownerId     String?  // null => branch-level template managed by admin
+  ownerId     String? // null => branch-level template managed by admin
   name        String
-  touchpoint  String   // e.g., appointment_confirmation, invoice_share, prescription_share
-  language    String?  // e.g., en, en_US, hi
-  contentHtml String?  // WYSIWYG HTML (stored as-is)
-  contentText String   // Fallback plain text (WhatsApp text messages)
-  variables   String?  // JSON array of variable keys used
+  touchpoint  String // e.g., appointment_confirmation, invoice_share, prescription_share
+  language    String? // e.g., en, en_US, hi
+  contentHtml String? // WYSIWYG HTML (stored as-is)
+  contentText String // Fallback plain text (WhatsApp text messages)
+  variables   String? // JSON array of variable keys used
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  owner       User?    @relation(fields: [ownerId], references: [id])
-  branch      Branch   @relation(fields: [branchId], references: [id])
+  owner  User?  @relation(fields: [ownerId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
 
-  @@map("whatsapp_templates")
   @@index([branchId])
   @@index([ownerId])
   @@index([touchpoint])
+  @@map("whatsapp_templates")
 }
