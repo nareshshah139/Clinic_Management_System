@@ -148,16 +148,16 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
+                'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors border',
                 isActive
-                  ? 'bg-[var(--accent-soft)] text-[var(--primary)]'
-                  : 'text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--primary)]'
+                  ? 'bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--ring)] shadow-sm'
+                  : 'border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--primary)]'
               )}
             >
               <item.icon
                 className={cn(
                   'mr-3 h-5 w-5',
-                  isActive ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)] group-hover:text-[var(--primary)]'
+                  isActive ? 'text-[var(--accent-foreground)]' : 'text-[var(--muted-foreground)] group-hover:text-[var(--primary)]'
                 )}
               />
               {item.name}
