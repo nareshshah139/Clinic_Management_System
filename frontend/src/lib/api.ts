@@ -442,6 +442,16 @@ export class ApiClient {
   async deleteWhatsAppTemplate(id: string) {
     return this.delete(`/whatsapp/templates/${id}`);
   }
+
+  async generateWhatsAppTemplate(data: {
+    touchpoint: string;
+    language?: string;
+    variables?: string[];
+    hints?: string;
+    tone?: 'formal' | 'friendly' | 'concise' | 'detailed';
+  }) {
+    return this.post('/whatsapp/templates/generate', data);
+  }
 }
 
 export const apiClient = new ApiClient();

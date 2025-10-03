@@ -43,6 +43,8 @@ export default function UsersManagement() {
   const [tplText, setTplText] = useState('');
   const [tplVars, setTplVars] = useState<string[]>(['patient_name','patient_phone','doctor_name','appointment_date','appointment_time','invoice_number','invoice_total','prescription_link']);
   const editorRef = useRef<HTMLDivElement | null>(null);
+  const [genLoading, setGenLoading] = useState(false);
+  const [genHints, setGenHints] = useState('');
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -658,6 +660,46 @@ export default function UsersManagement() {
                       <SelectItem value="BRANCH">Branch Template (Admin)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-9">
+                  <Label className="text-sm">Generator Hints (optional)</Label>
+                  <Input value={genHints} onChange={(e) => setGenHints(e.target.value)} placeholder="Add context like clinic name, specialty, signature" />
+                </div>
+                <div className="md:col-span-3 flex gap-2">
+                  <Button
+                    variant="outline"
+                    disabled={genLoading}
+                    onClick={async () => {
+                      try {
+                        setGenLoading(true);
+                        const res = await apiClient.generateWhatsAppTemplate({
+                          touchpoint: tplTouchpoint,
+                          language: tplLanguage,
+                          variables: tplVars,
+                          hints: genHints,
+                          tone: 'friendly',
+                        });
+                        const out = (res as any) || {};
+                        const html = String(out.contentHtml || '');
+                        const text = String(out.contentText || '');
+                        const vars = Array.isArray(out.variables) ? out.variables : tplVars;
+                        setTplHtml(html);
+                        setTplText(text);
+                        setTplVars(vars);
+                        // Reflect in editor
+                        if (editorRef.current) {
+                          editorRef.current.innerHTML = html;
+                        }
+                      } catch (e) {
+                        alert((e as any)?.body?.message || (e as any)?.message || 'Failed to generate');
+                      } finally {
+                        setGenLoading(false);
+                      }
+                    }}
+                  >{genLoading ? 'Generating…' : 'Generate'}</Button>
                 </div>
               </div>
 

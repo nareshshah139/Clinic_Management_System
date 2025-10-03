@@ -25,6 +25,14 @@ class UpdateTemplateBody {
   isActive?: boolean;
 }
 
+class GenerateTemplateBody {
+  touchpoint!: string;
+  language?: string;
+  variables?: string[];
+  hints?: string;
+  tone?: 'formal' | 'friendly' | 'concise' | 'detailed';
+}
+
 @ApiTags('WhatsApp Templates')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -69,6 +77,13 @@ export class WhatsAppTemplatesController {
     const role: string = req.user?.role;
     const isAdminOrOwner = role === 'ADMIN' || role === 'OWNER';
     return this.svc.remove(req.user.branchId, id, req.user.id, isAdminOrOwner);
+  }
+
+  @Post('generate')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @ApiOperation({ summary: 'Generate a WhatsApp template suggestion via OpenAI GPT' })
+  async generate(@Body() body: GenerateTemplateBody) {
+    return this.svc.generate(body);
   }
 }
 

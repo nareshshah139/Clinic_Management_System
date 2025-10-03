@@ -22,7 +22,12 @@ export function validateEnv(config: Record<string, unknown>) {
   }
 
   if (!config['OPENAI_API_KEY']) {
-    logger.warn('OPENAI_API_KEY is not set. /visits/transcribe endpoint will be disabled.');
+    logger.warn('OPENAI_API_KEY is not set. AI endpoints (/visits/transcribe, /whatsapp/templates/generate) will be disabled.');
+  }
+
+  if (!config['OPENAI_TEMPLATE_MODEL']) {
+    // Default model for WhatsApp template generation
+    config['OPENAI_TEMPLATE_MODEL'] = 'gpt-5-mini';
   }
 
   return config;
