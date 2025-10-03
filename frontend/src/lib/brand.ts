@@ -139,12 +139,15 @@ export function applyBrandPaletteToCssVariables(palette: BrandPalette) {
 
 export function defaultPalette(): BrandPalette {
   return {
-    // Linaé mood defaults: charcoal primary, sage accent
-    primary: '#5b5d5d',
+    // Linaé fixed tokens
+    // primary -> Deep Sage (buttons/links)
+    primary: '#616B60',
     primaryForeground: '#ffffff',
-    accent: '#98aa95',
-    accentForeground: '#2e3730',
-    ring: '#74807b',
+    // accent -> Sage (chips/focus rings)
+    accent: '#A3B3A0',
+    accentForeground: '#2E3730',
+    // ring follows accent
+    ring: '#A3B3A0',
   };
 }
 

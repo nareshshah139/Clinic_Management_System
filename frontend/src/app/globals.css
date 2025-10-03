@@ -114,17 +114,23 @@
 
 /* Branded mode overrides: applied when html has class .branded */
 .branded {
-  /* Linaé brand mood: warm cream background, charcoal text, sage green accent */
-  /* Defaults here; JS may override via CSS variables when palette extracted from image */
-  /* Primary: Charcoal (logo text) */
-  --primary: #5b5d5d;
+  /* Linaé tokens */
+  /* Backgrounds */
+  --background: #FFFCEC; /* --bg Warm Ivory */
+  --card: #F4F1E2; /* --surface Ivory 100 */
+  --popover: #F4F1E2;
+  /* Text */
+  --foreground: #595A5C; /* --text Slate */
+  --muted-foreground: #6F7173; /* --text-muted Slate 500 */
+  /* Accents */
+  --accent: #A3B3A0; /* Sage */
+  --accent-foreground: #2E3730; /* dark text on accent */
+  --primary: #616B60; /* Deep Sage as strong accent for CTAs */
   --primary-foreground: #ffffff;
-  /* Accent: Soft Sage (footer band) */
-  --accent: #98aa95;
-  --accent-foreground: #2e3730;
-  /* Ring/border slightly lighter than primary */
-  --ring: #74807b;
-  /* Optional subtle background tint toward cream; leave base background as-is for readability */
+  /* Borders and ring */
+  --border: #C3D6C0; /* Sage Tint */
+  --input: #C3D6C0;
+  --ring: #A3B3A0; /* use Sage for focus */
   /* Sidebar alignment */
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
