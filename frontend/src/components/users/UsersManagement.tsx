@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<User[]>([]);
@@ -21,6 +22,11 @@ export default function UsersManagement() {
   const [allPermissions, setAllPermissions] = useState<string[]>([]);
   const [rolePerms, setRolePerms] = useState<string[]>([]);
   const [roleSelect, setRoleSelect] = useState<string>('ADMIN');
+  const [waOpen, setWaOpen] = useState(false);
+  const [waAutoConfirm, setWaAutoConfirm] = useState(false);
+  const [waUseTemplate, setWaUseTemplate] = useState(false);
+  const [waTemplateName, setWaTemplateName] = useState('');
+  const [waTemplateLanguage, setWaTemplateLanguage] = useState('en');
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -90,6 +96,44 @@ export default function UsersManagement() {
     if (!confirm('Delete user?')) return;
     await apiClient.deleteUser(u.id);
     await fetchUsers();
+  };
+
+  const openWhatsAppSettings = (u: User) => {
+    setSelectedUser(u);
+    const meta = (u as any)?.metadata || {};
+    try {
+      setWaAutoConfirm(Boolean(meta?.whatsappAutoConfirmAppointments));
+      setWaUseTemplate(Boolean(meta?.whatsappUseTemplate));
+      setWaTemplateName(String(meta?.whatsappTemplateName || ''));
+      setWaTemplateLanguage(String(meta?.whatsappTemplateLanguage || 'en'));
+    } catch {
+      setWaAutoConfirm(false);
+      setWaUseTemplate(false);
+      setWaTemplateName('');
+      setWaTemplateLanguage('en');
+    }
+    setWaOpen(true);
+  };
+
+  const saveWhatsAppSettings = async () => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      const existing = ((selectedUser as any)?.metadata || {}) as Record<string, any>;
+      const metadata = {
+        ...existing,
+        whatsappAutoConfirmAppointments: waAutoConfirm,
+        whatsappUseTemplate: waUseTemplate,
+        whatsappTemplateName: waTemplateName || undefined,
+        whatsappTemplateLanguage: waTemplateLanguage || undefined,
+      } as Record<string, any>;
+      await apiClient.updateUserProfile(selectedUser.id, { metadata });
+      setWaOpen(false);
+      await fetchUsers();
+      alert('WhatsApp settings saved');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openRolePerms = async (u: User) => {
@@ -334,6 +378,57 @@ export default function UsersManagement() {
                               </div>
                             </DialogContent>
                           </Dialog>
+                          {u.role === 'DOCTOR' && (
+                            <Dialog open={waOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWaOpen(open); if (!open) setSelectedUser(null); }}>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" onClick={() => openWhatsAppSettings(u)}>WhatsApp Settings</Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[520px]">
+                                <DialogHeader>
+                                  <DialogTitle>Doctor WhatsApp Settings</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-medium">Send WhatsApp on appointment creation</div>
+                                        <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
+                                      </div>
+                                      <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
+                                    </div>
+                                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                                  </div>
+
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="font-medium">Use WhatsApp Template</div>
+                                        <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
+                                      </div>
+                                      <Switch checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
+                                    </div>
+                                    {waUseTemplate && (
+                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div>
+                                          <Label className="text-sm">Template Name</Label>
+                                          <Input value={waTemplateName} onChange={(e) => setWaTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
+                                        </div>
+                                        <div>
+                                          <Label className="text-sm">Language Code</Label>
+                                          <Input value={waTemplateLanguage} onChange={(e) => setWaTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={() => setWaOpen(false)}>Close</Button>
+                                    <Button onClick={() => void saveWhatsAppSettings()}>Save</Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

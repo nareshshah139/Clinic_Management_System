@@ -128,12 +128,12 @@ export function Sidebar() {
   const navigationItems = useMemo(() => filterNavigationByRole(navigation, role), [role]);
 
   return (
-    <div className="flex h-full w-64 flex-col bg-white border-r border-gray-200">
+    <div className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]">
       {/* Logo */}
-      <div className="flex h-16 items-center px-6 border-b border-gray-200">
+      <div className="flex h-16 items-center px-6 border-b border-[var(--border)]">
         <div className="flex items-center">
-          <Stethoscope className="h-8 w-8 text-blue-600" />
-          <span className="ml-2 text-xl font-semibold text-gray-900">
+          <Stethoscope className="h-8 w-8 text-[var(--primary)]" />
+          <span className="ml-2 text-xl font-semibold text-[var(--foreground)]">
             ClinicMS
           </span>
         </div>
@@ -150,14 +150,14 @@ export function Sidebar() {
               className={cn(
                 'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors',
                 isActive
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+                  ? 'bg-[var(--accent-soft)] text-[var(--primary)]'
+                  : 'text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--primary)]'
               )}
             >
               <item.icon
                 className={cn(
                   'mr-3 h-5 w-5',
-                  isActive ? 'text-blue-700' : 'text-gray-400 group-hover:text-gray-500'
+                  isActive ? 'text-[var(--primary)]' : 'text-[var(--muted-foreground)] group-hover:text-[var(--primary)]'
                 )}
               />
               {item.name}
@@ -167,19 +167,19 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-gray-200 p-4">
+      <div className="border-t border-[var(--border)] p-4">
         <div className="flex items-center">
-          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
-            <UserIcon className="h-4 w-4 text-blue-600" />
+          <div className="h-8 w-8 rounded-full bg-[var(--accent-soft)] flex items-center justify-center">
+            <UserIcon className="h-4 w-4 text-[var(--primary)]" />
           </div>
           <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-gray-900">
+            <p className="text-sm font-medium text-[var(--foreground)]">
               {loading ? 'Loading…' : `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || user?.email || 'Unknown User'}
             </p>
-            <p className="text-xs text-gray-500">{role ?? 'Unknown Role'}</p>
+            <p className="text-xs text-[var(--muted-foreground)]">{role ?? 'Unknown Role'}</p>
           </div>
           <button
-            className="ml-2 p-1 text-gray-400 hover:text-gray-600"
+            className="ml-2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
             onClick={() => { void logout(); }}
             aria-label="Log out"
           >
