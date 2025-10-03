@@ -12,6 +12,9 @@ interface WhatsAppOptions {
   toPhoneE164: string; // E.164 format, e.g., +919999999999
   template?: { name: string; language: string; components?: any[] };
   text?: string;
+  // Optional per-doctor overrides
+  overrideToken?: string;
+  overridePhoneId?: string; // Meta WhatsApp Business Phone Number ID
 }
 
 @Injectable()
@@ -58,14 +61,16 @@ export class NotificationsService {
   }
 
   async sendWhatsApp(opts: WhatsAppOptions): Promise<void> {
-    if (!this.whatsappToken || !this.whatsappPhoneId) {
+    const token = opts.overrideToken || this.whatsappToken;
+    const phoneId = opts.overridePhoneId || this.whatsappPhoneId;
+    if (!token || !phoneId) {
       this.logger.warn('WhatsApp is not configured; skipping message');
       return;
     }
-    const url = `https://graph.facebook.com/v18.0/${this.whatsappPhoneId}/messages`;
+    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.whatsappToken}`,
+      Authorization: `Bearer ${token}`,
     } as any;
     const body: any = {
       messaging_product: 'whatsapp',

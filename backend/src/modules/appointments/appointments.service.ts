@@ -92,12 +92,17 @@ export class AppointmentsService {
       let useTemplate = false;
       let templateName: string | undefined;
       let templateLanguage: string | undefined;
+      let waOverrideToken: string | undefined;
+      let waOverridePhoneId: string | undefined;
       try {
         const meta = doctorSettings?.metadata ? JSON.parse(doctorSettings.metadata) : null;
         allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
         useTemplate = !!meta?.whatsappUseTemplate;
         templateName = typeof meta?.whatsappTemplateName === 'string' ? meta.whatsappTemplateName : undefined;
         templateLanguage = typeof meta?.whatsappTemplateLanguage === 'string' ? meta.whatsappTemplateLanguage : undefined;
+        // Optional per-doctor credential overrides
+        waOverrideToken = typeof meta?.whatsappAccessToken === 'string' ? meta.whatsappAccessToken : undefined;
+        waOverridePhoneId = typeof meta?.whatsappPhoneNumberId === 'string' ? meta.whatsappPhoneNumberId : undefined;
       } catch {}
 
       const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
@@ -126,6 +131,8 @@ export class AppointmentsService {
                 name: templateName,
                 language: templateLanguage,
               },
+              overrideToken: waOverrideToken,
+              overridePhoneId: waOverridePhoneId,
             })
             .catch(() => void 0);
         } else {
@@ -133,6 +140,8 @@ export class AppointmentsService {
             .sendWhatsApp({
               toPhoneE164: e164,
               text: summary,
+              overrideToken: waOverrideToken,
+              overridePhoneId: waOverridePhoneId,
             })
             .catch(() => void 0);
         }

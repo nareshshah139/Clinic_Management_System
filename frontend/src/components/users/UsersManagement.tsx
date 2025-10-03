@@ -27,6 +27,8 @@ export default function UsersManagement() {
   const [waUseTemplate, setWaUseTemplate] = useState(false);
   const [waTemplateName, setWaTemplateName] = useState('');
   const [waTemplateLanguage, setWaTemplateLanguage] = useState('en');
+  const [waPhoneNumberId, setWaPhoneNumberId] = useState('');
+  const [waAccessToken, setWaAccessToken] = useState('');
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -106,11 +108,15 @@ export default function UsersManagement() {
       setWaUseTemplate(Boolean(meta?.whatsappUseTemplate));
       setWaTemplateName(String(meta?.whatsappTemplateName || ''));
       setWaTemplateLanguage(String(meta?.whatsappTemplateLanguage || 'en'));
+      setWaPhoneNumberId(String(meta?.whatsappPhoneNumberId || ''));
+      setWaAccessToken(''); // do not prefill token for security; allow overwrite
     } catch {
       setWaAutoConfirm(false);
       setWaUseTemplate(false);
       setWaTemplateName('');
       setWaTemplateLanguage('en');
+      setWaPhoneNumberId('');
+      setWaAccessToken('');
     }
     setWaOpen(true);
   };
@@ -126,6 +132,10 @@ export default function UsersManagement() {
         whatsappUseTemplate: waUseTemplate,
         whatsappTemplateName: waTemplateName || undefined,
         whatsappTemplateLanguage: waTemplateLanguage || undefined,
+        // Admin-configurable per-doctor credentials
+        whatsappPhoneNumberId: waPhoneNumberId || undefined,
+        // Only persist token if a new one is provided (avoid overwriting with empty)
+        ...(waAccessToken ? { whatsappAccessToken: waAccessToken } : {}),
       } as Record<string, any>;
       await apiClient.updateUserProfile(selectedUser.id, { metadata });
       setWaOpen(false);
@@ -397,6 +407,21 @@ export default function UsersManagement() {
                                       <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
                                     </div>
                                     <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                                  </div>
+
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="grid grid-cols-1 gap-3">
+                                      <div>
+                                        <Label className="text-sm">Doctor WhatsApp Phone Number ID</Label>
+                                        <Input value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
+                                        <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm">Doctor WhatsApp Access Token</Label>
+                                        <Input type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
+                                        <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
+                                      </div>
+                                    </div>
                                   </div>
 
                                   <div className="border rounded p-3 space-y-3">
