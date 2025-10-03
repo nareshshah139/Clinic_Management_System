@@ -1,11 +1,12 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 import AppointmentsCalendar from '@/components/appointments/AppointmentsCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
-export default function AppointmentsPage() {
+function AppointmentsPageInner() {
   const search = useSearchParams();
   const prefillPatientId = search.get('patientId') || undefined;
   return (
@@ -21,5 +22,13 @@ export default function AppointmentsPage() {
         <AppointmentScheduler prefillPatientId={prefillPatientId} />
       </TabsContent>
     </Tabs>
+  );
+}
+
+export default function AppointmentsPage() {
+  return (
+    <Suspense fallback={<div className="p-4">Loading...</div>}>
+      <AppointmentsPageInner />
+    </Suspense>
   );
 }

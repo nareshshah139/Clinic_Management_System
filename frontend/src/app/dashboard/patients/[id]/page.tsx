@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,9 +17,10 @@ type VisitEntry = Record<string, unknown> & {
   plan?: unknown;
 };
 
-export default function PatientDetailsPage({ params }: { params: { id: string } }) {
+export default function PatientDetailsPage() {
   const router = useRouter();
-  const { id } = params;
+  const params = useParams<{ id: string }>();
+  const id = params?.id as unknown as string;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
