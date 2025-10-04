@@ -144,6 +144,9 @@ export class WhatsAppTemplatesService {
       { role: 'user', content: JSON.stringify(user) },
     ];
 
+    // Use higher creativity: set temperature to 1 for template generation
+    const temperature = 1;
+
     const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -152,7 +155,7 @@ export class WhatsAppTemplatesService {
       },
       body: JSON.stringify({
         model,
-        temperature: 0.3,
+        temperature,
         response_format: { type: 'json_object' },
         messages,
       }),
