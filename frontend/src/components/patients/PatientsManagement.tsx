@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatPatientName } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/lib/types';
 
@@ -39,8 +39,10 @@ export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [listLoading, setListLoading] = useState<boolean>(false);
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
   const [search, setSearch] = useState<string>('');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
   const [open, setOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -59,6 +61,7 @@ export default function PatientsManagement() {
   const [linkPortalOpen, setLinkPortalOpen] = useState<boolean>(false);
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
+  const fetchIdRef = useRef(0);
   const [form, setForm] = useState<PatientFormState>({
     abhaId: '',
     firstName: '',
@@ -111,20 +114,28 @@ export default function PatientsManagement() {
     return Array.from(candidates).slice(0, 8);
   }, [search, patients]);
 
+  // Seed search from URL param once on mount
+  const searchParams = useSearchParams();
   useEffect(() => {
-    void fetchPatients();
+    const q = (searchParams?.get('search') || '').trim();
+    if (q) {
+      setSearch(q);
+      setDebouncedSearch(q);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Debounce search input and reset to page 1 on search/gender change
   useEffect(() => {
-    // Reset to page 1 when search or filter changes
     setCurrentPage(1);
-    const t = setTimeout(() => void fetchPatients(1), 500); // Increased debounce time
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 500);
     return () => clearTimeout(t);
   }, [search, genderFilter]);
 
+  // Trigger fetch when pagination, page size, gender, or debounced search changes
   useEffect(() => {
     void fetchPatients(currentPage);
-  }, [currentPage, pageSize]);
+  }, [currentPage, pageSize, debouncedSearch, genderFilter]);
 
   // Save page size preference
   useEffect(() => {
@@ -135,12 +146,13 @@ export default function PatientsManagement() {
 
   const fetchPatients = async (page: number = currentPage) => {
     try {
-      setLoading(true);
+      setListLoading(true);
       setError(null);
+      const requestId = ++fetchIdRef.current;
       const normGender = genderFilter !== 'ALL' ? genderFilter : undefined;
       
       // Only search if we have at least 2 characters
-      const searchTerm = search.trim().length >= 2 ? search.trim() : undefined;
+      const searchTerm = debouncedSearch.length >= 2 ? debouncedSearch : undefined;
       
       const response = await apiClient.getPatients({
         page,
@@ -184,6 +196,7 @@ export default function PatientsManagement() {
           updatedAt: bp.updatedAt,
         };
       });
+      if (requestId !== fetchIdRef.current) return; // stale response guard
       setPatients(mapped);
       
       // Update pagination metadata
@@ -192,7 +205,9 @@ export default function PatientsManagement() {
         setTotalPages(meta.totalPages);
         setTotalPatients(meta.total);
       } else if (typeof (response as { total?: number }).total === 'number') {
-        setTotalPatients((response as { total: number }).total);
+        const total = (response as { total: number }).total;
+        setTotalPatients(total);
+        setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
       }
     } catch (err: any) {
       console.error('Failed to fetch patients', err);
@@ -201,7 +216,7 @@ export default function PatientsManagement() {
       setTotalPages(1);
       setTotalPatients(0);
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
   };
 
@@ -240,7 +255,7 @@ export default function PatientsManagement() {
 
   const submitPatient = async () => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       setError(null);
       
       // Basic validation
@@ -248,11 +263,21 @@ export default function PatientsManagement() {
         setError('Please fill in all required fields (Name, Phone, Date of Birth)');
         return;
       }
+      if (form.abhaId && form.abhaId.trim().length > 0) {
+        const abha = form.abhaId.trim();
+        const isDigits = /^\d{14}$/.test(abha);
+        if (!isDigits) {
+          setError('ABHA ID must be a 14-digit number');
+          return;
+        }
+      }
       
       const name = `${form.firstName} ${form.lastName}`.trim();
       const payload = {
         abhaId: form.abhaId || undefined,
         name: name || form.firstName || form.lastName,
+        firstName: form.firstName || undefined,
+        lastName: form.lastName || undefined,
         gender: form.gender,
         dob: form.dateOfBirth,
         phone: form.phone,
@@ -282,7 +307,7 @@ export default function PatientsManagement() {
       console.error('Failed to save patient', err);
       setError(err?.message || 'Failed to save patient. Please check your input and try again.');
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -363,8 +388,10 @@ export default function PatientsManagement() {
     })();
   };
 
-  const calculateAge = (dob: string): number => {
+  const calculateAge = (dob: string): number | null => {
+    if (!dob) return null;
     const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return null;
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
@@ -412,7 +439,7 @@ export default function PatientsManagement() {
       return;
     }
     try {
-      setLoading(true);
+      setActionLoading(true);
       await apiClient.linkPortalUser(linkPortalTarget.id, { email: linkPortalEmail.trim() });
       toast({
         title: 'Portal user linked',
@@ -429,7 +456,7 @@ export default function PatientsManagement() {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -442,7 +469,7 @@ export default function PatientsManagement() {
         label: 'Confirm',
         onClick: async () => {
           try {
-            setLoading(true);
+            setActionLoading(true);
             await apiClient.unlinkPortalUser(patient.id);
             toast({
               title: 'Portal user unlinked',
@@ -456,7 +483,7 @@ export default function PatientsManagement() {
               variant: 'destructive',
             });
           } finally {
-            setLoading(false);
+            setActionLoading(false);
           }
         },
       },
@@ -465,12 +492,12 @@ export default function PatientsManagement() {
 
   const handleSendWhatsApp = async (patient: Patient) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
       await apiClient.sendAppointmentReminder(patient.id);
       toast({
         title: 'Reminder sent',
         description: `WhatsApp reminder sent to ${formatPatientName(patient)}`,
-        variant: 'success',
+        variant: 'default',
       });
     } catch (err: any) {
       toast({
@@ -479,7 +506,7 @@ export default function PatientsManagement() {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -613,7 +640,7 @@ export default function PatientsManagement() {
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
-              <Button onClick={submitPatient} disabled={loading}>{form.id ? 'Save Changes' : 'Create'}</Button>
+              <Button onClick={submitPatient} disabled={actionLoading}>{form.id ? 'Save Changes' : 'Create'}</Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -696,7 +723,7 @@ export default function PatientsManagement() {
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={() => { setLinkPortalOpen(false); setLinkPortalTarget(null); setLinkPortalEmail(''); }}>Cancel</Button>
-            <Button onClick={confirmLinkPortalUser} disabled={loading || !linkPortalEmail.trim()}>Link</Button>
+            <Button onClick={confirmLinkPortalUser} disabled={actionLoading || !linkPortalEmail.trim()}>Link</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -714,7 +741,7 @@ export default function PatientsManagement() {
                 Try Again
               </Button>
             </div>
-          ) : loading ? (
+          ) : listLoading ? (
             <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
           ) : patients.length === 0 ? (
             <div className="text-center py-10 text-gray-500">
@@ -730,7 +757,7 @@ export default function PatientsManagement() {
                     <TableHead>Gender</TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>ABHA ID</TableHead>
-                    <TableHead>Last Visit</TableHead>
+                    {patients.some(p => !!p.lastVisitDate) && <TableHead>Last Visit</TableHead>}
                     <TableHead>Referral</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
@@ -749,7 +776,7 @@ export default function PatientsManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{calculateAge(p.dob)} yrs</div>
+                        <div className="text-sm">{calculateAge(p.dob) !== null ? `${calculateAge(p.dob)} yrs` : <span className="text-gray-400">—</span>}</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
@@ -763,9 +790,11 @@ export default function PatientsManagement() {
                       <TableCell>
                         <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
                       </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
-                      </TableCell>
+                      {patients.some(pp => !!pp.lastVisitDate) && (
+                        <TableCell>
+                          <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
                       </TableCell>
@@ -793,7 +822,7 @@ export default function PatientsManagement() {
           )}
           
           {/* Pagination Controls */}
-          {!loading && patients.length > 0 && totalPages > 1 && (
+          {!listLoading && patients.length > 0 && totalPages > 1 && (
             <div className="flex items-center justify-between pt-4 border-t">
               <div className="text-sm text-gray-500">
                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
