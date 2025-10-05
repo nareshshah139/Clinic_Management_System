@@ -57,21 +57,17 @@ export default function PharmacyPage() {
       try {
         await apiClient.get('/auth/me');
         setIsAuthenticated(true);
-      } catch (error) {
-        try {
-          console.log('Auto-logging in with test credentials...');
-          await apiClient.login('9000000000', 'password123');
-          setIsAuthenticated(true);
-        } catch (loginError) {
-          console.error('Auto-login failed:', loginError);
-          router.push('/login?next=' + encodeURIComponent(window.location.pathname));
-        }
+      } catch (_error) {
+        const next = typeof window !== 'undefined'
+          ? window.location.pathname + window.location.search
+          : '/dashboard/pharmacy';
+        router.push('/login?next=' + encodeURIComponent(next));
       } finally {
         setIsLoading(false);
       }
     };
 
-    checkAuth();
+    void checkAuth();
   }, [router]);
 
   useEffect(() => {

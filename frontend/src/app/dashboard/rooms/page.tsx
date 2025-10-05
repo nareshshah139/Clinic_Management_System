@@ -5,9 +5,13 @@ import RoomsManagement from '@/components/rooms/RoomsManagement';
 import RoomCalendar from '@/components/rooms/RoomCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Settings } from 'lucide-react';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 
 export default function RoomsPage() {
   const [activeTab, setActiveTab] = useState('calendar');
+  const { user } = useDashboardUser();
+  const role = user?.role;
+  const canManageRooms = role === 'ADMIN' || role === 'DOCTOR' || role === 'OWNER';
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -26,10 +30,12 @@ export default function RoomsPage() {
             <Calendar className="h-4 w-4" />
             Calendar View
           </TabsTrigger>
-          <TabsTrigger value="management" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Manage Rooms
-          </TabsTrigger>
+          {canManageRooms && (
+            <TabsTrigger value="management" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Manage Rooms
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="calendar" className="space-y-6">
@@ -40,13 +46,15 @@ export default function RoomsPage() {
           <RoomCalendar />
         </TabsContent>
 
-        <TabsContent value="management" className="space-y-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Settings className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold">Room Configuration & Management</h2>
-          </div>
-          <RoomsManagement />
-        </TabsContent>
+        {canManageRooms && (
+          <TabsContent value="management" className="space-y-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Settings className="h-5 w-5 text-blue-600" />
+              <h2 className="text-xl font-semibold">Room Configuration & Management</h2>
+            </div>
+            <RoomsManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

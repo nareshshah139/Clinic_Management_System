@@ -69,7 +69,7 @@ const navigation = [
     name: 'Pharmacy',
     href: '/dashboard/pharmacy',
     icon: Pill,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'],
+    allowedRoles: ['ADMIN', 'PHARMACIST'],
   },
   {
     name: 'Prescription Pad',

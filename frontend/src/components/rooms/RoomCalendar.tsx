@@ -34,17 +34,24 @@ export default function RoomCalendar() {
   const fetchRooms = async () => {
     try {
       console.log('🏠 Fetching rooms...');
-      const response = await apiClient.getAllRooms();
-      console.log('🏠 Rooms response received:', response, 'Type:', typeof response);
-      
-      // Backend returns { rooms: [...] }, so we need to extract the rooms array
+      let response: any;
+      try {
+        // Prefer endpoint with broader read permissions
+        response = await apiClient.getRooms();
+      } catch (err) {
+        // Fallback to admin/doctor-only endpoint if needed
+        response = await apiClient.getAllRooms();
+      }
       const roomsData = response?.rooms || response;
-      console.log('🏠 Extracted rooms:', roomsData, 'IsArray:', Array.isArray(roomsData));
-      
-      setRooms(Array.isArray(roomsData) ? roomsData : []);
+      const roomsList = Array.isArray(roomsData) ? roomsData : [];
+      setRooms(roomsList);
+      if (roomsList.length === 0) {
+        setLoading(false);
+      }
     } catch (error) {
       console.error('❌ Error fetching rooms:', error);
       setRooms([]); // Ensure rooms is always an array
+      setLoading(false);
     }
   };
 
@@ -52,23 +59,29 @@ export default function RoomCalendar() {
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
       const schedules: Record<string, RoomSchedule> = {};
-      
-      for (const room of rooms) {
-        try {
-          const schedule = await apiClient.getRoomSchedule(room.id, dateStr);
-          schedules[room.id] = schedule;
-        } catch (error) {
-          console.error(`Error fetching schedule for room ${room.id}:`, error);
-          schedules[room.id] = {
-            roomId: room.id,
-            roomName: room.name,
-            roomType: room.type,
-            date: dateStr,
-            appointments: [],
-          };
-        }
+      const results = await Promise.all(
+        rooms.map(async (room) => {
+          try {
+            const schedule = await apiClient.getRoomSchedule(room.id, dateStr);
+            return { id: room.id, schedule };
+          } catch (error) {
+            console.error(`Error fetching schedule for room ${room.id}:`, error);
+            return {
+              id: room.id,
+              schedule: {
+                roomId: room.id,
+                roomName: room.name,
+                roomType: room.type,
+                date: dateStr,
+                appointments: [],
+              } as RoomSchedule,
+            };
+          }
+        })
+      );
+      for (const { id, schedule } of results) {
+        schedules[id] = schedule;
       }
-      
       setRoomSchedules(schedules);
     } catch (error) {
       console.error('Error fetching room schedules:', error);
@@ -125,7 +138,9 @@ export default function RoomCalendar() {
       case 'Consultation': return '🩺';
       case 'Procedure': return '⚕️';
       case 'Operation': return '🏥';
-      case 'Telemedicine': return '💻';
+      case 'Telemedicine':
+      case 'Telemed':
+        return '💻';
       case 'Emergency': return '🚨';
       default: return '🏢';
     }

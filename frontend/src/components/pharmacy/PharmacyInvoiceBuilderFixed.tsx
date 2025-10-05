@@ -107,6 +107,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
   
   const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
+  const patientsAllRef = useRef<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
@@ -419,9 +420,42 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
     void loadPrescriptionData(prefillPrescriptionId);
   }, [prefill?.prescriptionId, loadPrescriptionData]);
 
+  // Ensure doctor is selected when doctors array is loaded or prefill changes
+  useEffect(() => {
+    const prefillDoctorId = prefill?.doctorId;
+    if (!prefillDoctorId || doctors.length === 0) return;
+    if (selectedDoctor && selectedDoctor.id === prefillDoctorId) return;
+    const match = doctors.find((d) => d.id === prefillDoctorId);
+    if (match) {
+      setSelectedDoctor(match);
+      setInvoiceData((prev) => ({ ...prev, doctorId: match.id }));
+    }
+  }, [prefill?.doctorId, doctors, selectedDoctor]);
+
   useEffect(() => {
     invoiceItemsRef.current = items;
   }, [items]);
+
+  // Debounced server-side patient autocomplete
+  useEffect(() => {
+    const q = patientSearchQuery.trim();
+    const handler = setTimeout(async () => {
+      try {
+        if (q.length < 2) {
+          setPatients(patientsAllRef.current);
+          return;
+        }
+        const res = await apiClient.getPatients({ limit: 20, search: q });
+        const data = (res as any)?.data || (res as any)?.patients || [];
+        if (Array.isArray(data)) {
+          setPatients(data);
+        }
+      } catch (_e) {
+        // ignore errors to avoid noisy UX
+      }
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [patientSearchQuery]);
 
   const loadInitialData = async () => {
     try {
@@ -435,9 +469,14 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       const patientsData = (patientsRes as any)?.data || (patientsRes as any)?.patients || [];
       const doctorsData = (doctorsRes as any)?.users || [];
       const drugsData = Array.isArray((drugsRes as any)?.data) ? (drugsRes as any).data : [];
-      const packagesData = Array.isArray((packagesRes as any)?.data) ? (packagesRes as any).data : [];
+      const packagesData = Array.isArray((packagesRes as any)?.packages)
+        ? (packagesRes as any).packages
+        : Array.isArray((packagesRes as any)?.data)
+        ? (packagesRes as any).data
+        : [];
 
       setPatients(patientsData);
+      patientsAllRef.current = patientsData;
       setDoctors(doctorsData);
       setDrugs(drugsData);
       setPackages(packagesData);
@@ -480,13 +519,16 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       const response = await apiClient.get('/patients', { limit: 100 });
       if (response && Array.isArray((response as any).data)) {
         setPatients((response as any).data);
+        patientsAllRef.current = (response as any).data;
       } else {
         console.warn('Invalid patients response format:', response);
         setPatients([]);
+        patientsAllRef.current = [];
       }
     } catch (error) {
       console.error('Error loading patients:', error);
       setPatients([]);
+      patientsAllRef.current = [];
     }
   };
 
@@ -736,7 +778,11 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
     // Check if this is a prescription item (sticky - cannot be removed)
     const isPrescriptionItem = prescriptionItems.some(item => item.id === itemId);
     if (isPrescriptionItem) {
-      alert('This item is from a prescription and cannot be removed. You can only adjust quantity or pricing.');
+      toast({
+        variant: 'warning',
+        title: 'Action not allowed',
+        description: 'Prescription items cannot be removed. Adjust quantity or pricing instead.'
+      });
       return;
     }
     
@@ -758,10 +804,16 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
       console.log('🔍 Current invoice data:', invoiceData);
       console.log('🔍 Current items:', items);
       
-      if (!invoiceData.patientId || items.length === 0) {
+      if (!invoiceData.patientId || items.length === 0 || !invoiceData.billingName || !invoiceData.billingPhone) {
         toast({
           title: "Validation Error",
-          description: "Patient and at least one item are required",
+          description: !invoiceData.patientId
+            ? "Patient is required"
+            : items.length === 0
+            ? "At least one item is required"
+            : !invoiceData.billingName
+            ? "Billing name is required"
+            : "Billing phone is required",
           variant: "destructive",
         });
         return;
@@ -827,14 +879,24 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
 
       const createdInvoice: any = await apiClient.post('/pharmacy/invoices', invoicePayload);
 
+      // Fetch saved invoice to ensure printed data matches backend totals
+      let printableInvoice: any = createdInvoice;
+      try {
+        if (createdInvoice?.id) {
+          printableInvoice = await apiClient.getPharmacyInvoiceById(createdInvoice.id);
+        }
+      } catch (e) {
+        // Fallback to created response if fetch fails
+      }
+
       toast({
         title: "Success",
-        description: `Invoice ${createdInvoice?.invoiceNumber || ''} created successfully`,
+        description: `Invoice ${printableInvoice?.invoiceNumber || ''} created successfully`,
       });
 
-      // Open print preview
-      if (createdInvoice) {
-        openPrintPreview(createdInvoice, validItems);
+      // Open print preview using saved invoice data
+      if (printableInvoice) {
+        openPrintPreview(printableInvoice, validItems);
       }
 
       // Notify dashboard to refresh stats

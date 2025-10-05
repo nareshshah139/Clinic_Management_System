@@ -15,7 +15,6 @@ import {
   getErrorMessage,
   formatPatientName,
   createCleanupTimeouts,
-  getISTDateString
 } from '@/lib/utils';
 import type {
   AppointmentInSlot,

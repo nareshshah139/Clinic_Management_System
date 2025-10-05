@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError } from '@/lib/utils';
-import { isValidId } from '@/lib/id';
+import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
@@ -32,6 +31,7 @@ export default function AppointmentScheduler({
   prefillPatientId,
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
@@ -311,11 +311,8 @@ export default function AppointmentScheduler({
       if (isConflictError(e)) {
         const suggestions = getConflictSuggestions(e);
         const msg = getErrorMessage(e);
-        toast({
-          variant: "destructive",
-          title: "Scheduling Conflict",
-          description: `${msg}${suggestions.length ? ` Try: ${suggestions.join(', ')}` : ''}`,
-        });
+        // eslint-disable-next-line no-alert
+        alert(`${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`);
         return;
       }
       
@@ -444,14 +441,11 @@ export default function AppointmentScheduler({
         
         // Navigate to visit form with pre-populated data
         const visitUrl = `/dashboard/visits?visitId=${(newVisit as any).id}&patientId=${appointment.patient.id}&appointmentId=${appointment.id}&autoStart=true`;
-        console.log('🔗 Navigating to:', visitUrl);
-        console.log('🎯 Patient ID in URL:', appointment.patient.id);
-        window.location.href = visitUrl;
+        router.push(visitUrl);
       } else {
         // Navigate to existing visit
         const visitUrl = `/dashboard/visits?visitId=${appointment.visit.id}&patientId=${appointment.patient.id}&appointmentId=${appointment.id}`;
-        console.log('Navigating to existing visit:', visitUrl);
-        window.location.href = visitUrl;
+        router.push(visitUrl);
       }
     } catch (error) {
       console.error('Failed to start visit:', error);
@@ -467,19 +461,7 @@ export default function AppointmentScheduler({
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            �� Appointment Slots
-            <span style={{ 
-              backgroundColor: '#22c55e', 
-              color: 'white', 
-              padding: '2px 6px', 
-              borderRadius: '4px', 
-              fontSize: '10px',
-              marginLeft: '8px'
-            }}>
-              v2.0
-            </span>
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2">Appointment Scheduler</CardTitle>
           <CardDescription>Select a doctor and date to view available appointment slots</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

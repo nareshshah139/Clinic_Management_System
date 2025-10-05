@@ -207,10 +207,10 @@ export class PharmacyService {
         todayInvoices: todayAllCount,
         todayCompletedInvoices: todayCompletedCount,
         todayPendingInvoices: Math.max(0, todayAllCount - todayCompletedCount),
-        // Kept for compatibility (month-level)
+        // Month-level counts
         totalInvoices: monthInvoices._count,
-        pendingInvoices: Math.max(0, monthInvoices._count - monthInvoices._count),
         completedInvoices: monthInvoices._count,
+        pendingInvoices: 0,
         totalDrugs,
         lowStockDrugs: lowStockInventoryCount,
         expiredDrugs: expiredInventoryCount,

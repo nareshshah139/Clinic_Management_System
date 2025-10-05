@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
 
 interface Room {
@@ -29,6 +30,7 @@ interface RoomFormData {
 }
 
 export default function RoomsManagement() {
+  const { user } = useDashboardUser();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -60,8 +62,13 @@ export default function RoomsManagement() {
   const fetchRooms = async () => {
     try {
       setLoading(true);
-      const res: any = await apiClient.getAllRooms();
-      setRooms(res.rooms || []);
+      let res: any;
+      try {
+        res = await apiClient.getRooms();
+      } catch (err) {
+        res = await apiClient.getAllRooms();
+      }
+      setRooms(res?.rooms || []);
     } catch (e) {
       console.error('Failed to fetch rooms', e);
       alert('Failed to fetch rooms');
@@ -136,6 +143,17 @@ export default function RoomsManagement() {
     });
   };
 
+  const handleOpenAddDialog = () => {
+    setEditingRoom(null);
+    setFormData({
+      name: '',
+      type: 'Consultation',
+      capacity: 1,
+      isActive: true,
+    });
+    setDialogOpen(true);
+  };
+
   const getRoomTypeInfo = (type: string) => {
     return roomTypes.find(rt => rt.value === type) || { value: type, label: type, icon: '🏢' };
   };
@@ -159,7 +177,7 @@ export default function RoomsManagement() {
           <h2 className="text-2xl font-bold">Rooms Management</h2>
           <p className="text-gray-600">Manage clinic rooms and their configurations</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)} className="flex items-center gap-2">
+        <Button onClick={handleOpenAddDialog} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
           Add Room
         </Button>
@@ -297,7 +315,7 @@ export default function RoomsManagement() {
       </Card>
 
       {/* Add/Edit Room Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { handleCloseDialog(); } else { setDialogOpen(true); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingRoom ? 'Edit Room' : 'Add New Room'}</DialogTitle>
