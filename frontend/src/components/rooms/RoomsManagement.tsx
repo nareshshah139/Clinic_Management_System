@@ -315,7 +315,7 @@ export default function RoomsManagement() {
       </Card>
 
       {/* Add/Edit Room Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) { handleCloseDialog(); } else { setDialogOpen(true); } }}>
+      <Dialog open={dialogOpen} onOpenChange={(open: boolean) => { if (!open) { handleCloseDialog(); } else { setDialogOpen(true); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{editingRoom ? 'Edit Room' : 'Add New Room'}</DialogTitle>

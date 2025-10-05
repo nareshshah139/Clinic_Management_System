@@ -791,7 +791,7 @@ export default function AppointmentScheduler({
 
       <PatientQuickCreateDialog
         open={quickCreateOpen}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           setQuickCreateOpen(open);
           if (!open && !selectedPatientId) {
             setPatientSearch('');
