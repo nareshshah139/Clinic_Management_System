@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AppointmentScheduler from '@/components/appointments/AppointmentScheduler';
 
+// Mock API to produce a 409 conflict on createAppointment
 jest.mock('@/lib/api', () => {
   const suggestions = ['10:30-11:00', '11:00-11:30'];
   const err: any = new Error('Scheduling conflict detected');
@@ -14,21 +15,24 @@ jest.mock('@/lib/api', () => {
       getAvailableSlots: jest.fn().mockResolvedValue({ availableSlots: ['10:00-10:30'] }),
       getPatients: jest.fn().mockResolvedValue({ patients: [{ id: 'pat-1', firstName: 'Pat', lastName: 'Ient', phone: '9999999999' }] }),
       createAppointment: jest.fn().mockRejectedValue(err),
+      getDoctorSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
+      getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
     },
   };
 });
 
-describe('AppointmentScheduler - conflict handling', () => {
-  const originalAlert = window.alert;
-  beforeEach(() => {
-    window.alert = jest.fn();
-  });
+// Capture toast calls
+const toastMock = jest.fn();
+jest.mock('@/hooks/use-toast', () => ({
+  useToast: () => ({ toast: toastMock }),
+}));
+
+describe('AppointmentScheduler - conflict handling (toast)', () => {
   afterEach(() => {
-    window.alert = originalAlert;
     jest.clearAllMocks();
   });
 
-  it('shows alert with suggested alternative slots on conflict', async () => {
+  it('shows toast with suggested alternative slots on conflict', async () => {
     render(<AppointmentScheduler />);
 
     // Wait for doctor and slots to load
@@ -41,15 +45,20 @@ describe('AppointmentScheduler - conflict handling', () => {
     await waitFor(() => expect(screen.getByText(/Pat Ient/)).toBeInTheDocument());
     fireEvent.click(screen.getByText(/Pat Ient/));
 
-    // Click the slot to book -> triggers conflict
+    // Click the slot to open booking dialog
     fireEvent.click(screen.getByText('10:00-10:30'));
 
+    // Confirm booking, which will trigger conflict toast
+    const confirmBtn = await screen.findByRole('button', { name: /Confirm Booking/i });
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => {
-      expect(window.alert).toHaveBeenCalled();
-      const alertMsg = (window.alert as jest.Mock).mock.calls[0][0] as string;
-      expect(alertMsg).toMatch(/Scheduling conflict detected/i);
-      expect(alertMsg).toMatch(/10:30-11:00/);
-      expect(alertMsg).toMatch(/11:00-11:30/);
+      expect(toastMock).toHaveBeenCalled();
+      const args = toastMock.mock.calls[0][0];
+      expect(args.title).toMatch(/Scheduling Conflict/i);
+      expect(String(args.description)).toMatch(/10:30-11:00/);
+      expect(String(args.description)).toMatch(/11:00-11:30/);
+      expect(args.variant).toBe('destructive');
     });
   });
-}); 
+});
