@@ -24,31 +24,40 @@ import { apiClient } from '@/lib/api';
 import type {
   PharmacyInvoiceListResponse,
   PharmacyInvoiceSummary,
-  PharmacyInvoiceStatus,
-  PharmacyPaymentMethod,
-  PharmacyPaymentStatus,
 } from '@/lib/types';
+import {
+  PharmacyInvoiceStatus,
+  PharmacyPaymentStatus,
+  PharmacyPaymentMethod,
+  PharmacyInvoiceStatusLabels,
+  PharmacyPaymentStatusLabels,
+  PharmacyPaymentMethodLabels,
+  getEnumValues,
+  type PharmacyInvoiceStatus as PharmacyInvoiceStatusType,
+  type PharmacyPaymentStatus as PharmacyPaymentStatusType,
+  type PharmacyPaymentMethod as PharmacyPaymentMethodType,
+} from '@/lib/api-enums';
 
-type StatusFilter = PharmacyInvoiceStatus | 'all';
-type PaymentStatusFilter = PharmacyPaymentStatus | 'all';
-type PaymentMethodFilter = PharmacyPaymentMethod | 'all';
+type StatusFilter = PharmacyInvoiceStatusType | 'all';
+type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
+type PaymentMethodFilter = PharmacyPaymentMethodType | 'all';
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'quarter';
 
-const STATUS_COLORS: Record<PharmacyInvoiceStatus, string> = {
-  DRAFT: 'bg-gray-100 text-gray-800',
-  PENDING: 'bg-yellow-100 text-yellow-800',
-  CONFIRMED: 'bg-blue-100 text-blue-800',
-  DISPENSED: 'bg-green-100 text-green-800',
-  COMPLETED: 'bg-green-100 text-green-800',
-  CANCELLED: 'bg-red-100 text-red-800',
+const STATUS_COLORS: Record<PharmacyInvoiceStatusType, string> = {
+  [PharmacyInvoiceStatus.DRAFT]: 'bg-gray-100 text-gray-800',
+  [PharmacyInvoiceStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+  [PharmacyInvoiceStatus.CONFIRMED]: 'bg-blue-100 text-blue-800',
+  [PharmacyInvoiceStatus.DISPENSED]: 'bg-green-100 text-green-800',
+  [PharmacyInvoiceStatus.COMPLETED]: 'bg-green-100 text-green-800',
+  [PharmacyInvoiceStatus.CANCELLED]: 'bg-red-100 text-red-800',
 };
 
-const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatus, string> = {
-  PENDING: 'bg-yellow-100 text-yellow-800',
-  COMPLETED: 'bg-green-100 text-green-800',
-  FAILED: 'bg-red-100 text-red-800',
-  REFUNDED: 'bg-purple-100 text-purple-800',
-  PARTIALLY_PAID: 'bg-orange-100 text-orange-800',
+const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatusType, string> = {
+  [PharmacyPaymentStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
+  [PharmacyPaymentStatus.COMPLETED]: 'bg-green-100 text-green-800',
+  [PharmacyPaymentStatus.FAILED]: 'bg-red-100 text-red-800',
+  [PharmacyPaymentStatus.REFUNDED]: 'bg-purple-100 text-purple-800',
+  [PharmacyPaymentStatus.PARTIALLY_PAID]: 'bg-orange-100 text-orange-800',
 };
 
 export function PharmacyInvoiceList() {
@@ -538,12 +547,11 @@ export function PharmacyInvoiceList() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="CONFIRMED">Confirmed</SelectItem>
-                  <SelectItem value="DISPENSED">Dispensed</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  {getEnumValues(PharmacyInvoiceStatus).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {PharmacyInvoiceStatusLabels[status]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -562,11 +570,11 @@ export function PharmacyInvoiceList() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All payments</SelectItem>
-                  <SelectItem value="PENDING">Pending</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="FAILED">Failed</SelectItem>
-                  <SelectItem value="REFUNDED">Refunded</SelectItem>
-                  <SelectItem value="PARTIALLY_PAID">Partially Paid</SelectItem>
+                  {getEnumValues(PharmacyPaymentStatus).map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {PharmacyPaymentStatusLabels[status]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -585,12 +593,11 @@ export function PharmacyInvoiceList() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All methods</SelectItem>
-                  <SelectItem value="CASH">Cash</SelectItem>
-                  <SelectItem value="CARD">Card</SelectItem>
-                  <SelectItem value="UPI">UPI</SelectItem>
-                  <SelectItem value="NETBANKING">Net Banking</SelectItem>
-                  <SelectItem value="WALLET">Wallet</SelectItem>
-                  <SelectItem value="INSURANCE">Insurance</SelectItem>
+                  {getEnumValues(PharmacyPaymentMethod).map((method) => (
+                    <SelectItem key={method} value={method}>
+                      {PharmacyPaymentMethodLabels[method]}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

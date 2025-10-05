@@ -4,7 +4,7 @@ import { CreateAppointmentDto, RescheduleAppointmentDto } from './dto/create-app
 import { UpdateAppointmentDto, BulkUpdateAppointmentsDto } from './dto/update-appointment.dto';
 import { QueryAppointmentsDto, AvailableSlotsDto } from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
-import { AppointmentStatus, VisitType } from '@prisma/client';
+import { AppointmentStatus, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
@@ -27,7 +27,7 @@ export class AppointmentsService {
 
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
-      where: { id: doctorId, branchId, role: 'DOCTOR' },
+      where: { id: doctorId, branchId, role: UserRole.DOCTOR },
     });
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');
@@ -448,7 +448,7 @@ export class AppointmentsService {
 
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
-      where: { id: doctorId, branchId, role: 'DOCTOR' },
+      where: { id: doctorId, branchId, role: UserRole.DOCTOR },
     });
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');
@@ -535,7 +535,7 @@ export class AppointmentsService {
   async getDoctorSchedule(doctorId: string, date: string, branchId: string) {
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
-      where: { id: doctorId, branchId, role: 'DOCTOR' },
+      where: { id: doctorId, branchId, role: UserRole.DOCTOR },
     });
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');

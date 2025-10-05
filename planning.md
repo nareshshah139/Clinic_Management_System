@@ -27,7 +27,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 - Patient demographics extended; patient portal linkage to user accounts implemented (September 2025)
 - **RBAC Enforcement** - Controller-level Roles and Permissions guards enforced across Appointments, Billing, Inventory, Pharmacy modules; route annotations added; default role permission sets seeded; Users UI gained Role & Permissions toggle
 
-✅ **Recently Completed (September 2025):**
+✅ **Recently Completed (September-October 2025):**
 - **ML-Powered Stock Prediction System** - AI-driven inventory forecasting with smart cold-start capabilities
   - Time-series analysis with exponential smoothing and linear regression
   - Top 30 drugs by sales volume analysis (handles large inventories efficiently)
@@ -40,6 +40,14 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
   - Backend: StockPredictionModule with service, controller, DTOs, Prisma migration
   - Frontend: Complete dashboard at /dashboard/stock-predictions with tabs for predictions, critical items, trends, and bulk orders
   - Invoice status management: Added confirm button for DRAFT invoices to finalize them for analysis
+- **Database Performance & Robustness Fixes (October 2025)**
+  - Added comprehensive database indexes for Visit, PharmacyInvoice, and PharmacyPayment models
+  - Implemented PostgreSQL GIN trigram indexes for fast text search on complaints, diagnosis, plan, invoice numbers, billing info
+  - Centralized pharmacy invoice stock side-effects with idempotency guard using mutationVersion field
+  - Created typed enum constants in frontend (`api-enums.ts`) for type-safe filters
+  - Updated PharmacyInvoiceList component to use typed enums, preventing silent filter failures
+  - All changes deployed to Railway production database
+  - Documentation: TYPE_ALIGNMENT_GUIDE.md and ROBUSTNESS_FIXES_SUMMARY.md
 - Global search functionality in header (patients, appointments, users)
 - Enhanced medical visit forms with role-based sections (Therapist 20-25%, Nurse 40%, Doctor 100%)
 - Photo capture integration for medical visits

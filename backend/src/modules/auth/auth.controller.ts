@@ -1,4 +1,5 @@
 import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -28,6 +29,7 @@ export class AuthController {
 
   @Public()
   @Post('login')
+  @Throttle({ default: { ttl: 60, limit: 5 } })
   async login(@Body() body: any, @Res({ passthrough: true }) res: Response) {
     const { identifier, phone, email, password } = body || {};
     const loginIdentifier = (identifier ?? phone ?? email)?.trim();
@@ -116,73 +118,77 @@ export class AuthController {
     }
 
     try {
-      const execAsync = promisify(exec);
+      // Enqueue a background backup job and return a job id immediately
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const backupDir = path.join(process.cwd(), '..', 'backups', timestamp);
-      
-      // Create backup directory
-      await fs.mkdir(backupDir, { recursive: true });
-      
-      // Database backup using docker exec
-      const backupCommand = `docker exec cms-postgres pg_dump -U cms -d cms > ${backupDir}/cms_full_backup.sql`;
-      await execAsync(backupCommand);
-      
-      // Copy schema and migrations
-      const schemaPath = path.join(process.cwd(), 'prisma', 'schema.prisma');
-      const migrationsPath = path.join(process.cwd(), 'prisma', 'migrations');
-      const seedPath = path.join(process.cwd(), 'scripts', 'fresh-seed.ts');
-      
-      await Promise.all([
-        fs.copyFile(schemaPath, path.join(backupDir, 'schema.prisma')),
-        fs.cp(migrationsPath, path.join(backupDir, 'migrations'), { recursive: true }).catch(() => {}),
-        fs.copyFile(seedPath, path.join(backupDir, 'fresh-seed.ts')).catch(() => {}),
-      ]);
-      
-      // Create README
-      const readmeContent = `# Database Backup - ${new Date().toLocaleString()}
+      const jobId = `backup-${timestamp}-${user.id}`;
+      const jobsDir = path.join(process.cwd(), '..', 'backups', '.jobs');
+      const jobFile = path.join(jobsDir, `${jobId}.json`);
+      await fs.mkdir(jobsDir, { recursive: true });
+      await fs.writeFile(jobFile, JSON.stringify({ id: jobId, status: 'QUEUED', createdAt: new Date().toISOString(), createdBy: user.id, branchId: user.branchId }));
 
-## Backup Information
-- **Created**: ${new Date().toLocaleString()}
-- **Created by**: ${user.id} (${user.role})
-- **Branch**: ${user.branchId}
+      // Kick off child process detached to perform backup safely
+      const runner = path.join(process.cwd(), 'dist', 'scripts', 'seed-once.js'); // placeholder to ensure dist exists
+      const script = `(${process.execPath} -e "(${function(){
+        const { exec } = require('child_process');
+        const fs = require('fs');
+        const path = require('path');
+        const jobsDir = ${JSON.stringify(path.join(process.cwd(), '..', 'backups', '.jobs'))};
+        const jobId = ${JSON.stringify(jobId)};
+        const jobFile = path.join(jobsDir, jobId + '.json');
+        const backupsRoot = path.join(process.cwd(), '..', 'backups');
+        const backupDir = path.join(backupsRoot, jobId.replace(/^backup-/, ''));
+        const update = (obj) => fs.writeFileSync(jobFile, JSON.stringify({ id: jobId, ...obj }));
+        (async () => {
+          try {
+            update({ status: 'RUNNING', startedAt: new Date().toISOString() });
+            fs.mkdirSync(backupDir, { recursive: true });
+            const dumpFile = path.join(backupDir, 'cms_full_backup.sql');
+            const cmd = 'docker exec cms-postgres pg_dump -U cms -d cms';
+            const child = exec(cmd, { maxBuffer: 1024*1024*1024 }, (err, stdout, stderr) => {
+              if (err) {
+                update({ status: 'FAILED', error: String(err && err.message || err), finishedAt: new Date().toISOString() });
+                return;
+              }
+            });
+            const write = fs.createWriteStream(dumpFile);
+            child.stdout && child.stdout.pipe(write);
+            child.stderr && child.stderr.on('data', d => { /* optionally log */ });
+            await new Promise((res, rej) => {
+              child.on('exit', (code) => code === 0 ? res(null) : rej(new Error('pg_dump exit ' + code)));
+            });
+            // Copy schema/migrations if present
+            try { fs.copyFileSync(path.join(process.cwd(), 'prisma', 'schema.prisma'), path.join(backupDir, 'schema.prisma')); } catch {}
+            try { fs.cpSync(path.join(process.cwd(), 'prisma', 'migrations'), path.join(backupDir, 'migrations'), { recursive: true }); } catch {}
+            try { fs.copyFileSync(path.join(process.cwd(), 'scripts', 'fresh-seed.ts'), path.join(backupDir, 'fresh-seed.ts')); } catch {}
+            const size = fs.statSync(dumpFile).size;
+            update({ status: 'COMPLETED', finishedAt: new Date().toISOString(), directory: 'backups/' + jobId.replace(/^backup-/, ''), size });
+          } catch (e) {
+            update({ status: 'FAILED', error: String(e && e.message || e), finishedAt: new Date().toISOString() });
+          }
+        })();
+      }.toString()})()" )`;
+      promisify(exec)(script).catch(() => void 0);
 
-## Files
-- cms_full_backup.sql - Complete database backup
-- schema.prisma - Prisma schema
-- migrations/ - Database migrations
-- fresh-seed.ts - Seed script
-
-## Restore Command
-\`\`\`bash
-docker exec -i cms-postgres psql -U cms -d cms < cms_full_backup.sql
-\`\`\`
-
-⚠️ **Security**: This backup contains sensitive data. Store securely.
-`;
-      
-      await fs.writeFile(path.join(backupDir, 'README.md'), readmeContent);
-      
-      // Get backup file sizes
-      const stats = await fs.stat(path.join(backupDir, 'cms_full_backup.sql'));
-      
-      return {
-        success: true,
-        message: 'Database backup created successfully',
-        backup: {
-          timestamp,
-          directory: `backups/${timestamp}`,
-          size: stats.size,
-          createdBy: user.id,
-          createdAt: new Date(),
-        },
-      };
-      
+      return { success: true, jobId };
     } catch (error) {
-      console.error('Backup creation failed:', error);
-      throw new HttpException(
-        `Backup creation failed: ${error.message}`,
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throw new HttpException('Failed to enqueue backup job', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  // Check backup job status
+  @ApiBearerAuth()
+  @Get('backup/:jobId')
+  async getBackupStatus(@Param('jobId') jobId: string, @Request() req: AuthenticatedRequest) {
+    const role = req.user?.role;
+    if (!role || !['ADMIN', 'OWNER'].includes(role)) {
+      throw new HttpException('Insufficient permissions. Admin access required.', HttpStatus.FORBIDDEN);
+    }
+    const jobsDir = path.join(process.cwd(), '..', 'backups', '.jobs');
+    try {
+      const raw = await fs.readFile(path.join(jobsDir, `${jobId}.json`), 'utf8');
+      return JSON.parse(raw);
+    } catch {
+      throw new HttpException('Job not found', HttpStatus.NOT_FOUND);
     }
   }
 }

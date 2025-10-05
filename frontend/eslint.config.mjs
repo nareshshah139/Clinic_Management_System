@@ -28,6 +28,41 @@ const eslintConfig = [
       "react-hooks/exhaustive-deps": "warn",
       "prefer-const": "warn",
       "jsx-a11y/role-has-required-aria-props": "warn",
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector: "Literal[value='DOCTOR']",
+          message: "Use UserRole.DOCTOR from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='ADMIN']",
+          message: "Use UserRole.ADMIN from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='OWNER']",
+          message: "Use UserRole.OWNER from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='SCHEDULED']",
+          message: "Use AppointmentStatus.SCHEDULED from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='IN_PROGRESS']",
+          message: "Use AppointmentStatus.IN_PROGRESS from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='COMPLETED']",
+          message: "Use AppointmentStatus.COMPLETED from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='CANCELLED']",
+          message: "Use AppointmentStatus.CANCELLED from @cms/shared-types",
+        },
+        {
+          selector: "Literal[value='NO_SHOW']",
+          message: "Use AppointmentStatus.NO_SHOW from @cms/shared-types",
+        }
+      ]
     },
   },
 ];

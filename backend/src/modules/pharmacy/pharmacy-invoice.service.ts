@@ -166,6 +166,8 @@ export class PharmacyInvoiceService {
                 billingState: createInvoiceDto.billingState,
                 billingPincode: createInvoiceDto.billingPincode,
                 notes: createInvoiceDto.notes,
+                // Normalize: if created with terminal status, set status now but do NOT apply stock here
+                status: (createInvoiceDto.status as any) || undefined,
               },
               include: {
                 patient: { select: { id: true, name: true, phone: true } },
@@ -208,53 +210,7 @@ export class PharmacyInvoiceService {
               })
             );
 
-            // If confirming immediately, compute all stock ops first and then apply
-            if (createInvoiceDto.status && ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(createInvoiceDto.status) && userId) {
-              type StockOp = { invItemId: string; qty: number; price: number; notes: string };
-              const stockOps: StockOp[] = [];
-
-              for (const item of invoiceItems) {
-                if (item.itemType === 'DRUG' && item.drugId) {
-                  const invItem = drugIdToInventory.get(item.drugId);
-                  if (invItem) {
-                    const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
-                    const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined ? invPrice : (Number.isFinite(item.unitPrice) ? (item.unitPrice as any as number) : 0);
-                    if (Number.isFinite(price) && price > 0) stockOps.push({ invItemId: invItem.id, qty: item.quantity, price, notes: 'Pharmacy invoice sale' });
-                  }
-                } else if (item.itemType === 'PACKAGE' && item.packageId) {
-                  const pkg = (packages as any[]).find((p: any) => p.id === item.packageId);
-                  if (pkg) {
-                    for (const pkgItem of pkg.items) {
-                      const dId = pkgItem.drug?.id;
-                      if (!dId) continue;
-                      const invItem = drugIdToInventory.get(dId);
-                      if (!invItem) continue;
-                      const totalQty = (pkgItem.quantity || 1) * item.quantity;
-                      const invPrice = (invItem.sellingPrice ?? invItem.costPrice);
-                      const price = Number.isFinite(invPrice) && invPrice !== null && invPrice !== undefined ? invPrice : (Number.isFinite(item.unitPrice) ? (item.unitPrice as any as number) : 0);
-                      if (Number.isFinite(price) && price > 0) stockOps.push({ invItemId: invItem.id, qty: totalQty, price, notes: `Package sale: ${pkg.name}` });
-                    }
-                  }
-                }
-              }
-
-              for (const op of stockOps) {
-                await tx.stockTransaction.create({
-                  data: {
-                    itemId: op.invItemId,
-                    type: 'SALE',
-                    quantity: op.qty,
-                    unitPrice: op.price,
-                    totalAmount: op.price * op.qty,
-                    reference: `INV-${invoice.invoiceNumber}`,
-                    notes: op.notes,
-                    branchId,
-                    userId,
-                  },
-                });
-                await this.updateInventoryStock(tx, op.invItemId, op.qty, 'SALE');
-              }
-            }
+            // Do not apply stock mutations in create. Stock mutations are centralized in updateStatus with idempotency.
 
             return { ...invoice, items: invoiceItems };
           });
@@ -666,12 +622,22 @@ export class PharmacyInvoiceService {
           },
         });
 
-        // If transitioning FROM DRAFT TO CONFIRMED/COMPLETED/DISPENSED, create stock transactions
+        // If transitioning FROM DRAFT TO CONFIRMED/COMPLETED/DISPENSED, create stock transactions (idempotent)
         if (
           oldStatus === 'DRAFT' &&
           ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(status) &&
           userId
         ) {
+          // Idempotency fence: bump mutationVersion and only execute mutations once per invoice
+          const fresh = await tx.pharmacyInvoice.update({
+            where: { id },
+            data: { mutationVersion: { increment: 1 } },
+            select: { mutationVersion: true, invoiceNumber: true },
+          });
+          if (fresh.mutationVersion > 1) {
+            // Mutations already applied
+            return updatedInvoice;
+          }
           console.log(`✅ Creating stock transactions for invoice ${existingInvoice.invoiceNumber} (status: ${oldStatus} → ${status})`);
 
           // Precompute inventory mapping by drugId

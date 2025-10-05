@@ -5,11 +5,12 @@
   "private": true,
   "workspaces": [
     "frontend",
-    "backend"
+    "backend",
+    "shared-types"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run start:dev --workspace=backend\"",
-    "build": "npm run build --workspace=frontend && npm run build --workspace=backend",
+    "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run start:dev --workspace=backend\" \"npm run build --workspace=shared-types -- --watch\"",
+    "build": "npm run build --workspace=shared-types && npm run build --workspace=frontend && npm run build --workspace=backend",
     "start": "concurrently \"npm run start --workspace=frontend\" \"npm run start:prod --workspace=backend\"",
     "test": "npm run test --workspace=frontend && npm run test --workspace=backend",
     "lint": "npm run lint --workspace=frontend && npm run lint --workspace=backend",
