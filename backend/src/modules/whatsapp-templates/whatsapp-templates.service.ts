@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 
 interface CreateTemplateDto {
@@ -93,9 +93,10 @@ export class WhatsAppTemplatesService {
   }) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY is not configured');
+      throw new ServiceUnavailableException('AI generation is not configured');
     }
     const model = process.env.OPENAI_TEMPLATE_MODEL || 'gpt-5-mini';
+    const timeoutMs = Number(process.env.OPENAI_HTTP_TIMEOUT_MS || 15000);
 
     const variables = Array.isArray(body.variables) ? body.variables : [];
     const tone = body.tone || 'friendly';
@@ -147,19 +148,32 @@ export class WhatsAppTemplatesService {
     // Use higher creativity: set temperature to 1 for template generation
     const temperature = 1;
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature,
-        response_format: { type: 'json_object' },
-        messages,
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    let resp: Response;
+    try {
+      resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        throw new RequestTimeoutException('Template generation timed out. Please try again.');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!resp.ok) {
       const errText = await resp.text();

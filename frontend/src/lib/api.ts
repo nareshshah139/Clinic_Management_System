@@ -47,7 +47,8 @@ export class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    extra?: { timeoutMs?: number }
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const headers: Record<string, string> = {
@@ -59,11 +60,32 @@ export class ApiClient {
 
     // Do not attach Authorization header; rely on HttpOnly cookie
 
-    const response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
+    const controller = new AbortController();
+    const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs : undefined;
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    if (timeoutMs) {
+      timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: 'include',
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        const apiErr: ApiError = new Error('Request timed out');
+        apiErr.status = 408;
+        apiErr.body = { message: 'Request timed out' };
+        throw apiErr;
+      }
+      throw err;
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+    }
 
     if (!response.ok) {
       let body: { message?: string } | null = null;
@@ -111,14 +133,18 @@ export class ApiClient {
     return this.request<T>(url);
   }
 
-  async post<T>(endpoint: string, data?: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, opts?: { idempotencyKey?: string; timeoutMs?: number }): Promise<T> {
     const headers: Record<string, string> = {};
     if (opts?.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
-    return this.request<T>(endpoint, {
-      method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
-      headers,
-    });
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'POST',
+        body: data ? JSON.stringify(data) : undefined,
+        headers,
+      },
+      { timeoutMs: opts?.timeoutMs }
+    );
   }
 
   async patch<T>(endpoint: string, data: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
@@ -456,7 +482,7 @@ export class ApiClient {
     hints?: string;
     tone?: 'formal' | 'friendly' | 'concise' | 'detailed';
   }) {
-    return this.post('/whatsapp/templates/generate', data);
+    return this.post('/whatsapp/templates/generate', data, { timeoutMs: 15000 });
   }
 }
 

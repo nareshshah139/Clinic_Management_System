@@ -13,8 +13,11 @@ import type { User } from '@/lib/types';
 import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react';
 
 export default function UsersManagement() {
+  const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
@@ -693,13 +696,21 @@ export default function UsersManagement() {
                         if (editorRef.current) {
                           editorRef.current.innerHTML = html;
                         }
+                        toast({ title: 'Template generated', description: 'Review and save if it looks good.' });
                       } catch (e) {
-                        alert((e as any)?.body?.message || (e as any)?.message || 'Failed to generate');
+                        const msg = (e as any)?.body?.message || (e as any)?.message || 'Failed to generate';
+                        toast({ title: 'Generation failed', description: msg });
                       } finally {
                         setGenLoading(false);
                       }
                     }}
-                  >{genLoading ? 'Generating…' : 'Generate'}</Button>
+                  >
+                    {genLoading ? (
+                      <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Generating…</span>
+                    ) : (
+                      'Generate'
+                    )}
+                  </Button>
                 </div>
               </div>
 
