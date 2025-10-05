@@ -21,6 +21,7 @@ import type {
   TimeSlotConfig,
   GetDoctorScheduleResponse
 } from '@/lib/types';
+import { AppointmentStatus } from '@cms/shared-types';
 
 export interface DoctorDayCalendarProps {
   doctorId: string;
@@ -117,7 +118,7 @@ export default function DoctorDayCalendar({
         visitType: a.visitType || 'OPD',
         room: a.room,
         id: a.id,
-        status: a.status || 'SCHEDULED',
+        status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
         visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
       }));
       

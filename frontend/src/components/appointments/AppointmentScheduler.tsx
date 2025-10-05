@@ -15,6 +15,7 @@ import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle } from 'lucide-react';
 import DoctorDayCalendar from './DoctorDayCalendar';
+import { AppointmentStatus } from '@cms/shared-types';
 
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -158,7 +159,7 @@ export default function AppointmentScheduler({
         doctor: a.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
         visitType: a.visitType || 'OPD',
         room: a.room,
-        status: a.status || 'SCHEDULED',
+        status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
         visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
       }));
       
@@ -284,7 +285,7 @@ export default function AppointmentScheduler({
         doctor: created.doctor || { firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: created.room,
-        status: 'SCHEDULED',
+        status: AppointmentStatus.SCHEDULED,
         visit: created.visit ? { id: created.visit.id, status: created.visit.status } : undefined,
       };
       
@@ -709,7 +710,7 @@ export default function AppointmentScheduler({
                             size="sm" 
                             variant="default" 
                             onClick={() => handleStartVisit(appt)}
-                            disabled={appt.status === 'COMPLETED'}
+                            disabled={appt.status === AppointmentStatus.COMPLETED}
                           >
                             {appt.visit ? 'Continue Visit' : 'Start Visit'}
                           </Button>

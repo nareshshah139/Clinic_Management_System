@@ -49,7 +49,7 @@ export type PharmacyItemType = typeof PharmacyItemType[keyof typeof PharmacyItem
 
 // Helper to get all values from an enum object
 export function getEnumValues<T extends Record<string, string>>(enumObj: T): T[keyof T][] {
-  return Object.values(enumObj);
+  return Object.values(enumObj) as unknown as T[keyof T][];
 }
 
 // Helper to get display label for enum values

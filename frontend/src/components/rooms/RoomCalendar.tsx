@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import type { RoomSchedule } from '@/lib/types';
+import { AppointmentStatus } from '@cms/shared-types';
 
 interface Room {
   id: string;
@@ -341,7 +342,7 @@ export default function RoomCalendar() {
                                 {appointment.visitType || 'APPOINTMENT'}
                               </Badge>
                               <Badge 
-                                variant={appointment.status === 'SCHEDULED' ? 'default' : 'secondary'}
+                                variant={appointment.status === AppointmentStatus.SCHEDULED ? 'default' : 'secondary'}
                                 className="text-xs"
                               >
                                 {appointment.status}

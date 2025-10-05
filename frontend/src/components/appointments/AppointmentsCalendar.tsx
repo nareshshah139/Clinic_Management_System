@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle } from 'lucide-react';
+import { AppointmentStatus } from '@cms/shared-types';
 
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -184,7 +185,7 @@ export default function AppointmentsCalendar({
           : { id: doctorId, firstName: 'Dr.', lastName: 'Unknown' },
         visitType: appointmentData.visitType,
         room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, type: selectedRoom.type } : undefined,
-        status: 'SCHEDULED',
+        status: AppointmentStatus.SCHEDULED,
       };
       
       setOptimisticAppointment(optimisticAppt);

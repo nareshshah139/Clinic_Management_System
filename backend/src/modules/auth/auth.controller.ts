@@ -1,4 +1,4 @@
-import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request } from '@nestjs/common';
+import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request, Param } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
@@ -126,48 +126,48 @@ export class AuthController {
       await fs.mkdir(jobsDir, { recursive: true });
       await fs.writeFile(jobFile, JSON.stringify({ id: jobId, status: 'QUEUED', createdAt: new Date().toISOString(), createdBy: user.id, branchId: user.branchId }));
 
-      // Kick off child process detached to perform backup safely
-      const runner = path.join(process.cwd(), 'dist', 'scripts', 'seed-once.js'); // placeholder to ensure dist exists
-      const script = `(${process.execPath} -e "(${function(){
-        const { exec } = require('child_process');
-        const fs = require('fs');
-        const path = require('path');
-        const jobsDir = ${JSON.stringify(path.join(process.cwd(), '..', 'backups', '.jobs'))};
-        const jobId = ${JSON.stringify(jobId)};
-        const jobFile = path.join(jobsDir, jobId + '.json');
-        const backupsRoot = path.join(process.cwd(), '..', 'backups');
-        const backupDir = path.join(backupsRoot, jobId.replace(/^backup-/, ''));
-        const update = (obj) => fs.writeFileSync(jobFile, JSON.stringify({ id: jobId, ...obj }));
-        (async () => {
-          try {
-            update({ status: 'RUNNING', startedAt: new Date().toISOString() });
-            fs.mkdirSync(backupDir, { recursive: true });
-            const dumpFile = path.join(backupDir, 'cms_full_backup.sql');
-            const cmd = 'docker exec cms-postgres pg_dump -U cms -d cms';
-            const child = exec(cmd, { maxBuffer: 1024*1024*1024 }, (err, stdout, stderr) => {
-              if (err) {
-                update({ status: 'FAILED', error: String(err && err.message || err), finishedAt: new Date().toISOString() });
-                return;
-              }
-            });
-            const write = fs.createWriteStream(dumpFile);
-            child.stdout && child.stdout.pipe(write);
-            child.stderr && child.stderr.on('data', d => { /* optionally log */ });
-            await new Promise((res, rej) => {
-              child.on('exit', (code) => code === 0 ? res(null) : rej(new Error('pg_dump exit ' + code)));
-            });
-            // Copy schema/migrations if present
-            try { fs.copyFileSync(path.join(process.cwd(), 'prisma', 'schema.prisma'), path.join(backupDir, 'schema.prisma')); } catch {}
-            try { fs.cpSync(path.join(process.cwd(), 'prisma', 'migrations'), path.join(backupDir, 'migrations'), { recursive: true }); } catch {}
-            try { fs.copyFileSync(path.join(process.cwd(), 'scripts', 'fresh-seed.ts'), path.join(backupDir, 'fresh-seed.ts')); } catch {}
-            const size = fs.statSync(dumpFile).size;
-            update({ status: 'COMPLETED', finishedAt: new Date().toISOString(), directory: 'backups/' + jobId.replace(/^backup-/, ''), size });
-          } catch (e) {
-            update({ status: 'FAILED', error: String(e && e.message || e), finishedAt: new Date().toISOString() });
-          }
-        })();
-      }.toString()})()" )`;
-      promisify(exec)(script).catch(() => void 0);
+      // Kick off child process detached to perform backup safely using a JSON-escaped inline script
+      const jobsDirOnDisk = path.join(process.cwd(), '..', 'backups', '.jobs');
+      const nodeInlineCode = [
+        "const { exec } = require('child_process');",
+        "const fs = require('fs');",
+        "const path = require('path');",
+        `const jobsDir = ${JSON.stringify(jobsDirOnDisk)};`,
+        `const jobId = ${JSON.stringify(jobId)};`,
+        "const jobFile = path.join(jobsDir, jobId + '.json');",
+        "const backupsRoot = path.join(process.cwd(), '..', 'backups');",
+        "const backupDir = path.join(backupsRoot, jobId.replace(/^backup-/, ''));",
+        "const update = (obj) => fs.writeFileSync(jobFile, JSON.stringify({ id: jobId, ...obj }));",
+        "(async () => {",
+        "  try {",
+        "    update({ status: 'RUNNING', startedAt: new Date().toISOString() });",
+        "    fs.mkdirSync(backupDir, { recursive: true });",
+        "    const dumpFile = path.join(backupDir, 'cms_full_backup.sql');",
+        "    const cmd = 'docker exec cms-postgres pg_dump -U cms -d cms';",
+        "    const child = exec(cmd, { maxBuffer: 1024*1024*1024 }, (err) => {",
+        "      if (err) {",
+        "        update({ status: 'FAILED', error: String((err && err.message) || err), finishedAt: new Date().toISOString() });",
+        "        return;",
+        "      }",
+        "    });",
+        "    const write = fs.createWriteStream(dumpFile);",
+        "    child.stdout && child.stdout.pipe(write);",
+        "    child.stderr && child.stderr.on && child.stderr.on('data', () => {});",
+        "    await new Promise((res, rej) => {",
+        "      child.on('exit', (code) => code === 0 ? res(null) : rej(new Error('pg_dump exit ' + code)));",
+        "    });",
+        "    try { fs.copyFileSync(path.join(process.cwd(), 'prisma', 'schema.prisma'), path.join(backupDir, 'schema.prisma')); } catch (e) {}",
+        "    try { fs.cpSync(path.join(process.cwd(), 'prisma', 'migrations'), path.join(backupDir, 'migrations'), { recursive: true }); } catch (e) {}",
+        "    try { fs.copyFileSync(path.join(process.cwd(), 'scripts', 'fresh-seed.ts'), path.join(backupDir, 'fresh-seed.ts')); } catch (e) {}",
+        "    const size = fs.statSync(dumpFile).size;",
+        "    update({ status: 'COMPLETED', finishedAt: new Date().toISOString(), directory: 'backups/' + jobId.replace(/^backup-/, ''), size });",
+        "  } catch (e) {",
+        "    update({ status: 'FAILED', error: String((e && e.message) || e), finishedAt: new Date().toISOString() });",
+        "  }",
+        "})();",
+      ].join('\n');
+      const cmd = `${process.execPath} -e ${JSON.stringify(nodeInlineCode)}`;
+      promisify(exec)(cmd).catch(() => void 0);
 
       return { success: true, jobId };
     } catch (error) {

@@ -27,6 +27,7 @@ export interface SystemAlert {
 }
 
 // Enums
+import type { AppointmentStatus } from '@cms/shared-types';
 export { UserRole, AppointmentStatus } from '@cms/shared-types';
 export type VisitType = 'OPD' | 'TELEMED' | 'PROCEDURE';
 
