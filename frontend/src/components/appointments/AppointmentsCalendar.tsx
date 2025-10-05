@@ -226,12 +226,15 @@ export default function AppointmentsCalendar({
       if (status === 409) {
         const suggestions = Array.isArray(body?.suggestions) ? body.suggestions : [];
         const msg = body?.message || 'Scheduling conflict detected';
-        // eslint-disable-next-line no-alert
-        alert(`${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`);
+        toast({
+          variant: 'destructive',
+          title: 'Scheduling Conflict',
+          description: `${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`,
+        });
         return;
       }
-      // eslint-disable-next-line no-alert
-      alert('Failed to book appointment');
+      const errMsg = body?.message || 'Failed to book appointment';
+      toast({ variant: 'destructive', title: 'Failed to book appointment', description: errMsg });
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,7 @@
 [service]
 name = "frontend"
 start = "npm run start"
-build = "npm ci && npm run build"
+build = "npm install --no-audit --no-fund && npm run build"
 
 [deploy]
 healthcheckPath = "/"

@@ -16,7 +16,7 @@
       "name": "frontend",
       "rootDir": "frontend",
       "startCommand": "npm run start",
-      "buildCommand": "npm ci && npm run build",
+      "buildCommand": "npm install --no-audit --no-fund && npm run build",
       "envVarGroups": [],
       "variables": {
         "PORT": "3000"

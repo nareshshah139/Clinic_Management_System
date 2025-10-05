@@ -311,8 +311,11 @@ export default function AppointmentScheduler({
       if (isConflictError(e)) {
         const suggestions = getConflictSuggestions(e);
         const msg = getErrorMessage(e);
-        // eslint-disable-next-line no-alert
-        alert(`${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`);
+        toast({
+          variant: "destructive",
+          title: "Scheduling Conflict",
+          description: `${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`,
+        });
         return;
       }
       
