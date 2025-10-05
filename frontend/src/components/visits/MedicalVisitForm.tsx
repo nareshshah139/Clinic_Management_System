@@ -268,6 +268,21 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const lastDraftJsonRef = useRef<string | null>(null);
   const lastStorageKeyRef = useRef<string | null>(null);
   const justSavedRef = useRef(false);
+  const lastIdempotencyKeyRef = useRef<string | null>(null);
+  const stableHash = useCallback((input: string): string => {
+    let hash = 5381;
+    for (let i = 0; i < input.length; i++) {
+      hash = ((hash << 5) + hash) + input.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash).toString(36);
+  }, []);
+
+  const buildIdempotencyKey = useCallback((method: 'POST' | 'PATCH', rid: string | null, payload: Record<string, unknown>) => {
+    const base = JSON.stringify(payload);
+    const scope = rid ? `visits:${rid}` : `visits:create:${patientId}:${doctorId}:${appointmentId || ''}`;
+    return `cms:${method}:${scope}:${stableHash(base)}`;
+  }, [appointmentId, doctorId, patientId, stableHash]);
 
   const clearAutoSaveTimer = useCallback(() => {
     if (autoSaveTimerRef.current) {
@@ -498,7 +513,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const payload = buildPayload();
     autoSavePromiseRef.current = (async () => {
       try {
-        await apiClient.updateVisit(visitId, payload);
+        // Reuse same idempotency key for retries of the same payload
+        let idemKey = lastIdempotencyKeyRef.current;
+        const currentKey = buildIdempotencyKey('PATCH', visitId, payload as any);
+        if (idemKey !== currentKey) {
+          idemKey = currentKey;
+          lastIdempotencyKeyRef.current = idemKey;
+        }
+        await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
         hasUnsavedChangesRef.current = false;
         autoSaveFailureNotifiedRef.current = false;
         justSavedRef.current = true;
@@ -917,16 +939,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       
       let visit;
       if (visitId) {
-        visit = await apiClient.updateVisit(visitId, payload);
+        const idemKey = buildIdempotencyKey('PATCH', visitId, payload as any);
+        visit = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
       } else {
-        visit = await apiClient.createVisit(payload);
+        const idemKey = buildIdempotencyKey('POST', null, payload as any);
+        visit = await apiClient.createVisit(payload, { idempotencyKey: idemKey });
         setVisitId((visit as VisitDetails).id);
       }
       
       if (complete) {
         const completePayload: Record<string, unknown> = {};
         if (reviewDate) completePayload.followUpDate = reviewDate;
-        await apiClient.completeVisit((visit as VisitDetails).id, completePayload);
+        const completeId = (visit as VisitDetails).id;
+        const idemKey = buildIdempotencyKey('POST', completeId, completePayload as any);
+        await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
         setVisitStatus('completed');
         if (typeof window !== 'undefined' && draftStorageKey) {
           try {

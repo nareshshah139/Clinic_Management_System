@@ -111,17 +111,23 @@ export class ApiClient {
     return this.request<T>(url);
   }
 
-  async post<T>(endpoint: string, data?: unknown): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (opts?.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
+      headers,
     });
   }
 
-  async patch<T>(endpoint: string, data: unknown): Promise<T> {
+  async patch<T>(endpoint: string, data: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (opts?.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
     return this.request<T>(endpoint, {
       method: 'PATCH',
       body: JSON.stringify(data),
+      headers,
     });
   }
 
@@ -231,16 +237,16 @@ export class ApiClient {
     return this.get('/visits', params);
   }
 
-  async createVisit(data: Record<string, unknown>) {
-    return this.post('/visits', data);
+  async createVisit(data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
+    return this.post('/visits', data, opts);
   }
 
-  async updateVisit(id: string, data: Record<string, unknown>) {
-    return this.patch(`/visits/${id}`, data);
+  async updateVisit(id: string, data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
+    return this.patch(`/visits/${id}`, data, opts);
   }
 
-  async completeVisit(id: string, data: Record<string, unknown>) {
-    return this.post(`/visits/${id}/complete`, data);
+  async completeVisit(id: string, data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
+    return this.post(`/visits/${id}/complete`, data, opts);
   }
 
   async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number }): Promise<T> {

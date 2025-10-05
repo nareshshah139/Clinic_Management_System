@@ -23,6 +23,7 @@ import { AuditLogsModule } from './modules/audit-logs/audit-logs.module';
 import { RolesGuard } from './shared/guards/roles.guard';
 import { PermissionsGuard } from './shared/guards/permissions.guard';
 import { RequestContextInterceptor } from './shared/interceptors/request-context.interceptor';
+import { IdempotencyInterceptor } from './shared/interceptors/idempotency.interceptor';
 import { validateEnv } from './shared/config/env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -88,6 +89,10 @@ const minimalModules = [AuthModule];
     {
       provide: APP_INTERCEPTOR,
       useClass: RequestContextInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: IdempotencyInterceptor,
     },
   ],
 })

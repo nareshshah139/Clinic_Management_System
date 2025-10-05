@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { InvoiceNumbersService } from '../../shared/numbering/invoice-numbers.service';
 import { 
   CreateInvoiceDto, 
   UpdateInvoiceDto, 
@@ -20,7 +21,7 @@ import {
 
 @Injectable()
 export class BillingService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private invoiceNumbers: InvoiceNumbersService) {}
 
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
     try {
@@ -716,29 +717,8 @@ export class BillingService {
   }
 
   private async generateInvoiceNumber(branchId: string): Promise<string> {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-
-    const lastInvoice = await this.prisma.newInvoice.findFirst({
-      where: {
-        branchId,
-        createdAt: {
-          gte: new Date(today.setHours(0, 0, 0, 0)),
-          lte: new Date(today.setHours(23, 59, 59, 999)),
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    let sequence = 1;
-    if (lastInvoice?.invoiceNo) {
-      const lastSequence = parseInt((lastInvoice.invoiceNo as any).split('-').pop() || '0');
-      sequence = lastSequence + 1;
-    }
-
-    return `INV-${year}${month}${date}-${String(sequence).padStart(3, '0')}`;
+    const { sequence, periodKey } = await this.invoiceNumbers.reserve({ type: 'BILLING', branchId });
+    return `INV-${periodKey}-${String(sequence).padStart(3, '0')}`;
   }
 
   // Removed updateInvoiceStatus since schema has no status; balances are updated in processPayment/updateInvoice
@@ -792,30 +772,8 @@ export class BillingService {
 
   // Helper to generate invoice number for a specific date (used for sample/backdated invoices)
   private async generateInvoiceNumberForDate(branchId: string, forDate: Date): Promise<string> {
-    const year = forDate.getFullYear();
-    const month = String(forDate.getMonth() + 1).padStart(2, '0');
-    const date = String(forDate.getDate()).padStart(2, '0');
-
-    const start = new Date(forDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(forDate);
-    end.setHours(23, 59, 59, 999);
-
-    const lastInvoice = await this.prisma.newInvoice.findFirst({
-      where: {
-        branchId,
-        createdAt: { gte: start, lte: end },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    let sequence = 1;
-    if (lastInvoice?.invoiceNo) {
-      const lastSequence = parseInt((lastInvoice.invoiceNo as any).split('-').pop() || '0');
-      sequence = lastSequence + 1;
-    }
-
-    return `INV-${year}${month}${date}-${String(sequence).padStart(3, '0')}`;
+    const { sequence, periodKey } = await this.invoiceNumbers.reserve({ type: 'BILLING', branchId, date: forDate });
+    return `INV-${periodKey}-${String(sequence).padStart(3, '0')}`;
   }
 
   // Generate sample invoices for existing patients with dermatology offers/packages

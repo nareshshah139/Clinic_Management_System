@@ -86,54 +86,57 @@ export class VisitsService {
       return basePlan;
     })();
 
-    // Create visit
-    const visit = await this.prisma.visit.create({
-      data: {
-        patientId,
-        doctorId,
-        appointmentId,
-        vitals: vitals ? JSON.stringify(vitals) : null,
-        complaints: JSON.stringify(complaints),
-        history: history ? JSON.stringify(history) : null,
-        exam: examination ? JSON.stringify(examination) : null,
-        diagnosis: diagnosis ? JSON.stringify(diagnosis) : null,
-        plan: mergedPlanObject ? JSON.stringify(mergedPlanObject) : null,
-        attachments: attachments ? JSON.stringify(attachments) : null,
-        scribeJson: scribeJson ? JSON.stringify(scribeJson) : null,
-      },
-      include: {
-        patient: {
-          select: { 
-            id: true, 
-            name: true, 
-            phone: true, 
-            gender: true,
-            dob: true,
-            address: true,
+    // Create visit and update appointment status atomically
+    const visit = await this.prisma.$transaction(async tx => {
+      const createdVisit = await tx.visit.create({
+        data: {
+          patientId,
+          doctorId,
+          appointmentId,
+          vitals: vitals ? JSON.stringify(vitals) : null,
+          complaints: JSON.stringify(complaints),
+          history: history ? JSON.stringify(history) : null,
+          exam: examination ? JSON.stringify(examination) : null,
+          diagnosis: diagnosis ? JSON.stringify(diagnosis) : null,
+          plan: mergedPlanObject ? JSON.stringify(mergedPlanObject) : null,
+          attachments: attachments ? JSON.stringify(attachments) : null,
+          scribeJson: scribeJson ? JSON.stringify(scribeJson) : null,
+        },
+        include: {
+          patient: {
+            select: { 
+              id: true, 
+              name: true, 
+              phone: true, 
+              gender: true,
+              dob: true,
+              address: true,
+            },
+          },
+          doctor: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+          appointment: {
+            select: { 
+              id: true, 
+              date: true, 
+              slot: true, 
+              status: true,
+              tokenNumber: true,
+            },
           },
         },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true, email: true },
-        },
-        appointment: {
-          select: { 
-            id: true, 
-            date: true, 
-            slot: true, 
-            status: true,
-            tokenNumber: true,
-          },
-        },
-      },
-    });
-
-    // Update appointment status if linked
-    if (appointmentId) {
-      await this.prisma.appointment.update({
-        where: { id: appointmentId },
-        data: { status: 'IN_PROGRESS' },
       });
-    }
+
+      if (appointmentId) {
+        await tx.appointment.update({
+          where: { id: appointmentId },
+          data: { status: 'IN_PROGRESS' },
+        });
+      }
+
+      return createdVisit;
+    });
 
     // Preserve doctor.name and top-level notes in response for compatibility
     const parsedPlanAfterCreate = visit.plan ? JSON.parse(visit.plan as unknown as string) : null;
@@ -493,29 +496,33 @@ export class VisitsService {
       updateData.followUp = new Date(completeVisitDto.followUpDate);
     }
 
-    const completedVisit = await this.prisma.visit.update({
-      where: { id },
-      data: updateData,
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
+    // Update visit and appointment status atomically
+    const completedVisit = await this.prisma.$transaction(async tx => {
+      const updated = await tx.visit.update({
+        where: { id },
+        data: updateData,
+        include: {
+          patient: {
+            select: { id: true, name: true, phone: true },
+          },
+          doctor: {
+            select: { id: true, firstName: true, lastName: true },
+          },
+          appointment: {
+            select: { id: true, date: true, slot: true },
+          },
         },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        appointment: {
-          select: { id: true, date: true, slot: true },
-        },
-      },
-    });
-
-    // Update appointment status to completed if linked
-    if (visit.appointmentId) {
-      await this.prisma.appointment.update({
-        where: { id: visit.appointmentId },
-        data: { status: 'COMPLETED' },
       });
-    }
+
+      if (visit.appointmentId) {
+        await tx.appointment.update({
+          where: { id: visit.appointmentId },
+          data: { status: 'COMPLETED' },
+        });
+      }
+
+      return updated;
+    });
 
     return {
       ...completedVisit,

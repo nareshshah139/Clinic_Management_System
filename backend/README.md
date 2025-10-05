@@ -76,3 +76,16 @@ npm run test:e2e
 # test coverage
 npm run test:cov
 ```
+
+## Migrations
+
+The invoice numbering has been centralized. A new table `number_sequences` is introduced via Prisma model `NumberSequence`.
+
+To apply the migration locally:
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate --name add-number-sequences
+```
+
+On production, ensure zero-downtime by applying the schema before deploying code that uses it.

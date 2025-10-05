@@ -8,9 +8,10 @@ import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import { PharmacyPackageController } from './pharmacy-package.controller';
 import { PharmacyPackageService } from './pharmacy-package.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
+import { NumberingModule } from '../../shared/numbering/numbering.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, NumberingModule],
   controllers: [
     PharmacyController,
     DrugController,

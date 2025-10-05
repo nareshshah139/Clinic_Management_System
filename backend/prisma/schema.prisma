@@ -7,6 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model IdempotencyRecord {
+  id             String   @id @default(cuid())
+  key            String
+  userId         String
+  resourceType   String
+  resourceId     String
+  method         String
+  statusCode     Int
+  responseBody   String
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime?
+
+  @@unique([key, userId, resourceType, resourceId, method])
+  @@index([userId, resourceType, resourceId])
+  @@map("idempotency_records")
+}
+
 model User {
   id                String             @id @default(cuid())
   firstName         String
@@ -1134,4 +1151,18 @@ model WhatsAppTemplate {
   @@index([ownerId])
   @@index([touchpoint])
   @@map("whatsapp_templates")
+}
+
+// Centralized atomic sequence storage for numbering (e.g., invoices)
+model NumberSequence {
+  id         String   @id @default(cuid())
+  type       String
+  branchId   String
+  periodKey  String?
+  lastNumber Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([type, branchId, periodKey])
+  @@map("number_sequences")
 }
