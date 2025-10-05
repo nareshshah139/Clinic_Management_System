@@ -13,7 +13,7 @@
     "generate:types": "openapi-typescript http://localhost:4000/docs-json -o src/lib/api-types.ts"
   },
   "dependencies": {
-    "@cms/shared-types": "*",
+    "@cms/shared-types": "workspace:*",
     "@hookform/resolvers": "^5.2.1",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.3",
