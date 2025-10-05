@@ -83,12 +83,20 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     try {
       setUploading(true);
 
-      // Draft (no visit yet): upload sequentially to draft endpoint
+      // Helper to chunk an array
+      const chunk = <T,>(arr: T[], size: number): T[][] => {
+        const out: T[][] = [];
+        for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+        return out;
+      };
+
+      // Draft (no visit yet): upload in batches (max 6 files per request)
       if (visitId === 'temp') {
         if (!patientId) { alert('Patient is required to upload draft photos'); return; }
-        for (const file of files) {
+        const batches = chunk(files, 6);
+        for (const group of batches) {
           const fd = new FormData();
-          fd.append('files', file);
+          for (const f of group) fd.append('files', f);
           const response = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, {
             method: 'POST',
             body: fd,
@@ -100,16 +108,19 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         return;
       }
 
-      // Existing visit: upload sequentially to visit photos endpoint
-      for (const file of files) {
-        const fd = new FormData();
-        fd.append('files', file);
-        const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
-          method: 'POST',
-          body: fd,
-          credentials: 'include',
-        });
-        if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+      // Existing visit: upload in batches (max 6 files per request)
+      {
+        const batches = chunk(files, 6);
+        for (const group of batches) {
+          const fd = new FormData();
+          for (const f of group) fd.append('files', f);
+          const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+          if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+        }
       }
 
       await load();

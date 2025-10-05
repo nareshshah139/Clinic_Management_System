@@ -237,7 +237,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         return;
       }
-      setTimeout(() => { if (r.state !== 'inactive') r.stop(); }, 30000);
+      setTimeout(() => { if (r.state !== 'inactive') r.stop(); }, 300000);
     } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);

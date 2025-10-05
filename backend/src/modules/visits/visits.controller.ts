@@ -114,8 +114,8 @@ const VISIT_UPLOAD_LIMIT_BYTES = (() => {
 })();
 
 const TRANSCRIBE_UPLOAD_LIMIT_BYTES = (() => {
-  const mb = Number(process.env.TRANSCRIBE_MAX_FILE_MB || 10);
-  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 10;
+  const mb = Number(process.env.TRANSCRIBE_MAX_FILE_MB || 50);
+  const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 50;
   return safeMb * 1024 * 1024;
 })();
 
@@ -346,6 +346,13 @@ export class VisitsController {
       const blob = new Blob([arrayBuffer], { type: file.mimetype || 'audio/webm' });
       form.append('file', blob, file.originalname || 'audio.webm');
       form.append('model', 'whisper-1');
+      // Improve accuracy by fixing language and disabling sampling randomness
+      // Note: Whisper ignores temperature for most use-cases, but passing 0 is safe
+      try { form.append('language', 'en'); } catch {}
+      try { form.append('temperature', '0'); } catch {}
+      try {
+        form.append('prompt', 'Medical clinical conversation transcription. Use medical spellings and terms accurately. Expand abbreviations when clear (e.g., BP, HR). Preserve measurements and units.');
+      } catch {}
 
       this.logger.debug('transcribeAudio: sending audio to OpenAI Whisper');
       const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {

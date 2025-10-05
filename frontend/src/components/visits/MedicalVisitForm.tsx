@@ -790,7 +790,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       };
       recorder.start();
       // Auto-stop after 30s or when button clicked again (toggle)
-      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 30000);
+      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 300000);
     } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);
