@@ -241,7 +241,6 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
 
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { isValidId } from '@/lib/id';
-import { isUuid } from '@/lib/id';
 import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -635,8 +634,8 @@ function VisitsPageInner() {
     setLoading(true);
     try {
       const [patientsRes, usersRes] = await Promise.allSettled([
-        apiClient.getPatients({ page: 1, limit: 50 }),
-        apiClient.getUsers({ role: 'DOCTOR', limit: 20 })
+        apiClient.getPatients({ page: 1, limit: 1 }),
+        apiClient.get('/users', { role: 'DOCTOR', limit: 1 })
       ]);
 
       if (patientsRes.status === 'fulfilled') {
@@ -657,10 +656,10 @@ function VisitsPageInner() {
         setDoctors(doctorsData);
         if (doctorsData.length > 0) {
           const candidate = doctorsData[0]?.id;
-          if (!candidate || !isValidId(candidate)) {
-            console.warn('[VisitsPage] First doctor has invalid id, requiring manual selection', { candidate });
+          if (!candidate) {
+            console.warn('[VisitsPage] First doctor missing id, requiring manual selection');
           }
-          setSelectedDoctorId((prev) => prev || (isValidId(candidate) ? candidate : ''));
+          setSelectedDoctorId((prev) => prev || (candidate || ''));
         }
       }
 
@@ -681,6 +680,13 @@ function VisitsPageInner() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Auto-open form when both patient and doctor are selected
+  useEffect(() => {
+    if (selectedPatientId && selectedDoctorId && !showForm) {
+      setShowForm(true);
+    }
+  }, [selectedPatientId, selectedDoctorId, showForm]);
 
   // Handle URL parameters for appointment linking
   useEffect(() => {
@@ -772,18 +778,18 @@ function VisitsPageInner() {
     return (
       <div className="flex items-center justify-center py-8">
         <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mr-3" />
-        <span className="text-sm text-gray-600">Loading visit management...</span>
+        <span className="text-sm text-gray-600">Loading visit form…</span>
       </div>
     );
   }
  
-  if (patients.length === 0 || doctors.length === 0) {
+  if (patients.length === 0 || doctors.length === 0 || !selectedPatientId || !selectedDoctorId) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Setup Required</CardTitle>
           <CardDescription>
-            Please ensure you have patients and doctors in the system before creating visits.
+            No patients or doctors found. Please add at least one to create a visit.
           </CardDescription>
         </CardHeader>
         <CardContent>
