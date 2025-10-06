@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -103,7 +103,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
 
   const steps = useMemo(
     () => {
-      const result: Array<{ key: string; label: string; icon: JSX.Element; status: StepStatus }> = [];
+      const result: Array<{ key: string; label: string; icon: ReactNode; status: StepStatus }> = [];
 
       // 1) Start Visit
       const startStatus: StepStatus = latestVisit?.id
