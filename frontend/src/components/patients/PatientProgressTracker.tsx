@@ -12,6 +12,7 @@ type StepStatus = 'done' | 'active' | 'pending';
 interface Props {
   patientId: string;
   compact?: boolean;
+  variant?: 'full' | 'compact' | 'mini';
 }
 
 interface NextAppointmentResponse {
@@ -29,7 +30,7 @@ interface VisitEntryMinimal {
   prescription?: { id?: string } | null;
 }
 
-export default function PatientProgressTracker({ patientId, compact = false }: Props) {
+export default function PatientProgressTracker({ patientId, compact = false, variant = 'full' }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [nextAppointment, setNextAppointment] = useState<NextAppointmentResponse | null>(null);
@@ -132,6 +133,11 @@ export default function PatientProgressTracker({ patientId, compact = false }: P
       const billingStatus: StepStatus = hasRecentInvoice ? 'done' : (hasPrescription ? 'active' : (latestVisit?.id ? 'pending' : 'pending'));
       result.push({ key: 'billing', label: 'Billing', icon: <Receipt className="h-3.5 w-3.5" />, status: billingStatus });
 
+      // 6) Follow-up (optional)
+      const hasFollowUp = !!latestVisit?.followUp;
+      const followStatus: StepStatus = hasFollowUp ? 'done' : 'pending';
+      result.push({ key: 'followup', label: 'Follow-up', icon: <Calendar className="h-3.5 w-3.5" />, status: followStatus });
+
       return result;
     }, [hasActiveVisit, hasPrescription, hasRecentInvoice, hasUpcomingAppointment, latestVisit?.id]
   );
@@ -154,6 +160,7 @@ export default function PatientProgressTracker({ patientId, compact = false }: P
   };
 
   const StartAction = () => {
+    if (variant === 'mini') return null;
     if (latestVisit?.id) {
       return (
         <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}`}>
@@ -176,6 +183,7 @@ export default function PatientProgressTracker({ patientId, compact = false }: P
   };
 
   const PrescribeAction = () => {
+    if (variant === 'mini') return null;
     if (!latestVisit?.id) return null;
     return (
       <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}`}>
@@ -185,6 +193,7 @@ export default function PatientProgressTracker({ patientId, compact = false }: P
   };
 
   const BillingAction = () => {
+    if (variant === 'mini') return null;
     if (!latestVisit?.id) return null;
     return (
       <Link href={`/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}${latestVisit?.id ? `&visitId=${encodeURIComponent(latestVisit.id)}` : ''}`}>
@@ -207,30 +216,51 @@ export default function PatientProgressTracker({ patientId, compact = false }: P
     );
   }
 
+  if (variant === 'mini') {
+    // Super-compact three-dot status: Start, Document, Prescribe
+    const miniSteps: Array<{ key: string; status: StepStatus }> = [
+      { key: 'start', status: latestVisit?.id ? 'done' : (hasUpcomingAppointment ? 'active' : 'pending') },
+      { key: 'document', status: latestVisit?.id ? (hasActiveVisit ? 'active' : 'done') : 'pending' },
+      { key: 'prescribe', status: latestVisit?.id ? (hasPrescription ? 'done' : 'pending') : 'pending' },
+    ];
+    return (
+      <div className="w-full py-1">
+        <div className="flex items-center gap-1.5">
+          {miniSteps.map((s, i) => (
+            <div key={s.key} className="flex items-center">
+              <div className={`h-2.5 w-2.5 rounded-full ${s.status === 'done' ? 'bg-emerald-500' : s.status === 'active' ? 'bg-blue-500' : 'bg-gray-300'}`} />
+              {i < miniSteps.length - 1 && <div className={`mx-1 h-0.5 w-6 ${s.status === 'done' && miniSteps[i + 1].status === 'done' ? 'bg-emerald-300' : (s.status === 'active' || miniSteps[i + 1].status === 'active') ? 'bg-blue-300' : 'bg-gray-200'}`} />}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={`w-full ${compact ? 'py-2' : 'py-3'}`}>
-      <div className={`flex items-center ${compact ? 'gap-2' : 'gap-3'}`}>
+    <div className={`w-full ${compact || variant === 'compact' ? 'py-2' : 'py-3'}`}>
+      <div className={`flex items-center ${compact || variant === 'compact' ? 'gap-2' : 'gap-3'}`}>
         {steps.map((step, idx) => (
           <div key={step.key} className="flex items-center">
             <div className="flex flex-col items-center">
               <div className={`h-7 w-7 rounded-full border flex items-center justify-center ${circleClass(step.status)}`}>
                 {step.icon}
               </div>
-              {!compact && (
+              {!(compact || variant === 'compact') && (
                 <div className="mt-1 text-[11px] text-gray-700">
                   {step.label}
                 </div>
               )}
             </div>
             {idx < steps.length - 1 && (
-              <div className={`mx-2 h-0.5 ${compact ? 'w-8' : 'w-12'} ${lineClass(step.status, steps[idx + 1].status)}`} />
+              <div className={`mx-2 h-0.5 ${(compact || variant === 'compact') ? 'w-8' : 'w-12'} ${lineClass(step.status, steps[idx + 1].status)}`} />
             )}
           </div>
         ))}
       </div>
 
       {/* Minimal inline actions */}
-      <div className={`mt-2 flex items-center gap-2 ${compact ? 'text-xs' : 'text-sm'}`}>
+      <div className={`mt-2 flex items-center gap-2 ${(compact || variant === 'compact') ? 'text-xs' : 'text-sm'}`}>
         {hasUpcomingAppointment && !latestVisit?.id && (
           <Badge variant="secondary">Upcoming appt</Badge>
         )}
