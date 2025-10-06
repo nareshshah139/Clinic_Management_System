@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Calendar, Stethoscope, ArrowLeft } from 'lucide-react';
+import VisitPhotos from '@/components/visits/VisitPhotos';
 
 type VisitEntry = Record<string, unknown> & {
   id?: string;
@@ -145,34 +147,50 @@ export default function PatientDetailsPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Patient Information</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
-          <div><span className="text-gray-600">Date of Birth:</span> <span className="text-gray-900">{patient.dob ? new Date(patient.dob).toLocaleDateString() : '—'}</span></div>
-          <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
-          <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
-          <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>
-          <div><span className="text-gray-600">Address:</span> <span className="text-gray-900">{patient.address || '—'}</span></div>
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="info" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="info">Info</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="uploads">Uploads</TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Visit History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {visits.length === 0 ? (
-            <div className="text-sm text-gray-500">None</div>
-          ) : (
-            <div className="space-y-3">
-              {visits.map(renderVisitItem)}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="info" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Patient Information</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
+              <div><span className="text-gray-600">Date of Birth:</span> <span className="text-gray-900">{patient.dob ? new Date(patient.dob).toLocaleDateString() : '—'}</span></div>
+              <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
+              <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
+              <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>
+              <div><span className="text-gray-600">Address:</span> <span className="text-gray-900">{patient.address || '—'}</span></div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Visit History</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {visits.length === 0 ? (
+                <div className="text-sm text-gray-500">None</div>
+              ) : (
+                <div className="space-y-3">
+                  {visits.map(renderVisitItem)}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="uploads" className="mt-4">
+          <VisitPhotos visitId="temp" patientId={id} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

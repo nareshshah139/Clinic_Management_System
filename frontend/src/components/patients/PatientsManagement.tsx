@@ -12,10 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { formatPatientName } from '@/lib/utils';
+import { formatPatientName, filterRoomsByVisitType } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
-import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta } from '@/lib/types';
+import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
 
 type Gender = 'MALE' | 'FEMALE' | 'OTHER';
 
@@ -33,6 +33,8 @@ interface PatientFormState {
   referralSource?: string;
   patientType?: 'WALKIN' | 'NON_WALKIN';
   walkinDoctorId?: string;
+  walkinVisitType?: VisitType;
+  walkinRoomId?: string;
 }
 
 export default function PatientsManagement() {
@@ -58,6 +60,7 @@ export default function PatientsManagement() {
   });
   const [error, setError] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<Array<{ id: string; firstName?: string; lastName?: string }>>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [linkPortalOpen, setLinkPortalOpen] = useState<boolean>(false);
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
@@ -75,6 +78,8 @@ export default function PatientsManagement() {
     referralSource: '',
     patientType: 'NON_WALKIN',
     walkinDoctorId: '',
+    walkinVisitType: 'OPD',
+    walkinRoomId: '',
   });
 
   const normalizeGender = (g: any): 'MALE' | 'FEMALE' | 'OTHER' | 'UNKNOWN' => {
@@ -232,6 +237,12 @@ export default function PatientsManagement() {
       } catch {
         setDoctors([]);
       }
+      try {
+        const r = await apiClient.getRooms();
+        setRooms((r as any)?.rooms || []);
+      } catch {
+        setRooms([]);
+      }
     })();
   }, [open]);
 
@@ -249,6 +260,8 @@ export default function PatientsManagement() {
       referralSource: '',
       patientType: 'NON_WALKIN',
       walkinDoctorId: '',
+      walkinVisitType: 'OPD',
+      walkinRoomId: '',
     });
     setError(null);
   };
@@ -297,7 +310,12 @@ export default function PatientsManagement() {
       
       // Optional: auto-book next available slot for walk-in patients when doctor is selected
       if (savedPatientId && form.patientType === 'WALKIN' && form.walkinDoctorId) {
-        await bookNextAvailableConsultation(savedPatientId, form.walkinDoctorId);
+        await bookNextAvailableConsultation(
+          savedPatientId,
+          form.walkinDoctorId,
+          form.walkinVisitType || 'OPD',
+          form.walkinRoomId || undefined,
+        );
       }
       
       await fetchPatients(currentPage);
@@ -318,7 +336,12 @@ export default function PatientsManagement() {
     return `${y}-${m}-${da}`;
   };
 
-  const bookNextAvailableConsultation = async (patientId: string, doctorId: string) => {
+  const bookNextAvailableConsultation = async (
+    patientId: string,
+    doctorId: string,
+    visitType: VisitType = 'OPD',
+    roomId?: string,
+  ) => {
     // Try today and the next 7 days
     const maxDaysAhead = 7;
     for (let i = 0; i <= maxDaysAhead; i++) {
@@ -327,7 +350,18 @@ export default function PatientsManagement() {
       const dateStr = formatDate(date);
       try {
         const slotsRes = (await apiClient.getAvailableSlots({ doctorId, date: dateStr, durationMinutes: 30 })) as any;
-        const availableSlots: string[] = slotsRes?.availableSlots || [];
+        let availableSlots: string[] = slotsRes?.availableSlots || [];
+
+        // If a room is specified, filter to slots where the room is also available
+        if (roomId) {
+          try {
+            const roomSchedule = await apiClient.getRoomSchedule(roomId, dateStr);
+            const occupied = new Set((roomSchedule as any)?.appointments?.map((a: any) => a.slot) || []);
+            availableSlots = availableSlots.filter((s) => !occupied.has(s));
+          } catch {
+            // If room schedule fails, proceed with doctor availability only
+          }
+        }
         if (availableSlots.length > 0) {
           const slot = availableSlots[0];
           await apiClient.createAppointment({
@@ -335,9 +369,10 @@ export default function PatientsManagement() {
             doctorId,
             date: dateStr,
             slot,
-            visitType: 'OPD',
+            visitType,
             source: 'WALK_IN',
             notes: 'Auto-booked next available slot for walk-in',
+            ...(roomId ? { roomId } : {}),
           });
           toast({
             title: 'Walk-in appointment booked',
@@ -637,6 +672,43 @@ export default function PatientsManagement() {
                 </Select>
                 <div className="text-xs text-gray-500 mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
               </div>
+              {form.patientType === 'WALKIN' && (
+                <>
+                  <div>
+                    <Label id="walkinVisitType-label" htmlFor="walkinVisitType">Appointment Type (walk-in)</Label>
+                    <Select value={form.walkinVisitType || 'OPD'} onValueChange={(v: VisitType) => setForm({ ...form, walkinVisitType: v, walkinRoomId: '' })}>
+                      <SelectTrigger id="walkinVisitType" aria-labelledby="walkinVisitType-label">
+                        <SelectValue placeholder="Select appointment type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OPD">OPD Consultation</SelectItem>
+                        <SelectItem value="PROCEDURE">Procedure</SelectItem>
+                        <SelectItem value="TELEMED">Telemedicine</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.walkinVisitType !== 'TELEMED' && (
+                    <div>
+                      <Label id="walkinRoomId-label" htmlFor="walkinRoomId">Room (optional for OPD)</Label>
+                      <Select value={form.walkinRoomId || ''} onValueChange={(v: string) => setForm({ ...form, walkinRoomId: v })}>
+                        <SelectTrigger id="walkinRoomId" aria-labelledby="walkinRoomId-label">
+                          <SelectValue placeholder="Select room" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {filterRoomsByVisitType(rooms.filter(r => r.isActive), form.walkinVisitType || 'OPD').map((r) => (
+                            <SelectItem key={r.id} value={r.id}>
+                              {r.name} — {r.type}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {form.walkinVisitType === 'PROCEDURE' ? 'Selecting an available procedure room is recommended.' : 'Optional: choose a consultation room if needed.'}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
             <div className="flex justify-end gap-2 pt-4">
               <Button variant="outline" onClick={() => { setOpen(false); resetForm(); }}>Cancel</Button>
