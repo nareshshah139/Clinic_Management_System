@@ -161,6 +161,12 @@ export class TreatmentPlanDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Accept a flexible dermatology plan object (investigations, procedures, counseling, etc.)
+  // We intentionally keep this untyped to preserve custom nested structures used by the UI
+  @IsOptional()
+  @IsObject()
+  dermatology?: Record<string, any>;
 }
 
 export class CreateVisitDto {

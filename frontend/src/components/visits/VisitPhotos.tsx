@@ -4,6 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Camera, Upload, Image as ImageIcon } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
   visitId: string;
@@ -12,17 +14,41 @@ interface Props {
   patientId?: string; // required for draft uploads when visitId is temp
 }
 
-interface PhotoItem { url: string; uploadedAt?: string | null }
+type PhotoPosition = 'FRONT' | 'LEFT_PROFILE' | 'RIGHT_PROFILE' | 'BACK' | 'CLOSE_UP' | 'OTHER';
+
+interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoPosition; displayOrder?: number }
 
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId }: Props) {
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [compareMode, setCompareMode] = useState<boolean>(false);
+  const [tagDialogOpen, setTagDialogOpen] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const [pendingPositions, setPendingPositions] = useState<PhotoPosition[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
   const baseUrl = apiBase || '/api';
+
+  const POSITION_LABEL: Record<PhotoPosition, string> = {
+    FRONT: 'Front',
+    LEFT_PROFILE: 'Left',
+    RIGHT_PROFILE: 'Right',
+    BACK: 'Back',
+    CLOSE_UP: 'Close-up',
+    OTHER: 'Other',
+  };
+
+  const RECOMMENDED_ORDER: PhotoPosition[] = ['FRONT','LEFT_PROFILE','RIGHT_PROFILE','BACK','CLOSE_UP','OTHER'];
+
+  const inferPositions = (count: number): PhotoPosition[] => {
+    const out: PhotoPosition[] = [];
+    for (let i = 0; i < count; i += 1) {
+      out.push(RECOMMENDED_ORDER[i] ?? 'OTHER');
+    }
+    return out;
+  };
 
   const toAbsolute = (path: string) => {
     if (!path) return path;
@@ -57,8 +83,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       const data = await res.json();
       const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
         .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
-      // Sort by uploadedAt ascending, fallback to URL alphabetical if missing
+      // Preserve backend ordering; as a safety, sort by displayOrder then time
       incoming.sort((a, b) => {
+        const ao = typeof a.displayOrder === 'number' ? a.displayOrder : 999;
+        const bo = typeof b.displayOrder === 'number' ? b.displayOrder : 999;
+        if (ao !== bo) return ao - bo;
         const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
         const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
         if (at === bt) return a.url.localeCompare(b.url);
@@ -73,30 +102,47 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   useEffect(() => { void load(); }, [visitId, patientId]);
 
-  const onUpload = async (evt: React.ChangeEvent<HTMLInputElement>) => {
+  const openTaggingForFiles = (files: File[]) => {
+    setPendingFiles(files);
+    setPendingPositions(inferPositions(files.length));
+    setTagDialogOpen(true);
+  };
+
+  const onUpload = (evt: React.ChangeEvent<HTMLInputElement>) => {
     const f = evt.target.files;
     if (!f || f.length === 0) return;
+    openTaggingForFiles(Array.from(f));
+  };
 
-    const files = Array.from(f);
+  const uploadWithPositions = async () => {
+    if (!pendingFiles || pendingFiles.length === 0) return;
+    const positions = pendingPositions;
+    if (positions.length !== pendingFiles.length || positions.some(p => !p)) {
+      alert('Please select a position for each photo.');
+      return;
+    }
+
     let actualVisitId = visitId;
-
     try {
       setUploading(true);
 
-      // Helper to chunk an array
       const chunk = <T,>(arr: T[], size: number): T[][] => {
         const out: T[][] = [];
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
         return out;
       };
 
-      // Draft (no visit yet): upload in batches (max 6 files per request)
+      const fileBatches = chunk(pendingFiles, 6);
+      const posBatches = chunk(positions, 6);
+
       if (visitId === 'temp') {
         if (!patientId) { alert('Patient is required to upload draft photos'); return; }
-        const batches = chunk(files, 6);
-        for (const group of batches) {
+        for (let b = 0; b < fileBatches.length; b += 1) {
+          const group = fileBatches[b];
+          const groupPositions = posBatches[b];
           const fd = new FormData();
-          for (const f of group) fd.append('files', f);
+          group.forEach(f => fd.append('files', f));
+          fd.append('positions', JSON.stringify(groupPositions));
           const response = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, {
             method: 'POST',
             body: fd,
@@ -104,16 +150,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           });
           if (!response.ok) throw new Error(`Draft upload failed: ${response.status}`);
         }
-        await load();
-        return;
-      }
-
-      // Existing visit: upload in batches (max 6 files per request)
-      {
-        const batches = chunk(files, 6);
-        for (const group of batches) {
+      } else {
+        for (let b = 0; b < fileBatches.length; b += 1) {
+          const group = fileBatches[b];
+          const groupPositions = posBatches[b];
           const fd = new FormData();
-          for (const f of group) fd.append('files', f);
+          group.forEach(f => fd.append('files', f));
+          fd.append('positions', JSON.stringify(groupPositions));
           const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
             method: 'POST',
             body: fd,
@@ -123,6 +166,9 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         }
       }
 
+      setTagDialogOpen(false);
+      setPendingFiles(null);
+      setPendingPositions([]);
       await load();
     } catch (e) {
       console.error('Upload error:', e);
@@ -138,6 +184,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
@@ -203,6 +250,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div className="text-xs text-gray-500 flex items-center justify-between">
               <div>
                 {active?.uploadedAt ? `Uploaded: ${new Date(active.uploadedAt).toLocaleString()}` : ''}
+                {active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
               </div>
               <div className="space-x-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
@@ -223,7 +271,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                   >
                     <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
-                      {it.uploadedAt ? new Date(it.uploadedAt).toLocaleDateString() : ''}
+                      {it.position ? POSITION_LABEL[it.position] : ''}
                     </span>
                   </button>
                 ))}
@@ -233,5 +281,49 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         )}
       </CardContent>
     </Card>
+
+    {/* Tagging dialog */}
+    <Dialog open={tagDialogOpen} onOpenChange={setTagDialogOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Tag photo positions</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          {pendingFiles?.map((file, idx) => (
+            <div key={`${file.name}-${idx}`} className="flex items-center gap-3">
+              <div className="flex-1 truncate text-sm" title={file.name}>{file.name}</div>
+              <div className="w-44">
+                <Select
+                  value={pendingPositions[idx]}
+                  onValueChange={(val: PhotoPosition) => {
+                    const next = [...pendingPositions];
+                    next[idx] = val as PhotoPosition;
+                    setPendingPositions(next);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {RECOMMENDED_ORDER.map(p => (
+                      <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center justify-between pt-2">
+            <Button variant="outline" size="sm" onClick={() => setPendingPositions(inferPositions(pendingFiles?.length || 0))}>Infer positions</Button>
+            <div className="space-x-2">
+              <Button variant="outline" size="sm" onClick={() => { setTagDialogOpen(false); setPendingFiles(null); setPendingPositions([]); }}>Cancel</Button>
+              <Button size="sm" onClick={uploadWithPositions} disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</Button>
+            </div>
+          </div>
+        </div>
+        <DialogFooter />
+      </DialogContent>
+    </Dialog>
+    </>
   );
 } 

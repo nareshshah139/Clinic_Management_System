@@ -222,6 +222,60 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [counseling, setCounseling] = useState<string>('');
   const [reviewDate, setReviewDate] = useState<string>('');
   
+  // Lab Tests (Investigations)
+  const investigationOptions: string[] = useMemo(() => (
+    ['CBC','ESR','CRP','LFT','Fasting lipid profile','RFT','Creatinine','FBS','Fasting Insulin','HbA1c','RBS','CUE','Stool examination','Total Testosterone','S. Prolactin','Vitamin B12','Vitamin D','Ferritin','TSH','Thyroid profile','HIV-I,II','HbS Ag','Anti HCV','VDRL','RPR','TPHA','TB Gold Quantiferon Test','Montoux Test','Chest Xray PA view','2D Echo','Skin Biopsy']
+  ), []);
+  const [labSelections, setLabSelections] = useState<string[]>([]);
+  const [labResults, setLabResults] = useState<Record<string, { value?: string; unit?: string } | Record<string, { value?: string; unit?: string }>>>({});
+  const [labsAutofillLoading, setLabsAutofillLoading] = useState(false);
+
+  // Default units and composite breakdowns for common investigations
+  const SIMPLE_TEST_UNITS: Record<string, string> = useMemo(() => ({
+    ESR: 'mm/hr',
+    CRP: 'mg/L',
+    Creatinine: 'mg/dL',
+    FBS: 'mg/dL',
+    RBS: 'mg/dL',
+    'Fasting Insulin': 'µIU/mL',
+    HbA1c: '%',
+    'Vitamin D': 'ng/mL',
+    'Vitamin B12': 'pg/mL',
+    Ferritin: 'ng/mL',
+    TSH: 'µIU/mL',
+  }), []);
+
+  const COMPOSITE_TESTS: Record<string, Record<string, string>> = useMemo(() => ({
+    CBC: { 'Hemoglobin': 'g/dL', 'WBC': '10^9/L', 'Platelets': '10^9/L' },
+    LFT: { 'AST (SGOT)': 'U/L', 'ALT (SGPT)': 'U/L', 'Bilirubin Total': 'mg/dL', 'Bilirubin Direct': 'mg/dL', 'Bilirubin Indirect': 'mg/dL' },
+    RFT: { 'Urea': 'mg/dL', 'Creatinine': 'mg/dL' },
+    'Fasting lipid profile': { 'Total Cholesterol': 'mg/dL', 'Triglycerides': 'mg/dL', 'HDL': 'mg/dL', 'LDL': 'mg/dL' },
+    'Thyroid profile': { 'TSH': 'µIU/mL', 'T3': 'ng/dL', 'T4': 'ng/dL' },
+  }), []);
+
+  useEffect(() => {
+    // Ensure labResults has entries for selected tests with default units/subtests
+    setLabResults((prev) => {
+      const next: typeof prev = { ...prev };
+      // Add new selections
+      for (const test of labSelections) {
+        if (!next[test]) {
+          if (COMPOSITE_TESTS[test]) {
+            const subs = COMPOSITE_TESTS[test];
+            const subObj: Record<string, { value?: string; unit?: string }> = {};
+            Object.keys(subs).forEach((sub) => { subObj[sub] = { value: '', unit: subs[sub] }; });
+            next[test] = subObj;
+          } else {
+            next[test] = { value: '', unit: SIMPLE_TEST_UNITS[test] || '' };
+          }
+        }
+      }
+      // Remove deselections
+      Object.keys(next).forEach((k) => { if (!labSelections.includes(k)) delete next[k]; });
+      return next;
+    });
+  }, [labSelections, COMPOSITE_TESTS, SIMPLE_TEST_UNITS]);
+  
   // Patient history
   const [patientHistory, setPatientHistory] = useState<VisitSummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
@@ -556,6 +610,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             systemics: systemics || undefined,
           },
           counseling: counseling || undefined,
+          investigations: labSelections.length ? labSelections : undefined,
           // follow-up date handled at visit completion; prescription gets reviewDate via prop
         }
       },
@@ -573,6 +628,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         capturedBy: userRole,
         sections: Array.from(completedSections),
         progress: getProgress(),
+        labResults: labResults && Object.keys(labResults).length ? labResults : undefined,
       }
     };
 
@@ -1092,6 +1148,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     if (hasPermission('all')) {
       tabs.push({ id: 'prescription', label: 'Prescription', icon: FileText, always: false });
+      tabs.push({ id: 'labs', label: 'Lab Tests', icon: Activity, always: false });
       tabs.push({ id: 'customization', label: 'Customization', icon: FileText, always: false });
     }
 
@@ -1490,6 +1547,135 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               </TabsContent>
             )}
 
+            {/* Lab Tests Tab - Reception + Doctor */}
+            {(hasPermission('all') || hasPermission('basic-info')) && (
+              <TabsContent value="labs" className="space-y-4" forceMount>
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
+                    <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {investigationOptions.map((opt) => (
+                          <label key={opt} className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={labSelections.includes(opt)}
+                              onChange={(e) => setLabSelections((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))}
+                            />
+                            <span>{opt}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {labSelections.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium">Enter Results</div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {labSelections.map((test) => {
+                            const entry = labResults[test] as any;
+                            const isComposite = entry && typeof entry === 'object' && !('value' in entry) && !('unit' in entry);
+                            return (
+                              <div key={test} className="border rounded p-3">
+                                <div className="text-sm font-semibold mb-2">{test}</div>
+                                {!isComposite ? (
+                                  <div className="flex gap-2">
+                                    <Input
+                                      placeholder="Value"
+                                      value={(entry?.value ?? '') as string}
+                                      onChange={(e) => setLabResults((prev) => ({ ...prev, [test]: { value: e.target.value, unit: (prev[test] as any)?.unit || '' } }))}
+                                    />
+                                    <Input
+                                      placeholder="Unit"
+                                      value={(entry?.unit ?? '') as string}
+                                      onChange={(e) => setLabResults((prev) => ({ ...prev, [test]: { value: (prev[test] as any)?.value || '', unit: e.target.value } }))}
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="space-y-2">
+                                    {Object.keys(entry || {}).map((sub) => (
+                                      <div key={sub} className="flex items-center gap-2">
+                                        <span className="text-xs w-28">{sub}</span>
+                                        <Input
+                                          placeholder="Value"
+                                          value={(entry?.[sub]?.value ?? '') as string}
+                                          onChange={(e) => setLabResults((prev) => ({
+                                            ...prev,
+                                            [test]: { ...(prev[test] as any), [sub]: { value: e.target.value, unit: (prev[test] as any)?.[sub]?.unit || '' } },
+                                          }))}
+                                        />
+                                        <Input
+                                          placeholder="Unit"
+                                          value={(entry?.[sub]?.unit ?? '') as string}
+                                          onChange={(e) => setLabResults((prev) => ({
+                                            ...prev,
+                                            [test]: { ...(prev[test] as any), [sub]: { value: (prev[test] as any)?.[sub]?.value || '', unit: e.target.value } },
+                                          }))}
+                                        />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2 border-t">
+                      <div className="text-xs text-gray-500">Selections are saved to Treatment Plan; numeric results stored in metadata.</div>
+                      <div className="flex gap-2">
+                        <label className="text-sm">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              try {
+                                setLabsAutofillLoading(true);
+                                const fd = new FormData();
+                                fd.append('file', f);
+                                const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
+                                if (!res.ok) {
+                                  let t = '';
+                                  try { t = await res.text(); } catch {}
+                                  throw new Error(`AI autofill failed: ${res.status} ${t}`);
+                                }
+                                const data = await res.json();
+                                const labs = (data?.labs as any) || {};
+                                const newSelections = new Set(labSelections);
+                                const newResults: typeof labResults = { ...labResults };
+                                Object.keys(labs).forEach((name) => {
+                                  newSelections.add(name);
+                                  newResults[name] = labs[name];
+                                });
+                                setLabSelections(Array.from(newSelections));
+                                setLabResults(newResults);
+                                toast({ variant: 'success', title: 'Autofill complete', description: 'Extracted results inserted.' });
+                              } catch (err) {
+                                console.error(err);
+                                toast({ variant: 'warning', title: 'Autofill failed', description: getErrorMessage(err) || 'Try another image.' });
+                              } finally {
+                                setLabsAutofillLoading(false);
+                                try { (e.target as any).value = ''; } catch {}
+                              }
+                            }}
+                          />
+                        </label>
+                        <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { await save(false); markSectionComplete('labs'); }}>
+                          {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
               <TabsContent value="photos" className="space-y-4" forceMount>

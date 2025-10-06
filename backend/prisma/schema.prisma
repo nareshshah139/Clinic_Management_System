@@ -275,6 +275,16 @@ model Visit {
   @@map("visits")
 }
 
+// Dermatology photo capture positions
+enum PhotoPosition {
+  FRONT
+  LEFT_PROFILE
+  RIGHT_PROFILE
+  BACK
+  CLOSE_UP
+  OTHER
+}
+
 // Binary attachments stored in the database for visits
 model VisitAttachment {
   id          String   @id @default(cuid())
@@ -284,6 +294,8 @@ model VisitAttachment {
   sizeBytes   Int
   data        Bytes
   createdAt   DateTime @default(now())
+  position    PhotoPosition @default(OTHER)
+  displayOrder Int          @default(0)
 
   visit Visit @relation(fields: [visitId], references: [id])
 
@@ -301,6 +313,8 @@ model DraftAttachment {
   sizeBytes   Int
   data        Bytes
   createdAt   DateTime @default(now())
+  position    PhotoPosition @default(OTHER)
+  displayOrder Int          @default(0)
 
   patient Patient @relation(fields: [patientId], references: [id])
 

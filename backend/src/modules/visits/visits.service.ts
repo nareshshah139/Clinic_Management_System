@@ -818,8 +818,8 @@ export class VisitsService {
     // DB-backed attachments
     const dbItems = await this.prisma.draftAttachment.findMany({
       where: { patientId, dateStr },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, filename: true, createdAt: true },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, filename: true, createdAt: true, position: true, displayOrder: true },
     });
 
     // Legacy filesystem attachments for backward compatibility
@@ -837,11 +837,14 @@ export class VisitsService {
     const legacyItems = sanitizedLegacy.map(url => ({ url, uploadedAt: null as string | null }));
 
     const items = [
-      ...dbItems.map(i => ({ url: `/visits/photos/draft/${patientId}/${dateStr}/${i.id}`, uploadedAt: i.createdAt.toISOString() })),
+      ...dbItems.map(i => ({ url: `/visits/photos/draft/${patientId}/${dateStr}/${i.id}`, uploadedAt: i.createdAt.toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
       ...legacyItems,
     ].sort((a, b) => {
-      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
-      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      const ao = typeof (a as any).displayOrder === 'number' ? (a as any).displayOrder : this.positionOrderValue((a as any).position);
+      const bo = typeof (b as any).displayOrder === 'number' ? (b as any).displayOrder : this.positionOrderValue((b as any).position);
+      if (ao !== bo) return ao - bo;
+      const at = (a as any).uploadedAt ? Date.parse((a as any).uploadedAt) : 0;
+      const bt = (b as any).uploadedAt ? Date.parse((b as any).uploadedAt) : 0;
       return at - bt;
     });
 
@@ -875,8 +878,8 @@ export class VisitsService {
     // DB-backed attachments
     const dbItems = await this.prisma.visitAttachment.findMany({
       where: { visitId },
-      orderBy: { createdAt: 'asc' },
-      select: { id: true, createdAt: true },
+      orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, createdAt: true, position: true, displayOrder: true },
     });
 
     // Legacy filesystem
@@ -889,11 +892,14 @@ export class VisitsService {
     }
 
     const items = [
-      ...dbItems.map(i => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: i.createdAt.toISOString() })),
-      ...sanitized.map(url => ({ url, uploadedAt: null as string | null })),
+      ...dbItems.map(i => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: i.createdAt.toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
+      ...sanitized.map(url => ({ url, uploadedAt: null as string | null, position: 'OTHER', displayOrder: 999 })),
     ].sort((a, b) => {
-      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
-      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      const ao = typeof (a as any).displayOrder === 'number' ? (a as any).displayOrder : this.positionOrderValue((a as any).position);
+      const bo = typeof (b as any).displayOrder === 'number' ? (b as any).displayOrder : this.positionOrderValue((b as any).position);
+      if (ao !== bo) return ao - bo;
+      const at = (a as any).uploadedAt ? Date.parse((a as any).uploadedAt) : 0;
+      const bt = (b as any).uploadedAt ? Date.parse((b as any).uploadedAt) : 0;
       return at - bt;
     });
 
@@ -906,10 +912,21 @@ export class VisitsService {
     return `${Date.now()}_${unique}${ext}`;
   }
 
+  private positionOrderValue(position?: string): number {
+    switch ((position || 'OTHER').toUpperCase()) {
+      case 'FRONT': return 1;
+      case 'LEFT_PROFILE': return 2;
+      case 'RIGHT_PROFILE': return 3;
+      case 'BACK': return 4;
+      case 'CLOSE_UP': return 5;
+      default: return 99;
+    }
+  }
+
   async createVisitAttachment(
     visitId: string,
     branchId: string,
-    params: { preferredExt: string; contentType: string; buffer: Buffer },
+    params: { preferredExt: string; contentType: string; buffer: Buffer; position?: string; displayOrder?: number },
   ) {
     const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
@@ -924,6 +941,8 @@ export class VisitsService {
         contentType: params.contentType || 'image/jpeg',
         sizeBytes: params.buffer.length,
         data: params.buffer,
+        position: (params.position as any) ?? 'OTHER',
+        displayOrder: Number.isFinite(params.displayOrder as any) ? (params.displayOrder as any) : this.positionOrderValue(params.position),
       },
       select: { id: true },
     });
@@ -933,7 +952,7 @@ export class VisitsService {
   async createDraftAttachment(
     patientId: string,
     dateStr: string,
-    params: { preferredExt: string; contentType: string; buffer: Buffer },
+    params: { preferredExt: string; contentType: string; buffer: Buffer; position?: string; displayOrder?: number },
   ) {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId } });
     if (!patient) throw new NotFoundException('Patient not found');
@@ -946,6 +965,8 @@ export class VisitsService {
         contentType: params.contentType || 'image/jpeg',
         sizeBytes: params.buffer.length,
         data: params.buffer,
+        position: (params.position as any) ?? 'OTHER',
+        displayOrder: Number.isFinite(params.displayOrder as any) ? (params.displayOrder as any) : this.positionOrderValue(params.position),
       },
       select: { id: true },
     });

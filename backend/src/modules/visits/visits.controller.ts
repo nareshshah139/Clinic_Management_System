@@ -156,15 +156,41 @@ export class VisitsController {
   async uploadDraftPhotos(
     @Param('patientId') patientId: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Body() body?: any,
   ) {
     const { dateStr } = await ensurePatientDraftDir(patientId);
+    const parsePositions = (): string[] => {
+      const allowed = new Set(['FRONT','LEFT_PROFILE','RIGHT_PROFILE','BACK','CLOSE_UP','OTHER']);
+      let positions: unknown = body?.positions ?? body?.['positions[]'] ?? body?.position ?? body?.['position[]'];
+      if (typeof positions === 'string') {
+        try {
+          const parsed = JSON.parse(positions);
+          positions = parsed;
+        } catch {
+          positions = (positions as string).split(',').map((s: string) => s.trim());
+        }
+      }
+      if (!Array.isArray(positions)) throw new BadRequestException('positions are required for each file');
+      const pos = (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '');
+      if (pos.length !== (files?.length || 0)) throw new BadRequestException('positions count must match files count');
+      for (const p of pos) if (!allowed.has(p)) throw new BadRequestException(`Invalid position: ${p}`);
+      return pos as string[];
+    };
+
+    if (!files || files.length === 0) throw new BadRequestException('No files provided');
+    const positions = parsePositions();
+
     let processedCount = 0;
-    for (const file of files || []) {
+    for (let idx = 0; idx < files.length; idx += 1) {
+      const file = files[idx];
+      const position = positions[idx] as any;
       const { buffer, ext } = await processImageUpload(file);
       await this.visitsService.createDraftAttachment(patientId, dateStr, {
         preferredExt: ext,
         contentType: file.mimetype || 'image/jpeg',
         buffer,
+        position,
+        displayOrder: this.positionOrderValue(position),
       });
       processedCount += 1;
     }
@@ -273,14 +299,40 @@ export class VisitsController {
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
     @Request() req: AuthenticatedRequest,
+    @Body() body?: any,
   ) {
+    const parsePositions = (): string[] => {
+      const allowed = new Set(['FRONT','LEFT_PROFILE','RIGHT_PROFILE','BACK','CLOSE_UP','OTHER']);
+      let positions: unknown = body?.positions ?? body?.['positions[]'] ?? body?.position ?? body?.['position[]'];
+      if (typeof positions === 'string') {
+        try {
+          const parsed = JSON.parse(positions);
+          positions = parsed;
+        } catch {
+          positions = (positions as string).split(',').map((s: string) => s.trim());
+        }
+      }
+      if (!Array.isArray(positions)) throw new BadRequestException('positions are required for each file');
+      const pos = (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '');
+      if (pos.length !== (files?.length || 0)) throw new BadRequestException('positions count must match files count');
+      for (const p of pos) if (!allowed.has(p)) throw new BadRequestException(`Invalid position: ${p}`);
+      return pos as string[];
+    };
+
+    if (!files || files.length === 0) throw new BadRequestException('No files provided');
+    const positions = parsePositions();
+
     let processedCount = 0;
-    for (const file of files || []) {
+    for (let idx = 0; idx < files.length; idx += 1) {
+      const file = files[idx];
+      const position = positions[idx] as any;
       const { buffer, ext } = await processImageUpload(file);
       await this.visitsService.createVisitAttachment(id, req.user.branchId, {
         preferredExt: ext,
         contentType: file.mimetype || 'image/jpeg',
         buffer,
+        position,
+        displayOrder: this.positionOrderValue(position),
       });
       processedCount += 1;
     }
@@ -289,6 +341,17 @@ export class VisitsController {
     }
     this.logger.debug(`uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`);
     return this.visitsService.listAttachments(id, req.user.branchId);
+  }
+
+  private positionOrderValue(position?: string): number {
+    switch ((position || 'OTHER').toUpperCase()) {
+      case 'FRONT': return 1;
+      case 'LEFT_PROFILE': return 2;
+      case 'RIGHT_PROFILE': return 3;
+      case 'BACK': return 4;
+      case 'CLOSE_UP': return 5;
+      default: return 99;
+    }
   }
 
   @Get(':id/photos')
@@ -380,6 +443,92 @@ export class VisitsController {
       this.logger.error(`transcribeAudio failed: ${e?.stack || e?.message || e}`);
       return { text: '' };
     }
+  }
+
+  // Extract lab results from an uploaded image using OpenAI Vision
+  @Post('labs/autofill')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(),
+    fileFilter: imageFileFilter,
+    limits: {
+      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+      files: 1,
+    },
+  }))
+  async autofillLabsFromImage(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() _req: AuthenticatedRequest,
+  ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('No image provided');
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      this.logger.warn('labs/autofill skipped: OPENAI_API_KEY is not configured');
+      throw new ServiceUnavailableException('AI autofill is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
+    }
+
+    // Normalize image and build data URL for OpenAI Vision
+    const processed = await processImageUpload(file);
+    const base64 = processed.buffer.toString('base64');
+    const mime = `image/${processed.ext || 'jpeg'}`;
+    const dataUrl = `data:${mime};base64,${base64}`;
+
+    const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
+
+    const system =
+      'You are a medical lab report extraction assistant. Extract lab test results from the provided report image. ' +
+      'Return STRICT JSON with a top-level key "labs". The value must be an object mapping test names to either: ' +
+      '(a) a number with unit via {"value": number, "unit": string}, or (b) an object of subtests each with {"value", "unit"}. ' +
+      'Prefer standard units: CBC->Hb g/dL, WBC 10^9/L, Platelets 10^9/L; LFT->AST/ALT U/L, Bilirubin mg/dL; ' +
+      'RFT->Urea mg/dL, Creatinine mg/dL; Lipid Profile->TC/TG/HDL/LDL mg/dL; Thyroid Profile->TSH µIU/mL, T3/T4 ng/dL; ' +
+      'HbA1c %; Vitamin D ng/mL; Vitamin B12 pg/mL; Ferritin ng/mL. ' +
+      'Do not include commentary. Use null for missing values. Avoid strings like "N/A".';
+
+    const messages: any[] = [
+      { role: 'system', content: system },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Extract structured lab results as per the schema.' },
+          { type: 'image_url', image_url: { url: dataUrl } },
+        ],
+      },
+    ];
+
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0,
+        response_format: { type: 'json_object' },
+        messages,
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      this.logger.error(`labs/autofill OpenAI error: ${resp.status} ${errText}`);
+      throw new ServiceUnavailableException('Failed to extract lab results');
+    }
+
+    const data = (await resp.json()) as any;
+    const content = data?.choices?.[0]?.message?.content || '{}';
+    let parsed: any = {};
+    try {
+      parsed = JSON.parse(content);
+    } catch (e) {
+      this.logger.error('labs/autofill: failed to parse JSON response from OpenAI');
+      throw new ServiceUnavailableException('Invalid AI response');
+    }
+
+    const labs = parsed?.labs ?? parsed ?? {};
+    return { labs };
   }
 
   @Post('translate')

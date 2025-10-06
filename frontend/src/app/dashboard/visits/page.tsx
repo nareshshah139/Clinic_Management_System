@@ -246,6 +246,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
+import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1109,6 +1110,12 @@ function VisitsPageInner() {
               </span>
             )}
           </p>
+          {/* Minimal inline tracker for current patient */}
+          {selectedPatientId && (
+            <div className="mt-2">
+              <PatientProgressTracker patientId={selectedPatientId} compact />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {appointmentData && (

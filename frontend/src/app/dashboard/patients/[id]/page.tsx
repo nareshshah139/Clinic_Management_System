@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Calendar, Stethoscope, ArrowLeft } from 'lucide-react';
+import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 
 type VisitEntry = Record<string, unknown> & {
@@ -146,6 +147,9 @@ export default function PatientDetailsPage() {
           <Button onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
         </div>
       </div>
+
+      {/* Minimal Patient Progress Tracker */}
+      <PatientProgressTracker patientId={id} />
 
       <Tabs defaultValue="info" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
