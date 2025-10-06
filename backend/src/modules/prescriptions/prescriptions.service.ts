@@ -1765,6 +1765,13 @@ export class PrescriptionsService {
     });
   }
 
+  // Interactions preview helper
+  async previewDrugInteractions(items: any[]) {
+    return {
+      interactions: await this.checkDrugInteractions(Array.isArray(items) ? items : []),
+    };
+  }
+
   // ANALYTICS / A-B
   async recordTemplateUsage(
     templateId: string,

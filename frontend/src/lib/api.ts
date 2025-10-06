@@ -486,6 +486,10 @@ export class ApiClient {
     return this.get(`/prescriptions/${id}/print-events`);
   }
 
+  async previewDrugInteractions(items: unknown[]) {
+    return this.post('/prescriptions/interactions/preview', { items });
+  }
+
   // Translation Memory
   async listTranslationMemory(params?: { fieldKey?: string; q?: string; targetLanguage?: string }) {
     return this.get('/prescriptions/translations', params || {});

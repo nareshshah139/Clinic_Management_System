@@ -350,6 +350,14 @@ export class PrescriptionsController {
     return this.prescriptionsService.upsertTranslationMemory(req.user.branchId, body);
   }
 
+  // Drug interactions preview (no persistence)
+  @Post('interactions/preview')
+  previewInteractions(
+    @Body() body: { items: any[] },
+  ) {
+    return this.prescriptionsService.previewDrugInteractions(Array.isArray(body?.items) ? body.items : []);
+  }
+
   // Template usage analytics
   @Post('templates/:templateId/usage')
   recordTemplateUsage(

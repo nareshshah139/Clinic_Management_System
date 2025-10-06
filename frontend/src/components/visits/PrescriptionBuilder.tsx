@@ -403,6 +403,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
+  const [interactionsOpen, setInteractionsOpen] = useState(false);
+  const [interactions, setInteractions] = useState<any[]>([]);
   type OneMgSelection = { sku: string; name: string; price?: number };
   const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
   const [oneMgChecking, setOneMgChecking] = useState(false);
@@ -1618,6 +1620,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     })();
   }, [previewOpen, visitData]);
 
+  const openInteractions = useCallback(async () => {
+    try {
+      const res: any = await apiClient.previewDrugInteractions(items as any);
+      setInteractions(Array.isArray(res?.interactions) ? res.interactions : []);
+      setInteractionsOpen(true);
+    } catch {
+      setInteractions([]);
+      setInteractionsOpen(true);
+    }
+  }, [items]);
+
   useEffect(() => {
     if (autoPreview && !previewOpen) setPreviewOpen(true);
   }, [autoPreview, previewOpen]);
@@ -2751,6 +2764,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
                 <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                <Button variant="outline" onClick={() => void openInteractions()}>Interactions</Button>
                 <Button variant="secondary" onClick={async () => {
                   try {
                     const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
@@ -2798,6 +2812,33 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
             </div>
             </div>
+          </DialogContent>
+        </Dialog>
+        <Dialog open={interactionsOpen} onOpenChange={setInteractionsOpen}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader>
+              <DialogTitle>Interaction Summary</DialogTitle>
+              <DialogDescription>Preview potential interactions based on current items.</DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-auto text-sm">
+              {interactions.length === 0 ? (
+                <div className="text-gray-600">No interactions found.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {interactions.map((it, idx) => (
+                    <li key={`ix-${idx}`} className="border rounded p-2">
+                      <div className="font-medium">{it.drug1} × {it.drug2}</div>
+                      <div className="text-xs text-gray-600">Severity: {it.severity}</div>
+                      <div className="mt-1">{it.description}</div>
+                      {it.recommendation && <div className="mt-1 text-xs text-gray-700">Recommendation: {it.recommendation}</div>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setInteractionsOpen(false)}>Close</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
         {/* New Template Dialog */}
