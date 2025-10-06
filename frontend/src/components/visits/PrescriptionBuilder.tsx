@@ -1848,6 +1848,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   )}
                 </div>
+                <div className="mt-2 text-xs text-gray-600 flex items-center gap-3">
+                  <span>Totals:</span>
+                  <span>Prints: {printTotals['PRINT_PREVIEW_PDF'] || 0}</span>
+                  <span>WhatsApp shares: {printTotals['WHATSAPP_SHARE'] || 0}</span>
+                  <span>Email shares: {printTotals['EMAIL_SHARE'] || 0}</span>
+                </div>
               </div>
             </CollapsibleSection>
 
@@ -2367,6 +2373,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   filter: grayscale ? 'grayscale(100%)' : undefined,
                 }}
               >
+                {showRefillStamp && (
+                  <div aria-hidden className="pointer-events-none select-none" style={{ position: 'absolute', right: 12, top: 12, padding: '4px 8px', border: '1px dashed rgba(0,0,0,0.4)', color: '#0a0a0a', background: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
+                    Refill eligible
+                  </div>
+                )}
                 {bleedSafe?.enabled && (
                   <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
                 )}
@@ -2733,6 +2744,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       ))}
                     </SelectContent>
                   </Select>
+                  <label className="ml-4 text-sm text-gray-700 flex items-center gap-2">
+                    <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
+                    Refill stamp
+                  </label>
                 </div>
                 <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
