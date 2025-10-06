@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { apiClient } from '@/lib/api';
 import { useRouter } from 'next/navigation';
 import { X, FileText, AlertTriangle } from 'lucide-react';
@@ -328,6 +329,12 @@ export default function DoctorDayCalendar({
                             style={{ color: 'rgba(255, 255, 255, 0.8)' }}
                           >
                             📍 {appt.room.name}
+                          </div>
+                        )}
+                        {/* Inline super-compact tracker */}
+                        {appt.patient?.id && (
+                          <div className="mt-1">
+                            <PatientProgressTracker patientId={appt.patient.id} variant="mini" />
                           </div>
                         )}
                       </div>
