@@ -2283,7 +2283,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div className="h-full min-h-0 flex flex-col">
+            <div className="h-full min-h-0 flex flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -2551,9 +2551,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div>
                       <div className="text-gray-600">Gender / DOB</div>
                       <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
-                </div>
-              </div>
-                )}
+                    </div>
+                  </div>
+                  )}
 
                 {/* Vitals (manual override) */}
                 {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
@@ -2721,100 +2721,103 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
               </div>
             </div>
-            </div>
-            <div className="print:hidden sticky bottom-0 bg-white border-t px-6 py-3 z-10">
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
-                <div className="text-xs text-blue-700">
-                  To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
-                  turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
-                </div>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)}>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</Button>
-                  <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
-                    <span>Zoom</span>
-                    <input type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
-                    <span>{Math.round(previewZoom * 100)}%</span>
+            </div>
+            {/* Right Sidebar Controls */}
+            <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+              <div className="p-4 space-y-4">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
+                  <div className="text-xs text-blue-700">
+                    To remove browser headers/footers: In your browser's print dialog, go to <strong>More settings</strong> → 
+                    turn OFF <strong>"Headers and footers"</strong> for a clean prescription print.
                   </div>
-                  <span className="text-sm text-gray-700">Print Format</span>
-                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Select format" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="TABLE">Table</SelectItem>
-                      <SelectItem value="TEXT">Text</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <span className="text-sm text-gray-700 ml-4">Printer profile</span>
-                  <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
-                    <SelectTrigger className="w-56">
-                      <SelectValue placeholder="Select profile" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {printerProfiles.map((p: any) => (
-                        <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (Default)' : ''}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <label className="ml-4 text-sm text-gray-700 flex items-center gap-2">
+                </div>
+                <div className="space-y-3">
+                  <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)} className="w-full justify-between">
+                    <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
+                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-gray-700">
+                    <span>Zoom</span>
+                    <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
+                    <span className="w-10 text-right">{Math.round(previewZoom * 100)}%</span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Print Format</span>
+                    <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select format" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TABLE">Table</SelectItem>
+                        <SelectItem value="TEXT">Text</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Printer profile</span>
+                    <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select profile" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {printerProfiles.map((p: any) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (Default)' : ''}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <label className="text-sm text-gray-700 flex items-center gap-2">
                     <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
                     Refill stamp
                   </label>
                 </div>
-                <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-                <Button variant="outline" onClick={() => void openInteractions()}>Interactions</Button>
-                <Button variant="secondary" onClick={async () => {
-                  try {
-                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                    if (!prescId) return;
-                    await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
-                    toast({ title: 'Email sent', description: 'Prescription email queued.' });
-                  } catch (e) {
-                    toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
-                  }
-                }}>Email</Button>
-                <Button variant="secondary" onClick={async () => {
-                  try {
-                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                    if (!prescId) return;
-                    const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
-                    await apiClient.sharePrescription(prescId, { channel: 'WHATSAPP', to: phone.startsWith('+') ? phone : `+91${phone}`, message: 'Your prescription is ready.' });
-                    toast({ title: 'WhatsApp queued', description: 'WhatsApp message queued.' });
-                  } catch (e) {
-                    toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not send message.' });
-                  }
-                }}>WhatsApp</Button>
-                <Button variant="ghost" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                <Button onClick={() => {
-                  try {
-                    window.print();
-                  } catch (e) {
-                    console.error('Browser print failed', e);
-                  }
-                }}>Print</Button>
-                <Button onClick={async () => {
-                  try {
-                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                    if (!prescId) return;
-                    const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
-                    try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
-                    const a = document.createElement('a');
-                    a.href = fileUrl;
-                    a.download = fileName || 'prescription.pdf';
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                  } catch (e) {
-                    console.error('PDF generation failed', e);
-                    toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
-                  }
-                }}>Download PDF</Button>
-                </div>
-              </div>
+                <div className="pt-2 grid grid-cols-2 gap-2">
+                  <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
+                  <Button variant="outline" onClick={() => void openInteractions()}>Interactions</Button>
+                  <Button variant="secondary" onClick={async () => {
+                    try {
+                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                      if (!prescId) return;
+                      await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
+                      toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                    } catch (e) {
+                      toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                    }
+                  }}>Email</Button>
+                  <Button variant="secondary" onClick={async () => {
+                    try {
+                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                      if (!prescId) return;
+                      const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
+                      await apiClient.sharePrescription(prescId, { channel: 'WHATSAPP', to: phone.startsWith('+') ? phone : `+91${phone}`, message: 'Your prescription is ready.' });
+                      toast({ title: 'WhatsApp queued', description: 'WhatsApp message queued.' });
+                    } catch (e) {
+                      toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not send message.' });
+                    }
+                  }}>WhatsApp</Button>
+                  <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
+                  <Button className="col-span-1" onClick={() => {
+                    try { window.print(); } catch (e) { console.error('Browser print failed', e); }
+                  }}>Print</Button>
+                  <Button className="col-span-1" onClick={async () => {
+                    try {
+                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                      if (!prescId) return;
+                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
+                      try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                      const a = document.createElement('a');
+                      a.href = fileUrl;
+                      a.download = fileName || 'prescription.pdf';
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                    } catch (e) {
+                      console.error('PDF generation failed', e);
+                      toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
+                    }
+                  }}>Download PDF</Button>
+            </div>
             </div>
             </div>
             </div>
