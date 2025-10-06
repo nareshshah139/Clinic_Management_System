@@ -73,6 +73,11 @@ interface Props {
   reviewDate?: string;
   printBgUrl?: string;
   printTopMarginPx?: number;
+  printLeftMarginPx?: number;
+  printRightMarginPx?: number;
+  printBottomMarginPx?: number;
+  contentOffsetXPx?: number;
+  contentOffsetYPx?: number;
   onChangeReviewDate?: (v: string) => void;
   refreshKey?: number;
   standalone?: boolean;
@@ -80,6 +85,7 @@ interface Props {
   includeSections?: Record<string, boolean>;
   onChangeIncludeSections?: (next: Record<string, boolean>) => void;
   ensureVisitId?: () => Promise<string>;
+  onChangeContentOffset?: (x: number, y: number) => void;
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -120,7 +126,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset }: Props) {
   const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
@@ -2227,9 +2233,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   margin: '0 auto',
                   padding: '0',
                   paddingTop: `${Math.max(0, (printTopMarginPx ?? 150))/3.78}mm`,
-                  paddingLeft: '12mm',
-                  paddingRight: '12mm',
-                  paddingBottom: '12mm',
+                  paddingLeft: `${Math.max(0, (printLeftMarginPx ?? 45))/3.78}mm`,
+                  paddingRight: `${Math.max(0, (printRightMarginPx ?? 45))/3.78}mm`,
+                  paddingBottom: `${Math.max(0, (printBottomMarginPx ?? 45))/3.78}mm`,
                   boxSizing: 'border-box',
                   backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
                   backgroundRepeat: 'no-repeat',
@@ -2240,6 +2246,31 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div 
                   id="prescription-print-content" 
                   className="w-full h-full"
+                  style={{
+                    position: 'relative',
+                    left: `${contentOffsetXPx ?? 0}px`,
+                    top: `${contentOffsetYPx ?? 0}px`,
+                  }}
+                  onMouseDown={(e) => {
+                    if (!(e.buttons & 1)) return; // left button only
+                    const startX = e.clientX;
+                    const startY = e.clientY;
+                    const origX = contentOffsetXPx ?? 0;
+                    const origY = contentOffsetYPx ?? 0;
+                    const move = (ev: MouseEvent) => {
+                      const dx = ev.clientX - startX;
+                      const dy = ev.clientY - startY;
+                      const nx = Math.round(origX + dx);
+                      const ny = Math.round(origY + dy);
+                      onChangeContentOffset?.(nx, ny);
+                    };
+                    const up = () => {
+                      window.removeEventListener('mousemove', move);
+                      window.removeEventListener('mouseup', up);
+                    };
+                    window.addEventListener('mousemove', move);
+                    window.addEventListener('mouseup', up);
+                  }}
                 >
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (

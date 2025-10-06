@@ -231,6 +231,38 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Print customization (moved from PrescriptionBuilder)
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
   const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+  const [printLeftMarginPx, setPrintLeftMarginPx] = useState<number>(45);
+  const [printRightMarginPx, setPrintRightMarginPx] = useState<number>(45);
+  const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(45);
+  const [contentOffsetXPx, setContentOffsetXPx] = useState<number>(0);
+  const [contentOffsetYPx, setContentOffsetYPx] = useState<number>(0);
+
+  // Persist customization locally so users keep their letterhead and layout
+  useEffect(() => {
+    try {
+      const bg = localStorage.getItem('rx_print_bg_url');
+      const top = localStorage.getItem('rx_margin_top_px');
+      const left = localStorage.getItem('rx_margin_left_px');
+      const right = localStorage.getItem('rx_margin_right_px');
+      const bottom = localStorage.getItem('rx_margin_bottom_px');
+      const offx = localStorage.getItem('rx_offset_x_px');
+      const offy = localStorage.getItem('rx_offset_y_px');
+      if (bg) setPrintBgUrl(bg);
+      if (top) setPrintTopMarginPx(Number(top));
+      if (left) setPrintLeftMarginPx(Number(left));
+      if (right) setPrintRightMarginPx(Number(right));
+      if (bottom) setPrintBottomMarginPx(Number(bottom));
+      if (offx) setContentOffsetXPx(Number(offx));
+      if (offy) setContentOffsetYPx(Number(offy));
+    } catch {}
+  }, []);
+  useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
+  useEffect(() => { try { localStorage.setItem('rx_margin_top_px', String(printTopMarginPx)); } catch {} }, [printTopMarginPx]);
+  useEffect(() => { try { localStorage.setItem('rx_margin_left_px', String(printLeftMarginPx)); } catch {} }, [printLeftMarginPx]);
+  useEffect(() => { try { localStorage.setItem('rx_margin_right_px', String(printRightMarginPx)); } catch {} }, [printRightMarginPx]);
+  useEffect(() => { try { localStorage.setItem('rx_margin_bottom_px', String(printBottomMarginPx)); } catch {} }, [printBottomMarginPx]);
+  useEffect(() => { try { localStorage.setItem('rx_offset_x_px', String(contentOffsetXPx)); } catch {} }, [contentOffsetXPx]);
+  useEffect(() => { try { localStorage.setItem('rx_offset_y_px', String(contentOffsetYPx)); } catch {} }, [contentOffsetYPx]);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
   const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
@@ -1498,6 +1530,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       reviewDate={reviewDate}
                       printBgUrl={printBgUrl}
                       printTopMarginPx={printTopMarginPx}
+                      printLeftMarginPx={printLeftMarginPx}
+                      printRightMarginPx={printRightMarginPx}
+                      printBottomMarginPx={printBottomMarginPx}
+                      contentOffsetXPx={contentOffsetXPx}
+                      contentOffsetYPx={contentOffsetYPx}
+                      onChangeContentOffset={(x, y) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}
@@ -1519,13 +1557,57 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="md:col-span-2">
+                      <div className="md:col-span-2 space-y-2">
                         <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
+                        <div className="flex items-center gap-2 text-sm">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const dataUrl = String(reader.result || '');
+                                if (dataUrl) setPrintBgUrl(dataUrl);
+                              };
+                              reader.readAsDataURL(f);
+                            }}
+                          />
+                          <Button type="button" variant="outline" onClick={() => setPrintBgUrl('')}>Clear</Button>
+                        </div>
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <label className="text-sm text-gray-700">Top Margin (px)</label>
                         <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
+                        <label className="text-sm text-gray-700">Bottom Margin (px)</label>
+                        <Input type="number" min={0} value={printBottomMarginPx} onChange={(e) => setPrintBottomMarginPx(Number(e.target.value) || 0)} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-700">Left Margin (px)</label>
+                        <Input type="number" min={0} value={printLeftMarginPx} onChange={(e) => setPrintLeftMarginPx(Number(e.target.value) || 0)} />
+                        <label className="text-sm text-gray-700">Right Margin (px)</label>
+                        <Input type="number" min={0} value={printRightMarginPx} onChange={(e) => setPrintRightMarginPx(Number(e.target.value) || 0)} />
+                      </div>
+                      <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
+                        <div>
+                          <label className="text-sm text-gray-700">Content X Offset (px)</label>
+                          <Input type="number" value={contentOffsetXPx} onChange={(e) => setContentOffsetXPx(Number(e.target.value) || 0)} />
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-700">Content Y Offset (px)</label>
+                          <Input type="number" value={contentOffsetYPx} onChange={(e) => setContentOffsetYPx(Number(e.target.value) || 0)} />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button type="button" variant="outline" onClick={() => setContentOffsetYPx((v) => v - 1)}>↑</Button>
+                          <Button type="button" variant="outline" onClick={() => setContentOffsetYPx((v) => v + 1)}>↓</Button>
+                          <Button type="button" variant="outline" onClick={() => setContentOffsetXPx((v) => v - 1)}>←</Button>
+                          <Button type="button" variant="outline" onClick={() => setContentOffsetXPx((v) => v + 1)}>→</Button>
+                        </div>
+                        <div>
+                          <Button type="button" variant="secondary" onClick={() => { setContentOffsetXPx(0); setContentOffsetYPx(0); }}>Reset Offsets</Button>
+                        </div>
                       </div>
                   <div className="md:col-span-3">
                     <label className="text-sm text-gray-700">Print Sections</label>
