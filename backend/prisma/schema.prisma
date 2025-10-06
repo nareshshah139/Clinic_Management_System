@@ -8,16 +8,16 @@ datasource db {
 }
 
 model IdempotencyRecord {
-  id             String   @id @default(cuid())
-  key            String
-  userId         String
-  resourceType   String
-  resourceId     String
-  method         String
-  statusCode     Int
-  responseBody   String
-  createdAt      DateTime @default(now())
-  expiresAt      DateTime?
+  id           String    @id @default(cuid())
+  key          String
+  userId       String
+  resourceType String
+  resourceId   String
+  method       String
+  statusCode   Int
+  responseBody String
+  createdAt    DateTime  @default(now())
+  expiresAt    DateTime?
 
   @@unique([key, userId, resourceType, resourceId, method])
   @@index([userId, resourceType, resourceId])
@@ -67,6 +67,15 @@ model User {
   createdPackages   PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates WhatsAppTemplate[]
 
+  // Back-relations
+  createdPrescriptionTemplates PrescriptionTemplate[]
+  approvedTemplateVersions     PrescriptionTemplateVersion[]
+  reviewedTemplateApprovals    TemplateVersionApproval[]
+  ownedClinicAssets            ClinicAsset[]
+  ownedPrinterProfiles         PrinterProfile[]
+  templateUsages               TemplateUsage[]
+  experimentAssignments        ExperimentAssignment[]
+
   @@map("users")
 }
 
@@ -103,6 +112,14 @@ model Branch {
   pharmacyInvoices  PharmacyInvoice[]
   pharmacyPackages  PharmacyPackage[]
   whatsappTemplates WhatsAppTemplate[]
+
+  // Back-relations
+  prescriptionTemplates    PrescriptionTemplate[]
+  clinicAssets             ClinicAsset[]
+  printerProfiles          PrinterProfile[]
+  templateUsages           TemplateUsage[]
+  translationMemoryEntries TranslationMemoryEntry[]
+  layoutExperiments        LayoutExperiment[]
 
   @@map("branches")
 }
@@ -186,6 +203,9 @@ model Patient {
   pharmacyInvoices PharmacyInvoice[]
   draftAttachments DraftAttachment[]
 
+  // Back-relations
+  experimentAssignments ExperimentAssignment[]
+
   @@index([branchId])
   @@index([name])
   @@index([phone])
@@ -222,29 +242,29 @@ model Appointment {
 }
 
 model Visit {
-  id            String        @id @default(cuid())
-  patientId     String
-  doctorId      String
-  appointmentId String?       @unique
-  vitals        String?
-  complaints    String
-  history       String?
-  exam          String?
-  diagnosis     String?
-  plan          String?
-  followUp      DateTime?
-  attachments   String?
-  scribeJson    String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  consents      Consent[]
-  deviceLogs    DeviceLog[]
-  labOrders     LabOrder[]
-  newInvoices   NewInvoice[]
-  prescription  Prescription?
-  appointment   Appointment?  @relation(fields: [appointmentId], references: [id])
-  doctor        User          @relation(fields: [doctorId], references: [id])
-  patient       Patient       @relation(fields: [patientId], references: [id])
+  id               String            @id @default(cuid())
+  patientId        String
+  doctorId         String
+  appointmentId    String?           @unique
+  vitals           String?
+  complaints       String
+  history          String?
+  exam             String?
+  diagnosis        String?
+  plan             String?
+  followUp         DateTime?
+  attachments      String?
+  scribeJson       String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  consents         Consent[]
+  deviceLogs       DeviceLog[]
+  labOrders        LabOrder[]
+  newInvoices      NewInvoice[]
+  prescription     Prescription?
+  appointment      Appointment?      @relation(fields: [appointmentId], references: [id])
+  doctor           User              @relation(fields: [doctorId], references: [id])
+  patient          Patient           @relation(fields: [patientId], references: [id])
   visitAttachments VisitAttachment[]
 
   @@index([patientId])
@@ -275,7 +295,7 @@ model VisitAttachment {
 model DraftAttachment {
   id          String   @id @default(cuid())
   patientId   String
-  dateStr     String   // yyyymmdd for grouping
+  dateStr     String // yyyymmdd for grouping
   filename    String
   contentType String
   sizeBytes   Int
@@ -289,21 +309,24 @@ model DraftAttachment {
 }
 
 model Prescription {
-  id               String            @id @default(cuid())
-  visitId          String            @unique
-  language         Language          @default(EN)
+  id               String                   @id @default(cuid())
+  visitId          String                   @unique
+  language         Language                 @default(EN)
   items            String
   instructions     String?
-  genericFirst     Boolean           @default(true)
+  genericFirst     Boolean                  @default(true)
   pharmacistNotes  String?
   qrcode           String?
   signature        String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  visit            Visit             @relation(fields: [visitId], references: [id])
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  visit            Visit                    @relation(fields: [visitId], references: [id])
   pharmacyInvoices PharmacyInvoice[]
   // Print/Share tracking
   printEvents      PrescriptionPrintEvent[]
+
+  // Back-relations
+  templateUsages TemplateUsage[]
 
   @@map("prescriptions")
 }
@@ -319,16 +342,17 @@ model PrescriptionTemplate {
   specialty   String?
   isPublic    Boolean  @default(false)
   // Default/current content for quick usage (JSON string of items/sections)
-  items       String   // JSON
-  metadata    String?  // JSON
+  items       String // JSON
+  metadata    String? // JSON
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
-  branch   Branch @relation(fields: [branchId], references: [id])
-  creator  User   @relation(fields: [createdBy], references: [id])
+  branch   Branch                        @relation(fields: [branchId], references: [id])
+  creator  User                          @relation(fields: [createdBy], references: [id])
   versions PrescriptionTemplateVersion[]
   usages   TemplateUsage[]
+  variants LayoutVariant[]
 
   @@index([branchId])
   @@index([createdBy])
@@ -343,22 +367,22 @@ enum TemplateApprovalStatus {
 }
 
 model PrescriptionTemplateVersion {
-  id            String                  @id @default(cuid())
+  id            String                 @id @default(cuid())
   templateId    String
   versionNumber Int
-  language      Language                @default(EN)
-  content       String                  // JSON full template content
+  language      Language               @default(EN)
+  content       String // JSON full template content
   changeNotes   String?
-  status        TemplateApprovalStatus  @default(DRAFT)
+  status        TemplateApprovalStatus @default(DRAFT)
   submittedAt   DateTime?
   approvedAt    DateTime?
   approvedBy    String?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   // Relations
-  template PrescriptionTemplate @relation(fields: [templateId], references: [id])
-  approver User?                @relation(fields: [approvedBy], references: [id])
+  template  PrescriptionTemplate      @relation(fields: [templateId], references: [id])
+  approver  User?                     @relation(fields: [approvedBy], references: [id])
   approvals TemplateVersionApproval[]
 
   @@unique([templateId, versionNumber])
@@ -390,7 +414,7 @@ enum AssetType {
 }
 
 model ClinicAsset {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   branchId    String
   ownerId     String?
   type        AssetType
@@ -398,14 +422,14 @@ model ClinicAsset {
   // original file stored in visit attachments or external URL
   url         String
   // Transform controls
-  opacity     Float    @default(1)
-  scale       Float    @default(1)
-  rotationDeg Float    @default(0)
-  crop        String?  // JSON {x,y,width,height} in pixels
-  placement   String?  // JSON {x,y,position}
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  opacity     Float     @default(1)
+  scale       Float     @default(1)
+  rotationDeg Float     @default(0)
+  crop        String? // JSON {x,y,width,height} in pixels
+  placement   String? // JSON {x,y,position}
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   branch Branch @relation(fields: [branchId], references: [id])
   owner  User?  @relation(fields: [ownerId], references: [id])
@@ -431,7 +455,7 @@ model PrinterProfile {
   contentOffsetYPx Int      @default(0)
   grayscale        Boolean  @default(false)
   bleedSafeMm      Int      @default(0)
-  metadata         String?  // JSON for calibration wizard steps
+  metadata         String? // JSON for calibration wizard steps
   isDefault        Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -448,10 +472,10 @@ model PrinterProfile {
 model PrescriptionPrintEvent {
   id             String   @id @default(cuid())
   prescriptionId String
-  eventType      String   // PRINT, PDF_DOWNLOAD, EMAIL_SHARE, WHATSAPP_SHARE
-  channel        String?  // printer name or medium
+  eventType      String // PRINT, PDF_DOWNLOAD, EMAIL_SHARE, WHATSAPP_SHARE
+  channel        String? // printer name or medium
   count          Int      @default(1)
-  metadata       String?  // JSON (alignment feedback, wizard data)
+  metadata       String? // JSON (alignment feedback, wizard data)
   createdAt      DateTime @default(now())
 
   prescription Prescription @relation(fields: [prescriptionId], references: [id])
@@ -463,19 +487,19 @@ model PrescriptionPrintEvent {
 
 // Analytics: record template usage
 model TemplateUsage {
-  id          String   @id @default(cuid())
-  templateId  String
-  branchId    String
-  doctorId    String?
+  id             String   @id @default(cuid())
+  templateId     String
+  branchId       String
+  doctorId       String?
   prescriptionId String?
-  variant     String? // variant key if part of A/B
-  alignmentDx String? // JSON of alignment feedback
-  createdAt   DateTime @default(now())
+  variant        String? // variant key if part of A/B
+  alignmentDx    String? // JSON of alignment feedback
+  createdAt      DateTime @default(now())
 
-  template PrescriptionTemplate @relation(fields: [templateId], references: [id])
-  branch   Branch               @relation(fields: [branchId], references: [id])
-  doctor   User?                @relation(fields: [doctorId], references: [id])
-  prescription Prescription?    @relation(fields: [prescriptionId], references: [id])
+  template     PrescriptionTemplate @relation(fields: [templateId], references: [id])
+  branch       Branch               @relation(fields: [branchId], references: [id])
+  doctor       User?                @relation(fields: [doctorId], references: [id])
+  prescription Prescription?        @relation(fields: [prescriptionId], references: [id])
 
   @@index([templateId])
   @@index([branchId])
@@ -490,17 +514,17 @@ enum VariantType {
 }
 
 model LayoutExperiment {
-  id         String   @id @default(cuid())
-  branchId   String
-  key        String
-  name       String
+  id          String   @id @default(cuid())
+  branchId    String
+  key         String
+  name        String
   description String?
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  branch    Branch            @relation(fields: [branchId], references: [id])
-  variants  LayoutVariant[]
+  branch      Branch                 @relation(fields: [branchId], references: [id])
+  variants    LayoutVariant[]
   assignments ExperimentAssignment[]
 
   @@unique([branchId, key])
@@ -508,28 +532,29 @@ model LayoutExperiment {
 }
 
 model LayoutVariant {
-  id            String      @id @default(cuid())
-  experimentId  String
-  key           String
-  type          VariantType @default(VARIANT)
-  weight        Int         @default(1)
-  templateId    String?
-  createdAt     DateTime    @default(now())
+  id           String      @id @default(cuid())
+  experimentId String
+  key          String
+  type         VariantType @default(VARIANT)
+  weight       Int         @default(1)
+  templateId   String?
+  createdAt    DateTime    @default(now())
 
-  experiment LayoutExperiment   @relation(fields: [experimentId], references: [id])
-  template   PrescriptionTemplate? @relation(fields: [templateId], references: [id])
+  experiment           LayoutExperiment       @relation(fields: [experimentId], references: [id])
+  template             PrescriptionTemplate?  @relation(fields: [templateId], references: [id])
+  ExperimentAssignment ExperimentAssignment[]
 
   @@unique([experimentId, key])
   @@map("layout_variants")
 }
 
 model ExperimentAssignment {
-  id            String   @id @default(cuid())
-  experimentId  String
-  doctorId      String?
-  patientId     String?
-  variantId     String
-  createdAt     DateTime @default(now())
+  id           String   @id @default(cuid())
+  experimentId String
+  doctorId     String?
+  patientId    String?
+  variantId    String
+  createdAt    DateTime @default(now())
 
   experiment LayoutExperiment @relation(fields: [experimentId], references: [id])
   doctor     User?            @relation(fields: [doctorId], references: [id])
@@ -544,23 +569,23 @@ model ExperimentAssignment {
 
 // Translation memory for per-field translations
 model TranslationMemoryEntry {
-  id            String   @id @default(cuid())
-  branchId      String
-  fieldKey      String   // e.g., prescription.instructions
-  sourceText    String
+  id             String   @id @default(cuid())
+  branchId       String
+  fieldKey       String // e.g., prescription.instructions
+  sourceText     String
   targetLanguage Language
-  targetText    String
-  confidence    Float    @default(0)
-  usageCount    Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  targetText     String
+  confidence     Float    @default(0)
+  usageCount     Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   branch Branch @relation(fields: [branchId], references: [id])
 
+  @@unique([branchId, fieldKey, sourceText, targetLanguage])
   @@index([branchId])
   @@index([fieldKey])
   @@index([targetLanguage])
-  @@unique([branchId, fieldKey, sourceText, targetLanguage])
   @@map("translation_memory_entries")
 }
 
@@ -1051,11 +1076,11 @@ model PharmacyInvoice {
   notes  String?
 
   // Timestamps
-  invoiceDate DateTime  @default(now())
-  dueDate     DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  mutationVersion Int   @default(0)
+  invoiceDate     DateTime  @default(now())
+  dueDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  mutationVersion Int       @default(0)
 
   // Relations
   patient      Patient               @relation(fields: [patientId], references: [id])

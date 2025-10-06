@@ -401,6 +401,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   const [orderOpen, setOrderOpen] = useState(false);
+  const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
+  const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   type OneMgSelection = { sku: string; name: string; price?: number };
   const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
   const [oneMgChecking, setOneMgChecking] = useState(false);
@@ -1604,6 +1606,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     })();
   }, []);
 
+  // Fetch aggregated print/share totals when preview is opened
+  useEffect(() => {
+    const prescId = (visitData as any)?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+    if (!previewOpen || !prescId) return;
+    (async () => {
+      try {
+        const res: any = await apiClient.getPrescriptionPrintEvents(prescId);
+        if (res?.totals) setPrintTotals(res.totals as Record<string, number>);
+      } catch {}
+    })();
+  }, [previewOpen, visitData]);
+
   useEffect(() => {
     if (autoPreview && !previewOpen) setPreviewOpen(true);
   }, [autoPreview, previewOpen]);
@@ -2513,7 +2527,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
                 </div>
               </div>
-                  </div>
                 )}
 
                 {/* Vitals (manual override) */}
@@ -2767,6 +2780,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}>Print</Button>
                 </div>
               </div>
+            </div>
             </div>
             </div>
           </DialogContent>
