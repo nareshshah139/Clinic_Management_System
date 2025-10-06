@@ -242,6 +242,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [designSnapToGrid, setDesignSnapToGrid] = useState<boolean>(true);
   const [designGridSizePx, setDesignGridSizePx] = useState<number>(8);
   const [designNudgeStepPx, setDesignNudgeStepPx] = useState<number>(1);
+  const [paperPreset, setPaperPreset] = useState<'A4' | 'LETTER'>('A4');
+  const [showBleedSafe, setShowBleedSafe] = useState<boolean>(false);
+  const [safeMarginMm, setSafeMarginMm] = useState<number>(5);
+  const [grayscaleMode, setGrayscaleMode] = useState<boolean>(false);
 
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
@@ -259,6 +263,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       const daSnap = localStorage.getItem('rx_da_snap');
       const daGridSize = localStorage.getItem('rx_da_grid_size');
       const daNudge = localStorage.getItem('rx_da_nudge');
+      const preset = localStorage.getItem('rx_paper_preset');
+      const bleed = localStorage.getItem('rx_show_bleed_safe');
+      const safe = localStorage.getItem('rx_safe_margin_mm');
+      const gray = localStorage.getItem('rx_grayscale');
       if (bg) setPrintBgUrl(bg);
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
@@ -272,6 +280,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (daSnap) setDesignSnapToGrid(daSnap === '1');
       if (daGridSize) setDesignGridSizePx(Number(daGridSize));
       if (daNudge) setDesignNudgeStepPx(Number(daNudge));
+      if (preset === 'LETTER' || preset === 'A4') setPaperPreset(preset);
+      if (bleed) setShowBleedSafe(bleed === '1');
+      if (safe) setSafeMarginMm(Number(safe));
+      if (gray) setGrayscaleMode(gray === '1');
     } catch {}
   }, []);
   useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
@@ -287,6 +299,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   useEffect(() => { try { localStorage.setItem('rx_da_snap', designSnapToGrid ? '1' : '0'); } catch {} }, [designSnapToGrid]);
   useEffect(() => { try { localStorage.setItem('rx_da_grid_size', String(designGridSizePx)); } catch {} }, [designGridSizePx]);
   useEffect(() => { try { localStorage.setItem('rx_da_nudge', String(designNudgeStepPx)); } catch {} }, [designNudgeStepPx]);
+  useEffect(() => { try { localStorage.setItem('rx_paper_preset', paperPreset); } catch {} }, [paperPreset]);
+  useEffect(() => { try { localStorage.setItem('rx_show_bleed_safe', showBleedSafe ? '1' : '0'); } catch {} }, [showBleedSafe]);
+  useEffect(() => { try { localStorage.setItem('rx_safe_margin_mm', String(safeMarginMm)); } catch {} }, [safeMarginMm]);
+  useEffect(() => { try { localStorage.setItem('rx_grayscale', grayscaleMode ? '1' : '0'); } catch {} }, [grayscaleMode]);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
   const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
@@ -1568,6 +1584,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         gridSizePx: designGridSizePx,
                         nudgeStepPx: designNudgeStepPx,
                       }}
+                      paperPreset={paperPreset}
+                      grayscale={grayscaleMode}
+                      bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}
@@ -1639,6 +1658,25 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         </div>
                         <div>
                           <Button type="button" variant="secondary" onClick={() => { setContentOffsetXPx(0); setContentOffsetYPx(0); }}>Reset Offsets</Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
+                        <div>
+                          <label className="text-sm text-gray-700">Paper Preset</label>
+                          <select className="border rounded px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
+                            <option value="A4">A4 (210x297mm)</option>
+                            <option value="LETTER">Letter (8.5x11in)</option>
+                          </select>
+                        </div>
+                        <label className="flex items-center gap-2 text-sm">
+                          <input type="checkbox" checked={grayscaleMode} onChange={(e) => setGrayscaleMode(e.target.checked)} /> Grayscale Mode
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={showBleedSafe} onChange={(e) => setShowBleedSafe(e.target.checked)} /> Show Safe Margin
+                          </label>
+                          <Input className="w-28" type="number" min={0} value={safeMarginMm} onChange={(e) => setSafeMarginMm(Number(e.target.value) || 0)} />
+                          <span className="text-sm text-gray-600">mm</span>
                         </div>
                       </div>
                       <div className="md:col-span-3 border-t pt-3 mt-2">

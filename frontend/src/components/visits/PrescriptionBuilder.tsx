@@ -94,6 +94,9 @@ interface Props {
     gridSizePx: number;
     nudgeStepPx: number;
   };
+  paperPreset?: 'A4' | 'LETTER';
+  grayscale?: boolean;
+  bleedSafe?: { enabled: boolean; safeMarginMm: number };
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -134,7 +137,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe }: Props) {
   const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
@@ -2236,8 +2239,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 style={{
                   fontFamily: 'Fira Sans, sans-serif',
                   fontSize: '14px',
-                  width: '210mm',
-                  minHeight: '297mm',
+                  width: paperPreset === 'LETTER' ? '216mm' : '210mm',
+                  minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
                   margin: '0 auto',
                   padding: '0',
                   paddingTop: `${Math.max(0, (printTopMarginPx ?? 150))/3.78}mm`,
@@ -2248,9 +2251,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
                   backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'top left',
-                  backgroundSize: '210mm 297mm',
+                  backgroundSize: paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm',
+                  filter: grayscale ? 'grayscale(100%)' : undefined,
                 }}
               >
+                {bleedSafe?.enabled && (
+                  <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
+                )}
                 <div 
                   id="prescription-print-content" 
                   className="w-full h-full"
