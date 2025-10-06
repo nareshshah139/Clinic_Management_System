@@ -2289,7 +2289,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
                 @page {
-                  size: A4 portrait;
+                  size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'} portrait;
                   margin: 0;
                   @top-left { content: ""; }
                   @top-center { content: ""; }
@@ -2328,16 +2328,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     position: absolute !important;
                     left: 0 !important;
                     top: 0 !important;
-                    width: 210mm !important;
-                    height: 297mm !important;
+                    width: ${paperPreset === 'LETTER' ? '216mm' : '210mm'} !important;
+                    height: ${paperPreset === 'LETTER' ? '279mm' : '297mm'} !important;
                     margin: 0 !important;
-                    padding: 12mm !important;
-                    padding-top: ${12 + Math.max(0, (printTopMarginPx ?? 150))/3.78}mm !important;
+                    padding-top: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150)))/3.78}mm !important;
+                    padding-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm !important;
+                    padding-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm !important;
+                    padding-bottom: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45)))/3.78}mm !important;
                     box-sizing: border-box !important;
                     background: white !important;
                     background-repeat: no-repeat !important;
                     background-position: 0 0 !important;
-                    background-size: 210mm 297mm !important;
+                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'} !important;
                     ${(printBgUrl ?? '/letterhead.png') ? `background-image: url('${printBgUrl ?? '/letterhead.png'}') !important;` : ''}
                   }
                   #prescription-print-content {
@@ -2787,26 +2789,30 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   }
                 }}>WhatsApp</Button>
                 <Button variant="ghost" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
+                <Button onClick={() => {
+                  try {
+                    window.print();
+                  } catch (e) {
+                    console.error('Browser print failed', e);
+                  }
+                }}>Print</Button>
                 <Button onClick={async () => {
                   try {
                     const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                    if (prescId) {
-                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
-                      try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
-                      const a = document.createElement('a');
-                      a.href = fileUrl;
-                      a.download = fileName || 'prescription.pdf';
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                    } else {
-                      window.print();
-                    }
+                    if (!prescId) return;
+                    const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
+                    try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                    const a = document.createElement('a');
+                    a.href = fileUrl;
+                    a.download = fileName || 'prescription.pdf';
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
                   } catch (e) {
-                    console.error('PDF generation failed, falling back to browser print', e);
-                    window.print();
+                    console.error('PDF generation failed', e);
+                    toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
                   }
-                }}>Print</Button>
+                }}>Download PDF</Button>
                 </div>
               </div>
             </div>
