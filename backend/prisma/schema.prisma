@@ -302,8 +302,266 @@ model Prescription {
   updatedAt        DateTime          @updatedAt
   visit            Visit             @relation(fields: [visitId], references: [id])
   pharmacyInvoices PharmacyInvoice[]
+  // Print/Share tracking
+  printEvents      PrescriptionPrintEvent[]
 
   @@map("prescriptions")
+}
+
+// Template Library for Prescriptions
+model PrescriptionTemplate {
+  id          String   @id @default(cuid())
+  branchId    String
+  createdBy   String
+  name        String
+  description String?
+  category    String?
+  specialty   String?
+  isPublic    Boolean  @default(false)
+  // Default/current content for quick usage (JSON string of items/sections)
+  items       String   // JSON
+  metadata    String?  // JSON
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  branch   Branch @relation(fields: [branchId], references: [id])
+  creator  User   @relation(fields: [createdBy], references: [id])
+  versions PrescriptionTemplateVersion[]
+  usages   TemplateUsage[]
+
+  @@index([branchId])
+  @@index([createdBy])
+  @@map("prescription_templates")
+}
+
+enum TemplateApprovalStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model PrescriptionTemplateVersion {
+  id            String                  @id @default(cuid())
+  templateId    String
+  versionNumber Int
+  language      Language                @default(EN)
+  content       String                  // JSON full template content
+  changeNotes   String?
+  status        TemplateApprovalStatus  @default(DRAFT)
+  submittedAt   DateTime?
+  approvedAt    DateTime?
+  approvedBy    String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  // Relations
+  template PrescriptionTemplate @relation(fields: [templateId], references: [id])
+  approver User?                @relation(fields: [approvedBy], references: [id])
+  approvals TemplateVersionApproval[]
+
+  @@unique([templateId, versionNumber])
+  @@index([status])
+  @@map("prescription_template_versions")
+}
+
+model TemplateVersionApproval {
+  id         String                 @id @default(cuid())
+  versionId  String
+  reviewerId String
+  status     TemplateApprovalStatus
+  note       String?
+  createdAt  DateTime               @default(now())
+
+  version  PrescriptionTemplateVersion @relation(fields: [versionId], references: [id])
+  reviewer User                        @relation(fields: [reviewerId], references: [id])
+
+  @@index([versionId])
+  @@index([reviewerId])
+  @@map("template_version_approvals")
+}
+
+// Asset library for printouts (logos, stamps, signatures)
+enum AssetType {
+  LOGO
+  STAMP
+  SIGNATURE
+}
+
+model ClinicAsset {
+  id          String   @id @default(cuid())
+  branchId    String
+  ownerId     String?
+  type        AssetType
+  name        String
+  // original file stored in visit attachments or external URL
+  url         String
+  // Transform controls
+  opacity     Float    @default(1)
+  scale       Float    @default(1)
+  rotationDeg Float    @default(0)
+  crop        String?  // JSON {x,y,width,height} in pixels
+  placement   String?  // JSON {x,y,position}
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+  owner  User?  @relation(fields: [ownerId], references: [id])
+
+  @@index([branchId])
+  @@index([ownerId])
+  @@index([type])
+  @@map("clinic_assets")
+}
+
+// Printer calibration and saved profiles
+model PrinterProfile {
+  id               String   @id @default(cuid())
+  branchId         String
+  ownerId          String?
+  name             String
+  paperPreset      String   @default("A4") // A4, LETTER
+  topMarginPx      Int      @default(150)
+  leftMarginPx     Int      @default(45)
+  rightMarginPx    Int      @default(45)
+  bottomMarginPx   Int      @default(45)
+  contentOffsetXPx Int      @default(0)
+  contentOffsetYPx Int      @default(0)
+  grayscale        Boolean  @default(false)
+  bleedSafeMm      Int      @default(0)
+  metadata         String?  // JSON for calibration wizard steps
+  isDefault        Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+  owner  User?  @relation(fields: [ownerId], references: [id])
+
+  @@index([branchId])
+  @@index([ownerId])
+  @@map("printer_profiles")
+}
+
+// Track each print/share event for prescriptions
+model PrescriptionPrintEvent {
+  id             String   @id @default(cuid())
+  prescriptionId String
+  eventType      String   // PRINT, PDF_DOWNLOAD, EMAIL_SHARE, WHATSAPP_SHARE
+  channel        String?  // printer name or medium
+  count          Int      @default(1)
+  metadata       String?  // JSON (alignment feedback, wizard data)
+  createdAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+
+  @@index([prescriptionId])
+  @@index([eventType])
+  @@map("prescription_print_events")
+}
+
+// Analytics: record template usage
+model TemplateUsage {
+  id          String   @id @default(cuid())
+  templateId  String
+  branchId    String
+  doctorId    String?
+  prescriptionId String?
+  variant     String? // variant key if part of A/B
+  alignmentDx String? // JSON of alignment feedback
+  createdAt   DateTime @default(now())
+
+  template PrescriptionTemplate @relation(fields: [templateId], references: [id])
+  branch   Branch               @relation(fields: [branchId], references: [id])
+  doctor   User?                @relation(fields: [doctorId], references: [id])
+  prescription Prescription?    @relation(fields: [prescriptionId], references: [id])
+
+  @@index([templateId])
+  @@index([branchId])
+  @@index([doctorId])
+  @@map("template_usages")
+}
+
+// A/B testing for layouts
+enum VariantType {
+  CONTROL
+  VARIANT
+}
+
+model LayoutExperiment {
+  id         String   @id @default(cuid())
+  branchId   String
+  key        String
+  name       String
+  description String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  branch    Branch            @relation(fields: [branchId], references: [id])
+  variants  LayoutVariant[]
+  assignments ExperimentAssignment[]
+
+  @@unique([branchId, key])
+  @@map("layout_experiments")
+}
+
+model LayoutVariant {
+  id            String      @id @default(cuid())
+  experimentId  String
+  key           String
+  type          VariantType @default(VARIANT)
+  weight        Int         @default(1)
+  templateId    String?
+  createdAt     DateTime    @default(now())
+
+  experiment LayoutExperiment   @relation(fields: [experimentId], references: [id])
+  template   PrescriptionTemplate? @relation(fields: [templateId], references: [id])
+
+  @@unique([experimentId, key])
+  @@map("layout_variants")
+}
+
+model ExperimentAssignment {
+  id            String   @id @default(cuid())
+  experimentId  String
+  doctorId      String?
+  patientId     String?
+  variantId     String
+  createdAt     DateTime @default(now())
+
+  experiment LayoutExperiment @relation(fields: [experimentId], references: [id])
+  doctor     User?            @relation(fields: [doctorId], references: [id])
+  patient    Patient?         @relation(fields: [patientId], references: [id])
+  variant    LayoutVariant    @relation(fields: [variantId], references: [id])
+
+  @@index([experimentId])
+  @@index([doctorId])
+  @@index([patientId])
+  @@map("experiment_assignments")
+}
+
+// Translation memory for per-field translations
+model TranslationMemoryEntry {
+  id            String   @id @default(cuid())
+  branchId      String
+  fieldKey      String   // e.g., prescription.instructions
+  sourceText    String
+  targetLanguage Language
+  targetText    String
+  confidence    Float    @default(0)
+  usageCount    Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@index([branchId])
+  @@index([fieldKey])
+  @@index([targetLanguage])
+  @@unique([branchId, fieldKey, sourceText, targetLanguage])
+  @@map("translation_memory_entries")
 }
 
 model Service {

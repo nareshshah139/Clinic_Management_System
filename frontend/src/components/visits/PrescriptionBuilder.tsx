@@ -391,7 +391,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
+  const createdPrescriptionIdRef = useRef<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(false);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
@@ -1128,6 +1132,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       const res: any = standalone
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
+      createdPrescriptionIdRef.current = res?.id || null;
       onCreated?.(res?.id);
 
       if (!standalone) {
@@ -1192,7 +1197,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         pulseRegimen: x.pulseRegimen,
       }));
       setItems(prev => [...prev, ...mapped]);
-
+      pushHistory();
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
       if (md) {
         if (md.diagnosis) setDiagnosis(md.diagnosis);
@@ -1231,6 +1236,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // procedureParams removed
         // doctor's personal notes removed from builder
       }
+      try { void apiClient.recordTemplateUsage?.(tpl?.id, { variant: undefined }); } catch {}
     } catch {}
   };
 
@@ -1577,6 +1583,89 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
   };
 
+  const [assets, setAssets] = useState<any[]>([]);
+  const [printerProfiles, setPrinterProfiles] = useState<any[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const undoStackRef = useRef<any[]>([]);
+  const redoStackRef = useRef<any[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [as, pp] = await Promise.all([
+          apiClient.getClinicAssets(),
+          apiClient.getPrinterProfiles(),
+        ]);
+        setAssets(Array.isArray(as) ? as : []);
+        setPrinterProfiles(Array.isArray(pp) ? pp : []);
+        const def = (Array.isArray(pp) ? pp : []).find((p: any) => p.isDefault);
+        if (def?.id) setActiveProfileId(def.id);
+      } catch {}
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (autoPreview && !previewOpen) setPreviewOpen(true);
+  }, [autoPreview, previewOpen]);
+
+  useEffect(() => {
+    if (!(previewOpen || autoPreview)) return;
+    let t: any;
+    const run = () => {
+      if (language !== 'EN') void translateForPreview();
+      setPreviewJustUpdated(true);
+      setTimeout(() => setPreviewJustUpdated(false), 600);
+    };
+    t = setTimeout(run, 250);
+    return () => { if (t) clearTimeout(t); };
+  }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId]);
+
+  // Autosave & history
+  const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
+  const pushHistory = useCallback(() => {
+    const snapshot = { items: JSON.parse(JSON.stringify(items)), followUpInstructions };
+    undoStackRef.current.push(snapshot);
+    if (undoStackRef.current.length > 50) undoStackRef.current.shift();
+    redoStackRef.current = [];
+  }, [items, followUpInstructions]);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const data = { items, followUpInstructions };
+        localStorage.setItem(draftKey, JSON.stringify(data));
+      } catch {}
+    }, 600);
+    return () => clearTimeout(t);
+  }, [draftKey, items, followUpInstructions]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data?.items)) setItems(data.items);
+        if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
+      }
+    } catch {}
+    pushHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+  const undo = useCallback(() => {
+    if (undoStackRef.current.length <= 1) return;
+    const cur = undoStackRef.current.pop();
+    if (!cur) return;
+    const prev = undoStackRef.current[undoStackRef.current.length - 1];
+    redoStackRef.current.push(cur);
+    setItems(JSON.parse(JSON.stringify(prev.items)));
+    setFollowUpInstructions(prev.followUpInstructions || '');
+  }, []);
+  const redo = useCallback(() => {
+    const next = redoStackRef.current.pop();
+    if (!next) return;
+    undoStackRef.current.push(next);
+    setItems(JSON.parse(JSON.stringify(next.items)));
+    setFollowUpInstructions(next.followUpInstructions || '');
+  }, []);
+
   return (
     <div className="space-y-6">
       {!standalone && validItems.length > 0 && (
@@ -1638,6 +1727,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 Apply
               </Button>
               <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
+              <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
+              <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>
+              <Button variant="destructive" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
               <div className="ml-auto flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
                 <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
@@ -2234,6 +2326,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `
               }} />
             <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
+              {previewJustUpdated && (
+                <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
+              )}
+              <div style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}>
               <div
                 id="prescription-print-root"
                 ref={printRef}
@@ -2245,10 +2341,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
                   margin: '0 auto',
                   padding: '0',
-                  paddingTop: `${Math.max(0, (printTopMarginPx ?? 150))/3.78}mm`,
-                  paddingLeft: `${Math.max(0, (printLeftMarginPx ?? 45))/3.78}mm`,
-                  paddingRight: `${Math.max(0, (printRightMarginPx ?? 45))/3.78}mm`,
-                  paddingBottom: `${Math.max(0, (printBottomMarginPx ?? 45))/3.78}mm`,
+                  paddingTop: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150)))/3.78}mm`,
+                  paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
+                  paddingRight: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm`,
+                  paddingBottom: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45)))/3.78}mm`,
                   boxSizing: 'border-box',
                   backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
                   backgroundRepeat: 'no-repeat',
@@ -2311,8 +2407,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   className="w-full h-full"
                   style={{
                     position: 'relative',
-                    left: `${contentOffsetXPx ?? 0}px`,
-                    top: `${contentOffsetYPx ?? 0}px`,
+                    left: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0))}px`,
+                    top: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0))}px`,
                   }}
                   onMouseDown={(e) => {
                     if (!(e.buttons & 1)) return; // left button only
@@ -2415,7 +2511,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div>
                       <div className="text-gray-600">Gender / DOB</div>
                       <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
-                    </div>
+                </div>
+              </div>
                   </div>
                 )}
 
@@ -2596,6 +2693,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)}>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</Button>
+                  <div className="hidden sm:flex items-center gap-2 text-sm text-gray-700">
+                    <span>Zoom</span>
+                    <input type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
+                    <span>{Math.round(previewZoom * 100)}%</span>
+                  </div>
                   <span className="text-sm text-gray-700">Print Format</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
                     <SelectTrigger className="w-40">
@@ -2606,10 +2709,62 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <SelectItem value="TEXT">Text</SelectItem>
                     </SelectContent>
                   </Select>
+                  <span className="text-sm text-gray-700 ml-4">Printer profile</span>
+                  <Select value={activeProfileId || ''} onValueChange={(v: string) => setActiveProfileId(v)}>
+                    <SelectTrigger className="w-56">
+                      <SelectValue placeholder="Select profile" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {printerProfiles.map((p: any) => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}{p.isDefault ? ' (Default)' : ''}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
-                <Button onClick={() => window.print()}>Print</Button>
+                <Button variant="secondary" onClick={async () => {
+                  try {
+                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                    if (!prescId) return;
+                    await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
+                    toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                  } catch (e) {
+                    toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                  }
+                }}>Email</Button>
+                <Button variant="secondary" onClick={async () => {
+                  try {
+                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                    if (!prescId) return;
+                    const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
+                    await apiClient.sharePrescription(prescId, { channel: 'WHATSAPP', to: phone.startsWith('+') ? phone : `+91${phone}`, message: 'Your prescription is ready.' });
+                    toast({ title: 'WhatsApp queued', description: 'WhatsApp message queued.' });
+                  } catch (e) {
+                    toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not send message.' });
+                  }
+                }}>WhatsApp</Button>
+                <Button variant="ghost" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
+                <Button onClick={async () => {
+                  try {
+                    const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
+                    if (prescId) {
+                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
+                      try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                      const a = document.createElement('a');
+                      a.href = fileUrl;
+                      a.download = fileName || 'prescription.pdf';
+                      document.body.appendChild(a);
+                      a.click();
+                      a.remove();
+                    } else {
+                      window.print();
+                    }
+                  } catch (e) {
+                    console.error('PDF generation failed, falling back to browser print', e);
+                    window.print();
+                  }
+                }}>Print</Button>
                 </div>
               </div>
             </div>

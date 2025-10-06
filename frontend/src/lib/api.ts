@@ -414,6 +414,83 @@ export class ApiClient {
     return this.post('/prescriptions/templates', data);
   }
 
+  async recordTemplateUsage(templateId: string, data: { prescriptionId?: string; variant?: string; alignmentDx?: unknown }) {
+    return this.post(`/prescriptions/templates/${templateId}/usage`, data);
+  }
+
+  // Prescription Template Versioning
+  async getPrescriptionTemplateVersions(templateId: string) {
+    return this.get(`/prescriptions/templates/${templateId}/versions`);
+  }
+
+  async createPrescriptionTemplateVersion(templateId: string, data: { language?: string; content: unknown; changeNotes?: string }) {
+    return this.post(`/prescriptions/templates/${templateId}/versions`, data);
+  }
+
+  async submitPrescriptionTemplateVersion(templateId: string, versionId: string) {
+    return this.post(`/prescriptions/templates/${templateId}/versions/${versionId}/submit`, {});
+  }
+
+  async approvePrescriptionTemplateVersion(templateId: string, versionId: string, note?: string) {
+    return this.post(`/prescriptions/templates/${templateId}/versions/${versionId}/approve`, { note });
+  }
+
+  async rejectPrescriptionTemplateVersion(templateId: string, versionId: string, note?: string) {
+    return this.post(`/prescriptions/templates/${templateId}/versions/${versionId}/reject`, { note });
+  }
+
+  // Clinic Asset Library
+  async getClinicAssets(params?: { type?: 'LOGO' | 'STAMP' | 'SIGNATURE' }) {
+    return this.get('/prescriptions/assets', params || {});
+  }
+
+  async upsertClinicAsset(data: { id?: string; type: 'LOGO'|'STAMP'|'SIGNATURE'; name: string; url: string; opacity?: number; scale?: number; rotationDeg?: number; crop?: unknown; placement?: unknown; isActive?: boolean }) {
+    return this.post('/prescriptions/assets', data);
+  }
+
+  async deleteClinicAsset(id: string) {
+    return this.delete(`/prescriptions/assets/${id}`);
+  }
+
+  // Printer Profiles
+  async getPrinterProfiles() {
+    return this.get('/prescriptions/printer-profiles');
+  }
+
+  async upsertPrinterProfile(data: { id?: string; name: string; paperPreset?: string; topMarginPx?: number; leftMarginPx?: number; rightMarginPx?: number; bottomMarginPx?: number; contentOffsetXPx?: number; contentOffsetYPx?: number; grayscale?: boolean; bleedSafeMm?: number; metadata?: unknown; isDefault?: boolean }) {
+    return this.post('/prescriptions/printer-profiles', data);
+  }
+
+  async setDefaultPrinterProfile(id: string) {
+    return this.post(`/prescriptions/printer-profiles/${id}/default`, {});
+  }
+
+  async deletePrinterProfile(id: string) {
+    return this.delete(`/prescriptions/printer-profiles/${id}`);
+  }
+
+  // PDF Generation & Share
+  async generatePrescriptionPdf(id: string, data?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean }) {
+    return this.post<{ fileUrl: string; fileName: string; fileSize: number }>(`/prescriptions/${id}/pdf`, data || {});
+  }
+
+  async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }) {
+    return this.post(`/prescriptions/${id}/share`, data);
+  }
+
+  async recordPrescriptionPrintEvent(id: string, data: { eventType: string; channel?: string; count?: number; metadata?: unknown }) {
+    return this.post(`/prescriptions/${id}/print-events`, data);
+  }
+
+  // Translation Memory
+  async listTranslationMemory(params?: { fieldKey?: string; q?: string; targetLanguage?: string }) {
+    return this.get('/prescriptions/translations', params || {});
+  }
+
+  async upsertTranslationMemory(data: { fieldKey: string; sourceText: string; targetLanguage: string; targetText: string; confidence?: number }) {
+    return this.post('/prescriptions/translations', data);
+  }
+
   async autocompletePrescriptionField(params: { field: string; patientId: string; visitId?: string; q?: string; limit?: number }) {
     return this.get('/prescriptions/fields/autocomplete', params);
   }
