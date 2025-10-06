@@ -86,6 +86,14 @@ interface Props {
   onChangeIncludeSections?: (next: Record<string, boolean>) => void;
   ensureVisitId?: () => Promise<string>;
   onChangeContentOffset?: (x: number, y: number) => void;
+  designAids?: {
+    enabled: boolean;
+    showGrid: boolean;
+    showRulers: boolean;
+    snapToGrid: boolean;
+    gridSizePx: number;
+    nudgeStepPx: number;
+  };
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -126,7 +134,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids }: Props) {
   const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
@@ -2260,8 +2268,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     const move = (ev: MouseEvent) => {
                       const dx = ev.clientX - startX;
                       const dy = ev.clientY - startY;
-                      const nx = Math.round(origX + dx);
-                      const ny = Math.round(origY + dy);
+                      let nx = Math.round(origX + dx);
+                      let ny = Math.round(origY + dy);
+                      if (designAids?.enabled && designAids?.snapToGrid) {
+                        const gs = Math.max(2, designAids.gridSizePx || 8);
+                        nx = Math.round(nx / gs) * gs;
+                        ny = Math.round(ny / gs) * gs;
+                      }
                       onChangeContentOffset?.(nx, ny);
                     };
                     const up = () => {
@@ -2271,7 +2284,29 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     window.addEventListener('mousemove', move);
                     window.addEventListener('mouseup', up);
                   }}
+                  onKeyDown={(e) => {
+                    const step = Math.max(1, designAids?.nudgeStepPx || 1);
+                    if (e.key === 'ArrowUp') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) - step); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) + step); }
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) - step, (contentOffsetYPx ?? 0)); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) + step, (contentOffsetYPx ?? 0)); }
+                  }}
+                  tabIndex={0}
                 >
+                  {/* Design Aids Overlays */}
+                  {designAids?.enabled && (
+                    <>
+                      {designAids.showRulers && (
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: - (contentOffsetXPx ?? 0), top: - (contentOffsetYPx ?? 0), right: 0, height: 20, background: 'linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '40px 20px' }} />
+                      )}
+                      {designAids.showRulers && (
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', top: - (contentOffsetYPx ?? 0), left: -20 - (contentOffsetXPx ?? 0), width: 20, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '20px 40px' }} />
+                      )}
+                      {designAids.showGrid && (
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: '-2000px', backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize: `${Math.max(2, designAids.gridSizePx || 8)}px ${Math.max(2, designAids.gridSizePx || 8)}px` }} />
+                      )}
+                    </>
+                  )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
                     <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">

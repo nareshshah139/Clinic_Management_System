@@ -236,6 +236,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(45);
   const [contentOffsetXPx, setContentOffsetXPx] = useState<number>(0);
   const [contentOffsetYPx, setContentOffsetYPx] = useState<number>(0);
+  const [designAidsEnabled, setDesignAidsEnabled] = useState<boolean>(false);
+  const [designShowGrid, setDesignShowGrid] = useState<boolean>(true);
+  const [designShowRulers, setDesignShowRulers] = useState<boolean>(true);
+  const [designSnapToGrid, setDesignSnapToGrid] = useState<boolean>(true);
+  const [designGridSizePx, setDesignGridSizePx] = useState<number>(8);
+  const [designNudgeStepPx, setDesignNudgeStepPx] = useState<number>(1);
 
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
@@ -247,6 +253,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       const bottom = localStorage.getItem('rx_margin_bottom_px');
       const offx = localStorage.getItem('rx_offset_x_px');
       const offy = localStorage.getItem('rx_offset_y_px');
+      const daEnabled = localStorage.getItem('rx_da_enabled');
+      const daGrid = localStorage.getItem('rx_da_grid');
+      const daRulers = localStorage.getItem('rx_da_rulers');
+      const daSnap = localStorage.getItem('rx_da_snap');
+      const daGridSize = localStorage.getItem('rx_da_grid_size');
+      const daNudge = localStorage.getItem('rx_da_nudge');
       if (bg) setPrintBgUrl(bg);
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
@@ -254,6 +266,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (bottom) setPrintBottomMarginPx(Number(bottom));
       if (offx) setContentOffsetXPx(Number(offx));
       if (offy) setContentOffsetYPx(Number(offy));
+      if (daEnabled) setDesignAidsEnabled(daEnabled === '1');
+      if (daGrid) setDesignShowGrid(daGrid === '1');
+      if (daRulers) setDesignShowRulers(daRulers === '1');
+      if (daSnap) setDesignSnapToGrid(daSnap === '1');
+      if (daGridSize) setDesignGridSizePx(Number(daGridSize));
+      if (daNudge) setDesignNudgeStepPx(Number(daNudge));
     } catch {}
   }, []);
   useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
@@ -263,6 +281,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   useEffect(() => { try { localStorage.setItem('rx_margin_bottom_px', String(printBottomMarginPx)); } catch {} }, [printBottomMarginPx]);
   useEffect(() => { try { localStorage.setItem('rx_offset_x_px', String(contentOffsetXPx)); } catch {} }, [contentOffsetXPx]);
   useEffect(() => { try { localStorage.setItem('rx_offset_y_px', String(contentOffsetYPx)); } catch {} }, [contentOffsetYPx]);
+  useEffect(() => { try { localStorage.setItem('rx_da_enabled', designAidsEnabled ? '1' : '0'); } catch {} }, [designAidsEnabled]);
+  useEffect(() => { try { localStorage.setItem('rx_da_grid', designShowGrid ? '1' : '0'); } catch {} }, [designShowGrid]);
+  useEffect(() => { try { localStorage.setItem('rx_da_rulers', designShowRulers ? '1' : '0'); } catch {} }, [designShowRulers]);
+  useEffect(() => { try { localStorage.setItem('rx_da_snap', designSnapToGrid ? '1' : '0'); } catch {} }, [designSnapToGrid]);
+  useEffect(() => { try { localStorage.setItem('rx_da_grid_size', String(designGridSizePx)); } catch {} }, [designGridSizePx]);
+  useEffect(() => { try { localStorage.setItem('rx_da_nudge', String(designNudgeStepPx)); } catch {} }, [designNudgeStepPx]);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
   const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
@@ -1536,6 +1560,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       contentOffsetXPx={contentOffsetXPx}
                       contentOffsetYPx={contentOffsetYPx}
                       onChangeContentOffset={(x, y) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
+                      designAids={{
+                        enabled: designAidsEnabled,
+                        showGrid: designShowGrid,
+                        showRulers: designShowRulers,
+                        snapToGrid: designSnapToGrid,
+                        gridSizePx: designGridSizePx,
+                        nudgeStepPx: designNudgeStepPx,
+                      }}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}
@@ -1607,6 +1639,111 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         </div>
                         <div>
                           <Button type="button" variant="secondary" onClick={() => { setContentOffsetXPx(0); setContentOffsetYPx(0); }}>Reset Offsets</Button>
+                        </div>
+                      </div>
+                      <div className="md:col-span-3 border-t pt-3 mt-2">
+                        <div className="flex items-center gap-3 mb-2">
+                          <label className="text-sm font-medium">Design Aids</label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={designAidsEnabled} onChange={(e) => setDesignAidsEnabled(e.target.checked)} /> Enable
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={designShowGrid} onChange={(e) => setDesignShowGrid(e.target.checked)} disabled={!designAidsEnabled} /> Grid
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={designShowRulers} onChange={(e) => setDesignShowRulers(e.target.checked)} disabled={!designAidsEnabled} /> Rulers
+                          </label>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={designSnapToGrid} onChange={(e) => setDesignSnapToGrid(e.target.checked)} disabled={!designAidsEnabled} /> Snap
+                          </label>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-sm text-gray-700">Grid Size (px)</label>
+                            <Input type="number" min={2} value={designGridSizePx} onChange={(e) => setDesignGridSizePx(Number(e.target.value) || 8)} disabled={!designAidsEnabled} />
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-700">Nudge Step (px)</label>
+                            <Input type="number" min={1} value={designNudgeStepPx} onChange={(e) => setDesignNudgeStepPx(Number(e.target.value) || 1)} disabled={!designAidsEnabled} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="md:col-span-3 border-t pt-3 mt-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium">Per-doctor Letterhead Profile</label>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={async () => {
+                                try {
+                                  if (!doctorId) { toast({ variant: 'destructive', title: 'No doctor selected' }); return; }
+                                  const existing = await apiClient.get(`/users/${doctorId}`) as any;
+                                  const currentMeta = (existing && (existing.metadata || existing?.user?.metadata)) || {};
+                                  const nextMeta = {
+                                    ...currentMeta,
+                                    rxPrintProfile: {
+                                      printBgUrl,
+                                      margins: {
+                                        topPx: printTopMarginPx,
+                                        leftPx: printLeftMarginPx,
+                                        rightPx: printRightMarginPx,
+                                        bottomPx: printBottomMarginPx,
+                                      },
+                                      contentOffset: { xPx: contentOffsetXPx, yPx: contentOffsetYPx },
+                                      designAids: {
+                                        enabled: designAidsEnabled,
+                                        showGrid: designShowGrid,
+                                        showRulers: designShowRulers,
+                                        snapToGrid: designSnapToGrid,
+                                        gridSizePx: designGridSizePx,
+                                        nudgeStepPx: designNudgeStepPx,
+                                      },
+                                    },
+                                  };
+                                  await apiClient.updateUserProfile(doctorId, { metadata: nextMeta });
+                                  toast({ variant: 'success', title: 'Saved', description: 'Doctor profile updated' });
+                                } catch (e) {
+                                  console.error('Save profile failed', e);
+                                  toast({ variant: 'destructive', title: 'Failed to save doctor profile' });
+                                }
+                              }}
+                            >Save Doctor Default</Button>
+                            <Button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  if (!doctorId) { toast({ variant: 'destructive', title: 'No doctor selected' }); return; }
+                                  const u = await apiClient.get(`/users/${doctorId}`) as any;
+                                  const p = (u && (u.metadata || u?.user?.metadata)?.rxPrintProfile) || (u?.rxPrintProfile);
+                                  if (!p) { toast({ title: 'No profile found', description: 'Save a profile first' }); return; }
+                                  if (p.printBgUrl) setPrintBgUrl(p.printBgUrl);
+                                  if (p.margins) {
+                                    if (typeof p.margins.topPx === 'number') setPrintTopMarginPx(p.margins.topPx);
+                                    if (typeof p.margins.leftPx === 'number') setPrintLeftMarginPx(p.margins.leftPx);
+                                    if (typeof p.margins.rightPx === 'number') setPrintRightMarginPx(p.margins.rightPx);
+                                    if (typeof p.margins.bottomPx === 'number') setPrintBottomMarginPx(p.margins.bottomPx);
+                                  }
+                                  if (p.contentOffset) {
+                                    if (typeof p.contentOffset.xPx === 'number') setContentOffsetXPx(p.contentOffset.xPx);
+                                    if (typeof p.contentOffset.yPx === 'number') setContentOffsetYPx(p.contentOffset.yPx);
+                                  }
+                                  if (p.designAids) {
+                                    if (typeof p.designAids.enabled === 'boolean') setDesignAidsEnabled(p.designAids.enabled);
+                                    if (typeof p.designAids.showGrid === 'boolean') setDesignShowGrid(p.designAids.showGrid);
+                                    if (typeof p.designAids.showRulers === 'boolean') setDesignShowRulers(p.designAids.showRulers);
+                                    if (typeof p.designAids.snapToGrid === 'boolean') setDesignSnapToGrid(p.designAids.snapToGrid);
+                                    if (typeof p.designAids.gridSizePx === 'number') setDesignGridSizePx(p.designAids.gridSizePx);
+                                    if (typeof p.designAids.nudgeStepPx === 'number') setDesignNudgeStepPx(p.designAids.nudgeStepPx);
+                                  }
+                                  toast({ variant: 'success', title: 'Loaded', description: 'Doctor profile applied' });
+                                } catch (e) {
+                                  console.error('Load profile failed', e);
+                                  toast({ variant: 'destructive', title: 'Failed to load doctor profile' });
+                                }
+                              }}
+                            >Load Doctor Default</Button>
+                          </div>
                         </div>
                       </div>
                   <div className="md:col-span-3">
