@@ -16,6 +16,7 @@ import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle } from 'lucide-react';
 import DoctorDayCalendar from './DoctorDayCalendar';
 import { AppointmentStatus } from '@cms/shared-types';
+import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
@@ -690,6 +691,12 @@ export default function AppointmentScheduler({
                         </Badge>
                         {appt.room && (
                           <div className="text-gray-600 truncate">{appt.room.name}</div>
+                        )}
+                        {/* mini tracker */}
+                        {appt.patient?.id && (
+                          <div className="mt-1">
+                            <PatientProgressTracker patientId={appt.patient.id} variant="mini" />
+                          </div>
                         )}
                         <div className="flex items-center gap-2 mt-2">
                           <Button
