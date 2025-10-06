@@ -97,6 +97,8 @@ interface Props {
   paperPreset?: 'A4' | 'LETTER';
   grayscale?: boolean;
   bleedSafe?: { enabled: boolean; safeMarginMm: number };
+  frames?: { enabled: boolean; headerHeightMm: number; footerHeightMm: number };
+  onChangeFrames?: (next: Partial<{ enabled: boolean; headerHeightMm: number; footerHeightMm: number }>) => void;
 }
 
 // Hoisted, memoized collapsible section to prevent remounting on parent re-render
@@ -137,7 +139,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
@@ -2257,6 +2259,52 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               >
                 {bleedSafe?.enabled && (
                   <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
+                )}
+                {/* Header/Footer Frames Overlays */}
+                {frames?.enabled && (
+                  <>
+                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
+                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
+                    {/* Drag handles */}
+                    <div
+                      role="separator"
+                      aria-label="Resize header"
+                      style={{ position: 'absolute', left: 0, right: 0, top: `${Math.max(0, frames.headerHeightMm || 0)}mm`, height: 6, cursor: 'row-resize', background: 'transparent' }}
+                      onMouseDown={(e) => {
+                        if (!(e.buttons & 1)) return;
+                        const startY = e.clientY;
+                        const startMm = Math.max(0, frames?.headerHeightMm || 0);
+                        const move = (ev: MouseEvent) => {
+                          const dyPx = ev.clientY - startY;
+                          const dyMm = dyPx / 3.78; // px -> mm approx
+                          const next = Math.max(0, Math.round((startMm + dyMm) * 10) / 10);
+                          onChangeFrames?.({ headerHeightMm: next });
+                        };
+                        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                        window.addEventListener('mousemove', move);
+                        window.addEventListener('mouseup', up);
+                      }}
+                    />
+                    <div
+                      role="separator"
+                      aria-label="Resize footer"
+                      style={{ position: 'absolute', left: 0, right: 0, bottom: `${Math.max(0, frames.footerHeightMm || 0)}mm`, height: 6, cursor: 'row-resize', background: 'transparent' }}
+                      onMouseDown={(e) => {
+                        if (!(e.buttons & 1)) return;
+                        const startY = e.clientY;
+                        const startMm = Math.max(0, frames?.footerHeightMm || 0);
+                        const move = (ev: MouseEvent) => {
+                          const dyPx = startY - ev.clientY; // dragging up increases footer
+                          const dyMm = dyPx / 3.78;
+                          const next = Math.max(0, Math.round((startMm + dyMm) * 10) / 10);
+                          onChangeFrames?.({ footerHeightMm: next });
+                        };
+                        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+                        window.addEventListener('mousemove', move);
+                        window.addEventListener('mouseup', up);
+                      }}
+                    />
+                  </>
                 )}
                 <div 
                   id="prescription-print-content" 

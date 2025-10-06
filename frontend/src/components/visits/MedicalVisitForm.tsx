@@ -246,6 +246,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [showBleedSafe, setShowBleedSafe] = useState<boolean>(false);
   const [safeMarginMm, setSafeMarginMm] = useState<number>(5);
   const [grayscaleMode, setGrayscaleMode] = useState<boolean>(false);
+  const [framesEnabled, setFramesEnabled] = useState<boolean>(false);
+  const [headerHeightMm, setHeaderHeightMm] = useState<number>(20);
+  const [footerHeightMm, setFooterHeightMm] = useState<number>(20);
 
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
@@ -267,6 +270,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       const bleed = localStorage.getItem('rx_show_bleed_safe');
       const safe = localStorage.getItem('rx_safe_margin_mm');
       const gray = localStorage.getItem('rx_grayscale');
+      const frames = localStorage.getItem('rx_frames_enabled');
+      const headerMm = localStorage.getItem('rx_header_mm');
+      const footerMm = localStorage.getItem('rx_footer_mm');
       if (bg) setPrintBgUrl(bg);
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
@@ -284,6 +290,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (bleed) setShowBleedSafe(bleed === '1');
       if (safe) setSafeMarginMm(Number(safe));
       if (gray) setGrayscaleMode(gray === '1');
+      if (frames) setFramesEnabled(frames === '1');
+      if (headerMm) setHeaderHeightMm(Number(headerMm));
+      if (footerMm) setFooterHeightMm(Number(footerMm));
     } catch {}
   }, []);
   useEffect(() => { try { localStorage.setItem('rx_print_bg_url', printBgUrl || ''); } catch {} }, [printBgUrl]);
@@ -303,6 +312,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   useEffect(() => { try { localStorage.setItem('rx_show_bleed_safe', showBleedSafe ? '1' : '0'); } catch {} }, [showBleedSafe]);
   useEffect(() => { try { localStorage.setItem('rx_safe_margin_mm', String(safeMarginMm)); } catch {} }, [safeMarginMm]);
   useEffect(() => { try { localStorage.setItem('rx_grayscale', grayscaleMode ? '1' : '0'); } catch {} }, [grayscaleMode]);
+  useEffect(() => { try { localStorage.setItem('rx_frames_enabled', framesEnabled ? '1' : '0'); } catch {} }, [framesEnabled]);
+  useEffect(() => { try { localStorage.setItem('rx_header_mm', String(headerHeightMm)); } catch {} }, [headerHeightMm]);
+  useEffect(() => { try { localStorage.setItem('rx_footer_mm', String(footerHeightMm)); } catch {} }, [footerHeightMm]);
   const [builderRefreshKey, setBuilderRefreshKey] = useState(0);
   const [rxIncludeSections, setRxIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
@@ -1587,6 +1599,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       paperPreset={paperPreset}
                       grayscale={grayscaleMode}
                       bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
+                      frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
+                      onChangeFrames={(next) => {
+                        if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
+                        if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
+                        if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
+                      }}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}
@@ -1677,6 +1695,24 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                           </label>
                           <Input className="w-28" type="number" min={0} value={safeMarginMm} onChange={(e) => setSafeMarginMm(Number(e.target.value) || 0)} />
                           <span className="text-sm text-gray-600">mm</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" checked={framesEnabled} onChange={(e) => setFramesEnabled(e.target.checked)} /> Enable Header/Footer Frames
+                          </label>
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-700">Header Height (mm)</label>
+                          <Input type="number" min={0} value={headerHeightMm} onChange={(e) => setHeaderHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
+                        </div>
+                        <div>
+                          <label className="text-sm text-gray-700">Footer Height (mm)</label>
+                          <Input type="number" min={0} value={footerHeightMm} onChange={(e) => setFooterHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
+                        </div>
+                        <div className="md:col-span-3">
+                          <Button type="button" variant="outline" onClick={() => { setHeaderHeightMm(20); setFooterHeightMm(20); }}>Reset Frames</Button>
                         </div>
                       </div>
                       <div className="md:col-span-3 border-t pt-3 mt-2">
