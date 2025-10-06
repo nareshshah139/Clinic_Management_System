@@ -214,3 +214,37 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Accessibility enhancements */
+/* Strong visible focus for keyboard users */
+*:focus-visible {
+  outline: 3px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* High-contrast mode toggle (applied via document.body.classList.toggle('high-contrast')) */
+.high-contrast {
+  --background: #ffffff;
+  --foreground: #000000;
+  --card: #ffffff;
+  --card-foreground: #000000;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --primary: #000000;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e7eb; /* gray-200 */
+  --secondary-foreground: #000000;
+  --muted: #f3f4f6; /* gray-100 */
+  --muted-foreground: #111827; /* gray-900 */
+  --accent: #111827;
+  --accent-foreground: #ffffff;
+  --destructive: #b91c1c; /* red-700 */
+  --border: #111827;
+  --input: #111827;
+  --ring: #000000;
+}
+
+.high-contrast *:focus-visible {
+  outline: 3px solid #000000;
+  outline-offset: 2px;
+}
