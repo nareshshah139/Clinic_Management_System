@@ -1304,7 +1304,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             </TabsList>
 
             {/* Overview Tab */}
-            <TabsContent value="overview" className="space-y-4">
+            <TabsContent value="overview" className="space-y-4" forceMount>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Card>
                   <CardHeader className="pb-3">
@@ -1394,7 +1394,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
             {/* Vitals Tab */}
             {(hasPermission('vitals') || hasPermission('all')) && (
-              <TabsContent value="vitals" className="space-y-4">
+              <TabsContent value="vitals" className="space-y-4" forceMount>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
                     <label className="text-sm font-medium text-gray-700">BP Systolic</label>
@@ -1492,7 +1492,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
-              <TabsContent value="photos" className="space-y-4">
+              <TabsContent value="photos" className="space-y-4" forceMount>
                 <VisitPhotos 
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
@@ -1535,7 +1535,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
             {/* Prescription Tab - Doctor Only */}
             {hasPermission('all') && (
-              <TabsContent value="prescription" className="space-y-4">
+              <TabsContent value="prescription" className="space-y-4" forceMount>
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Prescription</CardTitle>
@@ -1618,7 +1618,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
             {/* Customization Tab - Doctor Only */}
             {hasPermission('all') && (
-              <TabsContent value="customization" className="space-y-4">
+              <TabsContent value="customization" className="space-y-4" forceMount>
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Customization Options</CardTitle>
@@ -1838,7 +1838,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             )}
 
             {/* Patient History Tab */}
-            <TabsContent value="history" className="space-y-4">
+            <TabsContent value="history" className="space-y-4" forceMount>
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Patient Visit History</h3>
                 <Button variant="outline" onClick={loadPatientHistory} disabled={loadingHistory}>
