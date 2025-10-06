@@ -1709,6 +1709,18 @@ export class PrescriptionsService {
     return created;
   }
 
+  async getPrintEvents(prescriptionId: string, branchId: string) {
+    const exists = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
+    if (!exists) throw new NotFoundException('Prescription not found');
+    const events = await this.prisma.prescriptionPrintEvent.findMany({ where: { prescriptionId }, orderBy: { createdAt: 'desc' } });
+    const counts = events.reduce((acc: Record<string, number>, e: any) => {
+      const k = e.eventType;
+      acc[k] = (acc[k] || 0) + (e.count || 1);
+      return acc;
+    }, {} as Record<string, number>);
+    return { events, totals: counts };
+  }
+
   // TRANSLATION MEMORY
   async listTranslationMemory(branchId: string, filters: { fieldKey?: string; q?: string; targetLanguage?: string }) {
     const where: any = { branchId };

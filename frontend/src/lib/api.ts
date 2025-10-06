@@ -482,6 +482,10 @@ export class ApiClient {
     return this.post(`/prescriptions/${id}/print-events`, data);
   }
 
+  async getPrescriptionPrintEvents(id: string) {
+    return this.get(`/prescriptions/${id}/print-events`);
+  }
+
   // Translation Memory
   async listTranslationMemory(params?: { fieldKey?: string; q?: string; targetLanguage?: string }) {
     return this.get('/prescriptions/translations', params || {});
