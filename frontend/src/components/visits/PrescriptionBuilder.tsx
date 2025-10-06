@@ -404,6 +404,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   const [interactionsOpen, setInteractionsOpen] = useState(false);
+  // Print page break controls
+  const [breakBeforeMedications, setBreakBeforeMedications] = useState(false);
+  const [breakBeforeInvestigations, setBreakBeforeInvestigations] = useState(false);
+  const [breakBeforeFollowUp, setBreakBeforeFollowUp] = useState(false);
+  const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
+  const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
   const [interactions, setInteractions] = useState<any[]>([]);
   type OneMgSelection = { sku: string; name: string; price?: number };
   const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
@@ -2303,6 +2309,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
+                  /* Explicit page break helpers */
+                  .pb-before-page { break-before: page !important; page-break-before: always !important; }
+                  .pb-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
                   html, body {
                     margin: 0 !important;
                     padding: 0 !important;
@@ -2622,11 +2631,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Medications */}
                 {includeSections.medications && (
-                  <div className="py-3">
+                  <div className={`py-3 ${breakBeforeMedications ? 'pb-before-page' : ''}`}>
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <div className="overflow-auto border rounded">
+                        <div className={`overflow-auto border rounded ${avoidBreakInsideTables ? 'pb-avoid-break' : ''}`}>
                           <table className="min-w-full text-sm">
                             <thead className="bg-gray-50">
                               <tr>
@@ -2673,7 +2682,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
-                  <div className="py-3">
+                  <div className={`py-3 ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
                     <div className="font-semibold mb-1">Investigations</div>
                     <ul className="list-disc ml-5 text-sm space-y-1">
                       {investigations.map((inv, i) => (<li key={inv}>{tt(`investigations.${i}`, inv)}</li>))}
@@ -2701,7 +2710,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Follow-up Instructions */}
                 {(followUpInstructions?.trim()?.length) ? (
-                  <div className="py-3">
+                  <div className={`py-3 ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
                     <div className="font-semibold mb-1">Follow-up Instructions</div>
                     <div className="text-sm whitespace-pre-wrap">{tt('followUpInstructions', followUpInstructions)}</div>
                   </div>
@@ -2709,7 +2718,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className="pt-6 mt-4 border-t">
+                  <div className={`pt-6 mt-4 border-t ${breakBeforeSignature ? 'pb-before-page' : ''}`}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
                         <div className="h-10" />
@@ -2753,6 +2762,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <SelectItem value="TEXT">Text</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Page Breaks</span>
+                    <div className="space-y-2 text-sm text-gray-700">
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeInvestigations} onChange={(e) => setBreakBeforeInvestigations(e.target.checked)} /> Break before Investigations</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeFollowUp} onChange={(e) => setBreakBeforeFollowUp(e.target.checked)} /> Break before Follow-up</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeSignature} onChange={(e) => setBreakBeforeSignature(e.target.checked)} /> Break before Signature</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={avoidBreakInsideTables} onChange={(e) => setAvoidBreakInsideTables(e.target.checked)} /> Avoid breaks inside tables</label>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Printer profile</span>
