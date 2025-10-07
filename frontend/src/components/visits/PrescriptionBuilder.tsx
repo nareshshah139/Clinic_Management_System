@@ -470,6 +470,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [exDistribution, setExDistribution] = useState<Set<string>>(new Set());
   const [exAcneSeverity, setExAcneSeverity] = useState<string>('');
   const [exItchScore, setExItchScore] = useState<string>('');
+  const [newMorphology, setNewMorphology] = useState<string>('');
+  const [newDistribution, setNewDistribution] = useState<string>('');
   const [exTriggers, setExTriggers] = useState<string>('');
   const [exPriorTx, setExPriorTx] = useState<string>('');
   const [exDermDx, setExDermDx] = useState<Set<string>>(new Set());
@@ -980,6 +982,43 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
     setItems(prev => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+  };
+
+  const inferFrequencyFromDosePattern = (pattern: string): Frequency | null => {
+    const raw = (pattern || '').trim().toLowerCase();
+    if (!raw) return null;
+
+    // Common textual shorthands
+    const map: Record<string, Frequency> = {
+      od: 'ONCE_DAILY',
+      qd: 'ONCE_DAILY',
+      once: 'ONCE_DAILY',
+      hs: 'ONCE_DAILY',
+      qhs: 'ONCE_DAILY',
+      bid: 'TWICE_DAILY',
+      bd: 'TWICE_DAILY',
+      twice: 'TWICE_DAILY',
+      tid: 'THREE_TIMES_DAILY',
+      thrice: 'THREE_TIMES_DAILY',
+      qid: 'FOUR_TIMES_DAILY',
+    };
+    if (map[raw]) return map[raw];
+
+    // Try to infer from numeric pattern like 1-0-1, 0-1-0, 1-1-1, 2-0-2
+    const tokens = raw.split(/[^0-9]+/).filter(Boolean);
+    if (tokens.length > 0) {
+      const doses = tokens.map(t => Number(t)).filter(n => !Number.isNaN(n) && Number.isFinite(n));
+      if (doses.length > 0) {
+        const total = doses.reduce((a, b) => a + (b > 0 ? 1 : 0), 0);
+        if (total <= 0) return null;
+        if (total === 1) return 'ONCE_DAILY';
+        if (total === 2) return 'TWICE_DAILY';
+        if (total === 3) return 'THREE_TIMES_DAILY';
+        return 'FOUR_TIMES_DAILY';
+      }
+    }
+
+    return null;
   };
 
   const removeItem = (index: number) => {
@@ -1949,6 +1988,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <Button key={m} type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
                     ))}
                   </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Type and press Enter to add"
+                      value={newMorphology}
+                      onChange={(e) => setNewMorphology(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = (newMorphology || '').trim();
+                          if (val) {
+                            setExMorphology(prev => {
+                              const next = new Set(prev);
+                              next.add(val);
+                              return next;
+                            });
+                            setNewMorphology('');
+                          }
+                          e.preventDefault();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const val = (newMorphology || '').trim();
+                        if (!val) return;
+                        setExMorphology(prev => {
+                          const next = new Set(prev);
+                          next.add(val);
+                          return next;
+                        });
+                        setNewMorphology('');
+                      }}
+                    >Add</Button>
+                  </div>
                 </div>
 
                 <div>
@@ -1957,6 +2031,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     {DISTRIBUTION.map(d => (
                       <Button key={d} type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
                     ))}
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <Input
+                      placeholder="Type and press Enter to add"
+                      value={newDistribution}
+                      onChange={(e) => setNewDistribution(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const val = (newDistribution || '').trim();
+                          if (val) {
+                            setExDistribution(prev => {
+                              const next = new Set(prev);
+                              next.add(val);
+                              return next;
+                            });
+                            setNewDistribution('');
+                          }
+                          e.preventDefault();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        const val = (newDistribution || '').trim();
+                        if (!val) return;
+                        setExDistribution(prev => {
+                          const next = new Set(prev);
+                          next.add(val);
+                          return next;
+                        });
+                        setNewDistribution('');
+                      }}
+                    >Add</Button>
                   </div>
                 </div>
 
@@ -2082,7 +2191,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Input value={it.dosePattern || ''} onChange={(e) => updateItem(idx, { dosePattern: e.target.value })} placeholder="e.g., 1-0-1" />
+                              <Input value={it.dosePattern || ''} onChange={(e) => {
+                                const nextPattern = e.target.value;
+                                const inferred = inferFrequencyFromDosePattern(nextPattern);
+                                if (inferred) {
+                                  updateItem(idx, { dosePattern: nextPattern, frequency: inferred });
+                                } else {
+                                  updateItem(idx, { dosePattern: nextPattern });
+                                }
+                              }} placeholder="e.g., 1-0-1" />
                               <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -3019,7 +3136,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Input value={it.dosePattern || ''} onChange={(e) => updateNewTplItem(idx, { dosePattern: e.target.value })} placeholder="e.g., 1-0-1" />
+                              <Input value={it.dosePattern || ''} onChange={(e) => {
+                                const nextPattern = e.target.value;
+                                const inferred = inferFrequencyFromDosePattern(nextPattern);
+                                if (inferred) {
+                                  updateNewTplItem(idx, { dosePattern: nextPattern, frequency: inferred });
+                                } else {
+                                  updateNewTplItem(idx, { dosePattern: nextPattern });
+                                }
+                              }} placeholder="e.g., 1-0-1" />
                               <Select value={it.frequency} onValueChange={(v: Frequency) => updateNewTplItem(idx, { frequency: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
