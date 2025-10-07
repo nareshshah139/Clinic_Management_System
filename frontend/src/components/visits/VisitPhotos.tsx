@@ -154,14 +154,64 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     try {
       setUploading(true);
 
+      // Soft validation to avoid known failures
+      const MAX_FILE_BYTES = 25 * 1024 * 1024; // mirror backend default
+      const invalids: string[] = [];
+      const validFiles: File[] = [];
+      const validPositions: typeof positions = [] as any;
+      for (let i = 0; i < pendingFiles.length; i += 1) {
+        const f = pendingFiles[i];
+        const p = positions[i];
+        if (!f || f.size <= 0) {
+          invalids.push(`${f?.name || 'unnamed'}: empty file`);
+          continue;
+        }
+        if (!String(f.type || '').toLowerCase().startsWith('image/')) {
+          invalids.push(`${f.name}: not an image`);
+          continue;
+        }
+        if (f.size > MAX_FILE_BYTES) {
+          // Backend downscales but enforces size limit; warn but still attempt upload
+          invalids.push(`${f.name}: larger than ${Math.round(MAX_FILE_BYTES / (1024*1024))}MB (may fail, attempting anyway)`);
+        }
+        validFiles.push(f);
+        validPositions.push(p);
+      }
+      if (validFiles.length === 0) {
+        alert(`No valid images to upload.\n${invalids.join('\n')}`);
+        return;
+      }
+
       const chunk = <T,>(arr: T[], size: number): T[][] => {
         const out: T[][] = [];
         for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
         return out;
       };
 
-      const fileBatches = chunk(pendingFiles, 6);
-      const posBatches = chunk(positions, 6);
+      const fileBatches = chunk(validFiles, 6);
+      const posBatches = chunk(validPositions, 6);
+
+      const fetchWithRetry = async (url: string, body: FormData, attempts = 2, timeoutMs = 30000) => {
+        let lastErr: any = null;
+        for (let attempt = 0; attempt < attempts; attempt += 1) {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            const resp = await fetch(url, { method: 'POST', body, credentials: 'include', signal: controller.signal });
+            clearTimeout(t);
+            if (resp.ok) return resp;
+            lastErr = new Error(`${resp.status}`);
+          } catch (e) {
+            clearTimeout(t);
+            lastErr = e;
+          }
+          // Backoff before retrying
+          await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+        }
+        throw lastErr || new Error('Upload failed');
+      };
+
+      const failures: string[] = [];
 
       if (visitId === 'temp') {
         if (!patientId) { alert('Patient is required to upload draft photos'); return; }
@@ -171,12 +221,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           const fd = new FormData();
           group.forEach(f => fd.append('files', f));
           fd.append('positions', JSON.stringify(groupPositions));
-          const response = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, {
-            method: 'POST',
-            body: fd,
-            credentials: 'include',
-          });
-          if (!response.ok) throw new Error(`Draft upload failed: ${response.status}`);
+          try {
+            await fetchWithRetry(`${baseUrl}/visits/photos/draft/${patientId}`, fd);
+          } catch (e: any) {
+            failures.push(`Batch ${b + 1}: ${e?.message || 'failed'}`);
+          }
         }
       } else {
         for (let b = 0; b < fileBatches.length; b += 1) {
@@ -185,12 +234,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           const fd = new FormData();
           group.forEach(f => fd.append('files', f));
           fd.append('positions', JSON.stringify(groupPositions));
-          const response = await fetch(`${baseUrl}/visits/${actualVisitId}/photos`, {
-            method: 'POST',
-            body: fd,
-            credentials: 'include',
-          });
-          if (!response.ok) throw new Error(`Upload failed: ${response.status}`);
+          try {
+            await fetchWithRetry(`${baseUrl}/visits/${actualVisitId}/photos`, fd);
+          } catch (e: any) {
+            failures.push(`Batch ${b + 1}: ${e?.message || 'failed'}`);
+          }
         }
       }
 
@@ -198,6 +246,12 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       setPendingFiles(null);
       setPendingPositions([]);
       await load();
+      if (invalids.length || failures.length) {
+        const msgs = [] as string[];
+        if (invalids.length) msgs.push(`Skipped: ${invalids.length} (\n- ${invalids.join('\n- ')}\n)`);
+        if (failures.length) msgs.push(`Failed: ${failures.length} batch(es) (\n- ${failures.join('\n- ')}\n)`);
+        alert(`Upload completed with warnings.\n${msgs.join('\n')}`);
+      }
     } catch (e) {
       console.error('Upload error:', e);
       alert('Failed to upload photos. Please try again.');
