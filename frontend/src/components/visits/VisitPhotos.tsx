@@ -25,6 +25,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [pendingPositions, setPendingPositions] = useState<PhotoPosition[]>([]);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
@@ -53,8 +54,15 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const toAbsolute = (path: string) => {
     if (!path) return path;
     if (/^https?:\/\//i.test(path)) return path;
-    // Files are served under /uploads/... from the backend, proxied by Next rewrites
-    return path.startsWith('/uploads/') ? path : `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+    // Normalize any accidental api prefix and ensure /uploads/* is served from app root
+    const cleaned = path.replace(/^\/?api\/+/, '/');
+    if (/^\/?uploads\//i.test(cleaned) || /\/uploads\//i.test(cleaned)) {
+      const startIdx = cleaned.toLowerCase().indexOf('/uploads/');
+      const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
+      return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
+    }
+    // Fall back to calling API endpoints via /api
+    return `${baseUrl}${cleaned.startsWith('/') ? cleaned : `/${cleaned}`}`;
   };
 
   const load = async () => {
@@ -65,7 +73,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         const res = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, { credentials: 'include' });
         if (!res.ok) { setItems([]); return; }
         const data = await res.json();
-        const incoming: PhotoItem[] = (data.items as PhotoItem[] | undefined) || [];
+        const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || []).map((it: PhotoItem) => ({
+          ...it,
+          url: toAbsolute(it.url),
+        }));
         setItems(incoming);
         setActiveIndex(0);
       } catch { setItems([]); }
@@ -101,6 +112,21 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   };
 
   useEffect(() => { void load(); }, [visitId, patientId]);
+
+  // Build previews for pending files and clean up object URLs
+  useEffect(() => {
+    if (!pendingFiles || pendingFiles.length === 0) {
+      setPreviewUrls([]);
+      return;
+    }
+    const urls = pendingFiles.map((f) => URL.createObjectURL(f));
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach((u) => {
+        try { URL.revokeObjectURL(u); } catch {}
+      });
+    };
+  }, [pendingFiles]);
 
   const openTaggingForFiles = (files: File[]) => {
     setPendingFiles(files);
@@ -291,6 +317,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <div className="space-y-3">
           {pendingFiles?.map((file, idx) => (
             <div key={`${file.name}-${idx}`} className="flex items-center gap-3">
+              <div className="h-14 w-14 flex-shrink-0 rounded border overflow-hidden bg-gray-100">
+                {previewUrls[idx] ? (
+                  <img src={previewUrls[idx]} alt="preview" className="h-full w-full object-cover" />
+                ) : null}
+              </div>
               <div className="flex-1 truncate text-sm" title={file.name}>{file.name}</div>
               <div className="w-44">
                 <Select
