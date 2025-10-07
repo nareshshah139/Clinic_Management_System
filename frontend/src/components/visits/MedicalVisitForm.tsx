@@ -61,6 +61,7 @@ interface Props {
   visitDate?: string; // ISO string; falls back to today if not provided
   appointmentId?: string;
   appointmentData?: VisitDetails | null;
+  initialVisitId?: string;
 }
 
 interface PatientHistory {
@@ -83,6 +84,11 @@ type VitalsState = {
   spo2: string;
   rr: string;
 };
+
+// Helper types for labs
+type SimpleLabValue = { value?: string; unit?: string };
+type CompositeLabValue = Record<string, SimpleLabValue>;
+type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 
 type MedicalVisitDraftState = {
   vitals: VitalsState;
@@ -166,7 +172,7 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
-export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData }: Props) {
+export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId }: Props) {
   // Parse helper
   const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
     if (!value) return undefined;
@@ -182,7 +188,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, []);
 
   // Core visit data
-  const [visitId, setVisitId] = useState<string | null>(null);
+  const [visitId, setVisitId] = useState<string | null>(initialVisitId || null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<'draft' | 'in-progress' | 'completed'>('draft');
   
@@ -227,8 +233,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     ['CBC','ESR','CRP','LFT','Fasting lipid profile','RFT','Creatinine','FBS','Fasting Insulin','HbA1c','RBS','CUE','Stool examination','Total Testosterone','S. Prolactin','Vitamin B12','Vitamin D','Ferritin','TSH','Thyroid profile','HIV-I,II','HbS Ag','Anti HCV','VDRL','RPR','TPHA','TB Gold Quantiferon Test','Montoux Test','Chest Xray PA view','2D Echo','Skin Biopsy']
   ), []);
   const [labSelections, setLabSelections] = useState<string[]>([]);
-  const [labResults, setLabResults] = useState<Record<string, { value?: string; unit?: string } | Record<string, { value?: string; unit?: string }>>>({});
+  const [labResults, setLabResults] = useState<LabResultsMap>({});
   const [labsAutofillLoading, setLabsAutofillLoading] = useState(false);
+  const [compareLabs, setCompareLabs] = useState(false);
+  const [prevLabResults, setPrevLabResults] = useState<LabResultsMap>({});
 
   // Default units and composite breakdowns for common investigations
   const SIMPLE_TEST_UNITS: Record<string, string> = useMemo(() => ({
@@ -275,6 +283,41 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       return next;
     });
   }, [labSelections, COMPOSITE_TESTS, SIMPLE_TEST_UNITS]);
+
+  // Load previous visit's lab results for comparison
+  useEffect(() => {
+    let isActive = true;
+    const loadPrev = async () => {
+      try {
+        if (!patientId) return;
+        const resp = await apiClient.getPatientVisitHistory<any>(patientId, { limit: 2 });
+        const list = Array.isArray(resp)
+          ? resp
+          : Array.isArray((resp as any)?.visits)
+            ? (resp as any).visits
+            : Array.isArray((resp as any)?.data)
+              ? (resp as any).data
+              : [];
+        // Assuming newest-first; previous is index 1
+        const prev = list[1];
+        let prevPlan: any = undefined;
+        if (prev && prev.plan) {
+          if (typeof prev.plan === 'string') {
+            try { prevPlan = JSON.parse(prev.plan); } catch {}
+          } else if (typeof prev.plan === 'object') {
+            prevPlan = prev.plan;
+          }
+        }
+        const prevDerm = prevPlan?.dermatology || {};
+        const labs: LabResultsMap = (prevDerm?.labResults && typeof prevDerm.labResults === 'object') ? prevDerm.labResults as LabResultsMap : {};
+        if (isActive) setPrevLabResults(labs || {});
+      } catch {
+        if (isActive) setPrevLabResults({});
+      }
+    };
+    loadPrev();
+    return () => { isActive = false; };
+  }, [patientId]);
   
   // Patient history
   const [patientHistory, setPatientHistory] = useState<VisitSummary[]>([]);
@@ -615,6 +658,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           },
           counseling: counseling || undefined,
           investigations: labSelections.length ? labSelections : undefined,
+          labResults: labResults && Object.keys(labResults).length ? labResults : undefined,
           // follow-up date handled at visit completion; prescription gets reviewDate via prop
         }
       },
@@ -632,7 +676,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         capturedBy: userRole,
         sections: Array.from(completedSections),
         progress: getProgress(),
-        labResults: labResults && Object.keys(labResults).length ? labResults : undefined,
       }
     };
 
@@ -1633,6 +1676,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
                     <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
+                    <div className="mt-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                        <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
+                        Compare with previous visit
+                      </label>
+                    </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div>
@@ -1661,7 +1710,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               <div key={test} className="border rounded p-3">
                                 <div className="text-sm font-semibold mb-2">{test}</div>
                                 {!isComposite ? (
-                                  <div className="flex gap-2">
+                                  <div className="flex gap-2 items-center">
                                     <Input
                                       placeholder="Value"
                                       value={(entry?.value ?? '') as string}
@@ -1672,6 +1721,23 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                       value={(entry?.unit ?? '') as string}
                                       onChange={(e) => setLabResults((prev) => ({ ...prev, [test]: { value: (prev[test] as any)?.value || '', unit: e.target.value } }))}
                                     />
+                                    {compareLabs && (() => {
+                                      const prev = prevLabResults[test] as any;
+                                      const prevVal = typeof prev === 'object' && prev && 'value' in prev ? (prev.value ?? '') : '';
+                                      const currNum = Number((entry?.value ?? '').toString());
+                                      const prevNum = Number((prevVal ?? '').toString());
+                                      const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
+                                      const delta = hasNums ? (currNum - prevNum) : null;
+                                      return (
+                                        <div className="text-xs text-gray-600">
+                                          {hasNums ? (
+                                            <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
+                                          ) : (
+                                            <span className="text-gray-400">—</span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 ) : (
                                   <div className="space-y-2">
@@ -1694,6 +1760,23 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                             [test]: { ...(prev[test] as any), [sub]: { value: (prev[test] as any)?.[sub]?.value || '', unit: e.target.value } },
                                           }))}
                                         />
+                                        {compareLabs && (() => {
+                                          const prev = (prevLabResults[test] as any)?.[sub];
+                                          const prevVal = typeof prev === 'object' ? (prev?.value ?? '') : '';
+                                          const currNum = Number((((entry as any)?.[sub]?.value ?? '') as string).toString());
+                                          const prevNum = Number((prevVal ?? '').toString());
+                                          const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
+                                          const delta = hasNums ? (currNum - prevNum) : null;
+                                          return (
+                                            <div className="text-xs text-gray-600">
+                                              {hasNums ? (
+                                                <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
+                                              ) : (
+                                                <span className="text-gray-400">—</span>
+                                              )}
+                                            </div>
+                                          );
+                                        })()}
                                       </div>
                                     ))}
                                   </div>
@@ -1706,7 +1789,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     )}
 
                     <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="text-xs text-gray-500">Selections are saved to Treatment Plan; numeric results stored in metadata.</div>
+                      <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
                       <div className="flex gap-2">
                         <label className="text-sm">
                           <input

@@ -633,6 +633,7 @@ function VisitsPageInner() {
   const urlPatientId = searchParams.get('patientId');
   const appointmentIdParam = searchParams.get('appointmentId');
   const urlDoctorId = searchParams.get('doctorId');
+  const urlVisitId = searchParams.get('visitId');
   const autoStartParam = searchParams.get('autoStart') === 'true';
 
   const extractPatients = useCallback((payload: unknown): PatientMatch[] => {
@@ -741,6 +742,35 @@ function VisitsPageInner() {
       }
     }
   }, [appointmentIdParam, autoStartParam, fetchAppointmentData, urlDoctorId, urlPatientId]);
+
+  // Handle direct visit resume via visitId in URL
+  useEffect(() => {
+    const run = async () => {
+      if (!urlVisitId || !isValidId(urlVisitId)) return;
+      try {
+        const visit: any = await apiClient.get(`/visits/${urlVisitId}`);
+        const pid = visit?.patient?.id;
+        const did = visit?.doctor?.id;
+        if (typeof pid === 'string') setSelectedPatientId(pid);
+        if (typeof did === 'string') setSelectedDoctorId(did);
+        // Populate appointment context if present (non-blocking)
+        const apptId = visit?.appointment?.id;
+        if (typeof apptId === 'string') {
+          try {
+            const appt = await apiClient.getAppointment<AppointmentWithVisit>(apptId);
+            setAppointmentData(appt);
+            if (appt?.doctorId) setSelectedDoctorId(appt.doctorId);
+          } catch {}
+        }
+        setShowForm(true);
+        setRecentVisitId(urlVisitId);
+      } catch (e) {
+        // If visit fetch fails, ignore and proceed with normal flow
+        console.warn('[VisitsPage] Failed to load visit by id', e);
+      }
+    };
+    void run();
+  }, [urlVisitId]);
 
   useEffect(() => {
     const visitId = (appointmentData?.visit && 'id' in appointmentData.visit) ? appointmentData.visit.id : undefined;
@@ -1175,6 +1205,7 @@ function VisitsPageInner() {
         visitDate={new Date().toISOString()}
         appointmentId={appointmentData?.id}
         appointmentData={appointmentData}
+        initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
       />
       
       {recentVisitId && <PhotosPanel visitId={recentVisitId} />}
