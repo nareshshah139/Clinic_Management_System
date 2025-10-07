@@ -67,17 +67,42 @@ async function processImageUpload(file: Express.Multer.File) {
     throw new BadRequestException('Unsupported image type');
   }
 
-  // Normalize unknown/HEIC-like formats to jpeg
-  const normalizedExt = !detected.ext || ['heic', 'heif', 'tif', 'tiff'].includes(detected.ext) ? 'jpeg' : (detected.ext === 'jpg' ? 'jpeg' : detected.ext);
+  // Normalize to performant formats: convert HEIC/HEIF/TIFF/GIF/JPG to JPEG
+  const normalizedExt = !detected.ext || ['heic', 'heif', 'tif', 'tiff', 'gif'].includes(detected.ext)
+    ? 'jpeg'
+    : (detected.ext === 'jpg' ? 'jpeg' : detected.ext);
   const format = normalizedExt;
 
   try {
     const pipeline = sharp(file.buffer, { failOn: 'error' }).rotate().withMetadata({ exif: undefined });
     const { width = 0, height = 0 } = await pipeline.metadata();
-    if (width * height > 40_000_000) {
-      throw new BadRequestException('Image resolution too large');
+    let working = pipeline;
+    // Cap to 40MP and limit max dimension to ~3000px to reduce size/time
+    const MAX_PIXELS = 40_000_000;
+    const MAX_DIM = 3000;
+    const pixelScale = width * height > MAX_PIXELS ? Math.sqrt(MAX_PIXELS / (width * height)) : 1;
+    const dimScale = Math.min(
+      width > 0 ? MAX_DIM / width : 1,
+      height > 0 ? MAX_DIM / height : 1,
+      1,
+    );
+    const scale = Math.min(pixelScale, dimScale, 1);
+    if (scale < 1) {
+      const targetWidth = Math.max(1, Math.floor((width || 1) * scale));
+      const targetHeight = Math.max(1, Math.floor((height || 1) * scale));
+      working = working.resize(targetWidth, targetHeight, { fit: 'inside', withoutEnlargement: true });
     }
-    const sanitizedBuffer = await pipeline.toFormat(format as keyof sharp.FormatEnum).toBuffer();
+
+    // Apply sensible compression for faster uploads and smaller storage
+    if (format === 'jpeg') {
+      working = working.jpeg({ quality: 82, mozjpeg: true });
+    } else if (format === 'webp') {
+      working = working.webp({ quality: 80 });
+    } else if (format === 'png') {
+      working = working.png({ compressionLevel: 9 });
+    }
+
+    const sanitizedBuffer = await working.toFormat(format as keyof sharp.FormatEnum).toBuffer();
 
     return {
       buffer: sanitizedBuffer,
@@ -100,10 +125,7 @@ async function ensurePatientDraftDir(patientId: string) {
 
 function imageFileFilter(_req: any, file: any, cb: any) {
   if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
-  const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif'];
-  if (!allowed.includes(file.mimetype)) {
-    return cb(new BadRequestException('Only image files are allowed'), false);
-  }
+  if (!/^image\//i.test(file.mimetype)) return cb(new BadRequestException('Only image files are allowed'), false);
   return cb(null, true);
 }
 
@@ -170,30 +192,38 @@ export class VisitsController {
           positions = (positions as string).split(',').map((s: string) => s.trim());
         }
       }
-      if (!Array.isArray(positions)) throw new BadRequestException('positions are required for each file');
-      const pos = (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '');
-      if (pos.length !== (files?.length || 0)) throw new BadRequestException('positions count must match files count');
-      for (const p of pos) if (!allowed.has(p)) throw new BadRequestException(`Invalid position: ${p}`);
-      return pos as string[];
+      const fileCount = files?.length || 0;
+      let arr: string[] = Array.isArray(positions) ? (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '') : [];
+      if (arr.length < fileCount) arr = arr.concat(Array(fileCount - arr.length).fill(''));
+      if (arr.length > fileCount) arr = arr.slice(0, fileCount);
+      const normalized = arr.map(p => (allowed.has(p) ? p : 'OTHER')) as string[];
+      return normalized;
     };
 
     if (!files || files.length === 0) throw new BadRequestException('No files provided');
     const positions = parsePositions();
 
-    let processedCount = 0;
-    for (let idx = 0; idx < files.length; idx += 1) {
-      const file = files[idx];
-      const position = positions[idx] as any;
-      const { buffer, ext } = await processImageUpload(file);
-      await this.visitsService.createDraftAttachment(patientId, dateStr, {
-        preferredExt: ext,
-        contentType: file.mimetype || 'image/jpeg',
-        buffer,
-        position,
-        displayOrder: this.positionOrderValue(position),
-      });
-      processedCount += 1;
-    }
+    const results = await Promise.allSettled(
+      files.map(async (file, idx) => {
+        const position = positions[idx] as any;
+        const { buffer, ext } = await processImageUpload(file);
+        const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        await this.visitsService.createDraftAttachment(patientId, dateStr, {
+          preferredExt: ext,
+          contentType,
+          buffer,
+          position,
+          displayOrder: this.positionOrderValue(position),
+        });
+      }),
+    );
+    const processedCount = results.filter(r => r.status === 'fulfilled').length;
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const file = files[idx];
+        this.logger?.warn?.(`uploadDraftPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`);
+      }
+    });
     if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
@@ -312,30 +342,38 @@ export class VisitsController {
           positions = (positions as string).split(',').map((s: string) => s.trim());
         }
       }
-      if (!Array.isArray(positions)) throw new BadRequestException('positions are required for each file');
-      const pos = (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '');
-      if (pos.length !== (files?.length || 0)) throw new BadRequestException('positions count must match files count');
-      for (const p of pos) if (!allowed.has(p)) throw new BadRequestException(`Invalid position: ${p}`);
-      return pos as string[];
+      const fileCount = files?.length || 0;
+      let arr: string[] = Array.isArray(positions) ? (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '') : [];
+      if (arr.length < fileCount) arr = arr.concat(Array(fileCount - arr.length).fill(''));
+      if (arr.length > fileCount) arr = arr.slice(0, fileCount);
+      const normalized = arr.map(p => (allowed.has(p) ? p : 'OTHER')) as string[];
+      return normalized;
     };
 
     if (!files || files.length === 0) throw new BadRequestException('No files provided');
     const positions = parsePositions();
 
-    let processedCount = 0;
-    for (let idx = 0; idx < files.length; idx += 1) {
-      const file = files[idx];
-      const position = positions[idx] as any;
-      const { buffer, ext } = await processImageUpload(file);
-      await this.visitsService.createVisitAttachment(id, req.user.branchId, {
-        preferredExt: ext,
-        contentType: file.mimetype || 'image/jpeg',
-        buffer,
-        position,
-        displayOrder: this.positionOrderValue(position),
-      });
-      processedCount += 1;
-    }
+    const results = await Promise.allSettled(
+      files.map(async (file, idx) => {
+        const position = positions[idx] as any;
+        const { buffer, ext } = await processImageUpload(file);
+        const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+        await this.visitsService.createVisitAttachment(id, req.user.branchId, {
+          preferredExt: ext,
+          contentType,
+          buffer,
+          position,
+          displayOrder: this.positionOrderValue(position),
+        });
+      }),
+    );
+    const processedCount = results.filter(r => r.status === 'fulfilled').length;
+    results.forEach((r, idx) => {
+      if (r.status === 'rejected') {
+        const file = files[idx];
+        this.logger?.warn?.(`uploadPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`);
+      }
+    });
     if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
