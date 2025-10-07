@@ -341,6 +341,68 @@ export class DrugInteractionDto {
   recommendation?: string;
 }
 
+// Template item DTO allows optional numeric fields so instruction-only
+// rows or partial items can be saved in templates without failing validation.
+export class PrescriptionTemplateItemDto {
+  @IsString()
+  drugName: string;
+
+  @IsOptional()
+  @IsString()
+  genericName?: string;
+
+  @IsOptional()
+  @IsString()
+  brandName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.01)
+  dosage?: number;
+
+  @IsOptional()
+  @IsEnum(DosageUnit)
+  dosageUnit?: DosageUnit;
+
+  @IsOptional()
+  @IsEnum(Frequency)
+  frequency?: Frequency;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  duration?: number;
+
+  @IsOptional()
+  @IsEnum(DurationUnit)
+  durationUnit?: DurationUnit;
+
+  @IsOptional()
+  @IsString()
+  instructions?: string;
+
+  @IsOptional()
+  @IsString()
+  route?: string;
+
+  @IsOptional()
+  @IsString()
+  timing?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  quantity?: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isGeneric?: boolean;
+}
+
 export class PrescriptionTemplateDto {
   @IsString()
   name: string;
@@ -350,8 +412,8 @@ export class PrescriptionTemplateDto {
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => PrescriptionItemDto)
-  items: PrescriptionItemDto[];
+  @Type(() => PrescriptionTemplateItemDto)
+  items: PrescriptionTemplateItemDto[];
 
   @IsOptional()
   @IsString()
