@@ -994,6 +994,13 @@ export class VisitsService {
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
   
+  async deleteDraftAttachment(patientId: string, dateStr: string, attachmentId: string) {
+    const att = await (this.prisma as any).draftAttachment.findFirst({ where: { id: attachmentId, patientId, dateStr }, select: { id: true } });
+    if (!att) throw new NotFoundException('Attachment not found');
+    await (this.prisma as any).draftAttachment.delete({ where: { id: attachmentId } });
+    return { ok: true };
+  }
+  
   async deleteVisitAttachment(visitId: string, attachmentId: string, branchId: string) {
     const att = await this.prisma.visitAttachment.findFirst({
       where: { id: attachmentId, visitId },

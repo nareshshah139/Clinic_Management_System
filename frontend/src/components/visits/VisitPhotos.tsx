@@ -212,27 +212,32 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   const deleteActive = async () => {
     if (!active) return;
-    if (visitId === 'temp') return; // skip delete in draft mode
     const confirmed = window.confirm('Delete this photo? This cannot be undone.');
     if (!confirmed) return;
     try {
-      // If the image URL points to the API route, delete that resource; else treat as legacy
-      if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
-        const resp = await fetch(active.url.startsWith('http') ? active.url : `${active.url}`, {
-          method: 'DELETE',
-          credentials: 'include',
-        });
-        if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
-      } else if (/\/uploads\//i.test(active.url)) {
-        const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: active.url }),
-          credentials: 'include',
-        });
+      const isDraft = visitId === 'temp' || /\/visits\/photos\/draft\//i.test(active.url);
+      if (isDraft) {
+        // Draft mode deletion
+        const draftUrl = active.url.startsWith('/visits/photos/draft/') ? `${baseUrl}${active.url}` : active.url;
+        const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
         if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
       } else {
-        throw new Error('Unsupported photo URL');
+        // If the image URL points to API route, delete that resource; else treat as legacy
+        if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
+          const target = active.url.startsWith('http') ? active.url : `${active.url}`;
+          const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
+          if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+        } else if (/\/uploads\//i.test(active.url)) {
+          const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: active.url }),
+            credentials: 'include',
+          });
+          if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+        } else {
+          throw new Error('Unsupported photo URL');
+        }
       }
       await load();
     } catch (e) {
@@ -259,6 +264,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             {items.length > 1 && (
               <Button variant={compareMode ? 'default' : 'outline'} size="sm" onClick={() => setCompareMode(v => !v)}>
                 {compareMode ? 'Compare: On' : 'Compare: Off'}
+              </Button>
+            )}
+            {allowDelete && active && (
+              <Button variant="destructive" size="sm" onClick={deleteActive}>
+                <Trash2 className="h-4 w-4 mr-2" /> Delete
               </Button>
             )}
           </div>
@@ -313,7 +323,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <div className="space-x-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.min(items.length - 1, i + 1))} disabled={items.length <= 1}>Next</Button>
-                {allowDelete && visitId !== 'temp' && active && (
+                {allowDelete && active && (
                   <Button size="sm" variant="destructive" onClick={deleteActive}>
                     <Trash2 className="h-4 w-4 mr-1" /> Delete
                   </Button>
@@ -325,18 +335,34 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div className="w-full overflow-x-auto">
               <div className="flex gap-2 py-2">
                 {items.map((it, idx) => (
-                  <button
-                    key={it.url}
-                    type="button"
-                    onClick={() => setActiveIndex(idx)}
-                    className={`relative h-20 w-28 flex-shrink-0 rounded border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-blue-500' : ''}`}
-                    title={it.uploadedAt ? new Date(it.uploadedAt).toLocaleString() : it.url}
-                  >
-                    <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />
+                  <div key={it.url} className={`relative h-20 w-28 flex-shrink-0 rounded border overflow-hidden ${idx === activeIndex ? 'ring-2 ring-blue-500' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => setActiveIndex(idx)}
+                      title={it.uploadedAt ? new Date(it.uploadedAt).toLocaleString() : it.url}
+                      className="absolute inset-0"
+                    >
+                      <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />
+                    </button>
                     <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
                       {it.position ? POSITION_LABEL[it.position] : ''}
                     </span>
-                  </button>
+                    {allowDelete && (
+                      <button
+                        type="button"
+                        aria-label="Delete photo"
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          setActiveIndex(idx);
+                          await deleteActive();
+                        }}
+                        className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-700 text-white rounded p-1"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             </div>

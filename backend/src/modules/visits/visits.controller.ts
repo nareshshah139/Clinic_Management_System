@@ -253,6 +253,16 @@ export class VisitsController {
     return new StreamableFile(data);
   }
 
+  @Delete('photos/draft/:patientId/:dateStr/:attachmentId')
+  async deleteDraftPhoto(
+    @Param('patientId') patientId: string,
+    @Param('dateStr') dateStr: string,
+    @Param('attachmentId') attachmentId: string,
+  ) {
+    await this.visitsService.deleteDraftAttachment(patientId, dateStr, attachmentId);
+    return this.visitsService.listDraftAttachments(patientId, dateStr);
+  }
+
   @Get('statistics')
   getStatistics(
     @Request() req: AuthenticatedRequest,
@@ -471,8 +481,8 @@ export class VisitsController {
     try {
       // Build multipart form-data for OpenAI Whisper using native undici FormData/Blob
       const form = new FormData();
-      const arrayBuffer = await (file.buffer as Buffer).buffer.slice(0);
-      const blob = new Blob([arrayBuffer], { type: file.mimetype || 'audio/webm' });
+      const uint8 = new Uint8Array(file.buffer as Buffer);
+      const blob = new Blob([uint8], { type: file.mimetype || 'audio/webm' });
       form.append('file', blob, file.originalname || 'audio.webm');
       form.append('model', 'whisper-1');
       // Improve accuracy by fixing language and disabling sampling randomness
