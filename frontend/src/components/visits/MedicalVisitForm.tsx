@@ -1678,7 +1678,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             )}
             {/* Photos Tab */}
             {(hasPermission('photos') || hasPermission('all')) && (
-              <TabsContent value="photos" className="space-y-4" forceMount>
+              <TabsContent value="photos" className="space-y-4">
                 <VisitPhotos 
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
