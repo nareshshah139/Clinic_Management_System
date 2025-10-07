@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrescriptionsService } from './prescriptions.service';
 import { 
@@ -46,6 +47,13 @@ interface AuthenticatedRequest {
 export class PrescriptionsController {
   constructor(private readonly prescriptionsService: PrescriptionsService) {}
 
+  private requireIdempotency(req: { headers?: Record<string, unknown> }) {
+    const key = String(req?.headers?.['idempotency-key'] || '').trim();
+    if (!key) {
+      throw new BadRequestException('Missing Idempotency-Key header');
+    }
+  }
+
   // Prescription endpoints
   @Post()
   @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
@@ -53,6 +61,7 @@ export class PrescriptionsController {
     @Body() createPrescriptionDto: CreatePrescriptionDto,
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId);
   }
 
@@ -62,6 +71,7 @@ export class PrescriptionsController {
     @Body() createPrescriptionDto: CreatePrescriptionPadDto,
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId);
   }
 
@@ -104,6 +114,7 @@ export class PrescriptionsController {
     @Body() refillDto: RefillPrescriptionDto,
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.requestRefill(refillDto, req.user.branchId);
   }
 
@@ -113,6 +124,7 @@ export class PrescriptionsController {
     @Body() approveDto: ApproveRefillDto,
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.approveRefill(approveDto, req.user.branchId, req.user.id);
   }
 
@@ -122,6 +134,7 @@ export class PrescriptionsController {
     @Body() body: { reason: string },
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.rejectRefill(id, req.user.branchId, body.reason, req.user.id);
   }
 
@@ -450,6 +463,7 @@ export class PrescriptionsController {
     @Body() updatePrescriptionDto: UpdatePrescriptionDto,
     @Request() req: AuthenticatedRequest,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.updatePrescription(id, updatePrescriptionDto, req.user.branchId);
   }
 
@@ -460,6 +474,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
     @Query('reason') reason?: string,
   ) {
+    this.requireIdempotency(req as any);
     return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason);
   }
 }

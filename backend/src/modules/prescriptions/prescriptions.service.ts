@@ -140,14 +140,14 @@ export class PrescriptionsService {
 
     const where: any = {
       visit: {
-        branchId: branchId,
+        patient: { branchId },
       },
     };
 
     // Apply filters
-    if (patientId) where.patientId = patientId;
+    if (patientId) where.visit = { ...(where.visit || {}), patientId };
     if (visitId) where.visitId = visitId;
-    if (doctorId) where.doctorId = doctorId;
+    if (doctorId) where.visit = { ...(where.visit || {}), doctorId };
     if (status) where.status = status;
     if (language) where.language = language;
 
