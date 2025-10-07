@@ -56,6 +56,7 @@ export class PatientsService {
 
     const where = {
       branchId,
+      isArchived: false,
       ...(genderVariants ? { gender: { in: genderVariants } } : {}),
       ...(searchTerm && {
         OR: [
@@ -180,6 +181,30 @@ export class PatientsService {
         ...(dob ? { dob: new Date(dob as any) } : {}),
       },
     });
+  }
+
+  async archive(id: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+    if ((patient as any).isArchived) return { message: 'Already archived' };
+
+    await this.prisma.patient.update({
+      where: { id },
+      data: { isArchived: true, archivedAt: new Date() } as any,
+    });
+    return { message: 'Patient archived' };
+  }
+
+  async unarchive(id: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found');
+    if (!(patient as any).isArchived) return { message: 'Already active' };
+
+    await this.prisma.patient.update({
+      where: { id },
+      data: { isArchived: false, archivedAt: null } as any,
+    });
+    return { message: 'Patient restored' };
   }
 
   async linkUser(patientId: string, dto: LinkPatientUserDto, branchId: string) {

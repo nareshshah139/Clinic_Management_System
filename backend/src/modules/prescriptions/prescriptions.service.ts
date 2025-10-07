@@ -58,6 +58,18 @@ export class PrescriptionsService {
       throw new NotFoundException('Visit not found in this branch');
     }
 
+    // Validate doctor belongs to same branch as visit
+    const visitDoctor = await this.prisma.user.findFirst({ where: { id: doctorId, branchId } });
+    if (!visitDoctor) {
+      throw new BadRequestException('Doctor must belong to the same branch as the visit');
+    }
+
+    // Enforce uniqueness: one prescription per visit
+    const existingRx = await this.prisma.prescription.findFirst({ where: { visitId } });
+    if (existingRx) {
+      throw new ConflictException('Prescription already exists for this visit');
+    }
+
     // Validate doctor exists
     const doctor = await this.prisma.user.findFirst({
       where: { id: doctorId, role: 'DOCTOR' },
@@ -99,7 +111,7 @@ export class PrescriptionsService {
 
     return {
       ...prescription,
-      items: JSON.parse(prescription.items as string),
+      items: this.safeParse<any[]>(prescription.items as string, []),
       interactions,
     };
   }
@@ -253,8 +265,8 @@ export class PrescriptionsService {
     // Parse JSON fields
     const parsedPrescriptions = prescriptions.map(prescription => ({
       ...prescription,
-      items: JSON.parse(prescription.items as string),
-      metadata: prescription.metadata ? JSON.parse(prescription.metadata as string) : null,
+      items: this.safeParse<any[]>(prescription.items as string, []),
+      metadata: this.safeParse<any>(prescription.metadata as string, null),
     }));
 
     return {
@@ -300,7 +312,7 @@ export class PrescriptionsService {
     }
 
     // Parse JSON fields
-    const items = JSON.parse(prescription.items as string);
+    const items = this.safeParse<any[]>(prescription.items as string, []);
 
     // Check for drug interactions (mock)
     const interactions = await this.checkDrugInteractions(items);
@@ -404,7 +416,10 @@ export class PrescriptionsService {
       },
     });
 
-    return updatedPrescription;
+    return {
+      ...updatedPrescription,
+      items: this.safeParse<any[]>(updatedPrescription.items as unknown as string, []),
+    } as any;
   }
 
   async cancelPrescription(id: string, branchId: string, reason?: string) {
@@ -692,7 +707,7 @@ export class PrescriptionsService {
 
     // Parse JSON fields and extract drug information
     const history = prescriptions.map(prescription => {
-      const items = JSON.parse(prescription.items as string);
+      const items = this.safeParse<any[]>(prescription.items as string, []);
       return {
         ...prescription,
         items,
@@ -1101,7 +1116,7 @@ export class PrescriptionsService {
     // Parse JSON fields
     const expiringPrescriptions = prescriptions.map(prescription => ({
       ...prescription,
-      items: JSON.parse(prescription.items as string),
+      items: this.safeParse<any[]>(prescription.items as string, []),
       daysUntilExpiry: prescription.validUntil ? 
         Math.ceil((prescription.validUntil.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null,
     }));
@@ -1912,6 +1927,15 @@ export class PrescriptionsService {
       await this.prisma.prescription.deleteMany({ where: { visitId: autoVisit.id } }).catch(() => undefined);
       await this.prisma.visit.delete({ where: { id: autoVisit.id } }).catch(() => undefined);
       throw err;
+    }
+  }
+
+  private safeParse<T>(value: string | null | undefined, fallback: T): T {
+    if (!value || typeof value !== 'string') return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
     }
   }
 }

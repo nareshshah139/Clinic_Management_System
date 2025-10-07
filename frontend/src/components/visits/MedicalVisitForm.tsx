@@ -392,6 +392,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const { toast } = useToast();
 
+  // Live photo count from VisitPhotos
+  const [photoCount, setPhotoCount] = useState<number>(0);
+
   const draftStorageKey = useMemo(
     () => createDraftStorageKey(doctorId, patientId, visitId, appointmentId, visitDate),
     [doctorId, patientId, visitId, appointmentId, visitDate]
@@ -407,6 +410,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const lastStorageKeyRef = useRef<string | null>(null);
   const justSavedRef = useRef(false);
   const lastIdempotencyKeyRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
   const stableHash = useCallback((input: string): string => {
     let hash = 5381;
     for (let i = 0; i < input.length; i++) {
@@ -712,6 +716,23 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     [clearAutoSaveTimer, runAutoSave]
   );
 
+  // Warn if another tab modifies this draft key
+  useEffect(() => {
+    if (typeof window === 'undefined' || !draftStorageKey) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === draftStorageKey && e.newValue && e.newValue !== lastDraftJsonRef.current) {
+        // Only notify while mounted
+        if (mountedRef.current) {
+          toast({ variant: 'warning', title: 'Draft changed in another tab', description: 'Your local form may be out of date.' });
+        }
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+    };
+  }, [draftStorageKey, toast]);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !draftStorageKey) {
       return;
@@ -758,6 +779,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     lastStorageKeyRef.current = draftStorageKey;
   }, [draftStorageKey, applyDraft]);
+
+  // Unmount cleanup/guards
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      clearAutoSaveTimer();
+    };
+  }, [clearAutoSaveTimer]);
 
   // If linked to an appointment and no visitId yet, try to fetch existing visit by appointment to resume editing
   useEffect(() => {
@@ -1375,7 +1404,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="outline">0 Photos</Badge>
+              <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
                   className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
@@ -1733,6 +1762,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
                   allowDelete={hasPermission('photos') || hasPermission('all')}
+                  onChangeCount={(c) => { setPhotoCount(c); }}
                   onVisitNeeded={async () => {
                     if (!visitId) {
                       const minimalPayload: Record<string, unknown> = {

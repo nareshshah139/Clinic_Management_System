@@ -181,6 +181,14 @@ export class ApiClient {
     return this.patch(`/patients/${id}`, data);
   }
 
+  async archivePatient(id: string) {
+    return this.post(`/patients/${id}/archive`, {});
+  }
+
+  async unarchivePatient(id: string) {
+    return this.post(`/patients/${id}/unarchive`, {});
+  }
+
   async linkPortalUser(patientId: string, data: Record<string, unknown>) {
     return this.post(`/patients/${patientId}/link-user`, data);
   }

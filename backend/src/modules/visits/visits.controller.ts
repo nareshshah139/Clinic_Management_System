@@ -152,6 +152,7 @@ export class VisitsController {
   private readonly logger = new Logger(VisitsController.name);
 
   @Post()
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   create(
     @Body() createVisitDto: CreateVisitDto,
     @Request() req: AuthenticatedRequest,
@@ -306,6 +307,7 @@ export class VisitsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   update(
     @Param('id') id: string,
     @Body() updateVisitDto: UpdateVisitDto,
@@ -315,6 +317,7 @@ export class VisitsController {
   }
 
   @Post(':id/complete')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   complete(
     @Param('id') id: string,
     @Body() completeVisitDto: CompleteVisitDto,
@@ -469,7 +472,7 @@ export class VisitsController {
     if ((file.size || 0) <= 0) {
       throw new BadRequestException('Empty audio upload');
     }
-    const allowedAudioTypes = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg'];
+    const allowedAudioTypes = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/m4a'];
     if (!file.mimetype || !allowedAudioTypes.includes(file.mimetype)) {
       throw new BadRequestException('Unsupported audio type');
     }

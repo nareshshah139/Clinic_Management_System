@@ -20,6 +20,9 @@ import {
 import { apiClient } from '@/lib/api';
 import type { InventoryItem, ItemCategory } from '@/lib/types';
 import { AddInventoryItemDialog } from '@/components/inventory/AddInventoryItemDialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { useToast } from '@/hooks/use-toast';
 
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -28,6 +31,23 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | 'ALL'>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const { toast } = useToast();
+  // Edit dialog state
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [editForm, setEditForm] = useState<{ name: string; description: string; sku: string; costPrice: string; sellingPrice: string; reorderLevel: string }>({
+    name: '',
+    description: '',
+    sku: '',
+    costPrice: '',
+    sellingPrice: '',
+    reorderLevel: '',
+  });
+  // Stock adjust dialog state
+  const [showStockDialog, setShowStockDialog] = useState(false);
+  const [stockItem, setStockItem] = useState<InventoryItem | null>(null);
+  const [stockDelta, setStockDelta] = useState<string>('0');
+  const [stockNote, setStockNote] = useState<string>('');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -117,6 +137,44 @@ export default function InventoryPage() {
   const lowStockItems = items.filter(item => item.currentStock <= item.reorderLevel);
   const outOfStockItems = items.filter(item => item.currentStock === 0);
   const totalValue = items.reduce((sum, item) => sum + (item.currentStock * item.costPrice), 0);
+
+  const openEdit = (item: InventoryItem) => {
+    setEditItem(item);
+    setEditForm({
+      name: item.name || '',
+      description: item.description || '',
+      sku: item.sku || '',
+      costPrice: String(item.costPrice ?? ''),
+      sellingPrice: String(item.sellingPrice ?? ''),
+      reorderLevel: String(item.reorderLevel ?? ''),
+    });
+    setShowEditDialog(true);
+  };
+
+  const openStock = (item: InventoryItem) => {
+    setStockItem(item);
+    setStockDelta('0');
+    setStockNote('');
+    setShowStockDialog(true);
+  };
+
+  const handleSaveEdit = async () => {
+    // No-op placeholder; backend update endpoint not wired yet
+    toast({ description: 'Saved changes (no-op). Inventory update not yet implemented.' });
+    setShowEditDialog(false);
+    setEditItem(null);
+    // Optionally refresh list
+    fetchInventoryItems(1);
+  };
+
+  const handleApplyStock = async () => {
+    // No-op placeholder; backend stock adjust endpoint not wired yet
+    toast({ description: 'Applied stock adjustment (no-op). Not yet implemented.' });
+    setShowStockDialog(false);
+    setStockItem(null);
+    // Optionally refresh list
+    fetchInventoryItems(1);
+  };
 
   return (
     <div className="space-y-6">
@@ -297,10 +355,10 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex space-x-2">
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
                               Edit
                             </Button>
-                            <Button variant="outline" size="sm">
+                            <Button variant="outline" size="sm" onClick={() => openStock(item)}>
                               Stock
                             </Button>
                           </div>
@@ -367,6 +425,68 @@ export default function InventoryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit Item Dialog (no-op) */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle>Edit Item</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="inv-name">Name</Label>
+              <Input id="inv-name" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-sku">SKU</Label>
+              <Input id="inv-sku" value={editForm.sku} onChange={(e) => setEditForm({ ...editForm, sku: e.target.value })} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="inv-desc">Description</Label>
+              <Input id="inv-desc" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-cost">Cost Price</Label>
+              <Input id="inv-cost" type="number" inputMode="decimal" value={editForm.costPrice} onChange={(e) => setEditForm({ ...editForm, costPrice: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-sp">Selling Price</Label>
+              <Input id="inv-sp" type="number" inputMode="decimal" value={editForm.sellingPrice} onChange={(e) => setEditForm({ ...editForm, sellingPrice: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-reorder">Reorder Level</Label>
+              <Input id="inv-reorder" type="number" inputMode="numeric" value={editForm.reorderLevel} onChange={(e) => setEditForm({ ...editForm, reorderLevel: e.target.value })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button onClick={() => void handleSaveEdit()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Adjust Dialog (no-op) */}
+      <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle>Adjust Stock{stockItem ? ` — ${stockItem.name}` : ''}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="inv-delta">Quantity Change (use negative to reduce)</Label>
+              <Input id="inv-delta" type="number" inputMode="numeric" value={stockDelta} onChange={(e) => setStockDelta(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-note">Reason/Note</Label>
+              <Input id="inv-note" value={stockNote} onChange={(e) => setStockNote(e.target.value)} placeholder="e.g., New purchase, damaged stock" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStockDialog(false)}>Cancel</Button>
+            <Button onClick={() => void handleApplyStock()}>Apply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add Item Dialog */}
       <AddInventoryItemDialog

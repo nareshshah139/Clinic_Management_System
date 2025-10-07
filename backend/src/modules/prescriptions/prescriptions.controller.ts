@@ -1,4 +1,4 @@
-// @ts-nocheck
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import {
   Controller,
   Get,
@@ -30,6 +30,8 @@ import {
   PrescriptionTemplateQueryDto,
 } from './dto/query-prescription.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 interface AuthenticatedRequest {
   user: {
@@ -46,6 +48,7 @@ export class PrescriptionsController {
 
   // Prescription endpoints
   @Post()
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   createPrescription(
     @Body() createPrescriptionDto: CreatePrescriptionDto,
     @Request() req: AuthenticatedRequest,
@@ -54,6 +57,7 @@ export class PrescriptionsController {
   }
 
   @Post('pad')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   createPrescriptionPad(
     @Body() createPrescriptionDto: CreatePrescriptionPadDto,
     @Request() req: AuthenticatedRequest,
@@ -440,6 +444,7 @@ export class PrescriptionsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   updatePrescription(
     @Param('id') id: string,
     @Body() updatePrescriptionDto: UpdatePrescriptionDto,
@@ -449,6 +454,7 @@ export class PrescriptionsController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   cancelPrescription(
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,

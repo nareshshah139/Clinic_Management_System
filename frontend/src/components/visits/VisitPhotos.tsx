@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Camera, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 
 interface Props {
   visitId: string;
@@ -13,13 +14,15 @@ interface Props {
   onVisitNeeded?: () => Promise<string>; // Callback to create visit if needed
   patientId?: string; // required for draft uploads when visitId is temp
   allowDelete?: boolean; // doctor-only delete control
+  onChangeCount?: (count: number) => void; // notify parent of photo count changes
 }
 
 type PhotoPosition = 'FRONT' | 'LEFT_PROFILE' | 'RIGHT_PROFILE' | 'BACK' | 'CLOSE_UP' | 'OTHER';
 
 interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoPosition; displayOrder?: number }
 
-export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete }: Props) {
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
+  const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -70,7 +73,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const load = async () => {
     // Don't try to load if visitId is temp
     if (visitId === 'temp') {
-      if (!patientId) { setItems([]); return; }
+      if (!patientId) { setItems([]); try { onChangeCount?.(0); } catch {} return; }
       try {
         const res = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, { credentials: 'include' });
         if (!res.ok) { setItems([]); return; }
@@ -81,6 +84,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         }));
         setItems(incoming);
         setActiveIndex(0);
+        try { onChangeCount?.(incoming.length); } catch {}
       } catch { setItems([]); }
       return;
     }
@@ -108,6 +112,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       });
       setItems(incoming);
       setActiveIndex(0);
+      try { onChangeCount?.(incoming.length); } catch {}
     } catch (error) {
       console.error('Error loading photos:', error);
     }
@@ -146,7 +151,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     if (!pendingFiles || pendingFiles.length === 0) return;
     const positions = pendingPositions;
     if (positions.length !== pendingFiles.length || positions.some(p => !p)) {
-      alert('Please select a position for each photo.');
+      toast({ variant: 'warning', title: 'Tag positions', description: 'Please select a position for each photo.' });
       return;
     }
 
@@ -178,7 +183,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         validPositions.push(p);
       }
       if (validFiles.length === 0) {
-        alert(`No valid images to upload.\n${invalids.join('\n')}`);
+        toast({ variant: 'warning', title: 'No valid images', description: invalids.join('\n') });
         return;
       }
 
@@ -214,7 +219,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       const failures: string[] = [];
 
       if (visitId === 'temp') {
-        if (!patientId) { alert('Patient is required to upload draft photos'); return; }
+        if (!patientId) { toast({ variant: 'destructive', title: 'Missing patient', description: 'Patient is required to upload draft photos.' }); return; }
         for (let b = 0; b < fileBatches.length; b += 1) {
           const group = fileBatches[b];
           const groupPositions = posBatches[b];
@@ -250,11 +255,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         const msgs = [] as string[];
         if (invalids.length) msgs.push(`Skipped: ${invalids.length} (\n- ${invalids.join('\n- ')}\n)`);
         if (failures.length) msgs.push(`Failed: ${failures.length} batch(es) (\n- ${failures.join('\n- ')}\n)`);
-        alert(`Upload completed with warnings.\n${msgs.join('\n')}`);
+        toast({ variant: 'warning', title: 'Upload completed with warnings', description: msgs.join('\n') });
+      } else {
+        toast({ variant: 'success', title: 'Photos uploaded', description: `${validFiles.length} image(s) uploaded.` });
       }
     } catch (e) {
       console.error('Upload error:', e);
-      alert('Failed to upload photos. Please try again.');
+      toast({ variant: 'destructive', title: 'Upload failed', description: 'Failed to upload photos. Please try again.' });
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       if (cameraRef.current) cameraRef.current.value = '';
@@ -279,6 +286,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     });
     setItems(incoming);
     setActiveIndex(0);
+    try { onChangeCount?.(incoming.length); } catch {}
   };
 
   const deleteActive = async () => {
@@ -299,7 +307,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       } else {
         // If the image URL points to API route, delete that resource; else treat as legacy
         if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
-          const target = active.url.startsWith('http') ? active.url : `${active.url}`;
+          const target = active.url.startsWith('http') ? active.url : `${baseUrl}${active.url}`;
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
           try { const data = await resp.json(); applyResponseList(data); }
@@ -320,7 +328,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       }
     } catch (e) {
       console.error('Delete error:', e);
-      alert('Failed to delete photo.');
+      toast({ variant: 'destructive', title: 'Delete failed', description: 'Failed to delete photo.' });
     } finally {
       setDeleting(false);
     }

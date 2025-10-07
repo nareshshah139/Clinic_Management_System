@@ -437,29 +437,36 @@ export default function PatientsManagement() {
   };
 
   const handleArchive = async (patient: Patient) => {
-    // Soft delete - we'll mark as archived by updating a field
-    // For now, we'll show a toast with undo functionality
     const patientName = formatPatientName(patient);
-    
-    // Remove from local state immediately for UX
-    setPatients(prev => prev.filter(p => p.id !== patient.id));
-    setTotalPatients(prev => prev - 1);
-
-    toast({
-      title: 'Patient archived',
-      description: `${patientName} has been archived`,
-      action: {
-        label: 'Undo',
-        onClick: async () => {
-          // Restore the patient
-          await fetchPatients(currentPage);
-          toast({
-            title: 'Archive undone',
-            description: `${patientName} has been restored`,
-          });
+    try {
+      setActionLoading(true);
+      // Optimistic update
+      setPatients(prev => prev.filter(p => p.id !== patient.id));
+      setTotalPatients(prev => Math.max(0, prev - 1));
+      await apiClient.archivePatient(patient.id);
+      toast({
+        title: 'Patient archived',
+        description: `${patientName} has been archived`,
+        action: {
+          label: 'Undo',
+          onClick: async () => {
+            try {
+              await apiClient.unarchivePatient(patient.id);
+              await fetchPatients(currentPage);
+              toast({ title: 'Archive undone', description: `${patientName} has been restored` });
+            } catch (e: any) {
+              toast({ title: 'Failed to restore', description: e?.message || 'Please try again', variant: 'destructive' });
+            }
+          },
         },
-      },
-    });
+      });
+    } catch (e: any) {
+      // Revert on failure
+      await fetchPatients(currentPage);
+      toast({ title: 'Failed to archive', description: e?.message || 'Please try again', variant: 'destructive' });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleLinkPortalUser = (patient: Patient) => {

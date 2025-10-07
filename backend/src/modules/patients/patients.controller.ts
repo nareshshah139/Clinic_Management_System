@@ -92,4 +92,14 @@ export class PatientsController {
   sendAppointmentReminder(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
     return this.patientsService.sendAppointmentReminder(id, req.user.branchId);
   }
+
+  @Post(':id/archive')
+  archive(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.archive(id, req.user.branchId);
+  }
+
+  @Post(':id/unarchive')
+  unarchive(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.patientsService.unarchive(id, req.user.branchId);
+  }
 }

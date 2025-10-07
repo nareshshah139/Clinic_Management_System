@@ -63,6 +63,11 @@ export class VisitsService {
         throw new NotFoundException('Appointment not found or does not match patient/doctor');
       }
 
+      // Block visits starting from CANCELLED/COMPLETED appointments
+      if (['CANCELLED', 'COMPLETED'].includes((appointment as any).status)) {
+        throw new BadRequestException('Cannot create a visit from a cancelled or completed appointment');
+      }
+
       // Check if visit already exists for this appointment
       const existingVisit = await this.prisma.visit.findFirst({
         where: { appointmentId },
@@ -139,7 +144,7 @@ export class VisitsService {
     });
 
     // Preserve doctor.name and top-level notes in response for compatibility
-    const parsedPlanAfterCreate = visit.plan ? JSON.parse(visit.plan as unknown as string) : null;
+    const parsedPlanAfterCreate = this.safeParse<any>(visit.plan as unknown as string, null);
     return {
       ...visit,
       doctor: visit.doctor
@@ -198,6 +203,16 @@ export class VisitsService {
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
+
+    // Exclude soft-deleted visits (encoded in plan JSON)
+    where.AND = [
+      {
+        OR: [
+          { plan: null },
+          { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
+        ],
+      },
+    ];
 
     // Search filter (search notes inside plan JSON to preserve notes feature)
     if (search) {
@@ -370,14 +385,14 @@ export class VisitsService {
     // Parse JSON fields
     const parsedVisit = {
       ...visit,
-      vitals: visit.vitals ? JSON.parse(visit.vitals as string) : null,
-      complaints: visit.complaints ? JSON.parse(visit.complaints as string) : [],
-      history: visit.history ? JSON.parse(visit.history as string) : null,
-      exam: visit.exam ? JSON.parse(visit.exam as string) : null,
-      diagnosis: visit.diagnosis ? JSON.parse(visit.diagnosis as string) : [],
-      plan: visit.plan ? JSON.parse(visit.plan as string) : null,
-      attachments: visit.attachments ? JSON.parse(visit.attachments as string) : [],
-      scribeJson: visit.scribeJson ? JSON.parse(visit.scribeJson as string) : null,
+      vitals: this.safeParse<any>(visit.vitals as string, null),
+      complaints: this.safeParse<any[]>(visit.complaints as string, []),
+      history: this.safeParse<any>(visit.history as string, null),
+      exam: this.safeParse<any>(visit.exam as string, null),
+      diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
+      plan: this.safeParse<any>(visit.plan as string, null),
+      attachments: this.safeParse<string[]>(visit.attachments as string, []),
+      scribeJson: this.safeParse<any>(visit.scribeJson as string, null),
       doctor: visit.doctor
         ? {
             ...visit.doctor,
@@ -386,7 +401,7 @@ export class VisitsService {
         : visit.doctor,
       notes: (() => {
         try {
-          const p = visit.plan ? JSON.parse(visit.plan as string) : null;
+          const p = this.safeParse<any>(visit.plan as string, null);
           return p?.notes ?? p?.finalNotes ?? null;
         } catch {
           return null;
@@ -403,24 +418,24 @@ export class VisitsService {
     // Prepare update data
     const updateData: any = {};
 
-    if (updateVisitDto.vitals) {
-      updateData.vitals = JSON.stringify(updateVisitDto.vitals);
+    if (updateVisitDto.vitals !== undefined) {
+      updateData.vitals = updateVisitDto.vitals ? JSON.stringify(updateVisitDto.vitals) : null;
     }
 
-    if (updateVisitDto.complaints) {
-      updateData.complaints = JSON.stringify(updateVisitDto.complaints);
+    if (updateVisitDto.complaints !== undefined) {
+      updateData.complaints = JSON.stringify(updateVisitDto.complaints || []);
     }
 
     if (updateVisitDto.history !== undefined) {
       updateData.history = updateVisitDto.history ? JSON.stringify(updateVisitDto.history) : null;
     }
 
-    if (updateVisitDto.examination) {
-      updateData.exam = JSON.stringify(updateVisitDto.examination);
+    if (updateVisitDto.examination !== undefined) {
+      updateData.exam = updateVisitDto.examination ? JSON.stringify(updateVisitDto.examination) : null;
     }
 
-    if (updateVisitDto.diagnosis) {
-      updateData.diagnosis = JSON.stringify(updateVisitDto.diagnosis);
+    if (updateVisitDto.diagnosis !== undefined) {
+      updateData.diagnosis = JSON.stringify(updateVisitDto.diagnosis || []);
     }
 
     if (updateVisitDto.treatmentPlan || updateVisitDto.notes !== undefined) {
@@ -433,12 +448,12 @@ export class VisitsService {
       updateData.plan = JSON.stringify(updatedPlan);
     }
 
-    if (updateVisitDto.attachments) {
-      updateData.attachments = JSON.stringify(updateVisitDto.attachments);
+    if (updateVisitDto.attachments !== undefined) {
+      updateData.attachments = updateVisitDto.attachments ? JSON.stringify(updateVisitDto.attachments) : null;
     }
 
-    if (updateVisitDto.scribeJson) {
-      updateData.scribeJson = JSON.stringify(updateVisitDto.scribeJson);
+    if (updateVisitDto.scribeJson !== undefined) {
+      updateData.scribeJson = updateVisitDto.scribeJson ? JSON.stringify(updateVisitDto.scribeJson) : null;
     }
 
     const updatedVisit = await this.prisma.visit.update({
@@ -494,6 +509,14 @@ export class VisitsService {
 
     if (completeVisitDto.followUpDate) {
       updateData.followUp = new Date(completeVisitDto.followUpDate);
+    }
+
+    // Idempotency: if appointment already completed, return current state without changing
+    if (visit.appointment?.status === 'COMPLETED') {
+      return {
+        ...visit,
+        notes: completeVisitDto.finalNotes ?? visit.notes ?? null,
+      };
     }
 
     // Update visit and appointment status atomically
@@ -553,6 +576,20 @@ export class VisitsService {
 
     if (prescription) {
       throw new BadRequestException('Cannot delete visit with associated prescription');
+    }
+
+    // Block delete if attachments exist (DB-backed or legacy JSON)
+    const [dbAttachmentCount, legacyAttachments] = await Promise.all([
+      (this.prisma as any).visitAttachment.count({ where: { visitId: id } }),
+      (async () => {
+        try {
+          const arr = this.safeParse<string[]>(visit.attachments as any, []);
+          return Array.isArray(arr) ? arr.length : 0;
+        } catch { return 0; }
+      })(),
+    ]);
+    if (dbAttachmentCount > 0 || (legacyAttachments as any) > 0) {
+      throw new BadRequestException('Cannot delete visit with attachments. Delete attachments first.');
     }
 
     // Soft delete by updating plan to mark deleted (preserving notes semantics)
@@ -625,9 +662,9 @@ export class VisitsService {
       },
       visits: visits.map(visit => ({
         ...visit,
-        vitals: visit.vitals ? JSON.parse(visit.vitals as string) : null,
-        complaints: visit.complaints ? JSON.parse(visit.complaints as string) : [],
-        diagnosis: visit.diagnosis ? JSON.parse(visit.diagnosis as string) : [],
+        vitals: this.safeParse<any>(visit.vitals as string, null),
+        complaints: this.safeParse<any[]>(visit.complaints as string, []),
+        diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
         doctor: visit.doctor
           ? {
               ...visit.doctor,
@@ -679,6 +716,16 @@ export class VisitsService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
+    // Exclude soft-deleted
+    where.AND = [
+      {
+        OR: [
+          { plan: null },
+          { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
+        ],
+      },
+    ];
+
     const visits = await this.prisma.visit.findMany({
       where,
       include: {
@@ -702,9 +749,9 @@ export class VisitsService {
       },
       visits: visits.map(visit => ({
         ...visit,
-        vitals: visit.vitals ? JSON.parse(visit.vitals as string) : null,
-        complaints: visit.complaints ? JSON.parse(visit.complaints as string) : [],
-        diagnosis: visit.diagnosis ? JSON.parse(visit.diagnosis as string) : [],
+        vitals: this.safeParse<any>(visit.vitals as string, null),
+        complaints: this.safeParse<any[]>(visit.complaints as string, []),
+        diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
       })),
     };
   }
@@ -714,6 +761,14 @@ export class VisitsService {
       patient: {
         branchId,
       },
+      AND: [
+        {
+          OR: [
+            { plan: null },
+            { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
+          ],
+        },
+      ],
     };
 
     if (startDate || endDate) {
@@ -726,7 +781,7 @@ export class VisitsService {
       totalVisits,
       visitsWithPrescriptions,
       visitsWithFollowUp,
-      averageVisitsPerDay,
+      grouped,
     ] = await Promise.all([
       this.prisma.visit.count({ where }),
       this.prisma.visit.count({
@@ -741,14 +796,23 @@ export class VisitsService {
           followUp: { not: null },
         },
       }),
-      this.prisma.visit.groupBy({
-        by: ['createdAt'],
-        where,
-        _count: { id: true },
-      }),
+      // Use raw SQL to group by date (truncated day) for accurate average/day
+      this.prisma.$queryRawUnsafe<any[]>(
+        `SELECT DATE_TRUNC('day', "createdAt") AS day, COUNT(*)::int AS count
+         FROM "visits"
+         WHERE 1=1
+           AND ${branchId ? 'EXISTS (SELECT 1 FROM "patients" p WHERE p.id = "visits"."patientId" AND p."branchId" = $1)' : '1=1'}
+           ${where.createdAt?.gte ? 'AND "createdAt" >= $2' : ''}
+           ${where.createdAt?.lte ? 'AND "createdAt" <= $3' : ''}
+           AND ("plan" IS NULL OR POSITION('"deleted": true' IN "plan") = 0)
+         GROUP BY 1`,
+        ...(branchId ? [branchId] : []),
+        ...(where.createdAt?.gte ? [where.createdAt.gte] : []),
+        ...(where.createdAt?.lte ? [where.createdAt.lte] : []),
+      ),
     ]);
 
-    const days = averageVisitsPerDay.length;
+    const days = Array.isArray(grouped) ? grouped.length : 0;
     const avgVisitsPerDay = days > 0 ? totalVisits / days : 0;
 
     return {
@@ -816,7 +880,7 @@ export class VisitsService {
 
   async listDraftAttachments(patientId: string, dateStr: string) {
     // DB-backed attachments
-    const dbItems = await this.prisma.draftAttachment.findMany({
+    const dbItems = await (this.prisma as any).draftAttachment.findMany({
       where: { patientId, dateStr },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, filename: true, createdAt: true, position: true, displayOrder: true },
@@ -834,10 +898,10 @@ export class VisitsService {
     const sanitizedLegacy = this.sanitizeAttachmentPaths(legacyFiles, {
       allowedPrefixes: [`/uploads/patients/${patientId}/${dateStr}/`],
     });
-    const legacyItems = sanitizedLegacy.map(url => ({ url, uploadedAt: null as string | null }));
+    const legacyItems = sanitizedLegacy.map((url: string) => ({ url, uploadedAt: null as string | null }));
 
     const items = [
-      ...dbItems.map(i => ({ url: `/visits/photos/draft/${patientId}/${dateStr}/${i.id}`, uploadedAt: i.createdAt.toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
+      ...dbItems.map((i: any) => ({ url: `/visits/photos/draft/${patientId}/${dateStr}/${i.id}`, uploadedAt: (i.createdAt as Date).toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
       ...legacyItems,
     ].sort((a, b) => {
       const ao = typeof (a as any).displayOrder === 'number' ? (a as any).displayOrder : this.positionOrderValue((a as any).position);
@@ -859,7 +923,7 @@ export class VisitsService {
       throw new NotFoundException('Visit not found in this branch');
     }
     // Save any filesystem relPaths into legacy JSON for compatibility
-    const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    const existing = this.safeParse<string[]>(visit.attachments as any, []);
     const sanitizedExisting = this.sanitizeAttachmentPaths(existing);
     const sanitizedIncoming = this.sanitizeAttachmentPaths(relPaths);
     const merged = Array.from(new Set([...(sanitizedExisting || []), ...(sanitizedIncoming || [])]));
@@ -876,14 +940,14 @@ export class VisitsService {
     }
 
     // DB-backed attachments
-    const dbItems = await this.prisma.visitAttachment.findMany({
+    const dbItems = await (this.prisma as any).visitAttachment.findMany({
       where: { visitId },
       orderBy: [{ displayOrder: 'asc' }, { createdAt: 'asc' }],
       select: { id: true, createdAt: true, position: true, displayOrder: true },
     });
 
     // Legacy filesystem
-    const files = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    const files = this.safeParse<string[]>(visit.attachments as any, []);
     const sanitized = this.sanitizeAttachmentPaths(files);
     if (sanitized.length !== files.length) {
       try {
@@ -892,8 +956,8 @@ export class VisitsService {
     }
 
     const items = [
-      ...dbItems.map(i => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: i.createdAt.toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
-      ...sanitized.map(url => ({ url, uploadedAt: null as string | null, position: 'OTHER', displayOrder: 999 })),
+      ...dbItems.map((i: any) => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: (i.createdAt as Date).toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
+      ...sanitized.map((url: string) => ({ url, uploadedAt: null as string | null, position: 'OTHER', displayOrder: 999 })),
     ].sort((a, b) => {
       const ao = typeof (a as any).displayOrder === 'number' ? (a as any).displayOrder : this.positionOrderValue((a as any).position);
       const bo = typeof (b as any).displayOrder === 'number' ? (b as any).displayOrder : this.positionOrderValue((b as any).position);
@@ -934,7 +998,7 @@ export class VisitsService {
       throw new NotFoundException('Visit not found in this branch');
     }
     const filename = this.generateFilename(params.preferredExt);
-    const created = await this.prisma.visitAttachment.create({
+    const created = await (this.prisma as any).visitAttachment.create({
       data: {
         visitId,
         filename,
@@ -957,7 +1021,7 @@ export class VisitsService {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId } });
     if (!patient) throw new NotFoundException('Patient not found');
     const filename = this.generateFilename(params.preferredExt);
-    const created = await this.prisma.draftAttachment.create({
+    const created = await (this.prisma as any).draftAttachment.create({
       data: {
         patientId,
         dateStr,
@@ -974,7 +1038,7 @@ export class VisitsService {
   }
 
   async getVisitAttachmentBinary(visitId: string, attachmentId: string, branchId: string) {
-    const att = await this.prisma.visitAttachment.findFirst({
+    const att = await (this.prisma as any).visitAttachment.findFirst({
       where: { id: attachmentId, visitId },
       select: { data: true, contentType: true, visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } } },
     });
@@ -986,7 +1050,7 @@ export class VisitsService {
   }
 
   async getDraftAttachmentBinary(patientId: string, dateStr: string, attachmentId: string) {
-    const att = await this.prisma.draftAttachment.findFirst({
+    const att = await (this.prisma as any).draftAttachment.findFirst({
       where: { id: attachmentId, patientId, dateStr },
       select: { data: true, contentType: true },
     });
@@ -1002,7 +1066,7 @@ export class VisitsService {
   }
   
   async deleteVisitAttachment(visitId: string, attachmentId: string, branchId: string) {
-    const att = await this.prisma.visitAttachment.findFirst({
+    const att = await (this.prisma as any).visitAttachment.findFirst({
       where: { id: attachmentId, visitId },
       select: {
         id: true,
@@ -1013,7 +1077,7 @@ export class VisitsService {
     const pBranch = (att.visit as any).patient.branchId;
     const dBranch = (att.visit as any).doctor.branchId;
     if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
-    await this.prisma.visitAttachment.delete({ where: { id: attachmentId } });
+    await (this.prisma as any).visitAttachment.delete({ where: { id: attachmentId } });
     return { ok: true };
   }
 
@@ -1024,7 +1088,7 @@ export class VisitsService {
       throw new NotFoundException('Visit not found in this branch');
     }
 
-    const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    const existing = this.safeParse<string[]>(visit.attachments as any, []);
     const sanitizedExisting = this.sanitizeAttachmentPaths(existing);
     const sanitizedTargetList = this.sanitizeAttachmentPaths([url]);
     const target = sanitizedTargetList[0];
@@ -1050,7 +1114,16 @@ export class VisitsService {
       } catch {}
     } catch {}
 
-    await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(next) } });
+    await (this.prisma as any).visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(next) } });
     return { ok: true };
+  }
+
+  private safeParse<T>(value: string | null | undefined, fallback: T): T {
+    if (!value || typeof value !== 'string') return fallback;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
   }
 }

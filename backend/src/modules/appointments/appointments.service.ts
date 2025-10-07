@@ -54,34 +54,44 @@ export class AppointmentsService {
       });
     }
 
-    // Generate token number
-    const tokenNumber = await this.generateTokenNumber(date, branchId);
+    // Create appointment transactionally with tokenNumber generation to reduce race conditions
+    const appointment = await this.prisma.$transaction(async (tx) => {
+      const tokenNumber = await (async () => {
+        const startOfDay = new Date(`${date}T00:00:00.000Z`);
+        const endOfDay = new Date(`${date}T23:59:59.999Z`);
+        const last = await tx.appointment.findFirst({
+          where: { branchId, date: { gte: startOfDay, lte: endOfDay } },
+          orderBy: { tokenNumber: 'desc' },
+          select: { tokenNumber: true },
+        });
+        return ((last?.tokenNumber as number | null) || 0) + 1;
+      })();
 
-    // Create appointment
-    const appointment = await this.prisma.appointment.create({
-      data: {
-        patientId,
-        doctorId,
-        roomId,
-        date: new Date(date),
-        slot,
-        visitType: visitType || VisitType.OPD,
-        notes,
-        source,
-        branchId,
-        tokenNumber,
-      },
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true, email: true },
+      return tx.appointment.create({
+        data: {
+          patientId,
+          doctorId,
+          roomId,
+          date: new Date(date),
+          slot,
+          visitType: visitType || VisitType.OPD,
+          notes,
+          source,
+          branchId,
+          tokenNumber,
         },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true, email: true },
+        include: {
+          patient: {
+            select: { id: true, name: true, phone: true, email: true },
+          },
+          doctor: {
+            select: { id: true, firstName: true, lastName: true, email: true },
+          },
+          room: {
+            select: { id: true, name: true, type: true },
+          },
         },
-        room: {
-          select: { id: true, name: true, type: true },
-        },
-      },
+      });
     });
 
     // Fire-and-forget notifications (if configured and doctor has enabled)
@@ -107,7 +117,7 @@ export class AppointmentsService {
 
       const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
       const humanDate = new Date(date).toLocaleDateString();
-      const summary = `Appointment confirmed with Dr. ${doctorName} on ${humanDate} at ${slot}. Token #${tokenNumber}.`;
+      const summary = `Appointment confirmed with Dr. ${doctorName} on ${humanDate} at ${slot}. Token #${appointment.tokenNumber ?? ''}.`;
       // Email
       if (appointment.patient?.email) {
         this.notifications
@@ -501,8 +511,8 @@ export class AppointmentsService {
     // Generate all possible slots for the day
     const allSlots = SchedulingUtils.generateTimeSlots(9, 18, durationMinutes);
 
-    // Filter out booked slots
-    let availableSlots = allSlots.filter(slot => !bookedSlots.includes(slot));
+    // Filter out booked slots by overlap, not exact string equality
+    let availableSlots = allSlots.filter(slot => bookedSlots.every(b => !SchedulingUtils.doTimeSlotsOverlap(slot, b)));
 
     // For same-day scheduling, filter out past slots based on local time
     const getLocalDateStr = (d: Date): string => {
@@ -511,9 +521,13 @@ export class AppointmentsService {
       const da = String(d.getDate()).padStart(2, '0');
       return `${y}-${m}-${da}`;
     };
-    const todayStr = getLocalDateStr(new Date());
+    // Align same-day filtering with clinic timezone (Asia/Kolkata)
+    const now = new Date();
+    const tz = 'Asia/Kolkata';
+    const todayTz = new Date(now.toLocaleString('en-US', { timeZone: tz }));
+    const todayStr = getLocalDateStr(todayTz);
     if (date === todayStr) {
-      const now = new Date();
+      const nowTz = todayTz;
       const nowMinutes = now.getHours() * 60 + now.getMinutes();
       availableSlots = availableSlots.filter((slot) => {
         const parsed = SchedulingUtils.parseTimeSlot(slot);
