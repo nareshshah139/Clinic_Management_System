@@ -24,7 +24,12 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
-  const [prevItems, setPrevItems] = useState<PhotoItem[]>([]);
+  // Patient history and compare data
+  const [patientVisits, setPatientVisits] = useState<Array<{ id: string; createdAt?: string; ordinal: number }>>([]);
+  const [visitOrdinalMap, setVisitOrdinalMap] = useState<Record<string, number>>({});
+  const [selectedCompareVisitId, setSelectedCompareVisitId] = useState<string | null>(null);
+  const [compareItems, setCompareItems] = useState<PhotoItem[]>([]);
+  const [pairIndex, setPairIndex] = useState<number>(0);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -121,32 +126,56 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   useEffect(() => { void load(); }, [visitId, patientId]);
 
-  // Load previous visit's photos for compare mode (same patient)
+  // Load patient visit history and compute ordinals, choose default compare visit
   useEffect(() => {
-    const loadPreviousVisitPhotos = async () => {
-      if (!patientId || visitId === 'temp') { setPrevItems([]); return; }
+    const loadHistory = async () => {
+      if (!patientId) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
       try {
-        const resp = await fetch(`${baseUrl}/visits/patient/${patientId}/history?limit=10`, { credentials: 'include' });
-        if (!resp.ok) { setPrevItems([]); return; }
+        const resp = await fetch(`${baseUrl}/visits/patient/${patientId}/history?limit=50`, { credentials: 'include' });
+        if (!resp.ok) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
         const data = await resp.json();
         const visits = Array.isArray((data as any)?.visits) ? (data as any).visits as any[] : [];
-        if (visits.length === 0) { setPrevItems([]); return; }
-        const idx = visits.findIndex((v: any) => v?.id === visitId);
-        let prevVisitId: string | null = null;
-        if (idx >= 0 && idx + 1 < visits.length) {
-          prevVisitId = visits[idx + 1]?.id || null;
-        } else if (idx === 0 && visits.length > 1) {
-          prevVisitId = visits[1]?.id || null;
-        } else if (idx < 0 && visits.length > 0) {
-          // Current visit might be too new or not in the fetched window; fallback to next best older
-          prevVisitId = (visits[1]?.id as string) || (visits[0]?.id as string) || null;
-        }
-        if (!prevVisitId) { setPrevItems([]); return; }
+        // Sort ascending by createdAt for ordinal numbering
+        const asc = [...visits].sort((a, b) => {
+          const at = a?.createdAt ? Date.parse(a.createdAt as string) : 0;
+          const bt = b?.createdAt ? Date.parse(b.createdAt as string) : 0;
+          return at - bt;
+        });
+        const withOrd = asc.map((v, i) => ({ id: v?.id as string, createdAt: (v?.createdAt as string) || undefined, ordinal: i + 1 }));
+        const idToOrd: Record<string, number> = {};
+        withOrd.forEach(v => { if (v.id) idToOrd[v.id] = v.ordinal; });
+        setPatientVisits(withOrd);
+        setVisitOrdinalMap(idToOrd);
 
-        const photosResp = await fetch(`${baseUrl}/visits/${prevVisitId}/photos`, { credentials: 'include' });
-        if (!photosResp.ok) { setPrevItems([]); return; }
-        const photosData = await photosResp.json();
-        const incoming: PhotoItem[] = (((photosData as any)?.items as PhotoItem[] | undefined) || (((photosData as any)?.attachments || []).map((u: string) => ({ url: u }))))
+        // Pick default compare visit: previous ordinal if possible; else last older
+        let defCompare: string | null = null;
+        if (visitId && visitId !== 'temp' && idToOrd[visitId]) {
+          const curOrd = idToOrd[visitId];
+          defCompare = withOrd.find(v => v.ordinal === curOrd - 1)?.id || null;
+        } else {
+          // No current in history (temp): choose the latest visit if exists
+          defCompare = withOrd.length > 0 ? withOrd[withOrd.length - 1].id : null;
+        }
+        setSelectedCompareVisitId(defCompare);
+      } catch (e) {
+        console.error('Failed to load visit history', e);
+        setPatientVisits([]);
+        setVisitOrdinalMap({});
+        setSelectedCompareVisitId(null);
+      }
+    };
+    void loadHistory();
+  }, [patientId, visitId]);
+
+  // Load selected compare visit's photos
+  useEffect(() => {
+    const loadComparePhotos = async () => {
+      if (!selectedCompareVisitId) { setCompareItems([]); return; }
+      try {
+        const res = await fetch(`${baseUrl}/visits/${selectedCompareVisitId}/photos`, { credentials: 'include' });
+        if (!res.ok) { setCompareItems([]); return; }
+        const data = await res.json();
+        const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
           .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
         incoming.sort((a, b) => {
           const ao = typeof a.displayOrder === 'number' ? a.displayOrder : 999;
@@ -157,15 +186,15 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           if (at === bt) return a.url.localeCompare(b.url);
           return at - bt;
         });
-        setPrevItems(incoming);
+        setCompareItems(incoming);
+        setPairIndex(0);
       } catch (e) {
-        console.error('Failed to load previous visit photos', e);
-        setPrevItems([]);
+        console.error('Failed to load compare visit photos', e);
+        setCompareItems([]);
       }
     };
-
-    void loadPreviousVisitPhotos();
-  }, [patientId, visitId]);
+    void loadComparePhotos();
+  }, [selectedCompareVisitId, baseUrl]);
 
   // Build previews for pending files and clean up object URLs
   useEffect(() => {
@@ -318,16 +347,39 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   const active = items[activeIndex] || null;
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
-  const prevMatch = useMemo(() => {
-    if (!items.length || !prevItems.length) return null;
-    const cur = items[activeIndex] || null;
-    if (!cur) return null;
-    if (cur.position) {
-      const found = prevItems.find(p => p.position === cur.position);
-      if (found) return found;
+
+  // Build position-based pairs for compare mode
+  const positionPairs = useMemo(() => {
+    const byPos = (arr: PhotoItem[]) => {
+      const map: Partial<Record<PhotoPosition, PhotoItem>> = {};
+      for (const it of arr) {
+        const p = (it.position as PhotoPosition) || 'OTHER';
+        if (!map[p]) map[p] = it;
+      }
+      return map;
+    };
+    const curBy = byPos(items);
+    const cmpBy = byPos(compareItems);
+    const available = RECOMMENDED_ORDER.filter(p => curBy[p] || cmpBy[p]);
+    return { available, curBy, cmpBy } as { available: PhotoPosition[]; curBy: Partial<Record<PhotoPosition, PhotoItem>>; cmpBy: Partial<Record<PhotoPosition, PhotoItem>> };
+  }, [items, compareItems]);
+
+  useEffect(() => {
+    if (pairIndex >= positionPairs.available.length) {
+      setPairIndex(positionPairs.available.length > 0 ? positionPairs.available.length - 1 : 0);
     }
-    return prevItems[Math.min(activeIndex, Math.max(0, prevItems.length - 1))] || null;
-  }, [items, prevItems, activeIndex]);
+  }, [positionPairs.available.length, pairIndex]);
+
+  const currentPairPosition = positionPairs.available[pairIndex] || null;
+  const leftItem = currentPairPosition ? positionPairs.cmpBy[currentPairPosition] || null : null;
+  const rightItem = currentPairPosition ? positionPairs.curBy[currentPairPosition] || null : null;
+
+  const formatVisitLabel = (vid: string | null, fallback: string) => {
+    if (!vid) return fallback;
+    const ord = visitOrdinalMap[vid];
+    if (!ord) return fallback;
+    return `Visit ${ord}`;
+  };
 
   const applyResponseList = (data: any) => {
     const incoming: PhotoItem[] = ((data?.items as PhotoItem[] | undefined) || (data?.attachments || []).map((u: string) => ({ url: u })))
@@ -406,7 +458,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <Camera className="h-4 w-4 mr-2" />
               Camera
             </Button>
-            {items.length > 0 && (items.length > 1 || prevItems.length > 0) && (
+            {items.length > 0 && (
               <Button variant={compareMode ? 'default' : 'outline'} size="sm" onClick={() => setCompareMode(v => !v)}>
                 {compareMode ? 'Compare: On' : 'Compare: Off'}
               </Button>
@@ -449,12 +501,65 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                 ) : null}
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  {prevMatch ? <img src={toAbsolute(prevMatch.url)} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
+              <div className="space-y-2">
+                {/* Compare visit selector */}
+                <div className="flex items-center gap-2">
+                  <div className="text-xs text-gray-600">Compare against:</div>
+                  <Select
+                    value={selectedCompareVisitId || ''}
+                    onValueChange={(val: string) => { setSelectedCompareVisitId(val || null); setPairIndex(0); }}
+                  >
+                    <SelectTrigger className="w-56">
+                      <SelectValue placeholder="Select visit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patientVisits
+                        .filter(v => (visitId ? v.id !== visitId : true))
+                        .map(v => (
+                          <SelectItem key={v.id} value={v.id}>{`Visit ${v.ordinal}${v.createdAt ? ` - ${new Date(v.createdAt).toLocaleDateString()}` : ''}`}</SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  {active ? <img src={toAbsolute(active.url)} alt="after" className="max-h-full max-w-full object-contain" /> : null}
+
+                {/* Paired compare viewer */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden relative">
+                    {leftItem ? (
+                      <>
+                        <img src={toAbsolute(leftItem.url)} alt="before" className="max-h-full max-w-full object-contain" />
+                        <div className="absolute top-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                          {`${formatVisitLabel(selectedCompareVisitId, 'Visit ?')} - ${currentPairPosition ? POSITION_LABEL[currentPairPosition] : ''}`}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-gray-500">No photo</div>
+                    )}
+                  </div>
+                  <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden relative">
+                    {rightItem ? (
+                      <>
+                        <img src={toAbsolute(rightItem.url)} alt="after" className="max-h-full max-w-full object-contain" />
+                        <div className="absolute top-0 left-0 right-0 bg-black/50 text-white text-xs px-2 py-1">
+                          {`${visitId && visitId !== 'temp' ? formatVisitLabel(visitId, 'This Visit') : 'This Visit'} - ${currentPairPosition ? POSITION_LABEL[currentPairPosition] : ''}`}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-xs text-gray-500">No photo</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Pair navigation */}
+                <div className="flex items-center justify-between text-xs text-gray-600">
+                  <div>
+                    {currentPairPosition ? `Position: ${POSITION_LABEL[currentPairPosition]}` : 'No positions to compare'}
+                    {positionPairs.available.length > 0 ? ` • ${pairIndex + 1} / ${positionPairs.available.length}` : ''}
+                  </div>
+                  <div className="space-x-2">
+                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.max(0, i - 1))} disabled={positionPairs.available.length <= 1}>Prev</Button>
+                    <Button size="sm" variant="outline" onClick={() => setPairIndex(i => Math.min(positionPairs.available.length - 1, i + 1))} disabled={positionPairs.available.length <= 1}>Next</Button>
+                  </div>
                 </div>
               </div>
             )}
