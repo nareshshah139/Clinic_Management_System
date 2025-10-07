@@ -22,6 +22,7 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete }: Props) {
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
@@ -210,23 +211,45 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const active = items[activeIndex] || null;
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
 
+  const applyResponseList = (data: any) => {
+    const incoming: PhotoItem[] = ((data?.items as PhotoItem[] | undefined) || (data?.attachments || []).map((u: string) => ({ url: u })))
+      .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
+    incoming.sort((a, b) => {
+      const ao = typeof a.displayOrder === 'number' ? a.displayOrder : 999;
+      const bo = typeof b.displayOrder === 'number' ? b.displayOrder : 999;
+      if (ao !== bo) return ao - bo;
+      const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+      const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+      if (at === bt) return a.url.localeCompare(b.url);
+      return at - bt;
+    });
+    setItems(incoming);
+    setActiveIndex(0);
+  };
+
   const deleteActive = async () => {
     if (!active) return;
     const confirmed = window.confirm('Delete this photo? This cannot be undone.');
     if (!confirmed) return;
+    if (deleting) return;
     try {
+      setDeleting(true);
       const isDraft = visitId === 'temp' || /\/visits\/photos\/draft\//i.test(active.url);
       if (isDraft) {
         // Draft mode deletion
         const draftUrl = active.url.startsWith('/visits/photos/draft/') ? `${baseUrl}${active.url}` : active.url;
         const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
         if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+        try { const data = await resp.json(); applyResponseList(data); }
+        catch { await load(); }
       } else {
         // If the image URL points to API route, delete that resource; else treat as legacy
         if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
           const target = active.url.startsWith('http') ? active.url : `${active.url}`;
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+          try { const data = await resp.json(); applyResponseList(data); }
+          catch { await load(); }
         } else if (/\/uploads\//i.test(active.url)) {
           const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
             method: 'DELETE',
@@ -235,14 +258,17 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             credentials: 'include',
           });
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+          try { const data = await resp.json(); applyResponseList(data); }
+          catch { await load(); }
         } else {
           throw new Error('Unsupported photo URL');
         }
       }
-      await load();
     } catch (e) {
       console.error('Delete error:', e);
       alert('Failed to delete photo.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -267,7 +293,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               </Button>
             )}
             {allowDelete && active && (
-              <Button variant="destructive" size="sm" onClick={deleteActive}>
+              <Button variant="destructive" size="sm" onClick={deleteActive} disabled={deleting}>
                 <Trash2 className="h-4 w-4 mr-2" /> Delete
               </Button>
             )}
