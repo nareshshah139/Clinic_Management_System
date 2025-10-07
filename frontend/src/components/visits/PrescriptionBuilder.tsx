@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, ChevronUp, Languages } from 'lucide-react';
+import { ChevronDown, ChevronUp, Languages, X } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -462,8 +462,54 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const DERM_DIAGNOSES = useMemo(() => [
     'Acne vulgaris','Atopic dermatitis','Psoriasis','Tinea corporis','Melasma','Post-inflammatory hyperpigmentation','Urticaria','Rosacea','Seborrheic dermatitis','Lichen planus','Vitiligo'
   ], []);
-  const MORPHOLOGY = useMemo(() => ['Macule','Papule','Pustule','Nodule','Plaque','Vesicle','Scale','Erosion','Ulcer','Comedo'], []);
-  const DISTRIBUTION = useMemo(() => ['Face','Scalp','Neck','Trunk','Arms','Legs','Hands','Feet','Flexures','Extensors','Generalized'], []);
+  const readCustomList = useCallback((key: string): string[] => {
+    try {
+      const raw = localStorage.getItem(key);
+      const arr = raw ? (JSON.parse(raw) as string[]) : [];
+      return Array.isArray(arr) ? arr.filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const writeCustomList = useCallback((key: string, list: string[]) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(list.slice(0, 100)));
+    } catch {}
+  }, []);
+
+  const MORPHOLOGY_BASE = useMemo(() => ['Macule','Papule','Pustule','Nodule','Plaque','Vesicle','Scale','Erosion','Ulcer','Comedo'], []);
+  const DISTRIBUTION_BASE = useMemo(() => ['Face','Scalp','Neck','Trunk','Arms','Legs','Hands','Feet','Flexures','Extensors','Generalized'], []);
+  const [customMorphology, setCustomMorphology] = useState<string[]>(() => readCustomList('cms.custom.morphology'));
+  const [customDistribution, setCustomDistribution] = useState<string[]>(() => readCustomList('cms.custom.distribution'));
+  useEffect(() => { writeCustomList('cms.custom.morphology', customMorphology); }, [customMorphology, writeCustomList]);
+  useEffect(() => { writeCustomList('cms.custom.distribution', customDistribution); }, [customDistribution, writeCustomList]);
+  const MORPHOLOGY = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const m of [...MORPHOLOGY_BASE, ...customMorphology]) {
+      const k = (m || '').trim();
+      if (!k) continue;
+      const key = k.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(k);
+    }
+    return merged;
+  }, [MORPHOLOGY_BASE, customMorphology]);
+  const DISTRIBUTION = useMemo(() => {
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const d of [...DISTRIBUTION_BASE, ...customDistribution]) {
+      const k = (d || '').trim();
+      if (!k) continue;
+      const key = k.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(k);
+    }
+    return merged;
+  }, [DISTRIBUTION_BASE, customDistribution]);
   const FITZPATRICK = useMemo(() => ['I','II','III','IV','V','VI'], []);
   const [exSkinType, setExSkinType] = useState<string>('');
   const [exMorphology, setExMorphology] = useState<Set<string>>(new Set());
@@ -1985,7 +2031,31 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <label className="text-xs text-gray-600">Morphology</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {MORPHOLOGY.map(m => (
-                      <Button key={m} type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
+                      <div key={m} className="relative">
+                        <Button type="button" variant={exMorphology.has(m) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exMorphology, m, setExMorphology)}>{m}</Button>
+                        {customMorphology.some(x => x.toLowerCase() === m.toLowerCase()) && (
+                          <button
+                            type="button"
+                            aria-label="Remove custom morphology"
+                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow flex items-center justify-center hover:bg-gray-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const lowered = m.toLowerCase();
+                              setCustomMorphology(prev => prev.filter(x => x.toLowerCase() !== lowered));
+                              setExMorphology(prev => {
+                                const next = new Set(prev);
+                                // also unselect if currently selected
+                                for (const val of Array.from(next)) {
+                                  if (String(val).toLowerCase() === lowered) next.delete(val);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
@@ -1997,10 +2067,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         if (e.key === 'Enter') {
                           const val = (newMorphology || '').trim();
                           if (val) {
-                            setExMorphology(prev => {
-                              const next = new Set(prev);
-                              next.add(val);
-                              return next;
+                            setExMorphology(prev => { const next = new Set(prev); next.add(val); return next; });
+                            setCustomMorphology(prev => {
+                              const lowered = val.toLowerCase();
+                              if (prev.some((x) => x.toLowerCase() === lowered)) return prev;
+                              return [val, ...prev].slice(0, 100);
                             });
                             setNewMorphology('');
                           }
@@ -2014,10 +2085,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       onClick={() => {
                         const val = (newMorphology || '').trim();
                         if (!val) return;
-                        setExMorphology(prev => {
-                          const next = new Set(prev);
-                          next.add(val);
-                          return next;
+                        setExMorphology(prev => { const next = new Set(prev); next.add(val); return next; });
+                        setCustomMorphology(prev => {
+                          const lowered = val.toLowerCase();
+                          if (prev.some((x) => x.toLowerCase() === lowered)) return prev;
+                          return [val, ...prev].slice(0, 100);
                         });
                         setNewMorphology('');
                       }}
@@ -2029,7 +2101,30 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <label className="text-xs text-gray-600">Distribution / Body Areas</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {DISTRIBUTION.map(d => (
-                      <Button key={d} type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
+                      <div key={d} className="relative">
+                        <Button type="button" variant={exDistribution.has(d) ? 'default' : 'outline'} size="sm" onClick={() => toggleSet(exDistribution, d, setExDistribution)}>{d}</Button>
+                        {customDistribution.some(x => x.toLowerCase() === d.toLowerCase()) && (
+                          <button
+                            type="button"
+                            aria-label="Remove custom distribution"
+                            className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-white border shadow flex items-center justify-center hover:bg-gray-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const lowered = d.toLowerCase();
+                              setCustomDistribution(prev => prev.filter(x => x.toLowerCase() !== lowered));
+                              setExDistribution(prev => {
+                                const next = new Set(prev);
+                                for (const val of Array.from(next)) {
+                                  if (String(val).toLowerCase() === lowered) next.delete(val);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
@@ -2041,10 +2136,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         if (e.key === 'Enter') {
                           const val = (newDistribution || '').trim();
                           if (val) {
-                            setExDistribution(prev => {
-                              const next = new Set(prev);
-                              next.add(val);
-                              return next;
+                            setExDistribution(prev => { const next = new Set(prev); next.add(val); return next; });
+                            setCustomDistribution(prev => {
+                              const lowered = val.toLowerCase();
+                              if (prev.some((x) => x.toLowerCase() === lowered)) return prev;
+                              return [val, ...prev].slice(0, 100);
                             });
                             setNewDistribution('');
                           }
@@ -2058,10 +2154,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       onClick={() => {
                         const val = (newDistribution || '').trim();
                         if (!val) return;
-                        setExDistribution(prev => {
-                          const next = new Set(prev);
-                          next.add(val);
-                          return next;
+                        setExDistribution(prev => { const next = new Set(prev); next.add(val); return next; });
+                        setCustomDistribution(prev => {
+                          const lowered = val.toLowerCase();
+                          if (prev.some((x) => x.toLowerCase() === lowered)) return prev;
+                          return [val, ...prev].slice(0, 100);
                         });
                         setNewDistribution('');
                       }}
