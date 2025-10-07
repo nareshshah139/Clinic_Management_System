@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Image as ImageIcon } from 'lucide-react';
+import { Camera, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -12,13 +12,14 @@ interface Props {
   apiBase?: string; // optional override
   onVisitNeeded?: () => Promise<string>; // Callback to create visit if needed
   patientId?: string; // required for draft uploads when visitId is temp
+  allowDelete?: boolean; // doctor-only delete control
 }
 
 type PhotoPosition = 'FRONT' | 'LEFT_PROFILE' | 'RIGHT_PROFILE' | 'BACK' | 'CLOSE_UP' | 'OTHER';
 
 interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoPosition; displayOrder?: number }
 
-export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId }: Props) {
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete }: Props) {
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -209,6 +210,37 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const active = items[activeIndex] || null;
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
 
+  const deleteActive = async () => {
+    if (!active) return;
+    if (visitId === 'temp') return; // skip delete in draft mode
+    const confirmed = window.confirm('Delete this photo? This cannot be undone.');
+    if (!confirmed) return;
+    try {
+      // If the image URL points to the API route, delete that resource; else treat as legacy
+      if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
+        const resp = await fetch(active.url.startsWith('http') ? active.url : `${active.url}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+      } else if (/\/uploads\//i.test(active.url)) {
+        const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: active.url }),
+          credentials: 'include',
+        });
+        if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+      } else {
+        throw new Error('Unsupported photo URL');
+      }
+      await load();
+    } catch (e) {
+      console.error('Delete error:', e);
+      alert('Failed to delete photo.');
+    }
+  };
+
   return (
     <>
     <Card>
@@ -281,6 +313,11 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <div className="space-x-2">
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.max(0, i - 1))} disabled={items.length <= 1}>Prev</Button>
                 <Button size="sm" variant="outline" onClick={() => setActiveIndex(i => Math.min(items.length - 1, i + 1))} disabled={items.length <= 1}>Next</Button>
+                {allowDelete && visitId !== 'temp' && active && (
+                  <Button size="sm" variant="destructive" onClick={deleteActive}>
+                    <Trash2 className="h-4 w-4 mr-1" /> Delete
+                  </Button>
+                )}
               </div>
             </div>
 

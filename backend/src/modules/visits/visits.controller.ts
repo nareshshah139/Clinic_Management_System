@@ -23,6 +23,8 @@ import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-v
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { Roles } from '../../shared/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { join } from 'path';
@@ -409,6 +411,32 @@ export class VisitsController {
       res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' });
     }
     return new StreamableFile(data);
+  }
+
+  @Delete(':id/photos/:attachmentId')
+  @Roles(UserRole.DOCTOR)
+  async deleteVisitPhoto(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    await this.visitsService.deleteVisitAttachment(id, attachmentId, req.user.branchId);
+    return this.visitsService.listAttachments(id, req.user.branchId);
+  }
+
+  @Delete(':id/photos/legacy')
+  @Roles(UserRole.DOCTOR)
+  async deleteLegacyPhoto(
+    @Param('id') id: string,
+    @Body() body: { url?: string },
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const url = typeof body?.url === 'string' ? body.url : '';
+    if (!url) {
+      throw new BadRequestException('Missing url');
+    }
+    await this.visitsService.deleteLegacyAttachment(id, url, req.user.branchId);
+    return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
   // Speech-to-text proxy to OpenAI Whisper

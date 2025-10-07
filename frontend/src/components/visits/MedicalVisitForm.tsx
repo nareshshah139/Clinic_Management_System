@@ -739,9 +739,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         const parsed = JSON.parse(stored) as {
           version?: number;
           data?: MedicalVisitDraftState;
+          visitId?: string | null;
+          appointmentId?: string | null;
+          patientId?: string;
+          doctorId?: string;
         };
         if (parsed?.version === DRAFT_STORAGE_VERSION && parsed.data) {
           applyDraft(parsed.data);
+          if (parsed.visitId && typeof parsed.visitId === 'string') {
+            setVisitId(parsed.visitId);
+          }
           hasUnsavedChangesRef.current = false;
         }
       }
@@ -751,6 +758,26 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     lastStorageKeyRef.current = draftStorageKey;
   }, [draftStorageKey, applyDraft]);
+
+  // If linked to an appointment and no visitId yet, try to fetch existing visit by appointment to resume editing
+  useEffect(() => {
+    (async () => {
+      if (!appointmentId || visitId) return;
+      try {
+        const res: any = await apiClient.getVisits({ appointmentId });
+        const list = (res?.visits || res?.data || []) as Array<{ id?: string }>;
+        const existingId = Array.isArray(list) && list.length > 0 ? list[0]?.id : undefined;
+        if (existingId && typeof existingId === 'string') {
+          setVisitId(existingId);
+          // Ensure the draft record reflects the resolved visitId
+          try { persistDraftToStorage(true); } catch {}
+        }
+      } catch (e) {
+        // Non-blocking
+        console.warn('Failed to lookup existing visit by appointmentId', e);
+      }
+    })();
+  }, [appointmentId, visitId, persistDraftToStorage]);
 
   useEffect(() => {
     if (isInitialLoadRef.current) {
@@ -1083,8 +1110,31 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         visit = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
       } else {
         const idemKey = buildIdempotencyKey('POST', null, payload as any);
-        visit = await apiClient.createVisit(payload, { idempotencyKey: idemKey });
-        setVisitId((visit as VisitDetails).id);
+        try {
+          visit = await apiClient.createVisit(payload, { idempotencyKey: idemKey });
+          setVisitId((visit as VisitDetails).id);
+        } catch (err: any) {
+          const status = (err && typeof err === 'object' && 'status' in err) ? (err as any).status : undefined;
+          // If a visit already exists for the appointment, resume it instead of failing
+          if (status === 409 && appointmentId) {
+            try {
+              const res: any = await apiClient.getVisits({ appointmentId });
+              const list = (res?.visits || res?.data || []) as Array<{ id?: string }>;
+              const existingId = Array.isArray(list) && list.length > 0 ? list[0]?.id : undefined;
+              if (existingId && typeof existingId === 'string') {
+                setVisitId(existingId);
+                const patchKey = buildIdempotencyKey('PATCH', existingId, payload as any);
+                visit = await apiClient.updateVisit(existingId, payload, { idempotencyKey: patchKey });
+              } else {
+                throw err;
+              }
+            } catch (e2) {
+              throw e2;
+            }
+          } else {
+            throw err;
+          }
+        }
       }
       
       if (complete) {
@@ -1682,6 +1732,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 <VisitPhotos 
                   visitId={visitId || 'temp'} 
                   patientId={patientId}
+                  allowDelete={hasPermission('photos') || hasPermission('all')}
                   onVisitNeeded={async () => {
                     if (!visitId) {
                       const minimalPayload: Record<string, unknown> = {

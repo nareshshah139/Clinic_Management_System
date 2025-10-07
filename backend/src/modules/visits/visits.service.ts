@@ -993,4 +993,57 @@ export class VisitsService {
     if (!att) throw new NotFoundException('Attachment not found');
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
+  
+  async deleteVisitAttachment(visitId: string, attachmentId: string, branchId: string) {
+    const att = await this.prisma.visitAttachment.findFirst({
+      where: { id: attachmentId, visitId },
+      select: {
+        id: true,
+        visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } },
+      },
+    });
+    if (!att) throw new NotFoundException('Attachment not found');
+    const pBranch = (att.visit as any).patient.branchId;
+    const dBranch = (att.visit as any).doctor.branchId;
+    if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
+    await this.prisma.visitAttachment.delete({ where: { id: attachmentId } });
+    return { ok: true };
+  }
+
+  async deleteLegacyAttachment(visitId: string, url: string, branchId: string) {
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    if (!visit) throw new NotFoundException('Visit not found');
+    if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
+      throw new NotFoundException('Visit not found in this branch');
+    }
+
+    const existing = visit.attachments ? (JSON.parse(visit.attachments) as string[]) : [];
+    const sanitizedExisting = this.sanitizeAttachmentPaths(existing);
+    const sanitizedTargetList = this.sanitizeAttachmentPaths([url]);
+    const target = sanitizedTargetList[0];
+    if (!target) {
+      // If the provided URL is invalid or not part of allowed paths, treat as not found for safety
+      throw new NotFoundException('Attachment not found');
+    }
+
+    const next = sanitizedExisting.filter(u => u !== target);
+    if (next.length === sanitizedExisting.length) {
+      // nothing to remove
+      throw new NotFoundException('Attachment not found');
+    }
+
+    // Attempt filesystem delete best-effort
+    try {
+      const absolutePath = join(process.cwd(), target.replace(/^\//, ''));
+      try {
+        const stat = fs.statSync(absolutePath);
+        if (stat.isFile()) {
+          fs.unlinkSync(absolutePath);
+        }
+      } catch {}
+    } catch {}
+
+    await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(next) } });
+    return { ok: true };
+  }
 }
