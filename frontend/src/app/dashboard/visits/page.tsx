@@ -432,6 +432,13 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             const isProcedure = visitTypeLabel.toLowerCase().includes('procedure');
             const badgeVariant: 'default' | 'destructive' = isProcedure ? 'destructive' : 'default';
             const hasPrescription = !!visit.prescription?.id;
+            const photoCount = Number((visit as any)?.photos || 0);
+            const photoPreviews = Array.isArray((visit as any)?.photoPreviewUrls)
+              ? ((visit as any).photoPreviewUrls as string[])
+              : [];
+            const drugNames = Array.isArray((visit as any)?.prescriptionDrugNames)
+              ? ((visit as any).prescriptionDrugNames as string[])
+              : [];
             
             return (
               <div key={visit.id} className="relative flex items-start space-x-4">
@@ -464,7 +471,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                         </Badge>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-gray-600">Doctor: <span className="font-medium text-gray-900">{visit.doctor?.firstName} {visit.doctor?.lastName}</span></p>
                           <p className="text-gray-600">Chief Complaint: <span className="text-gray-900">{chiefComplaint}</span></p>
@@ -474,6 +481,9 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                           {visit.followUp && (
                             <p className="text-gray-600">Follow-up: <span className="text-gray-900">{new Date(visit.followUp).toLocaleDateString()}</span></p>
                           )}
+                            {photoCount > 0 && (
+                              <p className="text-gray-600">Photos: <span className="text-gray-900">{photoCount}</span></p>
+                            )}
                         </div>
                       </div>
                       
@@ -501,6 +511,33 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                           <p className="text-sm text-gray-600">
                             <span className="font-medium">Notes:</span> {scribeData.notes}
                           </p>
+                        </div>
+                      )}
+
+                      {drugNames.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-gray-200">
+                          <div className="text-sm text-gray-600">
+                            <span className="font-medium">Drugs:</span>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {drugNames.slice(0, 6).map((d, i) => (
+                                <Badge key={`${visit.id}-drug-${i}`} variant="outline">{String(d)}</Badge>
+                              ))}
+                              {drugNames.length > 6 && (
+                                <span className="text-xs text-gray-500 ml-1">+{drugNames.length - 6} more</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {photoPreviews.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-sm text-gray-600 font-medium mb-2">Photos</div>
+                          <div className="flex gap-2 overflow-x-auto">
+                            {photoPreviews.map((u, i) => (
+                              <img key={`${visit.id}-p-${i}`} src={u} alt="preview" className="h-16 w-24 object-cover rounded border" />
+                            ))}
+                          </div>
                         </div>
                       )}
 

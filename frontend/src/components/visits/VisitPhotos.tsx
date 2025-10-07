@@ -24,6 +24,7 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
+  const [prevItems, setPrevItems] = useState<PhotoItem[]>([]);
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -119,6 +120,52 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   };
 
   useEffect(() => { void load(); }, [visitId, patientId]);
+
+  // Load previous visit's photos for compare mode (same patient)
+  useEffect(() => {
+    const loadPreviousVisitPhotos = async () => {
+      if (!patientId || visitId === 'temp') { setPrevItems([]); return; }
+      try {
+        const resp = await fetch(`${baseUrl}/visits/patient/${patientId}/history?limit=10`, { credentials: 'include' });
+        if (!resp.ok) { setPrevItems([]); return; }
+        const data = await resp.json();
+        const visits = Array.isArray((data as any)?.visits) ? (data as any).visits as any[] : [];
+        if (visits.length === 0) { setPrevItems([]); return; }
+        const idx = visits.findIndex((v: any) => v?.id === visitId);
+        let prevVisitId: string | null = null;
+        if (idx >= 0 && idx + 1 < visits.length) {
+          prevVisitId = visits[idx + 1]?.id || null;
+        } else if (idx === 0 && visits.length > 1) {
+          prevVisitId = visits[1]?.id || null;
+        } else if (idx < 0 && visits.length > 0) {
+          // Current visit might be too new or not in the fetched window; fallback to next best older
+          prevVisitId = (visits[1]?.id as string) || (visits[0]?.id as string) || null;
+        }
+        if (!prevVisitId) { setPrevItems([]); return; }
+
+        const photosResp = await fetch(`${baseUrl}/visits/${prevVisitId}/photos`, { credentials: 'include' });
+        if (!photosResp.ok) { setPrevItems([]); return; }
+        const photosData = await photosResp.json();
+        const incoming: PhotoItem[] = (((photosData as any)?.items as PhotoItem[] | undefined) || (((photosData as any)?.attachments || []).map((u: string) => ({ url: u }))))
+          .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
+        incoming.sort((a, b) => {
+          const ao = typeof a.displayOrder === 'number' ? a.displayOrder : 999;
+          const bo = typeof b.displayOrder === 'number' ? b.displayOrder : 999;
+          if (ao !== bo) return ao - bo;
+          const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
+          const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
+          if (at === bt) return a.url.localeCompare(b.url);
+          return at - bt;
+        });
+        setPrevItems(incoming);
+      } catch (e) {
+        console.error('Failed to load previous visit photos', e);
+        setPrevItems([]);
+      }
+    };
+
+    void loadPreviousVisitPhotos();
+  }, [patientId, visitId]);
 
   // Build previews for pending files and clean up object URLs
   useEffect(() => {
@@ -271,6 +318,16 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   const active = items[activeIndex] || null;
   const previous = useMemo(() => (activeIndex > 0 ? items[activeIndex - 1] : null), [items, activeIndex]);
+  const prevMatch = useMemo(() => {
+    if (!items.length || !prevItems.length) return null;
+    const cur = items[activeIndex] || null;
+    if (!cur) return null;
+    if (cur.position) {
+      const found = prevItems.find(p => p.position === cur.position);
+      if (found) return found;
+    }
+    return prevItems[Math.min(activeIndex, Math.max(0, prevItems.length - 1))] || null;
+  }, [items, prevItems, activeIndex]);
 
   const applyResponseList = (data: any) => {
     const incoming: PhotoItem[] = ((data?.items as PhotoItem[] | undefined) || (data?.attachments || []).map((u: string) => ({ url: u })))
@@ -349,7 +406,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
               <Camera className="h-4 w-4 mr-2" />
               Camera
             </Button>
-            {items.length > 1 && (
+            {items.length > 0 && (items.length > 1 || prevItems.length > 0) && (
               <Button variant={compareMode ? 'default' : 'outline'} size="sm" onClick={() => setCompareMode(v => !v)}>
                 {compareMode ? 'Compare: On' : 'Compare: Off'}
               </Button>
@@ -394,7 +451,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
-                  {previous ? <img src={toAbsolute(previous.url)} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
+                  {prevMatch ? <img src={toAbsolute(prevMatch.url)} alt="before" className="max-h-full max-w-full object-contain" /> : <div className="text-xs text-gray-500">No previous photo</div>}
                 </div>
                 <div className="w-full aspect-video bg-gray-100 rounded border flex items-center justify-center overflow-hidden">
                   {active ? <img src={toAbsolute(active.url)} alt="after" className="max-h-full max-w-full object-contain" /> : null}

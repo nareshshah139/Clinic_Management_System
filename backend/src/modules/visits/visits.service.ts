@@ -645,7 +645,7 @@ export class VisitsService {
           select: { id: true, date: true, slot: true, tokenNumber: true },
         },
         prescription: {
-          select: { id: true, createdAt: true },
+          select: { id: true, createdAt: true, items: true },
         },
       },
       orderBy: {
@@ -654,33 +654,82 @@ export class VisitsService {
       take,
     });
 
+    // Compute photo counts for each visit: DB-backed attachments + legacy JSON attachments
+    const visitIds = visits.map(v => v.id);
+    let dbAttachmentCounts: Record<string, number> = {};
+    let dbAttachmentPreviews: Record<string, { id: string; createdAt: string; position?: string; displayOrder?: number }[]> = {};
+    if (visitIds.length > 0) {
+      try {
+        const dbItems = await (this.prisma as any).visitAttachment.findMany({
+          where: { visitId: { in: visitIds } },
+          select: { id: true, visitId: true, createdAt: true, position: true, displayOrder: true },
+          orderBy: [{ visitId: 'asc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+        });
+        dbAttachmentCounts = dbItems.reduce((acc: Record<string, number>, row: any) => {
+          const key = row.visitId as string;
+          acc[key] = (acc[key] || 0) + 1;
+          return acc;
+        }, {});
+        // Build previews (first 2 per visit)
+        dbAttachmentPreviews = dbItems.reduce((acc: Record<string, any[]>, row: any) => {
+          const key = row.visitId as string;
+          const arr = acc[key] || (acc[key] = []);
+          if (arr.length < 2) {
+            arr.push({ id: row.id as string, createdAt: (row.createdAt as Date).toISOString(), position: row.position, displayOrder: row.displayOrder });
+          }
+          return acc;
+        }, {} as Record<string, any[]>);
+      } catch {}
+    }
+
     return {
       patient: {
         id: patient.id,
         name: patient.name,
         phone: patient.phone,
       },
-      visits: visits.map(visit => ({
-        ...visit,
-        vitals: this.safeParse<any>(visit.vitals as string, null),
-        complaints: this.safeParse<any[]>(visit.complaints as string, []),
-        diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
-        doctor: visit.doctor
-          ? {
-              ...visit.doctor,
-              name: `${(visit.doctor as any).firstName} ${(visit.doctor as any).lastName}`.trim(),
-            }
-          : visit.doctor,
-        prescription: visit.prescription
-          ? {
-              id: visit.prescription.id,
-              createdAt:
-                visit.prescription.createdAt instanceof Date
-                  ? visit.prescription.createdAt.toISOString()
-                  : (visit.prescription.createdAt as any) ?? undefined,
-            }
-          : null,
-      })),
+      visits: visits.map(visit => {
+        const legacy = this.safeParse<string[]>(visit.attachments as any, []);
+        const legacyCount = Array.isArray(legacy) ? legacy.length : 0;
+        const dbCount = dbAttachmentCounts[visit.id] || 0;
+        const photos = dbCount + legacyCount;
+        // Build up to 3 preview URLs (prefer DB-backed, then legacy)
+        const dbPreviews = (dbAttachmentPreviews[visit.id] || []).map(p => `/visits/${visit.id}/photos/${p.id}`);
+        const legacyPreviews = Array.isArray(legacy) ? legacy.filter(u => typeof u === 'string').slice(0, Math.max(0, 3 - dbPreviews.length)) : [];
+        const photoPreviewUrls = [...dbPreviews, ...legacyPreviews];
+
+        return {
+          ...visit,
+          vitals: this.safeParse<any>(visit.vitals as string, null),
+          complaints: this.safeParse<any[]>(visit.complaints as string, []),
+          diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
+          // expose a simple photos count for UI badges
+          photos,
+          photoPreviewUrls,
+          doctor: visit.doctor
+            ? {
+                ...visit.doctor,
+                name: `${(visit.doctor as any).firstName} ${(visit.doctor as any).lastName}`.trim(),
+              }
+            : visit.doctor,
+          // summarize drugs for quick history view
+          prescriptionDrugNames: (() => {
+            try {
+              const items = this.safeParse<any[]>(visit.prescription?.items as any, []);
+              return Array.isArray(items) ? items.map((it: any) => it?.drugName).filter(Boolean) : [];
+            } catch { return []; }
+          })(),
+          prescription: visit.prescription
+            ? {
+                id: visit.prescription.id,
+                createdAt:
+                  visit.prescription.createdAt instanceof Date
+                    ? visit.prescription.createdAt.toISOString()
+                    : (visit.prescription.createdAt as any) ?? undefined,
+              }
+            : null,
+        };
+      }),
     };
   }
 

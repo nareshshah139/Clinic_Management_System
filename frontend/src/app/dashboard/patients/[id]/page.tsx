@@ -86,6 +86,13 @@ export default function PatientDetailsPage() {
     const doctorName = v.doctor ? `${v.doctor.firstName ?? ''} ${v.doctor.lastName ?? ''}`.trim() : undefined;
     const diagnosis = getPrimaryDiagnosis(v);
     const complaint = getChiefComplaint(v);
+    const photoCount = Number((v as any)?.photos || 0);
+    const photoPreviews = Array.isArray((v as any)?.photoPreviewUrls)
+      ? ((v as any).photoPreviewUrls as string[])
+      : [];
+    const drugNames = Array.isArray((v as any)?.prescriptionDrugNames)
+      ? ((v as any).prescriptionDrugNames as string[])
+      : [];
     return (
       <div key={v.id || `${String(v.createdAt)}`} className="rounded border border-gray-200 p-3">
         <div className="flex items-center justify-between mb-1">
@@ -102,8 +109,33 @@ export default function PatientDetailsPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           {complaint && <div><span className="text-gray-600">Chief complaint:</span> <span className="text-gray-900">{complaint}</span></div>}
-          {diagnosis && <div><span className="text-gray-600">Diagnosis:</span> <span className="text-gray-900">{diagnosis}</span></div>}
+          <div className="flex items-center justify-between">
+            {diagnosis && <div><span className="text-gray-600">Diagnosis:</span> <span className="text-gray-900">{diagnosis}</span></div>}
+            {photoCount > 0 && (
+              <Badge variant="outline" className="ml-2">{photoCount} Photos</Badge>
+            )}
+          </div>
         </div>
+        {drugNames.length > 0 && (
+          <div className="mt-2 text-sm">
+            <span className="text-gray-600">Drugs:</span>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {drugNames.slice(0, 6).map((d, i) => (
+                <Badge key={`${v.id || 'visit'}-drug-${i}`} variant="outline">{String(d)}</Badge>
+              ))}
+              {drugNames.length > 6 && (
+                <span className="text-xs text-gray-500 ml-1">+{drugNames.length - 6} more</span>
+              )}
+            </div>
+          </div>
+        )}
+        {photoPreviews.length > 0 && (
+          <div className="mt-2 flex gap-2 overflow-x-auto">
+            {photoPreviews.map((u, i) => (
+              <img key={`${v.id || 'visit'}-p-${i}`} src={u} alt="preview" className="h-12 w-20 object-cover rounded border" />
+            ))}
+          </div>
+        )}
       </div>
     );
   };
