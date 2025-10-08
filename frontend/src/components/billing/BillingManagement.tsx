@@ -213,6 +213,41 @@ export default function BillingManagement() {
     return () => clearTimeout(t);
   }, [filters.search, filters.status, filters.startDate, filters.endDate]);
 
+  const downloadCsv = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = () => {
+    const headers = ['Invoice #', 'Patient', 'Status', 'Total', 'Received', 'Balance', 'Date'];
+    const escapeCsv = (val: unknown) => {
+      const s = String(val ?? '');
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    };
+    const rows = (invoices as any[]).map((inv) => {
+      const invoiceNo = inv.invoiceNo || inv.invoiceNumber || '';
+      const patient = inv.patient?.name || `${inv.patient?.firstName || ''} ${inv.patient?.lastName || ''}`.trim();
+      const status = computeInvoiceStatus(inv);
+      const total = inv.total ?? inv.totalAmount ?? 0;
+      const received = inv.received ?? 0;
+      const balance = inv.balance ?? Math.max(0, Number(total) - Number(received));
+      const date = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN') : '';
+      return [invoiceNo, patient, status, total, received, balance, date].map(escapeCsv).join(',');
+    });
+    const csv = headers.join(',') + '\n' + rows.join('\n');
+    downloadCsv('invoices.csv', csv);
+  };
+
   // Debounced search for patients
   useEffect(() => {
     if (!open) return;
@@ -1275,6 +1310,29 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
       {/* Filters Toolbar */}
       <Card>
         <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-3 gap-3">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'all', label: 'All' },
+                { value: 'PAID', label: 'Paid' },
+                { value: 'PARTIALLY_PAID', label: 'Partial' },
+                { value: 'PENDING', label: 'Pending' },
+                { value: 'OVERDUE', label: 'Overdue' },
+              ].map((s) => (
+                <Button
+                  key={s.value}
+                  size="sm"
+                  variant={filters.status === s.value ? 'default' : 'outline'}
+                  onClick={() => setFilters({ ...filters, status: s.value })}
+                >
+                  {s.label}
+                </Button>
+              ))}
+            </div>
+            <div>
+              <Button variant="outline" onClick={handleExportCsv}>Export CSV</Button>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
             <div>
               <Label>Search</Label>
