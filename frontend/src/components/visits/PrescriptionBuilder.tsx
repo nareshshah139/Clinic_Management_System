@@ -512,6 +512,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
+  // Live margin overrides (px). Null -> use printer profile or provided defaults
+  const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
+  const [overrideBottomMarginPx, setOverrideBottomMarginPx] = useState<number | null>(null);
   const [interactionsOpen, setInteractionsOpen] = useState(false);
   // Print page break controls
   const [breakBeforeMedications, setBreakBeforeMedications] = useState(false);
@@ -1882,6 +1885,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const undoStackRef = useRef<any[]>([]);
   const redoStackRef = useRef<any[]>([]);
+  // Computed effective margins (depend on printer profile and overrides)
+  const effectiveTopMarginPx = useMemo(() => {
+    const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
+    return (overrideTopMarginPx ?? (prof.topMarginPx ?? printTopMarginPx ?? 150)) as number;
+  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx]);
+  const effectiveBottomMarginPx = useMemo(() => {
+    const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
+    return (overrideBottomMarginPx ?? (prof.bottomMarginPx ?? printBottomMarginPx ?? 45)) as number;
+  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx]);
+  const effectiveTopMarginMm = useMemo(() => Math.max(0, Math.round((effectiveTopMarginPx / 3.78) * 10) / 10), [effectiveTopMarginPx]);
+  const effectiveBottomMarginMm = useMemo(() => Math.max(0, Math.round((effectiveBottomMarginPx / 3.78) * 10) / 10), [effectiveBottomMarginPx]);
 
   useEffect(() => {
     (async () => {
@@ -1935,7 +1949,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     t = setTimeout(run, 250);
     return () => { if (t) clearTimeout(t); };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId]);
+  }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx]);
 
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
@@ -2785,17 +2799,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   #prescription-print-root, #prescription-print-root * {
                     visibility: visible !important;
                   }
-                  #prescription-print-root {
+                   #prescription-print-root {
                     position: absolute !important;
                     left: 0 !important;
                     top: 0 !important;
                     width: ${paperPreset === 'LETTER' ? '216mm' : '210mm'} !important;
                     height: ${paperPreset === 'LETTER' ? '279mm' : '297mm'} !important;
                     margin: 0 !important;
-                    padding-top: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150)))/3.78}mm !important;
+                    padding-top: ${effectiveTopMarginMm}mm !important;
                     padding-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm !important;
                     padding-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm !important;
-                    padding-bottom: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45)))/3.78}mm !important;
+                    padding-bottom: ${effectiveBottomMarginMm}mm !important;
                     box-sizing: border-box !important;
                     background: white !important;
                     background-repeat: no-repeat !important;
@@ -2837,16 +2851,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
                   margin: '0 auto',
                   padding: '0',
-                  paddingTop: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150)))/3.78}mm`,
+                  paddingTop: `${effectiveTopMarginMm}mm`,
                   paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
                   paddingRight: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm`,
-                  paddingBottom: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45)))/3.78}mm`,
+                  paddingBottom: `${effectiveBottomMarginMm}mm`,
                   boxSizing: 'border-box',
                   backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
                   backgroundRepeat: 'no-repeat',
                   backgroundPosition: 'top left',
                   backgroundSize: paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm',
                   filter: grayscale ? 'grayscale(100%)' : undefined,
+                  transition: 'padding-top 200ms ease, padding-bottom 200ms ease',
+                  willChange: 'padding-top, padding-bottom',
                 }}
               >
                 {showRefillStamp && (
@@ -3202,6 +3218,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <span>Zoom</span>
                     <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
                     <span className="w-10 text-right">{Math.round(previewZoom * 100)}%</span>
+                  </div>
+                  <div className="space-y-2 text-sm text-gray-700">
+                    <div className="flex items-center justify-between">
+                      <label className="block">Top margin</label>
+                      <span className="tabular-nums">{effectiveTopMarginMm} mm</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={300}
+                      step={1}
+                      value={overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150))}
+                      onChange={(e) => setOverrideTopMarginPx(Number(e.target.value))}
+                    />
+                    <div className="flex items-center justify-between">
+                      <label className="block">Bottom margin</label>
+                      <span className="tabular-nums">{effectiveBottomMarginMm} mm</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={200}
+                      step={1}
+                      value={overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45))}
+                      onChange={(e) => setOverrideBottomMarginPx(Number(e.target.value))}
+                    />
+                    <div className="flex gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => { setOverrideTopMarginPx(null); setOverrideBottomMarginPx(null); }}>Reset margins</Button>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
