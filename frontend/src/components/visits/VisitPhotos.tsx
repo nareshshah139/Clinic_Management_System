@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { Camera, Upload, Image as ImageIcon, Trash2, ChevronLeft, ChevronRight, LayoutGrid, Rows } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -38,6 +38,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const [pendingFiles, setPendingFiles] = useState<File[] | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [pendingPositions, setPendingPositions] = useState<PhotoPosition[]>([]);
+  const [taggingMode, setTaggingMode] = useState<'GRID' | 'SINGLE'>('GRID');
+  const [taggingIndex, setTaggingIndex] = useState<number>(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
@@ -211,9 +213,26 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     };
   }, [pendingFiles]);
 
+  // Keyboard navigation in single tagging mode
+  useEffect(() => {
+    if (!tagDialogOpen || taggingMode !== 'SINGLE') return;
+    const handler = (e: KeyboardEvent) => {
+      if (!pendingFiles || pendingFiles.length === 0) return;
+      if (e.key === 'ArrowLeft') {
+        setTaggingIndex(i => Math.max(0, i - 1));
+      } else if (e.key === 'ArrowRight') {
+        setTaggingIndex(i => Math.min((pendingFiles.length - 1), i + 1));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [tagDialogOpen, taggingMode, pendingFiles]);
+
   const openTaggingForFiles = (files: File[]) => {
     setPendingFiles(files);
     setPendingPositions(inferPositions(files.length));
+    setTaggingIndex(0);
+    setTaggingMode('SINGLE');
     setTagDialogOpen(true);
   };
 
@@ -627,38 +646,121 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <DialogHeader>
           <DialogTitle>Tag photo positions</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
-          {pendingFiles?.map((file, idx) => (
-            <div key={`${file.name}-${idx}`} className="flex items-center gap-3">
-              <div className="h-14 w-14 flex-shrink-0 rounded border overflow-hidden bg-gray-100">
-                {previewUrls[idx] ? (
-                  <img src={previewUrls[idx]} alt="preview" className="h-full w-full object-cover" />
-                ) : null}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600">Mode</span>
+              <Button size="sm" variant={taggingMode === 'GRID' ? 'default' : 'outline'} onClick={() => setTaggingMode('GRID')}>
+                <LayoutGrid className="h-3 w-3 mr-1" /> Grid
+              </Button>
+              <Button size="sm" variant={taggingMode === 'SINGLE' ? 'default' : 'outline'} onClick={() => setTaggingMode('SINGLE')}>
+                <Rows className="h-3 w-3 mr-1" /> Single
+              </Button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setPendingPositions(inferPositions(pendingFiles?.length || 0))}>Infer positions</Button>
+          </div>
+
+          {taggingMode === 'SINGLE' ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm text-gray-700">
+                <div className="truncate" title={pendingFiles?.[taggingIndex]?.name || ''}>{pendingFiles?.[taggingIndex]?.name}</div>
+                <div className="text-xs">{(taggingIndex + 1)} / {pendingFiles?.length || 0}</div>
               </div>
-              <div className="flex-1 truncate text-sm" title={file.name}>{file.name}</div>
-              <div className="w-44">
-                <Select
-                  value={pendingPositions[idx]}
-                  onValueChange={(val: PhotoPosition) => {
-                    const next = [...pendingPositions];
-                    next[idx] = val as PhotoPosition;
-                    setPendingPositions(next);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select position" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RECOMMENDED_ORDER.map(p => (
-                      <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="relative w-full bg-gray-100 rounded border aspect-video flex items-center justify-center overflow-hidden">
+                {previewUrls[taggingIndex] ? (
+                  <img src={previewUrls[taggingIndex]} alt="preview" className="max-h-full max-w-full object-contain" />
+                ) : null}
+                <div className="absolute inset-y-0 left-0 flex items-center p-2">
+                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.max(0, i - 1))} disabled={!pendingFiles || taggingIndex <= 0}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="absolute inset-y-0 right-0 flex items-center p-2">
+                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.min(((pendingFiles?.length || 1) - 1), i + 1))} disabled={!pendingFiles || taggingIndex >= ((pendingFiles?.length || 1) - 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-56">
+                  <Select
+                    value={pendingPositions[taggingIndex]}
+                    onValueChange={(val: PhotoPosition) => {
+                      const next = [...pendingPositions];
+                      next[taggingIndex] = val as PhotoPosition;
+                      setPendingPositions(next);
+                      if (pendingFiles && taggingIndex < pendingFiles.length - 1) {
+                        setTaggingIndex(taggingIndex + 1);
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select position" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {RECOMMENDED_ORDER.map(p => (
+                        <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="ml-auto space-x-2">
+                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.max(0, i - 1))} disabled={!pendingFiles || taggingIndex <= 0}><ChevronLeft className="h-4 w-4 mr-1" />Prev</Button>
+                  <Button size="sm" variant="outline" onClick={() => setTaggingIndex(i => Math.min(((pendingFiles?.length || 1) - 1), i + 1))} disabled={!pendingFiles || taggingIndex >= ((pendingFiles?.length || 1) - 1)}>Next<ChevronRight className="h-4 w-4 ml-1" /></Button>
+                </div>
+              </div>
+
+              <div className="w-full overflow-x-auto">
+                <div className="flex gap-2 py-2">
+                  {pendingFiles?.map((f, i) => (
+                    <button key={`${f.name}-${i}`} type="button" onClick={() => setTaggingIndex(i)} className={`relative h-20 w-20 flex-shrink-0 rounded border overflow-hidden ${i === taggingIndex ? 'ring-2 ring-blue-500' : ''}`} title={f.name}>
+                      {previewUrls[i] ? (
+                        <img src={previewUrls[i]} alt="thumb" className="h-full w-full object-cover" />
+                      ) : null}
+                      <span className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-1 truncate">
+                        {pendingPositions[i] ? POSITION_LABEL[pendingPositions[i]] : ''}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {pendingFiles?.map((file, idx) => (
+                <div key={`${file.name}-${idx}`} className="rounded border p-2">
+                  <div className="aspect-square w-full rounded bg-gray-100 overflow-hidden">
+                    {previewUrls[idx] ? (
+                      <img src={previewUrls[idx]} alt="preview" className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                  <div className="mt-2">
+                    <Select
+                      value={pendingPositions[idx]}
+                      onValueChange={(val: PhotoPosition) => {
+                        const next = [...pendingPositions];
+                        next[idx] = val as PhotoPosition;
+                        setPendingPositions(next);
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RECOMMENDED_ORDER.map(p => (
+                          <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="mt-1 text-[10px] text-gray-500 truncate" title={file.name}>{file.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center justify-between pt-2">
-            <Button variant="outline" size="sm" onClick={() => setPendingPositions(inferPositions(pendingFiles?.length || 0))}>Infer positions</Button>
+            <div />
             <div className="space-x-2">
               <Button variant="outline" size="sm" onClick={() => { setTagDialogOpen(false); setPendingFiles(null); setPendingPositions([]); }}>Cancel</Button>
               <Button size="sm" onClick={uploadWithPositions} disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</Button>
