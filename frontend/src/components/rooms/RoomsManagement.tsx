@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { apiClient } from '@/lib/api';
@@ -35,6 +37,10 @@ export default function RoomsManagement() {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const { toast } = useToast();
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [formData, setFormData] = useState<RoomFormData>({
     name: '',
     type: 'Consultation',
@@ -71,7 +77,11 @@ export default function RoomsManagement() {
       setRooms(res?.rooms || []);
     } catch (e) {
       console.error('Failed to fetch rooms', e);
-      alert('Failed to fetch rooms');
+      toast({
+        variant: 'destructive',
+        title: 'Failed to fetch rooms',
+        description: e instanceof Error ? e.message : 'Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -80,7 +90,7 @@ export default function RoomsManagement() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      alert('Please enter a room name');
+      toast({ variant: 'destructive', title: 'Room name is required' });
       return;
     }
 
@@ -96,9 +106,14 @@ export default function RoomsManagement() {
       
       await fetchRooms();
       handleCloseDialog();
+      toast({ title: editingRoom ? 'Room updated' : 'Room created' });
     } catch (e: any) {
       console.error('Failed to save room', e);
-      alert(`Failed to ${editingRoom ? 'update' : 'create'} room`);
+      toast({
+        variant: 'destructive',
+        title: `Failed to ${editingRoom ? 'update' : 'create'} room`,
+        description: e?.message || 'Please try again.',
+      });
     } finally {
       setLoading(false);
     }
@@ -124,9 +139,10 @@ export default function RoomsManagement() {
       setLoading(true);
       await apiClient.deleteRoom(room.id);
       await fetchRooms();
+      toast({ title: 'Room deleted' });
     } catch (e: any) {
       console.error('Failed to delete room', e);
-      alert('Failed to delete room');
+      toast({ variant: 'destructive', title: 'Failed to delete room', description: e?.message || 'Please try again.' });
     } finally {
       setLoading(false);
     }
@@ -168,6 +184,16 @@ export default function RoomsManagement() {
   };
 
   const stats = getRoomStats();
+
+  const filteredRooms = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return rooms.filter((r) => {
+      const matchesQuery = !q || r.name.toLowerCase().includes(q);
+      const matchesType = typeFilter === 'all' || r.type === typeFilter;
+      const matchesStatus = statusFilter === 'all' || (statusFilter === 'active' ? r.isActive : !r.isActive);
+      return matchesQuery && matchesType && matchesStatus;
+    });
+  }, [rooms, search, typeFilter, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -234,19 +260,48 @@ export default function RoomsManagement() {
         </Card>
       </div>
 
-      {/* Rooms Table */}
+      {/* Filters & Rooms Table */}
       <Card>
         <CardHeader>
           <CardTitle>All Rooms</CardTitle>
           <CardDescription>View and manage all clinic rooms</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Filters */}
+          <div className="flex flex-col md:flex-row gap-3 mb-4">
+            <Input
+              placeholder="Search by room name..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="md:max-w-xs"
+            />
+            <Select value={typeFilter} onValueChange={(v: string) => setTypeFilter(v)}>
+              <SelectTrigger className="w-[200px]"><SelectValue placeholder="Type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {roomTypes.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(v: string) => setStatusFilter(v)}>
+              <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {loading ? (
             <div className="text-center py-8">Loading rooms...</div>
           ) : rooms.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No rooms found. Add your first room to get started.
             </div>
+          ) : filteredRooms.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">No rooms match your filters.</div>
           ) : (
             <Table>
               <TableHeader>
@@ -260,7 +315,7 @@ export default function RoomsManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rooms.map((room) => {
+                {filteredRooms.map((room) => {
                   const typeInfo = getRoomTypeInfo(room.type);
                   return (
                     <TableRow key={room.id}>
@@ -278,9 +333,24 @@ export default function RoomsManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={room.isActive ? 'default' : 'secondary'}>
-                          {room.isActive ? 'Active' : 'Inactive'}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={room.isActive ? 'default' : 'secondary'}>
+                            {room.isActive ? 'Active' : 'Inactive'}
+                          </Badge>
+                          <Switch
+                            checked={room.isActive}
+                            onCheckedChange={async (checked: boolean) => {
+                              try {
+                                await apiClient.updateRoom(room.id, { name: room.name, type: room.type, capacity: room.capacity, isActive: checked });
+                                setRooms((prev) => prev.map((r) => (r.id === room.id ? { ...r, isActive: checked } : r)));
+                                toast({ title: `Room ${checked ? 'activated' : 'deactivated'}` });
+                              } catch (e: any) {
+                                toast({ variant: 'destructive', title: 'Failed to update status', description: e?.message || 'Please try again.' });
+                              }
+                            }}
+                            aria-label={room.isActive ? 'Deactivate room' : 'Activate room'}
+                          />
+                        </div>
                       </TableCell>
                       <TableCell>{new Date(room.createdAt).toLocaleDateString()}</TableCell>
                       <TableCell>

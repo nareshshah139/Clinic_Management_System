@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,8 @@ import {
   ChevronUp,
   ChevronDown,
   History,
-  Image
+  Image,
+  Keyboard
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
@@ -326,6 +328,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
@@ -1555,7 +1558,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
@@ -1570,10 +1573,45 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               {saveStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
               {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
             </div>
+              <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
+                <Keyboard className="h-4 w-4 mr-2" />
+                Shortcuts
+              </Button>
             </div>
           </div>
         </CardHeader>
       </Card>
+
+      <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+            <DialogDescription>Speed up documentation with these shortcuts.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span>Save Draft</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + S</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Complete Visit</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + Shift + S</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Patient Search Navigate</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">↑ / ↓</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Patient Search Select</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Enter</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Close Menus</span>
+              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Esc</span>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Main Form */}
       <Card>
