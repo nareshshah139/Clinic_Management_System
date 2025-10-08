@@ -42,6 +42,7 @@ export default function AppointmentsCalendar({
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
+  const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
   // const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [visitTypeFilter, setVisitTypeFilter] = useState<string>('ALL');
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
@@ -110,10 +111,12 @@ export default function AppointmentsCalendar({
       setPatients([]);
       setQuickCreateOpen(false);
       setAutoPromptedForSearch(false);
+      setSearchingPatients(false);
       return;
     }
 
     try {
+      setSearchingPatients(true);
       const res: any = await apiClient.getPatients({ search: q, limit: 10 });
       const matches = (res.data || res.patients || []).map((p: any) => ({
         ...p,
@@ -129,8 +132,10 @@ export default function AppointmentsCalendar({
         setQuickCreateOpen(false);
         setAutoPromptedForSearch(false);
       }
+      setSearchingPatients(false);
     } catch (error) {
       console.error('Failed to search patients', error);
+      setSearchingPatients(false);
     }
   };
 
@@ -338,7 +343,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
 
-          {patientSearch && patients.length === 0 && (
+          {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
             <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
@@ -348,7 +353,7 @@ export default function AppointmentsCalendar({
               </div>
             </div>
           )}
-          {patientSearch && !patients.length && !quickCreateOpen && (
+          {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
             <div className="text-xs text-gray-500">
               Tip: enter patient name and phone, then use "Add" to create a new record instantly.
             </div>

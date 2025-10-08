@@ -54,6 +54,7 @@ export default function AppointmentScheduler({
   const [bookingSlot, setBookingSlot] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchingPatients, setSearchingPatients] = useState<boolean>(false);
   const [rescheduleContext, setRescheduleContext] = useState<{ appointment: AppointmentInSlot; originalDate: string } | null>(null);
   const [rescheduleLoading, setRescheduleLoading] = useState<boolean>(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -148,7 +149,9 @@ export default function AppointmentScheduler({
       setSlots(availableSlots);
       
       const scheduleRes: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
-      const appts: AppointmentInSlot[] = (scheduleRes.appointments || []).map((a) => ({
+      const appts: AppointmentInSlot[] = (scheduleRes.appointments || [])
+        .filter((a) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
+        .map((a) => ({
         id: a.id,
         slot: a.slot,
         patient: a.patient ? {
@@ -189,10 +192,12 @@ export default function AppointmentScheduler({
       setPatients([]);
       setQuickCreateOpen(false);
       setAutoPromptedForSearch(false);
+      setSearchingPatients(false);
       return;
     }
 
     try {
+      setSearchingPatients(true);
       const res: GetPatientsResponse = await apiClient.getPatients({ search: q, limit: 10 });
       const patientsData = res.data || res.patients || [];
 
@@ -211,6 +216,7 @@ export default function AppointmentScheduler({
         setQuickCreateOpen(false);
         setAutoPromptedForSearch(false);
       }
+      setSearchingPatients(false);
     } catch (e) {
       const errorMessage = getErrorMessage(e);
       toast({
@@ -218,6 +224,7 @@ export default function AppointmentScheduler({
         title: "Failed to search patients",
         description: errorMessage,
       });
+      setSearchingPatients(false);
     }
   }, [autoPromptedForSearch, toast]);
 
@@ -392,8 +399,9 @@ export default function AppointmentScheduler({
     }
   }, [rescheduleContext, rescheduleLoading, date, fetchSlots, toast]);
 
-  // Filter appointments based on visitType and room
+  // Filter appointments based on status, visitType and room
   const filteredAppointments = appointments.filter(apt => {
+    if (apt.status === AppointmentStatus.CANCELLED) return false;
     const visitTypeMatch = visitTypeFilter === 'ALL' || apt.visitType === visitTypeFilter;
     const roomMatch = roomFilter === 'ALL' || apt.room?.id === roomFilter;
     return visitTypeMatch && roomMatch;
@@ -401,6 +409,7 @@ export default function AppointmentScheduler({
 
   const filteredAppointmentsBySlot = Object.fromEntries(
     Object.entries(appointmentsBySlot).filter(([_, apt]) => {
+      if (apt.status === AppointmentStatus.CANCELLED) return false;
       const visitTypeMatch = visitTypeFilter === 'ALL' || apt.visitType === visitTypeFilter;
       const roomMatch = roomFilter === 'ALL' || apt.room?.id === roomFilter;
       return visitTypeMatch && roomMatch;
@@ -582,7 +591,7 @@ export default function AppointmentScheduler({
                 ))}
               </div>
             )}
-            {patientSearch && patients.length === 0 && (
+            {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
               <div className="mt-2 flex flex-col gap-2 rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
                 <div>No matching patients found.</div>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
@@ -590,7 +599,7 @@ export default function AppointmentScheduler({
                 </Button>
               </div>
             )}
-            {patientSearch && !patients.length && !quickCreateOpen && (
+            {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
               <div className="mt-2 text-xs text-gray-500">
                 Tip: enter patient name and phone, then use "Add" to create a new record instantly.
               </div>
