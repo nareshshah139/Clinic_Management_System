@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope } from 'lucide-react';
+import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatPatientName, filterRoomsByVisitType } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -46,6 +46,8 @@ export default function PatientsManagement() {
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
+  const [portalFilter, setPortalFilter] = useState<'ALL' | 'LINKED' | 'UNLINKED'>('ALL');
+  const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
   const [open, setOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
@@ -65,6 +67,8 @@ export default function PatientsManagement() {
   const [linkPortalEmail, setLinkPortalEmail] = useState<string>('');
   const [linkPortalTarget, setLinkPortalTarget] = useState<Patient | null>(null);
   const fetchIdRef = useRef(0);
+  const [sortBy, setSortBy] = useState<'NAME' | 'AGE' | 'GENDER' | 'LAST_VISIT' | 'CREATED_AT' | 'REFERRAL'>('NAME');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [form, setForm] = useState<PatientFormState>({
     abhaId: '',
     firstName: '',
@@ -164,6 +168,11 @@ export default function PatientsManagement() {
         limit: pageSize,
         search: searchTerm,
         gender: normGender,
+        // Pass-through filters if backend supports (no-op otherwise)
+        portalLinked: portalFilter === 'ALL' ? undefined : portalFilter === 'LINKED',
+        abhaPresent: abhaFilter === 'ALL' ? undefined : abhaFilter === 'HAS',
+        sortBy: sortBy,
+        sortOrder: sortOrder,
       });
 
       const extractRows = (payload: unknown): BackendPatientRow[] => {
@@ -223,6 +232,124 @@ export default function PatientsManagement() {
     } finally {
       setListLoading(false);
     }
+  };
+
+  // Derived rows with client-side filters + sorting (in case backend ignores params)
+  const displayPatients = useMemo(() => {
+    let rows = [...patients];
+    if (portalFilter !== 'ALL') {
+      const wantLinked = portalFilter === 'LINKED';
+      rows = rows.filter(p => (wantLinked ? !!p.portalUserId : !p.portalUserId));
+    }
+    if (abhaFilter !== 'ALL') {
+      const wantAbha = abhaFilter === 'HAS';
+      rows = rows.filter(p => (wantAbha ? !!p.abhaId : !p.abhaId));
+    }
+    const cmp = <T,>(a: T, b: T) => (a === b ? 0 : (a as any) < (b as any) ? -1 : 1);
+    rows.sort((a, b) => {
+      let r = 0;
+      if (sortBy === 'NAME') {
+        r = cmp((a.name || '').toLowerCase(), (b.name || '').toLowerCase());
+      } else if (sortBy === 'AGE') {
+        const ageA = (() => {
+          if (!a.dob) return -Infinity;
+          const d = new Date(a.dob);
+          if (isNaN(d.getTime())) return -Infinity;
+          const today = new Date();
+          let age = today.getFullYear() - d.getFullYear();
+          const m = today.getMonth() - d.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+          return age;
+        })();
+        const ageB = (() => {
+          if (!b.dob) return -Infinity;
+          const d = new Date(b.dob);
+          if (isNaN(d.getTime())) return -Infinity;
+          const today = new Date();
+          let age = today.getFullYear() - d.getFullYear();
+          const m = today.getMonth() - d.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+          return age;
+        })();
+        r = cmp(ageA, ageB);
+      } else if (sortBy === 'GENDER') {
+        r = cmp((a.gender || '').toString(), (b.gender || '').toString());
+      } else if (sortBy === 'LAST_VISIT') {
+        const da = a.lastVisitDate ? new Date(a.lastVisitDate).getTime() : -Infinity;
+        const db = b.lastVisitDate ? new Date(b.lastVisitDate).getTime() : -Infinity;
+        r = cmp(da, db);
+      } else if (sortBy === 'REFERRAL') {
+        r = cmp((a.referralSource || ''), (b.referralSource || ''));
+      } else {
+        const ca = a.createdAt ? new Date(a.createdAt).getTime() : -Infinity;
+        const cb = b.createdAt ? new Date(b.createdAt).getTime() : -Infinity;
+        r = cmp(ca, cb);
+      }
+      return sortOrder === 'asc' ? r : -r;
+    });
+    return rows;
+  }, [patients, portalFilter, abhaFilter, sortBy, sortOrder]);
+
+  const toggleSort = (key: typeof sortBy) => {
+    if (sortBy === key) {
+      setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(key);
+      setSortOrder('asc');
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setGenderFilter('ALL');
+    setPortalFilter('ALL');
+    setAbhaFilter('ALL');
+    setCurrentPage(1);
+  };
+
+  const exportCsv = () => {
+    const headers = [
+      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Portal Linked','Created At'
+    ];
+    const lines = [headers.join(',')];
+    const csvEscape = (v: unknown) => {
+      const s = String(v ?? '');
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    };
+    for (const p of displayPatients) {
+      const age = (() => {
+        if (!p.dob) return '';
+        const d = new Date(p.dob);
+        if (isNaN(d.getTime())) return '';
+        const today = new Date();
+        let age = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+        return age;
+      })();
+      const row = [
+        p.id,
+        p.name,
+        age,
+        p.gender,
+        p.phone,
+        p.email || '',
+        p.abhaId || '',
+        p.referralSource || '',
+        p.portalUserId ? 'Yes' : 'No',
+        p.createdAt,
+      ].map(csvEscape);
+      lines.push(row.join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `patients_export_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -723,6 +850,10 @@ export default function PatientsManagement() {
             </div>
           </DialogContent>
         </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
+          <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-2" /> Export CSV</Button>
+        </div>
       </div>
 
       <Card>
@@ -773,6 +904,22 @@ export default function PatientsManagement() {
                 <SelectItem value="MALE">Male</SelectItem>
                 <SelectItem value="FEMALE">Female</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={portalFilter} onValueChange={(v: 'ALL' | 'LINKED' | 'UNLINKED') => setPortalFilter(v)}>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Portal" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Portal</SelectItem>
+                <SelectItem value="LINKED">Portal Linked</SelectItem>
+                <SelectItem value="UNLINKED">Not Linked</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={abhaFilter} onValueChange={(v: 'ALL' | 'HAS' | 'NONE') => setAbhaFilter(v)}>
+              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="ABHA" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All ABHA</SelectItem>
+                <SelectItem value="HAS">Has ABHA</SelectItem>
+                <SelectItem value="NONE">No ABHA</SelectItem>
               </SelectContent>
             </Select>
             <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
@@ -831,25 +978,49 @@ export default function PatientsManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Patient</TableHead>
-                    <TableHead>Age</TableHead>
-                    <TableHead>Gender</TableHead>
+                    <TableHead onClick={() => toggleSort('NAME')} className="cursor-pointer select-none">
+                      Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    </TableHead>
+                    <TableHead onClick={() => toggleSort('AGE')} className="cursor-pointer select-none">
+                      Age {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    </TableHead>
+                    <TableHead onClick={() => toggleSort('GENDER')} className="cursor-pointer select-none">
+                      Gender {sortBy === 'GENDER' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    </TableHead>
                     <TableHead>Contact</TableHead>
                     <TableHead>ABHA ID</TableHead>
-                    {patients.some(p => !!p.lastVisitDate) && <TableHead>Last Visit</TableHead>}
-                    <TableHead>Referral</TableHead>
+                    {displayPatients.some(p => !!p.lastVisitDate) && (
+                      <TableHead onClick={() => toggleSort('LAST_VISIT')} className="cursor-pointer select-none">
+                        Last Visit {sortBy === 'LAST_VISIT' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                      </TableHead>
+                    )}
+                    <TableHead onClick={() => toggleSort('REFERRAL')} className="cursor-pointer select-none">
+                      Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
+                    </TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {patients.map((p) => (
-                    <TableRow key={p.id}>
+                  {displayPatients.map((p) => (
+                    <TableRow key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/dashboard/patients/${p.id}`)}>
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar><AvatarFallback className="bg-blue-100 text-blue-600">{initials(p)}</AvatarFallback></Avatar>
                           <div>
                             <div className="font-medium text-gray-900">{formatPatientName(p)}</div>
-                            <div className="text-xs text-gray-500">ID: {p.id.slice(-8)}</div>
+                            <button
+                              type="button"
+                              className="text-xs text-gray-500 hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard?.writeText(p.id).then(() => {
+                                  toast({ title: 'Copied', description: 'Patient ID copied to clipboard' });
+                                }).catch(() => {});
+                              }}
+                              title="Click to copy full ID"
+                            >
+                              ID: {p.id.slice(-8)}
+                            </button>
                             {p.portalUserId && <Badge variant="outline" className="text-xs mt-1">Portal Linked</Badge>}
                           </div>
                         </div>
@@ -869,7 +1040,7 @@ export default function PatientsManagement() {
                       <TableCell>
                         <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
                       </TableCell>
-                      {patients.some(pp => !!pp.lastVisitDate) && (
+                      {displayPatients.some(pp => !!pp.lastVisitDate) && (
                         <TableCell>
                           <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
                         </TableCell>
@@ -879,16 +1050,16 @@ export default function PatientsManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => router.push(`/dashboard/patients/${p.id}`)}><Eye className="h-3 w-3 mr-1" /> View</Button>
-                          <Button variant="outline" size="sm" onClick={() => onEdit(p)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
-                          <Button variant="outline" size="sm" onClick={() => handleArchive(p)}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/patients/${p.id}`); }}><Eye className="h-3 w-3 mr-1" /> View</Button>
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); onEdit(p); }}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleArchive(p); }}><Archive className="h-3 w-3 mr-1" /> Archive</Button>
                           {p.portalUserId ? (
-                            <Button variant="outline" size="sm" onClick={() => handleUnlinkPortalUser(p)}><Unlink className="h-3 w-3 mr-1" /> Unlink</Button>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleUnlinkPortalUser(p); }}><Unlink className="h-3 w-3 mr-1" /> Unlink</Button>
                           ) : (
-                            <Button variant="outline" size="sm" onClick={() => handleLinkPortalUser(p)}><LinkIcon className="h-3 w-3 mr-1" /> Link Portal</Button>
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleLinkPortalUser(p); }}><LinkIcon className="h-3 w-3 mr-1" /> Link Portal</Button>
                           )}
-                          <Button variant="outline" size="sm" onClick={() => handleSendWhatsApp(p)}><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Button>
-                          <Button size="sm" onClick={() => router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`)}>
+                          <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleSendWhatsApp(p); }}><MessageSquare className="h-3 w-3 mr-1" /> WhatsApp</Button>
+                          <Button size="sm" onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/visits?patientId=${p.id}&autoStart=true`); }}>
                             <Stethoscope className="h-3 w-3 mr-1" /> Start Visit
                           </Button>
                         </div>
