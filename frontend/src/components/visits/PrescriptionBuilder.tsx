@@ -151,6 +151,43 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
   const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
 
+  // Allow creating a drug in DB for privileged roles
+  const canAddDrugToDB = useMemo(() => ['ADMIN', 'PHARMACIST'].includes(String(userRole || '').toUpperCase()), [userRole]);
+  const [addDrugOpen, setAddDrugOpen] = useState(false);
+  const [newDrugForm, setNewDrugForm] = useState<{ name: string; manufacturerName: string; price: string; packSizeLabel: string }>({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
+  const openAddDrugDialog = () => {
+    const q = (drugQuery || '').trim();
+    setNewDrugForm({ name: q, manufacturerName: '', price: '', packSizeLabel: '' });
+    setAddDrugOpen(true);
+  };
+  const handleCreateDrug = async () => {
+    try {
+      const payload: any = {
+        name: (newDrugForm.name || '').trim(),
+        manufacturerName: (newDrugForm.manufacturerName || '').trim(),
+        price: Number(newDrugForm.price) || 0,
+        packSizeLabel: (newDrugForm.packSizeLabel || '').trim() || 'unit',
+        description: [
+          'Added from Prescription Builder',
+          patientId ? `patientId=${patientId}` : null,
+          visitId ? `visitId=${visitId}` : null,
+          doctorId ? `doctorId=${doctorId}` : null,
+        ].filter(Boolean).join('; '),
+      };
+      if (!payload.name || !payload.manufacturerName) {
+        toast({ variant: 'destructive', title: 'Missing details', description: 'Name and Manufacturer are required.' });
+        return;
+      }
+      const created: any = await apiClient.post('/drugs', payload);
+      setAddDrugOpen(false);
+      // Immediately add to current prescription items
+      addItemFromDrug({ id: created?.id, name: created?.name, genericName: '', manufacturerName: created?.manufacturerName });
+      toast({ variant: 'success', title: 'Drug added', description: 'Drug saved to database and added to prescription.' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Failed to add drug', description: getErrorMessage(e) });
+    }
+  };
+
   // Additional clinical fields per requirements
   const [chiefComplaints, setChiefComplaints] = useState<string>('');
   const [pastHistory, setPastHistory] = useState<string>('');
@@ -2047,6 +2084,40 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </CollapsibleSection>
 
+            {/* Add Drug to DB Dialog */}
+            <Dialog open={addDrugOpen} onOpenChange={setAddDrugOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Drug to Database</DialogTitle>
+                  <DialogDescription>Quickly add a new drug record and insert into this prescription.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-600">Name</label>
+                    <Input value={newDrugForm.name} onChange={(e) => setNewDrugForm((p) => ({ ...p, name: e.target.value }))} placeholder="e.g., Paracetamol 500mg Tablet" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600">Manufacturer</label>
+                    <Input value={newDrugForm.manufacturerName} onChange={(e) => setNewDrugForm((p) => ({ ...p, manufacturerName: e.target.value }))} placeholder="e.g., Sun Pharmaceuticals" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-600">Price (₹)</label>
+                      <Input type="number" value={newDrugForm.price} onChange={(e) => setNewDrugForm((p) => ({ ...p, price: e.target.value }))} placeholder="e.g., 25" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600">Pack Size Label</label>
+                      <Input value={newDrugForm.packSizeLabel} onChange={(e) => setNewDrugForm((p) => ({ ...p, packSizeLabel: e.target.value }))} placeholder="e.g., strip of 10 tablets" />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAddDrugOpen(false)}>Cancel</Button>
+                  <Button onClick={handleCreateDrug}>Save & Add</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Chief Complaints - dedicated card */}
             <CollapsibleSection 
               title="Chief Complaints" 
@@ -2351,6 +2422,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     value={drugQuery}
                     onChange={(e) => void searchDrugs(e.target.value)}
                   />
+                  {canAddDrugToDB && (
+                    <div className="mt-1">
+                      <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
+                    </div>
+                  )}
                   {drugQuery.trim().length >= 2 && (
                     <div className="mt-2 border rounded divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {loadingDrugs && (
