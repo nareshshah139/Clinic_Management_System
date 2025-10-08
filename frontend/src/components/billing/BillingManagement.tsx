@@ -108,12 +108,19 @@ interface InvoiceItem {
 
 export default function BillingManagement() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [allInvoicesCache, setAllInvoicesCache] = useState<Invoice[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ patientId: '', description: '', amount: '', gstRate: 18 });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState('');
   const [activeTab, setActiveTab] = useState('simple');
+  const [filters, setFilters] = useState<{ search: string; status: string; startDate?: string; endDate?: string }>({
+    search: '',
+    status: 'all',
+    startDate: undefined,
+    endDate: undefined,
+  });
 
   // Invoice builder state
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
@@ -133,20 +140,78 @@ export default function BillingManagement() {
   const [showPatientMenu, setShowPatientMenu] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
 
-  const fetchInvoices = async () => {
+  const computeInvoiceStatus = (inv: any): string => {
+    if (inv?.status) return String(inv.status);
+    if (inv?.balance === 0) return 'PAID';
+    if ((inv?.received || 0) > 0) return 'PARTIALLY_PAID';
+    return 'PENDING';
+  };
+
+  const applyLocalFilters = (rows: Invoice[]): Invoice[] => {
+    let filtered = [...rows];
+    if (filters.search?.trim()) {
+      const q = filters.search.trim().toLowerCase();
+      filtered = filtered.filter((inv: any) => {
+        const invNo = String(inv.invoiceNo || inv.invoiceNumber || '').toLowerCase();
+        const patientName = String(inv.patient?.name || `${inv.patient?.firstName || ''} ${inv.patient?.lastName || ''}` || '').toLowerCase();
+        return invNo.includes(q) || patientName.includes(q);
+      });
+    }
+    if (filters.status && filters.status !== 'all') {
+      filtered = filtered.filter((inv) => computeInvoiceStatus(inv) === filters.status);
+    }
+    if (filters.startDate) {
+      const start = new Date(filters.startDate);
+      filtered = filtered.filter((inv: any) => new Date(inv.createdAt) >= start);
+    }
+    if (filters.endDate) {
+      const end = new Date(filters.endDate);
+      // include end day fully
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter((inv: any) => new Date(inv.createdAt) <= end);
+    }
+    return filtered;
+  };
+
+  const fetchInvoices = async (opts?: { useFilters?: boolean }) => {
     try {
       setLoading(true);
-      const res: any = await apiClient.getInvoices({ limit: 50 });
-      setInvoices(res?.invoices || res?.data || res || []);
+      const params: Record<string, any> = { limit: 50 };
+      if (opts?.useFilters) {
+        if (filters.search) params.search = filters.search;
+        if (filters.status && filters.status !== 'all') params.status = filters.status;
+        if (filters.startDate) params.startDate = filters.startDate;
+        if (filters.endDate) params.endDate = filters.endDate;
+      }
+      const res: any = await apiClient.getInvoices(params);
+      const rows: Invoice[] = res?.invoices || res?.data || res || [];
+      if (!opts?.useFilters) {
+        setAllInvoicesCache(rows);
+        setInvoices(rows);
+      } else {
+        setInvoices(rows);
+      }
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch invoices', e);
+      // Fallback to client-side filtering if we have cache
+      if (allInvoicesCache.length > 0) {
+        setInvoices(applyLocalFilters(allInvoicesCache));
+      }
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => { void fetchInvoices(); }, []);
+
+  // Debounce server-side filtering
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void fetchInvoices({ useFilters: true });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [filters.search, filters.status, filters.startDate, filters.endDate]);
 
   // Debounced search for patients
   useEffect(() => {
@@ -1134,17 +1199,55 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                   {errors.items && (
                     <div className="text-xs text-red-600">{errors.items}</div>
                   )}
+
+                  {/* Sticky Totals & Actions */}
+                  {invoiceItems.length > 0 && (
+                    <div className="sticky bottom-0 bg-white border-t mt-4">
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-3">
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+                          <span>
+                            <span className="text-gray-600">Subtotal:</span>{' '}
+                            <span className="font-medium">₹{subtotal.toLocaleString('en-IN')}</span>
+                          </span>
+                          {discountAmount > 0 && (
+                            <span className="text-red-600">
+                              <span>Discount:</span>{' '}
+                              <span>-₹{discountAmount.toLocaleString('en-IN')}</span>
+                            </span>
+                          )}
+                          <span>
+                            <span className="text-gray-600">GST:</span>{' '}
+                            <span className="font-medium">₹{gstAmount.toLocaleString('en-IN')}</span>
+                          </span>
+                          <span className="text-base">
+                            <span className="text-gray-600">Total:</span>{' '}
+                            <span className="font-semibold">₹{finalTotal.toLocaleString('en-IN')}</span>
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={loading}>
+                            Cancel
+                          </Button>
+                          <Button onClick={createInvoice} disabled={loading}>
+                            {loading ? 'Creating...' : 'Create Invoice'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
-              
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={loading}>
-                  Cancel
-                </Button>
-                <Button onClick={createInvoice} disabled={loading}>
-                  {loading ? 'Creating...' : 'Create Invoice'}
-                </Button>
-              </div>
+              {/* Bottom actions for simple form only */}
+              {activeTab === 'simple' && (
+                <div className="flex justify-end gap-2 pt-4 border-t">
+                  <Button variant="outline" onClick={() => handleDialogOpenChange(false)} disabled={loading}>
+                    Cancel
+                  </Button>
+                  <Button onClick={createInvoice} disabled={loading}>
+                    {loading ? 'Creating...' : 'Create Invoice'}
+                  </Button>
+                </div>
+              )}
             </DialogContent>
           </Dialog>
           <Button 
@@ -1168,6 +1271,70 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
           </Button>
         </div>
       </div>
+
+      {/* Filters Toolbar */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <Label>Search</Label>
+              <Input
+                placeholder="Search by invoice # or patient"
+                value={filters.search}
+                onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Status</Label>
+              <Select
+                value={filters.status}
+                onValueChange={(v: string) => setFilters({ ...filters, status: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="PAID">Paid</SelectItem>
+                  <SelectItem value="PARTIALLY_PAID">Partially Paid</SelectItem>
+                  <SelectItem value="PENDING">Pending</SelectItem>
+                  <SelectItem value="OVERDUE">Overdue</SelectItem>
+                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                  <SelectItem value="REFUNDED">Refunded</SelectItem>
+                  <SelectItem value="DRAFT">Draft</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Start date</Label>
+              <Input
+                type="date"
+                value={filters.startDate || ''}
+                onChange={(e) => setFilters({ ...filters, startDate: e.target.value || undefined })}
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Label>End date</Label>
+                <Input
+                  type="date"
+                  value={filters.endDate || ''}
+                  onChange={(e) => setFilters({ ...filters, endDate: e.target.value || undefined })}
+                />
+              </div>
+              <div className="self-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setFilters({ search: '', status: 'all', startDate: undefined, endDate: undefined })}
+                  disabled={loading || (!filters.search && filters.status === 'all' && !filters.startDate && !filters.endDate)}
+                >
+                  Clear
+                </Button>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Print Preview Dialog */}
       <Dialog open={showPrintPreview} onOpenChange={setShowPrintPreview}>
@@ -1216,7 +1383,19 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
           {loading ? (
             <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
           ) : invoices.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">No invoices found</div>
+            <div className="text-center py-10 text-gray-500">
+              <div>No invoices found</div>
+              {(filters.search || filters.status !== 'all' || filters.startDate || filters.endDate) && (
+                <div className="mt-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setFilters({ search: '', status: 'all', startDate: undefined, endDate: undefined })}
+                  >
+                    Clear filters
+                  </Button>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <Table>

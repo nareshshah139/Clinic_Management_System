@@ -14,15 +14,7 @@ import { apiClient } from '@/lib/api';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
 
-interface Room {
-  id: string;
-  name: string;
-  type: string;
-  capacity: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import type { Room } from '@/lib/types';
 
 interface RoomFormData {
   name: string;

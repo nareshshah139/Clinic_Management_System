@@ -21,6 +21,9 @@ import PatientProgressTracker from '@/components/patients/PatientProgressTracker
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
   prefillPatientId?: string;
+  controlledDoctorId?: string;
+  controlledDate?: string;
+  hideHeaderControls?: boolean;
 }
 
 export default function AppointmentScheduler({ 
@@ -31,6 +34,9 @@ export default function AppointmentScheduler({
     timezone: 'Asia/Kolkata'
   },
   prefillPatientId,
+  controlledDoctorId,
+  controlledDate,
+  hideHeaderControls,
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -66,6 +72,14 @@ export default function AppointmentScheduler({
       setSelectedPatientId(prefillPatientId);
     }
   }, [prefillPatientId]);
+
+  // Apply controlled doctor/date when provided
+  useEffect(() => {
+    if (controlledDoctorId) setDoctorId(controlledDoctorId);
+  }, [controlledDoctorId]);
+  useEffect(() => {
+    if (controlledDate) setDate(controlledDate);
+  }, [controlledDate]);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
@@ -480,19 +494,23 @@ export default function AppointmentScheduler({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <div>
-              <label className="text-sm text-gray-700">Doctor</label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Date</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            {!hideHeaderControls && (
+              <>
+                <div>
+                  <label className="text-sm text-gray-700">Doctor</label>
+                  <Select value={doctorId} onValueChange={setDoctorId}>
+                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-700">Date</label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+              </>
+            )}
             <div>
               <label className="text-sm text-gray-700">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>

@@ -20,6 +20,9 @@ import { AppointmentStatus } from '@cms/shared-types';
 interface AppointmentsCalendarProps {
   timeSlotConfig?: TimeSlotConfig;
   prefillPatientId?: string;
+  controlledDoctorId?: string;
+  controlledDate?: string;
+  hideHeaderControls?: boolean;
 }
 
 export default function AppointmentsCalendar({
@@ -30,6 +33,9 @@ export default function AppointmentsCalendar({
     timezone: 'Asia/Kolkata'
   },
   prefillPatientId,
+  controlledDoctorId,
+  controlledDate,
+  hideHeaderControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
   const [date, setDate] = useState<string>(getISTDateString());
@@ -72,6 +78,14 @@ export default function AppointmentsCalendar({
       setSelectedPatientId(prefillPatientId);
     }
   }, [prefillPatientId]);
+
+  // Apply controlled doctor/date when provided
+  useEffect(() => {
+    if (controlledDoctorId) setDoctorId(controlledDoctorId);
+  }, [controlledDoctorId]);
+  useEffect(() => {
+    if (controlledDate) setDate(controlledDate);
+  }, [controlledDate]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
@@ -263,19 +277,23 @@ export default function AppointmentsCalendar({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-            <div>
-              <label className="text-sm text-gray-700">Doctor</label>
-              <Select value={doctorId} onValueChange={setDoctorId}>
-                <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
-                <SelectContent>
-                  {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm text-gray-700">Date</label>
-              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-            </div>
+            {!hideHeaderControls && (
+              <>
+                <div>
+                  <label className="text-sm text-gray-700">Doctor</label>
+                  <Select value={doctorId} onValueChange={setDoctorId}>
+                    <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((d) => (<SelectItem key={d.id} value={d.id}>{d.firstName} {d.lastName}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-700">Date</label>
+                  <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                </div>
+              </>
+            )}
             <div>
               <label className="text-sm text-gray-700">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>

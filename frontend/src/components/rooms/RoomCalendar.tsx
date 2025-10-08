@@ -9,14 +9,9 @@ import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'l
 import { apiClient } from '@/lib/api';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
+import { useToast } from '@/hooks/use-toast';
 
-interface Room {
-  id: string;
-  name: string;
-  type: string;
-  capacity: number;
-  isActive: boolean;
-}
+import type { Room } from '@/lib/types';
 
 export default function RoomCalendar() {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -24,6 +19,8 @@ export default function RoomCalendar() {
   const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule>>({});
   const [selectedRoomType, setSelectedRoomType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const [search, setSearch] = useState('');
 
   // Generate time slots from 8 AM to 8 PM
   const timeSlots = Array.from({ length: 12 }, (_, i) => {
@@ -53,6 +50,7 @@ export default function RoomCalendar() {
       console.error('❌ Error fetching rooms:', error);
       setRooms([]); // Ensure rooms is always an array
       setLoading(false);
+      toast({ variant: 'destructive', title: 'Failed to fetch rooms' });
     }
   };
 
@@ -86,6 +84,7 @@ export default function RoomCalendar() {
       setRoomSchedules(schedules);
     } catch (error) {
       console.error('Error fetching room schedules:', error);
+      toast({ variant: 'destructive', title: 'Failed to fetch room schedules' });
     } finally {
       setLoading(false);
     }
@@ -102,8 +101,9 @@ export default function RoomCalendar() {
   }, [selectedDate, rooms]);
 
   const filteredRooms = Array.isArray(rooms) ? rooms.filter(room => {
-    if (selectedRoomType === 'all') return room.isActive;
-    return room.isActive && room.type === selectedRoomType;
+    const matchesType = selectedRoomType === 'all' || room.type === selectedRoomType;
+    const matchesQuery = !search.trim() || room.name.toLowerCase().includes(search.trim().toLowerCase());
+    return room.isActive && matchesType && matchesQuery;
   }) : [];
 
   const getAppointmentForTimeSlot = (roomId: string, hour: number) => {
@@ -130,6 +130,15 @@ export default function RoomCalendar() {
     const newDate = new Date(selectedDate);
     newDate.setDate(selectedDate.getDate() + (direction === 'next' ? 1 : -1));
     setSelectedDate(newDate);
+  };
+
+  const scrollToCurrentHour = () => {
+    const now = new Date();
+    const hour = now.getHours();
+    const anchor = document.getElementById(`time-${hour.toString().padStart(2, '0')}:00`);
+    if (anchor) {
+      anchor.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    }
   };
 
   const roomTypes = ['all', ...new Set(Array.isArray(rooms) ? rooms.map(room => room.type) : [])];
@@ -220,12 +229,19 @@ export default function RoomCalendar() {
               ))}
             </SelectContent>
           </Select>
+          <input
+            className="border rounded px-3 py-2 text-sm w-[220px]"
+            placeholder="Search room name..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
           <Button
             variant="outline"
             onClick={() => setSelectedDate(new Date())}
           >
             Today
           </Button>
+          <Button variant="outline" onClick={scrollToCurrentHour}>Now</Button>
         </div>
       </div>
 
@@ -322,7 +338,7 @@ export default function RoomCalendar() {
               {/* Time Slots */}
               {timeSlots.map((slot) => (
                 <div key={slot.time} className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
-                  <div className="flex items-center p-2 font-medium text-sm text-gray-700">
+                <div className="flex items-center p-2 font-medium text-sm text-gray-700" id={`time-${slot.time}`}>
                     <Clock className="h-4 w-4 mr-1" />
                     {slot.time}
                   </div>
