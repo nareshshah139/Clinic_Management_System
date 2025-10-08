@@ -433,8 +433,21 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             const badgeVariant: 'default' | 'destructive' = isProcedure ? 'destructive' : 'default';
             const hasPrescription = !!visit.prescription?.id;
             const photoCount = Number((visit as any)?.photos || 0);
+            // Normalize preview URLs so both legacy `/uploads/*` and API routes render
+            const toAbsolute = (path: string) => {
+              if (!path) return path as unknown as string;
+              const p = String(path);
+              if (/^https?:\/\//i.test(p)) return p;
+              const cleaned = p.replace(/^\/?api\/+/, '/');
+              if (/^\/?uploads\//i.test(cleaned) || /\/uploads\//i.test(cleaned)) {
+                const startIdx = cleaned.toLowerCase().indexOf('/uploads/');
+                const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
+                return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
+              }
+              return `/api${cleaned.startsWith('/') ? '' : '/'}${cleaned.replace(/^\//, '')}`;
+            };
             const photoPreviews = Array.isArray((visit as any)?.photoPreviewUrls)
-              ? ((visit as any).photoPreviewUrls as string[])
+              ? ((visit as any).photoPreviewUrls as string[]).map(toAbsolute)
               : [];
             const drugNames = Array.isArray((visit as any)?.prescriptionDrugNames)
               ? ((visit as any).prescriptionDrugNames as string[])

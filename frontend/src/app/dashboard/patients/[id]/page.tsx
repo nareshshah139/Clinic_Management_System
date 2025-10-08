@@ -29,6 +29,22 @@ export default function PatientDetailsPage() {
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
   const [visits, setVisits] = useState<VisitEntry[]>([]);
 
+  // Normalize thumbnail/image URLs so they work both for legacy `/uploads/*` files
+  // and new DB-backed endpoints served under `/api/visits/...`.
+  const toAbsolute = (path: string) => {
+    if (!path) return path as unknown as string;
+    const p = String(path);
+    if (/^https?:\/\//i.test(p)) return p;
+    const cleaned = p.replace(/^\/?api\/+/, '/');
+    if (/^\/?uploads\//i.test(cleaned) || /\/uploads\//i.test(cleaned)) {
+      const startIdx = cleaned.toLowerCase().indexOf('/uploads/');
+      const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
+      return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
+    }
+    // Default to proxying through Next.js API rewrite
+    return `/api${cleaned.startsWith('/') ? '' : '/'}${cleaned.replace(/^\//, '')}`;
+  };
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -143,7 +159,7 @@ export default function PatientDetailsPage() {
         {photoPreviews.length > 0 && (
           <div className="mt-2 flex gap-2 overflow-x-auto">
             {photoPreviews.map((u, i) => (
-              <img key={`${v.id || 'visit'}-p-${i}`} src={u} alt="preview" className="h-12 w-20 object-cover rounded border" />
+              <img key={`${v.id || 'visit'}-p-${i}`} src={toAbsolute(u)} alt="preview" className="h-12 w-20 object-cover rounded border" />
             ))}
           </div>
         )}
