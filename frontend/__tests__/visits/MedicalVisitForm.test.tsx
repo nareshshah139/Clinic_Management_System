@@ -274,7 +274,7 @@ describe('MedicalVisitForm', () => {
     });
   });
 
-  it('converts numeric vitals correctly', async () => {
+  it('converts numeric vitals correctly (including Fahrenheit to Celsius)', async () => {
     const mockCreateVisit = jest.mocked(apiClient.createVisit);
     mockCreateVisit.mockResolvedValue({ id: 'visit-123' });
 
@@ -287,7 +287,8 @@ describe('MedicalVisitForm', () => {
     fireEvent.change(screen.getByPlaceholderText('BP Systolic'), { target: { value: '120' } });
     fireEvent.change(screen.getByPlaceholderText('BP Diastolic'), { target: { value: '80' } });
     fireEvent.change(screen.getByPlaceholderText('Heart Rate'), { target: { value: '72' } });
-    fireEvent.change(screen.getByPlaceholderText('Temperature'), { target: { value: '36.5' } });
+    // Enter 98.6 (F) and expect backend receives ~37 C
+    fireEvent.change(screen.getByPlaceholderText('°F'), { target: { value: '98.6' } });
     fireEvent.change(screen.getByPlaceholderText('Weight'), { target: { value: '70' } });
     fireEvent.change(screen.getByPlaceholderText('Height'), { target: { value: '175' } });
     fireEvent.change(screen.getByPlaceholderText('SpO2'), { target: { value: '98' } });
@@ -297,20 +298,17 @@ describe('MedicalVisitForm', () => {
     fireEvent.click(saveButton);
     
     await waitFor(() => {
-      expect(mockCreateVisit).toHaveBeenCalledWith(
-        expect.objectContaining({
-          vitals: {
-            systolicBP: 120,
-            diastolicBP: 80,
-            heartRate: 72,
-            temperature: 36.5,
-            weight: 70,
-            height: 175,
-            oxygenSaturation: 98,
-            respiratoryRate: 16,
-          },
-        })
-      );
+      const call = mockCreateVisit.mock.calls[0][0] as any;
+      expect(call.vitals).toBeDefined();
+      expect(call.vitals.systolicBP).toBe(120);
+      expect(call.vitals.diastolicBP).toBe(80);
+      expect(call.vitals.heartRate).toBe(72);
+      // 98.6F -> 37C exact
+      expect(call.vitals.temperature).toBeCloseTo(37, 3);
+      expect(call.vitals.weight).toBe(70);
+      expect(call.vitals.height).toBe(175);
+      expect(call.vitals.oxygenSaturation).toBe(98);
+      expect(call.vitals.respiratoryRate).toBe(16);
     });
   });
 

@@ -619,6 +619,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   // Build payload for save/update (moved up to avoid TDZ issues)
   const buildPayload = useCallback(() => {
+    // Convert Fahrenheit (UI unit) to Celsius for backend validation/storage
+    let temperatureC: number | undefined = undefined;
+    if (vitals.temp !== '') {
+      const n = Number(vitals.temp);
+      if (!Number.isNaN(n)) {
+        temperatureC = ((n - 32) * 5) / 9;
+      }
+    }
     const payload: Record<string, unknown> = {
       patientId,
       doctorId,
@@ -666,10 +674,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         systolicBP: vitals.bpS ? Number(vitals.bpS) : undefined,
         diastolicBP: vitals.bpD ? Number(vitals.bpD) : undefined,
         heartRate: vitals.hr ? Number(vitals.hr) : undefined,
-        temperature: vitals.temp ? Number(vitals.temp) : undefined,
+        temperature: temperatureC,
         weight: vitals.weight ? Number(vitals.weight) : undefined,
         height: vitals.height ? Number(vitals.height) : undefined,
         respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
+        oxygenSaturation: vitals.spo2 ? Number(vitals.spo2) : undefined,
       },
       photos: [], // Photos are now managed by VisitPhotos component
       metadata: {
@@ -871,10 +880,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               bpS: v.systolicBP ? String(v.systolicBP) : '',
               bpD: v.diastolicBP ? String(v.diastolicBP) : '',
               hr: v.heartRate ? String(v.heartRate) : '',
-              temp: v.temperature ? String(v.temperature) : '',
+              // Backend stores Celsius; convert to Fahrenheit for UI
+              temp: v.temperature ? String(((Number(v.temperature) * 9) / 5) + 32) : '',
               weight: v.weight ? String(v.weight) : '',
               height: v.height ? String(v.height) : '',
-              spo2: v.spo2 ? String(v.spo2) : '',
+              spo2: v.oxygenSaturation ? String(v.oxygenSaturation) : '',
               rr: v.respiratoryRate ? String(v.respiratoryRate) : '',
             });
           }
@@ -1674,7 +1684,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   <div>
                     <label className="text-sm font-medium text-gray-700">Temperature</label>
                     <Input 
-                      placeholder="°F" 
+                      placeholder="°F"
                       value={vitals.temp} 
                       onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} 
                     />
