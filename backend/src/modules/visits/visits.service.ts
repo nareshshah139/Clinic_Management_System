@@ -1096,9 +1096,12 @@ export class VisitsService {
       select: { data: true, contentType: true, visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } } },
     });
     if (!att) throw new NotFoundException('Attachment not found');
-    const pBranch = (att.visit as any).patient.branchId;
-    const dBranch = (att.visit as any).doctor.branchId;
-    if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
+    // Optional bypass for single-branch deployments
+    if (String(process.env.DISABLE_BRANCH_ENFORCEMENT).toLowerCase() !== 'true') {
+      const pBranch = (att.visit as any).patient.branchId;
+      const dBranch = (att.visit as any).doctor.branchId;
+      if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
+    }
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
 
