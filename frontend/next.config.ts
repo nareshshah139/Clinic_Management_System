@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
       {
         source: "/uploads/:path*",
         destination: process.env.NEXT_PUBLIC_API_PROXY
-          ? process.env.NEXT_PUBLIC_API_PROXY.replace(/:\d+\/$/, '/').replace(/\/$/, '') + "/uploads/:path*"
+          ? process.env.NEXT_PUBLIC_API_PROXY.replace(/\/+$/, '') + "/uploads/:path*"
           : "http://localhost:4000/uploads/:path*",
       },
     ];
