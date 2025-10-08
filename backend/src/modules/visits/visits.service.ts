@@ -689,13 +689,17 @@ export class VisitsService {
         phone: patient.phone,
       },
       visits: visits.map(visit => {
-        const legacy = this.safeParse<string[]>(visit.attachments as any, []);
-        const legacyCount = Array.isArray(legacy) ? legacy.length : 0;
+        // Sanitize legacy filesystem attachments to avoid returning non-existent files on Railway
+        const legacyRaw = this.safeParse<string[]>(visit.attachments as any, []);
+        const legacySanitized = this.sanitizeAttachmentPaths(legacyRaw);
+        const legacyCount = Array.isArray(legacySanitized) ? legacySanitized.length : 0;
         const dbCount = dbAttachmentCounts[visit.id] || 0;
         const photos = dbCount + legacyCount;
         // Build up to 3 preview URLs (prefer DB-backed, then legacy)
         const dbPreviews = (dbAttachmentPreviews[visit.id] || []).map(p => `/visits/${visit.id}/photos/${p.id}`);
-        const legacyPreviews = Array.isArray(legacy) ? legacy.filter(u => typeof u === 'string').slice(0, Math.max(0, 3 - dbPreviews.length)) : [];
+        const legacyPreviews = Array.isArray(legacySanitized)
+          ? legacySanitized.slice(0, Math.max(0, 3 - dbPreviews.length))
+          : [];
         const photoPreviewUrls = [...dbPreviews, ...legacyPreviews];
 
         return {
