@@ -1058,11 +1058,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         streamRef.current = null;
         recorderRef.current = null;
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        // Use the actual recording mimeType to avoid server-side "Unsupported audio type"
+        const recordedType: string = mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type: recordedType });
         try {
            const baseUrl = '/api';
            const fd = new FormData();
-           fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
+           // Preserve a sensible filename extension matching the recorded mime type
+           const filename = recordedType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm';
+           fd.append('file', blob, filename);
            const res = await fetch(`${baseUrl}/visits/transcribe`, {
              method: 'POST',
              body: fd,

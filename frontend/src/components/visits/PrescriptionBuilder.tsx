@@ -276,11 +276,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         streamRef.current = null;
         recorderRef.current = null;
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const recordedType: string = mimeType || 'audio/webm';
+        const blob = new Blob(chunks, { type: recordedType });
         try {
           const baseUrl = '/api';
           const fd = new FormData();
-          fd.append('file', blob, mimeType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm');
+          const filename = recordedType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm';
+          fd.append('file', blob, filename);
           const res = await fetch(`${baseUrl}/visits/transcribe`, { method: 'POST', body: fd, credentials: 'include' });
           if (!res.ok) {
             let errText = '';
