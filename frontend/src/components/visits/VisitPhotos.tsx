@@ -623,7 +623,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
     {/* Tagging dialog */}
     <Dialog open={tagDialogOpen} onOpenChange={setTagDialogOpen}>
-      <DialogContent>
+      <DialogContent className="max-w-[95vw] sm:max-w-3xl md:max-w-5xl lg:max-w-[90vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Tag photo positions</DialogTitle>
         </DialogHeader>
