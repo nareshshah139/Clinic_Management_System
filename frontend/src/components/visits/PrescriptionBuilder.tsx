@@ -2406,7 +2406,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   )}
                 </div>
                 <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-600">Total items: {validItems.length}</div>
+              <div className="text-sm text-gray-600">Total items: {items.length}</div>
                   <Button size="sm" variant="outline" onClick={() => setItems(prev => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '', duration: '', durationUnit: 'DAYS', instructions: '', timing: '', quantity: '' }])}>Add Row</Button>
                 </div>
                 <div className="overflow-auto border rounded">
@@ -2422,12 +2422,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       </tr>
                     </thead>
                     <tbody>
-                      {validItems.length === 0 && (
+                      {items.length === 0 && (
                         <tr>
                           <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
                         </tr>
                       )}
-                      {validItems.map((it, idx) => (
+                      {items.map((it, idx) => (
                         <tr key={idx} className="border-t">
                           <td className="px-3 py-2 align-top" onMouseEnter={() => prefetchDrugStockByName(it.drugName)} title={(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; if (stock === undefined) return 'Remaining stock: —'; return `Remaining stock: ${stock}`; })()}>
                             <div className="flex items-center gap-2">
