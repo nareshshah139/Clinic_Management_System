@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronDown, ChevronUp, Languages, X } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -159,6 +160,65 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [familyHistoryHTN, setFamilyHistoryHTN] = useState<boolean>(false);
   const [familyHistoryThyroid, setFamilyHistoryThyroid] = useState<boolean>(false);
   const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
+  const [creatingTemplate, setCreatingTemplate] = useState<boolean>(false);
+  const [savingFieldsTemplate, setSavingFieldsTemplate] = useState<boolean>(false);
+
+  const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
+    const status = error?.status;
+    let title = 'Failed to create template';
+    let description = getErrorMessage(error) || 'Please try again.';
+    let withRetry = false;
+
+    switch (status) {
+      case 400:
+        title = 'Invalid template';
+        description = getErrorMessage(error) || 'Please check required fields and try again.';
+        break;
+      case 401:
+        title = 'Not signed in';
+        description = 'Your session may have expired. Please sign in and retry.';
+        break;
+      case 403:
+        title = 'Action not allowed';
+        description = 'You do not have permission to create templates.';
+        break;
+      case 404:
+        title = 'Service unavailable';
+        description = 'Template service is unavailable. Please try again later.';
+        withRetry = true;
+        break;
+      case 408:
+        title = 'Request timed out';
+        description = 'Network seems slow. Please retry.';
+        withRetry = true;
+        break;
+      case 409:
+        title = 'Duplicate name';
+        description = 'A template with this name already exists. Choose a different name.';
+        break;
+      case 429:
+        title = 'Too many requests';
+        description = 'You’ve made too many requests. Please wait a moment and retry.';
+        withRetry = true;
+        break;
+      default:
+        if (!status || status >= 500) {
+          title = 'Server error';
+          description = 'Something went wrong on our side. Please try again shortly.';
+          withRetry = true;
+        }
+    }
+
+    toast({
+      variant: 'destructive',
+      title,
+      description,
+      action: retry && withRetry ? (
+        <ToastAction altText="Retry" onClick={retry}>Retry</ToastAction>
+      ) : undefined,
+    });
+  }, [toast]);
+
   // Topicals
   // Removed Topicals UI
 
@@ -1471,6 +1531,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const persistLocalFieldTemplate = useCallback(async (name: string) => {
     // Save as server-side template with no items
     try {
+      setSavingFieldsTemplate(true);
       const payload: any = {
         name,
         description: '',
@@ -1496,17 +1557,55 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           },
         },
       };
-      await apiClient.createPrescriptionTemplate(payload);
-      await loadTemplates();
-      toast({ variant: 'success', title: 'Fields template saved', description: 'Template stored on server.' });
+      const doRequest = async () => {
+        await apiClient.createPrescriptionTemplate(payload);
+        await loadTemplates();
+        toast({ variant: 'success', title: 'Fields template saved', description: 'Template stored on server.' });
+      };
+      await doRequest();
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Unable to save fields template', description: getErrorMessage(e) || 'Please try again later.' });
+      showTemplateCreateError(e, async () => {
+        try {
+          await apiClient.createPrescriptionTemplate({
+            name,
+            description: '',
+            items: [],
+            category: 'Dermatology',
+            specialty: 'Dermatology',
+            isPublic: true,
+            metadata: {
+              chiefComplaints,
+              diagnosis,
+              examination: {
+                generalAppearance: exObjective || undefined,
+                dermatology: {
+                  skinType: exSkinType || undefined,
+                  morphology: Array.from(exMorphology),
+                  distribution: Array.from(exDistribution),
+                  acneSeverity: exAcneSeverity || undefined,
+                  itchScore: exItchScore ? Number(exItchScore) : undefined,
+                  triggers: exTriggers || undefined,
+                  priorTreatments: exPriorTx || undefined,
+                  skinConcerns: Array.from(skinConcerns),
+                }
+              },
+            },
+          });
+          await loadTemplates();
+          toast({ variant: 'success', title: 'Fields template saved', description: 'Template stored on server.' });
+        } catch (err) {
+          showTemplateCreateError(err);
+        }
+      });
       throw e;
+    } finally {
+      setSavingFieldsTemplate(false);
     }
-  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, skinConcerns, loadTemplates, apiClient, toast]);
+  }, [chiefComplaints, diagnosis, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, skinConcerns, loadTemplates, apiClient, toast, showTemplateCreateError]);
 
   const persistTemplate = useCallback(async (name: string) => {
     try {
+      setCreatingTemplate(true);
       const payload = {
         name,
         description: '',
@@ -1545,20 +1644,70 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           },
         },
       } as any;
-      await apiClient.createPrescriptionTemplate(payload);
-      await loadTemplates();
-      toast({
-        variant: 'success',
-        title: 'Template saved',
-        description: 'Prescription template stored for future visits.',
-      });
+      const doRequest = async () => {
+        await apiClient.createPrescriptionTemplate(payload);
+        await loadTemplates();
+        toast({
+          variant: 'success',
+          title: 'Template saved',
+          description: 'Prescription template stored for future visits.',
+        });
+      };
+      await doRequest();
     } catch (e: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Unable to save template',
-        description: getErrorMessage(e) || 'Please try again later.',
+      showTemplateCreateError(e, async () => {
+        try {
+          await apiClient.createPrescriptionTemplate({
+            name,
+            description: '',
+            items: validItems.map(it => ({
+              drugName: it.drugName,
+              genericName: it.genericName,
+              brandName: it.brandName,
+              dosage: Number(it.dosage),
+              dosageUnit: it.dosageUnit,
+              frequency: it.frequency,
+              duration: Number(it.duration),
+              durationUnit: it.durationUnit,
+              instructions: it.instructions,
+              route: it.route,
+              timing: it.timing,
+              quantity: it.quantity ? Number(it.quantity) : undefined,
+              notes: it.notes,
+              isGeneric: it.isGeneric ?? true,
+            })),
+            category: 'Dermatology',
+            specialty: 'Dermatology',
+            isPublic: true,
+            metadata: {
+              chiefComplaints,
+              diagnosis,
+              examination: {
+                generalAppearance: exObjective || undefined,
+                dermatology: {
+                  skinType: exSkinType || undefined,
+                  morphology: Array.from(exMorphology),
+                  distribution: Array.from(exDistribution),
+                  acneSeverity: exAcneSeverity || undefined,
+                  itchScore: exItchScore ? Number(exItchScore) : undefined,
+                  skinConcerns: Array.from(skinConcerns),
+                }
+              },
+            },
+          } as any);
+          await loadTemplates();
+          toast({
+            variant: 'success',
+            title: 'Template saved',
+            description: 'Prescription template stored for future visits.',
+          });
+        } catch (err) {
+          showTemplateCreateError(err);
+        }
       });
       throw e;
+    } finally {
+      setCreatingTemplate(false);
     }
   }, [
     apiClient,
@@ -1576,6 +1725,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     skinConcerns,
     loadTemplates,
     toast,
+    showTemplateCreateError,
   ]);
 
   useEffect(() => {
@@ -3291,6 +3441,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <DialogFooter>
               <Button variant="outline" onClick={() => setNewTemplateOpen(false)}>Cancel</Button>
               <Button
+                disabled={creatingTemplate}
                 onClick={async () => {
                   const name = newTplName.trim();
                   if (!name) {
@@ -3330,12 +3481,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     },
                   };
                   try {
-                    await apiClient.createPrescriptionTemplate(payload);
-                    await loadTemplates();
-                    toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
-                    setNewTemplateOpen(false);
+                    setCreatingTemplate(true);
+                    const doCreate = async () => {
+                      await apiClient.createPrescriptionTemplate(payload);
+                      await loadTemplates();
+                      toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
+                      setNewTemplateOpen(false);
+                    };
+                    await doCreate();
                   } catch (e: any) {
-                    toast({ variant: 'destructive', title: 'Failed to create template', description: getErrorMessage(e) || 'Please try again.' });
+                    showTemplateCreateError(e, async () => {
+                      try {
+                        await apiClient.createPrescriptionTemplate(payload);
+                        await loadTemplates();
+                        toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
+                        setNewTemplateOpen(false);
+                      } catch (err) {
+                        showTemplateCreateError(err);
+                      }
+                    });
+                  } finally {
+                    setCreatingTemplate(false);
                   }
                 }}
               >
