@@ -324,6 +324,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'unsaved' | 'autosaving' | 'saved' | 'saving' | 'error'>('idle');
+  const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
 
   // Print customization (moved from PrescriptionBuilder)
   const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
@@ -709,6 +711,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const payload = buildPayload();
     autoSavePromiseRef.current = (async () => {
       try {
+        setSaveStatus((prev) => (prev === 'saving' ? 'saving' : 'autosaving'));
         // Reuse same idempotency key for retries of the same payload
         let idemKey = lastIdempotencyKeyRef.current;
         const currentKey = buildIdempotencyKey('PATCH', visitId, payload as any);
@@ -723,9 +726,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         if (!persisted) {
           persistDraftToStorage(true);
         }
+        setSaveStatus('saved');
+        setLastSavedAt(Date.now());
       } catch (error) {
         console.error('Auto-save failed:', error);
         hasUnsavedChangesRef.current = true;
+        setSaveStatus('error');
         toast({
           variant: 'warning',
           title: 'Auto-save failed',
@@ -945,6 +951,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     hasUnsavedChangesRef.current = true;
+    setSaveStatus('unsaved');
     autoSaveFailureNotifiedRef.current = false;
     const changed = persistDraftToStorage();
     if (changed) {
@@ -1008,8 +1015,20 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isSave = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's';
+      const isComplete = (e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's';
+      if (isSave || isComplete) {
+        e.preventDefault();
+        if (!saving) {
+          void save(isComplete);
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('keydown', handleKeyDown);
     };
   }, [persistDraftToStorage]);
   // Patient context sidebar
@@ -1260,6 +1279,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const save = async (complete = false) => {
     try {
       setSaving(true);
+      setSaveStatus('saving');
       const payload = buildPayload();
       
       let visit;
@@ -1324,10 +1344,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           ? 'All documentation has been marked complete.'
           : 'Your draft was saved safely.',
       });
+      setSaveStatus('saved');
+      setLastSavedAt(Date.now());
 
       void loadPatientHistory();
     } catch (e) {
       console.error('Save failed:', e);
+      setSaveStatus('error');
       toast({
         variant: 'destructive',
         title: 'Unable to save visit',
@@ -1532,7 +1555,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 Medical Visit Documentation • Role: {userRole} • Progress: {getProgress()}%
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
               <div className="w-20 bg-gray-200 rounded-full h-2">
                 <div 
@@ -1540,6 +1563,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   style={{ width: `${getProgress()}%` }}
                 />
               </div>
+            <div className="text-xs text-gray-500 min-w-[120px] text-right">
+              {saveStatus === 'saving' && 'Saving…'}
+              {saveStatus === 'autosaving' && 'Auto-saving…'}
+              {saveStatus === 'unsaved' && 'Unsaved changes'}
+              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
+              {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
+            </div>
             </div>
           </div>
         </CardHeader>

@@ -640,6 +640,7 @@ function VisitsPageInner() {
   const [patientOptions, setPatientOptions] = useState<PatientMatch[]>([]);
   const [searchingPatients, setSearchingPatients] = useState(false);
   const [showPatientMenu, setShowPatientMenu] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const [appointmentData, setAppointmentData] = useState<AppointmentWithVisit | null>(null);
 
   const searchParams = useSearchParams();
@@ -963,8 +964,24 @@ function VisitsPageInner() {
                     className="w-full border rounded px-3 py-2 text-sm"
                     placeholder="Search name, phone, or email"
                     value={patientQuery}
-                    onChange={(e) => { setPatientQuery(e.target.value); setShowPatientMenu(true); }}
+                    onChange={(e) => { setPatientQuery(e.target.value); setShowPatientMenu(true); setHighlightedIndex(0); }}
                     onFocus={() => setShowPatientMenu(true)}
+                    onKeyDown={(e) => {
+                      if (!showPatientMenu) return;
+                      const max = patientOptions.length;
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightedIndex(i => Math.min(max - 1, i + 1)); }
+                      if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightedIndex(i => Math.max(0, i - 1)); }
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const sel = patientOptions[highlightedIndex];
+                        if (sel) {
+                          setSelectedPatientId(sel.id);
+                          setPatientQuery(sel.name || sel.phone || sel.email || sel.id);
+                          setShowPatientMenu(false);
+                        }
+                      }
+                      if (e.key === 'Escape') { setShowPatientMenu(false); }
+                    }}
                   />
                   {showPatientMenu && (
                     <div className="absolute z-20 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
@@ -974,16 +991,17 @@ function VisitsPageInner() {
                       {!searchingPatients && patientOptions.length === 0 && (
                         <div className="px-3 py-2 text-xs text-gray-500">No results</div>
                       )}
-                      {!searchingPatients && patientOptions.map((p) => (
+                      {!searchingPatients && patientOptions.map((p, idx) => (
                         <button
                           key={p.id}
                           type="button"
+                          onMouseEnter={() => setHighlightedIndex(idx)}
                           onClick={() => {
                             setSelectedPatientId(p.id);
                             setPatientQuery(p.name || p.phone || p.email || p.id);
                             setShowPatientMenu(false);
                           }}
-                          className={`w-full text-left px-3 py-2 hover:bg-gray-50 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''}`}
+                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''} ${idx === highlightedIndex ? 'bg-blue-50' : ''}`}
                         >
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
