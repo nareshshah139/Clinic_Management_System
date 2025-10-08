@@ -851,6 +851,78 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     })();
   }, [appointmentId, visitId, persistDraftToStorage]);
 
+  // If initialVisitId is provided, load existing visit data to prefill controls
+  useEffect(() => {
+    const load = async () => {
+      if (!visitId) return;
+      try {
+        const res: any = await apiClient.get(`/visits/${visitId}`);
+        // Prefill complaints, vitals, exam, diagnosis, plan when empty
+        try {
+          const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
+          if (Array.isArray(complaintsArr) && complaints.length === 0) {
+            setComplaints(complaintsArr.map((c: any) => c?.complaint).filter(Boolean));
+          }
+        } catch {}
+        try {
+          const v = typeof res?.vitals === 'object' ? res.vitals : (res?.vitals ? JSON.parse(res.vitals) : undefined);
+          if (v && Object.keys(v).length && JSON.stringify(vitals) === JSON.stringify(INITIAL_VITALS)) {
+            setVitals({
+              bpS: v.systolicBP ? String(v.systolicBP) : '',
+              bpD: v.diastolicBP ? String(v.diastolicBP) : '',
+              hr: v.heartRate ? String(v.heartRate) : '',
+              temp: v.temperature ? String(v.temperature) : '',
+              weight: v.weight ? String(v.weight) : '',
+              height: v.height ? String(v.height) : '',
+              spo2: v.spo2 ? String(v.spo2) : '',
+              rr: v.respiratoryRate ? String(v.respiratoryRate) : '',
+            });
+          }
+        } catch {}
+        try {
+          const exam = typeof res?.exam === 'object' ? res.exam : (res?.exam ? JSON.parse(res.exam) : undefined);
+          if (exam?.generalAppearance && !objective) setObjective(String(exam.generalAppearance));
+          const derm = exam?.dermatology || {};
+          if (derm?.skinType && !skinType) setSkinType(String(derm.skinType));
+          if (Array.isArray(derm?.morphology) && morphology.size === 0) setMorphology(new Set(derm.morphology));
+          if (Array.isArray(derm?.distribution) && distribution.size === 0) setDistribution(new Set(derm.distribution));
+          if (derm?.acneSeverity && !acneSeverity) setAcneSeverity(String(derm.acneSeverity));
+          if (derm?.itchScore && !itchScore) setItchScore(String(derm.itchScore));
+          if (Array.isArray(derm?.skinConcerns) && skinConcerns.size === 0) setSkinConcerns(new Set(derm.skinConcerns));
+        } catch {}
+        try {
+          const diagArr = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
+          if (Array.isArray(diagArr) && dermDx.size === 0 && !assessment) {
+            const vals = diagArr.map((d: any) => d?.diagnosis).filter(Boolean);
+            setDermDx(new Set(vals));
+            if (vals[0]) setAssessment(String(vals[0]));
+          }
+        } catch {}
+        try {
+          const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
+          if (planObj?.notes && !plan) setPlan(String(planObj.notes));
+          const derm = planObj?.dermatology || {};
+          if (Array.isArray(derm?.investigations) && labSelections.length === 0) setLabSelections(derm.investigations);
+          if (derm?.procedures && Array.isArray(derm.procedures) && derm.procedures.length && !procType) {
+            const p = derm.procedures[0];
+            if (p?.type) setProcType(String(p.type));
+            if (p?.fluence) setFluence(String(p.fluence));
+            if (p?.spotSize) setSpotSize(String(p.spotSize));
+            if (p?.passes) setPasses(String(p.passes));
+          }
+          if (derm?.medications) {
+            if (derm.medications.topicals && !topicals) setTopicals(String(derm.medications.topicals));
+            if (derm.medications.systemics && !systemics) setSystemics(String(derm.medications.systemics));
+          }
+          if (derm?.counseling && !counseling) setCounseling(String(derm.counseling));
+        } catch {}
+      } catch {
+        // ignore
+      }
+    };
+    void load();
+  }, [visitId]);
+
   useEffect(() => {
     if (isInitialLoadRef.current) {
       isInitialLoadRef.current = false;

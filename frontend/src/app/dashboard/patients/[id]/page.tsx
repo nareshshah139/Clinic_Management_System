@@ -100,12 +100,23 @@ export default function PatientDetailsPage() {
             <Calendar className="h-4 w-4 text-gray-400" />
             <span>{date ? `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Unknown date'}</span>
           </div>
-          {doctorName && (
-            <div className="flex items-center gap-2 text-sm text-gray-700">
-              <Stethoscope className="h-4 w-4 text-gray-400" />
-              <span>Dr. {doctorName}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {doctorName && (
+              <div className="flex items-center gap-2 text-sm text-gray-700">
+                <Stethoscope className="h-4 w-4 text-gray-400" />
+                <span>Dr. {doctorName}</span>
+              </div>
+            )}
+            {v.id && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => router.push(`/dashboard/visits?visitId=${encodeURIComponent(String(v.id))}&patientId=${encodeURIComponent(id)}`)}
+              >
+                Resume
+              </Button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
           {complaint && <div><span className="text-gray-600">Chief complaint:</span> <span className="text-gray-900">{complaint}</span></div>}

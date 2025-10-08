@@ -163,7 +163,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
     if (variant === 'mini') return null;
     if (latestVisit?.id) {
       return (
-        <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}`}>
+        <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}&visitId=${encodeURIComponent(latestVisit.id)}`}>
           <Button variant="outline" size={compact ? 'sm' : 'default'}>Continue</Button>
         </Link>
       );
@@ -186,7 +186,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
     if (variant === 'mini') return null;
     if (!latestVisit?.id) return null;
     return (
-      <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}`}>
+      <Link href={`/dashboard/visits?patientId=${encodeURIComponent(patientId)}&visitId=${encodeURIComponent(latestVisit.id)}`}>
         <Button variant="outline" size={compact ? 'sm' : 'default'}>{hasPrescription ? 'View' : 'Prescribe'}</Button>
       </Link>
     );

@@ -459,16 +459,29 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 <div className="flex-1 min-w-0">
                   <Card className={`${index === 0 ? 'border-blue-200 bg-blue-50' : ''}`}>
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-gray-400" />
                           <span className="text-sm font-medium text-gray-900">
                             {visitDate.toLocaleDateString()} at {visitDate.toLocaleTimeString()}
                           </span>
                         </div>
-                        <Badge variant={badgeVariant}>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={badgeVariant}>
                           {visitTypeLabel}
-                        </Badge>
+                          </Badge>
+                          {visit.id && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}`;
+                              }}
+                            >
+                              Resume
+                            </Button>
+                          )}
+                        </div>
                       </div>
                       
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
