@@ -26,8 +26,7 @@ export class DrugController {
   constructor(private readonly drugService: DrugService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:drug:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @ApiOperation({ summary: 'Create a new drug' })
   @ApiResponse({ status: 201, description: 'Drug created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })

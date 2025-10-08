@@ -151,8 +151,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
   const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
 
-  // Allow creating a drug in DB for privileged roles
-  const canAddDrugToDB = useMemo(() => ['ADMIN', 'PHARMACIST'].includes(String(userRole || '').toUpperCase()), [userRole]);
+  // Allow creating a drug in DB for doctors, admins, pharmacists
+  const canAddDrugToDB = useMemo(() => ['ADMIN', 'PHARMACIST', 'DOCTOR'].includes(String(userRole || '').toUpperCase()), [userRole]);
   const [addDrugOpen, setAddDrugOpen] = useState(false);
   const [newDrugForm, setNewDrugForm] = useState<{ name: string; manufacturerName: string; price: string; packSizeLabel: string }>({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
   const openAddDrugDialog = () => {
@@ -178,6 +178,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         toast({ variant: 'destructive', title: 'Missing details', description: 'Name and Manufacturer are required.' });
         return;
       }
+      // Client-side duplicate pre-check by name+manufacturer (best-effort)
+      try {
+        const dupList: any = await apiClient.get('/drugs', { search: payload.name, limit: 20 });
+        const items = Array.isArray(dupList) ? dupList : (Array.isArray((dupList as any)?.items) ? (dupList as any).items : (Array.isArray((dupList as any)?.data) ? (dupList as any).data : []));
+        const hasDup = (items as any[]).some((d: any) => String(d?.name || '').toLowerCase() === payload.name.toLowerCase() && String(d?.manufacturerName || '').toLowerCase() === payload.manufacturerName.toLowerCase());
+        if (hasDup) {
+          toast({ variant: 'destructive', title: 'Duplicate detected', description: 'A drug with the same name and manufacturer already exists.' });
+          return;
+        }
+      } catch {}
       const created: any = await apiClient.post('/drugs', payload);
       setAddDrugOpen(false);
       // Immediately add to current prescription items

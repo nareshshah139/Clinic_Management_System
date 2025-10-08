@@ -9,25 +9,32 @@ export class DrugService {
 
   async create(createDrugDto: CreateDrugDto, branchId: string) {
     try {
-      // Check for duplicate barcode or SKU
-      if (createDrugDto.barcode || createDrugDto.sku) {
-        const existingDrug = await this.prisma.drug.findFirst({
-          where: {
-            OR: [
-              createDrugDto.barcode ? { barcode: createDrugDto.barcode } : {},
-              createDrugDto.sku ? { sku: createDrugDto.sku } : {},
-            ].filter(condition => Object.keys(condition).length > 0),
-          },
-        });
+      // Duplicate checks: barcode/SKU, and soft match by name+manufacturer in same branch
+      const dup = await this.prisma.drug.findFirst({
+        where: {
+          branchId,
+          OR: [
+            createDrugDto.barcode ? { barcode: createDrugDto.barcode } : undefined,
+            createDrugDto.sku ? { sku: createDrugDto.sku } : undefined,
+            {
+              AND: [
+                { name: { equals: createDrugDto.name, mode: 'insensitive' } },
+                { manufacturerName: { equals: createDrugDto.manufacturerName, mode: 'insensitive' } },
+              ],
+            },
+          ].filter(Boolean) as any,
+        },
+      });
 
-        if (existingDrug) {
-          if (existingDrug.barcode === createDrugDto.barcode) {
-            throw new ConflictException('A drug with this barcode already exists');
-          }
-          if (existingDrug.sku === createDrugDto.sku) {
-            throw new ConflictException('A drug with this SKU already exists');
-          }
+      if (dup) {
+        if (createDrugDto.barcode && dup.barcode === createDrugDto.barcode) {
+          throw new ConflictException('A drug with this barcode already exists');
         }
+        if (createDrugDto.sku && dup.sku === createDrugDto.sku) {
+          throw new ConflictException('A drug with this SKU already exists');
+        }
+        // Same name+manufacturer — treat as duplicate
+        throw new ConflictException('A drug with the same name and manufacturer already exists');
       }
 
       const drug = await this.prisma.drug.create({
