@@ -1252,7 +1252,8 @@ function VisitsPageInner() {
         initialVisitId={urlVisitId || (appointmentData?.visit && 'id' in (appointmentData as any).visit ? (appointmentData as any).visit.id : undefined)}
       />
       
-      {recentVisitId && <PhotosPanel visitId={recentVisitId} />}
+      {/* Show standalone photos panel only when the form is not open to avoid duplicate rendering */}
+      {!showForm && recentVisitId && <PhotosPanel visitId={recentVisitId} />}
     </div>
   );
 }
