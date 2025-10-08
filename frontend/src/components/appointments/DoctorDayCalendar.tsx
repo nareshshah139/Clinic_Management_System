@@ -73,9 +73,9 @@ export default function DoctorDayCalendar({
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
-  // Filter appointments based on visitType and room filters
+  // Filter appointments based on status, visitType and room filters
   const filteredSchedule = useMemo(() => {
-    let appointments = [...schedule];
+    let appointments = schedule.filter(a => a.status !== AppointmentStatus.CANCELLED);
     
     if (optimisticAppointment) {
       const visitTypeMatch = visitTypeFilter === 'ALL' || optimisticAppointment.visitType === visitTypeFilter;
@@ -107,7 +107,9 @@ export default function DoctorDayCalendar({
       const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
 
       // Map backend appointments to slot-wise entries with proper type safety
-      const items: AppointmentInSlot[] = (res.appointments || []).map((a) => ({
+      const items: AppointmentInSlot[] = (res.appointments || [])
+        .filter((a) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
+        .map((a) => ({
         slot: a.slot,
         patient: a.patient ? { 
           id: a.patient.id, 

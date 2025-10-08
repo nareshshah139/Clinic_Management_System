@@ -81,7 +81,7 @@ export default function AppointmentScheduler({
     if (doctorId && date) {
       void fetchSlots();
     }
-  }, [doctorId, date]);
+  }, [doctorId, date, refreshKey]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
