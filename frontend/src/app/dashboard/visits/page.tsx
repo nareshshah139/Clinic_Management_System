@@ -444,7 +444,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
                 return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
               }
-              return `/api${cleaned.startsWith('/') ? '' : '/'}${cleaned.replace(/^\//, '')}`;
+              // Ensure we always insert exactly one slash between /api and the path
+              return `/api/${cleaned.replace(/^\//, '')}`;
             };
             const photoPreviews = Array.isArray((visit as any)?.photoPreviewUrls)
               ? ((visit as any).photoPreviewUrls as string[]).map(toAbsolute)

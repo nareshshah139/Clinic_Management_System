@@ -41,8 +41,8 @@ export default function PatientDetailsPage() {
       const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
       return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
     }
-    // Default to proxying through Next.js API rewrite
-    return `/api${cleaned.startsWith('/') ? '' : '/'}${cleaned.replace(/^\//, '')}`;
+  // Default to proxying through Next.js API rewrite (ensure single slash)
+  return `/api/${cleaned.replace(/^\//, '')}`;
   };
 
   useEffect(() => {
