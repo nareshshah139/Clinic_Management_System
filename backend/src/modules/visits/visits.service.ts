@@ -670,13 +670,11 @@ export class VisitsService {
           acc[key] = (acc[key] || 0) + 1;
           return acc;
         }, {});
-        // Build previews (first 2 per visit)
+        // Build previews (all, ordered by displayOrder then createdAt)
         dbAttachmentPreviews = dbItems.reduce((acc: Record<string, any[]>, row: any) => {
           const key = row.visitId as string;
           const arr = acc[key] || (acc[key] = []);
-          if (arr.length < 2) {
-            arr.push({ id: row.id as string, createdAt: (row.createdAt as Date).toISOString(), position: row.position, displayOrder: row.displayOrder });
-          }
+          arr.push({ id: row.id as string, createdAt: (row.createdAt as Date).toISOString(), position: row.position, displayOrder: row.displayOrder });
           return acc;
         }, {} as Record<string, any[]>);
       } catch {}
@@ -695,11 +693,9 @@ export class VisitsService {
         const legacyCount = Array.isArray(legacySanitized) ? legacySanitized.length : 0;
         const dbCount = dbAttachmentCounts[visit.id] || 0;
         const photos = dbCount + legacyCount;
-        // Build up to 3 preview URLs (prefer DB-backed, then legacy)
+        // Build preview URLs for all photos (prefer DB-backed first, then legacy)
         const dbPreviews = (dbAttachmentPreviews[visit.id] || []).map(p => `/visits/${visit.id}/photos/${p.id}`);
-        const legacyPreviews = Array.isArray(legacySanitized)
-          ? legacySanitized.slice(0, Math.max(0, 3 - dbPreviews.length))
-          : [];
+        const legacyPreviews = Array.isArray(legacySanitized) ? legacySanitized : [];
         const photoPreviewUrls = [...dbPreviews, ...legacyPreviews];
 
         return {
@@ -710,6 +706,69 @@ export class VisitsService {
           // expose a simple photos count for UI badges
           photos,
           photoPreviewUrls,
+          // Provide sanitized prescription items for UI rendering
+          prescriptionItems: (() => {
+            try {
+              const items = this.safeParse<any[]>(visit.prescription?.items as any, []);
+              if (!Array.isArray(items)) return [];
+              return items.map((it: any) => ({
+                drugName: it?.drugName ?? it?.name ?? undefined,
+                dosage: it?.dosage ?? undefined,
+                dosageUnit: it?.dosageUnit ?? undefined,
+                frequency: it?.frequency ?? undefined,
+                dosePattern: it?.dosePattern ?? undefined,
+                duration: it?.duration ?? undefined,
+                durationUnit: it?.durationUnit ?? undefined,
+                route: it?.route ?? undefined,
+                timing: it?.timing ?? undefined,
+                instructions: it?.instructions ?? undefined,
+                quantity: it?.quantity ?? undefined,
+              })).filter((x: any) => x && (x.drugName || x.dosage || x.frequency || x.duration || x.instructions));
+            } catch { return []; }
+          })(),
+          // Prescription metadata used in builder
+          prescriptionMeta: (() => {
+            const meta: any = {};
+            const p: any = visit.prescription || null;
+            if (p) {
+              if (p.instructions) meta.followUpInstructions = p.instructions;
+              if ((p as any).pharmacistNotes) meta.pharmacistNotes = (p as any).pharmacistNotes;
+              if ((p as any).validUntil) meta.validUntil = (p as any).validUntil instanceof Date ? (p as any).validUntil.toISOString() : (p as any).validUntil;
+              if ((p as any).language) meta.language = (p as any).language;
+            }
+            return meta;
+          })(),
+          // Summaries from visit JSON plan/history/exam used by builder
+          planSummary: (() => {
+            const plan = this.safeParse<any>(visit.plan as any, null);
+            const derm = plan?.dermatology || plan || {};
+            const summary: any = {};
+            if (Array.isArray(derm?.investigations) && derm.investigations.length) summary.investigations = derm.investigations;
+            if (derm?.procedurePlanned) summary.procedurePlanned = derm.procedurePlanned;
+            if (plan?.followUpInstructions) summary.followUpInstructions = plan.followUpInstructions;
+            if (plan?.notes || derm?.counseling) summary.counseling = plan?.notes || derm?.counseling;
+            if (plan?.finalNotes) summary.finalNotes = plan.finalNotes;
+            if (plan?.followUp) summary.followUp = plan.followUp;
+            return summary;
+          })(),
+          historySummary: (() => {
+            const hist = this.safeParse<any>(visit.history as any, null);
+            if (!hist) return {};
+            const out: any = {};
+            if (hist.pastHistory) out.pastHistory = hist.pastHistory;
+            if (hist.medicationHistory) out.medicationHistory = hist.medicationHistory;
+            if (hist.menstrualHistory) out.menstrualHistory = hist.menstrualHistory;
+            if (hist.familyHistory) out.familyHistory = hist.familyHistory;
+            return out;
+          })(),
+          examSummary: (() => {
+            const exam = this.safeParse<any>(visit.exam as any, null);
+            if (!exam) return {};
+            const out: any = {};
+            if (exam.generalAppearance) out.generalAppearance = exam.generalAppearance;
+            if (exam.dermatology) out.dermatology = exam.dermatology;
+            return out;
+          })(),
           doctor: visit.doctor
             ? {
                 ...visit.doctor,
