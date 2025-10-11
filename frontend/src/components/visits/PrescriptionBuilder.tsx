@@ -3202,6 +3202,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </div>
             </div>
+            </div>
             {/* Right Sidebar Controls */}
             <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
               <div className="p-4 space-y-4">
@@ -3335,8 +3336,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
                     }
                   }}>Download PDF</Button>
-            </div>
-            </div>
+                </div>
+              </div>
             </div>
             </div>
             </div>
@@ -3572,7 +3573,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       ))}
                     </tbody>
                   </table>
-                </div>
                 </div>
               </div>
             <DialogFooter>
@@ -3859,36 +3859,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 Save Template
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        <Dialog open={confirmPharmacy.open} onOpenChange={(open: boolean) => setConfirmPharmacy((prev) => ({ ...prev, open }))}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Go to Pharmacy?</DialogTitle>
-              <DialogDescription>
-                {confirmPharmacy.summary?.medicationsCount || 0} medications were added to this prescription. Continue to the pharmacy module to bill them now?
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setConfirmPharmacy({ open: false, prescriptionId: '', summary: null })}
-              >
-                Stay Here
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!confirmPharmacy.prescriptionId) {
-                    setConfirmPharmacy({ open: false, prescriptionId: '', summary: null });
-                    return;
-                  }
-                  const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&prescriptionId=${encodeURIComponent(confirmPharmacy.prescriptionId)}&doctorId=${encodeURIComponent(doctorId)}`;
-                  window.location.href = url;
-                }}
-              >
-                Yes, go to Pharmacy
               </Button>
             </DialogFooter>
           </DialogContent>
