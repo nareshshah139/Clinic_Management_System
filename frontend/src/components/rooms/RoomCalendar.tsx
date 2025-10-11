@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { getISTDateString } from '@/lib/utils';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { useToast } from '@/hooks/use-toast';
@@ -56,7 +57,8 @@ export default function RoomCalendar() {
 
   const fetchRoomSchedules = async () => {
     try {
-      const dateStr = selectedDate.toISOString().split('T')[0];
+      // Use clinic timezone (IST) date string to align with backend expectations
+      const dateStr = getISTDateString(selectedDate);
       const schedules: Record<string, RoomSchedule> = {};
       const results = await Promise.all(
         rooms.map(async (room) => {

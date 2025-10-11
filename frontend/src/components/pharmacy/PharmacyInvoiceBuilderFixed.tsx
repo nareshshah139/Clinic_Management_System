@@ -29,6 +29,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
 interface Drug {
   id: string;
@@ -978,6 +979,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
         <head>
           <meta charset="utf-8" />
           <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          ${getGlobalPrintStyleTag()}
           <style>
             @media print {
               body { margin: 12mm; }
@@ -1054,14 +1056,17 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
             }
           </style>
         </head>
-        <body>
-          <div class="invoice-header">
-            <h1>Pharmacy Invoice</h1>
-            <div class="muted">
-              <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
-              <strong>Date:</strong> ${dateStr}
+        <body style="--print-header-height: 28mm;">
+          <div class="print-fixed-header">
+            <div class="invoice-header">
+              <h1>Pharmacy Invoice</h1>
+              <div class="muted">
+                <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
+                <strong>Date:</strong> ${dateStr}
+              </div>
             </div>
           </div>
+          <div class="print-content">
           
           <div class="billing-section">
             <strong>Bill To:</strong><br />
@@ -1102,6 +1107,7 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
               ${invoiceData.notes}
             </div>
           ` : ''}
+          </div>
         </body>
       </html>
     `;

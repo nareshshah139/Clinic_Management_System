@@ -113,6 +113,25 @@ export function getConflictSuggestions(error: any): string[] {
   return Array.isArray(suggestions) ? suggestions : [];
 }
 
+// Detailed conflict messages for UI
+export function getConflictDetails(error: any): string[] {
+  if (!isConflictError(error)) return [];
+  const conflicts = error?.body?.conflicts;
+  if (!Array.isArray(conflicts) || conflicts.length === 0) return [];
+
+  return conflicts.map((c: any) => {
+    const base = typeof c?.message === 'string' && c.message.trim().length > 0
+      ? c.message.trim()
+      : (typeof c?.type === 'string' ? `${c.type} conflict` : 'Scheduling conflict');
+    const appt = c?.conflictingAppointment;
+    const extraParts: string[] = [];
+    if (appt?.patientName) extraParts.push(`with ${appt.patientName}`);
+    if (appt?.slot) extraParts.push(`at ${appt.slot}`);
+    const extras = extraParts.length ? ` (${extraParts.join(', ')})` : '';
+    return `${base}${extras}`;
+  });
+}
+
 // Cleanup utilities for component unmounting
 export function createCleanupTimeouts(): {
   addTimeout: (id: NodeJS.Timeout) => void;

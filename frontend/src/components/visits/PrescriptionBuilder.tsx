@@ -2799,27 +2799,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   #prescription-print-root, #prescription-print-root * {
                     visibility: visible !important;
                   }
-                   #prescription-print-root {
-                    position: absolute !important;
-                    left: 0 !important;
-                    top: 0 !important;
+                  #prescription-print-root {
+                    position: static !important;
+                    left: auto !important;
+                    top: auto !important;
                     width: ${paperPreset === 'LETTER' ? '216mm' : '210mm'} !important;
-                    height: ${paperPreset === 'LETTER' ? '279mm' : '297mm'} !important;
+                    height: auto !important;
                     margin: 0 !important;
-                    padding-top: ${effectiveTopMarginMm}mm !important;
+                    padding-top: 0 !important;
                     padding-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm !important;
                     padding-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm !important;
                     padding-bottom: ${effectiveBottomMarginMm}mm !important;
                     box-sizing: border-box !important;
                     background: white !important;
-                    background-repeat: no-repeat !important;
-                    background-position: 0 0 !important;
-                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'} !important;
-                    ${(printBgUrl ?? '/letterhead.png') ? `background-image: url('${printBgUrl ?? '/letterhead.png'}') !important;` : ''}
                   }
                   #prescription-print-content {
                     width: 100% !important;
-                    height: 100% !important;
+                    height: auto !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     box-sizing: border-box !important;
@@ -2843,7 +2839,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div
                 id="prescription-print-root"
                 ref={printRef}
-                className="bg-white text-gray-900"
+                className="bg-white text-gray-900 print-page-preview"
                 style={{
                   fontFamily: 'Fira Sans, sans-serif',
                   fontSize: '14px',
@@ -2851,20 +2847,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
                   margin: '0 auto',
                   padding: '0',
-                  paddingTop: `${effectiveTopMarginMm}mm`,
+                  paddingTop: '0',
                   paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
                   paddingRight: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm`,
                   paddingBottom: `${effectiveBottomMarginMm}mm`,
                   boxSizing: 'border-box',
-                  backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'top left',
-                  backgroundSize: paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm',
+                  backgroundImage: undefined,
+                  backgroundRepeat: undefined,
+                  backgroundPosition: undefined,
+                  backgroundSize: undefined,
                   filter: grayscale ? 'grayscale(100%)' : undefined,
                   transition: 'padding-top 200ms ease, padding-bottom 200ms ease',
                   willChange: 'padding-top, padding-bottom',
                 }}
               >
+                {/* Fixed header banner for preview and printing */}
+                {printBgUrl && (
+                  <div className="print-fixed-header" style={{ height: `${effectiveTopMarginMm}mm` }}>
+                    <img src={printBgUrl} alt="Letterhead" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                )}
+                <div className="print-content" style={{ paddingTop: `var(--print-header-height, ${effectiveTopMarginMm}mm)` }}>
                 {showRefillStamp && (
                   <div aria-hidden className="pointer-events-none select-none" style={{ position: 'absolute', right: 12, top: 12, padding: '4px 8px', border: '1px dashed rgba(0,0,0,0.4)', color: '#0a0a0a', background: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
                     Refill eligible
@@ -3198,7 +3201,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
               </div>
             </div>
-              </div>
             </div>
             {/* Right Sidebar Controls */}
             <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
@@ -3446,6 +3448,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     ))}
                   </div>
                 </div>
+                </div>
               </div>
               <div className="space-y-3">
                 <div>
@@ -3568,6 +3571,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       ))}
                     </tbody>
                   </table>
+                </div>
                 </div>
               </div>
             </div>

@@ -25,6 +25,7 @@ import {
   Package
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
 interface Drug {
   id: string;
@@ -557,6 +558,7 @@ export function PharmacyInvoiceBuilder() {
         <head>
           <meta charset="utf-8" />
           <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          ${getGlobalPrintStyleTag()}
           <style>
             @media print { body { margin: 12mm; } }
             body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; white-space: pre-wrap; line-height: 1.5; }
@@ -586,6 +588,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
         <head>
           <meta charset="utf-8" />
           <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          ${getGlobalPrintStyleTag()}
           <style>
             body { font-family: Arial, sans-serif; padding: 16px; }
             h1 { margin-bottom: 4px; }
@@ -594,10 +597,13 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
             th { background: #f5f5f5; }
           </style>
         </head>
-        <body>
-          <h1>Pharmacy Invoice</h1>
-          <div class="muted">${invoice?.invoiceNumber || ''} • ${dateStr}</div>
-          <hr />
+        <body style="--print-header-height: 22mm;">
+          <div class="print-fixed-header">
+            <h1>Pharmacy Invoice</h1>
+            <div class="muted">${invoice?.invoiceNumber || ''} • ${dateStr}</div>
+            <hr />
+          </div>
+          <div class="print-content">
           <div>
             <strong>Bill To:</strong><br />
             ${invoiceData.billingName}<br/>
@@ -624,6 +630,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
             <div>Discount: <strong>-₹${totals.totalDiscount.toFixed(2)}</strong></div>
             <div>Tax: <strong>₹${totals.totalTax.toFixed(2)}</strong></div>
             <div style="font-size:18px;">Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong></div>
+          </div>
           </div>
         </body>
       </html>

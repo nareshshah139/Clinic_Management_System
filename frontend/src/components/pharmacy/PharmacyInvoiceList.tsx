@@ -37,6 +37,7 @@ import {
   type PharmacyPaymentStatus as PharmacyPaymentStatusType,
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
 type StatusFilter = PharmacyInvoiceStatusType | 'all';
 type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
@@ -183,6 +184,7 @@ export function PharmacyInvoiceList() {
         <head>
           <meta charset="utf-8" />
           <title>Invoice ${invoice?.invoiceNumber || ''}</title>
+          ${getGlobalPrintStyleTag()}
           <style>
             @media print {
               body { margin: 12mm; }
@@ -259,15 +261,18 @@ export function PharmacyInvoiceList() {
             }
           </style>
         </head>
-        <body>
-          <div class="invoice-header">
-            <h1>Pharmacy Invoice</h1>
-            <div class="muted">
-              <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
-              <strong>Date:</strong> ${dateStr}<br/>
-              <strong>Status:</strong> ${invoice?.status || 'N/A'}
+        <body style="--print-header-height: 28mm;">
+          <div class="print-fixed-header">
+            <div class="invoice-header">
+              <h1>Pharmacy Invoice</h1>
+              <div class="muted">
+                <strong>Invoice #:</strong> ${invoice?.invoiceNumber || ''}<br/>
+                <strong>Date:</strong> ${dateStr}<br/>
+                <strong>Status:</strong> ${invoice?.status || 'N/A'}
+              </div>
             </div>
           </div>
+          <div class="print-content">
           
           <div class="billing-section">
             <strong>Bill To:</strong><br />
@@ -308,6 +313,7 @@ export function PharmacyInvoiceList() {
               ${invoice.notes}
             </div>
           ` : ''}
+          </div>
         </body>
       </html>
     `;

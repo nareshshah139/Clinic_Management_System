@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError } from '@/lib/utils';
+import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
@@ -333,11 +333,14 @@ export default function AppointmentScheduler({
     } catch (e: any) {
       if (isConflictError(e)) {
         const suggestions = getConflictSuggestions(e);
-        const msg = getErrorMessage(e);
+        const details = getConflictDetails(e);
+        const base = getErrorMessage(e) || 'Scheduling conflict detected';
+        const detailText = details.length ? `\n• ${details.join('\n• ')}` : '';
+        const suggestionText = suggestions.length ? ` — Try: ${suggestions.join(', ')}` : '';
         toast({
           variant: "destructive",
           title: "Scheduling Conflict",
-          description: `${msg}${suggestions.length ? ` — Try: ${suggestions.join(', ')}` : ''}`,
+          description: `${base}${suggestionText}${detailText}`,
         });
         return;
       }
@@ -401,13 +404,26 @@ export default function AppointmentScheduler({
       setRescheduleContext(null);
       setRecentBookedSlot(newSlot);
       await fetchSlots();
-    } catch (e) {
-      const errorMessage = getErrorMessage(e);
-      toast({
-        variant: "destructive",
-        title: "Failed to reschedule appointment",
-        description: errorMessage,
-      });
+    } catch (e: any) {
+      if (isConflictError(e)) {
+        const suggestions = getConflictSuggestions(e);
+        const details = getConflictDetails(e);
+        const base = getErrorMessage(e) || 'Scheduling conflict detected';
+        const detailText = details.length ? `\n• ${details.join('\n• ')}` : '';
+        const suggestionText = suggestions.length ? ` — Try: ${suggestions.join(', ')}` : '';
+        toast({
+          variant: "destructive",
+          title: "Scheduling Conflict",
+          description: `${base}${suggestionText}${detailText}`,
+        });
+      } else {
+        const errorMessage = getErrorMessage(e);
+        toast({
+          variant: "destructive",
+          title: "Failed to reschedule appointment",
+          description: errorMessage,
+        });
+      }
     } finally {
       setRescheduleLoading(false);
     }

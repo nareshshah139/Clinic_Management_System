@@ -13,6 +13,7 @@ import { Plus, AlertCircle, Package, Trash2, ShoppingCart, Printer } from 'lucid
 import { apiClient } from '@/lib/api';
 import type { Invoice } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
 // Dermatology packages and services
 const DERMATOLOGY_PACKAGES = [
@@ -622,6 +623,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
       <html>
       <head>
         <title>Invoice - ${printInvoice.invoiceNo || 'New Invoice'}</title>
+        ${getGlobalPrintStyleTag()}
         <style>
           @media print {
             body { margin: 0; }
@@ -707,14 +709,17 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
           }
         </style>
       </head>
-      <body>
-        <div class="header">
-          <h1>DERMATOLOGY CLINIC</h1>
-          <p>Advanced Skin Care & Aesthetic Treatments</p>
-          <p>📍 Hyderabad, India | 📞 +91 9876543210 | ✉️ info@dermclinic.com</p>
-          <p>GSTIN: 36XXXXX1234X1ZX | License: DL-12345</p>
+      <body style="--print-header-height: 35mm;">
+        <div class="print-fixed-header">
+          <div class="header">
+            <h1>DERMATOLOGY CLINIC</h1>
+            <p>Advanced Skin Care & Aesthetic Treatments</p>
+            <p>📍 Hyderabad, India | 📞 +91 9876543210 | ✉️ info@dermclinic.com</p>
+            <p>GSTIN: 36XXXXX1234X1ZX | License: DL-12345</p>
+          </div>
         </div>
 
+        <div class="print-content">
         <div class="invoice-details">
           <div>
             <h3>Bill To:</h3>
@@ -791,6 +796,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
           <p><strong>Thank you for choosing our dermatology services!</strong></p>
           <p>For any queries, please contact us at info@dermclinic.com or +91 9876543210</p>
           <p>This is a computer-generated invoice and does not require a signature.</p>
+        </div>
         </div>
       </body>
       </html>
