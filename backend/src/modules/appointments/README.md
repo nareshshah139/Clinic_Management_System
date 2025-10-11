@@ -108,7 +108,7 @@ GET    /appointments/room/:roomId/schedule      # Room's daily schedule
 
 ### Rescheduling Rules
 1. **Status Check**: Cannot reschedule completed or cancelled appointments
-2. **Advance Notice**: Minimum 24 hours advance notice required (configurable)
+2. **Advance Notice**: Minimum 2 hours advance notice required (configurable)
 3. **Conflict Check**: New time slot must be available
 4. **Status Reset**: Status resets to SCHEDULED after rescheduling
 
@@ -292,7 +292,7 @@ JWT_SECRET="your-secret-key"
 JWT_EXPIRES_IN="24h"
 
 # Business Rules
-MIN_ADVANCE_HOURS=24
+MIN_ADVANCE_HOURS=2
 MAX_ADVANCE_DAYS=90
 DEFAULT_SLOT_DURATION=30
 BUSINESS_START_HOUR=9

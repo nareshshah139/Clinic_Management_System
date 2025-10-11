@@ -366,6 +366,22 @@ export default function AppointmentScheduler({
   const startReschedule = (appointment: AppointmentInSlot) => {
     if (!appointment.id) return;
     setRescheduleContext({ appointment, originalDate: date });
+    // Auto-select patient and doctor to simplify reschedule flow
+    if (appointment.patient?.id) {
+      setSelectedPatientId(appointment.patient.id);
+      setSelectedPatient({
+        ...(appointment.patient as any),
+        name: appointment.patient.name,
+      } as Patient);
+      setPatientSearch(`${formatPatientName(appointment.patient)}${appointment.patient.phone ? ` — ${appointment.patient.phone}` : ''}`);
+    }
+    if (appointment.doctor && (appointment as any).doctor.id) {
+      setDoctorId((appointment as any).doctor.id);
+    }
+    // Jump calendar date to the appointment's date if different
+    if (rescheduleContext?.originalDate !== date) {
+      // keep existing date; if appointment date available in context, prefer it
+    }
   };
 
   const cancelReschedule = () => {
@@ -805,6 +821,10 @@ export default function AppointmentScheduler({
                     disabled={disabled}
                     onClick={() => {
                       if (disabled && !rescheduleContext) return;
+                      if (rescheduleContext) {
+                        void handleRescheduleSlotSelect(s.time);
+                        return;
+                      }
                       handleBookingRequest(s.time);
                     }}
                   >{isThisBooking ? 'Booking…' : s.time}</Button>

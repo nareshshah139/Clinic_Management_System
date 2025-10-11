@@ -187,7 +187,7 @@ describe('SchedulingUtils', () => {
       const result = SchedulingUtils.canRescheduleAppointment(
         futureDate,
         AppointmentStatus.SCHEDULED,
-        24,
+        2,
       );
       
       expect(result.canReschedule).toBe(true);
@@ -221,16 +221,16 @@ describe('SchedulingUtils', () => {
 
     it('should not allow rescheduling within minimum advance hours', () => {
       const nearFutureDate = new Date();
-      nearFutureDate.setHours(nearFutureDate.getHours() + 12); // 12 hours from now
+      nearFutureDate.setHours(nearFutureDate.getHours() + 1); // 1 hour from now
       
       const result = SchedulingUtils.canRescheduleAppointment(
         nearFutureDate,
         AppointmentStatus.SCHEDULED,
-        24, // Requires 24 hours advance
+        2, // Requires 2 hours advance
       );
       
       expect(result.canReschedule).toBe(false);
-      expect(result.reason).toBe('Cannot reschedule within 24 hours of appointment');
+      expect(result.reason).toBe('Cannot reschedule within 2 hours of appointment');
     });
   });
 
