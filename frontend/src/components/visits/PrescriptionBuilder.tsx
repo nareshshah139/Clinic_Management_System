@@ -3202,6 +3202,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </div>
             </div>
+            </div>
             {/* Right Sidebar Controls */}
             <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
               <div className="p-4 space-y-4">
@@ -3337,7 +3338,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   }}>Download PDF</Button>
                 </div>
               </div>
-            </div>
             </div>
             </div>
             </div>
