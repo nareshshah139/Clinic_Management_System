@@ -2838,7 +2838,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `}
                 `
               }} />
-            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto bg-gray-100" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            <div className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto bg-gray-100" style={{ flex: '1 1 0%', minHeight: 0, overflow: 'auto', maxWidth: 'calc(100% - 24rem)' }}>
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
