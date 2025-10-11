@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import { apiClient } from '@/lib/api';
 import type { Patient, User } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
@@ -286,6 +287,8 @@ function PrescriptionPadContent() {
                 visitId={null}
                 standalone
                 standaloneReason={reason}
+                    printBgUrl={"/letterhead.png"}
+                    paperPreset={'A4'}
                 onCreated={() => {
                   setReason('');
                   toast({
@@ -316,6 +319,8 @@ function PrescriptionPadContent() {
 export default function PrescriptionPadPage() {
   return (
     <Suspense fallback={<PrescriptionPadSkeleton />}>
+      {/* Inject global print CSS used by preview/printing (fixed headers, page helpers) */}
+      <div dangerouslySetInnerHTML={{ __html: getGlobalPrintStyleTag() }} />
       <PrescriptionPadContent />
     </Suspense>
   );
