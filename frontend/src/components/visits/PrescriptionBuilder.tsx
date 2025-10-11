@@ -2861,6 +2861,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   filter: grayscale ? 'grayscale(100%)' : undefined,
                   transition: 'padding-top 200ms ease, padding-bottom 200ms ease',
                   willChange: 'padding-top, padding-bottom',
+                  // CSS variables consumed by global print CSS and local layout
+                  ['--print-header-height' as any]: `${effectiveTopMarginMm}mm`,
+                  ['--print-footer-height' as any]: `${Math.max(0, frames?.footerHeightMm || 0)}mm`,
                 }}
               >
                 {/* Fixed header banner for preview and printing */}
