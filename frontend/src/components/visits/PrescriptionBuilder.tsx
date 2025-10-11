@@ -504,7 +504,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [visitData, setVisitData] = useState<any>(null);
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
-  const [autoPreview, setAutoPreview] = useState(true);
+  const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
@@ -712,10 +712,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (language === 'EN') return fallback ?? '';
     return translationsMap[key] ?? (fallback ?? '');
   }, [language, translationsMap]);
-
-  const clampNumber = useCallback((n: number, min: number, max: number) => {
-    return Math.max(min, Math.min(max, n));
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -2782,8 +2778,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                    /* Hide any design aids in print */
-                    .design-aid-overlay { display: none !important; }
                   /* Explicit page break helpers */
                   .pb-before-page { break-before: page !important; page-break-before: always !important; }
                   .pb-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
@@ -2821,7 +2815,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     padding-bottom: ${effectiveBottomMarginMm}mm !important;
                     box-sizing: border-box !important;
                     background: white !important;
-                      box-shadow: none !important;
                   }
                   #prescription-print-content {
                     width: 100% !important;
@@ -2890,13 +2883,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
                 {bleedSafe?.enabled && (
-                  <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
+                  <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
                 )}
                 {/* Header/Footer Frames Overlays */}
                 {frames?.enabled && (
                   <>
-                    <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
-                    <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
+                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
+                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
                     {/* Drag handles */}
                     <div
                       role="separator"
@@ -2943,15 +2936,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   className="w-full h-full"
                   style={{
                     position: 'relative',
-                    left: `${(() => {
-                      const x = (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0));
-                      // Clamp within reasonable bounds so content doesn't disappear
-                      return clampNumber(x, -60, 200);
-                    })()}px`,
-                    top: `${(() => {
-                      const y = (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0));
-                      return clampNumber(y, -60, 200);
-                    })()}px`,
+                    left: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0))}px`,
+                    top: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0))}px`,
                   }}
                   onMouseDown={(e) => {
                     if (!(e.buttons & 1)) return; // left button only
@@ -2969,7 +2955,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         nx = Math.round(nx / gs) * gs;
                         ny = Math.round(ny / gs) * gs;
                       }
-                      onChangeContentOffset?.(clampNumber(nx, -60, 200), clampNumber(ny, -60, 200));
+                      onChangeContentOffset?.(nx, ny);
                     };
                     const up = () => {
                       window.removeEventListener('mousemove', move);
@@ -2980,10 +2966,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   }}
                   onKeyDown={(e) => {
                     const step = Math.max(1, designAids?.nudgeStepPx || 1);
-                    if (e.key === 'ArrowUp') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), clampNumber((contentOffsetYPx ?? 0) - step, -60, 200)); }
-                    if (e.key === 'ArrowDown') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), clampNumber((contentOffsetYPx ?? 0) + step, -60, 200)); }
-                    if (e.key === 'ArrowLeft') { e.preventDefault(); onChangeContentOffset?.(clampNumber((contentOffsetXPx ?? 0) - step, -60, 200), (contentOffsetYPx ?? 0)); }
-                    if (e.key === 'ArrowRight') { e.preventDefault(); onChangeContentOffset?.(clampNumber((contentOffsetXPx ?? 0) + step, -60, 200), (contentOffsetYPx ?? 0)); }
+                    if (e.key === 'ArrowUp') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) - step); }
+                    if (e.key === 'ArrowDown') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) + step); }
+                    if (e.key === 'ArrowLeft') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) - step, (contentOffsetYPx ?? 0)); }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) + step, (contentOffsetYPx ?? 0)); }
                   }}
                   tabIndex={0}
                 >
@@ -2991,13 +2977,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   {designAids?.enabled && (
                     <>
                       {designAids.showRulers && (
-                        <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', left: - (contentOffsetXPx ?? 0), top: - (contentOffsetYPx ?? 0), right: 0, height: 20, background: 'linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '40px 20px' }} />
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: - (contentOffsetXPx ?? 0), top: - (contentOffsetYPx ?? 0), right: 0, height: 20, background: 'linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '40px 20px' }} />
                       )}
                       {designAids.showRulers && (
-                        <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', top: - (contentOffsetYPx ?? 0), left: -20 - (contentOffsetXPx ?? 0), width: 20, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '20px 40px' }} />
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', top: - (contentOffsetYPx ?? 0), left: -20 - (contentOffsetXPx ?? 0), width: 20, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '20px 40px' }} />
                       )}
                       {designAids.showGrid && (
-                        <div aria-hidden className="pointer-events-none design-aid-overlay" style={{ position: 'absolute', inset: '-2000px', backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize: `${Math.max(2, designAids.gridSizePx || 8)}px ${Math.max(2, designAids.gridSizePx || 8)}px` }} />
+                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: '-2000px', backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize: `${Math.max(2, designAids.gridSizePx || 8)}px ${Math.max(2, designAids.gridSizePx || 8)}px` }} />
                       )}
                     </>
                   )}
@@ -3285,15 +3271,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={() => {
-                      // Reset layout-affecting controls
-                      setOverrideTopMarginPx(null);
-                      setOverrideBottomMarginPx(null);
-                      onChangeContentOffset?.(0, 0);
-                      setPreviewZoom(1);
-                    }}>Reset layout</Button>
-                  </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Page Breaks</span>
                     <div className="space-y-2 text-sm text-gray-700">
@@ -3347,12 +3324,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     }
                   }}>WhatsApp</Button>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" onClick={async () => {
-                    try {
-                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WINDOW_PRINT' }); } catch {}
-                      window.print();
-                    } catch (e) { console.error('Browser print failed', e); }
+                  <Button className="col-span-1" onClick={() => {
+                    try { window.print(); } catch (e) { console.error('Browser print failed', e); }
                   }}>Print</Button>
                   <Button className="col-span-1" onClick={async () => {
                     try {
