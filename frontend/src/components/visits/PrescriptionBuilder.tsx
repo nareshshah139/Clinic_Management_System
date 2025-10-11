@@ -2758,11 +2758,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
         {/* Print Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0 flex flex-col">
+          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0 flex flex-col" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div className="flex-1 min-h-0 flex flex-row">
+            <div className="flex-1 min-h-0 flex flex-row" style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0 }}>
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -2838,7 +2838,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `}
                 `
               }} />
-            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
+            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto bg-gray-100" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
@@ -3252,7 +3252,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
             </div>
             {/* Right Sidebar Controls */}
-            <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto">
+            <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto bg-white" style={{ width: '24rem', flexShrink: 0, height: '100%', overflow: 'auto' }}>
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
