@@ -510,6 +510,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
+  const [bgLoadError, setBgLoadError] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
@@ -2867,9 +2868,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 {/* Fixed header banner for preview and printing */}
-                {printBgUrl && (
+                {(() => {
+                  const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && String(printBgUrl || '').startsWith('http://');
+                  return !!printBgUrl && !bgLoadError && !isMixedContent;
+                })() && (
                   <div className="print-fixed-header" style={{ height: `${effectiveTopMarginMm}mm` }}>
-                    <img src={printBgUrl} alt="Letterhead" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img src={printBgUrl} alt="Letterhead" onError={() => setBgLoadError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
                 )}
                 <div className="print-content" style={{ paddingTop: `var(--print-header-height, ${effectiveTopMarginMm}mm)` }}>
@@ -3207,9 +3211,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </div>
             </div>
-            </div>
             {/* Right Sidebar Controls */}
-            <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+            <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
@@ -3342,7 +3345,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     }
                   }}>Download PDF</Button>
                 </div>
-              </div>
+            </div>
+            </div>
             </div>
             </div>
             </div>
