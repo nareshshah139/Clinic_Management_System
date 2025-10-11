@@ -3249,7 +3249,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
               </div>
-              </div>
+            </div>
             </div>
             {/* RIGHT: Sidebar Controls */}
             <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto bg-white" style={{ width: '24rem', flexShrink: 0, height: '100%', overflow: 'auto' }}>
