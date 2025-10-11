@@ -40,6 +40,7 @@ export default function AppointmentScheduler({
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
   const router = useRouter();
+  const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
@@ -80,6 +81,11 @@ export default function AppointmentScheduler({
   useEffect(() => {
     if (controlledDate) setDate(controlledDate);
   }, [controlledDate]);
+  
+  // Keep internal slot config in sync if parent changes defaults
+  useEffect(() => {
+    setSlotConfig(timeSlotConfig);
+  }, [timeSlotConfig]);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
@@ -95,7 +101,7 @@ export default function AppointmentScheduler({
     if (doctorId && date) {
       void fetchSlots();
     }
-  }, [doctorId, date, refreshKey]);
+  }, [doctorId, date, refreshKey, slotConfig.stepMinutes]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
@@ -155,7 +161,7 @@ export default function AppointmentScheduler({
       const res: GetAvailableSlotsResponse = await apiClient.getAvailableSlots({ 
         doctorId, 
         date, 
-        durationMinutes: timeSlotConfig.stepMinutes 
+        durationMinutes: slotConfig.stepMinutes 
       });
       
       // Handle both possible response formats
@@ -197,7 +203,7 @@ export default function AppointmentScheduler({
     } finally {
       setLoading(false);
     }
-  }, [doctorId, date, timeSlotConfig.stepMinutes, toast]);
+  }, [doctorId, date, slotConfig.stepMinutes, toast]);
 
   const searchPatients = useCallback(async (q: string) => {
     setPatientSearch(q);
@@ -567,6 +573,28 @@ export default function AppointmentScheduler({
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label className="text-sm text-gray-700">Duration</label>
+              <Select
+                value={String(slotConfig.stepMinutes)}
+                onValueChange={(v: string) => {
+                  const m = parseInt(v, 10);
+                  if (!Number.isNaN(m)) {
+                    setSlotConfig((prev) => ({ ...prev, stepMinutes: m }));
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select duration" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="15">15 minutes</SelectItem>
+                  <SelectItem value="20">20 minutes</SelectItem>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                  <SelectItem value="90">90 minutes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>
@@ -845,7 +873,7 @@ export default function AppointmentScheduler({
         refreshKey={refreshKey}
         bookingInProgress={isBooking ? bookingSlot : undefined}
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
-        timeSlotConfig={timeSlotConfig}
+        timeSlotConfig={slotConfig}
         disableSlotBooking={!selectedPatientId && !rescheduleContext}
       />
 
