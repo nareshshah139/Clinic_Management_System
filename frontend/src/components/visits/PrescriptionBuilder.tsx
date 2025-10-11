@@ -510,6 +510,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
+  // Design overlay controls (screen-only helpers; hidden when printing)
+  const [overlayMode, setOverlayMode] = useState<'OFF' | 'LETTERHEAD_HEADER' | 'LETTERHEAD_FULL' | 'GRID' | 'FRAMES'>('OFF');
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(30); // percent opacity for overlays
+  const [printLetterhead, setPrintLetterhead] = useState<boolean>(true);
   const [bgLoadError, setBgLoadError] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   const [orderOpen, setOrderOpen] = useState(false);
@@ -2870,7 +2874,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {/* Fixed header banner for preview and printing */}
                 {(() => {
                   const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && String(printBgUrl || '').startsWith('http://');
-                  return !!printBgUrl && !bgLoadError && !isMixedContent;
+                  return !!printBgUrl && !bgLoadError && !isMixedContent && printLetterhead;
                 })() && (
                   <div className="print-fixed-header" style={{ height: `${effectiveTopMarginMm}mm` }}>
                     <img src={printBgUrl} alt="Letterhead" onError={() => setBgLoadError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -2931,6 +2935,42 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     />
                   </>
                 )}
+                {/* Screen-only design overlays (hidden during print) */}
+                {(() => {
+                  const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && String(printBgUrl || '').startsWith('http://');
+                  const letterheadUsable = !!printBgUrl && !bgLoadError && !isMixedContent;
+                  const opacity = Math.max(0, Math.min(100, overlayOpacity)) / 100;
+                  return (
+                    <>
+                      {/* Letterhead header overlay */}
+                      {overlayMode === 'LETTERHEAD_HEADER' && letterheadUsable && (
+                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0 }}>
+                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${effectiveTopMarginMm}mm`, opacity }}>
+                            <img src={printBgUrl} alt="Letterhead overlay" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        </div>
+                      )}
+                      {/* Full-page faint letterhead overlay (for full-bleed letterheads) */}
+                      {overlayMode === 'LETTERHEAD_FULL' && letterheadUsable && (
+                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0, opacity }}>
+                          <img src={printBgUrl} alt="Letterhead overlay (full)" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: `${paperPreset === 'LETTER' ? '279mm' : '297mm'}`, objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      {/* Grid overlay shortcut via overlay mode */}
+                      {overlayMode === 'GRID' && (
+                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: '-2000px', opacity }} />
+                      )}
+                      {/* Frames overlay shortcut via overlay mode (header/footer guides) */}
+                      {overlayMode === 'FRAMES' && (
+                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0 }}>
+                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames?.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)', opacity }} />
+                          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames?.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)', opacity }} />
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+
                 <div 
                   id="prescription-print-content" 
                   className="w-full h-full"
@@ -3258,6 +3298,30 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="flex gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => { setOverrideTopMarginPx(null); setOverrideBottomMarginPx(null); }}>Reset margins</Button>
                     </div>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Design Overlay</span>
+                    <Select value={overlayMode} onValueChange={(v: any) => setOverlayMode(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select overlay" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OFF">Off</SelectItem>
+                        <SelectItem value="LETTERHEAD_HEADER">Letterhead (header)</SelectItem>
+                        <SelectItem value="LETTERHEAD_FULL">Letterhead (full)</SelectItem>
+                        <SelectItem value="GRID">Grid</SelectItem>
+                        <SelectItem value="FRAMES">Frames</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="flex items-center gap-2 text-sm text-gray-700 mt-2">
+                      <span>Overlay opacity</span>
+                      <input className="flex-1" type="range" min={0} max={100} step={5} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
+                      <span className="w-10 text-right">{overlayOpacity}%</span>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 mt-1">
+                      <input type="checkbox" checked={printLetterhead} onChange={(e) => setPrintLetterhead(e.target.checked)} />
+                      Print letterhead image
+                    </label>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
