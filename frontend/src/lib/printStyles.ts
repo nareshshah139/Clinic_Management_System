@@ -86,4 +86,23 @@ export function getGlobalPrintStyleTag(extraCss?: string): string {
   return `<style>${css}</style>`;
 }
 
+/**
+ * Ensures the global print CSS is injected into document.head exactly once.
+ * Safer than injecting a <style> tag inside the body for consistent print engines.
+ */
+export function ensureGlobalPrintStyles(extraCss?: string): void {
+  if (typeof document === 'undefined') return;
+  const STYLE_ID = 'global-print-css';
+  let styleEl = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = STYLE_ID;
+    document.head.appendChild(styleEl);
+  }
+  const css = extraCss ? `${GLOBAL_PRINT_CSS}\n${extraCss}` : GLOBAL_PRINT_CSS;
+  if (styleEl.textContent !== css) {
+    styleEl.textContent = css;
+  }
+}
+
 
