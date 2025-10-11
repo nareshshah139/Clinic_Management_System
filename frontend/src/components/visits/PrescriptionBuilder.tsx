@@ -3249,9 +3249,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 )}
               </div>
+              </div>
             </div>
-            </div>
-            {/* Right Sidebar Controls */}
+            {/* RIGHT: Sidebar Controls */}
             <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto bg-white" style={{ width: '24rem', flexShrink: 0, height: '100%', overflow: 'auto' }}>
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
