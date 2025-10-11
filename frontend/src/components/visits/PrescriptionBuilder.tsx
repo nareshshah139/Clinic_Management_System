@@ -3339,6 +3339,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </div>
             </div>
             </div>
+            </div>
           </DialogContent>
         </Dialog>
         <Dialog open={interactionsOpen} onOpenChange={setInteractionsOpen}>
@@ -3574,7 +3575,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
                 </div>
               </div>
-            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setNewTemplateOpen(false)}>Cancel</Button>
               <Button
