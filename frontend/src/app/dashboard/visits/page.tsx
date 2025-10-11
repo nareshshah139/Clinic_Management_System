@@ -245,6 +245,7 @@ import type { ComponentType } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
+import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import { apiClient } from '@/lib/api';
@@ -1445,6 +1446,8 @@ function VisitsPageInner() {
 export default function VisitsPage() {
   return (
     <Suspense fallback={<div className="p-4">Loading...</div>}>
+      {/* Inject global print CSS used by prescription/invoice previews (fixed headers, page-break helpers) */}
+      <div dangerouslySetInnerHTML={{ __html: getGlobalPrintStyleTag() }} />
       <VisitsPageInner />
     </Suspense>
   );
