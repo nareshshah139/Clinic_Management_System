@@ -1973,8 +1973,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const container = pagedJsContainerRef.current;
         if (!container) return;
         
-        // Clear previous content
+        // Clear previous content and force cleanup
         container.innerHTML = '';
+        
+        // Force garbage collection of previous paged.js instance
+        // by ensuring we get a fresh container state
+        const previousPages = container.querySelectorAll('.pagedjs_page');
+        previousPages.forEach(page => page.remove());
         
         // Get the prescription content
         const content = printRef.current?.innerHTML || '';
@@ -1985,7 +1990,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         tempDiv.style.fontFamily = 'Fira Sans, sans-serif';
         tempDiv.style.fontSize = '14px';
         
-        // Initialize Paged.js
+        // Calculate margins in mm for @page rule
+        const topMarginMm = effectiveTopMarginMm;
+        const bottomMarginMm = effectiveBottomMarginMm;
+        const leftMarginMm = Math.max(0, Math.round((activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45))/3.78 * 10) / 10);
+        const rightMarginMm = Math.max(0, Math.round((activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45))/3.78 * 10) / 10);
+        
+        // Debug log for margin verification
+        console.log('Paged.js Processing - Margins:', { topMarginMm, bottomMarginMm, leftMarginMm, rightMarginMm });
+        
+        // Initialize a fresh Paged.js instance
         const paged = new Previewer();
         
         // Process the content with dynamic CSS based on all controls
@@ -1993,10 +2007,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
-            margin-top: ${effectiveTopMarginMm}mm;
-            margin-bottom: ${effectiveBottomMarginMm}mm;
-            margin-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm;
-            margin-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm;
+            margin-top: ${topMarginMm}mm !important;
+            margin-bottom: ${bottomMarginMm}mm !important;
+            margin-left: ${leftMarginMm}mm !important;
+            margin-right: ${rightMarginMm}mm !important;
           }
           
           body {
@@ -2061,13 +2075,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           
           // Add frame overlays if enabled
           if (frames?.enabled) {
-            // Header frame
+            // Header frame - positioned from top of page box
             const headerFrame = document.createElement('div');
             headerFrame.style.cssText = `
               position: absolute;
               left: 0;
               right: 0;
-              top: ${effectiveTopMarginMm}mm;
+              top: ${topMarginMm}mm;
               height: ${Math.max(0, (frames.headerHeightMm || 0))}mm;
               background: rgba(0, 123, 255, 0.06);
               outline: 1px dashed rgba(0,123,255,0.5);
@@ -2075,16 +2089,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               z-index: 99;
             `;
             headerFrame.setAttribute('aria-hidden', 'true');
+            headerFrame.setAttribute('data-frame', 'header');
             (pagebox as HTMLElement).style.position = 'relative';
             pagebox.appendChild(headerFrame);
             
-            // Footer frame
+            // Footer frame - positioned from bottom of page box
             const footerFrame = document.createElement('div');
             footerFrame.style.cssText = `
               position: absolute;
               left: 0;
               right: 0;
-              bottom: ${effectiveBottomMarginMm}mm;
+              bottom: ${bottomMarginMm}mm;
               height: ${Math.max(0, (frames.footerHeightMm || 0))}mm;
               background: rgba(0, 123, 255, 0.06);
               outline: 1px dashed rgba(0,123,255,0.5);
@@ -2092,6 +2107,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               z-index: 99;
             `;
             footerFrame.setAttribute('aria-hidden', 'true');
+            footerFrame.setAttribute('data-frame', 'footer');
             pagebox.appendChild(footerFrame);
           }
           
@@ -2187,9 +2203,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     const timer = setTimeout(processWithPagedJs, 300);
     return () => clearTimeout(timer);
   }, [previewOpen, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
-      paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, activeProfileId, printerProfiles, 
-      printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, designAids, frames, 
-      bleedSafe, showRefillStamp, grayscale]);
+      paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
+      activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
+      designAids, frames, bleedSafe, showRefillStamp, grayscale]);
 
   // Handle page navigation
   useEffect(() => {
@@ -3091,7 +3107,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 
                 /* Unified Paged.js styling */
                 #pagedjs-container .pagedjs_page {
-                  margin: 20px auto;
+                  margin: 20px auto !important;
                   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
                   background: white;
                   ${grayscale ? 'filter: grayscale(100%);' : ''}
@@ -3102,6 +3118,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   background-repeat: no-repeat;
                   background-position: top left;
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
+                }
+                
+                /* Ensure paged.js respects @page margins */
+                #pagedjs-container .pagedjs_page_content {
+                  box-sizing: border-box !important;
                 }
                 `
               }} />
