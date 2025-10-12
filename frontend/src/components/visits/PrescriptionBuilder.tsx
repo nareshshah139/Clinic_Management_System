@@ -518,6 +518,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const [totalPreviewPages, setTotalPreviewPages] = useState(1);
   const [pagedJsProcessing, setPagedJsProcessing] = useState(false);
+  const pagedJsRunningRef = useRef(false);
+  const pagedJsPendingRef = useRef(false);
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
@@ -1675,10 +1677,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           drugName: it.drugName,
           genericName: it.genericName,
           brandName: it.brandName,
-          dosage: Number(it.dosage),
+          dosage: it.dosage === '' || it.dosage === undefined || it.dosage === null ? undefined : Number(it.dosage),
           dosageUnit: it.dosageUnit,
           frequency: it.frequency,
-          duration: Number(it.duration),
+          duration: it.duration === '' || it.duration === undefined || it.duration === null ? undefined : Number(it.duration),
           durationUnit: it.durationUnit,
           instructions: it.instructions,
           route: it.route,
@@ -1707,7 +1709,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         },
       } as any;
       const doRequest = async () => {
-        await apiClient.createPrescriptionTemplate(payload);
+        const key = `tpl-${name}-${String(Date.now())}`;
+        await apiClient.createPrescriptionTemplate(payload, { idempotencyKey: key });
         await loadTemplates();
         toast({
           variant: 'success',
@@ -1986,6 +1989,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
     
     const processWithPagedJs = async () => {
+      if (pagedJsRunningRef.current) {
+        // Flag a pending run; the current run will trigger it in finally
+        pagedJsPendingRef.current = true;
+        return;
+      }
+      pagedJsRunningRef.current = true;
       console.log('⏱️  Starting paged.js processing (after 300ms debounce)...');
       try {
         setPagedJsProcessing(true);
@@ -2081,9 +2090,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           });
         }
         
-        // Force a re-render by toggling a state flag
-        setPreviewJustUpdated(true);
-        setTimeout(() => setPreviewJustUpdated(false), 2000);
+        // Note: Avoid forcing React re-render here to prevent resize races
         
         // Apply custom overlays to each page
         pages.forEach((page, idx) => {
@@ -2255,6 +2262,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       } finally {
         console.log('🏁 Paged.js processing finished (finally block)');
         setPagedJsProcessing(false);
+        pagedJsRunningRef.current = false;
+        if (pagedJsPendingRef.current) {
+          // Clear flag and immediately re-run with the latest state
+          pagedJsPendingRef.current = false;
+          // Run in microtask to let state settle
+          setTimeout(() => processWithPagedJs(), 0);
+        }
       }
     };
     
@@ -3919,7 +3933,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   try {
                     setCreatingTemplate(true);
                     const doCreate = async () => {
-                      await apiClient.createPrescriptionTemplate(payload);
+                      const key = `tpl-${name}-${String(Date.now())}`;
+                      await apiClient.createPrescriptionTemplate(payload, { idempotencyKey: key });
                       await loadTemplates();
                       toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
                       setNewTemplateOpen(false);
