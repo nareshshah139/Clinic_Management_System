@@ -2868,9 +2868,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   #prescription-print-content {
                     width: 100% !important;
                     height: 100% !important;
+                    max-height: calc(${paperPreset === 'LETTER' ? '279mm' : '297mm'} - ${effectiveTopMarginMm}mm - ${effectiveBottomMarginMm}mm${frames?.enabled ? ` - ${frames.headerHeightMm || 0}mm - ${frames.footerHeightMm || 0}mm` : ''}) !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     box-sizing: border-box !important;
+                    overflow: hidden !important;
                   }
                 }
                 ${rxPrintFormat === 'TEXT' ? `
@@ -3021,6 +3023,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       
                       return `${baseOffset}px`;
                     })(),
+                    maxHeight: (() => {
+                      const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
+                      const totalMarginMm = effectiveTopMarginMm + effectiveBottomMarginMm;
+                      const frameHeightMm = frames?.enabled ? (frames.headerHeightMm || 0) + (frames.footerHeightMm || 0) : 0;
+                      return `calc(${pageHeightMm}mm - ${totalMarginMm}mm - ${frameHeightMm}mm)`;
+                    })(),
+                    overflow: 'hidden',
                     transition: previewViewMode === 'paginated' ? 'top 0.3s ease-in-out' : undefined,
                   }}
                   onMouseDown={(e) => {
