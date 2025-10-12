@@ -2032,9 +2032,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Initialize a fresh Paged.js instance
         const paged = new Previewer();
         
-        // Process the content with dynamic CSS based on all controls
-        const flow = await paged.preview(tempDiv, [
-          `
+        // Build an inline <style> to avoid Paged.js treating CSS as a remote URL
+        const cssText = `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
             margin-top: ${topMarginMm}mm !important;
@@ -2042,33 +2041,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             margin-left: ${leftMarginMm}mm !important;
             margin-right: ${rightMarginMm}mm !important;
           }
-          
-          body {
-            font-family: 'Fira Sans', sans-serif;
-            font-size: 14px;
-            color: #111827;
-          }
-          
-          .medication-item, .pb-avoid-break {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-          
-          .pb-before-page {
-            break-before: page;
-            page-break-before: always;
-          }
-          
-          table {
-            break-inside: auto;
-          }
-          
-          tr {
-            break-inside: avoid;
-            page-break-inside: avoid;
-          }
-          `
-        ], container);
+          body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
+          .medication-item, .pb-avoid-break { break-inside: avoid; page-break-inside: avoid; }
+          .pb-before-page { break-before: page; page-break-before: always; }
+          table { break-inside: auto; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+        `;
+        const styleEl = document.createElement('style');
+        styleEl.setAttribute('type', 'text/css');
+        styleEl.appendChild(document.createTextNode(cssText));
+        tempDiv.prepend(styleEl);
+
+        // Process with Paged.js (no external CSS array) and render into our container
+        const flow = await paged.preview(tempDiv, [], container);
         
         console.log('📦 Paged.js flow result:', flow);
         
