@@ -103,4 +103,19 @@ export class AvailableSlotsDto {
   @Min(15)
   @Max(120)
   durationMinutes?: number = 30; // Default 30-minute slots
+
+  // Optional dynamic clinic hours (fallback to defaults if not provided)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(23)
+  startHour?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(24)
+  endHour?: number;
 }

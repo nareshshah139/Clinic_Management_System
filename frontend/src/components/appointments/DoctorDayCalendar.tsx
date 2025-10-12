@@ -16,6 +16,7 @@ import {
   getErrorMessage,
   formatPatientName,
   createCleanupTimeouts,
+  doTimeSlotsOverlap,
 } from '@/lib/utils';
 import type {
   AppointmentInSlot,
@@ -69,7 +70,13 @@ export default function DoctorDayCalendar({
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
 
-  const slots = useMemo(() => generateTimeSlots(timeSlotConfig), [timeSlotConfig]);
+  // Use a 10-minute base grid and aggregate rendering to display mixed-duration sessions accurately
+  const baseGridSlots = useMemo(() => generateTimeSlots({
+    startHour: timeSlotConfig.startHour,
+    endHour: timeSlotConfig.endHour,
+    stepMinutes: 10,
+    timezone: timeSlotConfig.timezone,
+  }), [timeSlotConfig]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
@@ -94,6 +101,7 @@ export default function DoctorDayCalendar({
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
+  // Build quick lookup for overlap checks
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
   const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
@@ -260,30 +268,32 @@ export default function DoctorDayCalendar({
               className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3"
               style={showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
             >
-            {slots.map((slot) => {
-              const booked = bookedBySlot.has(slot);
-              const appt = bookedBySlot.get(slot);
+            {baseGridSlots.map((slot) => {
+              // Determine overlaps with any appointment
+              const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
+              const hasAny = overlappingAppointments.length > 0;
+              const primary = overlappingAppointments[0];
               const past = isSlotInPast(slot, date);
-              const isNewlyBooked = recentBookedSlot === slot;
+              const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
               const isBookingInProgress = bookingInProgress === slot;
-              const isDisabled = past || isBookingInProgress || disableSlotBooking;
-              
+              const isDisabled = past || isBookingInProgress || disableSlotBooking || hasAny;
+
               return (
                 <div 
                   key={slot} 
                   className="border rounded-lg p-3 flex flex-col gap-2 transition-all duration-200"
                   style={{
-                    backgroundColor: booked 
+                    backgroundColor: hasAny
                       ? (isNewlyBooked ? '#22c55e' : '#3b82f6')
                       : isBookingInProgress
                       ? '#fbbf24'
                       : (past ? '#f3f4f6' : 'white'),
-                    borderColor: booked 
+                    borderColor: hasAny
                       ? (isNewlyBooked ? '#16a34a' : '#2563eb')
                       : isBookingInProgress
                       ? '#f59e0b'
                       : (past ? '#d1d5db' : '#e5e7eb'),
-                    opacity: past && !booked ? 0.6 : 1,
+                    opacity: past && !hasAny ? 0.6 : 1,
                     boxShadow: isNewlyBooked 
                       ? '0 0 0 2px rgba(34, 197, 94, 0.3)' 
                       : isBookingInProgress 
@@ -293,55 +303,45 @@ export default function DoctorDayCalendar({
                 >
                   <div 
                     className="text-sm font-medium"
-                    style={{ color: booked ? 'white' : (past ? '#9ca3af' : '#374151') }}
+                    style={{ color: hasAny ? 'white' : (past ? '#9ca3af' : '#374151') }}
                   >
                     {slot}
                   </div>
-                  
-                  {booked && appt ? (
+
+                  {hasAny && primary ? (
                     <div className="flex flex-col gap-2">
                       <div 
                         className="text-xs truncate cursor-pointer font-medium"
                         style={{ color: 'rgba(255, 255, 255, 0.95)' }}
-                        onClick={() => setSelectedAppointment(appt)}
+                        onClick={() => setSelectedAppointment(primary)}
                       >
-                        {formatPatientName(appt.patient ?? { name: 'Unknown' })}
+                        {formatPatientName(primary.patient ?? { name: 'Unknown' })}
+                        {overlappingAppointments.length > 1 && (
+                          <span className="ml-2 text-[11px] opacity-90">(+{overlappingAppointments.length - 1} more)</span>
+                        )}
                       </div>
-                      
                       <div className="flex flex-col gap-1">
                         <Badge 
-                          variant={appt.visitType === 'PROCEDURE' ? 'destructive' : appt.visitType === 'TELEMED' ? 'secondary' : 'default'}
+                          variant={primary.visitType === 'PROCEDURE' ? 'destructive' : primary.visitType === 'TELEMED' ? 'secondary' : 'default'}
                           className="text-xs w-fit"
                           style={{
-                            backgroundColor: appt.visitType === 'PROCEDURE' 
+                            backgroundColor: primary.visitType === 'PROCEDURE' 
                               ? 'rgba(220, 38, 38, 0.8)' 
-                              : appt.visitType === 'TELEMED'
+                              : primary.visitType === 'TELEMED'
                               ? 'rgba(107, 114, 128, 0.8)'
                               : 'rgba(59, 130, 246, 0.8)',
                             color: 'white',
                             border: 'none'
                           }}
                         >
-                          {appt.visitType || 'OPD'}
+                          {primary.visitType || 'OPD'}
                         </Badge>
-                        
-                        {appt.room && (
-                          <div 
-                            className="text-xs truncate"
-                            style={{ color: 'rgba(255, 255, 255, 0.8)' }}
-                          >
-                            📍 {appt.room.name}
-                          </div>
-                        )}
-                        {/* Inline super-compact tracker */}
-                        {appt.patient?.id && (
-                          <div className="mt-1">
-                            <PatientProgressTracker patientId={appt.patient.id} variant="mini" />
+                        {primary.room && (
+                          <div className="text-xs truncate" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                            📍 {primary.room.name}
                           </div>
                         )}
                       </div>
-                      
-                      {/* Action buttons */}
                       <div className="flex gap-1 mt-1">
                         <Button
                           size="sm"
@@ -349,12 +349,12 @@ export default function DoctorDayCalendar({
                           className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleStartVisit(appt);
+                            handleStartVisit(primary);
                           }}
-                          disabled={appt.id?.startsWith('optimistic-')}
+                          disabled={primary.id?.startsWith('optimistic-')}
                         >
                           <FileText className="h-3 w-3 mr-1" />
-                          {appt.visit?.id ? 'Continue Visit' : 'Start Visit'}
+                          {primary.visit?.id ? 'Continue Visit' : 'Start Visit'}
                         </Button>
                         <Button
                           size="sm"
@@ -362,9 +362,9 @@ export default function DoctorDayCalendar({
                           className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:bg-opacity-80"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleCancelAppointment(appt);
+                            handleCancelAppointment(primary);
                           }}
-                          disabled={appt.id?.startsWith('optimistic-')}
+                          disabled={primary.id?.startsWith('optimistic-')}
                         >
                           <X className="h-3 w-3" />
                         </Button>

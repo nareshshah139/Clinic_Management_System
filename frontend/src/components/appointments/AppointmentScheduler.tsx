@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails } from '@/lib/utils';
+import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
@@ -161,7 +161,9 @@ export default function AppointmentScheduler({
       const res: GetAvailableSlotsResponse = await apiClient.getAvailableSlots({ 
         doctorId, 
         date, 
-        durationMinutes: slotConfig.stepMinutes 
+        durationMinutes: slotConfig.stepMinutes,
+        startHour: slotConfig.startHour,
+        endHour: slotConfig.endHour,
       });
       
       // Handle both possible response formats
@@ -281,14 +283,16 @@ export default function AppointmentScheduler({
   const handleBookingConfirm = async (appointmentData: { 
     visitType: VisitType; 
     roomId?: string;
+    slot?: string;
   }) => {
     try {
       setIsBooking(true);
+      const finalSlot = appointmentData.slot || pendingBookingSlot;
       const created = await apiClient.createAppointment({ 
         doctorId, 
         patientId: selectedPatientId, 
         date, 
-        slot: pendingBookingSlot, 
+        slot: finalSlot, 
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId
       });
@@ -297,13 +301,13 @@ export default function AppointmentScheduler({
       toast({
         variant: "success",
         title: "Appointment Booked Successfully",
-        description: `${formatPatientName(selectedPatient)} scheduled for ${pendingBookingSlot}`,
+        description: `${formatPatientName(selectedPatient)} scheduled for ${finalSlot}`,
       });
       
       // Optimistic UI update with better error handling
       const newAppt: AppointmentInSlot = {
         id: created.id || 'temp',
-        slot: pendingBookingSlot,
+        slot: finalSlot,
         patient: selectedPatient ? {
           id: selectedPatient.id,
           name: formatPatientName(selectedPatient),
@@ -319,9 +323,9 @@ export default function AppointmentScheduler({
       
       setAppointments(prev => [...prev, newAppt]);
       setAppointmentsBySlot(prev => ({ ...prev, [pendingBookingSlot]: newAppt }));
-      setSlots(prev => prev.filter(s => s.time !== pendingBookingSlot));
+      setSlots(prev => prev.filter(s => s.time !== finalSlot));
       
-      setRecentBookedSlot(pendingBookingSlot);
+      setRecentBookedSlot(finalSlot);
       setBookingDetails(created);
       
       // Use cleanup timeout management
@@ -779,7 +783,6 @@ export default function AppointmentScheduler({
                         {appt.room && (
                           <div className="text-gray-600 truncate">{appt.room.name}</div>
                         )}
-                        {/* mini tracker */}
                         {appt.patient?.id && (
                           <div className="mt-1">
                             <PatientProgressTracker patientId={appt.patient.id} variant="mini" />
@@ -817,7 +820,9 @@ export default function AppointmentScheduler({
               {slots.map((s) => {
                 const past = isSlotInPast(s.time, date);
                 const isThisBooking = isBooking && bookingSlot === s.time;
-                const disabled = past || isThisBooking || (!selectedPatientId && !rescheduleContext);
+                // Disable if this slot overlaps any booked appointment
+                const overlapsAny = booked.some((b) => doTimeSlotsOverlap(b, s.time));
+                const disabled = past || isThisBooking || overlapsAny || (!selectedPatientId && !rescheduleContext);
                 return (
                   <Button
                     key={s.time}
@@ -827,6 +832,8 @@ export default function AppointmentScheduler({
                         ? '#f3f4f6'
                         : isThisBooking
                         ? '#fef3c7'
+                        : overlapsAny
+                        ? '#e5e7eb'
                         : !selectedPatientId && !rescheduleContext
                         ? '#f9fafb'
                         : 'white',
@@ -834,6 +841,8 @@ export default function AppointmentScheduler({
                         ? '#9ca3af'
                         : isThisBooking
                         ? '#92400e'
+                        : overlapsAny
+                        ? '#6b7280'
                         : !selectedPatientId && !rescheduleContext
                         ? '#94a3b8'
                         : '#374151',
@@ -855,7 +864,7 @@ export default function AppointmentScheduler({
                       }
                       handleBookingRequest(s.time);
                     }}
-                  >{isThisBooking ? 'Booking…' : s.time}</Button>
+                  >{isThisBooking ? 'Booking…' : overlapsAny ? `${s.time} • Busy` : s.time}</Button>
                 );
               })}
             </div>

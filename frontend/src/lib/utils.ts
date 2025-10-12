@@ -41,20 +41,57 @@ export function generateTimeSlots(config: TimeSlotConfig = {
 }): string[] {
   const { startHour, endHour, stepMinutes } = config;
   const slots: string[] = [];
-  
-  for (let h = startHour; h < endHour; h += stepMinutes / 60) {
-    const startH = Math.floor(h);
-    const startM = Math.round((h - startH) * 60);
-    const endH = Math.floor(h + stepMinutes / 60);
-    const endM = Math.round(((h + stepMinutes / 60) - endH) * 60);
-    
-    const formatTime = (hour: number, minute: number) => 
-      `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-    
-    slots.push(`${formatTime(startH, startM)}-${formatTime(endH, endM)}`);
+
+  // Calculate using integer minutes to avoid floating rounding like ":60"
+  const startMinutes = Math.max(0, Math.floor(startHour * 60));
+  const endMinutes = Math.max(startMinutes, Math.floor(endHour * 60));
+  const step = Math.max(1, Math.floor(stepMinutes));
+
+  for (let m = startMinutes; m + step <= endMinutes; m += step) {
+    const startHHMM = minutesToHHMM(m);
+    const endHHMM = minutesToHHMM(m + step);
+    slots.push(`${startHHMM}-${endHHMM}`);
   }
-  
+
   return slots;
+}
+
+// Time parsing and overlap utilities for HH:MM-HH:MM slots
+export function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+export function minutesToHHMM(totalMinutes: number): string {
+  const normalized = Math.max(0, totalMinutes);
+  const hours = Math.floor(normalized / 60);
+  const minutes = normalized % 60;
+  const hh = String(hours).padStart(2, '0');
+  const mm = String(minutes).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+export function addMinutesToHHMM(startHHMM: string, minutesToAdd: number): string {
+  const start = hhmmToMinutes(startHHMM);
+  const end = start + (Number.isFinite(minutesToAdd) ? minutesToAdd : 0);
+  return minutesToHHMM(end);
+}
+
+export function getSlotDurationMinutes(slot: string): number {
+  if (!/\d{2}:\d{2}-\d{2}:\d{2}/.test(slot)) return 0;
+  const [start, end] = slot.split('-');
+  return Math.max(0, hhmmToMinutes(end) - hhmmToMinutes(start));
+}
+
+export function doTimeSlotsOverlap(slot1: string, slot2: string): boolean {
+  if (!/\d{2}:\d{2}-\d{2}:\d{2}/.test(slot1) || !/\d{2}:\d{2}-\d{2}:\d{2}/.test(slot2)) return false;
+  const [s1, e1] = slot1.split('-');
+  const [s2, e2] = slot2.split('-');
+  const start1 = hhmmToMinutes(s1);
+  const end1 = hhmmToMinutes(e1);
+  const start2 = hhmmToMinutes(s2);
+  const end2 = hhmmToMinutes(e2);
+  return start1 < end2 && start2 < end1;
 }
 
 // IST timezone utilities

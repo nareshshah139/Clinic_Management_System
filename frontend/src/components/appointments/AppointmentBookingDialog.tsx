@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { getErrorMessage, filterRoomsByVisitType, formatPatientName } from '@/lib/utils';
+import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes } from '@/lib/utils';
 import type { 
   Patient, 
   Room, 
@@ -27,6 +27,7 @@ interface AppointmentBookingDialogProps {
   onConfirm: (appointmentData: { 
     visitType: VisitType; 
     roomId?: string;
+    slot?: string;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -50,6 +51,19 @@ export default function AppointmentBookingDialog({
   const [fetchingRooms, setFetchingRooms] = useState(false);
   const [fetchingSchedules, setFetchingSchedules] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [durationMinutes, setDurationMinutes] = useState<number>(() => {
+    // Default to the slot's current duration if provided, else 30
+    const initial = getSlotDurationMinutes(slot);
+    return initial > 0 ? initial : 30;
+  });
+
+  const derivedSlot = React.useMemo(() => {
+    // slot is HH:MM-HH:MM; recompute end using durationMinutes and keep the start
+    const [start] = (slot || '').split('-');
+    if (!start || !/\d{2}:\d{2}/.test(start)) return slot;
+    const newEnd = addMinutesToHHMM(start, durationMinutes);
+    return `${start}-${newEnd}`;
+  }, [slot, durationMinutes]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -127,7 +141,8 @@ export default function AppointmentBookingDialog({
   const isSlotAvailable = (roomId: string, slotTime: string): boolean => {
     const schedule = roomSchedules[roomId];
     if (!schedule) return true;
-    return !schedule.appointments.some(apt => apt.slot === slotTime);
+    // Use overlap detection with the derived slot (so changing duration re-validates)
+    return !schedule.appointments.some(apt => doTimeSlotsOverlap(apt.slot, slotTime));
   };
 
   const getRelevantRooms = () => {
@@ -162,7 +177,7 @@ export default function AppointmentBookingDialog({
     }
     
     // Check if selected room is available
-    if (selectedRoomId && !isSlotAvailable(selectedRoomId, slot)) {
+    if (selectedRoomId && !isSlotAvailable(selectedRoomId, derivedSlot)) {
       validationErrors.push('Selected room is not available at this time');
     }
 
@@ -186,7 +201,8 @@ export default function AppointmentBookingDialog({
     try {
       await onConfirm({ 
         visitType, 
-        roomId: selectedRoomId || undefined 
+        roomId: selectedRoomId || undefined,
+        slot: derivedSlot
       });
     } catch (error) {
       // Error handling is done in parent component
@@ -212,7 +228,26 @@ export default function AppointmentBookingDialog({
             <div><span className="font-medium">Patient:</span> {formatPatientName(patient)}</div>
             <div><span className="font-medium">Phone:</span> {patient?.phone || 'N/A'}</div>
             <div><span className="font-medium">Date:</span> {date}</div>
-            <div><span className="font-medium">Time Slot:</span> {slot}</div>
+            <div><span className="font-medium">Time Slot:</span> {derivedSlot}</div>
+          </div>
+
+          {/* Duration selector */}
+          <div>
+            <label className="text-sm font-medium text-gray-700 mb-2 block">Duration</label>
+            <Select value={String(durationMinutes)} onValueChange={(v: string) => setDurationMinutes(parseInt(v, 10))}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select duration" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="15">15 minutes</SelectItem>
+                <SelectItem value="20">20 minutes</SelectItem>
+                <SelectItem value="30">30 minutes</SelectItem>
+                <SelectItem value="45">45 minutes</SelectItem>
+                <SelectItem value="60">60 minutes</SelectItem>
+                <SelectItem value="90">90 minutes</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500 mt-1">Adjusts end time and validates room availability for the new duration.</p>
           </div>
 
           {/* Validation Errors */}
@@ -274,9 +309,9 @@ export default function AppointmentBookingDialog({
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {relevantRooms.map((room) => {
-                    const isAvailable = isSlotAvailable(room.id, slot);
+                    const isAvailable = isSlotAvailable(room.id, derivedSlot);
                     const schedule = roomSchedules[room.id];
-                    const conflictingAppointment = schedule?.appointments.find(apt => apt.slot === slot);
+                    const conflictingAppointment = schedule?.appointments.find(apt => doTimeSlotsOverlap(apt.slot, derivedSlot));
                     
                     return (
                       <Card 
@@ -316,7 +351,7 @@ export default function AppointmentBookingDialog({
                             </div>
                           )}
                           {isAvailable && (
-                            <p className="text-sm text-green-600">✓ Available for {slot}</p>
+                            <p className="text-sm text-green-600">✓ Available for {derivedSlot}</p>
                           )}
                         </CardContent>
                       </Card>

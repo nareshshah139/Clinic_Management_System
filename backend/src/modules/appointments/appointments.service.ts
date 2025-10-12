@@ -28,6 +28,7 @@ export class AppointmentsService {
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
       where: { id: doctorId, branchId, role: UserRole.DOCTOR },
+      select: { id: true, firstName: true, lastName: true, metadata: true },
     });
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');
@@ -454,7 +455,7 @@ export class AppointmentsService {
   }
 
   async getAvailableSlots(query: AvailableSlotsDto, branchId: string) {
-    const { doctorId, roomId, date, durationMinutes = 30 } = query;
+    const { doctorId, roomId, date, durationMinutes = 30, startHour, endHour } = query;
 
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
@@ -513,8 +514,34 @@ export class AppointmentsService {
       bookedSlots.push(...roomBookedSlots);
     }
 
+    // Determine clinic hours (fallback to defaults if not provided or invalid)
+    // Attempt to read working hours from doctor.metadata if available
+    let doctorStart: number | undefined;
+    let doctorEnd: number | undefined;
+    try {
+      if (doctor?.metadata) {
+        const meta = typeof doctor.metadata === 'string' ? JSON.parse(doctor.metadata) : doctor.metadata;
+        const hours = meta?.workingHours;
+        if (hours && typeof hours === 'object') {
+          // Allow per-day override; fallback to generic startHour/endHour if present
+          const day = new Date(`${date}T00:00:00.000Z`).getUTCDay(); // 0-6
+          const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][day];
+          const byDay = hours?.byDay?.[dayKey];
+          const startCandidate = byDay?.startHour ?? hours?.startHour;
+          const endCandidate = byDay?.endHour ?? hours?.endHour;
+          if (Number.isInteger(startCandidate)) doctorStart = startCandidate;
+          if (Number.isInteger(endCandidate)) doctorEnd = endCandidate;
+        }
+      }
+    } catch {}
+
+    const clinicStart = Number.isInteger(startHour) ? (startHour as number) : (Number.isInteger(doctorStart) ? (doctorStart as number) : 9);
+    const clinicEnd = Number.isInteger(endHour) ? (endHour as number) : (Number.isInteger(doctorEnd) ? (doctorEnd as number) : 18);
+    const normalizedStart = Math.max(0, Math.min(23, clinicStart));
+    const normalizedEnd = Math.max(normalizedStart + 1, Math.min(24, clinicEnd));
+
     // Generate all possible slots for the day
-    const allSlots = SchedulingUtils.generateTimeSlots(9, 18, durationMinutes);
+    const allSlots = SchedulingUtils.generateTimeSlots(normalizedStart, normalizedEnd, durationMinutes);
 
     // Filter out booked slots by overlap, not exact string equality
     let availableSlots = allSlots.filter(slot => bookedSlots.every(b => !SchedulingUtils.doTimeSlotsOverlap(slot, b)));
@@ -743,13 +770,7 @@ export class AppointmentsService {
       throw new BadRequestException('Cannot schedule appointment in the past');
     }
 
-    // Check if appointment is within business hours (9 AM - 6 PM)
-    const startHour = parseInt(timeSlot.start.split(':')[0]);
-    const endHour = parseInt(timeSlot.end.split(':')[0]);
-
-    if (startHour < 9 || endHour > 18) {
-      throw new BadRequestException('Appointment must be within business hours (9 AM - 6 PM)');
-    }
+    // Do not hard-restrict to 9-18; validation of hours is handled by available-slots logic and conflict checks
   }
 
   private async checkSchedulingConflicts(
