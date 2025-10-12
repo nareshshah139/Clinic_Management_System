@@ -483,7 +483,10 @@ export class AppointmentsService {
       },
     });
 
-    const bookedSlots = bookedAppointments.map(apt => apt.slot);
+    // Normalize and guard against any malformed/empty slot values
+    const bookedSlots = bookedAppointments
+      .map((apt) => apt.slot)
+      .filter((s) => typeof s === 'string' && s.length > 0 && SchedulingUtils.isValidTimeSlot(s));
 
     // If room is specified, also check room availability
     if (roomId) {
@@ -504,7 +507,9 @@ export class AppointmentsService {
         },
       });
 
-      const roomBookedSlots = roomAppointments.map(apt => apt.slot);
+      const roomBookedSlots = roomAppointments
+        .map((apt) => apt.slot)
+        .filter((s) => typeof s === 'string' && s.length > 0 && SchedulingUtils.isValidTimeSlot(s));
       bookedSlots.push(...roomBookedSlots);
     }
 

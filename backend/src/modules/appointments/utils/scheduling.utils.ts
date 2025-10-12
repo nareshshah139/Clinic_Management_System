@@ -203,8 +203,10 @@ export class SchedulingUtils {
   }
 
   private static formatTime(hour: number): string {
-    const h = Math.floor(hour);
-    const m = Math.round((hour - h) * 60);
+    // Use total minutes to avoid floating point rounding issues that can produce ":60"
+    const totalMinutes = Math.round(hour * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   }
 }
