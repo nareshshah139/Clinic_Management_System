@@ -3145,27 +3145,60 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
                         const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
                         
-                        // For proper pagination, each page needs full top and bottom margins
-                        // So we offset by: (available content height) + (margins for spacing between pages)
+                        // Calculate offset: shift by full page height per page
                         const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-                        
-                        // Offset to show the current page - includes inter-page spacing
-                        // Each page transition needs to account for: bottom margin of previous page + top margin of next page
-                        const interPageMargin = topMarginPx + bottomMarginPx;
-                        const pageOffset = -((currentPreviewPage - 1) * (availableHeightPerPage + interPageMargin));
+                        const pageOffset = -((currentPreviewPage - 1) * availableHeightPerPage);
                         return `${baseOffset + pageOffset}px`;
                       }
                       
                       return `${baseOffset}px`;
                     })(),
-                    // Only constrain height in scroll mode or when printing
-                    // In paginated mode, let content flow naturally so all pages exist
+                    // In paginated mode, use clip-path to hide content in margin areas
                     ...(previewViewMode === 'paginated' ? {
                       minHeight: (() => {
+                        const mmToPx = 3.78;
                         const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const totalMarginMm = effectiveTopMarginMm + effectiveBottomMarginMm;
-                        const frameHeightMm = frames?.enabled ? (frames.headerHeightMm || 0) + (frames.footerHeightMm || 0) : 0;
-                        return `calc(${pageHeightMm}mm - ${totalMarginMm}mm - ${frameHeightMm}mm)`;
+                        const pageHeightPx = pageHeightMm * mmToPx;
+                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
+                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
+                        // Content needs space for all pages
+                        return `${totalPreviewPages * availableHeightPerPage}px`;
+                      })(),
+                      // Use mask-image with repeating pattern to hide content in margin areas
+                      // Black = visible, transparent = hidden
+                      WebkitMaskImage: (() => {
+                        const mmToPx = 3.78;
+                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
+                        const pageHeightPx = pageHeightMm * mmToPx;
+                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
+                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
+                        
+                        // Repeating mask: black (visible) for content areas, transparent for margins
+                        return `repeating-linear-gradient(
+                          to bottom,
+                          black 0px,
+                          black ${availableHeightPerPage}px,
+                          transparent ${availableHeightPerPage}px,
+                          transparent ${availableHeightPerPage + 1}px
+                        )`;
+                      })(),
+                      maskImage: (() => {
+                        const mmToPx = 3.78;
+                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
+                        const pageHeightPx = pageHeightMm * mmToPx;
+                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
+                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
+                        
+                        return `repeating-linear-gradient(
+                          to bottom,
+                          black 0px,
+                          black ${availableHeightPerPage}px,
+                          transparent ${availableHeightPerPage}px,
+                          transparent ${availableHeightPerPage + 1}px
+                        )`;
                       })(),
                     } : {
                       maxHeight: (() => {
@@ -3500,6 +3533,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         ? 'Using custom overflow handling' 
                         : 'Using Paged.js library for smart pagination'}
                     </p>
+                    {/* Recommendation for multi-page documents */}
+                    {paginationEngine === 'custom' && totalPreviewPages >= 3 && (
+                      <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                        <div className="font-medium mb-1">💡 Recommendation</div>
+                        <div>For documents with 3+ pages, consider using <strong>Paged.js</strong> for better margin awareness and page break control.</div>
+                      </div>
+                    )}
                   </div>
 
                   {/* View Mode Toggle - Only show for custom engine */}
