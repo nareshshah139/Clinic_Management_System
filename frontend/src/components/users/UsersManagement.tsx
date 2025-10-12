@@ -48,6 +48,11 @@ export default function UsersManagement() {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [genLoading, setGenLoading] = useState(false);
   const [genHints, setGenHints] = useState('');
+  // Working Hours editor state
+  const [whOpen, setWhOpen] = useState(false);
+  const [whStartHour, setWhStartHour] = useState<number>(9);
+  const [whEndHour, setWhEndHour] = useState<number>(18);
+  const [whByDay, setWhByDay] = useState<Record<string, { startHour?: number; endHour?: number }>>({});
   const [form, setForm] = useState<{ id?: string; firstName: string; lastName: string; email: string; phone: string; role: string; status: string; password?: string }>({
     firstName: '', lastName: '', email: '', phone: '', role: 'RECEPTION', status: 'ACTIVE',
   });
@@ -138,6 +143,50 @@ export default function UsersManagement() {
       setWaAccessToken('');
     }
     setWaOpen(true);
+  };
+
+  const openWorkingHours = (u: User) => {
+    setSelectedUser(u);
+    const meta = (u as any)?.metadata || {};
+    const wh = (meta?.workingHours || {}) as any;
+    const start = Number.isInteger(wh?.startHour) ? wh.startHour : 9;
+    const end = Number.isInteger(wh?.endHour) ? wh.endHour : 18;
+    const byDay = typeof wh?.byDay === 'object' && wh.byDay ? wh.byDay : {};
+    setWhStartHour(start);
+    setWhEndHour(end);
+    setWhByDay(byDay);
+    setWhOpen(true);
+  };
+
+  const saveWorkingHours = async () => {
+    if (!selectedUser) return;
+    try {
+      setLoading(true);
+      const existing = ((selectedUser as any)?.metadata || {}) as Record<string, any>;
+      const byDayClean: Record<string, { startHour?: number; endHour?: number }> = {};
+      const days = ['sun','mon','tue','wed','thu','fri','sat'];
+      days.forEach((d) => {
+        const v = whByDay[d];
+        if (v && (Number.isInteger(v.startHour) || Number.isInteger(v.endHour))) {
+          byDayClean[d] = {
+            ...(Number.isInteger(v.startHour) ? { startHour: v.startHour } : {}),
+            ...(Number.isInteger(v.endHour) ? { endHour: v.endHour } : {}),
+          };
+        }
+      });
+      const workingHours = {
+        startHour: whStartHour,
+        endHour: whEndHour,
+        ...(Object.keys(byDayClean).length ? { byDay: byDayClean } : {}),
+      };
+      const metadata = { ...existing, workingHours } as Record<string, any>;
+      await apiClient.updateUserProfile(selectedUser.id, { metadata });
+      setWhOpen(false);
+      await fetchUsers();
+      alert('Working hours saved');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const stripHtml = (html: string) => {
@@ -428,6 +477,81 @@ export default function UsersManagement() {
                         <div className="flex gap-2">
                           <Button variant="outline" size="sm" onClick={() => onEdit(u)}><Edit className="h-3 w-3 mr-1" /> Edit</Button>
                           <Button variant="outline" size="sm" onClick={() => void onDelete(u)}><Trash2 className="h-3 w-3 mr-1" /> Delete</Button>
+                          {u.role === 'DOCTOR' && (
+                            <Dialog open={whOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setWhOpen(open); if (!open) setSelectedUser(null); }}>
+                              <DialogTrigger asChild>
+                                <Button variant="outline" size="sm" onClick={() => openWorkingHours(u)}>Working Hours</Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-[520px]">
+                                <DialogHeader>
+                                  <DialogTitle>Doctor Working Hours</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <Label className="text-sm">Default Start Hour</Label>
+                                        <Input type="number" min={0} max={23} value={whStartHour} onChange={(e) => setWhStartHour(parseInt(e.target.value || '0', 10))} />
+                                      </div>
+                                      <div>
+                                        <Label className="text-sm">Default End Hour</Label>
+                                        <Input type="number" min={1} max={24} value={whEndHour} onChange={(e) => setWhEndHour(parseInt(e.target.value || '0', 10))} />
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500">Hours are in 24h format. End should be greater than Start.</div>
+                                  </div>
+
+                                  <div className="border rounded p-3 space-y-3">
+                                    <div className="font-medium">Per-day Overrides (optional)</div>
+                                    {['sun','mon','tue','wed','thu','fri','sat'].map((d) => (
+                                      <div key={d} className="grid grid-cols-5 gap-2 items-end">
+                                        <div className="col-span-1 capitalize text-sm">{d}</div>
+                                        <div className="col-span-2">
+                                          <Label className="text-xs">Start</Label>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            max={23}
+                                            value={Number.isInteger(whByDay[d]?.startHour) ? (whByDay[d]?.startHour as number) : ''}
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              setWhByDay((prev) => ({
+                                                ...prev,
+                                                [d]: { ...(prev[d] || {}), startHour: v === '' ? undefined : parseInt(v, 10) },
+                                              }));
+                                            }}
+                                            placeholder="—"
+                                          />
+                                        </div>
+                                        <div className="col-span-2">
+                                          <Label className="text-xs">End</Label>
+                                          <Input
+                                            type="number"
+                                            min={1}
+                                            max={24}
+                                            value={Number.isInteger(whByDay[d]?.endHour) ? (whByDay[d]?.endHour as number) : ''}
+                                            onChange={(e) => {
+                                              const v = e.target.value;
+                                              setWhByDay((prev) => ({
+                                                ...prev,
+                                                [d]: { ...(prev[d] || {}), endHour: v === '' ? undefined : parseInt(v, 10) },
+                                              }));
+                                            }}
+                                            placeholder="—"
+                                          />
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={() => setWhOpen(false)}>Close</Button>
+                                    <Button onClick={() => void saveWorkingHours()}>Save</Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
                           <Dialog open={permOpen && selectedUser?.id === u.id} onOpenChange={(open: boolean) => { setPermOpen(open); if (!open) setSelectedUser(null); }}>
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm" onClick={() => openRolePerms(u)}><Settings className="h-3 w-3 mr-1" /> Role & Permissions</Button>

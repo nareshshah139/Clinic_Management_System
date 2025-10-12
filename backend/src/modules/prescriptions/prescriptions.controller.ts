@@ -196,7 +196,23 @@ export class PrescriptionsController {
     @Body() templateDto: PrescriptionTemplateDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.prescriptionsService.createPrescriptionTemplate(templateDto, req.user.branchId, req.user.id);
+    try {
+      const userId = (req as any)?.user?.id || (req as any)?.user?.userId;
+      const branchId = (req as any)?.user?.branchId;
+      if (!userId || !branchId) {
+        throw new BadRequestException('Authentication context missing. Please sign in again.');
+      }
+      // Normalize empty description to undefined to avoid storing empty strings
+      if (templateDto && typeof (templateDto as any).description === 'string' && (templateDto as any).description.trim() === '') {
+        (templateDto as any).description = undefined as any;
+      }
+      return this.prescriptionsService.createPrescriptionTemplate(templateDto, branchId, userId);
+    } catch (err) {
+      // Surface useful message while preserving original error for logs
+      // eslint-disable-next-line no-console
+      console.error('❌ Failed to create prescription template:', err);
+      throw err;
+    }
   }
 
   @Get('templates')

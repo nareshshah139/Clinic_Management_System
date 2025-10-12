@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { getISTDateString } from '@/lib/utils';
+import { getISTDateString, minutesToHHMM, hhmmToMinutes } from '@/lib/utils';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 import { useToast } from '@/hooks/use-toast';
@@ -22,13 +22,21 @@ export default function RoomCalendar() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const [search, setSearch] = useState('');
+  const [gridMinutes, setGridMinutes] = useState<number>(30);
 
-  // Generate time slots from 8 AM to 8 PM
-  const timeSlots = Array.from({ length: 12 }, (_, i) => {
-    const hour = 8 + i;
-    const time = `${hour.toString().padStart(2, '0')}:00`;
-    return { time, hour };
-  });
+  // Generate time grid from 8 AM to 8 PM using selected granularity (min 10 minutes)
+  const timeSlots = (() => {
+    const slots: { label: string; startMin: number; endMin: number }[] = [];
+    const start = 8 * 60;
+    const end = 20 * 60;
+    const step = Math.max(10, Math.floor(gridMinutes));
+    for (let m = start; m < end; m += step) {
+      const startMin = m;
+      const endMin = Math.min(m + step, end);
+      slots.push({ label: minutesToHHMM(startMin), startMin, endMin });
+    }
+    return slots;
+  })();
 
   const fetchRooms = async () => {
     try {
@@ -108,24 +116,17 @@ export default function RoomCalendar() {
     return room.isActive && matchesType && matchesQuery;
   }) : [];
 
-  const getAppointmentForTimeSlot = (roomId: string, hour: number) => {
+  const getAppointmentsForRange = (roomId: string, startMin: number, endMin: number) => {
     const schedule = roomSchedules[roomId];
-    if (!schedule) return null;
-
-    return (
-      schedule.appointments.find((apt) => {
-        const parts = apt.slot?.split('-') || [];
-        if (parts.length !== 2) return false;
-        const [startH, startM] = parts[0].split(':').map((v) => parseInt(v, 10));
-        const [endH, endM] = parts[1].split(':').map((v) => parseInt(v, 10));
-        const slotStart = (isNaN(startH) ? 0 : startH) * 60 + (isNaN(startM) ? 0 : startM);
-        const slotEnd = (isNaN(endH) ? 0 : endH) * 60 + (isNaN(endM) ? 0 : endM);
-        const cellStart = hour * 60;
-        const cellEnd = (hour + 1) * 60;
-        // Occupied if slot overlaps the hour cell
-        return slotStart < cellEnd && slotEnd > cellStart;
-      }) || null
-    );
+    if (!schedule) return [] as RoomSchedule['appointments'];
+    const overlaps = schedule.appointments.filter((apt) => {
+      const parts = apt.slot?.split('-') || [];
+      if (parts.length !== 2) return false;
+      const slotStart = hhmmToMinutes(parts[0]);
+      const slotEnd = hhmmToMinutes(parts[1]);
+      return slotStart < endMin && slotEnd > startMin;
+    });
+    return overlaps.sort((a, b) => hhmmToMinutes((a.slot || '00:00-00:00').split('-')[0]) - hhmmToMinutes((b.slot || '00:00-00:00').split('-')[0]));
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -137,7 +138,19 @@ export default function RoomCalendar() {
   const scrollToCurrentHour = () => {
     const now = new Date();
     const hour = now.getHours();
-    const anchor = document.getElementById(`time-${hour.toString().padStart(2, '0')}:00`);
+    const minutes = now.getMinutes();
+    const withinDay = hour * 60 + minutes;
+    // Find nearest slot label
+    let nearest = timeSlots[0]?.label;
+    let minDiff = Number.MAX_SAFE_INTEGER;
+    for (const s of timeSlots) {
+      const diff = Math.abs(s.startMin - withinDay);
+      if (diff < minDiff) {
+        minDiff = diff;
+        nearest = s.label;
+      }
+    }
+    const anchor = document.getElementById(`time-${nearest}`);
     if (anchor) {
       anchor.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     }
@@ -244,6 +257,17 @@ export default function RoomCalendar() {
             Today
           </Button>
           <Button variant="outline" onClick={scrollToCurrentHour}>Now</Button>
+          <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(Math.max(10, parseInt(v, 10) || 10))}>
+            <SelectTrigger className="w-[140px]"><SelectValue placeholder="Grid" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="10">Grid: 10m</SelectItem>
+              <SelectItem value="15">Grid: 15m</SelectItem>
+              <SelectItem value="20">Grid: 20m</SelectItem>
+              <SelectItem value="30">Grid: 30m</SelectItem>
+              <SelectItem value="45">Grid: 45m</SelectItem>
+              <SelectItem value="60">Grid: 60m</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -339,42 +363,44 @@ export default function RoomCalendar() {
 
               {/* Time Slots */}
               {timeSlots.map((slot) => (
-                <div key={slot.time} className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
-                <div className="flex items-center p-2 font-medium text-sm text-gray-700" id={`time-${slot.time}`}>
+                <div key={slot.label} className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
+                  <div className="flex items-center p-2 font-medium text-sm text-gray-700" id={`time-${slot.label}`}>
                     <Clock className="h-4 w-4 mr-1" />
-                    {slot.time}
+                    {slot.label}
                   </div>
-                  
                   {filteredRooms.map((room) => {
-                    const appointment = getAppointmentForTimeSlot(room.id, slot.hour);
-                    
+                    const appointments = getAppointmentsForRange(room.id, slot.startMin, slot.endMin);
                     return (
-                      <div key={`${room.id}-${slot.time}`} className="p-2 min-h-[60px]">
-                        {appointment ? (
-                          <div className="bg-blue-50 border border-blue-200 rounded p-2 h-full">
-                            <div className="flex items-start justify-between mb-1">
-                              <Badge 
-                                variant="secondary" 
-                                className={`text-xs ${getVisitTypeColor(appointment.visitType || '')}`}
-                              >
-                                {appointment.visitType || 'APPOINTMENT'}
-                              </Badge>
-                              <Badge 
-                                variant={appointment.status === AppointmentStatus.SCHEDULED ? 'default' : 'secondary'}
-                                className="text-xs"
-                              >
-                                {appointment.status}
-                              </Badge>
-                            </div>
-                            <div className="text-sm font-medium text-gray-900 truncate">
-                              {appointment.patient.name}
-                            </div>
-                            <div className="text-xs text-gray-600 truncate">
-                              Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {appointment.slot}
-                            </div>
+                      <div key={`${room.id}-${slot.label}`} className="p-2 min-h-[56px]">
+                        {appointments.length > 0 ? (
+                          <div className="space-y-1">
+                            {appointments.map((appointment) => (
+                              <div key={appointment.id} className="bg-blue-50 border border-blue-200 rounded p-2">
+                                <div className="flex items-start justify-between mb-1">
+                                  <Badge 
+                                    variant="secondary" 
+                                    className={`text-xs ${getVisitTypeColor(appointment.visitType || '')}`}
+                                  >
+                                    {appointment.visitType || 'APPT'}
+                                  </Badge>
+                                  <Badge 
+                                    variant={appointment.status === AppointmentStatus.SCHEDULED ? 'default' : 'secondary'}
+                                    className="text-xs"
+                                  >
+                                    {appointment.status}
+                                  </Badge>
+                                </div>
+                                <div className="text-xs font-medium text-gray-900 truncate">
+                                  {appointment.patient.name}
+                                </div>
+                                <div className="text-[11px] text-gray-600 truncate">
+                                  Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
+                                </div>
+                                <div className="text-[11px] text-gray-500 mt-1">
+                                  {appointment.slot}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <div className="bg-green-50 border border-green-200 rounded p-2 h-full flex items-center justify-center">

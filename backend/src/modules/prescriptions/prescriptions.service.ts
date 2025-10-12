@@ -1128,41 +1128,57 @@ export class PrescriptionsService {
   }
 
   async createPrescriptionTemplate(templateDto: PrescriptionTemplateDto, branchId: string, createdBy: string) {
-    const {
-      name,
-      description,
-      items,
-      category,
-      specialty,
-      isPublic = false,
-      metadata,
-    } = templateDto;
-
-    // Allow templates with only metadata (no items)
-    const safeItems = Array.isArray(items) ? items : [];
-
-    // Enrich items with pricing (mrp) where missing
-    const enrichedItems = await this.enrichItemsWithDrugPricing(safeItems, branchId);
-
-    const template = await this.prisma.prescriptionTemplate.create({
-      data: {
+    try {
+      const {
         name,
         description,
-        items: JSON.stringify(enrichedItems),
+        items,
         category,
         specialty,
-        isPublic,
-        createdBy,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        branchId,
-      },
-    });
+        isPublic = false,
+        metadata,
+      } = templateDto;
 
-    return {
-      ...template,
-      items: JSON.parse(template.items as string),
-      metadata: template.metadata ? JSON.parse(template.metadata as string) : null,
-    };
+      if (!name || !name.trim()) {
+        throw new BadRequestException('Template name is required');
+      }
+
+      // Ensure creator exists in branch (more helpful error than FK violation)
+      const creator = await this.prisma.user.findFirst({ where: { id: createdBy, branchId } });
+      if (!creator) {
+        throw new BadRequestException('Creator not found in this branch');
+      }
+
+      // Allow templates with only metadata (no items)
+      const safeItems = Array.isArray(items) ? items : [];
+
+      // Enrich items with pricing (mrp) where missing
+      const enrichedItems = await this.enrichItemsWithDrugPricing(safeItems, branchId);
+
+      const template = await this.prisma.prescriptionTemplate.create({
+        data: {
+          name: name.trim(),
+          description: description && description.trim() ? description.trim() : null,
+          items: JSON.stringify(enrichedItems),
+          category: category && category.trim() ? category.trim() : null,
+          specialty: specialty && specialty.trim() ? specialty.trim() : null,
+          isPublic,
+          createdBy,
+          metadata: metadata ? JSON.stringify(metadata) : null,
+          branchId,
+        },
+      });
+
+      return {
+        ...template,
+        items: JSON.parse(template.items as string),
+        metadata: template.metadata ? JSON.parse(template.metadata as string) : null,
+      };
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.error('❌ createPrescriptionTemplate error:', err?.message || err);
+      throw err;
+    }
   }
 
   async findAllPrescriptionTemplates(query: PrescriptionTemplateQueryDto, branchId: string) {
