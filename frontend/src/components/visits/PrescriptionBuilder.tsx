@@ -510,11 +510,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
-  // Design overlay controls (screen-only helpers; hidden when printing)
-  const [overlayMode, setOverlayMode] = useState<'OFF' | 'LETTERHEAD_HEADER' | 'LETTERHEAD_FULL' | 'GRID' | 'FRAMES'>('OFF');
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(30); // percent opacity for overlays
-  const [printLetterhead, setPrintLetterhead] = useState<boolean>(true);
-  const [bgLoadError, setBgLoadError] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
@@ -2758,11 +2753,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
         {/* Print Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0 !flex !flex-col" style={{ display: 'flex !important', flexDirection: 'column', height: '100vh' }}>
+          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div className="flex-1 min-h-0 flex flex-row" style={{ display: 'flex', flexDirection: 'row', flex: 1, minHeight: 0 }}>
+            <div className="h-full min-h-0 flex flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -2806,23 +2801,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   #prescription-print-root, #prescription-print-root * {
                     visibility: visible !important;
                   }
-                  #prescription-print-root {
-                    position: static !important;
-                    left: auto !important;
-                    top: auto !important;
+                   #prescription-print-root {
+                    position: absolute !important;
+                    left: 0 !important;
+                    top: 0 !important;
                     width: ${paperPreset === 'LETTER' ? '216mm' : '210mm'} !important;
-                    height: auto !important;
+                    height: ${paperPreset === 'LETTER' ? '279mm' : '297mm'} !important;
                     margin: 0 !important;
-                    padding-top: 0 !important;
+                    padding-top: ${effectiveTopMarginMm}mm !important;
                     padding-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm !important;
                     padding-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm !important;
                     padding-bottom: ${effectiveBottomMarginMm}mm !important;
                     box-sizing: border-box !important;
                     background: white !important;
+                    background-repeat: no-repeat !important;
+                    background-position: 0 0 !important;
+                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'} !important;
+                    ${(printBgUrl ?? '/letterhead.png') ? `background-image: url('${printBgUrl ?? '/letterhead.png'}') !important;` : ''}
                   }
                   #prescription-print-content {
                     width: 100% !important;
-                    height: auto !important;
+                    height: 100% !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     box-sizing: border-box !important;
@@ -2838,7 +2837,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `}
                 `
               }} />
-            <div className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto bg-gray-100" style={{ flex: '1 1 0%', minHeight: 0, overflow: 'auto', maxWidth: 'calc(100% - 24rem)' }}>
+            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
@@ -2846,7 +2845,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div
                 id="prescription-print-root"
                 ref={printRef}
-                className="bg-white text-gray-900 print-page-preview"
+                className="bg-white text-gray-900"
                 style={{
                   fontFamily: 'Fira Sans, sans-serif',
                   fontSize: '14px',
@@ -2854,33 +2853,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
                   margin: '0 auto',
                   padding: '0',
-                  paddingTop: '0',
+                  paddingTop: `${effectiveTopMarginMm}mm`,
                   paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
                   paddingRight: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm`,
                   paddingBottom: `${effectiveBottomMarginMm}mm`,
                   boxSizing: 'border-box',
-                  backgroundImage: undefined,
-                  backgroundRepeat: undefined,
-                  backgroundPosition: undefined,
-                  backgroundSize: undefined,
+                  backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'top left',
+                  backgroundSize: paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm',
                   filter: grayscale ? 'grayscale(100%)' : undefined,
                   transition: 'padding-top 200ms ease, padding-bottom 200ms ease',
                   willChange: 'padding-top, padding-bottom',
-                  // CSS variables consumed by global print CSS and local layout
-                  ['--print-header-height' as any]: `${effectiveTopMarginMm}mm`,
-                  ['--print-footer-height' as any]: `${Math.max(0, frames?.footerHeightMm || 0)}mm`,
                 }}
               >
-                {/* Fixed header banner for preview and printing */}
-                {(() => {
-                  const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && String(printBgUrl || '').startsWith('http://');
-                  return !!printBgUrl && !bgLoadError && !isMixedContent && printLetterhead;
-                })() && (
-                  <div className="print-fixed-header" style={{ height: `${effectiveTopMarginMm}mm` }}>
-                    <img src={printBgUrl} alt="Letterhead" onError={() => setBgLoadError(true)} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-                <div className="print-content" style={{ paddingTop: `var(--print-header-height, ${effectiveTopMarginMm}mm)` }}>
                 {showRefillStamp && (
                   <div aria-hidden className="pointer-events-none select-none" style={{ position: 'absolute', right: 12, top: 12, padding: '4px 8px', border: '1px dashed rgba(0,0,0,0.4)', color: '#0a0a0a', background: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
                     Refill eligible
@@ -2935,42 +2921,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     />
                   </>
                 )}
-                {/* Screen-only design overlays (hidden during print) */}
-                {(() => {
-                  const isMixedContent = typeof window !== 'undefined' && window.location.protocol === 'https:' && String(printBgUrl || '').startsWith('http://');
-                  const letterheadUsable = !!printBgUrl && !bgLoadError && !isMixedContent;
-                  const opacity = Math.max(0, Math.min(100, overlayOpacity)) / 100;
-                  return (
-                    <>
-                      {/* Letterhead header overlay */}
-                      {overlayMode === 'LETTERHEAD_HEADER' && letterheadUsable && (
-                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0 }}>
-                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${effectiveTopMarginMm}mm`, opacity }}>
-                            <img src={printBgUrl} alt="Letterhead overlay" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          </div>
-                        </div>
-                      )}
-                      {/* Full-page faint letterhead overlay (for full-bleed letterheads) */}
-                      {overlayMode === 'LETTERHEAD_FULL' && letterheadUsable && (
-                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0, opacity }}>
-                          <img src={printBgUrl} alt="Letterhead overlay (full)" style={{ position: 'absolute', left: 0, top: 0, width: '100%', height: `${paperPreset === 'LETTER' ? '279mm' : '297mm'}`, objectFit: 'cover' }} />
-                        </div>
-                      )}
-                      {/* Grid overlay shortcut via overlay mode */}
-                      {overlayMode === 'GRID' && (
-                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: '-2000px', opacity }} />
-                      )}
-                      {/* Frames overlay shortcut via overlay mode (header/footer guides) */}
-                      {overlayMode === 'FRAMES' && (
-                        <div aria-hidden className="no-print pointer-events-none" style={{ position: 'absolute', inset: 0 }}>
-                          <div style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames?.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)', opacity }} />
-                          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames?.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)', opacity }} />
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-
                 <div 
                   id="prescription-print-content" 
                   className="w-full h-full"
@@ -3250,9 +3200,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
               </div>
             </div>
+              </div>
             </div>
-            {/* RIGHT: Sidebar Controls */}
-            <div className="print:hidden w-96 shrink-0 border-l h-full overflow-auto bg-white" style={{ width: '24rem', flexShrink: 0, height: '100%', overflow: 'auto' }}>
+            {/* Right Sidebar Controls */}
+            <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
@@ -3298,30 +3249,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="flex gap-2">
                       <Button type="button" variant="outline" size="sm" onClick={() => { setOverrideTopMarginPx(null); setOverrideBottomMarginPx(null); }}>Reset margins</Button>
                     </div>
-                  </div>
-                  <div className="space-y-1">
-                    <span className="text-sm text-gray-700">Design Overlay</span>
-                    <Select value={overlayMode} onValueChange={(v: any) => setOverlayMode(v)}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select overlay" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="OFF">Off</SelectItem>
-                        <SelectItem value="LETTERHEAD_HEADER">Letterhead (header)</SelectItem>
-                        <SelectItem value="LETTERHEAD_FULL">Letterhead (full)</SelectItem>
-                        <SelectItem value="GRID">Grid</SelectItem>
-                        <SelectItem value="FRAMES">Frames</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <div className="flex items-center gap-2 text-sm text-gray-700 mt-2">
-                      <span>Overlay opacity</span>
-                      <input className="flex-1" type="range" min={0} max={100} step={5} value={overlayOpacity} onChange={(e) => setOverlayOpacity(Number(e.target.value))} />
-                      <span className="w-10 text-right">{overlayOpacity}%</span>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 mt-1">
-                      <input type="checkbox" checked={printLetterhead} onChange={(e) => setPrintLetterhead(e.target.checked)} />
-                      Print letterhead image
-                    </label>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
@@ -3408,8 +3335,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
                     }
                   }}>Download PDF</Button>
-                </div>
-            </div>
             </div>
             </div>
             </div>
