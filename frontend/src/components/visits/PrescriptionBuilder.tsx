@@ -16,6 +16,9 @@ import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
+// @ts-ignore - pagedjs types
+import { Previewer } from 'pagedjs';
+
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
 
@@ -515,6 +518,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [previewViewMode, setPreviewViewMode] = useState<'scroll' | 'paginated'>('paginated');
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const [totalPreviewPages, setTotalPreviewPages] = useState(1);
+  // Pagination engine: 'custom' (default) or 'pagedjs'
+  const [paginationEngine, setPaginationEngine] = useState<'custom' | 'pagedjs'>('custom');
+  const [pagedJsProcessing, setPagedJsProcessing] = useState(false);
+  const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
@@ -1999,6 +2006,105 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => { if (t) clearTimeout(t); };
   }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx]);
 
+  // Paged.js processing
+  useEffect(() => {
+    if (!previewOpen || paginationEngine !== 'pagedjs' || !pagedJsContainerRef.current) return;
+    
+    const processWithPagedJs = async () => {
+      try {
+        setPagedJsProcessing(true);
+        const container = pagedJsContainerRef.current;
+        if (!container) return;
+        
+        // Clear previous content
+        container.innerHTML = '';
+        
+        // Get the prescription content
+        const content = printRef.current?.innerHTML || '';
+        
+        // Create a temporary div with the content
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        tempDiv.style.fontFamily = 'Fira Sans, sans-serif';
+        tempDiv.style.fontSize = '14px';
+        
+        // Initialize Paged.js
+        const paged = new Previewer();
+        
+        // Process the content
+        await paged.preview(tempDiv, [
+          `
+          @page {
+            size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
+            margin-top: ${effectiveTopMarginMm}mm;
+            margin-bottom: ${effectiveBottomMarginMm}mm;
+            margin-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm;
+            margin-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm;
+          }
+          
+          body {
+            font-family: 'Fira Sans', sans-serif;
+            font-size: 14px;
+            color: #111827;
+          }
+          
+          .medication-item, .pb-avoid-break {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          
+          .pb-before-page {
+            break-before: page;
+            page-break-before: always;
+          }
+          
+          table {
+            break-inside: auto;
+          }
+          
+          tr {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          `
+        ], container);
+        
+        // Update total pages count
+        const pages = container.querySelectorAll('.pagedjs_page');
+        setTotalPreviewPages(pages.length);
+        
+      } catch (error) {
+        console.error('Paged.js error:', error);
+        toast({
+          title: 'Pagination Error',
+          description: 'Failed to process document with Paged.js. Falling back to custom pagination.',
+          variant: 'destructive',
+        });
+        setPaginationEngine('custom');
+      } finally {
+        setPagedJsProcessing(false);
+      }
+    };
+    
+    const timer = setTimeout(processWithPagedJs, 300);
+    return () => clearTimeout(timer);
+  }, [previewOpen, paginationEngine, items, diagnosis, chiefComplaints, investigations, customSections, 
+      paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, activeProfileId, printerProfiles, 
+      printLeftMarginPx, printRightMarginPx]);
+
+  // Handle page navigation for Paged.js
+  useEffect(() => {
+    if (paginationEngine !== 'pagedjs' || !pagedJsContainerRef.current) return;
+    
+    const pages = pagedJsContainerRef.current.querySelectorAll('.pagedjs_page');
+    if (pages.length === 0 || currentPreviewPage < 1 || currentPreviewPage > pages.length) return;
+    
+    const targetPage = pages[currentPreviewPage - 1];
+    if (targetPage) {
+      targetPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [paginationEngine, currentPreviewPage]);
+
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
   const pushHistory = useCallback(() => {
@@ -2883,6 +2989,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   /* Table/normal mode */
                   .rx-text { display: none !important; }
                 `}
+                
+                /* Paged.js styling */
+                #pagedjs-container .pagedjs_page {
+                  margin: 20px auto;
+                  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+                  background: white;
+                }
+                
+                #pagedjs-container .pagedjs_pagebox {
+                  background-image: ${(printBgUrl ?? '/letterhead.png') ? `url('${printBgUrl ?? '/letterhead.png'}')` : 'none'};
+                  background-repeat: no-repeat;
+                  background-position: top left;
+                  background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
+                }
                 `
               }} />
             <div className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
@@ -2890,15 +3010,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
               {/* Page indicator for paginated view */}
-              {previewViewMode === 'paginated' && totalPreviewPages > 1 && (
+              {((previewViewMode === 'paginated' && paginationEngine === 'custom') || paginationEngine === 'pagedjs') && totalPreviewPages > 1 && (
                 <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
-                  Page {currentPreviewPage} of {totalPreviewPages}
+                  Page {currentPreviewPage} of {totalPreviewPages} {paginationEngine === 'pagedjs' && '(Paged.js)'}
                 </div>
               )}
               <div style={{ 
                 transform: `scale(${previewZoom})`, 
                 transformOrigin: 'top left',
-                ...(previewViewMode === 'paginated' ? {
+                ...((previewViewMode === 'paginated' && paginationEngine === 'custom') ? {
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'flex-start',
@@ -2906,11 +3026,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   padding: '20px 0'
                 } : {})
               }}>
+              
+              {/* Paged.js Container */}
+              {paginationEngine === 'pagedjs' && (
+                <div 
+                  ref={pagedJsContainerRef}
+                  id="pagedjs-container"
+                  className="w-full"
+                  style={{
+                    minHeight: '100vh',
+                  }}
+                />
+              )}
+              
+              {/* Custom Pagination Container */}
               <div
                 id="prescription-print-root"
                 ref={printRef}
                 className="bg-white text-gray-900"
                 style={{
+                  display: paginationEngine === 'pagedjs' ? 'none' : 'block',
                   fontFamily: 'Fira Sans, sans-serif',
                   fontSize: '14px',
                   width: paperPreset === 'LETTER' ? '216mm' : '210mm',
@@ -3320,7 +3455,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
                   </Button>
                   
-                  {/* View Mode Toggle */}
+                  {/* Pagination Engine Toggle */}
+                  <div className="space-y-2">
+                    <span className="text-sm text-gray-700 font-medium">Pagination Engine</span>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant={paginationEngine === 'custom' ? 'default' : 'outline'} 
+                        size="sm" 
+                        onClick={() => {
+                          setPaginationEngine('custom');
+                          setCurrentPreviewPage(1);
+                        }}
+                        className="flex-1"
+                        title="Custom pagination (manual overflow handling)"
+                      >
+                        Custom
+                      </Button>
+                      <Button 
+                        variant={paginationEngine === 'pagedjs' ? 'default' : 'outline'} 
+                        size="sm" 
+                        onClick={() => {
+                          setPaginationEngine('pagedjs');
+                          setCurrentPreviewPage(1);
+                        }}
+                        className="flex-1"
+                        title="Paged.js (automatic pagination library)"
+                      >
+                        Paged.js {pagedJsProcessing && '⏳'}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {paginationEngine === 'custom' 
+                        ? 'Using custom overflow handling' 
+                        : 'Using Paged.js library for smart pagination'}
+                    </p>
+                  </div>
+
+                  {/* View Mode Toggle - Only show for custom engine */}
+                  {paginationEngine === 'custom' && (
                   <div className="space-y-2">
                     <span className="text-sm text-gray-700 font-medium">View Mode</span>
                     <div className="flex gap-2">
@@ -3348,9 +3520,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       </Button>
                     </div>
                   </div>
+                  )}
 
-                  {/* Pagination Controls - Only show in paginated mode */}
-                  {previewViewMode === 'paginated' && totalPreviewPages > 1 && (
+                  {/* Pagination Controls - Show in paginated mode or with Paged.js */}
+                  {((previewViewMode === 'paginated' && paginationEngine === 'custom') || paginationEngine === 'pagedjs') && totalPreviewPages > 1 && (
                     <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700">Page Navigation</span>
