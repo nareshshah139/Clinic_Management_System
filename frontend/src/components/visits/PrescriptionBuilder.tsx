@@ -1965,13 +1965,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   // Unified Paged.js processing with custom controls integration
   useEffect(() => {
-    if (!previewOpen || !pagedJsContainerRef.current) return;
+    console.log('🔄 Paged.js useEffect triggered', { 
+      previewOpen,
+      autoPreview,
+      hasRef: !!pagedJsContainerRef.current,
+      effectiveTopMarginMm,
+      effectiveBottomMarginMm,
+      overrideTopMarginPx,
+      overrideBottomMarginPx
+    });
+    
+    // Check if either preview or autoPreview mode is active
+    if (!(previewOpen || autoPreview) || !pagedJsContainerRef.current) {
+      console.log('⚠️ Early return from paged.js effect', { 
+        previewOpen, 
+        autoPreview,
+        hasRef: !!pagedJsContainerRef.current 
+      });
+      return;
+    }
     
     const processWithPagedJs = async () => {
+      console.log('⏱️  Starting paged.js processing (after 300ms debounce)...');
       try {
         setPagedJsProcessing(true);
         const container = pagedJsContainerRef.current;
-        if (!container) return;
+        if (!container) {
+          console.error('⚠️ Container ref is null at processing time!');
+          return;
+        }
         
         // Clear previous content and force cleanup
         container.innerHTML = '';
@@ -1983,6 +2005,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         
         // Get the prescription content
         const content = printRef.current?.innerHTML || '';
+        
+        console.log('📄 Source content length:', content.length, 'chars');
+        
+        if (!content || content.length < 50) {
+          console.warn('⚠️ Source content is empty or too short, skipping paged.js processing');
+          setPagedJsProcessing(false);
+          return;
+        }
         
         // Create a temporary div with the content
         const tempDiv = document.createElement('div');
@@ -2043,6 +2073,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Update total pages count
         const pages = container.querySelectorAll('.pagedjs_page');
         setTotalPreviewPages(pages.length);
+        console.log('✅ Paged.js processing complete - Generated', pages.length, 'pages');
         
         // Apply custom overlays to each page
         pages.forEach((page, idx) => {
@@ -2189,20 +2220,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         });
         
       } catch (error) {
-        console.error('Paged.js processing error:', error);
+        console.error('❌ Paged.js processing error:', error);
+        console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         toast({
           title: 'Pagination Error',
           description: 'Failed to process document. Please check your content and try again.',
           variant: 'destructive',
         });
       } finally {
+        console.log('🏁 Paged.js processing finished (finally block)');
         setPagedJsProcessing(false);
       }
     };
     
     const timer = setTimeout(processWithPagedJs, 300);
     return () => clearTimeout(timer);
-  }, [previewOpen, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
+  }, [previewOpen, autoPreview, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, grayscale]);
