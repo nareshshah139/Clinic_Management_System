@@ -1149,6 +1149,17 @@ export class PrescriptionsService {
         throw new BadRequestException('Creator not found in this branch');
       }
 
+      // Enforce unique name per branch (case-insensitive)
+      const existingCount = await this.prisma.prescriptionTemplate.count({
+        where: {
+          branchId,
+          name: { equals: name.trim(), mode: 'insensitive' as any },
+        },
+      });
+      if (existingCount > 0) {
+        throw new ConflictException('A template with this name already exists');
+      }
+
       // Allow templates with only metadata (no items)
       const safeItems = Array.isArray(items) ? items : [];
 
@@ -1177,6 +1188,13 @@ export class PrescriptionsService {
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error('❌ createPrescriptionTemplate error:', err);
+      if (err?.status && typeof err.status === 'number') {
+        throw err;
+      }
+      if (err?.code === 'P2002') {
+        // Prisma unique constraint violation
+        throw new ConflictException('A template with this name already exists');
+      }
       const message = (err && (err.meta?.cause || err.message)) || 'Failed to create template';
       throw new BadRequestException(message);
     }

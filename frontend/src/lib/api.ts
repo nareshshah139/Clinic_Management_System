@@ -422,8 +422,8 @@ export class ApiClient {
     return this.get('/prescriptions/templates', params || {});
   }
 
-  async createPrescriptionTemplate(data: Record<string, unknown>) {
-    return this.post('/prescriptions/templates', data);
+  async createPrescriptionTemplate(data: Record<string, unknown>, opts?: { idempotencyKey?: string; timeoutMs?: number }) {
+    return this.post('/prescriptions/templates', data, opts);
   }
 
   async recordTemplateUsage(templateId: string, data: { prescriptionId?: string; variant?: string; alignmentDx?: unknown }) {

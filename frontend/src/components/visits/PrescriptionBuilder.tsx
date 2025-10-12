@@ -1708,9 +1708,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           },
         },
       } as any;
+      const idemKey = `tpl-${name}-${String(Date.now())}`;
       const doRequest = async () => {
-        const key = `tpl-${name}-${String(Date.now())}`;
-        await apiClient.createPrescriptionTemplate(payload, { idempotencyKey: key });
+        await apiClient.post('/prescriptions/templates', payload, { idempotencyKey: idemKey });
         await loadTemplates();
         toast({
           variant: 'success',
@@ -1720,6 +1720,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       await doRequest();
     } catch (e: any) {
+      const idemKey = `tpl-${name}-${String(Date.now())}`;
       showTemplateCreateError(e, async () => {
         try {
           await apiClient.createPrescriptionTemplate({
@@ -3932,9 +3933,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   };
                   try {
                     setCreatingTemplate(true);
+                    const idemKey = `tpl-${name}-${String(Date.now())}`;
                     const doCreate = async () => {
-                      const key = `tpl-${name}-${String(Date.now())}`;
-                      await apiClient.createPrescriptionTemplate(payload, { idempotencyKey: key });
+                      await apiClient.post('/prescriptions/templates', payload, { idempotencyKey: idemKey });
                       await loadTemplates();
                       toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
                       setNewTemplateOpen(false);

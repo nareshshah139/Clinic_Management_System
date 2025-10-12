@@ -197,6 +197,11 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     try {
+      // Optional: enforce idempotency for create template operations
+      const idem = String((req as any)?.headers?.['idempotency-key'] || '').trim();
+      if (!idem) {
+        // Keep it soft for now to avoid breaking clients; consider hard-enforcing later
+      }
       const userId = (req as any)?.user?.id || (req as any)?.user?.userId;
       const branchId = (req as any)?.user?.branchId;
       if (!userId || !branchId) {

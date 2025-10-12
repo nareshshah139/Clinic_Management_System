@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrescriptionsService } from '../prescriptions.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { PrescriptionStatus, PrescriptionLanguage, RefillStatus, DosageUnit, Frequency, DurationUnit, CreatePrescriptionPadDto } from '../dto/prescription.dto';
 
 describe('PrescriptionsService', () => {
@@ -15,8 +16,6 @@ describe('PrescriptionsService', () => {
     visit: {
       create: jest.fn(),
       delete: jest.fn(),
-    },
-    visit: {
       findFirst: jest.fn(),
     },
     user: {
@@ -30,6 +29,7 @@ describe('PrescriptionsService', () => {
       count: jest.fn(),
       aggregate: jest.fn(),
       groupBy: jest.fn(),
+      deleteMany: jest.fn(),
     },
     prescriptionRefill: {
       create: jest.fn(),
@@ -42,6 +42,9 @@ describe('PrescriptionsService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
+    },
+    drug: {
+      findMany: jest.fn(),
     },
   }; 
 
@@ -72,6 +75,13 @@ describe('PrescriptionsService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: NotificationsService,
+          useValue: {
+            sendEmail: jest.fn(),
+            sendWhatsApp: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -182,7 +192,7 @@ describe('PrescriptionsService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(null);
 
       await expect(service.createPrescription(createPrescriptionDto, mockBranchId)).rejects.toThrow(
-        new NotFoundException('Doctor not found'),
+        new BadRequestException('Doctor must belong to the same branch as the visit'),
       );
     });
 
@@ -260,6 +270,8 @@ describe('PrescriptionsService', () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockDoctor);
       mockPrisma.visit.create.mockResolvedValue({ id: 'generated-visit', createdAt: new Date() });
       mockPrisma.prescription.create.mockRejectedValue(new Error('Failed to create prescription'));
+      mockPrisma.prescription.deleteMany.mockResolvedValue({} as any);
+      mockPrisma.visit.delete.mockResolvedValue({} as any);
 
       await expect(service.createPrescriptionPad(padDto, mockBranchId)).rejects.toThrow('Failed to create prescription');
 
@@ -405,10 +417,10 @@ describe('PrescriptionsService', () => {
 
       const updateDto = {
         items: [
-          { drugName: 'Updated Paracetamol', dosage: 600 },
+          { drugName: 'Updated Paracetamol', dosage: 600, dosageUnit: DosageUnit.MG, frequency: Frequency.ONCE_DAILY, duration: 1, durationUnit: DurationUnit.DAYS },
         ],
         notes: 'Updated notes',
-      };
+      } as any;
 
       const mockUpdatedPrescription = {
         ...mockPrescription,
@@ -728,6 +740,8 @@ describe('PrescriptionsService', () => {
         metadata: null,
       };
 
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'doctor-123' });
+      mockPrisma.prescriptionTemplate.count.mockResolvedValue(0);
       mockPrisma.prescriptionTemplate.create.mockResolvedValue(mockTemplate);
 
       const result = await service.createPrescriptionTemplate(templateDto, mockBranchId, 'doctor-123');
@@ -745,6 +759,24 @@ describe('PrescriptionsService', () => {
           createdBy: 'doctor-123',
         }),
       });
+    });
+
+    it('should throw ConflictException for duplicate template name (case-insensitive)', async () => {
+      const templateDto = {
+        name: 'Common Cold Template',
+        description: 'Template for common cold treatment',
+        items: [],
+        category: 'Respiratory',
+        specialty: 'General Medicine',
+        isPublic: false,
+      };
+
+      mockPrisma.user.findFirst.mockResolvedValue({ id: 'doctor-123' });
+      mockPrisma.prescriptionTemplate.count.mockResolvedValue(1);
+
+      await expect(service.createPrescriptionTemplate(templateDto as any, mockBranchId, 'doctor-123')).rejects.toThrow(
+        new ConflictException('A template with this name already exists'),
+      );
     });
   });
 });

@@ -96,7 +96,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.createPrescription.mockResolvedValue(mockPrescription);
 
-      const result = await controller.createPrescription(createPrescriptionDto, mockRequest as any);
+      const result = await controller.createPrescription(createPrescriptionDto, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockPrescription);
       expect(service.createPrescription).toHaveBeenCalledWith(createPrescriptionDto, mockRequest.user.branchId);
@@ -253,7 +253,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.updatePrescription.mockResolvedValue(mockUpdatedPrescription);
 
-      const result = await controller.updatePrescription(prescriptionId, updateDto, mockRequest as any);
+      const result = await controller.updatePrescription(prescriptionId, updateDto, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockUpdatedPrescription);
       expect(service.updatePrescription).toHaveBeenCalledWith(
@@ -277,7 +277,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.cancelPrescription.mockResolvedValue(mockCancelledPrescription);
 
-      const result = await controller.cancelPrescription(prescriptionId, reason, mockRequest as any);
+      const result = await controller.cancelPrescription(prescriptionId, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any, reason as any);
 
       expect(result).toEqual(mockCancelledPrescription);
       expect(service.cancelPrescription).toHaveBeenCalledWith(
@@ -304,7 +304,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.requestRefill.mockResolvedValue(mockRefill);
 
-      const result = await controller.requestRefill(refillDto, mockRequest as any);
+      const result = await controller.requestRefill(refillDto, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockRefill);
       expect(service.requestRefill).toHaveBeenCalledWith(refillDto, mockRequest.user.branchId);
@@ -328,7 +328,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.approveRefill.mockResolvedValue(mockApprovedRefill);
 
-      const result = await controller.approveRefill(refillId, approveDto, mockRequest as any);
+      const result = await controller.approveRefill(refillId, approveDto, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockApprovedRefill);
       expect(service.approveRefill).toHaveBeenCalledWith(
@@ -352,7 +352,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.rejectRefill.mockResolvedValue(mockRejectedRefill);
 
-      const result = await controller.rejectRefill(refillId, body, mockRequest as any);
+      const result = await controller.rejectRefill(refillId, body as any, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockRejectedRefill);
       expect(service.rejectRefill).toHaveBeenCalledWith(
@@ -450,7 +450,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.createPrescriptionTemplate.mockResolvedValue(mockTemplate);
 
-      const result = await controller.createPrescriptionTemplate(templateDto, mockRequest as any);
+      const result = await controller.createPrescriptionTemplate(templateDto as any, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockTemplate);
       expect(service.createPrescriptionTemplate).toHaveBeenCalledWith(
@@ -505,7 +505,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.findAllPrescriptions.mockResolvedValue(mockResult);
 
-      const result = await controller.getPatientPrescriptions(patientId, limit, mockRequest as any);
+      const result = await controller.getPatientPrescriptions(patientId, mockRequest as any, limit as any);
 
       expect(result).toEqual(mockResult);
       expect(service.findAllPrescriptions).toHaveBeenCalledWith(
@@ -530,7 +530,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.getPrescriptionHistory.mockResolvedValue(mockHistory);
 
-      const result = await controller.getPatientPrescriptionHistory(patientId, limit, mockRequest as any);
+      const result = await controller.getPatientPrescriptionHistory(patientId, mockRequest as any, limit as any);
 
       expect(result).toEqual(mockHistory);
       expect(service.getPrescriptionHistory).toHaveBeenCalledWith(
@@ -557,7 +557,7 @@ describe('PrescriptionsController', () => {
 
       mockPrescriptionsService.findAllPrescriptions.mockResolvedValue(mockResult);
 
-      const result = await controller.getDoctorPrescriptions(doctorId, limit, mockRequest as any);
+      const result = await controller.getDoctorPrescriptions(doctorId, mockRequest as any, limit as any);
 
       expect(result).toEqual(mockResult);
       expect(service.findAllPrescriptions).toHaveBeenCalledWith(

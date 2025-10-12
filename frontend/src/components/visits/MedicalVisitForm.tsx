@@ -40,8 +40,6 @@ import {
   Printer,
   Camera,
   Upload,
-  ChevronUp,
-  ChevronDown,
   History,
   Image,
   Keyboard
@@ -1039,8 +1037,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [patientDetails, setPatientDetails] = useState<VisitPatientSummary | null>(null);
   const [recentVisits, setRecentVisits] = useState<VisitSummary[]>([]);
 
-  // Quick templates for common scenarios
-  const [showQuickTemplates, setShowQuickTemplates] = useState(false);
+  
   
   // Voice-to-text functionality
   const [isListening, setIsListening] = useState(false);
@@ -1175,48 +1172,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     updater(next);
   }, []);
 
-  const quickTemplates = useMemo(() => ([
-    {
-      name: 'Acne Follow-up',
-      condition: () => recentVisits.some((visit) => {
-        const diagnosisEntries = Array.isArray(visit.diagnosis) ? visit.diagnosis : [];
-        return diagnosisEntries.some((d: any) => {
-          const label = typeof d === 'string' ? d : d?.diagnosis;
-          return label ? label.toLowerCase().includes('acne') : false;
-        });
-      }),
-      apply: () => {
-        setSubjective('Follow-up for acne treatment. Patient reports improvement/worsening.');
-        setDermDx(new Set(['Acne vulgaris']));
-        setMorphology(new Set(['Papule', 'Pustule', 'Comedo']));
-        setDistribution(new Set(['Face']));
-      }
-    },
-    {
-      name: 'Routine Dermatology Check',
-      condition: () => true,
-      apply: () => {
-        setSubjective('General dermatological consultation. Patient seeking skin assessment.');
-        setSkinConcerns(new Set(['General assessment']));
-      }
-    },
-    {
-      name: 'Pigmentation Concern',
-      condition: () => recentVisits.some((visit) => {
-        const diagnosisEntries = Array.isArray(visit.diagnosis) ? visit.diagnosis : [];
-        return diagnosisEntries.some((d: any) => {
-          const label = typeof d === 'string' ? d : d?.diagnosis;
-          return label ? label.toLowerCase().includes('melasma') || label.toLowerCase().includes('pigment') : false;
-        });
-      }),
-      apply: () => {
-        setSubjective('Pigmentation concerns. Patient reports dark spots/patches.');
-        setDermDx(new Set(['Melasma', 'Post-inflammatory hyperpigmentation']));
-        setMorphology(new Set(['Macule']));
-        setDistribution(new Set(['Face']));
-      }
-    }
-  ]), [parseJsonValue, recentVisits]);
+  
 
   // Load visit number and patient history
   const loadPatientContext = useCallback(async () => {
@@ -1504,37 +1460,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           </Button>
         )}
         
-        {/* Quick Templates */}
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Quick Start Templates</CardTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowQuickTemplates(!showQuickTemplates)}>
-                {showQuickTemplates ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
-            </div>
-          </CardHeader>
-          {showQuickTemplates && (
-            <CardContent className="pt-0">
-              <div className="space-y-2">
-                {quickTemplates
-                  .filter(template => template.condition())
-                  .map((template, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start"
-                      onClick={template.apply}
-                    >
-                      <FileText className="h-3 w-3 mr-2" />
-                      {template.name}
-                    </Button>
-                  ))}
-              </div>
-            </CardContent>
-          )}
-        </Card>
+        
 
       {/* Visit Header */}
       <Card>
