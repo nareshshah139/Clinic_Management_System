@@ -511,6 +511,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
+  // Multi-page preview state
+  const [previewViewMode, setPreviewViewMode] = useState<'scroll' | 'paginated'>('scroll');
+  const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
+  const [totalPreviewPages, setTotalPreviewPages] = useState(1);
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
@@ -1926,6 +1930,48 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     })();
   }, [previewOpen, visitData]);
 
+  // Calculate total pages for paginated preview
+  useEffect(() => {
+    if (!previewOpen || previewViewMode !== 'paginated') return;
+    
+    const calculatePages = () => {
+      const printRoot = printRef.current;
+      if (!printRoot) return;
+
+      // Get page dimensions in pixels (convert mm to px at 96 DPI)
+      const mmToPx = 3.78;
+      const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
+      const pageHeightPx = pageHeightMm * mmToPx;
+      
+      // Account for margins
+      const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
+      const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+      
+      const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
+      
+      // Get content height
+      const contentEl = printRoot.querySelector('#prescription-print-content');
+      if (!contentEl) return;
+      
+      const contentHeight = (contentEl as HTMLElement).scrollHeight;
+      
+      // Calculate number of pages needed
+      const calculatedPages = Math.max(1, Math.ceil(contentHeight / availableHeightPerPage));
+      setTotalPreviewPages(calculatedPages);
+      
+      // Reset to page 1 if current page exceeds total
+      if (currentPreviewPage > calculatedPages) {
+        setCurrentPreviewPage(1);
+      }
+    };
+
+    // Delay calculation to allow DOM to settle
+    const timer = setTimeout(calculatePages, 300);
+    return () => clearTimeout(timer);
+  }, [previewOpen, previewViewMode, items, diagnosis, chiefComplaints, investigations, customSections, 
+      paperPreset, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, currentPreviewPage, 
+      printTopMarginPx, printBottomMarginPx, printerProfiles]);
+
   const openInteractions = useCallback(async () => {
     try {
       const res: any = await apiClient.previewDrugInteractions(items as any);
@@ -2837,11 +2883,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `}
                 `
               }} />
-            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto">
+            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
-              <div style={{ transform: `scale(${previewZoom})`, transformOrigin: 'top left' }}>
+              {/* Page indicator for paginated view */}
+              {previewViewMode === 'paginated' && totalPreviewPages > 1 && (
+                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
+                  Page {currentPreviewPage} of {totalPreviewPages}
+                </div>
+              )}
+              <div style={{ 
+                transform: `scale(${previewZoom})`, 
+                transformOrigin: 'top left',
+                ...(previewViewMode === 'paginated' ? {
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'flex-start',
+                  minHeight: '100%',
+                  padding: '20px 0'
+                } : {})
+              }}>
               <div
                 id="prescription-print-root"
                 ref={printRef}
@@ -2851,7 +2913,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   fontSize: '14px',
                   width: paperPreset === 'LETTER' ? '216mm' : '210mm',
                   minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
-                  margin: '0 auto',
+                  ...(previewViewMode === 'paginated' ? {
+                    height: paperPreset === 'LETTER' ? '279mm' : '297mm',
+                    maxHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
+                    overflow: 'hidden',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                    position: 'relative'
+                  } : {
+                    margin: '0 auto'
+                  }),
                   padding: '0',
                   paddingTop: `${effectiveTopMarginMm}mm`,
                   paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
@@ -2927,7 +2997,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   style={{
                     position: 'relative',
                     left: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0))}px`,
-                    top: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0))}px`,
+                    top: (() => {
+                      const baseOffset = (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0));
+                      
+                      // In paginated mode, apply page offset
+                      if (previewViewMode === 'paginated' && currentPreviewPage > 1) {
+                        const mmToPx = 3.78;
+                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
+                        const pageHeightPx = pageHeightMm * mmToPx;
+                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
+                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
+                        
+                        // Offset to show the current page
+                        const pageOffset = -((currentPreviewPage - 1) * availableHeightPerPage);
+                        return `${baseOffset + pageOffset}px`;
+                      }
+                      
+                      return `${baseOffset}px`;
+                    })(),
+                    transition: previewViewMode === 'paginated' ? 'top 0.3s ease-in-out' : undefined,
                   }}
                   onMouseDown={(e) => {
                     if (!(e.buttons & 1)) return; // left button only
@@ -3216,6 +3305,82 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <Button variant="ghost" size="sm" onClick={() => setAutoPreview(v => !v)} className="w-full justify-between">
                     <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
                   </Button>
+                  
+                  {/* View Mode Toggle */}
+                  <div className="space-y-2">
+                    <span className="text-sm text-gray-700 font-medium">View Mode</span>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant={previewViewMode === 'scroll' ? 'default' : 'outline'} 
+                        size="sm" 
+                        onClick={() => {
+                          setPreviewViewMode('scroll');
+                          setCurrentPreviewPage(1);
+                        }}
+                        className="flex-1"
+                      >
+                        Scroll
+                      </Button>
+                      <Button 
+                        variant={previewViewMode === 'paginated' ? 'default' : 'outline'} 
+                        size="sm" 
+                        onClick={() => {
+                          setPreviewViewMode('paginated');
+                          setCurrentPreviewPage(1);
+                        }}
+                        className="flex-1"
+                      >
+                        Pages
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Pagination Controls - Only show in paginated mode */}
+                  {previewViewMode === 'paginated' && totalPreviewPages > 1 && (
+                    <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Page Navigation</span>
+                        <span className="text-xs text-gray-600">{currentPreviewPage} / {totalPreviewPages}</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setCurrentPreviewPage(p => Math.max(1, p - 1))}
+                          disabled={currentPreviewPage <= 1}
+                          className="flex-1"
+                        >
+                          ← Prev
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => setCurrentPreviewPage(p => Math.min(totalPreviewPages, p + 1))}
+                          disabled={currentPreviewPage >= totalPreviewPages}
+                          className="flex-1"
+                        >
+                          Next →
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-600">Go to:</span>
+                        <input 
+                          type="number" 
+                          min={1} 
+                          max={totalPreviewPages} 
+                          value={currentPreviewPage}
+                          onChange={(e) => {
+                            const page = parseInt(e.target.value, 10);
+                            if (page >= 1 && page <= totalPreviewPages) {
+                              setCurrentPreviewPage(page);
+                            }
+                          }}
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex items-center gap-2 text-sm text-gray-700">
                     <span>Zoom</span>
                     <input className="flex-1" type="range" min={0.6} max={1.4} step={0.05} value={previewZoom} onChange={(e) => setPreviewZoom(Number(e.target.value))} />
