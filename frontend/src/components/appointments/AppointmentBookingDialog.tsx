@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes } from '@/lib/utils';
+import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes, hhmmToMinutes } from '@/lib/utils';
 import type { 
   Patient, 
   Room, 
@@ -64,6 +64,50 @@ export default function AppointmentBookingDialog({
     const newEnd = addMinutesToHHMM(start, durationMinutes);
     return `${start}-${newEnd}`;
   }, [slot, durationMinutes]);
+
+  // Load doctor's working hours for warnings
+  const [workingHours, setWorkingHours] = useState<{ startHour?: number; endHour?: number } | null>(null);
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!doctorId) return;
+        const res: any = await apiClient.getUser(doctorId);
+        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
+        const wh = meta?.workingHours;
+        if (!wh) { setWorkingHours(null); return; }
+        // Resolve effective hours for date using byDay if present
+        const tz = 'Asia/Kolkata';
+        const noonUtc = new Date(`${date}T12:00:00.000Z`);
+        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
+        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
+        const byDay = wh?.byDay?.[dayKey] || {};
+        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
+        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
+        setWorkingHours({ startHour, endHour });
+      } catch {
+        setWorkingHours(null);
+      }
+    };
+    void load();
+  }, [doctorId, date]);
+
+  const outOfHoursMessage = (() => {
+    if (!workingHours?.startHour && !workingHours?.endHour) return '';
+    const [s, e] = (derivedSlot || '').split('-');
+    if (!s || !e) return '';
+    const startMin = hhmmToMinutes(s);
+    const endMin = hhmmToMinutes(e);
+    const startHour = workingHours?.startHour ?? 9;
+    const endHour = workingHours?.endHour ?? 18;
+    const dayStartMin = startHour * 60;
+    const dayEndMin = endHour * 60;
+    if (startMin < dayStartMin || endMin > dayEndMin) {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const fmt = (h: number) => `${pad(h)}:00`;
+      return `Warning: selected time ${derivedSlot} is outside doctor's working hours (${fmt(startHour)}-${fmt(endHour)}).`;
+    }
+    return '';
+  })();
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -181,6 +225,19 @@ export default function AppointmentBookingDialog({
       validationErrors.push('Selected room is not available at this time');
     }
 
+    // Validate duration is positive and end > start
+    const parts = (derivedSlot || '').split('-');
+    if (parts.length === 2) {
+      const [s, e] = parts;
+      const [sh, sm] = s.split(':').map(Number);
+      const [eh, em] = e.split(':').map(Number);
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      if (!(endMin > startMin)) {
+        validationErrors.push('Invalid duration: end time must be after start time');
+      }
+    }
+
     return validationErrors;
   };
 
@@ -249,6 +306,10 @@ export default function AppointmentBookingDialog({
             </Select>
             <p className="text-xs text-gray-500 mt-1">Adjusts end time and validates room availability for the new duration.</p>
           </div>
+
+          {outOfHoursMessage && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded text-amber-800 text-sm">{outOfHoursMessage}</div>
+          )}
 
           {/* Validation Errors */}
           {errors.length > 0 && (

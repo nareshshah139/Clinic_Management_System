@@ -100,7 +100,7 @@ export class AvailableSlotsDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
-  @Min(15)
+  @Min(10)
   @Max(120)
   durationMinutes?: number = 30; // Default 30-minute slots
 
@@ -110,12 +110,12 @@ export class AvailableSlotsDto {
   @IsInt()
   @Min(0)
   @Max(23)
-  startHour?: number;
+  startHour?: number = 9;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(24)
-  endHour?: number;
+  endHour?: number = 18;
 }

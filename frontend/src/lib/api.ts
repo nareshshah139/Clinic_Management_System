@@ -365,6 +365,10 @@ export class ApiClient {
     return this.patch(`/users/${id}`, data);
   }
 
+  async getUser(id: string) {
+    return this.get(`/users/${id}`);
+  }
+
   async updateUserProfile(id: string, data: Record<string, unknown>) {
     return this.patch(`/users/${id}/profile`, data);
   }

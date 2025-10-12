@@ -183,10 +183,18 @@ export default function UsersManagement() {
       await apiClient.updateUserProfile(selectedUser.id, { metadata });
       setWhOpen(false);
       await fetchUsers();
-      alert('Working hours saved');
+      toast({ title: 'Saved', description: 'Working hours updated' });
     } finally {
       setLoading(false);
     }
+  };
+
+  const copyDefaultsToAllDays = () => {
+    const days = ['sun','mon','tue','wed','thu','fri','sat'];
+    const next: Record<string, { startHour?: number; endHour?: number }> = {};
+    days.forEach((d) => { next[d] = { startHour: whStartHour, endHour: whEndHour }; });
+    setWhByDay(next);
+    toast({ title: 'Applied', description: 'Defaults copied to all days' });
   };
 
   const stripHtml = (html: string) => {
@@ -498,7 +506,10 @@ export default function UsersManagement() {
                                         <Input type="number" min={1} max={24} value={whEndHour} onChange={(e) => setWhEndHour(parseInt(e.target.value || '0', 10))} />
                                       </div>
                                     </div>
-                                    <div className="text-xs text-gray-500">Hours are in 24h format. End should be greater than Start.</div>
+                                    <div className="flex items-center justify-between">
+                                      <div className="text-xs text-gray-500">Hours are in 24h format. End should be greater than Start.</div>
+                                      <Button size="sm" variant="outline" onClick={copyDefaultsToAllDays}>Copy defaults to all days</Button>
+                                    </div>
                                   </div>
 
                                   <div className="border rounded p-3 space-y-3">
@@ -544,10 +555,24 @@ export default function UsersManagement() {
                                     ))}
                                   </div>
 
-                                  <div className="flex justify-end gap-2">
-                                    <Button variant="outline" onClick={() => setWhOpen(false)}>Close</Button>
-                                    <Button onClick={() => void saveWorkingHours()}>Save</Button>
-                                  </div>
+                                  {(() => {
+                                    const invalidDefault = !(whEndHour > whStartHour);
+                                    const invalidDays = ['sun','mon','tue','wed','thu','fri','sat'].some((d) => {
+                                      const v = whByDay[d];
+                                      if (!v) return false;
+                                      if (Number.isInteger(v.startHour) && Number.isInteger(v.endHour)) {
+                                        return !((v.endHour as number) > (v.startHour as number));
+                                      }
+                                      return false;
+                                    });
+                                    const disabled = invalidDefault || invalidDays;
+                                    return (
+                                      <div className="flex justify-end gap-2">
+                                        <Button variant="outline" onClick={() => setWhOpen(false)}>Close</Button>
+                                        <Button disabled={disabled} onClick={() => void saveWorkingHours()}>{disabled ? 'Fix hours to save' : 'Save'}</Button>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               </DialogContent>
                             </Dialog>

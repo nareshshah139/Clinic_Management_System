@@ -325,7 +325,7 @@ export default function AppointmentsCalendar({
             </div>
             <div>
               <label className="text-sm text-gray-700">Grid</label>
-              <Select value={String(gridMinutes)} onValueChange={(v) => setGridMinutes(parseInt(v, 10))}>
+              <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
                 <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="10">10 minutes</SelectItem>

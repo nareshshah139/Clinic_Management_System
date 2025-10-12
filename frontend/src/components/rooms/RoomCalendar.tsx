@@ -27,8 +27,8 @@ export default function RoomCalendar() {
   // Generate time grid from 8 AM to 8 PM using selected granularity (min 10 minutes)
   const timeSlots = (() => {
     const slots: { label: string; startMin: number; endMin: number }[] = [];
-    const start = 8 * 60;
-    const end = 20 * 60;
+    const start = 9 * 60;
+    const end = 18 * 60;
     const step = Math.max(10, Math.floor(gridMinutes));
     for (let m = start; m < end; m += step) {
       const startMin = m;

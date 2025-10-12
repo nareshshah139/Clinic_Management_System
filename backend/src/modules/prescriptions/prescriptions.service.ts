@@ -1176,8 +1176,9 @@ export class PrescriptionsService {
       };
     } catch (err: any) {
       // eslint-disable-next-line no-console
-      console.error('❌ createPrescriptionTemplate error:', err?.message || err);
-      throw err;
+      console.error('❌ createPrescriptionTemplate error:', err);
+      const message = (err && (err.meta?.cause || err.message)) || 'Failed to create template';
+      throw new BadRequestException(message);
     }
   }
 

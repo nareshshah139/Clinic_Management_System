@@ -86,6 +86,32 @@ export default function AppointmentScheduler({
   useEffect(() => {
     setSlotConfig(timeSlotConfig);
   }, [timeSlotConfig]);
+
+  // Auto-apply doctor working hours to slotConfig when doctor/date changes
+  useEffect(() => {
+    const applyHours = async () => {
+      if (!doctorId || !date) return;
+      try {
+        const res: any = await apiClient.getUser(doctorId);
+        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
+        const wh = meta?.workingHours;
+        if (!wh) return;
+        const tz = 'Asia/Kolkata';
+        const noonUtc = new Date(`${date}T12:00:00.000Z`);
+        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
+        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
+        const byDay = wh?.byDay?.[dayKey] || {};
+        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
+        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
+        setSlotConfig((prev) => ({
+          ...prev,
+          ...(Number.isInteger(startHour) ? { startHour } : {}),
+          ...(Number.isInteger(endHour) ? { endHour } : {}),
+        }));
+      } catch {}
+    };
+    void applyHours();
+  }, [doctorId, date]);
   const [pendingBookingSlot, setPendingBookingSlot] = useState<string>('');
   const [quickCreateOpen, setQuickCreateOpen] = useState<boolean>(false);
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
@@ -590,6 +616,7 @@ export default function AppointmentScheduler({
               >
                 <SelectTrigger><SelectValue placeholder="Select duration" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="10">10 minutes</SelectItem>
                   <SelectItem value="15">15 minutes</SelectItem>
                   <SelectItem value="20">20 minutes</SelectItem>
                   <SelectItem value="30">30 minutes</SelectItem>

@@ -524,7 +524,11 @@ export class AppointmentsService {
         const hours = meta?.workingHours;
         if (hours && typeof hours === 'object') {
           // Allow per-day override; fallback to generic startHour/endHour if present
-          const day = new Date(`${date}T00:00:00.000Z`).getUTCDay(); // 0-6
+          // Resolve weekday in clinic timezone to avoid UTC off-by-one
+          const tz = 'Asia/Kolkata';
+          const noonUtc = new Date(`${date}T12:00:00.000Z`); // noon UTC mapped to local day deterministically
+          const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
+          const day = localNoon.getDay(); // 0-6 in clinic TZ
           const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][day];
           const byDay = hours?.byDay?.[dayKey];
           const startCandidate = byDay?.startHour ?? hours?.startHour;
