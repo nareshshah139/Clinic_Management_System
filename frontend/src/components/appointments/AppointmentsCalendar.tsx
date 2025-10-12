@@ -59,6 +59,7 @@ export default function AppointmentsCalendar({
   );
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
+  const [gridMinutes, setGridMinutes] = useState<number>(30);
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
@@ -322,6 +323,20 @@ export default function AppointmentsCalendar({
               <label className="text-sm text-gray-700">Patient</label>
               <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
             </div>
+            <div>
+              <label className="text-sm text-gray-700">Grid</label>
+              <Select value={String(gridMinutes)} onValueChange={(v) => setGridMinutes(parseInt(v, 10))}>
+                <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 minutes</SelectItem>
+                  <SelectItem value="15">15 minutes</SelectItem>
+                  <SelectItem value="20">20 minutes</SelectItem>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="45">45 minutes</SelectItem>
+                  <SelectItem value="60">60 minutes</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {selectedPatient && (
@@ -418,6 +433,7 @@ export default function AppointmentsCalendar({
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
             disableSlotBooking={!selectedPatientId}
             selectedRoomName={selectedRoom?.name}
+            timeSlotConfig={{ ...timeSlotConfig, stepMinutes: Math.max(10, gridMinutes) }}
           />
         </CardContent>
       </Card>

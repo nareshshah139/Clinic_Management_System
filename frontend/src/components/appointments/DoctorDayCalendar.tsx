@@ -74,7 +74,7 @@ export default function DoctorDayCalendar({
   const baseGridSlots = useMemo(() => generateTimeSlots({
     startHour: timeSlotConfig.startHour,
     endHour: timeSlotConfig.endHour,
-    stepMinutes: 10,
+    stepMinutes: Math.max(10, timeSlotConfig.stepMinutes || 10),
     timezone: timeSlotConfig.timezone,
   }), [timeSlotConfig]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
