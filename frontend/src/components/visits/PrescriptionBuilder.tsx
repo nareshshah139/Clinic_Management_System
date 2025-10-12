@@ -3007,10 +3007,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         const pageHeightPx = pageHeightMm * mmToPx;
                         const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
                         const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
+                        
+                        // For proper pagination, each page needs full top and bottom margins
+                        // So we offset by: (available content height) + (margins for spacing between pages)
                         const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
                         
-                        // Offset to show the current page
-                        const pageOffset = -((currentPreviewPage - 1) * availableHeightPerPage);
+                        // Offset to show the current page - includes inter-page spacing
+                        // Each page transition needs to account for: bottom margin of previous page + top margin of next page
+                        const interPageMargin = topMarginPx + bottomMarginPx;
+                        const pageOffset = -((currentPreviewPage - 1) * (availableHeightPerPage + interPageMargin));
                         return `${baseOffset + pageOffset}px`;
                       }
                       
