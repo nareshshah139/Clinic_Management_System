@@ -407,13 +407,15 @@ export class PrescriptionTemplateDto {
   @IsString()
   name: string;
 
+  @IsOptional()
   @IsString()
   description?: string;
 
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PrescriptionTemplateItemDto)
-  items: PrescriptionTemplateItemDto[];
+  items?: PrescriptionTemplateItemDto[];
 
   @IsOptional()
   @IsString()
