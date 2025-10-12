@@ -1898,7 +1898,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return (overrideTopMarginPx ?? (prof.topMarginPx ?? printTopMarginPx ?? 150)) as number;
+    return (overrideTopMarginPx ?? (prof.topMarginPx ?? printTopMarginPx ?? 170)) as number;
   }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx]);
   const effectiveBottomMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
@@ -3532,7 +3532,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       min={0}
                       max={300}
                       step={1}
-                      value={overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150))}
+                      value={overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 170) : (printTopMarginPx ?? 170))}
                       onChange={(e) => setOverrideTopMarginPx(Number(e.target.value))}
                     />
                     <div className="flex items-center justify-between">
