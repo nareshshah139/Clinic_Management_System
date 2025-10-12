@@ -512,7 +512,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
   // Multi-page preview state
-  const [previewViewMode, setPreviewViewMode] = useState<'scroll' | 'paginated'>('scroll');
+  const [previewViewMode, setPreviewViewMode] = useState<'scroll' | 'paginated'>('paginated');
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const [totalPreviewPages, setTotalPreviewPages] = useState(1);
   const [orderOpen, setOrderOpen] = useState(false);
