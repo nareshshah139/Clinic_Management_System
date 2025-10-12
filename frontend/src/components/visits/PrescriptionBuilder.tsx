@@ -2033,7 +2033,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const paged = new Previewer();
         
         // Process the content with dynamic CSS based on all controls
-        await paged.preview(tempDiv, [
+        const flow = await paged.preview(tempDiv, [
           `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
@@ -2070,15 +2070,55 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           `
         ], container);
         
+        console.log('📦 Paged.js flow result:', flow);
+        
         // Update total pages count
         const pages = container.querySelectorAll('.pagedjs_page');
         setTotalPreviewPages(pages.length);
         console.log('✅ Paged.js processing complete - Generated', pages.length, 'pages');
+        console.log('📏 Container dimensions:', {
+          width: container.offsetWidth,
+          height: container.offsetHeight,
+          scrollHeight: container.scrollHeight,
+          childElementCount: container.childElementCount,
+          innerHTML_length: container.innerHTML.length
+        });
+        
+        // Check if pages are actually in the DOM with the right margins
+        if (pages.length > 0) {
+          const firstPage = pages[0] as HTMLElement;
+          const pageStyle = window.getComputedStyle(firstPage);
+          console.log('🎨 First page computed styles:', {
+            width: pageStyle.width,
+            height: pageStyle.height,
+            display: pageStyle.display,
+            visibility: pageStyle.visibility
+          });
+        }
+        
+        // Force a re-render by toggling a state flag
+        setPreviewJustUpdated(true);
+        setTimeout(() => setPreviewJustUpdated(false), 2000);
         
         // Apply custom overlays to each page
         pages.forEach((page, idx) => {
           const pagebox = page.querySelector('.pagedjs_pagebox');
-          if (!pagebox) return;
+          if (!pagebox) {
+            console.warn(`⚠️ Page ${idx} has no pagebox!`);
+            return;
+          }
+          
+          // Log the page content area dimensions
+          const pageContent = page.querySelector('.pagedjs_page_content') as HTMLElement;
+          if (pageContent && idx === 0) {
+            console.log('📄 First page content area:', {
+              marginTop: window.getComputedStyle(pageContent).marginTop,
+              marginBottom: window.getComputedStyle(pageContent).marginBottom,
+              paddingTop: window.getComputedStyle(pageContent).paddingTop,
+              paddingBottom: window.getComputedStyle(pageContent).paddingBottom,
+              height: pageContent.offsetHeight
+            });
+          }
           
           // Apply content offset (for design positioning)
           const contentArea = page.querySelector('.pagedjs_page_content');
