@@ -514,12 +514,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
-  // Multi-page preview state
-  const [previewViewMode, setPreviewViewMode] = useState<'scroll' | 'paginated'>('paginated');
+  // Multi-page preview state - now unified with Paged.js
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const [totalPreviewPages, setTotalPreviewPages] = useState(1);
-  // Pagination engine: 'custom' (default) or 'pagedjs'
-  const [paginationEngine, setPaginationEngine] = useState<'custom' | 'pagedjs'>('custom');
   const [pagedJsProcessing, setPagedJsProcessing] = useState(false);
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const [orderOpen, setOrderOpen] = useState(false);
@@ -1937,47 +1934,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     })();
   }, [previewOpen, visitData]);
 
-  // Calculate total pages for paginated preview
-  useEffect(() => {
-    if (!previewOpen || previewViewMode !== 'paginated') return;
-    
-    const calculatePages = () => {
-      const printRoot = printRef.current;
-      if (!printRoot) return;
-
-      // Get page dimensions in pixels (convert mm to px at 96 DPI)
-      const mmToPx = 3.78;
-      const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-      const pageHeightPx = pageHeightMm * mmToPx;
-      
-      // Account for margins
-      const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
-      const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
-      
-      const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-      
-      // Get content height
-      const contentEl = printRoot.querySelector('#prescription-print-content');
-      if (!contentEl) return;
-      
-      const contentHeight = (contentEl as HTMLElement).scrollHeight;
-      
-      // Calculate number of pages needed
-      const calculatedPages = Math.max(1, Math.ceil(contentHeight / availableHeightPerPage));
-      setTotalPreviewPages(calculatedPages);
-      
-      // Reset to page 1 if current page exceeds total
-      if (currentPreviewPage > calculatedPages) {
-        setCurrentPreviewPage(1);
-      }
-    };
-
-    // Delay calculation to allow DOM to settle
-    const timer = setTimeout(calculatePages, 300);
-    return () => clearTimeout(timer);
-  }, [previewOpen, previewViewMode, items, diagnosis, chiefComplaints, investigations, customSections, 
-      paperPreset, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, currentPreviewPage, 
-      printTopMarginPx, printBottomMarginPx, printerProfiles]);
+  // Old custom pagination removed - now using unified Paged.js system
 
   const openInteractions = useCallback(async () => {
     try {
@@ -2006,9 +1963,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => { if (t) clearTimeout(t); };
   }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx]);
 
-  // Paged.js processing
+  // Unified Paged.js processing with custom controls integration
   useEffect(() => {
-    if (!previewOpen || paginationEngine !== 'pagedjs' || !pagedJsContainerRef.current) return;
+    if (!previewOpen || !pagedJsContainerRef.current) return;
     
     const processWithPagedJs = async () => {
       try {
@@ -2031,7 +1988,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Initialize Paged.js
         const paged = new Previewer();
         
-        // Process the content
+        // Process the content with dynamic CSS based on all controls
         await paged.preview(tempDiv, [
           `
           @page {
@@ -2073,14 +2030,155 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const pages = container.querySelectorAll('.pagedjs_page');
         setTotalPreviewPages(pages.length);
         
+        // Apply custom overlays to each page
+        pages.forEach((page, idx) => {
+          const pagebox = page.querySelector('.pagedjs_pagebox');
+          if (!pagebox) return;
+          
+          // Apply content offset (for design positioning)
+          const contentArea = page.querySelector('.pagedjs_page_content');
+          if (contentArea) {
+            const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
+            const offsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
+            (contentArea as HTMLElement).style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+          }
+          
+          // Add bleed-safe overlay if enabled
+          if (bleedSafe?.enabled) {
+            const safeOverlay = document.createElement('div');
+            safeOverlay.style.cssText = `
+              position: absolute;
+              inset: 0;
+              outline: ${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15);
+              outline-offset: -${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm;
+              pointer-events: none;
+              z-index: 100;
+            `;
+            safeOverlay.setAttribute('aria-hidden', 'true');
+            (pagebox as HTMLElement).style.position = 'relative';
+            pagebox.appendChild(safeOverlay);
+          }
+          
+          // Add frame overlays if enabled
+          if (frames?.enabled) {
+            // Header frame
+            const headerFrame = document.createElement('div');
+            headerFrame.style.cssText = `
+              position: absolute;
+              left: 0;
+              right: 0;
+              top: ${effectiveTopMarginMm}mm;
+              height: ${Math.max(0, (frames.headerHeightMm || 0))}mm;
+              background: rgba(0, 123, 255, 0.06);
+              outline: 1px dashed rgba(0,123,255,0.5);
+              pointer-events: none;
+              z-index: 99;
+            `;
+            headerFrame.setAttribute('aria-hidden', 'true');
+            (pagebox as HTMLElement).style.position = 'relative';
+            pagebox.appendChild(headerFrame);
+            
+            // Footer frame
+            const footerFrame = document.createElement('div');
+            footerFrame.style.cssText = `
+              position: absolute;
+              left: 0;
+              right: 0;
+              bottom: ${effectiveBottomMarginMm}mm;
+              height: ${Math.max(0, (frames.footerHeightMm || 0))}mm;
+              background: rgba(0, 123, 255, 0.06);
+              outline: 1px dashed rgba(0,123,255,0.5);
+              pointer-events: none;
+              z-index: 99;
+            `;
+            footerFrame.setAttribute('aria-hidden', 'true');
+            pagebox.appendChild(footerFrame);
+          }
+          
+          // Add design aids if enabled
+          if (designAids?.enabled) {
+            const designContainer = document.createElement('div');
+            designContainer.style.cssText = `
+              position: absolute;
+              inset: 0;
+              pointer-events: none;
+              z-index: 98;
+            `;
+            designContainer.setAttribute('aria-hidden', 'true');
+            
+            if (designAids.showGrid) {
+              const gridOverlay = document.createElement('div');
+              gridOverlay.style.cssText = `
+                position: absolute;
+                inset: -200px;
+                background-image: linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px),
+                                  linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px);
+                background-size: ${Math.max(2, designAids.gridSizePx || 8)}px ${Math.max(2, designAids.gridSizePx || 8)}px;
+              `;
+              designContainer.appendChild(gridOverlay);
+            }
+            
+            if (designAids.showRulers) {
+              // Horizontal ruler
+              const hRuler = document.createElement('div');
+              hRuler.style.cssText = `
+                position: absolute;
+                left: 0;
+                top: 0;
+                right: 0;
+                height: 20px;
+                background: linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px);
+                background-size: 40px 20px;
+              `;
+              designContainer.appendChild(hRuler);
+              
+              // Vertical ruler
+              const vRuler = document.createElement('div');
+              vRuler.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 20px;
+                bottom: 0;
+                background: linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px);
+                background-size: 20px 40px;
+              `;
+              designContainer.appendChild(vRuler);
+            }
+            
+            (pagebox as HTMLElement).style.position = 'relative';
+            pagebox.appendChild(designContainer);
+          }
+          
+          // Add refill stamp to first page if enabled
+          if (idx === 0 && showRefillStamp) {
+            const stamp = document.createElement('div');
+            stamp.style.cssText = `
+              position: absolute;
+              right: 12px;
+              top: 12px;
+              padding: 4px 8px;
+              border: 1px dashed rgba(0,0,0,0.4);
+              color: #0a0a0a;
+              background: rgba(255,255,255,0.8);
+              font-size: 12px;
+              pointer-events: none;
+              z-index: 101;
+            `;
+            stamp.textContent = 'Refill eligible';
+            stamp.setAttribute('aria-hidden', 'true');
+            (pagebox as HTMLElement).style.position = 'relative';
+            pagebox.appendChild(stamp);
+          }
+        });
+        
       } catch (error) {
-        console.error('Paged.js error:', error);
+        console.error('Paged.js processing error:', error);
         toast({
           title: 'Pagination Error',
-          description: 'Failed to process document with Paged.js. Falling back to custom pagination.',
+          description: 'Failed to process document. Please check your content and try again.',
           variant: 'destructive',
         });
-        setPaginationEngine('custom');
       } finally {
         setPagedJsProcessing(false);
       }
@@ -2088,13 +2186,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     
     const timer = setTimeout(processWithPagedJs, 300);
     return () => clearTimeout(timer);
-  }, [previewOpen, paginationEngine, items, diagnosis, chiefComplaints, investigations, customSections, 
+  }, [previewOpen, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, activeProfileId, printerProfiles, 
-      printLeftMarginPx, printRightMarginPx]);
+      printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, designAids, frames, 
+      bleedSafe, showRefillStamp, grayscale]);
 
-  // Handle page navigation for Paged.js
+  // Handle page navigation
   useEffect(() => {
-    if (paginationEngine !== 'pagedjs' || !pagedJsContainerRef.current) return;
+    if (!pagedJsContainerRef.current) return;
     
     const pages = pagedJsContainerRef.current.querySelectorAll('.pagedjs_page');
     if (pages.length === 0 || currentPreviewPage < 1 || currentPreviewPage > pages.length) return;
@@ -2103,7 +2202,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (targetPage) {
       targetPage.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }, [paginationEngine, currentPreviewPage]);
+  }, [currentPreviewPage]);
 
   // Autosave & history
   const draftKey = useMemo(() => `rxDraft:${patientId}:${visitId || 'standalone'}`, [patientId, visitId]);
@@ -2990,11 +3089,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   .rx-text { display: none !important; }
                 `}
                 
-                /* Paged.js styling */
+                /* Unified Paged.js styling */
                 #pagedjs-container .pagedjs_page {
                   margin: 20px auto;
                   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
                   background: white;
+                  ${grayscale ? 'filter: grayscale(100%);' : ''}
                 }
                 
                 #pagedjs-container .pagedjs_pagebox {
@@ -3009,26 +3109,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
-              {/* Page indicator for paginated view */}
-              {((previewViewMode === 'paginated' && paginationEngine === 'custom') || paginationEngine === 'pagedjs') && totalPreviewPages > 1 && (
+              {/* Page indicator */}
+              {totalPreviewPages > 1 && (
                 <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
-                  Page {currentPreviewPage} of {totalPreviewPages} {paginationEngine === 'pagedjs' && '(Paged.js)'}
+                  Page {currentPreviewPage} of {totalPreviewPages}
                 </div>
               )}
               <div style={{ 
                 transform: `scale(${previewZoom})`, 
-                transformOrigin: 'top left',
-                ...((previewViewMode === 'paginated' && paginationEngine === 'custom') ? {
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'flex-start',
-                  minHeight: '100%',
-                  padding: '20px 0'
-                } : {})
+                transformOrigin: 'top left'
               }}>
               
-              {/* Paged.js Container */}
-              {paginationEngine === 'pagedjs' && (
+              {/* Unified Paged.js Container (always shown) */}
                 <div 
                   ref={pagedJsContainerRef}
                   id="pagedjs-container"
@@ -3037,228 +3129,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     minHeight: '100vh',
                   }}
                 />
-              )}
               
-              {/* Custom Pagination Container */}
+              {/* Hidden source content for Paged.js processing (overlays applied to Paged.js output) */}
               <div
                 id="prescription-print-root"
                 ref={printRef}
                 className="bg-white text-gray-900"
                 style={{
-                  display: paginationEngine === 'pagedjs' ? 'none' : 'block',
+                  display: 'none', // Hidden - used only as source for Paged.js
                   fontFamily: 'Fira Sans, sans-serif',
                   fontSize: '14px',
-                  width: paperPreset === 'LETTER' ? '216mm' : '210mm',
-                  minHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
-                  ...(previewViewMode === 'paginated' ? {
-                    height: paperPreset === 'LETTER' ? '279mm' : '297mm',
-                    maxHeight: paperPreset === 'LETTER' ? '279mm' : '297mm',
-                    overflow: 'hidden',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                    position: 'relative'
-                  } : {
-                    margin: '0 auto'
-                  }),
-                  padding: '0',
-                  paddingTop: `${effectiveTopMarginMm}mm`,
-                  paddingLeft: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm`,
-                  paddingRight: `${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm`,
-                  paddingBottom: `${effectiveBottomMarginMm}mm`,
-                  boxSizing: 'border-box',
-                  backgroundImage: (printBgUrl ?? '/letterhead.png') ? `url(${printBgUrl ?? '/letterhead.png'})` : undefined,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'top left',
-                  backgroundSize: paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm',
-                  filter: grayscale ? 'grayscale(100%)' : undefined,
-                  transition: 'padding-top 200ms ease, padding-bottom 200ms ease',
-                  willChange: 'padding-top, padding-bottom',
                 }}
               >
-                {showRefillStamp && (
-                  <div aria-hidden className="pointer-events-none select-none" style={{ position: 'absolute', right: 12, top: 12, padding: '4px 8px', border: '1px dashed rgba(0,0,0,0.4)', color: '#0a0a0a', background: 'rgba(255,255,255,0.8)', fontSize: 12 }}>
-                    Refill eligible
-                  </div>
-                )}
-                {bleedSafe?.enabled && (
-                  <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: 0, outline: `${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm solid rgba(255,0,0,0.15)`, outlineOffset: `-${Math.max(0, bleedSafe.safeMarginMm) / 3.78}mm` }} />
-                )}
-                {/* Header/Footer Frames Overlays */}
-                {frames?.enabled && (
-                  <>
-                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, top: 0, height: `${Math.max(0, (frames.headerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
-                    <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: `${Math.max(0, (frames.footerHeightMm || 0))}mm`, background: 'rgba(0, 123, 255, 0.06)', outline: '1px dashed rgba(0,123,255,0.5)' }} />
-                    {/* Drag handles */}
-                    <div
-                      role="separator"
-                      aria-label="Resize header"
-                      style={{ position: 'absolute', left: 0, right: 0, top: `${Math.max(0, frames.headerHeightMm || 0)}mm`, height: 6, cursor: 'row-resize', background: 'transparent' }}
-                      onMouseDown={(e) => {
-                        if (!(e.buttons & 1)) return;
-                        const startY = e.clientY;
-                        const startMm = Math.max(0, frames?.headerHeightMm || 0);
-                        const move = (ev: MouseEvent) => {
-                          const dyPx = ev.clientY - startY;
-                          const dyMm = dyPx / 3.78; // px -> mm approx
-                          const next = Math.max(0, Math.round((startMm + dyMm) * 10) / 10);
-                          onChangeFrames?.({ headerHeightMm: next });
-                        };
-                        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-                        window.addEventListener('mousemove', move);
-                        window.addEventListener('mouseup', up);
-                      }}
-                    />
-                    <div
-                      role="separator"
-                      aria-label="Resize footer"
-                      style={{ position: 'absolute', left: 0, right: 0, bottom: `${Math.max(0, frames.footerHeightMm || 0)}mm`, height: 6, cursor: 'row-resize', background: 'transparent' }}
-                      onMouseDown={(e) => {
-                        if (!(e.buttons & 1)) return;
-                        const startY = e.clientY;
-                        const startMm = Math.max(0, frames?.footerHeightMm || 0);
-                        const move = (ev: MouseEvent) => {
-                          const dyPx = startY - ev.clientY; // dragging up increases footer
-                          const dyMm = dyPx / 3.78;
-                          const next = Math.max(0, Math.round((startMm + dyMm) * 10) / 10);
-                          onChangeFrames?.({ footerHeightMm: next });
-                        };
-                        const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
-                        window.addEventListener('mousemove', move);
-                        window.addEventListener('mouseup', up);
-                      }}
-                    />
-                  </>
-                )}
-                <div 
-                  id="prescription-print-content" 
-                  className="w-full h-full"
-                  style={{
-                    position: 'relative',
-                    left: `${(activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0))}px`,
-                    top: (() => {
-                      const baseOffset = (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0));
-                      
-                      // In paginated mode, apply page offset
-                      if (previewViewMode === 'paginated' && currentPreviewPage > 1) {
-                        const mmToPx = 3.78;
-                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const pageHeightPx = pageHeightMm * mmToPx;
-                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
-                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
-                        
-                        // Calculate offset: shift by full page height per page
-                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-                        const pageOffset = -((currentPreviewPage - 1) * availableHeightPerPage);
-                        return `${baseOffset + pageOffset}px`;
-                      }
-                      
-                      return `${baseOffset}px`;
-                    })(),
-                    // In paginated mode, use clip-path to hide content in margin areas
-                    ...(previewViewMode === 'paginated' ? {
-                      minHeight: (() => {
-                        const mmToPx = 3.78;
-                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const pageHeightPx = pageHeightMm * mmToPx;
-                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
-                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
-                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-                        // Content needs space for all pages
-                        return `${totalPreviewPages * availableHeightPerPage}px`;
-                      })(),
-                      // Use mask-image with repeating pattern to hide content in margin areas
-                      // Black = visible, transparent = hidden
-                      WebkitMaskImage: (() => {
-                        const mmToPx = 3.78;
-                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const pageHeightPx = pageHeightMm * mmToPx;
-                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
-                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
-                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-                        
-                        // Repeating mask: black (visible) for content areas, transparent for margins
-                        return `repeating-linear-gradient(
-                          to bottom,
-                          black 0px,
-                          black ${availableHeightPerPage}px,
-                          transparent ${availableHeightPerPage}px,
-                          transparent ${availableHeightPerPage + 1}px
-                        )`;
-                      })(),
-                      maskImage: (() => {
-                        const mmToPx = 3.78;
-                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const pageHeightPx = pageHeightMm * mmToPx;
-                        const topMarginPx = overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 150) : (printTopMarginPx ?? 150));
-                        const bottomMarginPx = overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45));
-                        const availableHeightPerPage = pageHeightPx - topMarginPx - bottomMarginPx;
-                        
-                        return `repeating-linear-gradient(
-                          to bottom,
-                          black 0px,
-                          black ${availableHeightPerPage}px,
-                          transparent ${availableHeightPerPage}px,
-                          transparent ${availableHeightPerPage + 1}px
-                        )`;
-                      })(),
-                    } : {
-                      maxHeight: (() => {
-                        const pageHeightMm = paperPreset === 'LETTER' ? 279 : 297;
-                        const totalMarginMm = effectiveTopMarginMm + effectiveBottomMarginMm;
-                        const frameHeightMm = frames?.enabled ? (frames.headerHeightMm || 0) + (frames.footerHeightMm || 0) : 0;
-                        return `calc(${pageHeightMm}mm - ${totalMarginMm}mm - ${frameHeightMm}mm)`;
-                      })(),
-                      overflow: 'hidden',
-                    }),
-                    transition: previewViewMode === 'paginated' ? 'top 0.3s ease-in-out' : undefined,
-                  }}
-                  onMouseDown={(e) => {
-                    if (!(e.buttons & 1)) return; // left button only
-                    const startX = e.clientX;
-                    const startY = e.clientY;
-                    const origX = contentOffsetXPx ?? 0;
-                    const origY = contentOffsetYPx ?? 0;
-                    const move = (ev: MouseEvent) => {
-                      const dx = ev.clientX - startX;
-                      const dy = ev.clientY - startY;
-                      let nx = Math.round(origX + dx);
-                      let ny = Math.round(origY + dy);
-                      if (designAids?.enabled && designAids?.snapToGrid) {
-                        const gs = Math.max(2, designAids.gridSizePx || 8);
-                        nx = Math.round(nx / gs) * gs;
-                        ny = Math.round(ny / gs) * gs;
-                      }
-                      onChangeContentOffset?.(nx, ny);
-                    };
-                    const up = () => {
-                      window.removeEventListener('mousemove', move);
-                      window.removeEventListener('mouseup', up);
-                    };
-                    window.addEventListener('mousemove', move);
-                    window.addEventListener('mouseup', up);
-                  }}
-                  onKeyDown={(e) => {
-                    const step = Math.max(1, designAids?.nudgeStepPx || 1);
-                    if (e.key === 'ArrowUp') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) - step); }
-                    if (e.key === 'ArrowDown') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0), (contentOffsetYPx ?? 0) + step); }
-                    if (e.key === 'ArrowLeft') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) - step, (contentOffsetYPx ?? 0)); }
-                    if (e.key === 'ArrowRight') { e.preventDefault(); onChangeContentOffset?.((contentOffsetXPx ?? 0) + step, (contentOffsetYPx ?? 0)); }
-                  }}
-                  tabIndex={0}
-                >
-                  {/* Design Aids Overlays */}
-                  {designAids?.enabled && (
-                    <>
-                      {designAids.showRulers && (
-                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', left: - (contentOffsetXPx ?? 0), top: - (contentOffsetYPx ?? 0), right: 0, height: 20, background: 'linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '40px 20px' }} />
-                      )}
-                      {designAids.showRulers && (
-                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', top: - (contentOffsetYPx ?? 0), left: -20 - (contentOffsetXPx ?? 0), width: 20, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px)', backgroundSize: '20px 40px' }} />
-                      )}
-                      {designAids.showGrid && (
-                        <div aria-hidden className="pointer-events-none" style={{ position: 'absolute', inset: '-2000px', backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,0,0,0.06) 1px, transparent 1px)`, backgroundSize: `${Math.max(2, designAids.gridSizePx || 8)}px ${Math.max(2, designAids.gridSizePx || 8)}px` }} />
-                      )}
-                    </>
-                  )}
+                <div id="prescription-print-content">
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
                     <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">
@@ -3499,82 +3382,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <span>{autoPreview ? 'Live Preview: On' : 'Live Preview: Off'}</span>
                   </Button>
                   
-                  {/* Pagination Engine Toggle */}
-                  <div className="space-y-2">
-                    <span className="text-sm text-gray-700 font-medium">Pagination Engine</span>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant={paginationEngine === 'custom' ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => {
-                          setPaginationEngine('custom');
-                          setCurrentPreviewPage(1);
-                        }}
-                        className="flex-1"
-                        title="Custom pagination (manual overflow handling)"
-                      >
-                        Custom
-                      </Button>
-                      <Button 
-                        variant={paginationEngine === 'pagedjs' ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => {
-                          setPaginationEngine('pagedjs');
-                          setCurrentPreviewPage(1);
-                        }}
-                        className="flex-1"
-                        title="Paged.js (automatic pagination library)"
-                      >
-                        Paged.js {pagedJsProcessing && '⏳'}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {paginationEngine === 'custom' 
-                        ? 'Using custom overflow handling' 
-                        : 'Using Paged.js library for smart pagination'}
-                    </p>
-                    {/* Recommendation for multi-page documents */}
-                    {paginationEngine === 'custom' && totalPreviewPages >= 3 && (
-                      <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
-                        <div className="font-medium mb-1">💡 Recommendation</div>
-                        <div>For documents with 3+ pages, consider using <strong>Paged.js</strong> for better margin awareness and page break control.</div>
+                  {/* Unified Pagination Info */}
+                  {pagedJsProcessing && (
+                    <div className="p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-800">
+                      <div className="flex items-center gap-2">
+                        <span className="animate-spin">⏳</span>
+                        <span>Processing pagination...</span>
                       </div>
-                    )}
-                  </div>
-
-                  {/* View Mode Toggle - Only show for custom engine */}
-                  {paginationEngine === 'custom' && (
-                  <div className="space-y-2">
-                    <span className="text-sm text-gray-700 font-medium">View Mode</span>
-                    <div className="flex gap-2">
-                      <Button 
-                        variant={previewViewMode === 'scroll' ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => {
-                          setPreviewViewMode('scroll');
-                          setCurrentPreviewPage(1);
-                        }}
-                        className="flex-1"
-                      >
-                        Scroll
-                      </Button>
-                      <Button 
-                        variant={previewViewMode === 'paginated' ? 'default' : 'outline'} 
-                        size="sm" 
-                        onClick={() => {
-                          setPreviewViewMode('paginated');
-                          setCurrentPreviewPage(1);
-                        }}
-                        className="flex-1"
-                      >
-                        Pages
-                      </Button>
                     </div>
-                  </div>
                   )}
 
-                  {/* Pagination Controls - Show in paginated mode or with Paged.js */}
-                  {((previewViewMode === 'paginated' && paginationEngine === 'custom') || paginationEngine === 'pagedjs') && totalPreviewPages > 1 && (
+                  {/* Page Navigation Controls */}
+                  {totalPreviewPages > 1 && (
                     <div className="space-y-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700">Page Navigation</span>
