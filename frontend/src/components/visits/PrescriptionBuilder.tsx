@@ -16,9 +16,6 @@ import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
-// @ts-ignore - pagedjs types
-import { Previewer } from 'pagedjs';
-
 // Minimal local types aligned with backend DTO enums
 type Language = 'EN' | 'TE' | 'HI';
 
@@ -521,6 +518,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsRunningRef = useRef(false);
   const pagedJsPendingRef = useRef(false);
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
+  const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
@@ -1979,13 +1977,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       overrideBottomMarginPx
     });
     
-    // Check if either preview or autoPreview mode is active
-    if (!(previewOpen || autoPreview) || !pagedJsContainerRef.current) {
-      console.log('⚠️ Early return from paged.js effect', { 
-        previewOpen, 
-        autoPreview,
-        hasRef: !!pagedJsContainerRef.current 
-      });
+    // Only proceed in preview or autoPreview mode; container may not be mounted yet
+    if (!(previewOpen || autoPreview)) {
+      console.log('⚠️ Early return from paged.js effect - preview disabled');
       return;
     }
     
@@ -1997,9 +1991,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
       pagedJsRunningRef.current = true;
       console.log('⏱️  Starting paged.js processing (after 300ms debounce)...');
+      
+      // Store error handler reference for cleanup
+      let errorHandler: ((event: ErrorEvent | PromiseRejectionEvent) => void) | null = null;
+      
       try {
         setPagedJsProcessing(true);
-        const container = pagedJsContainerRef.current;
+        const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
         if (!container) {
           console.error('⚠️ Container ref is null at processing time!');
           return;
@@ -2037,13 +2035,70 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const rightMarginMm = Math.max(0, Math.round((activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45))/3.78 * 10) / 10);
         
         // Debug log for margin verification
-        console.log('Paged.js Processing - Margins:', { topMarginMm, bottomMarginMm, leftMarginMm, rightMarginMm });
+        console.log('📐 Paged.js Processing - Margins:', { 
+          topMarginMm, 
+          bottomMarginMm, 
+          leftMarginMm, 
+          rightMarginMm,
+          overrideTopMarginPx,
+          overrideBottomMarginPx,
+          effectiveTopMarginPx,
+          effectiveBottomMarginPx
+        });
         
-        // Initialize a fresh Paged.js instance
+        console.log('🎯 @page rule that will be passed to Paged.js:', `margin-top: ${topMarginMm}mm`);
+        
+        // Clean up previous paged.js instance if it exists
+        if (pagedInstanceRef.current) {
+          try {
+            // Remove all pagedjs-generated pages to clean up event listeners
+            const existingPages = container.querySelectorAll('.pagedjs_page');
+            existingPages.forEach(page => {
+              // Remove the page element completely
+              page.remove();
+            });
+            
+            // Clear the container completely
+            if (container) {
+              container.innerHTML = '';
+            }
+            pagedInstanceRef.current = null;
+          } catch (e) {
+            console.warn('Error cleaning up previous paged.js instance:', e);
+          }
+        }
+        
+        // Initialize a fresh Paged.js instance with dynamic import (client-side only)
+        // @ts-ignore - pagedjs has no type definitions
+        const { Previewer } = await import('pagedjs');
         const paged = new Previewer();
+        pagedInstanceRef.current = paged;
         
-        // Build an inline <style> to avoid Paged.js treating CSS as a remote URL
-        const cssText = `
+        // Add error handlers to suppress pagedjs resize errors
+        errorHandler = (event: ErrorEvent | PromiseRejectionEvent) => {
+          const message = 'message' in event ? event.message : String(event.reason);
+          const stack = event instanceof ErrorEvent && event.error?.stack ? event.error.stack : '';
+          
+          // Check if this is a pagedjs internal error
+          if (message?.includes('nextSibling') || 
+              stack?.includes('dom.js') ||
+              stack?.includes('pagedjs') ||
+              stack?.includes('Layout.findEndToken') ||
+              stack?.includes('checkUnderflowAfterResize')) {
+            // Suppress pagedjs DOM errors that occur during/after processing
+            event.preventDefault?.();
+            console.warn('🔇 Suppressed pagedjs DOM error (expected during re-processing)');
+            return true;
+          }
+        };
+        
+        // Handle both regular errors and unhandled promise rejections
+        window.addEventListener('error', errorHandler as EventListener);
+        window.addEventListener('unhandledrejection', errorHandler as EventListener);
+        
+        // Build CSS string with page rules
+        // Note: @page rules must be passed to Paged.js through the CSS parameter, not inline styles
+        const pageRulesCSS = `
           @page {
             size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
             margin-top: ${topMarginMm}mm !important;
@@ -2051,19 +2106,33 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             margin-left: ${leftMarginMm}mm !important;
             margin-right: ${rightMarginMm}mm !important;
           }
+        `;
+        
+        // Content styling (can be inline or in CSS string)
+        const contentCSS = `
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
           .medication-item, .pb-avoid-break { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           table { break-inside: auto; }
           tr { break-inside: avoid; page-break-inside: avoid; }
         `;
+        
+        // Add content styles as inline style tag
         const styleEl = document.createElement('style');
         styleEl.setAttribute('type', 'text/css');
-        styleEl.appendChild(document.createTextNode(cssText));
+        styleEl.appendChild(document.createTextNode(contentCSS));
         tempDiv.prepend(styleEl);
 
-        // Process with Paged.js (no external CSS array) and render into our container
-        const flow = await paged.preview(tempDiv, [], container);
+        // Process with Paged.js - pass @page rules via a Blob URL stylesheet
+        // Raw CSS strings are treated as URLs by Paged.js; use an object URL instead
+        const pageRulesBlob = new Blob([pageRulesCSS], { type: 'text/css' });
+        const pageRulesUrl = URL.createObjectURL(pageRulesBlob);
+        let flow;
+        try {
+          flow = await paged.preview(tempDiv, [pageRulesUrl], container);
+        } finally {
+          URL.revokeObjectURL(pageRulesUrl);
+        }
         
         console.log('📦 Paged.js flow result:', flow);
         
@@ -2087,8 +2156,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             width: pageStyle.width,
             height: pageStyle.height,
             display: pageStyle.display,
-            visibility: pageStyle.visibility
+            visibility: pageStyle.visibility,
+            marginTop: pageStyle.marginTop,
+            marginBottom: pageStyle.marginBottom,
+            marginLeft: pageStyle.marginLeft,
+            marginRight: pageStyle.marginRight
           });
+          
+          // Check the page box (content area) margins
+          const pageBox = firstPage.querySelector('.pagedjs_pagebox') as HTMLElement;
+          if (pageBox) {
+            const boxStyle = window.getComputedStyle(pageBox);
+            console.log('📦 First page box margins:', {
+              paddingTop: boxStyle.paddingTop,
+              paddingBottom: boxStyle.paddingBottom,
+              paddingLeft: boxStyle.paddingLeft,
+              paddingRight: boxStyle.paddingRight
+            });
+          }
         }
         
         // Note: Avoid forcing React re-render here to prevent resize races
@@ -2262,6 +2347,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         });
       } finally {
         console.log('🏁 Paged.js processing finished (finally block)');
+        
+        // Remove the error handlers
+        if (errorHandler) {
+          window.removeEventListener('error', errorHandler as EventListener);
+          window.removeEventListener('unhandledrejection', errorHandler as EventListener);
+          errorHandler = null;
+        }
+        
         setPagedJsProcessing(false);
         pagedJsRunningRef.current = false;
         if (pagedJsPendingRef.current) {
@@ -2273,8 +2366,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
     };
     
-    const timer = setTimeout(processWithPagedJs, 300);
-    return () => clearTimeout(timer);
+    // Wait for container to mount if needed, then process
+    let cancelled = false;
+    const ensureAndProcess = () => {
+      const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
+      if (!container) {
+        if (!cancelled) setTimeout(ensureAndProcess, 50);
+        return;
+      }
+      void processWithPagedJs();
+    };
+    const timer = setTimeout(ensureAndProcess, 300);
+    
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      // Only clear the reference, not the container content
+      // The container will be cleared by processWithPagedJs when it runs next
+    };
   }, [previewOpen, autoPreview, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
@@ -3102,16 +3211,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <style dangerouslySetInnerHTML={{
                 __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-                @page {
-                  size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'} portrait;
-                  margin: 0;
-                  @top-left { content: ""; }
-                  @top-center { content: ""; }
-                  @top-right { content: ""; }
-                  @bottom-left { content: ""; }
-                  @bottom-center { content: ""; }
-                  @bottom-right { content: ""; }
-                }
                 @media print {
                   * {
                     -webkit-print-color-adjust: exact !important;
@@ -3126,47 +3225,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  @page :first {
-                    margin-top: 0 !important;
-                  }
-                  @page :left {
-                    margin-left: 0 !important;
-                  }
-                  @page :right {
-                    margin-right: 0 !important;
-                  }
-                  body *:not(#prescription-print-root):not(#prescription-print-root *) {
+                  /* Print only the paged.js output */
+                  body *:not(#pagedjs-container):not(#pagedjs-container *) {
                     visibility: hidden !important;
                   }
-                  #prescription-print-root, #prescription-print-root * {
+                  #pagedjs-container, #pagedjs-container * {
                     visibility: visible !important;
-                  }
-                   #prescription-print-root {
-                    position: absolute !important;
-                    left: 0 !important;
-                    top: 0 !important;
-                    width: ${paperPreset === 'LETTER' ? '216mm' : '210mm'} !important;
-                    height: ${paperPreset === 'LETTER' ? '279mm' : '297mm'} !important;
-                    margin: 0 !important;
-                    padding-top: ${effectiveTopMarginMm}mm !important;
-                    padding-left: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.leftMarginPx ?? printLeftMarginPx ?? 45) : (printLeftMarginPx ?? 45)))/3.78}mm !important;
-                    padding-right: ${Math.max(0, (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.rightMarginPx ?? printRightMarginPx ?? 45) : (printRightMarginPx ?? 45)))/3.78}mm !important;
-                    padding-bottom: ${effectiveBottomMarginMm}mm !important;
-                    box-sizing: border-box !important;
-                    background: white !important;
-                    background-repeat: no-repeat !important;
-                    background-position: 0 0 !important;
-                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'} !important;
-                    ${(printBgUrl ?? '/letterhead.png') ? `background-image: url('${printBgUrl ?? '/letterhead.png'}') !important;` : ''}
-                  }
-                  #prescription-print-content {
-                    width: 100% !important;
-                    min-height: calc(${paperPreset === 'LETTER' ? '279mm' : '297mm'} - ${effectiveTopMarginMm}mm - ${effectiveBottomMarginMm}mm${frames?.enabled ? ` - ${frames.headerHeightMm || 0}mm - ${frames.footerHeightMm || 0}mm` : ''}) !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    box-sizing: border-box !important;
-                    /* Allow content to flow across pages naturally */
-                    page-break-inside: auto !important;
                   }
                 }
                 ${rxPrintFormat === 'TEXT' ? `
