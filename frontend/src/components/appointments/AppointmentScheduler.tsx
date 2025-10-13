@@ -18,6 +18,14 @@ import DoctorDayCalendar from './DoctorDayCalendar';
 import { AppointmentStatus } from '@cms/shared-types';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 
+// Stable fallback to avoid recreating default objects each render
+const DEFAULT_TIME_SLOT_CONFIG: TimeSlotConfig = {
+  startHour: 9,
+  endHour: 18,
+  stepMinutes: 30,
+  timezone: 'Asia/Kolkata'
+};
+
 interface AppointmentSchedulerProps {
   timeSlotConfig?: TimeSlotConfig;
   prefillPatientId?: string;
@@ -27,12 +35,7 @@ interface AppointmentSchedulerProps {
 }
 
 export default function AppointmentScheduler({ 
-  timeSlotConfig = {
-    startHour: 9,
-    endHour: 18,
-    stepMinutes: 30,
-    timezone: 'Asia/Kolkata'
-  },
+  timeSlotConfig,
   prefillPatientId,
   controlledDoctorId,
   controlledDate,
@@ -40,7 +43,7 @@ export default function AppointmentScheduler({
 }: AppointmentSchedulerProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
+  const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig ?? DEFAULT_TIME_SLOT_CONFIG);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
@@ -82,9 +85,21 @@ export default function AppointmentScheduler({
     if (controlledDate) setDate(controlledDate);
   }, [controlledDate]);
   
-  // Keep internal slot config in sync if parent changes defaults
+  // Keep internal slot config in sync if parent changes defaults, without causing loops
   useEffect(() => {
-    setSlotConfig(timeSlotConfig);
+    if (!timeSlotConfig) return;
+    setSlotConfig((prev) => {
+      const next = timeSlotConfig;
+      if (
+        prev.startHour === next.startHour &&
+        prev.endHour === next.endHour &&
+        prev.stepMinutes === next.stepMinutes &&
+        prev.timezone === next.timezone
+      ) {
+        return prev;
+      }
+      return next;
+    });
   }, [timeSlotConfig]);
 
   // Auto-apply doctor working hours to slotConfig when doctor/date changes
