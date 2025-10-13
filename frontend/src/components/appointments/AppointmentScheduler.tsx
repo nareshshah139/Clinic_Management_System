@@ -59,6 +59,7 @@ export default function AppointmentScheduler({
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [bookingDetails, setBookingDetails] = useState<any | null>(null);
+  const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | undefined>(undefined);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [isBooking, setIsBooking] = useState<boolean>(false);
   const [bookingSlot, setBookingSlot] = useState<string>('');
@@ -361,6 +362,7 @@ export default function AppointmentScheduler({
       
       setAppointments(prev => [...prev, newAppt]);
       setAppointmentsBySlot(prev => ({ ...prev, [pendingBookingSlot]: newAppt }));
+      setOptimisticAppointment(newAppt);
       
       setRecentBookedSlot(finalSlot);
       setBookingDetails(created);
@@ -376,6 +378,7 @@ export default function AppointmentScheduler({
       setBookingDialogOpen(false);
       setPendingBookingSlot('');
       setBookingSlot('');
+      setRefreshKey(prev => prev + 1);
       
     } catch (e: any) {
       if (isConflictError(e)) {
@@ -467,6 +470,8 @@ export default function AppointmentScheduler({
       setRescheduleContext(null);
       setRecentBookedSlot(newSlot);
       await fetchSlots();
+      setOptimisticAppointment(undefined);
+      setRefreshKey(prev => prev + 1);
     } catch (e: any) {
       if (isConflictError(e)) {
         const suggestions = getConflictSuggestions(e);
@@ -963,6 +968,7 @@ export default function AppointmentScheduler({
         onAppointmentUpdate={() => setRefreshKey((prev) => prev + 1)}
         timeSlotConfig={slotConfig}
         disableSlotBooking={!selectedPatientId && !rescheduleContext}
+        optimisticAppointment={optimisticAppointment}
       />
 
       <AppointmentBookingDialog
