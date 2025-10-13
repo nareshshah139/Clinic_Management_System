@@ -212,7 +212,7 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
         {drugResults.length > 0 && (
           <div className="max-h-48 overflow-auto border rounded-md p-2">
             {drugResults.map((d) => (
-              <div key={d.id} className="flex items-center justify-between py-1">
+              <div key={d.id} className="flex items-center justify-between py-1" onDoubleClick={() => addItem(d)}>
                 <div className="text-sm">
                   <div className="font-medium">{d.name}</div>
                   <div className="text-xs text-muted-foreground">₹{d.price} • {d.manufacturerName} • {d.packSizeLabel}</div>

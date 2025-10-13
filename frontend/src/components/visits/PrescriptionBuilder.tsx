@@ -1126,6 +1126,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return uniq;
   };
 
+  // Ensure we always have a trailing blank row when user starts typing a drug
+  const createBlankItem = (): PrescriptionItemForm => ({
+    drugName: '',
+    dosage: '',
+    dosageUnit: 'TABLET',
+    frequency: 'ONCE_DAILY',
+    dosePattern: '',
+    duration: '',
+    durationUnit: 'DAYS',
+    instructions: '',
+    timing: '',
+    quantity: ''
+  });
+
+  const hasTrailingBlank = (list: PrescriptionItemForm[]): boolean => {
+    if (!list || list.length === 0) return false;
+    const last = list[list.length - 1];
+    return !((last.drugName || '').trim());
+  };
+
   const addItemFromDrug = (drug: any) => {
     const base: PrescriptionItemForm = {
       drugName: drug.name,
@@ -1141,7 +1161,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       quantity: 5,
       isGeneric: true,
     };
-    setItems(prev => [...prev, base]);
+    setItems(prev => {
+      const next = [...prev, base];
+      if (!hasTrailingBlank(next)) next.push(createBlankItem());
+      return next;
+    });
     setDrugResults([]);
     setDrugQuery('');
     pushRecent('drugNames', drug.name);
@@ -1149,7 +1173,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
-    setItems(prev => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
+    setItems(prev => {
+      const next = prev.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      // If user types a drug name into the last row, append a new blank row
+      const isLastRow = index === prev.length - 1;
+      const newDrugName = typeof patch.drugName === 'string' ? patch.drugName : undefined;
+      if (isLastRow && typeof newDrugName === 'string' && newDrugName.trim() && !hasTrailingBlank(next)) {
+        next.push(createBlankItem());
+      }
+      return next;
+    });
   };
 
   const inferFrequencyFromDosePattern = (pattern: string): Frequency | null => {
@@ -2920,6 +2953,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                               }`}
                               onMouseEnter={() => prefetchDrugStockById(d.id)}
+                              onDoubleClick={() => { addItemFromDrug(d); }}
                               title={((): string => {
                                 const stock = drugStockById[d.id];
                                 if (stock === undefined) return 'Checking stock…';

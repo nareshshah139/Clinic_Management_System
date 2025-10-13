@@ -88,6 +88,8 @@ export default function DoctorDayCalendar({
     stepMinutes: 10,
     timezone: timeSlotConfig.timezone,
   }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.timezone]);
+  // Tile height so the entire day grid fits in ~80% of the viewport
+  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
@@ -300,10 +302,26 @@ export default function DoctorDayCalendar({
                 <span className="mt-2 text-sm font-medium text-blue-700">Refreshing schedule…</span>
               </div>
             )}
-            <div
-              className="grid grid-cols-1 gap-0"
-              style={showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
-            >
+            <div className="flex">
+              {/* Sticky left gutter with hour labels */}
+              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-white/80 backdrop-blur-sm">
+                {baseGridSlots.map((slot) => {
+                  const slotStart = slot.split('-')[0];
+                  const isHourStart = slotStart.endsWith(':00');
+                  return (
+                    <div key={`gutter-${slot}`} style={{ height: tileHeightCss }} className="flex items-start justify-end pr-1">
+                      {isHourStart && (
+                        <span className="text-[10px] leading-none text-gray-400">{slotStart}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Main calendar grid */}
+              <div
+                className="flex-1 grid grid-cols-1 gap-0"
+                style={showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
+              >
             {baseGridSlots.map((slot, idx) => {
               // Determine overlaps with any appointment
               const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
@@ -338,7 +356,7 @@ export default function DoctorDayCalendar({
               return (
                 <div 
                   key={slot} 
-                  className="border rounded-none p-3 flex flex-col gap-2 transition-all duration-200"
+                  className="border rounded-none p-1 flex flex-col gap-1 transition-all duration-200"
                   style={{
                     backgroundColor: hasAny
                       ? (isNewlyBooked ? '#22c55e' : '#3b82f6')
@@ -358,7 +376,8 @@ export default function DoctorDayCalendar({
                       if (showNowLine) parts.push('inset 0 2px 0 #ef4444');
                       else if (isHourStart) parts.push('inset 0 1px 0 #e5e7eb');
                       return parts.length ? parts.join(', ') : 'none';
-                    })()
+                    })(),
+                    height: tileHeightCss,
                   }}
                   title={hasAny && primary ? `${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}` : undefined}
                   onMouseDown={(e) => {
@@ -400,6 +419,7 @@ export default function DoctorDayCalendar({
                     onSelectSlot?.(newSpan);
                   }}
                 >
+                  {/* hour labels are rendered in the sticky gutter */}
                   {(hasAny && isPrimaryStartTile) && (
                     <div 
                       className="text-sm font-medium"
@@ -527,6 +547,7 @@ export default function DoctorDayCalendar({
                 </div>
               );
             })}
+              </div>
             </div>
           </div>
           
