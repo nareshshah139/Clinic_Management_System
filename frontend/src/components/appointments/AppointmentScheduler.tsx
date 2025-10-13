@@ -71,6 +71,8 @@ export default function AppointmentScheduler({
   
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
+  // Grid-level duration selector for preview and click actions
+  const [gridDurationMinutes, setGridDurationMinutes] = useState<number>(slotConfig.stepMinutes);
   useEffect(() => {
     if (prefillPatientId) {
       setSelectedPatientId(prefillPatientId);
@@ -132,6 +134,12 @@ export default function AppointmentScheduler({
   const [autoPromptedForSearch, setAutoPromptedForSearch] = useState<boolean>(false);
 
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
+  // Keep grid duration in sync with header duration when it changes
+  useEffect(() => {
+    if (typeof slotConfig.stepMinutes === 'number') {
+      setGridDurationMinutes(slotConfig.stepMinutes);
+    }
+  }, [slotConfig.stepMinutes]);
 
   useEffect(() => {
     void fetchDoctors();
@@ -758,22 +766,48 @@ export default function AppointmentScheduler({
           <div>
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-medium">Available & Booked Slots</h4>
-              <div className="flex gap-2 text-xs">
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></div>
-                  <span>Newly Booked</span>
+              <div className="flex items-center gap-3">
+                {/* Grid-level duration selector */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="text-gray-600">Duration</span>
+                  <Select
+                    value={String(gridDurationMinutes)}
+                    onValueChange={(v: string) => {
+                      const m = parseInt(v, 10);
+                      if (!Number.isNaN(m)) {
+                        setGridDurationMinutes(m);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[120px]"><SelectValue placeholder="Duration" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10 minutes</SelectItem>
+                      <SelectItem value="15">15 minutes</SelectItem>
+                      <SelectItem value="20">20 minutes</SelectItem>
+                      <SelectItem value="30">30 minutes</SelectItem>
+                      <SelectItem value="45">45 minutes</SelectItem>
+                      <SelectItem value="60">60 minutes</SelectItem>
+                      <SelectItem value="90">90 minutes</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
-                  <span>Booked</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-white border"></div>
-                  <span>Available</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f3f4f6' }}></div>
-                  <span>Past</span>
+                <div className="flex gap-2 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></div>
+                    <span>Newly Booked</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#3b82f6' }}></div>
+                    <span>Booked</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded bg-white border"></div>
+                    <span>Available</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f3f4f6' }}></div>
+                    <span>Past</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -861,8 +895,8 @@ export default function AppointmentScheduler({
                 // Build a prospective slot representing the full intended duration
                 const start = (s.split('-')[0]) as string;
                 const intendedDuration = rescheduleContext
-                  ? Math.max(1, getSlotDurationMinutes(rescheduleContext.appointment.slot) || slotConfig.stepMinutes)
-                  : slotConfig.stepMinutes;
+                  ? Math.max(1, getSlotDurationMinutes(rescheduleContext.appointment.slot) || gridDurationMinutes)
+                  : gridDurationMinutes;
                 const prospectiveSlot = `${start}-${addMinutesToHHMM(start, intendedDuration)}`;
                 const isThisBooking = isBooking && bookingSlot === prospectiveSlot;
                 // Disable if this prospective slot overlaps any booked appointment
