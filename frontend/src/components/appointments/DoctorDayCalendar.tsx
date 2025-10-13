@@ -81,13 +81,13 @@ export default function DoctorDayCalendar({
   const [selectionStartIdx, setSelectionStartIdx] = useState<number | null>(null);
   const [selectionEndIdx, setSelectionEndIdx] = useState<number | null>(null);
 
-  // Use a fixed 10-minute base grid to represent mixed-duration appointments precisely
+  // Use selected grid size (stepMinutes) to control tiles per hour
   const baseGridSlots = useMemo(() => generateTimeSlots({
     startHour: timeSlotConfig.startHour,
     endHour: timeSlotConfig.endHour,
-    stepMinutes: 10,
+    stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
     timezone: timeSlotConfig.timezone,
-  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.timezone]);
+  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
   // Tile height so the entire day grid fits in ~80% of the viewport
   const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
