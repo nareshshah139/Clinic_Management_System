@@ -3225,11 +3225,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  /* Print only the paged.js output */
-                  body *:not(#pagedjs-container):not(#pagedjs-container *) {
+                  /* Print only the preview scroll container (and its contents) */
+                  body *:not(#print-preview-scroll):not(#print-preview-scroll *) {
                     visibility: hidden !important;
                   }
-                  #pagedjs-container, #pagedjs-container * {
+                  #print-preview-scroll, #print-preview-scroll * {
                     visibility: visible !important;
                   }
                 }
@@ -3263,7 +3263,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 `
               }} />
-            <div className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+            <div id="print-preview-scroll" className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
