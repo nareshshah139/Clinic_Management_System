@@ -41,9 +41,17 @@ JWT_SECRET="replace-with-secure-secret"
 JWT_EXPIRES_IN="1d"
 # Optional – enables /visits/transcribe endpoint
 OPENAI_API_KEY="sk-..."
+# Optional – choose the transcription model (defaults to gpt-4o-transcribe)
+OPENAI_TRANSCRIBE_MODEL="gpt-4o-transcribe" # or whisper-1, gpt-4o-mini-transcribe
 ```
 
 The application performs a startup validation and will refuse to boot if `DATABASE_URL` or `JWT_SECRET` are missing. Missing optional values log helpful warnings.
+
+### Transcription models
+
+- Default is **gpt-4o-transcribe** for higher accuracy, robust multilingual and noisy audio handling.
+- For faster and lighter loads, set `OPENAI_TRANSCRIBE_MODEL="gpt-4o-mini-transcribe"`.
+- To use legacy Whisper, set `OPENAI_TRANSCRIBE_MODEL="whisper-1"`.
 
 ## Project setup
 

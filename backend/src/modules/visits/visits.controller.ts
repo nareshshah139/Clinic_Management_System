@@ -452,7 +452,7 @@ export class VisitsController {
     return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
-  // Speech-to-text proxy to OpenAI Whisper
+  // Speech-to-text proxy to OpenAI Transcription API
   @Post('transcribe')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
@@ -482,12 +482,13 @@ export class VisitsController {
       throw new ServiceUnavailableException('Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
     }
     try {
-      // Build multipart form-data for OpenAI Whisper using native undici FormData/Blob
+      // Build multipart form-data for OpenAI Transcriptions using native undici FormData/Blob
       const form = new FormData();
       const uint8 = new Uint8Array(file.buffer as Buffer);
       const blob = new Blob([uint8], { type: file.mimetype || 'audio/webm' });
       form.append('file', blob, file.originalname || 'audio.webm');
-      form.append('model', 'whisper-1');
+      const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+      form.append('model', transcribeModel);
       // Improve accuracy by fixing language and disabling sampling randomness
       // Note: Whisper ignores temperature for most use-cases, but passing 0 is safe
       try { form.append('language', 'en'); } catch {}
@@ -496,7 +497,7 @@ export class VisitsController {
         form.append('prompt', 'Medical clinical conversation transcription. Use medical spellings and terms accurately. Expand abbreviations when clear (e.g., BP, HR). Preserve measurements and units.');
       } catch {}
 
-      this.logger.debug('transcribeAudio: sending audio to OpenAI Whisper');
+      this.logger.debug(`transcribeAudio: sending audio to OpenAI with model=${transcribeModel}`);
       const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
