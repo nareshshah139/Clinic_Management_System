@@ -110,7 +110,13 @@ export class ApiClient {
     }
     const contentType = response.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      return undefined as T;
+      // Surface a clear error so callers can handle gracefully instead of crashing on undefined
+      let text = '';
+      try { text = await response.text(); } catch {}
+      const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
+      apiErr.status = response.status;
+      apiErr.body = { message: 'Unexpected non-JSON response' };
+      throw apiErr;
     }
     return (await response.json()) as T;
   }

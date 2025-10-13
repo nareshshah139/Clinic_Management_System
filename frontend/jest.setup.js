@@ -51,3 +51,49 @@ global.IntersectionObserver = jest.fn().mockImplementation(() => ({
   unobserve: jest.fn(),
   disconnect: jest.fn(),
 })); 
+
+// Neutralize jsdom CSS parsing for <style> tags (it doesn't support @page, @top-left, etc.)
+// while still keeping access to the raw CSS text for assertions in tests.
+try {
+  const define = (proto, prop, descriptor) => Object.defineProperty(proto, prop, descriptor);
+  if (typeof HTMLStyleElement !== 'undefined') {
+    // Preserve original descriptors if present
+    const originalTextContent = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+
+    // Backing store for raw CSS
+    define(HTMLStyleElement.prototype, '__rawCss', {
+      configurable: true,
+      writable: true,
+      value: '',
+    });
+
+    // Override textContent getter/setter
+    if (originalTextContent) {
+      define(HTMLStyleElement.prototype, 'textContent', {
+        configurable: true,
+        get() { return this.__rawCss || ''; },
+        set(v) { this.__rawCss = String(v ?? ''); },
+      });
+    }
+
+    // Override innerHTML getter/setter
+    const originalInnerHtml = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    if (originalInnerHtml) {
+      define(HTMLStyleElement.prototype, 'innerHTML', {
+        configurable: true,
+        get() { return this.__rawCss || ''; },
+        set(v) { this.__rawCss = String(v ?? ''); },
+      });
+    }
+
+    // Override appendChild to accumulate raw CSS from Text nodes without parsing
+    const originalAppendChild = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(child) {
+      if (this instanceof HTMLStyleElement && child && child.nodeType === 3 /* TEXT_NODE */) {
+        this.__rawCss = (this.__rawCss || '') + (child.nodeValue || '');
+        return child;
+      }
+      return originalAppendChild.call(this, child);
+    };
+  }
+} catch {}

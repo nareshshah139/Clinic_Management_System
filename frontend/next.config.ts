@@ -16,6 +16,33 @@ const nextConfig: NextConfig = {
     optimizeCss: false,
     externalDir: true,
   },
+  webpack: (config, { isServer }) => {
+    const path = require('path');
+    
+    // Fix for pagedjs and es5-ext module resolution issues
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      };
+    }
+    
+    // Add module resolution paths to look in parent node_modules
+    config.resolve.modules = [
+      ...(config.resolve.modules || []),
+      'node_modules',
+      path.resolve(__dirname, '../node_modules'),
+    ];
+    
+    // Add explicit alias for es5-ext problematic paths
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'es5-ext': path.resolve(__dirname, '../node_modules/es5-ext'),
+    };
+    
+    return config;
+  },
   async rewrites() {
     return [
       {

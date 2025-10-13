@@ -21,7 +21,8 @@ import {
 import type {
   AppointmentInSlot,
   TimeSlotConfig,
-  GetDoctorScheduleResponse
+  GetDoctorScheduleResponse,
+  Appointment
 } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
 
@@ -115,9 +116,10 @@ export default function DoctorDayCalendar({
       const res: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
 
       // Map backend appointments to slot-wise entries with proper type safety
-      const items: AppointmentInSlot[] = (res.appointments || [])
-        .filter((a) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
-        .map((a) => ({
+      const sourceAppointments: Appointment[] = Array.isArray(res?.appointments) ? res.appointments : [];
+      const items: AppointmentInSlot[] = sourceAppointments
+        .filter((a: Appointment) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
+        .map((a: Appointment) => ({
         slot: a.slot,
         patient: a.patient ? { 
           id: a.patient.id, 

@@ -206,7 +206,7 @@ export class DrugService {
               currentStock: true,
               minStockLevel: true,
               maxStockLevel: true,
-              location: true,
+              storageLocation: true,
               expiryDate: true,
             },
           },

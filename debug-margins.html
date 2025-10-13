@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Debug Paged.js Margins</title>
+  <script src="https://unpkg.com/pagedjs/dist/paged.legacy.polyfill.js"></script>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+    }
+    .controls {
+      margin-bottom: 20px;
+      padding: 20px;
+      background: #f0f0f0;
+      border-radius: 8px;
+    }
+    input[type="range"] {
+      width: 300px;
+    }
+    #output {
+      margin-top: 20px;
+      padding: 20px;
+      background: #e0f7fa;
+      border-radius: 8px;
+    }
+    #content {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>Paged.js Margin Slider Test</h1>
+  
+  <div class="controls">
+    <label>
+      Top Margin (mm): <span id="marginValue">45</span>
+      <input type="range" id="marginSlider" min="10" max="100" value="45" step="1">
+    </label>
+    <button id="applyButton">Apply Margin</button>
+  </div>
+  
+  <div id="output"></div>
+  
+  <div id="content">
+    <h2>Test Content</h2>
+    <p>This is test content to be paginated.</p>
+    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+  </div>
+  
+  <div id="preview"></div>
+  
+  <script>
+    const slider = document.getElementById('marginSlider');
+    const marginValue = document.getElementById('marginValue');
+    const applyButton = document.getElementById('applyButton');
+    const output = document.getElementById('output');
+    const preview = document.getElementById('preview');
+    
+    slider.addEventListener('input', (e) => {
+      marginValue.textContent = e.target.value;
+    });
+    
+    applyButton.addEventListener('click', async () => {
+      const topMarginMm = parseInt(slider.value);
+      output.innerHTML = `<p>Processing with top margin: ${topMarginMm}mm...</p>`;
+      
+      try {
+        // Clear previous preview
+        preview.innerHTML = '';
+        
+        // Get content
+        const content = document.getElementById('content').innerHTML;
+        
+        // Create temp div with inline style
+        const tempDiv = document.createElement('div');
+        
+        // Inject CSS as inline style
+        const cssText = `
+          @page {
+            size: A4;
+            margin-top: ${topMarginMm}mm !important;
+            margin-bottom: 10mm !important;
+            margin-left: 10mm !important;
+            margin-right: 10mm !important;
+          }
+          body { font-family: sans-serif; }
+        `;
+        
+        const styleEl = document.createElement('style');
+        styleEl.appendChild(document.createTextNode(cssText));
+        tempDiv.appendChild(styleEl);
+        
+        // Add content
+        const contentDiv = document.createElement('div');
+        contentDiv.innerHTML = content;
+        tempDiv.appendChild(contentDiv);
+        
+        output.innerHTML += `<p>CSS injected: <pre>${cssText}</pre></p>`;
+        
+        // Process with Paged.js
+        const { Previewer } = window.PagedPolyfill;
+        const paged = new Previewer();
+        
+        const flow = await paged.preview(tempDiv, [], preview);
+        
+        output.innerHTML += `<p>✅ Paged.js processing complete</p>`;
+        output.innerHTML += `<p>Generated pages: ${preview.querySelectorAll('.pagedjs_page').length}</p>`;
+        
+        // Check the first page
+        const firstPage = preview.querySelector('.pagedjs_page');
+        if (firstPage) {
+          const pageStyle = window.getComputedStyle(firstPage);
+          output.innerHTML += `<p>First page margin-top: ${pageStyle.marginTop}</p>`;
+          
+          // Check if our style tag is in there
+          const styles = preview.querySelectorAll('style');
+          output.innerHTML += `<p>Style tags in preview: ${styles.length}</p>`;
+          styles.forEach((style, idx) => {
+            if (style.textContent.includes('@page')) {
+              output.innerHTML += `<p>Style ${idx} contains @page rule: <pre>${style.textContent.substring(0, 500)}</pre></p>`;
+            }
+          });
+        }
+        
+      } catch (error) {
+        output.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+        console.error(error);
+      }
+    });
+    
+    // Auto-run on load
+    setTimeout(() => applyButton.click(), 500);
+  </script>
+</body>
+</html>
+

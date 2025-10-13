@@ -10,7 +10,7 @@ import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType } from '@/lib/types';
+import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
 import { AlertCircle } from 'lucide-react';
@@ -192,14 +192,19 @@ export default function AppointmentScheduler({
         endHour: slotConfig.endHour,
       });
       
-      // Handle both possible response formats
-      const availableSlots = res.slots || res.availableSlots?.map(slot => ({ time: slot, available: true })) || [];
-      setSlots(availableSlots);
+      // Handle both possible response formats robustly
+      const availableSlots = Array.isArray((res as any)?.slots)
+        ? ((res as any).slots as AvailableSlot[])
+        : Array.isArray((res as any)?.availableSlots)
+        ? ((res as any).availableSlots as string[]).map((slot) => ({ time: slot, available: true }))
+        : [];
+      setSlots(Array.isArray(availableSlots) ? availableSlots : []);
       
       const scheduleRes: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
-      const appts: AppointmentInSlot[] = (scheduleRes.appointments || [])
-        .filter((a) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
-        .map((a) => ({
+      const scheduleAppointments: Appointment[] = Array.isArray(scheduleRes?.appointments) ? scheduleRes.appointments : [];
+      const appts: AppointmentInSlot[] = scheduleAppointments
+        .filter((a: Appointment) => (a.status as AppointmentStatus) !== AppointmentStatus.CANCELLED)
+        .map((a: Appointment) => ({
         id: a.id,
         slot: a.slot,
         patient: a.patient ? {
