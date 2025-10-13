@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
-import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap } from '@/lib/utils';
+import { isSlotInPast, getErrorMessage, formatPatientName, createCleanupTimeouts, getISTDateString, validateAppointmentForm, getConflictSuggestions, isConflictError, getConflictDetails, doTimeSlotsOverlap, generateTimeSlots, addMinutesToHHMM, getSlotDurationMinutes } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
@@ -53,7 +53,7 @@ export default function AppointmentScheduler({
   const [roomFilter, setRoomFilter] = useState<string>('ALL');
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<User[]>([]);
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
+  // We derive available start times locally to allow mixed-duration bookings
   const [appointments, setAppointments] = useState<AppointmentInSlot[]>([]);
   const [appointmentsBySlot, setAppointmentsBySlot] = useState<Record<string, AppointmentInSlot>>({});
   const [rooms, setRooms] = useState<{ id: string; name: string; type: string }[]>([]);
@@ -142,7 +142,7 @@ export default function AppointmentScheduler({
     if (doctorId && date) {
       void fetchSlots();
     }
-  }, [doctorId, date, refreshKey, slotConfig.stepMinutes]);
+  }, [doctorId, date, refreshKey, slotConfig.startHour, slotConfig.endHour, slotConfig.stepMinutes]);
 
   useEffect(() => {
     // Clear transient highlights when doctor/date changes
@@ -199,22 +199,6 @@ export default function AppointmentScheduler({
       setLoading(true);
       setError(null);
       
-      const res: GetAvailableSlotsResponse = await apiClient.getAvailableSlots({ 
-        doctorId, 
-        date, 
-        durationMinutes: slotConfig.stepMinutes,
-        startHour: slotConfig.startHour,
-        endHour: slotConfig.endHour,
-      });
-      
-      // Handle both possible response formats robustly
-      const availableSlots = Array.isArray((res as any)?.slots)
-        ? ((res as any).slots as AvailableSlot[])
-        : Array.isArray((res as any)?.availableSlots)
-        ? ((res as any).availableSlots as string[]).map((slot) => ({ time: slot, available: true }))
-        : [];
-      setSlots(Array.isArray(availableSlots) ? availableSlots : []);
-      
       const scheduleRes: GetDoctorScheduleResponse = await apiClient.getDoctorSchedule(doctorId, date);
       const scheduleAppointments: Appointment[] = Array.isArray(scheduleRes?.appointments) ? scheduleRes.appointments : [];
       const appts: AppointmentInSlot[] = scheduleAppointments
@@ -251,7 +235,7 @@ export default function AppointmentScheduler({
     } finally {
       setLoading(false);
     }
-  }, [doctorId, date, slotConfig.stepMinutes, toast]);
+  }, [doctorId, date, slotConfig.startHour, slotConfig.endHour, slotConfig.stepMinutes, toast]);
 
   const searchPatients = useCallback(async (q: string) => {
     setPatientSearch(q);
@@ -369,7 +353,6 @@ export default function AppointmentScheduler({
       
       setAppointments(prev => [...prev, newAppt]);
       setAppointmentsBySlot(prev => ({ ...prev, [pendingBookingSlot]: newAppt }));
-      setSlots(prev => prev.filter(s => s.time !== finalSlot));
       
       setRecentBookedSlot(finalSlot);
       setBookingDetails(created);
@@ -519,6 +502,15 @@ export default function AppointmentScheduler({
   );
 
   const booked = filteredAppointments.map(a => a.slot);
+
+  // Build a base grid (10-minute resolution) so users can choose any start time,
+  // and then pick duration in the booking dialog
+  const baseGridSlots = useMemo(() => generateTimeSlots({
+    startHour: slotConfig.startHour,
+    endHour: slotConfig.endHour,
+    stepMinutes: 10,
+    timezone: slotConfig.timezone,
+  }), [slotConfig.startHour, slotConfig.endHour, slotConfig.timezone]);
 
   const handleStartVisit = async (appointment: AppointmentInSlot) => {
     try {
@@ -864,15 +856,21 @@ export default function AppointmentScheduler({
                   </div>
                 );
               })}
-              {slots.map((s) => {
-                const past = isSlotInPast(s.time, date);
-                const isThisBooking = isBooking && bookingSlot === s.time;
-                // Disable if this slot overlaps any booked appointment
-                const overlapsAny = booked.some((b) => doTimeSlotsOverlap(b, s.time));
+              {baseGridSlots.map((s) => {
+                const past = isSlotInPast(s, date);
+                // Build a prospective slot representing the full intended duration
+                const start = (s.split('-')[0]) as string;
+                const intendedDuration = rescheduleContext
+                  ? Math.max(1, getSlotDurationMinutes(rescheduleContext.appointment.slot) || slotConfig.stepMinutes)
+                  : slotConfig.stepMinutes;
+                const prospectiveSlot = `${start}-${addMinutesToHHMM(start, intendedDuration)}`;
+                const isThisBooking = isBooking && bookingSlot === prospectiveSlot;
+                // Disable if this prospective slot overlaps any booked appointment
+                const overlapsAny = booked.some((b) => doTimeSlotsOverlap(b, prospectiveSlot));
                 const disabled = past || isThisBooking || overlapsAny || (!selectedPatientId && !rescheduleContext);
                 return (
                   <Button
-                    key={s.time}
+                    key={s}
                     variant="outline"
                     style={{
                       backgroundColor: past
@@ -906,12 +904,12 @@ export default function AppointmentScheduler({
                     onClick={() => {
                       if (disabled && !rescheduleContext) return;
                       if (rescheduleContext) {
-                        void handleRescheduleSlotSelect(s.time);
+                        void handleRescheduleSlotSelect(prospectiveSlot);
                         return;
                       }
-                      handleBookingRequest(s.time);
+                      handleBookingRequest(prospectiveSlot);
                     }}
-                  >{isThisBooking ? 'Booking…' : overlapsAny ? `${s.time} • Busy` : s.time}</Button>
+                  >{isThisBooking ? 'Booking…' : overlapsAny ? `${s} • Busy` : s}</Button>
                 );
               })}
             </div>
