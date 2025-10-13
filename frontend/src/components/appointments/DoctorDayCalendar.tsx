@@ -17,6 +17,10 @@ import {
   formatPatientName,
   createCleanupTimeouts,
   doTimeSlotsOverlap,
+  getISTDateString,
+  hhmmToMinutes,
+    addMinutesToHHMM,
+    getSlotDurationMinutes,
 } from '@/lib/utils';
 import type {
   AppointmentInSlot,
@@ -70,16 +74,35 @@ export default function DoctorDayCalendar({
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentInSlot | null>(null);
   const [cancellingAppointment, setCancellingAppointment] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState<boolean>(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState<AppointmentInSlot | null>(null);
+  const [rescheduleLoading, setRescheduleLoading] = useState<boolean>(false);
+  // Drag-to-select state for creating appointments
+  const [selecting, setSelecting] = useState<boolean>(false);
+  const [selectionStartIdx, setSelectionStartIdx] = useState<number | null>(null);
+  const [selectionEndIdx, setSelectionEndIdx] = useState<number | null>(null);
 
-  // Use a 10-minute base grid and aggregate rendering to display mixed-duration sessions accurately
+  // Use a fixed 10-minute base grid to represent mixed-duration appointments precisely
   const baseGridSlots = useMemo(() => generateTimeSlots({
     startHour: timeSlotConfig.startHour,
     endHour: timeSlotConfig.endHour,
-    stepMinutes: Math.max(10, timeSlotConfig.stepMinutes || 10),
+    stepMinutes: 10,
     timezone: timeSlotConfig.timezone,
-  }), [timeSlotConfig]);
+  }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.timezone]);
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
+
+  // Compute 'now' data in calendar timezone (defaults to Asia/Kolkata)
+  const isToday = useMemo(() => date === getISTDateString(), [date]);
+  const nowHHMM = useMemo(() => {
+    try {
+      const tz = timeSlotConfig.timezone || 'Asia/Kolkata';
+      const local = new Date(new Date().toLocaleString('en-US', { timeZone: tz }));
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+    } catch {
+      return '';
+    }
+  }, [timeSlotConfig.timezone]);
 
   // Filter appointments based on status, visitType and room filters
   const filteredSchedule = useMemo(() => {
@@ -260,6 +283,17 @@ export default function DoctorDayCalendar({
           )}
           
           <div className="relative" aria-busy={loading}>
+            {rescheduleTarget && (
+              <div className="mb-3 flex items-start justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
+                <div>
+                  <div className="font-medium text-amber-800">Rescheduling {formatPatientName(rescheduleTarget.patient)}</div>
+                  <div className="text-amber-700">Click a free time to move this appointment to {date}.</div>
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setRescheduleTarget(null)} disabled={rescheduleLoading}>
+                  Cancel
+                </Button>
+              </div>
+            )}
             {showLoadingOverlay && (
               <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
                 <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full" />
@@ -267,10 +301,10 @@ export default function DoctorDayCalendar({
               </div>
             )}
             <div
-              className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3"
+              className="grid grid-cols-1 gap-0"
               style={showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : undefined}
             >
-            {baseGridSlots.map((slot) => {
+            {baseGridSlots.map((slot, idx) => {
               // Determine overlaps with any appointment
               const overlappingAppointments = filteredSchedule.filter(a => doTimeSlotsOverlap(a.slot, slot));
               const hasAny = overlappingAppointments.length > 0;
@@ -278,115 +312,217 @@ export default function DoctorDayCalendar({
               const past = isSlotInPast(slot, date);
               const isNewlyBooked = recentBookedSlot === slot || (primary?.slot === recentBookedSlot);
               const isBookingInProgress = bookingInProgress === slot;
-              const isDisabled = past || isBookingInProgress || disableSlotBooking || hasAny;
+              const isDisabled = past || isBookingInProgress || hasAny || (!rescheduleTarget && disableSlotBooking);
+              const slotStart = slot.split('-')[0];
+              const primaryStart = primary?.slot?.split('-')[0];
+              const isPrimaryStartTile = !!(hasAny && primary && slotStart === primaryStart);
+
+              // Hour divider: draw a subtle top line on HH:00 tiles
+              const isHourStart = slotStart.endsWith(':00');
+              // Now line: highlight current 10-min tile for today
+              const showNowLine = (() => {
+                if (!isToday || !nowHHMM) return false;
+                const [s, e] = slot.split('-');
+                const n = hhmmToMinutes(nowHHMM);
+                return n >= hhmmToMinutes(s) && n < hhmmToMinutes(e);
+              })();
+
+              // Selection preview highlighting (only on free tiles)
+              const inSelectionPreview = (() => {
+                if (!selecting || selectionStartIdx === null || selectionEndIdx === null) return false;
+                const lo = Math.min(selectionStartIdx, selectionEndIdx);
+                const hi = Math.max(selectionStartIdx, selectionEndIdx);
+                return idx >= lo && idx <= hi && !hasAny;
+              })();
 
               return (
                 <div 
                   key={slot} 
-                  className="border rounded-lg p-3 flex flex-col gap-2 transition-all duration-200"
+                  className="border rounded-none p-3 flex flex-col gap-2 transition-all duration-200"
                   style={{
                     backgroundColor: hasAny
                       ? (isNewlyBooked ? '#22c55e' : '#3b82f6')
                       : isBookingInProgress
                       ? '#fbbf24'
-                      : (past ? '#f3f4f6' : 'white'),
+                      : (past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white')),
                     borderColor: hasAny
-                      ? (isNewlyBooked ? '#16a34a' : '#2563eb')
+                      ? 'transparent'
                       : isBookingInProgress
                       ? '#f59e0b'
                       : (past ? '#d1d5db' : '#e5e7eb'),
                     opacity: past && !hasAny ? 0.6 : 1,
-                    boxShadow: isNewlyBooked 
-                      ? '0 0 0 2px rgba(34, 197, 94, 0.3)' 
-                      : isBookingInProgress 
-                      ? '0 0 0 2px rgba(251, 191, 36, 0.3)' 
-                      : 'none'
+                    boxShadow: (() => {
+                      const parts: string[] = [];
+                      if (isNewlyBooked) parts.push('0 0 0 2px rgba(34, 197, 94, 0.3)');
+                      else if (isBookingInProgress) parts.push('0 0 0 2px rgba(251, 191, 36, 0.3)');
+                      if (showNowLine) parts.push('inset 0 2px 0 #ef4444');
+                      else if (isHourStart) parts.push('inset 0 1px 0 #e5e7eb');
+                      return parts.length ? parts.join(', ') : 'none';
+                    })()
+                  }}
+                  title={hasAny && primary ? `${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}` : undefined}
+                  onMouseDown={(e) => {
+                    if (e.button !== 0) return; // left-click only
+                    if (rescheduleTarget) return; // creation only
+                    if (disableSlotBooking || past || hasAny) return;
+                    setSelecting(true);
+                    setSelectionStartIdx(idx);
+                    setSelectionEndIdx(idx);
+                  }}
+                  onMouseEnter={() => {
+                    if (!selecting) return;
+                    setSelectionEndIdx(idx);
+                  }}
+                  onMouseUp={() => {
+                    if (!selecting) return;
+                    const startIdx = selectionStartIdx ?? idx;
+                    const endIdx = selectionEndIdx ?? idx;
+                    const lo = Math.min(startIdx, endIdx);
+                    const hi = Math.max(startIdx, endIdx);
+                    const startSlot = baseGridSlots[lo];
+                    const endSlot = baseGridSlots[hi];
+                    const startHH = startSlot.split('-')[0];
+                    // If single-tile click, default to 30-minute span
+                    const endHH = (lo === hi) ? addMinutesToHHMM(startHH, 30) : endSlot.split('-')[1];
+                    const newSpan = `${startHH}-${endHH}`;
+                    // Validate overlap
+                    const overlaps = filteredSchedule.some(a => doTimeSlotsOverlap(a.slot, newSpan));
+                    if (overlaps) {
+                      toast({ variant: 'destructive', title: 'Overlaps existing appointment', description: 'Please select a free time range.' });
+                      setSelecting(false);
+                      setSelectionStartIdx(null);
+                      setSelectionEndIdx(null);
+                      return;
+                    }
+                    setSelecting(false);
+                    setSelectionStartIdx(null);
+                    setSelectionEndIdx(null);
+                    onSelectSlot?.(newSpan);
                   }}
                 >
-                  <div 
-                    className="text-sm font-medium"
-                    style={{ color: hasAny ? 'white' : (past ? '#9ca3af' : '#374151') }}
-                  >
-                    {slot}
-                  </div>
+                  {(hasAny && isPrimaryStartTile) && (
+                    <div 
+                      className="text-sm font-medium"
+                      style={{ color: 'white' }}
+                    >
+                      {slot}
+                    </div>
+                  )}
 
                   {hasAny && primary ? (
-                    <div className="flex flex-col gap-2">
-                      <div 
-                        className="text-xs truncate cursor-pointer font-medium"
-                        style={{ color: 'rgba(255, 255, 255, 0.95)' }}
-                        onClick={() => setSelectedAppointment(primary)}
-                      >
-                        {formatPatientName(primary.patient ?? { name: 'Unknown' })}
-                        {overlappingAppointments.length > 1 && (
-                          <span className="ml-2 text-[11px] opacity-90">(+{overlappingAppointments.length - 1} more)</span>
-                        )}
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Badge 
-                          variant={primary.visitType === 'PROCEDURE' ? 'destructive' : primary.visitType === 'TELEMED' ? 'secondary' : 'default'}
-                          className="text-xs w-fit"
-                          style={{
-                            backgroundColor: primary.visitType === 'PROCEDURE' 
-                              ? 'rgba(220, 38, 38, 0.8)' 
-                              : primary.visitType === 'TELEMED'
-                              ? 'rgba(107, 114, 128, 0.8)'
-                              : 'rgba(59, 130, 246, 0.8)',
-                            color: 'white',
-                            border: 'none'
-                          }}
+                    isPrimaryStartTile ? (
+                      <div className="flex flex-col gap-2">
+                        <div 
+                          className="text-xs truncate cursor-pointer font-medium"
+                          style={{ color: 'rgba(255, 255, 255, 0.95)' }}
+                          onClick={() => setSelectedAppointment(primary)}
                         >
-                          {primary.visitType || 'OPD'}
-                        </Badge>
-                        {primary.room && (
-                          <div className="text-xs truncate" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
-                            📍 {primary.room.name}
-                          </div>
-                        )}
+                          {formatPatientName(primary.patient ?? { name: 'Unknown' })}
+                          {overlappingAppointments.length > 1 && (
+                            <span className="ml-2 text-[11px] opacity-90">(+{overlappingAppointments.length - 1} more)</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Badge 
+                            variant={primary.visitType === 'PROCEDURE' ? 'destructive' : primary.visitType === 'TELEMED' ? 'secondary' : 'default'}
+                            className="text-xs w-fit"
+                            style={{
+                              backgroundColor: primary.visitType === 'PROCEDURE' 
+                                ? 'rgba(220, 38, 38, 0.8)' 
+                                : primary.visitType === 'TELEMED'
+                                ? 'rgba(107, 114, 128, 0.8)'
+                                : 'rgba(59, 130, 246, 0.8)',
+                              color: 'white',
+                              border: 'none'
+                            }}
+                          >
+                            {primary.visitType || 'OPD'}
+                          </Badge>
+                          {primary.room && (
+                            <div className="text-xs truncate" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>
+                              📍 {primary.room.name}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 mt-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleStartVisit(primary);
+                            }}
+                            disabled={primary.id?.startsWith('optimistic-')}
+                          >
+                            <FileText className="h-3 w-3 mr-1" />
+                            {primary.visit?.id ? 'Continue Visit' : 'Start Visit'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:bg-opacity-80"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCancelAppointment(primary);
+                            }}
+                            disabled={primary.id?.startsWith('optimistic-')}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRescheduleTarget(primary);
+                            }}
+                            disabled={primary.id?.startsWith('optimistic-')}
+                          >
+                            Reschedule
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex gap-1 mt-1">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-2 text-xs text-white hover:bg-white hover:bg-opacity-20"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStartVisit(primary);
-                          }}
-                          disabled={primary.id?.startsWith('optimistic-')}
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          {primary.visit?.id ? 'Continue Visit' : 'Start Visit'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:bg-opacity-80"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCancelAppointment(primary);
-                          }}
-                          disabled={primary.id?.startsWith('optimistic-')}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
+                    ) : null
                   ) : (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      disabled={isDisabled}
+                    <div
+                      role="button"
+                      aria-label={rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}
+                      onClick={async () => {
+                        if (selecting) return;
+                        if (isDisabled) return;
+                        if (rescheduleTarget && rescheduleTarget.id) {
+                          const dur = Math.max(1, getSlotDurationMinutes(rescheduleTarget.slot));
+                          const newSlot = `${slotStart}-${addMinutesToHHMM(slotStart, dur)}`;
+                          setRescheduleLoading(true);
+                          try {
+                            await apiClient.rescheduleAppointment(rescheduleTarget.id, {
+                              date,
+                              slot: newSlot,
+                              roomId: rescheduleTarget.room?.id,
+                            } as any);
+                            toast({ variant: 'success', title: 'Appointment rescheduled', description: `${formatPatientName(rescheduleTarget.patient)} moved to ${newSlot}` });
+                            setRescheduleTarget(null);
+                            await fetchSchedule();
+                            onAppointmentUpdate?.();
+                          } catch (e) {
+                            const msg = getErrorMessage(e);
+                            toast({ variant: 'destructive', title: 'Failed to reschedule', description: msg });
+                          } finally {
+                            setRescheduleLoading(false);
+                          }
+                          return;
+                        }
+                        onSelectSlot?.(slot);
+                      }}
+                      title={rescheduleTarget ? `Move to ${slotStart}-${addMinutesToHHMM(slotStart, Math.max(1, getSlotDurationMinutes(rescheduleTarget?.slot || '00:00-00:10')))} ` : `Book ${slotStart}-${addMinutesToHHMM(slotStart, 30)}`}
                       style={{
-                        backgroundColor: past ? '#f3f4f6' : isBookingInProgress ? '#fbbf24' : disableSlotBooking ? '#f9fafb' : 'white',
-                        color: past ? '#9ca3af' : isBookingInProgress ? '#92400e' : disableSlotBooking ? '#94a3b8' : '#374151',
-                        borderColor: past ? '#d1d5db' : isBookingInProgress ? '#f59e0b' : '#d1d5db',
+                        height: '1.75rem',
+                        backgroundColor: past ? '#ffffff' : (isBookingInProgress ? '#fbbf24' : '#ffffff'),
                         cursor: isDisabled ? 'not-allowed' : 'pointer'
                       }}
-                      onClick={() => !isDisabled && onSelectSlot?.(slot)}
-                    >
-                      {past ? 'Past' : isBookingInProgress ? 'Booking...' : disableSlotBooking ? 'Select patient first' : 'Book'}
-                    </Button>
+                    />
                   )}
                 </div>
               );

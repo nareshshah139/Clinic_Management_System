@@ -173,6 +173,7 @@ export default function AppointmentsCalendar({
   const handleBookingConfirm = async (appointmentData: { 
     visitType: 'OPD' | 'PROCEDURE' | 'TELEMED'; 
     roomId?: string;
+    slot?: string;
   }) => {
     try {
       setLoading(true);
@@ -196,9 +197,11 @@ export default function AppointmentsCalendar({
 
       const optimisticDoctor = doctors.find((d) => d.id === doctorId);
 
+      const finalSlot = appointmentData.slot || pendingBookingSlot;
+
       const optimisticAppt: AppointmentInSlot = {
-        id: `optimistic-${pendingBookingSlot}`,
-        slot: pendingBookingSlot,
+        id: `optimistic-${finalSlot}`,
+        slot: finalSlot,
         patient: optimisticPatient,
         doctor: optimisticDoctor
           ? { id: optimisticDoctor.id, firstName: optimisticDoctor.firstName, lastName: optimisticDoctor.lastName }
@@ -214,7 +217,7 @@ export default function AppointmentsCalendar({
         doctorId, 
         patientId: selectedPatientId, 
         date, 
-        slot: pendingBookingSlot, 
+        slot: finalSlot, 
         visitType: appointmentData.visitType,
         roomId: appointmentData.roomId
       });
