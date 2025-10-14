@@ -378,6 +378,7 @@ export default function DoctorDayCalendar({
                       return parts.length ? parts.join(', ') : 'none';
                     })(),
                     height: tileHeightCss,
+                    pointerEvents: past ? 'none' : undefined,
                   }}
                   title={hasAny && primary ? `${formatPatientName(primary.patient ?? { name: 'Unknown' })} — ${primary.slot}` : undefined}
                   onMouseDown={(e) => {
