@@ -40,6 +40,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const [pendingPositions, setPendingPositions] = useState<PhotoPosition[]>([]);
   const [taggingMode, setTaggingMode] = useState<'GRID' | 'SINGLE'>('GRID');
   const [taggingIndex, setTaggingIndex] = useState<number>(0);
+  const [batchState, setBatchState] = useState<{ current: number; total: number; percent?: number }>({ current: 0, total: 0, percent: 0 });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const cameraRef = useRef<HTMLInputElement | null>(null);
 
@@ -291,56 +292,153 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       const fileBatches = chunk(validFiles, 6);
       const posBatches = chunk(validPositions, 6);
 
-      const fetchWithRetry = async (url: string, body: FormData, attempts = 2, timeoutMs = 30000) => {
-        let lastErr: any = null;
-        for (let attempt = 0; attempt < attempts; attempt += 1) {
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), timeoutMs);
-          try {
-            const resp = await fetch(url, { method: 'POST', body, credentials: 'include', signal: controller.signal });
-            clearTimeout(t);
-            if (resp.ok) return resp;
-            lastErr = new Error(`${resp.status}`);
-          } catch (e) {
-            clearTimeout(t);
-            lastErr = e;
+      // Downscale friendly formats client-side to reduce upload and server CPU
+      const shouldDownscale = (type: string) => {
+        const t = (type || '').toLowerCase();
+        if (!t.startsWith('image/')) return false;
+        // Avoid client processing HEIC/HEIF; let server handle conversion
+        if (t.includes('heic') || t.includes('heif')) return false;
+        return t.includes('jpeg') || t.includes('jpg') || t.includes('png') || t.includes('webp');
+      };
+
+      const downscaleImage = async (file: File, maxDim = 1600, quality = 0.75): Promise<File | Blob> => {
+        try {
+          if (!shouldDownscale(file.type)) return file;
+          const url = URL.createObjectURL(file);
+          const loadBitmap = async () => {
+            try {
+              // Prefer createImageBitmap for performance
+              // @ts-ignore
+              if (typeof createImageBitmap === 'function') {
+                // @ts-ignore
+                const bmp = await createImageBitmap(await fetch(url).then(r => r.blob()));
+                return { width: bmp.width, height: bmp.height, bitmap: bmp } as any;
+              }
+            } catch {}
+            // Fallback to HTMLImageElement
+            const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const i = new Image();
+              i.onload = () => resolve(i);
+              i.onerror = reject;
+              i.src = url;
+            });
+            return { width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, image: img } as any;
+          };
+
+          const src = await loadBitmap();
+          const { width, height } = src;
+          if (!width || !height) {
+            try { URL.revokeObjectURL(url); } catch {}
+            return file;
           }
-          // Backoff before retrying
-          await new Promise(r => setTimeout(r, 500 * Math.pow(2, attempt)));
+          const scale = Math.min(1, maxDim / Math.max(width, height));
+          const targetW = Math.max(1, Math.floor(width * scale));
+          const targetH = Math.max(1, Math.floor(height * scale));
+
+          // Use OffscreenCanvas when available
+          const hasOffscreen = typeof (globalThis as any).OffscreenCanvas === 'function';
+          if (hasOffscreen) {
+            const canvas = new (globalThis as any).OffscreenCanvas(targetW, targetH);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) { try { URL.revokeObjectURL(url); } catch {}; return file; }
+            if (src.bitmap) {
+              ctx.drawImage(src.bitmap, 0, 0, targetW, targetH);
+              try { (src.bitmap as any).close?.(); } catch {}
+            } else {
+              ctx.drawImage(src.image, 0, 0, targetW, targetH);
+            }
+            const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+            try { URL.revokeObjectURL(url); } catch {}
+            return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + '.jpg', { type: 'image/jpeg' });
+          }
+
+          // HTMLCanvas fallback
+          const canvas = document.createElement('canvas');
+          canvas.width = targetW; canvas.height = targetH;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { try { URL.revokeObjectURL(url); } catch {}; return file; }
+          if (src.bitmap) {
+            ctx.drawImage(src.bitmap, 0, 0, targetW, targetH);
+            try { (src.bitmap as any).close?.(); } catch {}
+          } else {
+            ctx.drawImage(src.image, 0, 0, targetW, targetH);
+          }
+          const blob: Blob = await new Promise((resolve) => canvas.toBlob(b => resolve(b as Blob), 'image/jpeg', quality));
+          try { URL.revokeObjectURL(url); } catch {}
+          if (!blob) return file;
+          return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + '.jpg', { type: 'image/jpeg' });
+        } catch {
+          return file;
         }
-        throw lastErr || new Error('Upload failed');
+      };
+
+      const xhrUpload = (url: string, formData: FormData, onProgress?: (pct: number) => void, timeoutMs = 90000) => {
+        return new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', url, true);
+          xhr.withCredentials = true;
+          xhr.timeout = timeoutMs;
+          if (xhr.upload && onProgress) {
+            xhr.upload.onprogress = (evt) => {
+              if (!evt.lengthComputable) return;
+              const pct = Math.max(0, Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+              onProgress(pct);
+            };
+          }
+          xhr.onreadystatechange = () => {
+            if (xhr.readyState === 4) {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error(`HTTP ${xhr.status}`));
+            }
+          };
+          xhr.ontimeout = () => reject(new Error('Timeout'));
+          xhr.onerror = () => reject(new Error('Network error'));
+          xhr.send(formData);
+        });
       };
 
       const failures: string[] = [];
 
-      if (visitId === 'temp') {
-        if (!patientId) { toast({ variant: 'destructive', title: 'Missing patient', description: 'Patient is required to upload draft photos.' }); return; }
-        for (let b = 0; b < fileBatches.length; b += 1) {
-          const group = fileBatches[b];
-          const groupPositions = posBatches[b];
-          const fd = new FormData();
-          group.forEach(f => fd.append('files', f));
-          fd.append('positions', JSON.stringify(groupPositions));
-          try {
-            await fetchWithRetry(`${baseUrl}/visits/photos/draft/${patientId}`, fd);
-          } catch (e: any) {
-            failures.push(`Batch ${b + 1}: ${e?.message || 'failed'}`);
-          }
+      const totalBatches = fileBatches.length;
+      setBatchState({ current: 0, total: totalBatches, percent: 0 });
+
+      const uploadOne = async (batchIndex: number) => {
+        const group = fileBatches[batchIndex];
+        const groupPositions = posBatches[batchIndex];
+        // Downscale each file in this batch
+        const processed = await Promise.all(group.map(f => downscaleImage(f)));
+        const fd = new FormData();
+        processed.forEach((f) => fd.append('files', f as any));
+        fd.append('positions', JSON.stringify(groupPositions));
+
+        const targetUrl = visitId === 'temp'
+          ? `${baseUrl}/visits/photos/draft/${patientId}`
+          : `${baseUrl}/visits/${actualVisitId}/photos`;
+
+        try {
+          await xhrUpload(targetUrl, fd, (pct) => {
+            setBatchState(prev => ({ current: Math.min(prev.current, batchIndex) + 1, total: totalBatches, percent: pct }));
+          }, 90000);
+        } catch (e: any) {
+          failures.push(`Batch ${batchIndex + 1}: ${e?.message || 'failed'}`);
+        } finally {
+          setBatchState(prev => ({ current: Math.min(batchIndex + 1, totalBatches), total: totalBatches, percent: 0 }));
         }
-      } else {
-        for (let b = 0; b < fileBatches.length; b += 1) {
-          const group = fileBatches[b];
-          const groupPositions = posBatches[b];
-          const fd = new FormData();
-          group.forEach(f => fd.append('files', f));
-          fd.append('positions', JSON.stringify(groupPositions));
-          try {
-            await fetchWithRetry(`${baseUrl}/visits/${actualVisitId}/photos`, fd);
-          } catch (e: any) {
-            failures.push(`Batch ${b + 1}: ${e?.message || 'failed'}`);
+      };
+
+      const CONCURRENCY = 2;
+      const queue = Array.from({ length: totalBatches }, (_, i) => i);
+      const workers: Promise<void>[] = [];
+      for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i += 1) {
+        workers.push((async function run() {
+          while (queue.length) {
+            const idx = queue.shift();
+            if (idx === undefined) break;
+            await uploadOne(idx);
           }
-        }
+        })());
       }
+      await Promise.all(workers);
 
       setTagDialogOpen(false);
       setPendingFiles(null);
@@ -360,6 +458,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
     } finally {
       if (inputRef.current) inputRef.current.value = '';
       if (cameraRef.current) cameraRef.current.value = '';
+      setBatchState({ current: 0, total: 0, percent: 0 });
       setUploading(false);
     }
   };
@@ -763,7 +862,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             <div />
             <div className="space-x-2">
               <Button variant="outline" size="sm" onClick={() => { setTagDialogOpen(false); setPendingFiles(null); setPendingPositions([]); }}>Cancel</Button>
-              <Button size="sm" onClick={uploadWithPositions} disabled={uploading}>{uploading ? 'Uploading...' : 'Upload'}</Button>
+              <Button size="sm" onClick={uploadWithPositions} disabled={uploading}>
+                {uploading ? (
+                  batchState.total > 0
+                    ? `Uploading (${Math.min(batchState.current + (batchState.percent ? 1 : 0), batchState.total)}/${batchState.total})${batchState.percent ? ` - ${batchState.percent}%` : ''}`
+                    : 'Uploading...'
+                ) : 'Upload'}
+              </Button>
             </div>
           </div>
         </div>

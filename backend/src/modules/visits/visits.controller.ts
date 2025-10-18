@@ -79,9 +79,9 @@ async function processImageUpload(file: Express.Multer.File) {
     const pipeline = sharp(file.buffer, { failOn: 'error' }).rotate().withMetadata({ exif: undefined });
     const { width = 0, height = 0 } = await pipeline.metadata();
     let working = pipeline;
-    // Cap to 40MP and limit max dimension to ~3000px to reduce size/time
+    // Cap to 40MP and limit max dimension to ~1600px to reduce size/time significantly
     const MAX_PIXELS = 40_000_000;
-    const MAX_DIM = 3000;
+    const MAX_DIM = 1600;
     const pixelScale = width * height > MAX_PIXELS ? Math.sqrt(MAX_PIXELS / (width * height)) : 1;
     const dimScale = Math.min(
       width > 0 ? MAX_DIM / width : 1,
@@ -97,9 +97,9 @@ async function processImageUpload(file: Express.Multer.File) {
 
     // Apply sensible compression for faster uploads and smaller storage
     if (format === 'jpeg') {
-      working = working.jpeg({ quality: 82, mozjpeg: true });
+      working = working.jpeg({ quality: 75, mozjpeg: true });
     } else if (format === 'webp') {
-      working = working.webp({ quality: 80 });
+      working = working.webp({ quality: 70 });
     } else if (format === 'png') {
       working = working.png({ compressionLevel: 9 });
     }
