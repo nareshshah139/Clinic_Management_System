@@ -395,6 +395,37 @@ export default function AppointmentsCalendar({
             </div>
           )}
 
+          {/* Legend */}
+          <div className="border rounded p-3 bg-gray-50">
+            <h3 className="font-semibold mb-2">Legend</h3>
+            <div className="flex flex-wrap gap-4 items-center">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3b82f6' }} />
+                <span className="text-sm">OPD</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#a855f7' }} />
+                <span className="text-sm">Procedure</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6b7280' }} />
+                <span className="text-sm">Telemedicine</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#94a3b8' }} />
+                <span className="text-sm">Completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
+                <span className="text-sm">Newly Booked</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
+                <span className="text-sm">Booking In Progress</span>
+              </div>
+            </div>
+          </div>
+
           {!!bookingDetails && (
             <div 
               className="p-4 rounded-r text-sm shadow-sm"

@@ -507,7 +507,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
-  const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TEXT');
+  const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
@@ -570,6 +570,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return null;
     }
   }, [visitData]);
+
+  const counselingText = useMemo(() => {
+    try {
+      const plan: any = visitPlan || null;
+      const derm: any = (plan && typeof plan === 'object') ? (plan.dermatology || {}) : {};
+      const fromPlan = (plan?.notes || derm?.counseling || '');
+      const fromSummary = (visitData as any)?.planSummary?.counseling || '';
+      return String(fromPlan || fromSummary || '');
+    } catch {
+      return '';
+    }
+  }, [visitPlan, visitData]);
 
   const visitVitals = useMemo(() => {
     try {
@@ -748,6 +760,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     pushIf('menstrualHistory', menstrualHistory);
     pushIf('familyHistoryOthers', familyHistoryOthers);
     pushIf('followUpInstructions', followUpInstructions);
+    pushIf('counseling', counselingText);
     pushIf('procedurePlanned', procedurePlanned);
     // Investigations
     (Array.isArray(investigations) ? investigations : []).forEach((inv, i) => {
@@ -800,7 +813,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: 'Showing original text. Check server OPENAI_API_KEY and network.',
       });
     }
-  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedurePlanned, investigations, customSections, items]);
+  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedurePlanned, investigations, customSections, items, counselingText]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
@@ -3024,7 +3037,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="grid grid-cols-3 gap-1">
+                              <Select value={(it.dosePattern || '').trim()} onValueChange={(p: string) => {
+                                const inferred = inferFrequencyFromDosePattern(p);
+                                if (inferred) {
+                                  updateItem(idx, { dosePattern: p, frequency: inferred });
+                                } else {
+                                  updateItem(idx, { dosePattern: p });
+                                }
+                              }}>
+                                <SelectTrigger><SelectValue placeholder="Pattern" /></SelectTrigger>
+                                <SelectContent>
+                                  {[ '1-0-1', '1-1-1', '1-1-0', '0-1-1', '1-0-0', '0-1-0', '0-0-1', '2-0-2' ].map(p => (
+                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <Input value={it.dosePattern || ''} onChange={(e) => {
                                 const nextPattern = e.target.value;
                                 const inferred = inferFrequencyFromDosePattern(nextPattern);
@@ -3334,6 +3362,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 <div id="prescription-print-content">
+                  <div className="text-sm text-gray-700 mb-2">{new Date().toLocaleDateString()}</div>
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
                     <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">
@@ -3362,6 +3391,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         sections.push('');
                         sections.push('Rx:');
                         sections.push(medsLines.length ? medsLines.join('\n') : '—');
+                        if ((counselingText || '').trim().length > 0) {
+                          sections.push('');
+                          sections.push('Counseling:');
+                          sections.push(tt('counseling', counselingText));
+                        }
                         if ((followUpInstructions || '').trim().length > 0) {
                           sections.push('');
                           sections.push('Follow-up Instructions:');
@@ -3511,11 +3545,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {(Array.isArray(investigations) && investigations.length > 0) && (
                   <div className={`py-3 ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
                     <div className="font-semibold mb-1">Investigations</div>
-                    <ul className="list-disc ml-5 text-sm space-y-1">
-                      {investigations.map((inv, i) => (<li key={inv}>{tt(`investigations.${i}`, inv)}</li>))}
-                    </ul>
+                    <div className="text-sm">
+                      {investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}
+                    </div>
                   </div>
                 )}
+
+                {/* Counseling / Advice */}
+                {(counselingText?.trim()?.length) ? (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Counseling</div>
+                    <div className="text-sm whitespace-pre-wrap">{tt('counseling', counselingText)}</div>
+                  </div>
+                ) : null}
 
                 {/* Procedure Planned */}
         {(procedurePlanned?.trim()?.length > 0) && (
@@ -3932,7 +3974,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <Input value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="grid grid-cols-3 gap-1">
+                              <Select value={(it.dosePattern || '').trim()} onValueChange={(p: string) => {
+                                const inferred = inferFrequencyFromDosePattern(p);
+                                if (inferred) {
+                                  updateNewTplItem(idx, { dosePattern: p, frequency: inferred });
+                                } else {
+                                  updateNewTplItem(idx, { dosePattern: p });
+                                }
+                              }}>
+                                <SelectTrigger><SelectValue placeholder="Pattern" /></SelectTrigger>
+                                <SelectContent>
+                                  {[ '1-0-1', '1-1-1', '1-1-0', '0-1-1', '1-0-0', '0-1-0', '0-0-1', '2-0-2' ].map(p => (
+                                    <SelectItem key={p} value={p}>{p}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <Input value={it.dosePattern || ''} onChange={(e) => {
                                 const nextPattern = e.target.value;
                                 const inferred = inferFrequencyFromDosePattern(nextPattern);

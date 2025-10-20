@@ -358,16 +358,22 @@ export default function DoctorDayCalendar({
                   key={slot} 
                   className="border rounded-none p-1 flex flex-col gap-1 transition-all duration-200"
                   style={{
-                    backgroundColor: hasAny
-                      ? (isNewlyBooked ? '#22c55e' : '#3b82f6')
-                      : isBookingInProgress
-                      ? '#fbbf24'
-                      : (past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white')),
-                    borderColor: hasAny
-                      ? 'transparent'
-                      : isBookingInProgress
-                      ? '#f59e0b'
-                      : (past ? '#d1d5db' : '#e5e7eb'),
+                    backgroundColor: (() => {
+                      if (hasAny) {
+                        if (isNewlyBooked) return '#22c55e'; // green for just-booked
+                        if (primary?.status === AppointmentStatus.COMPLETED) return '#94a3b8'; // slate for completed
+                        if (primary?.visitType === 'PROCEDURE') return '#a855f7'; // purple for procedure
+                        if (primary?.visitType === 'TELEMED') return '#6b7280'; // gray for telemed
+                        return '#3b82f6'; // blue for OPD/others
+                      }
+                      if (isBookingInProgress) return '#fbbf24';
+                      return past ? '#f3f4f6' : (inSelectionPreview ? '#fef3c7' : 'white');
+                    })(),
+                    borderColor: (() => {
+                      if (hasAny) return 'transparent';
+                      if (isBookingInProgress) return '#f59e0b';
+                      return past ? '#d1d5db' : '#e5e7eb';
+                    })(),
                     opacity: past && !hasAny ? 0.6 : 1,
                     boxShadow: (() => {
                       const parts: string[] = [];

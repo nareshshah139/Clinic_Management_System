@@ -374,8 +374,16 @@ export default function RoomCalendar() {
                       <div key={`${room.id}-${slot.label}`} className="p-2 min-h-[56px]">
                         {appointments.length > 0 ? (
                           <div className="space-y-1">
-                            {appointments.map((appointment) => (
-                              <div key={appointment.id} className="bg-blue-50 border border-blue-200 rounded p-2">
+                            {appointments.map((appointment) => {
+                              const vt = (appointment.visitType || '').toUpperCase();
+                              const blockClasses = (() => {
+                                if (appointment.status === AppointmentStatus.COMPLETED) return 'bg-slate-100 border border-slate-300';
+                                if (vt === 'PROCEDURE') return 'bg-purple-50 border border-purple-200';
+                                if (vt === 'TELEMED' || vt === 'TELEMEDICINE') return 'bg-gray-100 border border-gray-200';
+                                return 'bg-blue-50 border border-blue-200';
+                              })();
+                              return (
+                                <div key={appointment.id} className={`${blockClasses} rounded p-2`}>
                                 <div className="flex items-start justify-between mb-1">
                                   <Badge 
                                     variant="secondary" 
@@ -399,8 +407,9 @@ export default function RoomCalendar() {
                                 <div className="text-[11px] text-gray-500 mt-1">
                                   {appointment.slot}
                                 </div>
-                              </div>
-                            ))}
+                                </div>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="bg-green-50 border border-green-200 rounded p-2 h-full flex items-center justify-center">
@@ -427,20 +436,20 @@ export default function RoomCalendar() {
               <span className="text-sm">Available</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-50 border border-blue-200 rounded"></div>
-              <span className="text-sm">Occupied</span>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3b82f6' }} />
+              <span className="text-sm">OPD</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-xs">OPD</Badge>
-              <span className="text-sm">OPD Consultation</span>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#a855f7' }} />
+              <span className="text-sm">Procedure</span>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-purple-100 text-purple-800 text-xs">Procedure</Badge>
-              <span className="text-sm">Medical Procedure</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">Telemedicine</Badge>
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6b7280' }} />
               <span className="text-sm">Telemedicine</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#94a3b8' }} />
+              <span className="text-sm">Completed</span>
             </div>
           </div>
         </CardContent>
