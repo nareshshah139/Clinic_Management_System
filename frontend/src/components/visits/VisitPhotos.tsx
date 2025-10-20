@@ -301,7 +301,18 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         return t.includes('jpeg') || t.includes('jpg') || t.includes('png') || t.includes('webp');
       };
 
-      const downscaleImage = async (file: File, maxDim = 1600, quality = 0.75): Promise<File | Blob> => {
+      const preferWebP = (() => {
+        try {
+          const c = document.createElement('canvas');
+          // Some browsers may not implement toDataURL for webp; guard it
+          const ok = typeof c.toDataURL === 'function' && c.toDataURL('image/webp').startsWith('data:image/webp');
+          return ok;
+        } catch {
+          return false;
+        }
+      })();
+
+      const downscaleImage = async (file: File, maxDim = 1600, quality = 0.75, outputType: 'image/jpeg' | 'image/webp' = 'image/jpeg'): Promise<File | Blob> => {
         try {
           if (!shouldDownscale(file.type)) return file;
           const url = URL.createObjectURL(file);
@@ -347,9 +358,19 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             } else {
               ctx.drawImage(src.image, 0, 0, targetW, targetH);
             }
-            const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+            let blob: Blob | null = null;
+            try {
+              blob = await canvas.convertToBlob({ type: outputType, quality });
+            } catch {
+              try {
+                blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: Math.max(0.6, quality) });
+              } catch {}
+            }
             try { URL.revokeObjectURL(url); } catch {}
-            return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + '.jpg', { type: 'image/jpeg' });
+            if (!blob) return file;
+            const ext = outputType === 'image/webp' ? '.webp' : '.jpg';
+            const type = outputType === 'image/webp' ? 'image/webp' : 'image/jpeg';
+            return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + ext, { type });
           }
 
           // HTMLCanvas fallback
@@ -363,10 +384,25 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           } else {
             ctx.drawImage(src.image, 0, 0, targetW, targetH);
           }
-          const blob: Blob = await new Promise((resolve) => canvas.toBlob(b => resolve(b as Blob), 'image/jpeg', quality));
+          let blob: Blob | null = null;
+          await new Promise<void>((resolve) => {
+            try {
+              canvas.toBlob((b) => {
+                blob = b;
+                resolve();
+              }, outputType, quality);
+            } catch {
+              canvas.toBlob((b) => {
+                blob = b;
+                resolve();
+              }, 'image/jpeg', Math.max(0.6, quality));
+            }
+          });
           try { URL.revokeObjectURL(url); } catch {}
           if (!blob) return file;
-          return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + '.jpg', { type: 'image/jpeg' });
+          const ext = outputType === 'image/webp' ? '.webp' : '.jpg';
+          const type = outputType === 'image/webp' ? 'image/webp' : 'image/jpeg';
+          return new File([blob], (file.name.replace(/\.[^.]+$/, '') || 'photo') + ext, { type });
         } catch {
           return file;
         }
@@ -406,7 +442,12 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         const group = fileBatches[batchIndex];
         const groupPositions = posBatches[batchIndex];
         // Downscale each file in this batch
-        const processed = await Promise.all(group.map(f => downscaleImage(f)));
+        const processed = await Promise.all(group.map(f => downscaleImage(
+          f,
+          1600,
+          preferWebP ? 0.7 : 0.75,
+          preferWebP ? 'image/webp' : 'image/jpeg',
+        )));
         const fd = new FormData();
         processed.forEach((f) => fd.append('files', f as any));
         fd.append('positions', JSON.stringify(groupPositions));
@@ -426,7 +467,8 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         }
       };
 
-      const CONCURRENCY = 2;
+      const threads = (typeof navigator !== 'undefined' && (navigator as any)?.hardwareConcurrency) ? (navigator as any).hardwareConcurrency : 2;
+      const CONCURRENCY = Math.max(2, Math.min(4, Math.floor(threads / 2) || 2));
       const queue = Array.from({ length: totalBatches }, (_, i) => i);
       const workers: Promise<void>[] = [];
       for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i += 1) {
