@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import type { User } from '@/lib/types';
+import { getISTDateString } from '@/lib/utils';
 
 function AppointmentsPageInner() {
   const search = useSearchParams();
@@ -18,7 +19,7 @@ function AppointmentsPageInner() {
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
-    try { return localStorage.getItem('appointments.date') || new Date().toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); }
+    try { return localStorage.getItem('appointments.date') || getISTDateString(); } catch { return getISTDateString(); }
   });
 
   // Load doctors + persisted doctorId
