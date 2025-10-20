@@ -3037,22 +3037,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-3 gap-1">
-                              <Select value={(it.dosePattern || '').trim()} onValueChange={(p: string) => {
-                                const inferred = inferFrequencyFromDosePattern(p);
-                                if (inferred) {
-                                  updateItem(idx, { dosePattern: p, frequency: inferred });
-                                } else {
-                                  updateItem(idx, { dosePattern: p });
-                                }
-                              }}>
-                                <SelectTrigger><SelectValue placeholder="Pattern" /></SelectTrigger>
-                                <SelectContent>
-                                  {[ '1-0-1', '1-1-1', '1-1-0', '0-1-1', '1-0-0', '0-1-0', '0-0-1', '2-0-2' ].map(p => (
-                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                            <div className="grid grid-cols-2 gap-1">
                               <Input value={it.dosePattern || ''} onChange={(e) => {
                                 const nextPattern = e.target.value;
                                 const inferred = inferFrequencyFromDosePattern(nextPattern);
@@ -3974,22 +3959,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <Input value={it.drugName} onChange={(e) => updateNewTplItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-3 gap-1">
-                              <Select value={(it.dosePattern || '').trim()} onValueChange={(p: string) => {
-                                const inferred = inferFrequencyFromDosePattern(p);
-                                if (inferred) {
-                                  updateNewTplItem(idx, { dosePattern: p, frequency: inferred });
-                                } else {
-                                  updateNewTplItem(idx, { dosePattern: p });
-                                }
-                              }}>
-                                <SelectTrigger><SelectValue placeholder="Pattern" /></SelectTrigger>
-                                <SelectContent>
-                                  {[ '1-0-1', '1-1-1', '1-1-0', '0-1-1', '1-0-0', '0-1-0', '0-0-1', '2-0-2' ].map(p => (
-                                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                            <div className="grid grid-cols-2 gap-1">
                               <Input value={it.dosePattern || ''} onChange={(e) => {
                                 const nextPattern = e.target.value;
                                 const inferred = inferFrequencyFromDosePattern(nextPattern);
