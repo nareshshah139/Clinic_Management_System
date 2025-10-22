@@ -36,6 +36,37 @@ type Frequency =
 
 type DurationUnit = 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS';
 
+// Centralized options for frequency and dose patterns to avoid duplication
+const FREQUENCY_OPTIONS: Frequency[] = [
+  'ONCE_DAILY',
+  'TWICE_DAILY',
+  'THREE_TIMES_DAILY',
+  'FOUR_TIMES_DAILY',
+  'EVERY_4_HOURS',
+  'EVERY_6_HOURS',
+  'EVERY_8_HOURS',
+  'EVERY_12_HOURS',
+  'AS_NEEDED',
+  'WEEKLY',
+  'MONTHLY',
+];
+
+const DOSE_PATTERN_OPTIONS: string[] = [
+  '1-0-0',
+  '0-1-0',
+  '0-0-1',
+  '1-1-0',
+  '1-0-1',
+  '0-1-1',
+  '1-1-1',
+  '2-0-2',
+  'q4h',
+  'q6h',
+  'q8h',
+  'q12h',
+  'prn',
+];
+
 interface PrescriptionItemForm {
   drugName: string;
   genericName?: string;
@@ -247,7 +278,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         break;
       case 429:
         title = 'Too many requests';
-        description = 'You’ve made too many requests. Please wait a moment and retry.';
+        description = 'You've made too many requests. Please wait a moment and retry.';
         withRetry = true;
         break;
       default:
@@ -1189,7 +1220,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       isGeneric: true,
     };
     setItems(prev => {
-      const next = [...prev, base];
+      const next = [...prev];
+      const last = next[next.length - 1];
+      const hasBlankLast = last && !((last.drugName || '').trim());
+      if (hasBlankLast) {
+        next[next.length - 1] = base;
+      } else {
+        next.push(base);
+      }
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
       return next;
     });
@@ -1229,6 +1267,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       tid: 'THREE_TIMES_DAILY',
       thrice: 'THREE_TIMES_DAILY',
       qid: 'FOUR_TIMES_DAILY',
+      q4h: 'EVERY_4_HOURS',
+      'every 4 hours': 'EVERY_4_HOURS',
+      q6h: 'EVERY_6_HOURS',
+      'every 6 hours': 'EVERY_6_HOURS',
+      q8h: 'EVERY_8_HOURS',
+      'every 8 hours': 'EVERY_8_HOURS',
+      q12h: 'EVERY_12_HOURS',
+      'every 12 hours': 'EVERY_12_HOURS',
+      prn: 'AS_NEEDED',
     };
     if (map[raw]) return map[raw];
 
@@ -1476,7 +1523,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         foodInstructions: x.foodInstructions,
         pulseRegimen: x.pulseRegimen,
       }));
-      setItems(prev => [...prev, ...mapped]);
+      setItems(prev => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        const hasBlankLast = last && !((last?.drugName || '').trim());
+        if (hasBlankLast && mapped.length > 0) {
+          next[next.length - 1] = mapped[0];
+          if (mapped.length > 1) next.push(...mapped.slice(1));
+        } else {
+          next.push(...mapped);
+        }
+        if (!hasTrailingBlank(next)) next.push(createBlankItem());
+        return next;
+      });
       pushHistory();
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
       if (md) {
@@ -1516,7 +1575,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // procedureParams removed
         // doctor's personal notes removed from builder
       }
-      try { void apiClient.recordTemplateUsage?.(tpl?.id, { variant: undefined }); } catch {}
+      try { void apiClient.recordTemplateUsage?.(tpl?.id, { variant: undefined }).catch(() => {}); } catch {}
     } catch {}
   };
 
@@ -3079,19 +3138,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Input value={it.dosePattern || ''} onChange={(e) => {
-                                const nextPattern = e.target.value;
-                                const inferred = inferFrequencyFromDosePattern(nextPattern);
+                              <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
+                                const inferred = inferFrequencyFromDosePattern(v);
                                 if (inferred) {
-                                  updateItem(idx, { dosePattern: nextPattern, frequency: inferred });
+                                  updateItem(idx, { dosePattern: v, frequency: inferred });
                                 } else {
-                                  updateItem(idx, { dosePattern: nextPattern });
+                                  updateItem(idx, { dosePattern: v });
                                 }
-                              }} placeholder="e.g., 1-0-1" />
+                              }}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent>
+                                  {DOSE_PATTERN_OPTIONS.map(p => (
+                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
+                                  {FREQUENCY_OPTIONS.map(f => (
                                     <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
                                   ))}
                                 </SelectContent>
@@ -4011,19 +4076,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Input value={it.dosePattern || ''} onChange={(e) => {
-                                const nextPattern = e.target.value;
-                                const inferred = inferFrequencyFromDosePattern(nextPattern);
+                              <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
+                                const inferred = inferFrequencyFromDosePattern(v);
                                 if (inferred) {
-                                  updateNewTplItem(idx, { dosePattern: nextPattern, frequency: inferred });
+                                  updateNewTplItem(idx, { dosePattern: v, frequency: inferred });
                                 } else {
-                                  updateNewTplItem(idx, { dosePattern: nextPattern });
+                                  updateNewTplItem(idx, { dosePattern: v });
                                 }
-                              }} placeholder="e.g., 1-0-1" />
+                              }}>
+                                <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                <SelectContent>
+                                  {DOSE_PATTERN_OPTIONS.map(p => (
+                                    <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <Select value={it.frequency} onValueChange={(v: Frequency) => updateNewTplItem(idx, { frequency: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {['ONCE_DAILY','TWICE_DAILY','THREE_TIMES_DAILY','FOUR_TIMES_DAILY','AS_NEEDED','WEEKLY','MONTHLY'].map(f => (
+                                  {FREQUENCY_OPTIONS.map(f => (
                                     <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
                                   ))}
                                 </SelectContent>
