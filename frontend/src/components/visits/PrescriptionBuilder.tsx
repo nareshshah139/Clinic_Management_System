@@ -423,6 +423,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [loadingDrugs, setLoadingDrugs] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const lastTemplateApplyRef = useRef<number>(0);
   // Removed local-only field templates in favor of server persistence
   // Default dermatology templates (client-side suggestions)
   const defaultDermTemplates: Array<any> = [
@@ -1159,7 +1160,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return !((last.drugName || '').trim());
   };
 
+  // Throttle consecutive adds of the same drug (guards double/triple add)
+  const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
+  const shouldAllowDrugAdd = (drug: any): boolean => {
+    const key = String(drug?.id || drug?.name || '').toLowerCase();
+    const now = Date.now();
+    if (key && lastDrugAddRef.current.key === key && now - lastDrugAddRef.current.at < 600) {
+      return false;
+    }
+    lastDrugAddRef.current = { key, at: now };
+    return true;
+  };
+
   const addItemFromDrug = (drug: any) => {
+    if (!shouldAllowDrugAdd(drug)) return;
     const base: PrescriptionItemForm = {
       drugName: drug.name,
       genericName: drug.genericName,
@@ -1429,6 +1443,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedurePlanned, onCreated]);
 
   const applyTemplateToBuilder = (tpl: any) => {
+    const nowTs = Date.now();
+    if (nowTs - lastTemplateApplyRef.current < 800) return;
+    lastTemplateApplyRef.current = nowTs;
     try {
       const tItems = Array.isArray(tpl.items) ? tpl.items : JSON.parse(tpl.items || '[]');
       const mapped: PrescriptionItemForm[] = tItems.map((x: any) => ({
@@ -1505,11 +1522,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const [templatePromptOpen, setTemplatePromptOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  const [templateNameError, setTemplateNameError] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
   const [newTplName, setNewTplName] = useState('');
+  const [newTplNameError, setNewTplNameError] = useState('');
   const [newTplChiefComplaints, setNewTplChiefComplaints] = useState('');
   const [newTplDiagnosis, setNewTplDiagnosis] = useState('');
   const [newTplExObjective, setNewTplExObjective] = useState('');
@@ -1534,6 +1553,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [newTplDrugQuery, setNewTplDrugQuery] = useState('');
   const [newTplDrugResults, setNewTplDrugResults] = useState<any[]>([]);
   const [newTplLoadingDrugs, setNewTplLoadingDrugs] = useState(false);
+  const lastNewTplAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
 
   const addNewTplItem = () => {
     setNewTplItems((prev) => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: '', durationUnit: 'DAYS', route: '', instructions: '' }]);
@@ -1552,6 +1572,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setNewTplItems((prev) => prev.filter((_, i) => i !== index));
   };
   const addItemFromDrugToNewTpl = (drug: any) => {
+    const key = String(drug?.id || drug?.name || '').toLowerCase();
+    const now = Date.now();
+    if (key && lastNewTplAddRef.current.key === key && now - lastNewTplAddRef.current.at < 600) {
+      return;
+    }
+    lastNewTplAddRef.current = { key, at: now };
     const base: PrescriptionItemForm = {
       drugName: drug.name,
       genericName: drug.genericName,
@@ -1764,6 +1790,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       await doRequest();
     } catch (e: any) {
+      // Inline field highlights for common cases
+      if (e?.status === 409) {
+        setTemplateNameError('A template with this name already exists.');
+      } else if (e?.status === 400) {
+        const msg = getErrorMessage(e);
+        if (msg && /name/i.test(String(msg))) {
+          setTemplateNameError(msg);
+        }
+      }
       const idemKey = `tpl-${name}-${String(Date.now())}`;
       showTemplateCreateError(e, async () => {
         try {
@@ -1830,12 +1865,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     exDistribution,
     exAcneSeverity,
     exItchScore,
-    exTriggers,
-    exPriorTx,
     skinConcerns,
     loadTemplates,
     toast,
     showTemplateCreateError,
+    setTemplateNameError,
   ]);
 
   useEffect(() => {
@@ -2995,7 +3029,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   )}
                                 </div>
                               </div>
-                              <Button size="sm" variant="outline" onClick={() => { addItemFromDrug(d); }}>Add</Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={(e) => { e.stopPropagation(); addItemFromDrug(d); }}
+                                onDoubleClick={(e) => { e.stopPropagation(); }}
+                              >
+                                Add
+                              </Button>
                             </div>
                           ))}
                         </>
@@ -3814,6 +3855,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           setNewTemplateOpen(open);
           if (!open) {
             setNewTplName('');
+            setNewTplNameError('');
             setNewTplChiefComplaints('');
             setNewTplDiagnosis('');
             setNewTplExObjective('');
@@ -3833,7 +3875,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-gray-600">Name</label>
-                <Input value={newTplName} onChange={(e) => setNewTplName(e.target.value)} placeholder="e.g., Acne follow-up (Derm)" />
+                <Input 
+                  value={newTplName} 
+                  onChange={(e) => { setNewTplName(e.target.value); if (newTplNameError) setNewTplNameError(''); }} 
+                  placeholder="e.g., Acne follow-up (Derm)"
+                  aria-invalid={!!newTplNameError}
+                  aria-describedby={newTplNameError ? 'new-tpl-name-error' : undefined}
+                />
+                {newTplNameError ? (
+                  <p id="new-tpl-name-error" className="text-sm text-red-600">{newTplNameError}</p>
+                ) : null}
               </div>
               <div>
                 <label className="text-xs text-gray-600">Chief Complaints</label>
@@ -4022,6 +4073,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   const name = newTplName.trim();
                   if (!name) {
                     toast({ variant: 'warning', title: 'Name required', description: 'Please enter a template name.' });
+                    setNewTplNameError('Template name is required');
                     return;
                   }
                   const payload: any = {
@@ -4064,15 +4116,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       await loadTemplates();
                       toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
                       setNewTemplateOpen(false);
+                      setNewTplName('');
+                      setNewTplNameError('');
                     };
                     await doCreate();
                   } catch (e: any) {
+                    // Inline highlighting on common errors
+                    if (e?.status === 409) {
+                      setNewTplNameError('A template with this name already exists.');
+                    } else if (e?.status === 400) {
+                      const msg = getErrorMessage(e);
+                      if (msg && /name/i.test(String(msg))) setNewTplNameError(msg);
+                    }
                     showTemplateCreateError(e, async () => {
                       try {
                         await apiClient.createPrescriptionTemplate(payload);
                         await loadTemplates();
                         toast({ variant: 'success', title: 'Template created', description: 'New template is ready to use.' });
                         setNewTemplateOpen(false);
+                        setNewTplName('');
+                        setNewTplNameError('');
                       } catch (err) {
                         showTemplateCreateError(err);
                       }
@@ -4268,9 +4331,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <Input
                 placeholder="Dermatology follow-up"
                 value={templateName}
-                onChange={(e) => setTemplateName(e.target.value)}
+              onChange={(e) => { setTemplateName(e.target.value); if (templateNameError) setTemplateNameError(''); }}
                 autoFocus
+              aria-invalid={!!templateNameError}
+              aria-describedby={templateNameError ? 'template-name-error' : undefined}
               />
+            {templateNameError ? (
+              <p id="template-name-error" className="text-sm text-red-600">{templateNameError}</p>
+            ) : null}
             </div>
             <DialogFooter>
               <Button
@@ -4278,11 +4346,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 onClick={() => {
                   setTemplatePromptOpen(false);
                   setTemplateName('');
+                setTemplateNameError('');
                 }}
               >
                 Cancel
               </Button>
               <Button
+                disabled={creatingTemplate}
                 onClick={async () => {
                   const trimmed = templateName.trim();
                   if (!trimmed) {
@@ -4291,11 +4361,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       title: 'Template name required',
                       description: 'Please enter a name for the template.',
                     });
+                  setTemplateNameError('Template name is required');
                     return;
                   }
                   await persistTemplate(trimmed);
                   setTemplatePromptOpen(false);
                   setTemplateName('');
+                setTemplateNameError('');
                 }}
               >
                 Save Template

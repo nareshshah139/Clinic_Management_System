@@ -1,0 +1,13 @@
+@startuml Pharmacy_Module\nTitle Pharmacy Module - Controllers, Services, Invoices & Packages\nleft to right direction\nskinparam componentStyle rectangle\n\npackage "Pharmacy" {\n  [PharmacyController]\n  [PharmacyService]\n  [DrugController]\n  [DrugService]\n  [PharmacyInvoiceController]\n  [PharmacyInvoiceService]\n  [PharmacyPackageController]\n  [PharmacyPackageService]\n}\n\npackage "DB (Prisma)" {\n  [Drug]\n  [PharmacyPackage]\n  [PharmacyPackageItem]\n  [PharmacyInvoice]\n  [PharmacyInvoiceItem]\n  [PharmacyPayment]\n}\n\nPharmacyController --> PharmacyService : dashboard
+DrugController --> DrugService : CRUD drugs
+PharmacyInvoiceController --> PharmacyInvoiceService : billing
+PharmacyPackageController --> PharmacyPackageService : bundles
+
+DrugService --> Drug : CRUD
+PharmacyPackageService --> PharmacyPackage : CRUD
+PharmacyPackageService ..> PharmacyPackageItem : composition
+PharmacyInvoiceService --> PharmacyInvoice : CRUD
+PharmacyInvoiceService ..> PharmacyInvoiceItem : items
+PharmacyInvoiceService ..> PharmacyPayment : payments
+
+@enduml

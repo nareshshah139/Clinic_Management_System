@@ -1,0 +1,319 @@
+@startuml Clinic_Management_System
+
+title Clinic Management System - High-level Architecture
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam wrapWidth 180
+skinparam maxMessageSize 200
+
+package "Frontend (Next.js App Router, TypeScript, App Router)" as FRONTEND {
+  [Login Page] as FE_Login
+  [Root Landing] as FE_Root
+
+  package "Dashboard" as FE_Dashboard {
+    [Appointments Page] as FE_Appointments
+    [Visits Page] as FE_Visits
+    [Prescriptions Page] as FE_Prescriptions
+    [Patients Page] as FE_Patients
+    [Inventory Page] as FE_Inventory
+    [Billing Page] as FE_Billing
+    [Pharmacy Page] as FE_Pharmacy
+    [Pharmacy: Drugs] as FE_PharmacyDrugs
+    [Pharmacy: Invoices] as FE_PharmacyInvoices
+    [Rooms Page] as FE_Rooms
+    [Reports Page] as FE_Reports
+    [Stock Predictions Page] as FE_StockPred
+    [Users Page] as FE_Users
+    [Procedures Page] as FE_Procedures
+  }
+
+  note right of FE_Dashboard
+    UI built with shadcn/ui
+    Data fetching via frontend/lib/api.ts
+    Auth via JWT (middleware.ts)
+  end note
+}
+
+node "Backend (NestJS, TypeScript)" as BACKEND {
+  package "Shared" as SHARED {
+    [PrismaModule] <<module>>
+    [JwtAuthGuard] <<guard>>
+    [RolesGuard] <<guard>>
+    [PermissionsGuard] <<guard>>
+    [RequestContextInterceptor] <<interceptor>>
+    [IdempotencyInterceptor] <<interceptor>>
+    [NumberingModule] <<module>>
+  }
+
+  package "AppModule" as APP {
+    [AppController]
+    [AppService]
+  }
+
+  package "Auth" as MOD_AUTH {
+    [AuthModule] <<module>>
+    [AuthController]
+    [AuthService]
+    [JwtStrategy]
+  }
+
+  package "Users" as MOD_USERS {
+    [UsersModule] <<module>>
+    [UsersController]
+    [UsersService]
+  }
+
+  package "Patients" as MOD_PATIENTS {
+    [PatientsModule] <<module>>
+    [PatientsController]
+    [PatientsService]
+  }
+
+  package "Appointments" as MOD_APPTS {
+    [AppointmentsModule] <<module>>
+    [AppointmentsController]
+    [AppointmentsService]
+  }
+
+  package "Visits" as MOD_VISITS {
+    [VisitsModule] <<module>>
+    [VisitsController]
+    [VisitsService]
+  }
+
+  package "Prescriptions" as MOD_RX {
+    [PrescriptionsModule] <<module>>
+    [PrescriptionsController]
+    [PrescriptionsService]
+  }
+
+  package "Billing" as MOD_BILLING {
+    [BillingModule] <<module>>
+    [BillingController]
+    [BillingService]
+  }
+
+  package "Inventory" as MOD_INV {
+    [InventoryModule] <<module>>
+    [InventoryController]
+    [InventoryService]
+  }
+
+  package "Pharmacy" as MOD_PHARM {
+    [PharmacyModule] <<module>>
+    [PharmacyController]
+    [PharmacyService]
+
+    [DrugController]
+    [DrugService]
+
+    [PharmacyInvoiceController]
+    [PharmacyInvoiceService]
+
+    [PharmacyPackageController]
+    [PharmacyPackageService]
+
+    package "OneMg Integration" as MOD_ONE_MG {
+      [OneMgModule] <<module>>
+      [OneMgController]
+      [OneMgService]
+    }
+  }
+
+  package "Reports" as MOD_REPORTS {
+    [ReportsModule] <<module>>
+    [ReportsController]
+    [ReportsService]
+  }
+
+  package "Notifications" as MOD_NOTIFS {
+    [NotificationsModule] <<module>>
+    [NotificationsService]
+  }
+
+  package "Stock Prediction" as MOD_STOCK {
+    [StockPredictionModule] <<module>>
+    [StockPredictionController]
+    [StockPredictionService]
+  }
+
+  package "Audit Logs" as MOD_AUDIT {
+    [AuditLogsModule] <<module>>
+    [AuditLogsController]
+    [AuditLogsService]
+  }
+
+  package "WhatsApp Templates" as MOD_WA {
+    [WhatsAppTemplatesModule] <<module>>
+    [WhatsAppTemplatesController]
+    [WhatsAppTemplatesService]
+  }
+
+  SHARED -[hidden]DOWN- APP
+  SHARED ..> MOD_AUTH : applies guards/interceptors
+  SHARED ..> MOD_USERS
+  SHARED ..> MOD_PATIENTS
+  SHARED ..> MOD_APPTS
+  SHARED ..> MOD_VISITS
+  SHARED ..> MOD_RX
+  SHARED ..> MOD_BILLING
+  SHARED ..> MOD_INV
+  SHARED ..> MOD_PHARM
+  SHARED ..> MOD_REPORTS
+  SHARED ..> MOD_NOTIFS
+  SHARED ..> MOD_STOCK
+  SHARED ..> MOD_AUDIT
+  SHARED ..> MOD_WA
+}
+
+database "PostgreSQL (Prisma)" as DB {
+  package "Core" as DB_CORE {
+    [User]
+    [Branch]
+    [Role]
+    [Permission]
+    [AuditLog]
+    [NumberSequence]
+  }
+
+  package "Patients/Visits" as DB_CLINICAL {
+    [Patient]
+    [Appointment]
+    [Visit]
+    [VisitAttachment]
+    [DraftAttachment]
+    [Consent]
+    [DeviceLog]
+    [LabOrder]
+    [Referral]
+  }
+
+  package "Prescriptions/Templates" as DB_RX {
+    [Prescription]
+    [PrescriptionPrintEvent]
+    [PrescriptionTemplate]
+    [PrescriptionTemplateVersion]
+    [TemplateVersionApproval]
+    [TemplateUsage]
+    [ClinicAsset]
+    [PrinterProfile]
+    [LayoutExperiment]
+    [LayoutVariant]
+    [ExperimentAssignment]
+    [TranslationMemoryEntry]
+  }
+
+  package "Billing (Legacy + New)" as DB_BILL {
+    [Invoice]
+    [InvoiceItem]
+    [Payment]
+    [NewInvoice]
+    [NewInvoiceItem]
+    [NewPayment]
+    [Service]
+  }
+
+  package "Inventory/Pharmacy" as DB_PHARM {
+    [InventoryItem]
+    [StockTransaction]
+    [StockAdjustment]
+    [StockMovement]
+    [ReorderRule]
+    [InventoryAudit]
+
+    [Drug]
+    [PharmacyPackage]
+    [PharmacyPackageItem]
+    [PharmacyInvoice]
+    [PharmacyInvoiceItem]
+    [PharmacyPayment]
+  }
+
+  package "Forecasting" as DB_STOCK {
+    [StockPrediction]
+  }
+
+  package "Communication" as DB_COMMS {
+    [WhatsAppTemplate]
+    [IdempotencyRecord]
+  }
+}
+
+cloud "1mg Drug API" as EXT_ONE_MG
+
+FE_Login --> MOD_AUTH : login, token
+FE_Root --> APP : health/status
+FE_Appointments --> MOD_APPTS
+FE_Visits --> MOD_VISITS
+FE_Prescriptions --> MOD_RX
+FE_Patients --> MOD_PATIENTS
+FE_Inventory --> MOD_INV
+FE_Billing --> MOD_BILLING
+FE_Pharmacy --> MOD_PHARM
+FE_PharmacyDrugs --> MOD_PHARM
+FE_PharmacyInvoices --> MOD_PHARM
+FE_Rooms --> MOD_APPTS
+FE_Reports --> MOD_REPORTS
+FE_StockPred --> MOD_STOCK
+FE_Users --> MOD_USERS
+FE_Procedures --> MOD_VISITS
+
+MOD_AUTH --> DB_CORE
+MOD_USERS --> DB_CORE
+MOD_PATIENTS --> DB_CLINICAL
+MOD_APPTS --> DB_CLINICAL
+MOD_VISITS --> DB_CLINICAL
+MOD_RX --> DB_RX
+MOD_BILLING --> DB_BILL
+MOD_INV --> DB_PHARM
+MOD_PHARM --> DB_PHARM
+MOD_REPORTS --> DB
+MOD_NOTIFS --> DB_COMMS
+MOD_STOCK --> DB_STOCK
+MOD_AUDIT --> DB_CORE
+MOD_WA --> DB_COMMS
+SHARED --> DB : Prisma Client
+
+DB_CLINICAL.Patient "1" -- "0..*" DB_CLINICAL.Appointment
+DB_CORE.User "1 (doctor)" -- "0..*" DB_CLINICAL.Appointment
+DB_CLINICAL.Appointment "0..1" -- "1" DB_CLINICAL.Visit
+DB_CLINICAL.Visit "1" -- "0..1" DB_RX.Prescription
+DB_RX.Prescription "1" -- "0..*" DB_RX.PrescriptionPrintEvent
+DB_RX.Prescription "0..*" -- "0..*" DB_RX.TemplateUsage
+
+DB_PHARM.PharmacyInvoice "1" -- "0..*" DB_PHARM.PharmacyInvoiceItem
+DB_PHARM.PharmacyInvoiceItem "* (DRUG)" -- "0..1" DB_PHARM.Drug
+DB_PHARM.PharmacyInvoiceItem "* (PACKAGE)" -- "0..1" DB_PHARM.PharmacyPackage
+DB_RX.Prescription "0..1" -- "0..*" DB_PHARM.PharmacyInvoice
+DB_CLINICAL.Patient "1" -- "0..*" DB_PHARM.PharmacyInvoice
+DB_CORE.User "0..1 (doctor)" -- "0..*" DB_PHARM.PharmacyInvoice
+
+DB_BILL.NewInvoice "1" -- "0..*" DB_BILL.NewInvoiceItem
+DB_BILL.NewInvoice "1" -- "0..*" DB_BILL.NewPayment
+DB_CLINICAL.Patient "1" -- "0..*" DB_BILL.NewInvoice
+DB_CLINICAL.Visit "0..1" -- "0..*" DB_BILL.NewInvoice
+DB_CLINICAL.Appointment "0..1" -- "0..*" DB_BILL.NewInvoice
+DB_BILL.Service "1" -- "0..*" DB_BILL.NewInvoiceItem
+
+DB_PHARM.Drug "1" -- "0..*" DB_PHARM.PharmacyPackageItem
+DB_PHARM.PharmacyPackage "1" -- "0..*" DB_PHARM.PharmacyPackageItem
+DB_PHARM.Drug "1" -- "0..*" DB_PHARM.InventoryItem
+
+MOD_ONE_MG --> EXT_ONE_MG : drug search/details
+
+[JwtAuthGuard] ..> BACKEND
+[RolesGuard] ..> BACKEND
+[PermissionsGuard] ..> BACKEND
+[RequestContextInterceptor] ..> BACKEND
+[IdempotencyInterceptor] ..> BACKEND
+
+legend right
+  == Legend ==
+  <<module>> Nest Module
+  Guards/Interceptors apply globally via AppModule providers
+  DB packages group Prisma models by domain
+endlegend
+
+@enduml

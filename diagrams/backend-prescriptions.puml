@@ -1,0 +1,27 @@
+@startuml Prescriptions_Module\nTitle Prescriptions Module - Controller, Service, Templates
+left to right direction
+skinparam componentStyle rectangle
+
+package "Prescriptions" {
+  [PrescriptionsController]
+  [PrescriptionsService]
+}
+
+package "DB (Prisma)" {
+  [Prescription]
+  [PrescriptionPrintEvent]
+  [PrescriptionTemplate]
+  [PrescriptionTemplateVersion]
+  [TemplateVersionApproval]
+  [TemplateUsage]
+}
+
+PrescriptionsController --> PrescriptionsService
+PrescriptionsService --> Prescription : CRUD
+PrescriptionsService ..> PrescriptionPrintEvent : tracking
+PrescriptionsService ..> PrescriptionTemplate : library
+PrescriptionsService ..> PrescriptionTemplateVersion : versioning
+PrescriptionsService ..> TemplateVersionApproval : approvals
+PrescriptionsService ..> TemplateUsage : analytics
+
+@enduml

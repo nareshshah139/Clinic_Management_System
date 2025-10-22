@@ -1,0 +1,1 @@
+@startuml Notifications_Module\nTitle Notifications Module - Service\nleft to right direction\nskinparam componentStyle rectangle\n\npackage "Notifications" {\n  [NotificationsService]\n}\n\npackage "DB (Prisma)" {\n  [WhatsAppTemplate]\n}\n\nNotificationsService ..> WhatsAppTemplate : select templates\nNotificationsService ..> External WhatsApp API : send\n\n@enduml

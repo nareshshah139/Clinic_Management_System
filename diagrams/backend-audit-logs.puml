@@ -1,0 +1,1 @@
+@startuml Audit_Logs_Module\nTitle Audit Logs Module - Controller, Service\nleft to right direction\nskinparam componentStyle rectangle\n\npackage "Audit Logs" {\n  [AuditLogsController]\n  [AuditLogsService]\n}\n\npackage "DB (Prisma)" {\n  [AuditLog]\n}\n\nAuditLogsController --> AuditLogsService\nAuditLogsService --> AuditLog : write/read\n\n@enduml

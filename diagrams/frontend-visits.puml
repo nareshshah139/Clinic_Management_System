@@ -1,0 +1,36 @@
+@startuml Frontend_Visits\nTitle Frontend Visits - MedicalVisitForm & PrescriptionBuilder\nleft to right direction\nskinparam componentStyle rectangle\n
+package "Visits Components" {
+  [MedicalVisitForm.tsx]
+  [VisitStateContext.tsx]
+  [VisitPhotos.tsx]
+  [PrescriptionBuilder.tsx]
+}
+
+package "UI (shadcn)" {
+  [ui/form.tsx]
+  [ui/input.tsx]
+  [ui/select.tsx]
+  [ui/textarea.tsx]
+  [ui/dialog.tsx]
+  [ui/button.tsx]
+  [ui/table.tsx]
+}
+
+[MedicalVisitForm.tsx] ..> [VisitStateContext.tsx] : state
+[MedicalVisitForm.tsx] ..> [VisitPhotos.tsx] : capture/display
+[MedicalVisitForm.tsx] ..> [PrescriptionBuilder.tsx] : compose Rx
+
+[MedicalVisitForm.tsx] ..> [ui/form.tsx]
+[MedicalVisitForm.tsx] ..> [ui/input.tsx]
+[MedicalVisitForm.tsx] ..> [ui/select.tsx]
+[MedicalVisitForm.tsx] ..> [ui/textarea.tsx]
+[MedicalVisitForm.tsx] ..> [ui/dialog.tsx]
+[MedicalVisitForm.tsx] ..> [ui/button.tsx]
+[MedicalVisitForm.tsx] ..> [ui/table.tsx]
+
+[PrescriptionBuilder.tsx] ..> [ui/input.tsx]
+[PrescriptionBuilder.tsx] ..> [ui/select.tsx]
+[PrescriptionBuilder.tsx] ..> [ui/textarea.tsx]
+[PrescriptionBuilder.tsx] ..> [ui/button.tsx]
+
+@enduml

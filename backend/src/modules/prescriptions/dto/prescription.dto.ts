@@ -344,8 +344,9 @@ export class DrugInteractionDto {
 // Template item DTO allows optional numeric fields so instruction-only
 // rows or partial items can be saved in templates without failing validation.
 export class PrescriptionTemplateItemDto {
+  @IsOptional()
   @IsString()
-  drugName: string;
+  drugName?: string;
 
   @IsOptional()
   @IsString()

@@ -1,0 +1,57 @@
+@startuml Frontend_Dashboard\nTitle Frontend Dashboard - Pages and Layouts\nleft to right direction\nskinparam componentStyle rectangle\n
+package "App Router" {
+  [app/layout.tsx]
+  [app/dashboard/layout.tsx]
+}
+
+package "Pages" {
+  [app/page.tsx]
+  [app/login/page.tsx]
+  [dashboard/page.tsx]
+  [appointments/page.tsx]
+  [visits/page.tsx]
+  [prescriptions/page.tsx]
+  [patients/page.tsx]
+  [patients/[id]/page.tsx]
+  [inventory/page.tsx]
+  [billing/page.tsx]
+  [pharmacy/page.tsx]
+  [pharmacy/drugs/page.tsx]
+  [pharmacy/invoices/page.tsx]
+  [rooms/page.tsx]
+  [reports/page.tsx]
+  [stock-predictions/page.tsx]
+  [users/page.tsx]
+}
+
+package "Layout Components" {
+  [dashboard-layout.tsx]
+  [header.tsx]
+  [sidebar.tsx]
+  [dashboard-user-context.tsx]
+}
+
+[app/layout.tsx] --> [app/page.tsx]
+[app/layout.tsx] --> [app/login/page.tsx]
+[app/layout.tsx] --> [app/dashboard/layout.tsx]
+[app/dashboard/layout.tsx] --> [dashboard/page.tsx]
+[app/dashboard/layout.tsx] --> [appointments/page.tsx]
+[app/dashboard/layout.tsx] --> [visits/page.tsx]
+[app/dashboard/layout.tsx] --> [prescriptions/page.tsx]
+[app/dashboard/layout.tsx] --> [patients/page.tsx]
+[app/dashboard/layout.tsx] --> [patients/[id]/page.tsx]
+[app/dashboard/layout.tsx] --> [inventory/page.tsx]
+[app/dashboard/layout.tsx] --> [billing/page.tsx]
+[app/dashboard/layout.tsx] --> [pharmacy/page.tsx]
+[app/dashboard/layout.tsx] --> [pharmacy/drugs/page.tsx]
+[app/dashboard/layout.tsx] --> [pharmacy/invoices/page.tsx]
+[app/dashboard/layout.tsx] --> [rooms/page.tsx]
+[app/dashboard/layout.tsx] --> [reports/page.tsx]
+[app/dashboard/layout.tsx] --> [stock-predictions/page.tsx]
+[app/dashboard/layout.tsx] --> [users/page.tsx]
+
+[dashboard-layout.tsx] ..> [header.tsx]
+[dashboard-layout.tsx] ..> [sidebar.tsx]
+[dashboard-layout.tsx] ..> [dashboard-user-context.tsx]
+
+@enduml

@@ -192,6 +192,7 @@ export class PrescriptionsController {
 
   // Template endpoints
   @Post('templates')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   createPrescriptionTemplate(
     @Body() templateDto: PrescriptionTemplateDto,
     @Request() req: AuthenticatedRequest,

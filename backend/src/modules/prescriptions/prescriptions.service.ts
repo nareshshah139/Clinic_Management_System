@@ -1142,6 +1142,10 @@ export class PrescriptionsService {
       if (!name || !name.trim()) {
         throw new BadRequestException('Template name is required');
       }
+      const trimmedName = name.trim();
+      if (trimmedName.length > 120) {
+        throw new BadRequestException('Template name must be 120 characters or fewer');
+      }
 
       // Ensure creator exists in branch (more helpful error than FK violation)
       const creator = await this.prisma.user.findFirst({ where: { id: createdBy, branchId } });
@@ -1153,7 +1157,7 @@ export class PrescriptionsService {
       const existingCount = await this.prisma.prescriptionTemplate.count({
         where: {
           branchId,
-          name: { equals: name.trim(), mode: 'insensitive' as any },
+          name: { equals: trimmedName, mode: 'insensitive' as any },
         },
       });
       if (existingCount > 0) {
@@ -1168,7 +1172,7 @@ export class PrescriptionsService {
 
       const template = await this.prisma.prescriptionTemplate.create({
         data: {
-          name: name.trim(),
+          name: trimmedName,
           description: description && description.trim() ? description.trim() : null,
           items: JSON.stringify(enrichedItems),
           category: category && category.trim() ? category.trim() : null,
@@ -1262,12 +1266,24 @@ export class PrescriptionsService {
     // Parse JSON fields and enrich with pricing for clients
     const parsedTemplates = await Promise.all(
       templates.map(async (template) => {
-        const rawItems = JSON.parse(template.items as string);
+        let rawItems: any[] = [];
+        try {
+          rawItems = JSON.parse(template.items as string);
+          if (!Array.isArray(rawItems)) rawItems = [];
+        } catch {
+          rawItems = [];
+        }
+        let meta: any = null;
+        try {
+          meta = template.metadata ? JSON.parse(template.metadata as string) : null;
+        } catch {
+          meta = null;
+        }
         const itemsWithPrice = await this.enrichItemsWithDrugPricing(rawItems, branchId);
         return {
           ...template,
           items: itemsWithPrice,
-          metadata: template.metadata ? JSON.parse(template.metadata as string) : null,
+          metadata: meta,
         };
       })
     );
