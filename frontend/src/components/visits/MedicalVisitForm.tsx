@@ -1044,6 +1044,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const uploadChainRef = useRef<Promise<any>>(Promise.resolve());
+  const sessionIdRef = useRef<string | null>(null);
+  const chunkIndexRef = useRef<number>(0);
+  const recordingStartedAtRef = useRef<number>(0);
+  const lastChunkEndMsRef = useRef<number>(0);
    
   // Do not access JWT on client; rely on HttpOnly cookie sent automatically
  
@@ -1067,74 +1072,108 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      const chunks: BlobPart[] = [];
+      // Initialize chunked transcription session
+      const baseUrl = '/api';
+      const startRes = await fetch(`${baseUrl}/visits/transcribe/chunk-start`, { method: 'POST', credentials: 'include' });
+      if (!startRes.ok) {
+        throw new Error(`Failed to start transcription session (${startRes.status})`);
+      }
+      const startData = await startRes.json();
+      const sessionId = (startData?.sessionId as string) || '';
+      if (!sessionId) throw new Error('No sessionId returned');
+      sessionIdRef.current = sessionId;
+      chunkIndexRef.current = 0;
+      recordingStartedAtRef.current = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      lastChunkEndMsRef.current = 0;
       const mimeType = (window as any).MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
         ((window as any).MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } as any : undefined);
       recorderRef.current = recorder;
-      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.ondataavailable = (e) => {
+        if (!e.data || e.data.size <= 0) return;
+        const thisChunkIndex = chunkIndexRef.current++;
+        const startMs = lastChunkEndMsRef.current;
+        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+        const endMs = Math.max(startMs, Math.round(now - recordingStartedAtRef.current));
+        lastChunkEndMsRef.current = endMs;
+        const sess = sessionIdRef.current;
+        if (!sess) return;
+        const recordedType: string = mimeType || 'audio/webm';
+        const filename = recordedType === 'audio/mp4' ? `chunk_${thisChunkIndex}.m4a` : `chunk_${thisChunkIndex}.webm`;
+        const fd = new FormData();
+        fd.append('file', e.data, filename);
+        fd.append('sessionId', sess);
+        fd.append('chunkIndex', String(thisChunkIndex));
+        fd.append('startMs', String(startMs));
+        fd.append('endMs', String(endMs));
+        // Chain uploads sequentially to preserve order
+        uploadChainRef.current = uploadChainRef.current.then(async () => {
+          const upRes = await fetch(`${baseUrl}/visits/transcribe/chunk`, { method: 'POST', body: fd, credentials: 'include' });
+          if (!upRes.ok) {
+            // eslint-disable-next-line no-console
+            console.error('Chunk upload failed', upRes.status);
+          }
+        }).catch(() => {});
+      };
       recorder.onstop = async () => {
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         streamRef.current = null;
         recorderRef.current = null;
-        // Use the actual recording mimeType to avoid server-side "Unsupported audio type"
-        const recordedType: string = mimeType || 'audio/webm';
-        const blob = new Blob(chunks, { type: recordedType });
         try {
-           const baseUrl = '/api';
-           const fd = new FormData();
-           // Preserve a sensible filename extension matching the recorded mime type
-           const filename = recordedType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm';
-           fd.append('file', blob, filename);
-           const res = await fetch(`${baseUrl}/visits/transcribe`, {
-             method: 'POST',
-             body: fd,
-             credentials: 'include',
-           });
-           if (!res.ok) {
-             let errText = '';
-             try { errText = await res.text(); } catch {}
-             console.error('Transcription request failed:', res.status, errText);
-             toast({
-               variant: 'warning',
-               title: 'Transcription failed',
-               description: `Speech-to-text request returned ${res.status}.`,
-             });
-             return;
-           }
-           const data = await res.json();
-           const text = (data?.text as string) || '';
-           if (text) {
-             switch (fieldName) {
-               case 'subjective':
-                 setSubjective(prev => (prev ? prev + ' ' : '') + text);
-                 break;
-               case 'objective':
-                 setObjective(prev => (prev ? prev + ' ' : '') + text);
-                 break;
-               case 'assessment':
-                 setAssessment(prev => (prev ? prev + ' ' : '') + text);
-                 break;
-               case 'plan':
-                 setPlan(prev => (prev ? prev + ' ' : '') + text);
-                 break;
-             }
-           }
-        } catch (e) {
-          console.error('Speech-to-text error:', e);
-          toast({
-            variant: 'warning',
-            title: 'Speech-to-text error',
-            description: getErrorMessage(e) || 'Please try again.',
+          // Wait for any pending chunk uploads to finish
+          try { await uploadChainRef.current; } catch {}
+          const sess = sessionIdRef.current;
+          if (!sess) return;
+          const completeRes = await fetch(`/api/visits/transcribe/chunk-complete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ sessionId: sess }),
           });
+          if (!completeRes.ok) {
+            let errText = '';
+            try { errText = await completeRes.text(); } catch {}
+            // eslint-disable-next-line no-console
+            console.error('Transcription finalize failed:', completeRes.status, errText);
+            toast({ variant: 'warning', title: 'Transcription failed', description: `Finalize returned ${completeRes.status}.` });
+            return;
+          }
+          const data = await completeRes.json();
+          const text = (data?.text as string) || '';
+          if (text) {
+            switch (fieldName) {
+              case 'subjective':
+                setSubjective(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'objective':
+                setObjective(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'assessment':
+                setAssessment(prev => (prev ? prev + ' ' : '') + text);
+                break;
+              case 'plan':
+                setPlan(prev => (prev ? prev + ' ' : '') + text);
+                break;
+            }
+          }
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error('Speech-to-text error:', e);
+          toast({ variant: 'warning', title: 'Speech-to-text error', description: getErrorMessage(e) || 'Please try again.' });
         } finally {
           setIsListening(false);
           setActiveVoiceField(null);
+          sessionIdRef.current = null;
+          chunkIndexRef.current = 0;
+          recordingStartedAtRef.current = 0;
+          lastChunkEndMsRef.current = 0;
+          uploadChainRef.current = Promise.resolve();
         }
       };
-      recorder.start();
-      // Auto-stop after 30s or when button clicked again (toggle)
-      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 300000);
+      // Record in chunks (e.g., every 30s)
+      recorder.start(30000);
+      // Auto-stop after up to 10 minutes or when button clicked again (toggle)
+      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 600000);
     } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);
@@ -1209,7 +1248,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       setLoadingHistory(true);
       const response = await apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId);
       const responseDataArray = Array.isArray(response) ? response : response?.visits || response?.data || [];
-      const historyEntries = responseDataArray as VisitSummary[];
+      const historyEntries = (responseDataArray as VisitSummary[]).slice().sort((a, b) => {
+        const at = (a as any)?.createdAt ? Date.parse(String((a as any).createdAt)) : 0;
+        const bt = (b as any)?.createdAt ? Date.parse(String((b as any).createdAt)) : 0;
+        return bt - at;
+      });
       setPatientHistory(historyEntries);
       setCurrentVisitNumber(historyEntries.length + 1);
     } catch (error) {
@@ -2017,7 +2060,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       printBottomMarginPx={printBottomMarginPx}
                       contentOffsetXPx={contentOffsetXPx}
                       contentOffsetYPx={contentOffsetYPx}
-                      onChangeContentOffset={(x, y) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
+                      onChangeContentOffset={(x: number, y: number) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
                       designAids={{
                         enabled: designAidsEnabled,
                         showGrid: designShowGrid,
@@ -2030,11 +2073,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       grayscale={grayscaleMode}
                       bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
                       frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
-                      onChangeFrames={(next) => {
-                        if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
-                        if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
-                        if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
-                      }}
+                      onChangeFrames={(next: { enabled?: boolean; headerHeightMm?: number; footerHeightMm?: number }) => {
+                         if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
+                         if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
+                         if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
+                       }}
                       onChangeReviewDate={setReviewDate}
                       onCreated={() => markSectionComplete('prescription')}
                       refreshKey={builderRefreshKey}

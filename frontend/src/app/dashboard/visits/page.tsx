@@ -368,7 +368,15 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
         setLoading(true);
         const response = await apiClient.getPatientVisitHistory<PatientVisitHistoryResponse>(patientId, { limit: 10 });
         const visits = normalizePatientVisits(response);
-        setHistory(visits);
+        // Ensure consistent newest-first ordering by createdAt
+        const sorted = Array.isArray(visits)
+          ? [...visits].sort((a, b) => {
+              const at = a && (a as any).createdAt ? Date.parse(String((a as any).createdAt)) : 0;
+              const bt = b && (b as any).createdAt ? Date.parse(String((b as any).createdAt)) : 0;
+              return bt - at;
+            })
+          : [];
+        setHistory(sorted);
       } catch (error) {
         console.error('Failed to load patient visit history', error);
         setHistory([]);
