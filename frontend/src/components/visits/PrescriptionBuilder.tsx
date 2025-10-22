@@ -14,6 +14,7 @@ import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
+import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferTimingFromDosePattern } from '@/lib/frequency';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -36,36 +37,7 @@ type Frequency =
 
 type DurationUnit = 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS';
 
-// Centralized options for frequency and dose patterns to avoid duplication
-const FREQUENCY_OPTIONS: Frequency[] = [
-  'ONCE_DAILY',
-  'TWICE_DAILY',
-  'THREE_TIMES_DAILY',
-  'FOUR_TIMES_DAILY',
-  'EVERY_4_HOURS',
-  'EVERY_6_HOURS',
-  'EVERY_8_HOURS',
-  'EVERY_12_HOURS',
-  'AS_NEEDED',
-  'WEEKLY',
-  'MONTHLY',
-];
-
-const DOSE_PATTERN_OPTIONS: string[] = [
-  '1-0-0',
-  '0-1-0',
-  '0-0-1',
-  '1-1-0',
-  '1-0-1',
-  '0-1-1',
-  '1-1-1',
-  '2-0-2',
-  'q4h',
-  'q6h',
-  'q8h',
-  'q12h',
-  'prn',
-];
+// Use centralized options from lib/frequency
 
 interface PrescriptionItemForm {
   drugName: string;
@@ -278,7 +250,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         break;
       case 429:
         title = 'Too many requests';
-        description = 'You've made too many requests. Please wait a moment and retry.';
+        description = "You've made too many requests. Please wait a moment and retry.";
         withRetry = true;
         break;
       default:
@@ -1171,6 +1143,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return uniq;
   };
 
+  // Suggestions for per-item Instructions, combining per-drug and global recents
+  const [instrFocusIdx, setInstrFocusIdx] = useState<number | null>(null);
+  const getInstructionSuggestions = useCallback((drugName: string, q: string, limit = 8): string[] => {
+    const byDrugKey = 'instr:' + normalize((drugName || '').toLowerCase());
+    const byDrug = readRecent(byDrugKey);
+    const global = readRecent('instructions');
+    const merged: string[] = [...byDrug, ...global];
+    // de-dup then rank by query
+    const seen = new Set<string>();
+    const uniq = merged.filter((s) => {
+      const k = (s || '').toLowerCase();
+      if (seen.has(k)) return false; seen.add(k); return true;
+    });
+    const ranked = rankByQuery(uniq, q);
+    return ranked.slice(0, limit);
+  }, []);
+
   // Ensure we always have a trailing blank row when user starts typing a drug
   const createBlankItem = (): PrescriptionItemForm => ({
     drugName: '',
@@ -1213,7 +1202,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       frequency: 'ONCE_DAILY',
       duration: 5,
       durationUnit: 'DAYS',
-      instructions: '',
+      instructions: (() => {
+        try {
+          const byDrugKey = 'instr:' + (drug.name || '').trim().toLowerCase();
+          const list = readRecent(byDrugKey);
+          return list[0] || '';
+        } catch { return ''; }
+      })(),
       route: 'Oral',
       timing: 'After meals',
       quantity: 5,
@@ -3140,11 +3135,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 const inferred = inferFrequencyFromDosePattern(v);
-                                if (inferred) {
-                                  updateItem(idx, { dosePattern: v, frequency: inferred });
-                                } else {
-                                  updateItem(idx, { dosePattern: v });
-                                }
+                                const inferredTiming = inferTimingFromDosePattern(v);
+                                const patch: any = { dosePattern: v };
+                                if (inferred) patch.frequency = inferred;
+                                // Only set timing if empty
+                                if (!it.timing && inferredTiming) patch.timing = inferredTiming;
+                                updateItem(idx, patch);
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
@@ -3186,8 +3182,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <Input value={it.instructions || ''} onChange={(e) => updateItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                          <td className="px-3 py-2 align-top relative">
+                            <div className="space-y-1">
+                              <Input
+                                value={it.instructions || ''}
+                                onFocus={() => setInstrFocusIdx(idx)}
+                                onBlur={(e) => {
+                                  setTimeout(() => setInstrFocusIdx((cur) => (cur === idx ? null : cur)), 120);
+                                  updateItem(idx, { instructions: e.target.value });
+                                  pushRecent('instructions', e.target.value);
+                                  const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
+                                  pushRecent(byDrugKey, e.target.value);
+                                }}
+                                onChange={(e) => updateItem(idx, { instructions: e.target.value })}
+                                placeholder="e.g., Avoid alcohol"
+                              />
+                              {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
+                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded shadow max-h-48 overflow-auto">
+                                  {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
+                                    <div
+                                      key={s}
+                                      className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer"
+                                      onMouseDown={() => {
+                                        updateItem(idx, { instructions: s });
+                                        const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
+                                        pushRecent('instructions', s);
+                                        pushRecent(byDrugKey, s);
+                                        setInstrFocusIdx(null);
+                                      }}
+                                    >
+                                      {s}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2 align-top text-right">
                             <Button size="sm" variant="outline" onClick={() => removeItem(idx)}>Remove</Button>
@@ -4078,11 +4107,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
                                 const inferred = inferFrequencyFromDosePattern(v);
-                                if (inferred) {
-                                  updateNewTplItem(idx, { dosePattern: v, frequency: inferred });
-                                } else {
-                                  updateNewTplItem(idx, { dosePattern: v });
-                                }
+                                const inferredTiming = inferTimingFromDosePattern(v);
+                                const patch: any = { dosePattern: v };
+                                if (inferred) patch.frequency = inferred;
+                                if (!it.timing && inferredTiming) patch.timing = inferredTiming;
+                                updateNewTplItem(idx, patch);
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
@@ -4124,8 +4153,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top">
-                            <Input value={it.instructions || ''} onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
+                          <td className="px-3 py-2 align-top relative">
+                            <div className="space-y-1">
+                              <Input
+                                value={it.instructions || ''}
+                                onFocus={() => setInstrFocusIdx(idx)}
+                                onBlur={(e) => {
+                                  setTimeout(() => setInstrFocusIdx((cur) => (cur === idx ? null : cur)), 120);
+                                  updateNewTplItem(idx, { instructions: e.target.value });
+                                  pushRecent('instructions', e.target.value);
+                                  const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
+                                  pushRecent(byDrugKey, e.target.value);
+                                }}
+                                onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })}
+                                placeholder="e.g., Avoid alcohol"
+                              />
+                              {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
+                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded shadow max-h-48 overflow-auto">
+                                  {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
+                                    <div
+                                      key={s}
+                                      className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer"
+                                      onMouseDown={() => {
+                                        updateNewTplItem(idx, { instructions: s });
+                                        const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
+                                        pushRecent('instructions', s);
+                                        pushRecent(byDrugKey, s);
+                                        setInstrFocusIdx(null);
+                                      }}
+                                    >
+                                      {s}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2 align-top text-right">
                             <Button size="sm" variant="outline" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>

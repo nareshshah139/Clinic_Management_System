@@ -4,9 +4,10 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferFrequencyFromDosePattern } from '@/lib/frequency';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
@@ -739,12 +740,40 @@ export function PharmacyPackageManager() {
                           />
                         </div>
                         <div>
+                          <Label>Pattern</Label>
+                          <Select
+                            value={(item as any).dosePattern || ''}
+                            onValueChange={(v: string) => {
+                              const inferred = inferFrequencyFromDosePattern(v);
+                              updatePackageItem(index, 'dosePattern' as any, v);
+                              if (inferred) updatePackageItem(index, 'frequency', inferred);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="0-1-0 / q8h / prn" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {DOSE_PATTERN_OPTIONS.map((p) => (
+                                <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
                           <Label>Frequency</Label>
-                          <Input
-                            value={item.frequency}
-                            onChange={(e) => updatePackageItem(index, 'frequency', e.target.value)}
-                            placeholder="e.g., Twice daily"
-                          />
+                          <Select
+                            value={item.frequency || ''}
+                            onValueChange={(v: string) => updatePackageItem(index, 'frequency', v)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FREQUENCY_OPTIONS.map((f) => (
+                                <SelectItem key={f} value={f}>{f.replaceAll('_',' ')}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div>
                           <Label>Duration</Label>

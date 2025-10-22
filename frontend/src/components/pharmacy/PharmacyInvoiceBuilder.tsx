@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferFrequencyFromDosePattern, inferTimingFromDosePattern } from '@/lib/frequency';
 import { Badge } from '@/components/ui/badge';
 import { 
   X, 
@@ -900,7 +901,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 mb-3">
                           <div>
                             <Label className="text-xs">Dosage</Label>
                             <Input
@@ -911,13 +912,38 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             />
                           </div>
                           <div>
+                            <Label className="text-xs">Pattern</Label>
+                            <Select
+                              value={(item as any).dosePattern || ''}
+                              onValueChange={(v: string) => {
+                                const inferred = inferFrequencyFromDosePattern(v);
+                                const inferredTiming = inferTimingFromDosePattern(v);
+                                updateItemInstructions(item.drugId, 'dosePattern', v);
+                                if (inferred) updateItemInstructions(item.drugId, 'frequency', inferred);
+                                if (!item.instructions && inferredTiming) updateItemInstructions(item.drugId, 'instructions', inferredTiming);
+                              }}
+                            >
+                              <SelectTrigger className="h-8"><SelectValue placeholder="0-1-0 / q8h / prn" /></SelectTrigger>
+                              <SelectContent>
+                                {DOSE_PATTERN_OPTIONS.map(p => (
+                                  <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
                             <Label className="text-xs">Frequency</Label>
-                            <Input
-                              placeholder="e.g., Twice daily"
+                            <Select
                               value={item.frequency || ''}
-                              onChange={(e) => updateItemInstructions(item.drugId, 'frequency', e.target.value)}
-                              className="h-8"
-                            />
+                              onValueChange={(v: string) => updateItemInstructions(item.drugId, 'frequency', v)}
+                            >
+                              <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectContent>
+                                {FREQUENCY_OPTIONS.map(f => (
+                                  <SelectItem key={f} value={f}>{f.replaceAll('_',' ')}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div>
                             <Label className="text-xs">Duration</Label>

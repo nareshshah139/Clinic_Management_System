@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferFrequencyFromDosePattern, inferTimingFromDosePattern } from '@/lib/frequency';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Search, Trash2 } from 'lucide-react';
@@ -245,8 +246,33 @@ export function PharmacyPackageCreator({ onCreated, onCancel }: PharmacyPackageC
                   <Input value={it.dosage || ''} onChange={(e) => updateItem(idx, { dosage: e.target.value })} placeholder="e.g. Apply at night" />
                 </div>
                 <div>
+                  <Label className="text-xs">Pattern</Label>
+                  <Select value={(it as any).dosePattern || ''} onValueChange={(v: string) => {
+                    const inferred = inferFrequencyFromDosePattern(v);
+                    const inferredTiming = inferTimingFromDosePattern(v);
+                    const patch: any = { dosePattern: v };
+                    if (inferred) patch.frequency = inferred;
+                    if (!it.instructions && inferredTiming) patch.instructions = inferredTiming;
+                    updateItem(idx, patch);
+                  }}>
+                    <SelectTrigger><SelectValue placeholder="0-1-0 / q8h / prn" /></SelectTrigger>
+                    <SelectContent>
+                      {DOSE_PATTERN_OPTIONS.map((p) => (
+                        <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label className="text-xs">Frequency</Label>
-                  <Input value={it.frequency || ''} onChange={(e) => updateItem(idx, { frequency: e.target.value })} placeholder="e.g. Once daily" />
+                  <Select value={it.frequency || ''} onValueChange={(v: string) => updateItem(idx, { frequency: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select frequency" /></SelectTrigger>
+                    <SelectContent>
+                      {FREQUENCY_OPTIONS.map((f) => (
+                        <SelectItem key={f} value={f}>{f.replaceAll('_',' ')}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="flex items-end justify-between gap-2">
                   <div className="flex-1">
