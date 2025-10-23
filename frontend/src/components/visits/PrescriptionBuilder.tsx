@@ -523,6 +523,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsPendingRef = useRef(false);
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
+  const isPrintingRef = useRef(false);
   const [orderOpen, setOrderOpen] = useState(false);
   const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
@@ -1202,13 +1203,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       frequency: 'ONCE_DAILY',
       duration: 5,
       durationUnit: 'DAYS',
-      instructions: (() => {
-        try {
-          const byDrugKey = 'instr:' + (drug.name || '').trim().toLowerCase();
-          const list = readRecent(byDrugKey);
-          return list[0] || '';
-        } catch { return ''; }
-      })(),
+      instructions: '',
       route: 'Oral',
       timing: 'After meals',
       quantity: 5,
@@ -2088,6 +2083,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [autoPreview, previewOpen]);
 
   useEffect(() => {
+    // Avoid Paged.js DOM work during print preview to prevent internal nextSibling errors
+    const handleBeforePrint = () => {
+      isPrintingRef.current = true;
+      // Also clear any pending re-runs to avoid race conditions during print preview
+      pagedJsPendingRef.current = false;
+      console.warn('⏭️ Pausing Paged.js during print preview');
+    };
+    const handleAfterPrint = () => { isPrintingRef.current = false; };
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
     if (!(previewOpen || autoPreview)) return;
     let t: any;
     const run = () => {
@@ -2096,8 +2102,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setTimeout(() => setPreviewJustUpdated(false), 600);
     };
     t = setTimeout(run, 250);
-    return () => { if (t) clearTimeout(t); };
+    return () => {
+      if (t) clearTimeout(t);
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
   }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx]);
+
+  // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
+  useEffect(() => {
+    if (!(previewOpen || autoPreview)) return;
+    const globalHandler = (event: ErrorEvent | PromiseRejectionEvent) => {
+      const message = 'message' in event ? event.message : String((event as PromiseRejectionEvent).reason);
+      const stack = event instanceof ErrorEvent && event.error?.stack ? event.error.stack : '';
+      if (
+        message?.includes('nextSibling') ||
+        stack?.includes('dom.js') ||
+        stack?.includes('pagedjs') ||
+        stack?.includes('Layout.findEndToken') ||
+        stack?.includes('checkUnderflowAfterResize')
+      ) {
+        event.preventDefault?.();
+        console.warn('🔇 Suppressed pagedjs DOM error (global during preview)');
+        return true;
+      }
+    };
+    window.addEventListener('error', globalHandler as EventListener);
+    window.addEventListener('unhandledrejection', globalHandler as EventListener);
+    return () => {
+      window.removeEventListener('error', globalHandler as EventListener);
+      window.removeEventListener('unhandledrejection', globalHandler as EventListener);
+    };
+  }, [previewOpen, autoPreview]);
 
   // Unified Paged.js processing with custom controls integration
   useEffect(() => {
@@ -2118,6 +2154,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
     
     const processWithPagedJs = async () => {
+      // Skip processing if a print dialog/preview is active
+      if (isPrintingRef.current) {
+        console.warn('⏭️ Skipping Paged.js processing during print');
+        return;
+      }
       if (pagedJsRunningRef.current) {
         // Flag a pending run; the current run will trigger it in finally
         pagedJsPendingRef.current = true;
@@ -2128,6 +2169,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       
       // Store error handler reference for cleanup
       let errorHandler: ((event: ErrorEvent | PromiseRejectionEvent) => void) | null = null;
+      // Keep a handle to the temp content node so we can always clean it up
+      let tempDiv: HTMLDivElement | null = null;
       
       try {
         setPagedJsProcessing(true);
@@ -2136,9 +2179,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           console.error('⚠️ Container ref is null at processing time!');
           return;
         }
+        // If the container is not connected or currently not visible/measurable, delay processing
+        try {
+          const isConnected = (container as any).isConnected ?? document.body.contains(container);
+          const style = window.getComputedStyle(container as Element);
+          const rect = (container as Element).getBoundingClientRect();
+          if (!isConnected || style.display === 'none' || rect.width === 0 || rect.height === 0) {
+            console.warn('⏸️ Paged.js container not ready (invisible or zero-size). Delaying processing...');
+            setPagedJsProcessing(false);
+            pagedJsRunningRef.current = false;
+            setTimeout(() => {
+              // Re-run once the container is likely visible
+              if (previewOpen || autoPreview) void processWithPagedJs();
+            }, 150);
+            return;
+          }
+        } catch {
+          // If any measurement throws, bail out gracefully and retry shortly
+          setPagedJsProcessing(false);
+          pagedJsRunningRef.current = false;
+          setTimeout(() => {
+            if (previewOpen || autoPreview) void processWithPagedJs();
+          }, 150);
+          return;
+        }
         
-        // Clear previous content and force cleanup
-        container.innerHTML = '';
+        // Clear previous content and force cleanup (only if not printing)
+        if (!isPrintingRef.current) {
+          container.innerHTML = '';
+        }
         
         // Force garbage collection of previous paged.js instance
         // by ensuring we get a fresh container state
@@ -2157,10 +2226,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         
         // Create a temporary div with the content
-        const tempDiv = document.createElement('div');
+        tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
         tempDiv.style.fontFamily = 'Fira Sans, sans-serif';
         tempDiv.style.fontSize = '14px';
+        // Attach offscreen to DOM so Paged.js can safely measure layout
+        tempDiv.style.position = 'fixed';
+        tempDiv.style.left = '-10000px';
+        tempDiv.style.top = '0';
+        if (document && document.body) {
+          try {
+            document.body.appendChild(tempDiv);
+          } catch (e) {
+            console.warn('⚠️ Failed to append temp content to body:', e);
+          }
+        } else {
+          console.warn('⏸️ document.body not ready; delaying Paged.js processing');
+          setPagedJsProcessing(false);
+          pagedJsRunningRef.current = false;
+          setTimeout(() => {
+            if (previewOpen || autoPreview) void processWithPagedJs();
+          }, 150);
+          return;
+        }
+        if (!tempDiv.isConnected) {
+          console.warn('⏸️ Temp content not connected; delaying Paged.js processing');
+          setPagedJsProcessing(false);
+          pagedJsRunningRef.current = false;
+          setTimeout(() => {
+            if (previewOpen || autoPreview) void processWithPagedJs();
+          }, 150);
+          return;
+        }
         
         // Calculate margins in mm for @page rule
         const topMarginMm = effectiveTopMarginMm;
@@ -2188,12 +2285,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             // Remove all pagedjs-generated pages to clean up event listeners
             const existingPages = container.querySelectorAll('.pagedjs_page');
             existingPages.forEach(page => {
-              // Remove the page element completely
               page.remove();
             });
-            
-            // Clear the container completely
-            if (container) {
+            if (!isPrintingRef.current && container) {
               container.innerHTML = '';
             }
             pagedInstanceRef.current = null;
@@ -2261,9 +2355,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Raw CSS strings are treated as URLs by Paged.js; use an object URL instead
         const pageRulesBlob = new Blob([pageRulesCSS], { type: 'text/css' });
         const pageRulesUrl = URL.createObjectURL(pageRulesBlob);
-        let flow;
+        // Ensure a stable pages host element exists for Paged.js to render into
+        let pagesHost = container.querySelector('.pagedjs_pages') as HTMLElement | null;
+        if (!pagesHost) {
+          pagesHost = document.createElement('div');
+          pagesHost.className = 'pagedjs_pages';
+          container.appendChild(pagesHost);
+        }
+
+        // Double-check container is still connected and measurable before rendering
+        const stillConnected = (container as any).isConnected ?? document.body.contains(container);
+        if (!stillConnected) {
+          console.warn('⏸️ Container disconnected before Paged.js render; aborting.');
+          return;
+        }
+        let flow: any;
         try {
-          flow = await paged.preview(tempDiv, [pageRulesUrl], container);
+          flow = await paged.preview(tempDiv, [pageRulesUrl], pagesHost);
         } finally {
           URL.revokeObjectURL(pageRulesUrl);
         }
@@ -2481,6 +2589,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         });
       } finally {
         console.log('🏁 Paged.js processing finished (finally block)');
+        // Ensure the temporary content node is removed from DOM
+        try {
+          if (tempDiv && tempDiv.parentNode) {
+            tempDiv.parentNode.removeChild(tempDiv);
+          }
+        } catch {}
         
         // Remove the error handlers
         if (errorHandler) {
@@ -3415,6 +3529,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     visibility: visible !important;
                   }
                 }
+                /* Ensure a print-safe font stack with bullet glyph support */
+                #pagedjs-container, #pagedjs-container * {
+                  font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
+                }
+                #prescription-print-root, #prescription-print-root * {
+                  font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
+                }
                 ${rxPrintFormat === 'TEXT' ? `
                   /* Text print mode */
                   #prescription-print-content > :not(.rx-text) { display: none !important; }
@@ -3477,7 +3598,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 className="bg-white text-gray-900"
                 style={{
                   display: 'none', // Hidden - used only as source for Paged.js
-                  fontFamily: 'Fira Sans, sans-serif',
+                  fontFamily: "Fira Sans, 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif",
                   fontSize: '14px',
                 }}
               >
@@ -3540,7 +3661,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                     <div>
                       <div className="text-gray-600">Gender / DOB</div>
-                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `• ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
+                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `· ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
                     </div>
                   </div>
                   )}
@@ -4153,41 +4274,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               </Select>
                             </div>
                           </td>
-                          <td className="px-3 py-2 align-top relative">
-                            <div className="space-y-1">
-                              <Input
-                                value={it.instructions || ''}
-                                onFocus={() => setInstrFocusIdx(idx)}
-                                onBlur={(e) => {
-                                  setTimeout(() => setInstrFocusIdx((cur) => (cur === idx ? null : cur)), 120);
-                                  updateNewTplItem(idx, { instructions: e.target.value });
-                                  pushRecent('instructions', e.target.value);
-                                  const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
-                                  pushRecent(byDrugKey, e.target.value);
-                                }}
-                                onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })}
-                                placeholder="e.g., Avoid alcohol"
-                              />
-                              {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
-                                <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded shadow max-h-48 overflow-auto">
-                                  {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (
-                                    <div
-                                      key={s}
-                                      className="px-3 py-1 text-sm hover:bg-gray-50 cursor-pointer"
-                                      onMouseDown={() => {
-                                        updateNewTplItem(idx, { instructions: s });
-                                        const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
-                                        pushRecent('instructions', s);
-                                        pushRecent(byDrugKey, s);
-                                        setInstrFocusIdx(null);
-                                      }}
-                                    >
-                                      {s}
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                          <td className="px-3 py-2 align-top">
+                            <Input value={it.instructions || ''} onChange={(e) => updateNewTplItem(idx, { instructions: e.target.value })} placeholder="e.g., Avoid alcohol" />
                           </td>
                           <td className="px-3 py-2 align-top text-right">
                             <Button size="sm" variant="outline" onClick={() => removeNewTplRxItem(idx)}>Remove</Button>
