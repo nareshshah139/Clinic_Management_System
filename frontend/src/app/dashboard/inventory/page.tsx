@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   Package,
   Search,
@@ -184,10 +185,45 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold text-gray-900">Inventory Management</h1>
           <p className="text-gray-600">Track and manage your clinic&#39;s inventory</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Item
-        </Button>
+        <div className="flex gap-2">
+          <QuickGuide
+            title="Inventory Management Guide"
+            triggerVariant="ghost"
+            sections={[
+              {
+                title: "Managing Items",
+                items: [
+                  "Click 'Add Item' to create new inventory entries",
+                  "Fill in item details: name, SKU, category, and pricing",
+                  "Set reorder levels to receive low stock alerts",
+                  "Use Edit button to update item information"
+                ]
+              },
+              {
+                title: "Stock Management",
+                items: [
+                  "Click 'Stock' button to adjust item quantities",
+                  "Add positive values to increase stock",
+                  "Use negative values to record usage or damage",
+                  "Add notes to track reasons for adjustments"
+                ]
+              },
+              {
+                title: "Search & Filter",
+                items: [
+                  "Search items by name, SKU, or barcode",
+                  "Filter by category (Medicine, Equipment, Supplies)",
+                  "Filter by stock status (All, Low Stock, Out of Stock)",
+                  "View total inventory value and low stock alerts at the top"
+                ]
+              }
+            ]}
+          />
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}

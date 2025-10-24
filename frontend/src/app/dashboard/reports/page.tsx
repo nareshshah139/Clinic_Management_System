@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   BarChart3,
   Calendar,
@@ -1118,9 +1119,45 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-        <p className="text-gray-600">Generate comprehensive reports and analyze your clinic&apos;s performance</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
+          <p className="text-gray-600">Generate comprehensive reports and analyze your clinic&apos;s performance</p>
+        </div>
+        <QuickGuide
+          title="Reports & Analytics Guide"
+          sections={[
+            {
+              title: "Report Types",
+              items: [
+                "Revenue Report: Financial performance and payment analysis",
+                "Patient Analytics: Demographics and visit statistics",
+                "Doctor Performance: Productivity and revenue metrics",
+                "Appointments: Scheduling patterns and completion rates",
+                "Inventory: Stock levels and sales analysis",
+                "Payments: Transaction analysis and reconciliation"
+              ]
+            },
+            {
+              title: "Generating Reports",
+              items: [
+                "Select a report type from the cards",
+                "Set date range using the date picker",
+                "Click 'Generate Report' to create the report",
+                "View detailed metrics and breakdowns"
+              ]
+            },
+            {
+              title: "Exporting Data",
+              items: [
+                "Export reports in JSON, CSV, PDF, or Excel formats",
+                "Use exports for external analysis or record keeping",
+                "PDF exports are formatted for printing",
+                "CSV/Excel exports can be opened in spreadsheet software"
+              ]
+            }
+          ]}
+        />
       </div>
 
       {/* System Alerts */}

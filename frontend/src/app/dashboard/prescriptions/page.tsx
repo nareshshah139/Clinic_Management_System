@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { cn, formatPatientName } from '@/lib/utils';
 import { isValidId } from '@/lib/id';
+import { QuickGuide } from '@/components/common/QuickGuide';
 
 function PrescriptionPadSkeleton() {
   return (
@@ -321,7 +322,47 @@ export default function PrescriptionPadPage() {
     <Suspense fallback={<PrescriptionPadSkeleton />}>
       {/* Inject global print CSS used by preview/printing (fixed headers, page helpers) */}
       <div dangerouslySetInnerHTML={{ __html: getGlobalPrintStyleTag() }} />
-      <PrescriptionPadContent />
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Prescription Pad</h1>
+            <p className="text-gray-600">Create standalone prescriptions for patients</p>
+          </div>
+          <QuickGuide
+            title="Prescription Pad Guide"
+            sections={[
+              {
+                title: "Creating Prescriptions",
+                items: [
+                  "Search and select a patient from the search box",
+                  "Choose the prescribing doctor",
+                  "Add optional reason or note for the prescription",
+                  "Add medications using the prescription builder"
+                ]
+              },
+              {
+                title: "Adding Medications",
+                items: [
+                  "Search for drugs by name or use templates",
+                  "Specify dosage, frequency, and duration",
+                  "Add special instructions for each medication",
+                  "Configure dermatology-specific options if needed"
+                ]
+              },
+              {
+                title: "Printing & Export",
+                items: [
+                  "Preview prescription before finalizing",
+                  "Print prescription on clinic letterhead",
+                  "Download as PDF for digital records",
+                  "Prescriptions are automatically saved in patient records"
+                ]
+              }
+            ]}
+          />
+        </div>
+        <PrescriptionPadContent />
+      </div>
     </Suspense>
   );
 }

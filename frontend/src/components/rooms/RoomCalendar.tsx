@@ -1,16 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, ChevronLeft, ChevronRight, Clock, User, Stethoscope } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { getISTDateString, minutesToHHMM, hhmmToMinutes } from '@/lib/utils';
+import { getISTDateString, minutesToHHMM, hhmmToMinutes, isSlotInPast } from '@/lib/utils';
 import type { RoomSchedule } from '@/lib/types';
 import { AppointmentStatus } from '@cms/shared-types';
-import { useToast } from '@/hooks/use-toast';
 
 import type { Room } from '@/lib/types';
 
@@ -20,9 +19,18 @@ export default function RoomCalendar() {
   const [roomSchedules, setRoomSchedules] = useState<Record<string, RoomSchedule>>({});
   const [selectedRoomType, setSelectedRoomType] = useState<string>('all');
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
   const [search, setSearch] = useState('');
   const [gridMinutes, setGridMinutes] = useState<number>(30);
+  const schedulesAbortRef = useRef<AbortController | null>(null);
+  const fetchRoomsRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchSchedulesRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Tooltip state (fixed-position hover card)
+  const [hoveredApt, setHoveredApt] = useState<any | null>(null);
+  const [hoveredRoomInfo, setHoveredRoomInfo] = useState<{ name: string; type: string } | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
+  const [tooltipLocked, setTooltipLocked] = useState<boolean>(false);
+
 
   // Generate time grid from 8 AM to 8 PM using selected granularity (min 10 minutes)
   const timeSlots = (() => {
@@ -55,11 +63,11 @@ export default function RoomCalendar() {
       if (roomsList.length === 0) {
         setLoading(false);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error fetching rooms:', error);
       setRooms([]); // Ensure rooms is always an array
       setLoading(false);
-      toast({ variant: 'destructive', title: 'Failed to fetch rooms' });
+      console.error('Failed to fetch rooms:', error?.message || error);
     }
   };
 
@@ -72,7 +80,11 @@ export default function RoomCalendar() {
         rooms.map(async (room) => {
           try {
             const schedule = await apiClient.getRoomSchedule(room.id, dateStr);
-            return { id: room.id, schedule };
+            
+            return { 
+              id: room.id, 
+              schedule: schedule
+            };
           } catch (error) {
             console.error(`Error fetching schedule for room ${room.id}:`, error);
             return {
@@ -92,22 +104,34 @@ export default function RoomCalendar() {
         schedules[id] = schedule;
       }
       setRoomSchedules(schedules);
-    } catch (error) {
-      console.error('Error fetching room schedules:', error);
-      toast({ variant: 'destructive', title: 'Failed to fetch room schedules' });
+    } catch (error: any) {
+      console.error('Error fetching room schedules:', error?.message || error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchRooms();
+    // Debounce initial rooms fetch (avoid rapid mounts/rerenders causing bursts)
+    if (fetchRoomsRef.current) clearTimeout(fetchRoomsRef.current);
+    fetchRoomsRef.current = setTimeout(() => {
+      fetchRooms();
+    }, 150);
+    return () => {
+      if (fetchRoomsRef.current) clearTimeout(fetchRoomsRef.current);
+    };
   }, []);
 
   useEffect(() => {
-    if (Array.isArray(rooms) && rooms.length > 0) {
+    if (!(Array.isArray(rooms) && rooms.length > 0)) return;
+    // Debounce schedule fetches to avoid hammering backend on quick date changes
+    if (fetchSchedulesRef.current) clearTimeout(fetchSchedulesRef.current);
+    fetchSchedulesRef.current = setTimeout(() => {
       fetchRoomSchedules();
-    }
+    }, 250);
+    return () => {
+      if (fetchSchedulesRef.current) clearTimeout(fetchSchedulesRef.current);
+    };
   }, [selectedDate, rooms]);
 
   const filteredRooms = Array.isArray(rooms) ? rooms.filter(room => {
@@ -157,6 +181,7 @@ export default function RoomCalendar() {
   };
 
   const roomTypes = ['all', ...new Set(Array.isArray(rooms) ? rooms.map(room => room.type) : [])];
+
 
   const getRoomTypeIcon = (type: string) => {
     switch (type) {
@@ -341,9 +366,9 @@ export default function RoomCalendar() {
             Room Occupancy Calendar
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <div className="min-w-[800px]">
+        <CardContent style={{ overflow: 'visible' }}>
+          <div className="overflow-x-auto overflow-y-visible" style={{ overflowY: 'visible' }}>
+            <div className="min-w-[800px]" style={{ overflow: 'visible' }}>
               {/* Header Row */}
               <div className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
                 <div className="font-semibold text-sm text-gray-600 p-2">Time</div>
@@ -362,69 +387,210 @@ export default function RoomCalendar() {
               </div>
 
               {/* Time Slots */}
-              {timeSlots.map((slot) => (
-                <div key={slot.label} className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
-                  <div className="flex items-center p-2 font-medium text-sm text-gray-700" id={`time-${slot.label}`}>
-                    <Clock className="h-4 w-4 mr-1" />
-                    {slot.label}
-                  </div>
-                  {filteredRooms.map((room) => {
-                    const appointments = getAppointmentsForRange(room.id, slot.startMin, slot.endMin);
-                    return (
-                      <div key={`${room.id}-${slot.label}`} className="p-2 min-h-[56px]">
-                        {appointments.length > 0 ? (
-                          <div className="space-y-1">
-                            {appointments.map((appointment) => {
-                              const vt = (appointment.visitType || '').toUpperCase();
-                              const blockClasses = (() => {
-                                if (appointment.status === AppointmentStatus.COMPLETED) return 'bg-slate-100 border border-slate-300';
-                                if (vt === 'PROCEDURE') return 'bg-purple-50 border border-purple-200';
-                                if (vt === 'TELEMED' || vt === 'TELEMEDICINE') return 'bg-gray-100 border border-gray-200';
-                                return 'bg-blue-50 border border-blue-200';
-                              })();
-                              return (
-                                <div key={appointment.id} className={`${blockClasses} rounded p-2`}>
-                                <div className="flex items-start justify-between mb-1">
-                                  <Badge 
-                                    variant="secondary" 
-                                    className={`text-xs ${getVisitTypeColor(appointment.visitType || '')}`}
-                                  >
-                                    {appointment.visitType || 'APPT'}
-                                  </Badge>
-                                  <Badge 
-                                    variant={appointment.status === AppointmentStatus.SCHEDULED ? 'default' : 'secondary'}
-                                    className="text-xs"
-                                  >
-                                    {appointment.status}
-                                  </Badge>
-                                </div>
-                                <div className="text-xs font-medium text-gray-900 truncate">
-                                  {appointment.patient.name}
-                                </div>
-                                <div className="text-[11px] text-gray-600 truncate">
-                                  Dr. {appointment.doctor.firstName} {appointment.doctor.lastName}
-                                </div>
-                                <div className="text-[11px] text-gray-500 mt-1">
-                                  {appointment.slot}
-                                </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div className="bg-green-50 border border-green-200 rounded p-2 h-full flex items-center justify-center">
-                            <span className="text-xs text-green-600 font-medium">Available</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+              <div className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2" style={{ overflow: 'visible' }}>
+                {/* Time gutter (left) */}
+                <div className="relative" style={{ height: '80vh' }}>
+                  {timeSlots.map((slot) => (
+                    <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-gray-600"
+                      style={{ top: `${((slot.startMin - 9*60) * 100) / (9*60)}%`, transform: 'translateY(-50%)' }}
+                      id={`time-${slot.label}`}
+                    >
+                      <Clock className="h-3 w-3 mr-1" />
+                      {slot.label}
+                    </div>
+                  ))}
                 </div>
-              ))}
+                {/* Room columns */}
+                {filteredRooms.map((room) => {
+                  const schedule = roomSchedules[room.id];
+                  const appointments = schedule?.appointments || [];
+                  const dayStart = 9 * 60;
+                  const dayEnd = 18 * 60;
+                  const total = Math.max(1, dayEnd - dayStart);
+                  const dateStr = getISTDateString(selectedDate);
+                  const getColor = (vt: string, completed: boolean, slot: string) => {
+                    const isPast = isSlotInPast(slot, dateStr);
+                    
+                    // Completed status - 3 shades lighter
+                    if (completed) return 'rgba(226, 232, 240, 0.95)';
+                    
+                    const upper = (vt || '').toUpperCase();
+                    
+                    // For past appointments (not completed), use even lighter colors
+                    if (isPast) {
+                      if (upper === 'PROCEDURE') return 'rgba(245, 237, 254, 0.95)'; // very light purple
+                      if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'rgba(249, 250, 251, 0.95)'; // very light gray
+                      return 'rgba(239, 246, 255, 0.95)'; // very light blue
+                    }
+                    
+                    // Normal colors - all 3 shades lighter
+                    if (upper === 'PROCEDURE') return 'rgba(237, 233, 254, 0.95)'; // light purple
+                    if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'rgba(243, 244, 246, 0.95)'; // light gray
+                    return 'rgba(219, 234, 254, 0.95)'; // light blue
+                  };
+                  const overlapsWith = (a: any, b: any) => {
+                    const [as, ae] = (a.slot || '').split('-');
+                    const [bs, be] = (b.slot || '').split('-');
+                    if (!as || !ae || !bs || !be) return false;
+                    const a1 = hhmmToMinutes(as), a2 = hhmmToMinutes(ae);
+                    const b1 = hhmmToMinutes(bs), b2 = hhmmToMinutes(be);
+                    return a1 < b2 && a2 > b1;
+                  };
+                  return (
+                    <div key={`col-${room.id}`} className="relative bg-white rounded border group/col" style={{ height: '80vh' }}>
+                      {/* Horizontal grid lines */}
+                      {timeSlots.map((slot) => (
+                        <div key={`line-${room.id}-${slot.label}`} className="absolute left-0 right-0 border-t border-gray-200"
+                          style={{ top: `${((slot.startMin - dayStart) * 100) / total}%` }}
+                        />
+                      ))}
+                      {/* Appointment blocks */}
+                      {appointments.map((apt, idx) => {
+                        const [s, e] = (apt.slot || '').split('-');
+                        if (!s || !e) return null;
+                        const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
+                        const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
+                        if (end <= start) return null;
+                        const topPct = ((start - dayStart) * 100) / total;
+                        const heightPct = ((end - start) * 100) / total;
+                        const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
+                        const overlapping = appointments
+                          .filter((b) => overlapsWith(apt, b))
+                          .sort((a, b) => getStart(a) - getStart(b));
+                        const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
+                        const widthPct = 100 / Math.max(1, overlapping.length);
+                        const leftPct = index * widthPct;
+                        const bg = getColor(apt.visitType || '', apt.status === AppointmentStatus.COMPLETED, apt.slot);
+                        return (
+                          <div key={`apt-${room.id}-${idx}`} className="absolute rounded"
+                            style={{
+                              top: `${topPct}%`,
+                              height: `${heightPct}%`,
+                              left: `${leftPct}%`,
+                              width: `${widthPct}%`,
+                              backgroundColor: bg,
+                              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.2)',
+                              pointerEvents: 'none',
+                            }}
+                          />
+                        );
+                      })}
+                      {/* Floating labels */}
+                      {appointments.map((apt, idx) => {
+                        const [s, e] = (apt.slot || '').split('-');
+                        if (!s || !e) return null;
+                        const start = Math.max(dayStart, Math.min(hhmmToMinutes(s), dayEnd));
+                        const end = Math.max(dayStart, Math.min(hhmmToMinutes(e), dayEnd));
+                        if (end <= start) return null;
+                        const topPct = ((start - dayStart) * 100) / total;
+                        const heightPct = ((end - start) * 100) / total;
+                        return (
+                          <div
+                            key={`label-${room.id}-${idx}`}
+                            className="absolute left-0 right-0 group"
+                            style={{ top: `${topPct}%`, height: `${heightPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onMouseEnter={(e) => {
+                              const el = (e.currentTarget as HTMLElement) || null;
+                              if (!el || typeof el.getBoundingClientRect !== 'function') {
+                                // Element may be null if unmounted or event fired during layout changes
+                                setTooltipPos(null);
+                                return;
+                              }
+                              const rect = el.getBoundingClientRect();
+                              if (!rect) {
+                                setTooltipPos(null);
+                                return;
+                              }
+                              setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + 12 });
+                              setHoveredApt(apt);
+                              setHoveredRoomInfo({ name: room.name, type: room.type });
+                            }}
+                            onMouseLeave={() => {
+                              if (!tooltipLocked) {
+                                setHoveredApt(null);
+                                setHoveredRoomInfo(null);
+                                setTooltipPos(null);
+                              }
+                            }}
+                          >
+                            <div className="font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: '0.75rem', lineHeight: '1.2' }}>
+                              <div className="truncate font-semibold">
+                                {apt.patient.name}
+                              </div>
+                            </div>
+                            
+                            {/* Per-tile no inline tooltip: global fixed tooltip below */}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Global fixed tooltip - avoids parent overflow clipping */}
+      {hoveredApt && tooltipPos && (
+        <div
+          className="fixed bg-white shadow-2xl border border-gray-300 rounded-xl"
+          style={{
+            top: Math.max(8, tooltipPos.top - 120),
+            left: tooltipPos.left,
+            zIndex: 10000,
+            minWidth: 340,
+            minHeight: 240,
+            padding: 12,
+          }}
+          onMouseEnter={() => setTooltipLocked(true)}
+          onMouseLeave={() => {
+            setTooltipLocked(false);
+            setHoveredApt(null);
+            setHoveredRoomInfo(null);
+            setTooltipPos(null);
+          }}
+        >
+          <div className="text-sm space-y-2">
+            <div className="border-b border-gray-200 pb-2">
+              <div className="font-semibold text-gray-900">{hoveredApt.patient?.name}</div>
+              <div className="text-xs text-gray-600">{getISTDateString(selectedDate)} • {hoveredApt.slot}</div>
+            </div>
+            <div>
+              {hoveredApt.patient?.phone && (
+                <div className="text-xs"><span className="font-medium text-gray-700">Phone:</span> {hoveredApt.patient.phone}</div>
+              )}
+              {hoveredApt.patient?.email && (
+                <div className="text-xs"><span className="font-medium text-gray-700">Email:</span> {hoveredApt.patient.email}</div>
+              )}
+            </div>
+            <div>
+              {hoveredApt.doctor && (
+                <div className="text-xs"><span className="font-medium text-gray-700">Doctor:</span> Dr. {hoveredApt.doctor.firstName} {hoveredApt.doctor.lastName}</div>
+              )}
+              <div className="text-xs">
+                <span className="font-medium text-gray-700">Type:</span>
+                <span className={`ml-1 px-2 py-0.5 rounded text-xs font-medium ${
+                  hoveredApt.visitType === 'PROCEDURE' ? 'bg-red-100 text-red-800' :
+                  hoveredApt.visitType === 'TELEMED' ? 'bg-gray-100 text-gray-800' :
+                  'bg-blue-100 text-blue-800'
+                }`}>
+                  {hoveredApt.visitType || 'OPD'}
+                </span>
+              </div>
+              {hoveredApt.status && (
+                <div className="text-xs"><span className="font-medium text-gray-700">Status:</span> {hoveredApt.status}</div>
+              )}
+            </div>
+            {hoveredRoomInfo && (
+              <div className="text-xs">
+                <span className="font-medium text-gray-700">Room:</span> {hoveredRoomInfo.name} ({hoveredRoomInfo.type})
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       <Card>
@@ -436,24 +602,33 @@ export default function RoomCalendar() {
               <span className="text-sm">Available</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3b82f6' }} />
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
               <span className="text-sm">OPD</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#a855f7' }} />
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
               <span className="text-sm">Procedure</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6b7280' }} />
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
               <span className="text-sm">Telemedicine</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded" style={{ backgroundColor: '#94a3b8' }} />
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
               <span className="text-sm">Completed</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
+              <span className="text-sm">Past (OPD)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
+              <span className="text-sm">Past (Procedure)</span>
             </div>
           </div>
         </CardContent>
       </Card>
+
     </div>
   );
 } 

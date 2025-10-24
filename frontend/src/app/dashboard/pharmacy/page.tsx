@@ -9,6 +9,7 @@ import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { QuickGuide } from '@/components/common/QuickGuide';
 
 import {
   Receipt,
@@ -129,6 +130,39 @@ export default function PharmacyPage() {
           <p className="text-muted-foreground">Create invoices, manage packages, and handle prescriptions</p>
         </div>
         <div className="flex gap-2">
+          <QuickGuide
+            title="Pharmacy Management Guide"
+            triggerVariant="ghost"
+            sections={[
+              {
+                title: "Creating Invoices",
+                items: [
+                  "Search and select a patient to start an invoice",
+                  "Add drugs either manually or from a prescription",
+                  "Adjust quantities, apply discounts, and set GST",
+                  "Select payment mode and complete the invoice"
+                ]
+              },
+              {
+                title: "Treatment Packages",
+                items: [
+                  "Browse pre-built dermatology treatment packages",
+                  "Apply packages to quickly add multiple items",
+                  "Create custom packages for recurring treatments",
+                  "View package details including drugs and pricing"
+                ]
+              },
+              {
+                title: "Managing Drugs",
+                items: [
+                  "Navigate to 'Manage Drugs' to view drug inventory",
+                  "Add new drugs with pricing and stock information",
+                  "Update drug details, pricing, and availability",
+                  "Track drug usage and low stock alerts"
+                ]
+              }
+            ]}
+          />
           <Button variant="outline" onClick={() => router.push('/dashboard/pharmacy/invoices')}>
             <Receipt className="h-4 w-4 mr-2" />
             View Invoices

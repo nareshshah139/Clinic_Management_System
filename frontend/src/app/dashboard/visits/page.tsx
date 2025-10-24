@@ -256,6 +256,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { User, Users, Stethoscope, FileText, Calendar, Activity, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { QuickGuide } from '@/components/common/QuickGuide';
 import type {
   Appointment,
   GetPatientsResponse,
@@ -1125,15 +1126,67 @@ function VisitsPageInner() {
   if (!showForm) {
     return (
       <div className="space-y-6">
+        {/* Header with Guide */}
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Visit Documentation</h1>
+            <p className="text-gray-600">Create and manage patient visits with role-based documentation</p>
+          </div>
+          <QuickGuide
+            title="Visit Documentation Guide"
+            sections={[
+              {
+                title: "Starting a Visit",
+                items: [
+                  "Select a patient from the search bar or dropdown",
+                  "Choose the consulting doctor",
+                  "View patient history in the 'Patient History' tab",
+                  "Click 'Start Visit Documentation' to begin"
+                ]
+              },
+              {
+                title: "Role-Based Access",
+                items: [
+                  "Therapist: Record vitals, photos, and basic assessments (20-25%)",
+                  "Nurse: Record vitals, photos, complaints, and assessments",
+                  "Doctor: Complete SOAP documentation and prescriptions",
+                  "Each role sees features appropriate to their scope"
+                ]
+              },
+              {
+                title: "Visit Documentation",
+                items: [
+                  "Follow the SOAP format: Subjective, Objective, Assessment, Plan",
+                  "Record vitals, complaints, examination findings",
+                  "Add dermatology-specific assessments and procedures",
+                  "Create prescriptions with medications and instructions",
+                  "Upload photos to document patient condition",
+                  "Set follow-up appointments and review dates"
+                ]
+              },
+              {
+                title: "Patient History",
+                items: [
+                  "View complete timeline of past visits",
+                  "See previous diagnoses and treatments",
+                  "Access past prescriptions and photos",
+                  "Resume incomplete visits from history",
+                  "Track patient progress over time"
+                ]
+              }
+            ]}
+          />
+        </div>
+        
         {/* Role Information */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
-              Visit Documentation
+              Your Role & Permissions
             </CardTitle>
             <CardDescription>
-              Create and manage patient visits with role-based documentation
+              Features available based on your role: {roleInfo.label}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1422,6 +1475,39 @@ function VisitsPageInner() {
           )}
         </div>
         <div className="flex gap-2">
+          <QuickGuide
+            title="Visit Documentation Guide"
+            triggerVariant="ghost"
+            sections={[
+              {
+                title: "Documenting the Visit",
+                items: [
+                  "Fill out sections in order: Vitals → History → Examination → Assessment → Plan",
+                  "Use expandable sections to keep the form organized",
+                  "Save progress automatically as you work",
+                  "Mark visit as complete when finished"
+                ]
+              },
+              {
+                title: "Prescriptions",
+                items: [
+                  "Add medications from the drug database",
+                  "Configure dosage, frequency, and duration",
+                  "Add special dermatology instructions (application site, timing, etc.)",
+                  "Preview and print prescription for the patient"
+                ]
+              },
+              {
+                title: "Photos & Documentation",
+                items: [
+                  "Upload photos to document patient condition",
+                  "Photos are automatically attached to the visit",
+                  "Use photos to track treatment progress",
+                  "All photos are stored securely in patient records"
+                ]
+              }
+            ]}
+          />
           {appointmentData && (
             <Button variant="outline" onClick={() => window.history.back()}>
               <ArrowLeft className="h-4 w-4 mr-2" />

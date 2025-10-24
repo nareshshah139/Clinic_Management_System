@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { apiClient } from '@/lib/api';
 import { Zap, User, Activity, Settings, Save } from 'lucide-react';
 import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
+import { QuickGuide } from '@/components/common/QuickGuide';
 
 // Machine configurations
 const MACHINES = {
@@ -499,13 +500,50 @@ export default function SmartProceduresPage() {
       {/* Header */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-6 w-6 text-blue-600" />
-            Smart Procedures Management
-          </CardTitle>
-          <CardDescription>
-            Advanced procedure planning and tracking with machine-specific parameters
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-6 w-6 text-blue-600" />
+                Smart Procedures Management
+              </CardTitle>
+              <CardDescription>
+                Advanced procedure planning and tracking with machine-specific parameters
+              </CardDescription>
+            </div>
+            <QuickGuide
+              title="Procedures Management Guide"
+              triggerVariant="ghost"
+              sections={[
+                {
+                  title: "Creating Procedures",
+                  items: [
+                    "Select patient, doctor, and nurse/therapist for the procedure",
+                    "Choose the treatment machine (Endymed, Fotona, Soprano, Hydrafacial)",
+                    "Fill in session number and body parts being treated",
+                    "Record shot counts and skin type assessments"
+                  ]
+                },
+                {
+                  title: "Machine Parameters",
+                  items: [
+                    "Configure parameters specific to the selected machine",
+                    "Enter values for each pass of the treatment",
+                    "Different machines have different parameter sets",
+                    "All values are recorded for safety and compliance"
+                  ]
+                },
+                {
+                  title: "Procedure History",
+                  items: [
+                    "View past procedures for the selected patient",
+                    "Load previous procedure data to repeat treatments",
+                    "Track treatment progression over sessions",
+                    "Compare parameters across different sessions"
+                  ]
+                }
+              ]}
+            />
+          </div>
         </CardHeader>
       </Card>
 

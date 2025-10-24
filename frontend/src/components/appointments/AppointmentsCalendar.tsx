@@ -14,7 +14,7 @@ import DoctorDayCalendar from '@/components/appointments/DoctorDayCalendar';
 import { Badge } from '@/components/ui/badge';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import { AppointmentStatus } from '@cms/shared-types';
 
 interface AppointmentsCalendarProps {
@@ -60,6 +60,7 @@ export default function AppointmentsCalendar({
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
   const [gridMinutes, setGridMinutes] = useState<number>(30);
+  const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
@@ -92,6 +93,7 @@ export default function AppointmentsCalendar({
     // Clear transient highlights when doctor/date changes
     setBookingDetails(null);
     setOptimisticAppointment(null);
+    setRecentBookedSlot('');
     // Fetch rooms when doctor/date changes
     if (doctorId && date) {
       void fetchRooms();
@@ -226,15 +228,17 @@ export default function AppointmentsCalendar({
       setOptimisticAppointment(null);
       setRefreshKey(prev => prev + 1);
       
-      // Set success feedback
+      // Set success feedback and highlight newly booked slot
       setBookingDetails(created);
+      setRecentBookedSlot(finalSlot);
       
       // Refresh rooms after booking
       void fetchRooms();
       
-      // Clear success message after 5 seconds
+      // Clear success message and highlight after 5 seconds
       setTimeout(() => {
         setBookingDetails(null);
+        setRecentBookedSlot('');
       }, 5000);
       
       // Close dialog
@@ -400,20 +404,28 @@ export default function AppointmentsCalendar({
             <h3 className="font-semibold mb-2">Legend</h3>
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#3b82f6' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
                 <span className="text-sm">OPD</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#a855f7' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
                 <span className="text-sm">Procedure</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#6b7280' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
                 <span className="text-sm">Telemedicine</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#94a3b8' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
                 <span className="text-sm">Completed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
+                <span className="text-sm">Past (OPD)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
+                <span className="text-sm">Past (Procedure)</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
@@ -457,7 +469,7 @@ export default function AppointmentsCalendar({
           <DoctorDayCalendar
             doctorId={doctorId}
             date={date}
-            recentBookedSlot={undefined}
+            recentBookedSlot={recentBookedSlot}
             visitTypeFilter={visitTypeFilter}
             roomFilter={roomFilter}
             onSelectSlot={handleBookingRequest}

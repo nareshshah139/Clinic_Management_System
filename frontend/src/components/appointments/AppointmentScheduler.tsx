@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import type { User, Patient, AppointmentInSlot, AvailableSlot, TimeSlotConfig, GetUsersResponse, GetPatientsResponse, GetRoomsResponse, GetAvailableSlotsResponse, GetDoctorScheduleResponse, VisitType, Appointment } from '@/lib/types';
 import AppointmentBookingDialog from './AppointmentBookingDialog';
 import PatientQuickCreateDialog from './PatientQuickCreateDialog';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Info } from 'lucide-react';
 import DoctorDayCalendar from './DoctorDayCalendar';
 import { AppointmentStatus } from '@cms/shared-types';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';

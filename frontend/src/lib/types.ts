@@ -52,10 +52,12 @@ export interface RoomSchedule {
   appointments: Array<{
     id: string;
     slot: string;
-    patient: { id: string; name: string; phone?: string; email?: string };
+    patient: { id: string; name: string; phone?: string; email?: string; gender?: string; dob?: string; age?: number };
     doctor: { id: string; firstName: string; lastName: string };
     visitType?: string;
     status?: string;
+    isFollowUp?: boolean;
+    visit?: { id: string; status?: string | null };
   }>;
 }
 
@@ -99,12 +101,13 @@ export interface Appointment {
 export interface AppointmentInSlot {
   id: string;
   slot: string;
-  patient: { id: string; name: string; phone?: string; email?: string };
+  patient: { id: string; name: string; phone?: string; email?: string; gender?: string; dob?: string; age?: number };
   doctor: { id?: string; firstName: string; lastName: string };
   visitType: VisitType;
   room?: { id: string; name: string; type: string };
   status: AppointmentStatus;
   visit?: { id: string; status?: string | null };
+  isFollowUp?: boolean;
 }
 
 // Available Slots

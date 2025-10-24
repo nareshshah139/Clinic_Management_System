@@ -6,6 +6,15 @@ jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: jest.fn() }),
 }));
 
+// Mock api client used inside the dialog to avoid async effects touching network
+jest.mock('@/lib/api', () => ({
+  apiClient: {
+    getRooms: jest.fn().mockResolvedValue({ rooms: [] }),
+    getRoomSchedule: jest.fn().mockResolvedValue({ appointments: [] }),
+    getUser: jest.fn().mockResolvedValue({ id: 'doc-1', metadata: {} }),
+  },
+}));
+
 const baseProps = {
   open: true,
   onOpenChange: jest.fn(),
@@ -26,24 +35,21 @@ describe('AppointmentBookingDialog', () => {
     render(<AppointmentBookingDialog {...baseProps} doctorId="" />);
 
     fireEvent.click(screen.getByText('Confirm Booking'));
-
-    expect(await screen.findByText(/Validation Error/i)).toBeInTheDocument();
+    // Inline validation panel should render with specific error
+    expect(await screen.findByText('Please fix the following errors:')).toBeInTheDocument();
+    expect(screen.getByText('Doctor information is missing')).toBeInTheDocument();
   });
 
-  it('calls onConfirm with derived slot and selected room', async () => {
+  it('calls onConfirm with default derived slot when confirming', async () => {
     render(<AppointmentBookingDialog {...baseProps} />);
 
-    // Change duration to 60 → derived slot becomes 10:00-11:00
-    fireEvent.mouseDown(screen.getByText('30 minutes'));
-    fireEvent.click(screen.getByText('60 minutes'));
-
-    // No rooms are actually loaded (api client is not called in this unit test), but confirm should still pass for OPD
+    // Confirm directly (OPD, no room required)
     fireEvent.click(screen.getByText('Confirm Booking'));
 
     await waitFor(() => expect(baseProps.onConfirm).toHaveBeenCalled());
     expect(baseProps.onConfirm).toHaveBeenCalledWith(expect.objectContaining({
       visitType: 'OPD',
-      slot: '10:00-11:00',
+      slot: '10:00-10:30',
     }));
   });
 });

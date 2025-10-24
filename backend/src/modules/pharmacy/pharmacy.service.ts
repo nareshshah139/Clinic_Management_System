@@ -7,6 +7,32 @@ export class PharmacyService {
 
   async getDashboard(branchId: string) {
     try {
+      // Handle null/undefined branchId
+      if (!branchId) {
+        console.warn('[PharmacyService] getDashboard called with null/undefined branchId');
+        // Return empty dashboard data
+        return {
+          todaySales: 0,
+          todaySalesCompleted: 0,
+          todayGrowth: 0,
+          monthSales: 0,
+          monthGrowth: 0,
+          todayInvoices: 0,
+          todayCompletedInvoices: 0,
+          todayPendingInvoices: 0,
+          totalInvoices: 0,
+          completedInvoices: 0,
+          pendingInvoices: 0,
+          totalDrugs: 0,
+          lowStockDrugs: 0,
+          expiredDrugs: 0,
+          packagesCount: 0,
+          topSellingDrugs: [],
+          recentInvoices: [],
+          lowStockAlerts: [],
+        };
+      }
+
       const prisma = this.prisma as any;
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -116,26 +142,40 @@ export class PharmacyService {
         }),
 
         // Top selling drugs this month
-        prisma.pharmacyInvoiceItem.groupBy({
-          by: ['drugId'],
-          where: {
-            invoice: {
+        (async () => {
+          // First get completed invoice IDs for this month
+          const completedInvoices = await prisma.pharmacyInvoice.findMany({
+            where: {
               branchId,
               invoiceDate: { gte: monthStart },
               paymentStatus: 'COMPLETED',
             },
-          },
-          _sum: {
-            quantity: true,
-            totalAmount: true,
-          },
-          orderBy: {
-            _sum: {
-              totalAmount: 'desc',
+            select: { id: true },
+          });
+          const invoiceIds = completedInvoices.map((inv: any) => inv.id);
+          
+          if (invoiceIds.length === 0) {
+            return [];
+          }
+
+          // Now group by drugId without the relation filter
+          return prisma.pharmacyInvoiceItem.groupBy({
+            by: ['drugId'],
+            where: {
+              invoiceId: { in: invoiceIds },
             },
-          },
-          take: 5,
-        }),
+            _sum: {
+              quantity: true,
+              totalAmount: true,
+            },
+            orderBy: {
+              _sum: {
+                quantity: 'desc', // Use quantity instead of totalAmount to avoid ambiguity
+              },
+            },
+            take: 5,
+          });
+        })(),
 
         // Recent invoices
         prisma.pharmacyInvoice.findMany({
@@ -233,12 +273,21 @@ export class PharmacyService {
         })),
       };
     } catch (error) {
+      console.error('[PharmacyService] getDashboard error:', error);
       throw new Error(`Failed to get dashboard data: ${error.message}`);
     }
   }
 
   async getSalesStats(branchId: string) {
     try {
+      if (!branchId) {
+        console.warn('[PharmacyService] getSalesStats called with null/undefined branchId');
+        return {
+          today: { amount: 0, count: 0 },
+          week: { amount: 0, count: 0 },
+          month: { amount: 0, count: 0 },
+        };
+      }
       const prisma = this.prisma as any;
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -298,17 +347,32 @@ export class PharmacyService {
 
   async getTopSellingDrugs(branchId: string, limit: number = 10) {
     try {
+      if (!branchId) {
+        console.warn('[PharmacyService] getTopSellingDrugs called with null/undefined branchId');
+        return [];
+      }
       const prisma = this.prisma as any;
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+
+      // First get completed invoice IDs for this month
+      const completedInvoices = await prisma.pharmacyInvoice.findMany({
+        where: {
+          branchId,
+          invoiceDate: { gte: monthStart },
+          paymentStatus: 'COMPLETED',
+        },
+        select: { id: true },
+      });
+      const invoiceIds = completedInvoices.map((inv: any) => inv.id);
+      
+      if (invoiceIds.length === 0) {
+        return [];
+      }
 
       const topSelling = await prisma.pharmacyInvoiceItem.groupBy({
         by: ['drugId'],
         where: {
-          invoice: {
-            branchId,
-            invoiceDate: { gte: monthStart },
-            paymentStatus: 'COMPLETED',
-          },
+          invoiceId: { in: invoiceIds },
         },
         _sum: {
           quantity: true,
@@ -316,7 +380,7 @@ export class PharmacyService {
         },
         orderBy: {
           _sum: {
-            totalAmount: 'desc',
+            quantity: 'desc',
           },
         },
         take: limit,
@@ -352,6 +416,10 @@ export class PharmacyService {
 
   async getRecentInvoices(branchId: string, limit: number = 10) {
     try {
+      if (!branchId) {
+        console.warn('[PharmacyService] getRecentInvoices called with null/undefined branchId');
+        return [];
+      }
       const prisma = this.prisma as any;
       const invoices = await prisma.pharmacyInvoice.findMany({
         where: { branchId },
@@ -384,6 +452,14 @@ export class PharmacyService {
 
   async getAlerts(branchId: string) {
     try {
+      if (!branchId) {
+        console.warn('[PharmacyService] getAlerts called with null/undefined branchId');
+        return {
+          lowStock: [],
+          expired: [],
+          nearExpiry: [],
+        };
+      }
       // Mock low stock alerts for now
       const prisma = this.prisma as any;
       const drugs = await prisma.drug.findMany({

@@ -24,6 +24,23 @@ export function formatPatientName(patient: MinimalPatient): string {
   return `Patient ${patient.id?.slice(-4) || 'Unknown'}`;
 }
 
+// Calculate age from date of birth
+export function calculateAge(dob: string | Date): number | null {
+  if (!dob) return null;
+  try {
+    const birthDate = new Date(dob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
+  } catch {
+    return null;
+  }
+}
+
 // Default time slot configuration for IST
 export const DEFAULT_TIME_SLOT_CONFIG: TimeSlotConfig = {
   startHour: 9,

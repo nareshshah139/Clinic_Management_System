@@ -9,6 +9,7 @@ import { apiClient } from '@/lib/api';
 import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
+import { QuickGuide } from '@/components/common/QuickGuide';
 
 export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
@@ -168,9 +169,40 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
+        </div>
+        <QuickGuide
+          title="Dashboard Guide"
+          sections={[
+            {
+              title: "Overview",
+              items: [
+                "View key metrics including total users, active users, and branches",
+                "Monitor system status and health at a glance",
+                "Check today's appointments and upcoming schedule"
+              ]
+            },
+            {
+              title: "System Alerts",
+              items: [
+                "Important notifications appear in the alerts section",
+                "Alerts are color-coded by severity (red=high, yellow=medium, blue=low)",
+                "Click on any alert to view more details"
+              ]
+            },
+            ...(showAdminControls ? [{
+              title: "Admin Controls",
+              items: [
+                "Create database backups from the admin controls section",
+                "Backups are stored locally on the server",
+                "Regular backups are recommended for data safety"
+              ]
+            }] : [])
+          ]}
+        />
       </div>
 
       {/* Statistics Cards */}

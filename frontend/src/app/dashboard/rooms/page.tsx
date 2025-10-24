@@ -6,6 +6,7 @@ import RoomCalendar from '@/components/rooms/RoomCalendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Settings } from 'lucide-react';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { QuickGuide } from '@/components/common/QuickGuide';
 
 export default function RoomsPage() {
   const [activeTab, setActiveTab] = useState('calendar');
@@ -22,6 +23,38 @@ export default function RoomsPage() {
             Manage room schedules, occupancy, and configurations
           </p>
         </div>
+        <QuickGuide
+          title="Room Management Guide"
+          sections={[
+            {
+              title: "Calendar View",
+              items: [
+                "View all room occupancy in a visual calendar format",
+                "See which appointments are assigned to each room",
+                "Identify available time slots across all rooms",
+                "Click on appointments to view details or reassign rooms"
+              ]
+            },
+            {
+              title: "Managing Rooms",
+              items: [
+                "Add new rooms with name, type, and capacity",
+                "Configure room amenities and equipment",
+                "Set room availability schedules",
+                "Mark rooms as active or inactive as needed"
+              ]
+            },
+            {
+              title: "Room Assignment",
+              items: [
+                "Assign rooms to appointments during booking",
+                "Reassign rooms if conflicts arise",
+                "View room utilization metrics",
+                "Track room cleaning and maintenance schedules"
+              ]
+            }
+          ]}
+        />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">

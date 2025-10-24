@@ -1,0 +1,48 @@
+name: CI - Backend and Frontend Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install root deps
+        run: npm ci
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci
+
+      - name: Build shared types
+        working-directory: shared-types
+        run: npm ci && npm run build
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test -- --ci --runInBand
+
+      - name: Run backend appointments tests
+        working-directory: backend
+        run: npm run test:appointments --silent

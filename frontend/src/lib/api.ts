@@ -51,74 +51,114 @@ export class ApiClient {
     extra?: { timeoutMs?: number }
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
-    const headers: Record<string, string> = {
+    const baseHeaders: Record<string, string> = {
       ...((options.headers as Record<string, string>) || {}),
     };
     if (options.body !== undefined && !(options.body instanceof FormData)) {
-      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+      baseHeaders['Content-Type'] = baseHeaders['Content-Type'] || 'application/json';
     }
 
     // Do not attach Authorization header; rely on HttpOnly cookie
 
-    const controller = new AbortController();
-    const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs : undefined;
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    if (timeoutMs) {
-      timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
-    }
+    const method = ((options.method || 'GET') as string).toUpperCase();
+    const isSafeMethod = method === 'GET' || method === 'HEAD';
+    const maxRetries = isSafeMethod ? 2 : 0; // only retry safe/idempotent reads by default
 
-    let response: Response;
-    try {
-      response = await fetch(url, {
-        ...options,
-        headers,
-        credentials: 'include',
-        signal: controller.signal,
-      });
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        const apiErr: ApiError = new Error('Request timed out');
-        apiErr.status = 408;
-        apiErr.body = { message: 'Request timed out' };
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const controller = new AbortController();
+      const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs : undefined;
+      let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+      if (timeoutMs) {
+        timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+      }
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          ...options,
+          headers: baseHeaders,
+          credentials: 'include',
+          signal: controller.signal,
+        });
+      } catch (err: any) {
+        if (err?.name === 'AbortError') {
+          const apiErr: ApiError = new Error('Request timed out');
+          apiErr.status = 408;
+          apiErr.body = { message: 'Request timed out' };
+          throw apiErr;
+        }
+        // For network errors, do not auto-retry unsafe methods
+        if (attempt < maxRetries) {
+          const backoffMs = Math.min(2000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+          await new Promise((r) => setTimeout(r, backoffMs));
+          continue;
+        }
+        throw err;
+      } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+      }
+
+      if (!response.ok) {
+        // Handle 429 with backoff for safe methods
+        if (response.status === 429 && attempt < maxRetries) {
+          const retryAfter = response.headers.get('Retry-After');
+          let delayMs = 0;
+          if (retryAfter) {
+            const seconds = parseInt(retryAfter, 10);
+            if (!Number.isNaN(seconds)) {
+              delayMs = seconds * 1000;
+            } else {
+              const dateMs = Date.parse(retryAfter);
+              if (!Number.isNaN(dateMs)) {
+                delayMs = Math.max(0, dateMs - Date.now());
+              }
+            }
+          }
+          if (delayMs <= 0) {
+            delayMs = Math.min(3000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+          }
+          await new Promise((r) => setTimeout(r, delayMs));
+          continue;
+        }
+
+        let body: { message?: string } | null = null;
+        try {
+          body = (await response.json()) as { message?: string };
+        } catch {
+          try {
+            const text = await response.text();
+            body = { message: text || 'Network error' };
+          } catch {
+            body = { message: 'Network error' };
+          }
+        }
+        const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
+        apiErr.status = response.status;
+        apiErr.body = body;
         throw apiErr;
       }
-      throw err;
-    } finally {
-      if (timeoutHandle) clearTimeout(timeoutHandle);
-    }
 
-    if (!response.ok) {
-      let body: { message?: string } | null = null;
-      try {
-        body = (await response.json()) as { message?: string };
-      } catch {
-        try {
-          const text = await response.text();
-          body = { message: text || 'Network error' };
-        } catch {
-          body = { message: 'Network error' };
-        }
+      if (response.status === 204) {
+        return undefined as T;
       }
-      const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
-      apiErr.status = response.status;
-      apiErr.body = body;
-      throw apiErr;
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        // Surface a clear error so callers can handle gracefully instead of crashing on undefined
+        let text = '';
+        try { text = await response.text(); } catch {}
+        const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
+        apiErr.status = response.status;
+        apiErr.body = { message: 'Unexpected non-JSON response' };
+        throw apiErr;
+      }
+      return (await response.json()) as T;
     }
 
-    if (response.status === 204) {
-      return undefined as T;
-    }
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-      // Surface a clear error so callers can handle gracefully instead of crashing on undefined
-      let text = '';
-      try { text = await response.text(); } catch {}
-      const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
-      apiErr.status = response.status;
-      apiErr.body = { message: 'Unexpected non-JSON response' };
-      throw apiErr;
-    }
-    return (await response.json()) as T;
+    // Should not reach here
+    const apiErr: ApiError = new Error('Request failed');
+    apiErr.status = 500;
+    apiErr.body = { message: 'Request failed' };
+    throw apiErr;
   }
 
   // Generic CRUD operations

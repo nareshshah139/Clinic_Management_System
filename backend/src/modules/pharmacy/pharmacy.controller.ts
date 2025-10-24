@@ -25,7 +25,9 @@ export class PharmacyController {
   @ApiOperation({ summary: 'Get pharmacy dashboard statistics' })
   @ApiResponse({ status: 200, description: 'Dashboard data retrieved successfully' })
   async getDashboard(@Request() req: any) {
-    return this.pharmacyService.getDashboard(req.user.branchId);
+    const branchId = req.user?.branchId;
+    console.log(`[PharmacyController] getDashboard - branchId: ${branchId}, user:`, req.user);
+    return this.pharmacyService.getDashboard(branchId);
   }
 
   @Get('dashboard/sales')
