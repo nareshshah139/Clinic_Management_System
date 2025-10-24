@@ -4,6 +4,8 @@ ENV NODE_ENV=production
 RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
+# Install build dependencies for native modules
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
@@ -11,6 +13,9 @@ FROM node:20-slim AS builder
 WORKDIR /app
 RUN apt-get update && apt-get install -y openssl python3 build-essential && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
+# Set environment variables to optimize npm installation
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+ENV SKIP_POSTINSTALL=0
 RUN npm ci
 COPY tsconfig*.json nest-cli.json ./
 COPY src ./src

@@ -934,3 +934,4 @@ The pharmacy packages feature is now fully functional with comprehensive dermato
 [2025-09-21] Verification: Previous state was JWT-only with missing controller RBAC; now Roles/Permissions guards are registered and endpoints annotated (Appointments, Billing, Inventory, Pharmacy). Remaining: tighten Patients branch scoping and prescriptions ownership checks.
 
 2025-09-21: Seeded default RBAC permission sets per role (backend/scripts/seed_rbac.ts), updated assignRole to propagate defaults, added Users UI role/permissions toggle and API methods.
+[2025-10-24 16:15 UTC] Build Fix: Resolved npm @swc/core "Bus error (core dumped)" by adding python3 and build-essential to backend Dockerfile deps stage, increasing Node memory to 4GB in builder stage and Railway config, and creating .npmrc with optimized build settings. Created NPM_SWC_BUILD_FIX.md comprehensive troubleshooting guide.
