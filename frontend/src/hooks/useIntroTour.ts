@@ -80,8 +80,7 @@ export function useIntroTour(options: TourOptions) {
       if (typeof window !== 'undefined') {
         const introJs = (await import('intro.js')).default;
         
-        // Use the new tour() API instead of deprecated introJs()
-        introRef.current = introJs.tour ? introJs.tour() : introJs();
+        introRef.current = introJs();
         
         if (introRef.current) {
           introRef.current.setOptions({
@@ -164,7 +163,7 @@ export function useIntroTour(options: TourOptions) {
       if (firstSelector) {
         // Try to wait for the first element before starting, but don't block forever
         void (async () => {
-          try {
+      try {
             await waitForElement(firstSelector, 5000);
           } catch {}
           try { introRef.current?.start(); } catch (e) { console.error('Error starting tour:', e); }
@@ -172,9 +171,9 @@ export function useIntroTour(options: TourOptions) {
       } else {
         introRef.current.start();
       }
-    } catch (e) {
-      console.error('Error starting tour:', e);
-    }
+      } catch (e) {
+        console.error('Error starting tour:', e);
+      }
   }, [options.steps, waitForElement]);
 
   const exit = useCallback(() => {
