@@ -100,32 +100,39 @@ if (typeof window !== 'undefined') {
       }
       
       .introjs-skipbutton {
-        background: #ffffff !important;
-        color: #ef4444 !important;
-        font-weight: 600 !important;
+        background: #ef4444 !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
         border: 2px solid #ef4444 !important;
-        border-radius: 8px !important;
-        padding: 10px 20px !important;
+        border-radius: 50% !important;
+        padding: 8px !important;
+        width: 36px !important;
+        height: 36px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         transition: all 0.2s !important;
         text-shadow: none !important;
-        font-size: 14px !important;
+        font-size: 18px !important;
         cursor: pointer !important;
         position: static !important;
-        display: inline-block !important;
         margin: 0 4px !important;
         white-space: nowrap !important;
+        min-width: unset !important;
       }
       
       .introjs-skipbutton:hover {
-        background: #ef4444 !important;
+        background: #dc2626 !important;
         color: #ffffff !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+        transform: translateY(-1px) scale(1.05) !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.5) !important;
+        border-color: #dc2626 !important;
       }
       
       .introjs-skipbutton:before {
-        content: "✕ " !important;
-        font-weight: bold !important;
+        content: "✕" !important;
+        font-weight: 700 !important;
+        font-size: 20px !important;
       }
       
       /* Button navigation wrapper */
@@ -512,52 +519,88 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </div>
             
             <p class="text-sm text-gray-700 leading-relaxed">
-              Appointments are color-coded so you can quickly see their status at a glance:
+              Appointments in the calendar are color-coded by <strong>visit type</strong>, 
+              not by status. This helps you quickly identify different types of consultations at a glance.
             </p>
             
             <div class="space-y-2 mt-3">
-              <div class="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-                <div class="w-12 h-12 bg-blue-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold">S</div>
+              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(219, 234, 254, 0.3); border-color: #3b82f6;">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-sm" 
+                     style="background-color: rgba(219, 234, 254, 0.95); color: #1e40af;">OPD</div>
                 <div class="flex-1">
-                  <p class="font-bold text-blue-900">Scheduled (Blue)</p>
-                  <p class="text-xs text-blue-800">Appointment is booked, patient hasn't arrived yet</p>
+                  <p class="font-bold text-blue-900">OPD Consultations (Light Blue)</p>
+                  <p class="text-xs text-blue-800">Standard outpatient appointments for regular consultations</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg border-l-4 border-yellow-500">
-                <div class="w-12 h-12 bg-yellow-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold">✓</div>
+              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(237, 233, 254, 0.3); border-color: #a855f7;">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xs"
+                     style="background-color: rgba(237, 233, 254, 0.95); color: #6b21a8;">PROC</div>
                 <div class="flex-1">
-                  <p class="font-bold text-yellow-900">Checked-In (Yellow)</p>
-                  <p class="text-xs text-yellow-800">Patient has arrived and is waiting. Doctor should see them soon.</p>
-                  <p class="text-xs text-yellow-700 mt-1 font-medium">→ Your action: Assign a room if needed</p>
+                  <p class="font-bold text-purple-900">Procedures (Light Purple)</p>
+                  <p class="text-xs text-purple-800">Clinical procedures, treatments, laser sessions, and aesthetic services</p>
+                </div>
+              </div>
+              
+              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(243, 244, 246, 0.5); border-color: #9ca3af;">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xs"
+                     style="background-color: rgba(243, 244, 246, 0.95); color: #374151;">TELE</div>
+                <div class="flex-1">
+                  <p class="font-bold text-gray-900">Telemedicine (Light Gray)</p>
+                  <p class="text-xs text-gray-800">Virtual consultations via phone or video call</p>
+                </div>
+              </div>
+              
+              <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border-l-4 border-slate-400">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xl"
+                     style="background-color: rgba(226, 232, 240, 0.95); color: #475569;">✓</div>
+                <div class="flex-1">
+                  <p class="font-bold text-slate-900">Completed (Lighter Gray)</p>
+                  <p class="text-xs text-slate-800">Doctor finished consultation - ready for billing</p>
+                  <p class="text-xs text-slate-700 mt-1 font-medium">→ Your action: Process payment if not done yet</p>
                 </div>
               </div>
               
               <div class="flex items-center gap-3 p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                <div class="w-12 h-12 bg-green-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold">✓✓</div>
+                <div class="w-12 h-12 bg-green-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-xl">★</div>
                 <div class="flex-1">
-                  <p class="font-bold text-green-900">Completed (Green)</p>
-                  <p class="text-xs text-green-800">Doctor finished consultation. Ready for billing.</p>
-                  <p class="text-xs text-green-700 mt-1 font-medium">→ Your action: Process payment if not done yet</p>
+                  <p class="font-bold text-green-900">Newly Booked (Green Highlight)</p>
+                  <p class="text-xs text-green-800">Just booked in the last few seconds - temporary visual feedback</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 bg-red-50 rounded-lg border-l-4 border-red-500">
-                <div class="w-12 h-12 bg-red-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold">✕</div>
+              <div class="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border-l-4 border-amber-500">
+                <div class="w-12 h-12 bg-amber-400 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-lg">⏳</div>
                 <div class="flex-1">
-                  <p class="font-bold text-red-900">Cancelled (Red)</p>
-                  <p class="text-xs text-red-800">Appointment was cancelled by patient or doctor</p>
-                  <p class="text-xs text-red-700 mt-1">The time slot becomes available for rebooking</p>
+                  <p class="font-bold text-amber-900">Booking In Progress (Yellow)</p>
+                  <p class="text-xs text-amber-800">Someone is currently booking this slot - wait for it to complete</p>
                 </div>
               </div>
             </div>
             
-            <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 text-xs mt-3">
-              <p class="font-semibold text-indigo-900 mb-1">💡 Quick Glance Check:</p>
-              <p class="text-indigo-800">
-                <strong>Lots of Yellow?</strong> Busy waiting room - notify doctor.<br>
-                <strong>Lots of Green?</strong> Process pending bills.<br>
-                <strong>Lots of Blue in past hours?</strong> Patients might be no-shows - call to confirm.
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-xs mt-3">
+              <p class="font-semibold text-blue-900 mb-1">ℹ️ Viewing Appointment Status:</p>
+              <p class="text-blue-800">
+                To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
+                <strong>double-click the appointment</strong> to open the details dialog. 
+                The status is shown as text in the dialog.
+              </p>
+            </div>
+            
+            <div class="bg-purple-50 p-3 rounded-lg border border-purple-200 text-xs mt-2">
+              <p class="font-semibold text-purple-900 mb-1">🔍 Finding the Legend:</p>
+              <p class="text-purple-800">
+                The calendar page shows a color legend at the top explaining all colors. 
+                Refer to it anytime you need a reminder of what each color means!
+              </p>
+            </div>
+            
+            <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs mt-2">
+              <p class="font-semibold text-amber-900 mb-1">💡 Pro Tip:</p>
+              <p class="text-amber-800">
+                <strong>Past appointments</strong> show in even lighter shades. 
+                <strong>Cancelled appointments</strong> don't appear in the calendar at all - 
+                they're filtered out to keep the view clean!
               </p>
             </div>
           </div>
@@ -1003,7 +1046,7 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
     showBullets: true,
     exitOnEsc: true,
     exitOnOverlayClick: true,
-    skipLabel: 'Exit Tour',
+    skipLabel: '',
     doneLabel: 'Finish',
   });
 
@@ -1049,4 +1092,5 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
     </Button>
   );
 }
+
 
