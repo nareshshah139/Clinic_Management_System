@@ -64,7 +64,30 @@ export class PermissionsGuard implements CanActivate {
       }
     }
 
+    // Merge in role default permissions (union) before evaluating
+    let rolePermissions: string[] = [];
+    try {
+      const roleRecord = await this.prisma.role.findFirst({
+        where: { name: dbUser.role },
+        select: { permissions: true },
+      });
+      if (roleRecord?.permissions) {
+        try {
+          const parsedRole = JSON.parse(roleRecord.permissions);
+          if (Array.isArray(parsedRole)) {
+            rolePermissions = parsedRole.filter((p) => typeof p === 'string');
+          }
+        } catch {
+          rolePermissions = [];
+        }
+      }
+    } catch {
+      rolePermissions = [];
+    }
+
+    const effectivePermissions = Array.from(new Set([...(rolePermissions || []), ...(userPermissions || [])]));
+
     // Require all listed permissions
-    return requiredPermissions.every((perm) => userPermissions.includes(perm));
+    return requiredPermissions.every((perm) => effectivePermissions.includes(perm));
   }
 } 
