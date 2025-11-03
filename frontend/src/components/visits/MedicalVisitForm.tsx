@@ -47,6 +47,7 @@ import {
 import { apiClient } from '@/lib/api';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
+import { DoctorTour } from '@/components/tours';
 import type { Patient, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -1616,6 +1617,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               {saveStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
               {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
             </div>
+              <DoctorTour autoStart={false} />
               <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
                 <Keyboard className="h-4 w-4 mr-2" />
                 Shortcuts
