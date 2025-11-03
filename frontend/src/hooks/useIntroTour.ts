@@ -5,7 +5,6 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
-import type { IntroJs } from 'intro.js';
 
 export interface TourStep {
   element?: string;
@@ -38,14 +37,15 @@ export interface TourOptions {
  * @returns Object with start and exit methods
  */
 export function useIntroTour(options: TourOptions) {
-  const introRef = useRef<IntroJs | null>(null);
+  const introRef = useRef<any>(null);
 
   useEffect(() => {
     // Dynamically import intro.js to avoid SSR issues
     const loadIntro = async () => {
       if (typeof window !== 'undefined') {
         const introJs = (await import('intro.js')).default;
-        await import('intro.js/introjs.css');
+        // @ts-ignore - CSS import
+        await import('intro.js/intro.css');
         
         introRef.current = introJs();
         
