@@ -43,6 +43,13 @@ if (typeof window !== 'undefined') {
         position: relative !important;
       }
       
+      /* Ensure tour overlay and tooltips are always above app UI */
+      .introjs-overlay,
+      .introjs-helperLayer,
+      .introjs-tooltip {
+        z-index: 2147483647 !important;
+      }
+      
       .introjs-tooltiptext {
         padding: 20px !important;
         font-size: 14px !important;
