@@ -21,8 +21,15 @@ function AppointmentsPageInner() {
   const [doctors, setDoctors] = useState<User[]>([]);
   const [doctorId, setDoctorId] = useState<string>('');
   const [date, setDate] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    try { return localStorage.getItem('appointments.date') || getISTDateString(); } catch { return getISTDateString(); }
+    // Default to today (IST). Only restore the stored date if it equals today.
+    const today = getISTDateString();
+    if (typeof window === 'undefined') return today;
+    try {
+      const persisted = localStorage.getItem('appointments.date');
+      return persisted === today ? persisted : today;
+    } catch {
+      return today;
+    }
   });
   const [guideDialogOpen, setGuideDialogOpen] = useState<boolean>(false);
 
@@ -60,7 +67,7 @@ function AppointmentsPageInner() {
       <Card>
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
+            <div data-tour="doctor-select">
               <label className="text-sm text-gray-700">Doctor</label>
               <Select value={doctorId} onValueChange={setDoctorId}>
                 <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
@@ -71,7 +78,7 @@ function AppointmentsPageInner() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div data-tour="date-picker">
               <label className="text-sm text-gray-700">Date</label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
@@ -110,7 +117,7 @@ function AppointmentsPageInner() {
         </DialogContent>
       </Dialog>
 
-      <TabsList>
+      <TabsList data-tour="view-tabs">
         <TabsTrigger value="calendar">Calendar</TabsTrigger>
         <TabsTrigger value="slots">Slots</TabsTrigger>
       </TabsList>
