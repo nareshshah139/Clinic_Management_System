@@ -537,7 +537,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             </p>
             
             <div class="space-y-2 mt-3">
-              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(219, 234, 254, 0.3); border-color: #3b82f6;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(219, 234, 254, 0.5); border-left: 4px solid #3b82f6;">
                 <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-sm" 
                      style="background-color: rgba(219, 234, 254, 0.95); color: #1e40af;">OPD</div>
                 <div class="flex-1">
@@ -546,7 +546,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(237, 233, 254, 0.3); border-color: #a855f7;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(237, 233, 254, 0.5); border-left: 4px solid #a855f7;">
                 <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xs"
                      style="background-color: rgba(237, 233, 254, 0.95); color: #6b21a8;">PROC</div>
                 <div class="flex-1">
@@ -555,7 +555,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 rounded-lg border-l-4" style="background-color: rgba(243, 244, 246, 0.5); border-color: #9ca3af;">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(243, 244, 246, 0.8); border-left: 4px solid #9ca3af;">
                 <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xs"
                      style="background-color: rgba(243, 244, 246, 0.95); color: #374151;">TELE</div>
                 <div class="flex-1">
@@ -564,7 +564,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border-l-4 border-slate-400">
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(226, 232, 240, 0.5); border-left: 4px solid #94a3b8;">
                 <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center font-bold text-xl"
                      style="background-color: rgba(226, 232, 240, 0.95); color: #475569;">✓</div>
                 <div class="flex-1">
@@ -574,16 +574,18 @@ function getTourStepsForPage(pathname: string): TourStep[] {
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 bg-green-50 rounded-lg border-l-4 border-green-500">
-                <div class="w-12 h-12 bg-green-500 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-xl">★</div>
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(34, 197, 94, 0.15); border-left: 4px solid #22c55e;">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-xl"
+                     style="background-color: #22c55e;">★</div>
                 <div class="flex-1">
                   <p class="font-bold text-green-900">Newly Booked (Green Highlight)</p>
                   <p class="text-xs text-green-800">Just booked in the last few seconds - temporary visual feedback</p>
                 </div>
               </div>
               
-              <div class="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border-l-4 border-amber-500">
-                <div class="w-12 h-12 bg-amber-400 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-lg">⏳</div>
+              <div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: rgba(251, 191, 36, 0.15); border-left: 4px solid #fbbf24;">
+                <div class="w-12 h-12 rounded-lg shadow-md flex items-center justify-center text-white font-bold text-lg"
+                     style="background-color: #fbbf24;">⏳</div>
                 <div class="flex-1">
                   <p class="font-bold text-amber-900">Booking In Progress (Yellow)</p>
                   <p class="text-xs text-amber-800">Someone is currently booking this slot - wait for it to complete</p>
@@ -591,7 +593,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 text-xs mt-3">
+            <div class="p-3 rounded-lg text-xs mt-3" style="background-color: rgba(219, 234, 254, 0.5); border: 1px solid #93c5fd;">
               <p class="font-semibold text-blue-900 mb-1">ℹ️ Viewing Appointment Status:</p>
               <p class="text-blue-800">
                 To see if a patient is <strong>SCHEDULED, CHECKED-IN, or IN-PROGRESS</strong>, 
@@ -600,7 +602,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
             </div>
             
-            <div class="bg-purple-50 p-3 rounded-lg border border-purple-200 text-xs mt-2">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(237, 233, 254, 0.5); border: 1px solid #d8b4fe;">
               <p class="font-semibold text-purple-900 mb-1">🔍 Finding the Legend:</p>
               <p class="text-purple-800">
                 The calendar page shows a color legend at the top explaining all colors. 
@@ -608,7 +610,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               </p>
             </div>
             
-            <div class="bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs mt-2">
+            <div class="p-3 rounded-lg text-xs mt-2" style="background-color: rgba(251, 191, 36, 0.15); border: 1px solid #fcd34d;">
               <p class="font-semibold text-amber-900 mb-1">💡 Pro Tip:</p>
               <p class="text-amber-800">
                 <strong>Past appointments</strong> show in even lighter shades. 
