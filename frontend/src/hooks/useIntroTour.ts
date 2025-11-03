@@ -38,7 +38,7 @@ export interface TourOptions {
  */
 export function useIntroTour(options: TourOptions) {
   const introRef = useRef<any>(null);
-  
+
   // Wait for an element matching the selector to exist and be visible
   const waitForElement = useCallback(async (selector: string, timeoutMs: number = 5000): Promise<Element | null> => {
     if (typeof window === 'undefined') return null;
@@ -91,6 +91,7 @@ export function useIntroTour(options: TourOptions) {
             showProgress: options.showProgress ?? true,
             scrollToElement: options.scrollToElement ?? true,
             overlayOpacity: options.overlayOpacity ?? 0.7,
+            positionPrecedence: ['bottom', 'top', 'right', 'left'],
             doneLabel: options.doneLabel ?? 'Done',
             nextLabel: options.nextLabel ?? 'Next →',
             prevLabel: options.prevLabel ?? '← Back',
@@ -122,6 +123,14 @@ export function useIntroTour(options: TourOptions) {
           introRef.current.onafterchange(() => {
             try { introRef.current?.refresh(); } catch {}
           });
+
+          // Keep tooltip positioned correctly on viewport changes
+          const handleResize = () => {
+            try { introRef.current?.refresh(); } catch {}
+          };
+          window.addEventListener('resize', handleResize);
+          window.addEventListener('orientationchange', handleResize);
+          (introRef.current as any)._handleResize = handleResize;
         }
       }
     };
@@ -135,6 +144,13 @@ export function useIntroTour(options: TourOptions) {
         } catch (e) {
           // Ignore errors on cleanup
         }
+        try {
+          const hr = (introRef.current as any)?._handleResize;
+          if (hr) {
+            window.removeEventListener('resize', hr);
+            window.removeEventListener('orientationchange', hr);
+          }
+        } catch {}
       }
     };
   }, [options, waitForElement]);
@@ -147,7 +163,7 @@ export function useIntroTour(options: TourOptions) {
       if (firstSelector) {
         // Try to wait for the first element before starting, but don't block forever
         void (async () => {
-          try {
+      try {
             await waitForElement(firstSelector, 5000);
           } catch {}
           try { introRef.current?.start(); } catch (e) { console.error('Error starting tour:', e); }
@@ -155,9 +171,9 @@ export function useIntroTour(options: TourOptions) {
       } else {
         introRef.current.start();
       }
-    } catch (e) {
-      console.error('Error starting tour:', e);
-    }
+      } catch (e) {
+        console.error('Error starting tour:', e);
+      }
   }, [options.steps, waitForElement]);
 
   const exit = useCallback(() => {

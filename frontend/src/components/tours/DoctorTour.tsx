@@ -41,6 +41,14 @@ if (typeof window !== 'undefined') {
         padding: 0 !important;
         overflow: hidden !important;
         position: relative !important;
+        max-height: 80vh !important;
+      }
+      .introjs-tooltiptext {
+        overflow: auto !important;
+        max-height: calc(80vh - 120px) !important; /* leave room for buttons */
+        -webkit-overflow-scrolling: touch !important;
+        word-break: break-word !important;
+        overflow-wrap: anywhere !important;
       }
       
       /* Ensure tour overlay and tooltips are always above app UI */
@@ -198,11 +206,9 @@ if (typeof window !== 'undefined') {
       
       /* Responsive adjustments */
       @media (max-width: 768px) {
+        .introjs-tooltip { max-width: 92vw !important; min-width: auto !important; }
         .introjs-tooltip.introjs-large-tooltip,
-        .introjs-tooltip.introjs-medium-tooltip {
-          max-width: 90vw !important;
-          min-width: 85vw !important;
-        }
+        .introjs-tooltip.introjs-medium-tooltip { max-width: 92vw !important; min-width: auto !important; }
         
         .introjs-tooltiptext {
           padding: 15px !important;
