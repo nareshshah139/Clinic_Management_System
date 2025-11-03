@@ -40,7 +40,6 @@ if (typeof window !== 'undefined') {
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
         padding: 0 !important;
         overflow: hidden !important;
-        position: relative !important;
         max-height: 80vh !important;
       }
       .introjs-tooltiptext {
@@ -87,7 +86,6 @@ if (typeof window !== 'undefined') {
         border-bottom-left-radius: 12px !important;
         border-bottom-right-radius: 12px !important;
         margin: 0 !important;
-        position: relative !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
