@@ -16,13 +16,16 @@ import { HelpCircle } from 'lucide-react';
 import { useIntroTour, type TourStep } from '@/hooks/useIntroTour';
 import 'intro.js/introjs.css';
 
-// Custom styles for enhanced tour tooltips
-if (typeof window !== 'undefined') {
+// Function to inject custom styles for tour tooltips
+function injectTourStyles() {
+  if (typeof window === 'undefined') return;
+  
   const styleId = 'receptionist-tour-styles';
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.textContent = `
+  if (document.getElementById(styleId)) return; // Already injected
+  
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.textContent = `
       /* Enhanced tooltip sizes */
       .introjs-tooltip.introjs-large-tooltip {
         max-width: 650px !important;
@@ -237,8 +240,7 @@ if (typeof window !== 'undefined') {
         }
       }
     `;
-    document.head.appendChild(style);
-  }
+  document.head.appendChild(style);
 }
 
 interface ReceptionistTourProps {
@@ -1074,6 +1076,7 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
       if (autoStart && !seen) {
         // Small delay to ensure page is fully loaded
         const timer = setTimeout(() => {
+          injectTourStyles();
           start();
           localStorage.setItem(tourKey, 'true');
         }, 1000);
@@ -1084,6 +1087,9 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
   }, [pathname, autoStart, start]);
 
   const handleStartTour = () => {
+    // Inject styles before starting tour
+    injectTourStyles();
+    
     start();
     if (typeof window !== 'undefined') {
       const tourKey = `tour-seen-receptionist-${pathname}`;
