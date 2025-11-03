@@ -20,6 +20,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { useBrandedMode } from './branded-mode-context';
+import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 
 interface SearchResult {
   id: string;
@@ -127,8 +128,7 @@ export function Header() {
         pushMany(list, 6);
         break;
       }
-      case 'RECEPTION':
-      case 'RECEPTIONIST': {
+      case 'RECEPTION': {
         const apptItems: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
           title: `Upcoming: ${a.patientName || 'Patient'} at ${formatTime(a.time)}`,
@@ -486,6 +486,13 @@ export function Header() {
       {/* Right section */
       }
       <div className="flex items-center space-x-4">
+        {/* Receptionist Tour Button */}
+        {user?.role === 'RECEPTION' && (
+          <div className="pr-2 border-r border-gray-200 mr-2">
+            <ReceptionistTour />
+          </div>
+        )}
+        
         {/* Branded mode toggle */}
         <div className="flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
           <Palette className="h-4 w-4 text-gray-500" />
