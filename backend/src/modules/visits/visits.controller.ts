@@ -35,6 +35,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import sharp from 'sharp';
 import type { Express, Response } from 'express';
 import { Logger } from '@nestjs/common';
+import ffmpeg from 'fluent-ffmpeg';
 
 const fsPromises = fs.promises;
 
@@ -44,6 +45,25 @@ interface AuthenticatedRequest {
     branchId: string;
     role: string;
   };
+}
+
+/**
+ * Convert WebM audio to WAV format for gpt-4o-transcribe compatibility.
+ * gpt-4o-transcribe supports: wav, mp3, flac, opus, pcm16 (but NOT webm)
+ */
+async function convertWebMToWAV(inputPath: string): Promise<string> {
+  const outputPath = `${inputPath}.wav`;
+  
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .toFormat('wav')
+      .audioCodec('pcm_s16le') // 16-bit PCM
+      .audioChannels(1) // Mono
+      .audioFrequency(16000) // 16kHz sample rate (optimal for speech)
+      .on('end', () => resolve(outputPath))
+      .on('error', (err) => reject(new Error(`FFmpeg conversion failed: ${err.message}`)))
+      .save(outputPath);
+  });
 }
 
 async function ensureUploadsDir() {
@@ -525,16 +545,49 @@ export class VisitsController {
       throw new ServiceUnavailableException('Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
     }
     let tempFilePath: string | undefined = (file as any)?.path || (file as any)?.filename; // multer diskStorage sets path
+    let convertedWavPath: string | undefined;
     try {
       // Build multipart form-data for OpenAI Transcriptions using native undici FormData/Blob
       const form = new FormData();
-      let displayName = file.originalname || 'audio.webm';
-      if (typeof displayName !== 'string' || !displayName) displayName = 'audio.webm';
-      // Read from disk to avoid keeping upload in memory
+      // gpt-4o-transcribe supports: wav, mp3, flac, opus, pcm16 (NOT webm!)
       const pathToRead = tempFilePath ? join((file as any).destination || '', (file as any).filename) : undefined;
-      const fileBuf = await fsPromises.readFile(pathToRead || (file as any).path || '');
+      let finalPath = pathToRead || (file as any).path || '';
+      let finalMimeType = file.mimetype || 'audio/webm';
+      let displayName = file.originalname || 'audio.webm';
+      
+      // Convert WebM to WAV if needed
+      if (file.mimetype === 'audio/webm' || (displayName && displayName.endsWith('.webm'))) {
+        this.logger.log(`Converting WebM to WAV for gpt-4o-transcribe: ${finalPath}`);
+        try {
+          convertedWavPath = await convertWebMToWAV(finalPath);
+          finalPath = convertedWavPath;
+          finalMimeType = 'audio/wav';
+          displayName = displayName.replace(/\.webm$/i, '.wav');
+          this.logger.log(`Successfully converted to WAV: ${convertedWavPath}`);
+        } catch (convErr: any) {
+          this.logger.error(`WebM conversion failed: ${convErr.message}`);
+          throw new BadRequestException(`Audio format conversion failed: ${convErr.message}`);
+        }
+      }
+      
+      if (typeof displayName !== 'string' || !displayName) displayName = 'audio.wav';
+      // Read from disk to avoid keeping upload in memory
+      const fileBuf = await fsPromises.readFile(finalPath);
       const uint8 = new Uint8Array(fileBuf);
-      const blob = new Blob([uint8], { type: file.mimetype || 'audio/webm' });
+      const blob = new Blob([uint8], { type: finalMimeType });
+      
+      // Log detailed file information
+      this.logger.log(`========== AUDIO FILE DETAILS ==========`);
+      this.logger.log(`Original file: ${file.originalname}`);
+      this.logger.log(`Original mimetype: ${file.mimetype}`);
+      this.logger.log(`Original size: ${file.size} bytes (${(file.size / 1024).toFixed(2)} KB)`);
+      this.logger.log(`Final file path: ${finalPath}`);
+      this.logger.log(`Final mimetype: ${finalMimeType}`);
+      this.logger.log(`Final size: ${fileBuf.length} bytes (${(fileBuf.length / 1024).toFixed(2)} KB)`);
+      this.logger.log(`Display name: ${displayName}`);
+      this.logger.log(`Was converted: ${convertedWavPath ? 'Yes (WebM → WAV)' : 'No'}`);
+      this.logger.log(`========================================`);
+      
       form.append('file', blob, displayName);
       const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
       form.append('model', transcribeModel);
@@ -555,7 +608,15 @@ export class VisitsController {
       // Prefer structured output when supported (Whisper supports verbose_json). Safe to ignore if model does not support.
       try { form.append('response_format', 'verbose_json'); } catch {}
 
-      this.logger.debug(`transcribeAudio: sending audio to OpenAI with model=${transcribeModel}`);
+      this.logger.log(`========== OPENAI TRANSCRIPTION REQUEST ==========`);
+      this.logger.log(`Endpoint: https://api.openai.com/v1/audio/transcriptions`);
+      this.logger.log(`Model: ${transcribeModel}`);
+      this.logger.log(`Language: en`);
+      this.logger.log(`Temperature: 0`);
+      this.logger.log(`Response format: verbose_json`);
+      this.logger.log(`API Key: ${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)} (length: ${apiKey.length})`);
+      this.logger.log(`==================================================`);
+      
       const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
@@ -563,18 +624,41 @@ export class VisitsController {
         } as any,
         body: form as any,
       });
-      this.logger.debug(`transcribeAudio: OpenAI responded status=${resp.status}`);
+      
+      this.logger.log(`========== OPENAI TRANSCRIPTION RESPONSE ==========`);
+      this.logger.log(`Status: ${resp.status} ${resp.statusText}`);
+      this.logger.log(`Headers: ${JSON.stringify(Object.fromEntries(resp.headers.entries()), null, 2)}`);
       if (!resp.ok) {
         const errText = await resp.text();
-        this.logger.error(`OpenAI error response: ${resp.status} ${errText}`);
+        this.logger.error(`OpenAI error response body: ${errText}`);
+        this.logger.log(`===================================================`);
         throw new Error(`OpenAI error: ${resp.status}`);
       }
       const data = await resp.json();
+      this.logger.log(`Response body (parsed JSON):`);
+      this.logger.log(JSON.stringify(data, null, 2));
+      this.logger.log(`===================================================`);
+      
       const text = ((data as any)?.text as string) || '';
+      
+      this.logger.log(`========== TRANSCRIPTION RESULT ==========`);
+      this.logger.log(`Text extracted: ${text ? `"${text}"` : '(EMPTY)'}`);
+      this.logger.log(`Text length: ${text.length} characters`);
+      this.logger.log(`Has segments: ${Array.isArray((data as any)?.segments) ? 'Yes' : 'No'}`);
+      if (Array.isArray((data as any)?.segments)) {
+        this.logger.log(`Number of segments: ${(data as any).segments.length}`);
+      }
+      this.logger.log(`==========================================`);
+      
       if (!text) {
-        this.logger.warn('transcribeAudio: received empty transcript text');
+        this.logger.warn('⚠️  EMPTY TRANSCRIPT: No speech detected by OpenAI Whisper API');
+        this.logger.warn('Possible causes:');
+        this.logger.warn('  1. Audio file contains only silence');
+        this.logger.warn('  2. Audio level too low to detect speech');
+        this.logger.warn('  3. Audio format issue (though conversion should have fixed this)');
+        this.logger.warn('  4. Audio duration too short (< 0.1 seconds)');
       } else {
-        this.logger.debug(`transcribeAudio: transcript length=${text.length}`);
+        this.logger.log(`✓ Successfully transcribed ${text.length} characters`);
       }
 
       // Attempt speaker separation via LLM on transcript or segments
@@ -696,11 +780,57 @@ export class VisitsController {
     }
     finally {
       try {
+        // Clean up original uploaded file
         if ((file as any)?.path || (file as any)?.filename) {
           const p = (file as any).path || join((file as any).destination || '', (file as any).filename);
           if (p) await fsPromises.unlink(p).catch(() => {});
         }
+        // Clean up converted WAV file if it exists
+        if (convertedWavPath) {
+          await fsPromises.unlink(convertedWavPath).catch(() => {});
+        }
       } catch {}
+    }
+  }
+
+  // Quick OpenAI key health check (uses chat completions; no PHI/data sent)
+  @Get('transcribe/health')
+  async transcribeHealth(@Request() _req: AuthenticatedRequest) {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      this.logger.warn('transcribe/health: OPENAI_API_KEY not configured');
+      return { ok: false, error: 'OPENAI_API_KEY not configured' };
+    }
+    const model = process.env.OPENAI_DIARIZATION_MODEL || 'gpt-4o-mini';
+    const started = Date.now();
+    try {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          max_tokens: 3,
+          messages: [
+            { role: 'system', content: 'Respond with the single word: PONG' },
+            { role: 'user', content: 'ping' },
+          ],
+        }),
+      });
+      const roundTripMs = Date.now() - started;
+      if (!resp.ok) {
+        const errText = await resp.text();
+        this.logger.warn(`transcribe/health OpenAI error: ${resp.status} ${errText}`);
+        return { ok: false, status: resp.status, error: errText?.slice?.(0, 200) || 'OpenAI error', model, roundTripMs };
+      }
+      const data = (await resp.json()) as any;
+      const content: string = data?.choices?.[0]?.message?.content || '';
+      const ok = /pong/i.test((content || '').trim());
+      return { ok, model, roundTripMs };
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      this.logger.warn(`transcribe/health failed: ${msg}`);
+      return { ok: false, error: msg };
     }
   }
 
@@ -744,6 +874,12 @@ export class VisitsController {
     @Body() body: { sessionId?: string; chunkIndex?: number; startMs?: number; endMs?: number },
   ) {
     if (!file) throw new BadRequestException('No file provided');
+    // OpenAI requires minimum 0.1s of audio (~1KB for WebM)
+    // Very small chunks are likely errors or silence
+    if (file.size < 500) {
+      this.logger.warn(`transcribe/chunk: chunk too small (${file.size} bytes), skipping`);
+      return { text: '', segments: [] }; // Return empty result instead of error
+    }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
     const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
@@ -764,6 +900,7 @@ export class VisitsController {
     try { form.append('temperature', '0'); } catch {}
     try { form.append('response_format', 'verbose_json'); } catch {}
 
+    this.logger.debug(`transcribe/chunk: uploading ${file.size} bytes, model=${transcribeModel}`);
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` } as any,
@@ -771,8 +908,47 @@ export class VisitsController {
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      this.logger.error(`transcribe/chunk OpenAI error: ${resp.status} ${errText}`);
-      throw new ServiceUnavailableException('Transcription chunk failed');
+      this.logger.error(
+        `transcribe/chunk OpenAI error: status=${resp.status}, fileSize=${file.size} bytes, ` +
+        `mimeType=${file.mimetype}, model=${transcribeModel}, error=${errText.slice(0, 500)}`
+      );
+      // Also log to console and file for immediate debugging
+      const errorLog = [
+        '=== TRANSCRIBE CHUNK ERROR ===',
+        `Timestamp: ${new Date().toISOString()}`,
+        `Status: ${resp.status}`,
+        `File size: ${file.size} bytes`,
+        `MIME type: ${file.mimetype}`,
+        `Model: ${transcribeModel}`,
+        `OpenAI Error: ${errText}`,
+        '============================',
+      ].join('\n');
+      // eslint-disable-next-line no-console
+      console.error(errorLog);
+      // Write to file for debugging
+      try {
+        await fsPromises.appendFile(
+          join(process.cwd(), 'transcribe_errors.log'),
+          errorLog + '\n\n'
+        );
+      } catch (e) {
+        // Ignore file write errors
+      }
+      // Return a more informative error to the client
+      let errorDetail = 'OpenAI transcription service error';
+      if (errText.includes('duration') || errText.includes('too short')) {
+        errorDetail = 'Audio chunk too short (minimum 0.1 seconds required)';
+      } else if (errText.includes('corrupted') || errText.includes('unsupported') || errText.includes('invalid')) {
+        // MediaRecorder chunks are often corrupted - this is a known limitation
+        errorDetail = 'Browser audio format not supported. MediaRecorder chunks require reassembly.';
+      } else if (errText.includes('format')) {
+        errorDetail = 'Invalid audio format';
+      }
+      // Don't throw 503 for client errors (4xx) - these aren't service unavailable
+      if (resp.status >= 400 && resp.status < 500) {
+        throw new BadRequestException(errorDetail);
+      }
+      throw new ServiceUnavailableException(errorDetail);
     }
     const data = await resp.json();
     const text = ((data as any)?.text as string) || '';

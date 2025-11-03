@@ -1,0 +1,50 @@
+{
+  "success": true,
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "results": [
+    {
+      "test_name": "Small Audio (100 KB)",
+      "filename": "test_audio_small.webm",
+      "file_size_bytes": 102400,
+      "file_size_kb": 100.0,
+      "status_code": 201,
+      "elapsed_time_seconds": 1.9692978858947754,
+      "success": true,
+      "response": {
+        "text": ""
+      },
+      "transcript_length": 0,
+      "segments_count": 0
+    },
+    {
+      "test_name": "Medium Audio (1 MB)",
+      "filename": "test_audio_medium.webm",
+      "file_size_bytes": 1048576,
+      "file_size_kb": 1024.0,
+      "status_code": 201,
+      "elapsed_time_seconds": 3.155061960220337,
+      "success": true,
+      "response": {
+        "text": ""
+      },
+      "transcript_length": 0,
+      "segments_count": 0
+    },
+    {
+      "test_name": "Large Audio (5 MB)",
+      "filename": "test_audio_large.webm",
+      "file_size_bytes": 5242880,
+      "file_size_kb": 5120.0,
+      "status_code": 201,
+      "elapsed_time_seconds": 15.565202951431274,
+      "success": true,
+      "response": {
+        "text": ""
+      },
+      "transcript_length": 0,
+      "segments_count": 0
+    }
+  ]
+}

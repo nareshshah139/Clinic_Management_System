@@ -14,6 +14,7 @@ import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { HelpCircle } from 'lucide-react';
 import { useIntroTour, type TourStep } from '@/hooks/useIntroTour';
+import 'intro.js/introjs.css';
 
 interface ReceptionistTourProps {
   /** Whether to auto-start the tour on first visit */

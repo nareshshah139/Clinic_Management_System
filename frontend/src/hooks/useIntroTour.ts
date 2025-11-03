@@ -44,8 +44,6 @@ export function useIntroTour(options: TourOptions) {
     const loadIntro = async () => {
       if (typeof window !== 'undefined') {
         const introJs = (await import('intro.js')).default;
-        // @ts-ignore - CSS import
-        await import('intro.js/intro.css');
         
         introRef.current = introJs();
         

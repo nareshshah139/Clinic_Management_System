@@ -1204,6 +1204,21 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 
 *Last updated: September 2025 - Whisper transcription stabilized with native FormData/Blob; logging and env fixes applied.*
 
+### October 2025: Long Conversation Transcription with Diarization
+**Achievement:** Implemented long-form, chunked transcription with doctor–patient diarization using existing OpenAI APIs.
+**Impact:** Enables up to 10-minute recordings in the browser with reliable chunk uploads and consolidated diarized output.
+
+**Technical Highlights:**
+- Frontend `PrescriptionBuilder` now uses session-based flow: `chunk-start` → periodic `chunk` uploads (30s) → `chunk-complete` finalize.
+- Backend `VisitsController` merges chunk segments and performs diarization via `OPENAI_DIARIZATION_MODEL` chat completion with strict JSON schema.
+- UI prefers `speakers.patientText` for Chief Complaints; falls back to combined transcript when patient-only text is unavailable.
+
+**How to Use:**
+- Click mic in `PrescriptionBuilder` → speak → click again or wait auto-stop → transcript appended; diarization separates DOCTOR vs PATIENT.
+- Endpoints: `/visits/transcribe/chunk-start`, `/visits/transcribe/chunk`, `/visits/transcribe/chunk-complete`.
+
+*Last updated: October 2025 - Chunked diarized transcription integrated end-to-end.*
+
 ### September 2025: Immutable Audit Logging and Frontend Build Stabilization
 **Achievement:** Added immutable audit logging across all database mutations and stabilized frontend build by typing API surfaces, fixing hook deps, and trimming warnings.
 **Impact:**
