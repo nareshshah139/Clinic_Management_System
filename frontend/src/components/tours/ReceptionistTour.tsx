@@ -54,6 +54,18 @@ if (typeof window !== 'undefined') {
         font-weight: 600 !important;
         text-shadow: none !important;
         transition: all 0.2s !important;
+        font-size: 14px !important;
+        margin: 0 4px !important;
+      }
+      
+      /* Button container */
+      .introjs-tooltipbuttons {
+        border-top: 1px solid #e5e7eb !important;
+        padding: 16px 20px !important;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        gap: 8px !important;
       }
       
       .introjs-nextbutton {
@@ -79,12 +91,29 @@ if (typeof window !== 'undefined') {
       }
       
       .introjs-skipbutton {
-        color: #6b7280 !important;
-        font-weight: 500 !important;
+        background: #ffffff !important;
+        color: #ef4444 !important;
+        font-weight: 600 !important;
+        border: 2px solid #ef4444 !important;
+        border-radius: 8px !important;
+        padding: 10px 20px !important;
+        transition: all 0.2s !important;
+        text-shadow: none !important;
+        font-size: 14px !important;
+        cursor: pointer !important;
+        position: relative !important;
       }
       
       .introjs-skipbutton:hover {
-        color: #374151 !important;
+        background: #ef4444 !important;
+        color: #ffffff !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4) !important;
+      }
+      
+      .introjs-skipbutton:before {
+        content: "✕ " !important;
+        font-weight: bold !important;
       }
       
       /* Progress bar */
@@ -136,6 +165,23 @@ if (typeof window !== 'undefined') {
         .introjs-tooltiptext {
           padding: 15px !important;
           font-size: 13px !important;
+        }
+        
+        .introjs-tooltipbuttons {
+          flex-wrap: wrap !important;
+          padding: 12px 15px !important;
+        }
+        
+        .introjs-button {
+          padding: 8px 16px !important;
+          font-size: 13px !important;
+          margin: 4px 2px !important;
+        }
+        
+        .introjs-skipbutton {
+          order: -1 !important;
+          flex: 1 1 100% !important;
+          margin-bottom: 8px !important;
         }
       }
     `;
@@ -923,6 +969,8 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
     showBullets: true,
     exitOnEsc: true,
     exitOnOverlayClick: true,
+    skipLabel: 'Exit Tour',
+    doneLabel: 'Finish',
   });
 
   // Check if user has seen the tour before
