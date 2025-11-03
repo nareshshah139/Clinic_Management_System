@@ -39,6 +39,8 @@ if (typeof window !== 'undefined') {
         border-radius: 12px !important;
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
         padding: 0 !important;
+        overflow: hidden !important;
+        position: relative !important;
       }
       
       .introjs-tooltiptext {
@@ -66,6 +68,13 @@ if (typeof window !== 'undefined') {
         justify-content: space-between !important;
         align-items: center !important;
         gap: 8px !important;
+        background-color: #fafafa !important;
+        border-bottom-left-radius: 12px !important;
+        border-bottom-right-radius: 12px !important;
+        margin: 0 !important;
+        position: relative !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
       }
       
       .introjs-nextbutton {
@@ -101,7 +110,10 @@ if (typeof window !== 'undefined') {
         text-shadow: none !important;
         font-size: 14px !important;
         cursor: pointer !important;
-        position: relative !important;
+        position: static !important;
+        display: inline-block !important;
+        margin: 0 4px !important;
+        white-space: nowrap !important;
       }
       
       .introjs-skipbutton:hover {
@@ -114,6 +126,22 @@ if (typeof window !== 'undefined') {
       .introjs-skipbutton:before {
         content: "✕ " !important;
         font-weight: bold !important;
+      }
+      
+      /* Button navigation wrapper */
+      .introjs-tooltipbuttons::after {
+        content: none !important;
+      }
+      
+      .introjs-tooltipbuttons > a,
+      .introjs-tooltipbuttons > button {
+        position: static !important;
+        float: none !important;
+      }
+      
+      /* Ensure no overflow from buttons */
+      .introjs-tooltip * {
+        box-sizing: border-box !important;
       }
       
       /* Progress bar */
@@ -170,18 +198,24 @@ if (typeof window !== 'undefined') {
         .introjs-tooltipbuttons {
           flex-wrap: wrap !important;
           padding: 12px 15px !important;
+          width: 100% !important;
+          margin: 0 !important;
         }
         
         .introjs-button {
           padding: 8px 16px !important;
           font-size: 13px !important;
           margin: 4px 2px !important;
+          max-width: calc(50% - 8px) !important;
         }
         
         .introjs-skipbutton {
           order: -1 !important;
           flex: 1 1 100% !important;
-          margin-bottom: 8px !important;
+          margin: 0 0 8px 0 !important;
+          max-width: 100% !important;
+          width: 100% !important;
+          box-sizing: border-box !important;
         }
       }
     `;
