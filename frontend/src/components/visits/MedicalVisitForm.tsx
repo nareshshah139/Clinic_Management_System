@@ -1044,11 +1044,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const uploadChainRef = useRef<Promise<any>>(Promise.resolve());
-  const sessionIdRef = useRef<string | null>(null);
-  const chunkIndexRef = useRef<number>(0);
-  const recordingStartedAtRef = useRef<number>(0);
-  const lastChunkEndMsRef = useRef<number>(0);
    
   // Do not access JWT on client; rely on HttpOnly cookie sent automatically
  
@@ -1070,76 +1065,77 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     setIsListening(true);
     setActiveVoiceField(fieldName);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request audio with better quality settings
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true, // Automatically adjust volume
+          sampleRate: 48000,     // Higher quality
+        }
+      });
       streamRef.current = stream;
-      // Initialize chunked transcription session
-      const baseUrl = '/api';
-      const startRes = await fetch(`${baseUrl}/visits/transcribe/chunk-start`, { method: 'POST', credentials: 'include' });
-      if (!startRes.ok) {
-        throw new Error(`Failed to start transcription session (${startRes.status})`);
-      }
-      const startData = await startRes.json();
-      const sessionId = (startData?.sessionId as string) || '';
-      if (!sessionId) throw new Error('No sessionId returned');
-      sessionIdRef.current = sessionId;
-      chunkIndexRef.current = 0;
-      recordingStartedAtRef.current = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-      lastChunkEndMsRef.current = 0;
+
       const mimeType = (window as any).MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' :
         ((window as any).MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
       const recorder = new MediaRecorder(stream, mimeType ? { mimeType } as any : undefined);
       recorderRef.current = recorder;
+      
+      // Accumulate chunks instead of sending individually (MediaRecorder chunks aren't standalone files)
+      const chunksAccumulator: Blob[] = [];
       recorder.ondataavailable = (e) => {
         if (!e.data || e.data.size <= 0) return;
-        const thisChunkIndex = chunkIndexRef.current++;
-        const startMs = lastChunkEndMsRef.current;
-        const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-        const endMs = Math.max(startMs, Math.round(now - recordingStartedAtRef.current));
-        lastChunkEndMsRef.current = endMs;
-        const sess = sessionIdRef.current;
-        if (!sess) return;
-        const recordedType: string = mimeType || 'audio/webm';
-        const filename = recordedType === 'audio/mp4' ? `chunk_${thisChunkIndex}.m4a` : `chunk_${thisChunkIndex}.webm`;
-        const fd = new FormData();
-        fd.append('file', e.data, filename);
-        fd.append('sessionId', sess);
-        fd.append('chunkIndex', String(thisChunkIndex));
-        fd.append('startMs', String(startMs));
-        fd.append('endMs', String(endMs));
-        // Chain uploads sequentially to preserve order
-        uploadChainRef.current = uploadChainRef.current.then(async () => {
-          const upRes = await fetch(`${baseUrl}/visits/transcribe/chunk`, { method: 'POST', body: fd, credentials: 'include' });
-          if (!upRes.ok) {
-            // eslint-disable-next-line no-console
-            console.error('Chunk upload failed', upRes.status);
-          }
-        }).catch(() => {});
+        // Accumulate all chunks - MediaRecorder fragments need to be combined into a complete file
+        chunksAccumulator.push(e.data);
+        // eslint-disable-next-line no-console
+        console.log(`MedicalVisitForm: Accumulated chunk ${chunksAccumulator.length}: ${e.data.size} bytes`);
       };
       recorder.onstop = async () => {
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         streamRef.current = null;
         recorderRef.current = null;
         try {
-          // Wait for any pending chunk uploads to finish
-          try { await uploadChainRef.current; } catch {}
-          const sess = sessionIdRef.current;
-          if (!sess) return;
-          const completeRes = await fetch(`/api/visits/transcribe/chunk-complete`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ sessionId: sess }),
-          });
-          if (!completeRes.ok) {
-            let errText = '';
-            try { errText = await completeRes.text(); } catch {}
-            // eslint-disable-next-line no-console
-            console.error('Transcription finalize failed:', completeRes.status, errText);
-            toast({ variant: 'warning', title: 'Transcription failed', description: `Finalize returned ${completeRes.status}.` });
+          // Combine all accumulated chunks into a single complete audio file
+          if (chunksAccumulator.length === 0) {
+            toast({ variant: 'warning', title: 'No audio recorded', description: 'Please try recording again.' });
             return;
           }
-          const data = await completeRes.json();
-          const text = (data?.text as string) || '';
+
+          // Create a single Blob from all chunks
+          const completeAudio = new Blob(chunksAccumulator, { type: mimeType || 'audio/webm' });
+          // eslint-disable-next-line no-console
+          console.log(`MedicalVisitForm: Sending complete audio file: ${completeAudio.size} bytes from ${chunksAccumulator.length} chunks`);
+
+          // Upload the complete audio file using the simple transcribe endpoint
+          const recordedType: string = mimeType || 'audio/webm';
+          const filename = recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm';
+          const fd = new FormData();
+          fd.append('file', completeAudio, filename);
+
+          const transcribeRes = await fetch(`/api/visits/transcribe`, {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+
+          if (!transcribeRes.ok) {
+            let errText = '';
+            try { errText = await transcribeRes.text(); } catch {}
+            // eslint-disable-next-line no-console
+            console.error('Transcription failed:', transcribeRes.status, errText);
+            toast({ 
+              variant: 'warning', 
+              title: 'Transcription failed', 
+              description: `Server returned ${transcribeRes.status}. ${errText ? errText.slice(0, 100) : ''}` 
+            });
+            return;
+          }
+
+          const data = await transcribeRes.json();
+          const combinedText = (data?.text as string) || '';
+          const patientOnly = (data?.speakers?.patientText as string) || '';
+          const text = patientOnly || combinedText;
+
           if (text) {
             switch (fieldName) {
               case 'subjective':
@@ -1155,6 +1151,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 setPlan(prev => (prev ? prev + ' ' : '') + text);
                 break;
             }
+          } else {
+            toast({ variant: 'info', title: 'No speech detected', description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.' });
           }
         } catch (e) {
           // eslint-disable-next-line no-console
@@ -1163,11 +1161,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         } finally {
           setIsListening(false);
           setActiveVoiceField(null);
-          sessionIdRef.current = null;
-          chunkIndexRef.current = 0;
-          recordingStartedAtRef.current = 0;
-          lastChunkEndMsRef.current = 0;
-          uploadChainRef.current = Promise.resolve();
         }
       };
       // Record in chunks (e.g., every 30s)
@@ -1277,6 +1270,87 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     return completedSections.has(section);
   };
 
+  // Check if at least 4 key sections are filled for draft readiness indicator
+  // PrescriptionBuilder has its own state, so we check its localStorage draft
+  const [draftCheckTrigger, setDraftCheckTrigger] = useState(0);
+  
+  const isReadyForDraft = useMemo(() => {
+    let filledSectionsCount = 0;
+    
+    // Check PrescriptionBuilder's draft data from localStorage
+    try {
+      const rxDraftKey = `rxDraft:${patientId}:${visitId || 'standalone'}`;
+      const rxDraftData = localStorage.getItem(rxDraftKey);
+      if (rxDraftData) {
+        const draft = JSON.parse(rxDraftData);
+        
+        // 1. Chief complaints
+        if (draft.chiefComplaints && draft.chiefComplaints.trim()) {
+          filledSectionsCount++;
+          console.log('✓ Chief complaints filled');
+        }
+        
+        // 2. Diagnosis
+        if (draft.diagnosis && draft.diagnosis.trim()) {
+          filledSectionsCount++;
+          console.log('✓ Diagnosis filled');
+        }
+        
+        // 3. Clinical details (histories, examination, etc.)
+        const hasClinicalDetails = draft.pastHistory || draft.medicationHistory || 
+                                   draft.menstrualHistory || draft.exObjective || 
+                                   draft.procedurePlanned;
+        if (hasClinicalDetails) {
+          filledSectionsCount++;
+          console.log('✓ Clinical details filled');
+        }
+        
+        // 4. Vitals (any vital filled)
+        const hasVitals = draft.vitalsHeightCm || draft.vitalsWeightKg || 
+                         draft.vitalsBpSys || draft.vitalsBpDia || 
+                         draft.vitalsPulse;
+        if (hasVitals) {
+          filledSectionsCount++;
+          console.log('✓ Vitals filled');
+        }
+        
+        // 5. Treatment (medications prescribed)
+        if (draft.items && Array.isArray(draft.items) && draft.items.length > 0) {
+          filledSectionsCount++;
+          console.log('✓ Treatment/medications filled');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to check prescription draft:', e);
+    }
+    
+    const isReady = filledSectionsCount >= 4;
+    console.log(`📊 Draft readiness: ${filledSectionsCount}/5 sections filled - ${isReady ? '✅ READY' : '❌ NOT READY'}`);
+    return isReady;
+  }, [patientId, visitId, draftCheckTrigger]);
+
+  // Poll localStorage for prescription draft changes
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDraftCheckTrigger(prev => prev + 1);
+    }, 2000); // Check every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  // Automatically mark Photos section as complete when photos are uploaded
+  useEffect(() => {
+    if (photoCount > 0) {
+      markSectionComplete('photos');
+    } else {
+      // Remove photos from completed sections if all photos are deleted
+      setCompletedSections(prev => {
+        const next = new Set(prev);
+        next.delete('photos');
+        return next;
+      });
+    }
+  }, [photoCount]);
 
   const save = async (complete = false) => {
     try {
@@ -1589,16 +1663,22 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             <TabsList className="mb-6 flex flex-wrap gap-2">
               {renderTabs().map(tab => {
                 const IconComponent = tab.icon;
+                const showIndicator = tab.id === 'prescription' 
+                  ? isReadyForDraft 
+                  : isSectionComplete(tab.id);
                 return (
                   <TabsTrigger 
                     key={tab.id} 
                     value={tab.id}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 relative"
                   >
                     <IconComponent className="h-4 w-4" />
                     {tab.label}
-                    {isSectionComplete(tab.id) && (
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    {showIndicator && (
+                      <div 
+                        className={`w-2 h-2 bg-green-500 rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
+                        title={tab.id === 'prescription' ? 'At least 4 key sections filled' : 'Section complete'}
+                      />
                     )}
                   </TabsTrigger>
                 );
@@ -2009,83 +2089,75 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             {/* Prescription Tab - Doctor Only */}
             {hasPermission('all') && (
               <TabsContent value="prescription" className="space-y-4" forceMount>
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="text-lg">Prescription</CardTitle>
-                    <CardDescription>Create and format prescriptions tied to this visit</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <PrescriptionBuilder 
-                      patientId={patientId}
-                      doctorId={doctorId}
-                      visitId={visitId}
-                      ensureVisitId={async () => {
-                        if (visitId) return visitId;
-                        if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
-                          console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
-                          toast({
-                            variant: 'destructive',
-                            title: 'Invalid IDs',
-                            description: 'Patient or Doctor ID is missing. Please select valid records and try again.',
-                          });
-                          throw new Error('Missing IDs');
-                        }
-                        const minimalPayload: any = {
-                          patientId,
-                          doctorId,
-                          visitType: 'consultation',
-                          status: 'in-progress',
-                          complaints: [{ complaint: 'Consultation' }],
-                          diagnosis: [],
-                          plan: {},
-                          treatmentPlan: {},
-                          photos: [],
-                          metadata: {
-                            capturedBy: userRole,
-                            sections: ['prescription'],
-                            progress: 10,
-                            createdForPrescription: true,
-                          }
-                        };
-                        const newVisit = await apiClient.createVisit(minimalPayload);
-                        const newVisitId = (newVisit as VisitDetails).id;
-                        setVisitId(newVisitId);
-                        return newVisitId;
-                      }}
-                      reviewDate={reviewDate}
-                      printBgUrl={printBgUrl}
-                      printTopMarginPx={printTopMarginPx}
-                      printLeftMarginPx={printLeftMarginPx}
-                      printRightMarginPx={printRightMarginPx}
-                      printBottomMarginPx={printBottomMarginPx}
-                      contentOffsetXPx={contentOffsetXPx}
-                      contentOffsetYPx={contentOffsetYPx}
-                      onChangeContentOffset={(x: number, y: number) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
-                      designAids={{
-                        enabled: designAidsEnabled,
-                        showGrid: designShowGrid,
-                        showRulers: designShowRulers,
-                        snapToGrid: designSnapToGrid,
-                        gridSizePx: designGridSizePx,
-                        nudgeStepPx: designNudgeStepPx,
-                      }}
-                      paperPreset={paperPreset}
-                      grayscale={grayscaleMode}
-                      bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
-                      frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
-                      onChangeFrames={(next: { enabled?: boolean; headerHeightMm?: number; footerHeightMm?: number }) => {
-                         if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
-                         if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
-                         if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
-                       }}
-                      onChangeReviewDate={setReviewDate}
-                      onCreated={() => markSectionComplete('prescription')}
-                      refreshKey={builderRefreshKey}
-                      includeSections={rxIncludeSections}
-                      onChangeIncludeSections={setRxIncludeSections}
-                    />
-                  </CardContent>
-                </Card>
+                <PrescriptionBuilder 
+                  patientId={patientId}
+                  doctorId={doctorId}
+                  visitId={visitId}
+                  ensureVisitId={async () => {
+                    if (visitId) return visitId;
+                    if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
+                      console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });
+                      toast({
+                        variant: 'destructive',
+                        title: 'Invalid IDs',
+                        description: 'Patient or Doctor ID is missing. Please select valid records and try again.',
+                      });
+                      throw new Error('Missing IDs');
+                    }
+                    const minimalPayload: any = {
+                      patientId,
+                      doctorId,
+                      visitType: 'consultation',
+                      status: 'in-progress',
+                      complaints: [{ complaint: 'Consultation' }],
+                      diagnosis: [],
+                      plan: {},
+                      treatmentPlan: {},
+                      photos: [],
+                      metadata: {
+                        capturedBy: userRole,
+                        sections: ['prescription'],
+                        progress: 10,
+                        createdForPrescription: true,
+                      }
+                    };
+                    const newVisit = await apiClient.createVisit(minimalPayload);
+                    const newVisitId = (newVisit as VisitDetails).id;
+                    setVisitId(newVisitId);
+                    return newVisitId;
+                  }}
+                  reviewDate={reviewDate}
+                  printBgUrl={printBgUrl}
+                  printTopMarginPx={printTopMarginPx}
+                  printLeftMarginPx={printLeftMarginPx}
+                  printRightMarginPx={printRightMarginPx}
+                  printBottomMarginPx={printBottomMarginPx}
+                  contentOffsetXPx={contentOffsetXPx}
+                  contentOffsetYPx={contentOffsetYPx}
+                  onChangeContentOffset={(x: number, y: number) => { setContentOffsetXPx(x); setContentOffsetYPx(y); }}
+                  designAids={{
+                    enabled: designAidsEnabled,
+                    showGrid: designShowGrid,
+                    showRulers: designShowRulers,
+                    snapToGrid: designSnapToGrid,
+                    gridSizePx: designGridSizePx,
+                    nudgeStepPx: designNudgeStepPx,
+                  }}
+                  paperPreset={paperPreset}
+                  grayscale={grayscaleMode}
+                  bleedSafe={{ enabled: showBleedSafe, safeMarginMm }}
+                  frames={{ enabled: framesEnabled, headerHeightMm, footerHeightMm }}
+                  onChangeFrames={(next: { enabled?: boolean; headerHeightMm?: number; footerHeightMm?: number }) => {
+                    if (typeof next.enabled === 'boolean') setFramesEnabled(next.enabled);
+                    if (typeof next.headerHeightMm === 'number') setHeaderHeightMm(next.headerHeightMm);
+                    if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
+                  }}
+                  onChangeReviewDate={setReviewDate}
+                  onCreated={() => markSectionComplete('prescription')}
+                  refreshKey={builderRefreshKey}
+                  includeSections={rxIncludeSections}
+                  onChangeIncludeSections={setRxIncludeSections}
+                />
               </TabsContent>
             )}
 

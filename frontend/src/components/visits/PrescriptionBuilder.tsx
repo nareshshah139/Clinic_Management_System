@@ -123,7 +123,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   const headingId = `section-${section}-heading`;
   const contentId = `section-${section}-content`;
   return (
-    <Card className={highlight ? 'bg-green-50 border-green-300' : ''}>
+    <Card className={`overflow-visible ${highlight ? 'bg-green-50 border-green-300' : ''}`}>
       <CardHeader className="pb-2">
         <div
           className="flex items-center justify-between w-full"
@@ -137,7 +137,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
           </div>
         </div>
       </CardHeader>
-      <CardContent id={contentId} className="pt-0">
+      <CardContent id={contentId} className="pt-0 overflow-visible">
         {children}
       </CardContent>
     </Card>
@@ -161,8 +161,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [addDrugOpen, setAddDrugOpen] = useState(false);
   const [newDrugForm, setNewDrugForm] = useState<{ name: string; manufacturerName: string; price: string; packSizeLabel: string }>({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
   const openAddDrugDialog = () => {
-    const q = (drugQuery || '').trim();
-    setNewDrugForm({ name: q, manufacturerName: '', price: '', packSizeLabel: '' });
+    // No global drug query anymore, start with empty form
+    setNewDrugForm({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
     setAddDrugOpen(true);
   };
   const handleCreateDrug = async () => {
@@ -195,8 +195,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       } catch {}
       const created: any = await apiClient.post('/drugs', payload);
       setAddDrugOpen(false);
-      // Immediately add to current prescription items
-      addItemFromDrug({ id: created?.id, name: created?.name, genericName: '', manufacturerName: created?.manufacturerName });
+      // Immediately add to current prescription items (add a new row)
+      const newRow: PrescriptionItemForm = {
+        drugName: created?.name || '',
+        genericName: '',
+        dosage: 1,
+        dosageUnit: 'TABLET',
+        frequency: 'ONCE_DAILY',
+        duration: 5,
+        durationUnit: 'DAYS',
+        instructions: '',
+        route: 'Oral',
+        timing: 'After meals',
+        quantity: 5,
+        isGeneric: true,
+      };
+      setItems(prev => [...prev, newRow]);
       toast({ variant: 'success', title: 'Drug added', description: 'Drug saved to database and added to prescription.' });
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Failed to add drug', description: getErrorMessage(e) });
@@ -286,72 +300,95 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return;
     }
 
-    let mimeType = '';
-    let recorder: MediaRecorder;
-    const chunks: BlobPart[] = [];
-    const safeMimeTypes = ['audio/webm', 'audio/mp4'];
-    const tryInitRecorder = (stream: MediaStream) => {
-      for (const t of safeMimeTypes) {
-        if ((window as any).MediaRecorder?.isTypeSupported?.(t)) {
-          mimeType = t;
-          try {
-            recorder = new MediaRecorder(stream, { mimeType: t as any });
-            return recorder;
-          } catch {}
-        }
-      }
-      try {
-        recorder = new MediaRecorder(stream);
-        return recorder;
-      } catch (e) {
-        throw new Error('Unable to start audio recorder');
-      }
-    };
+    if (!navigator.mediaDevices || !(window as any).MediaRecorder) {
+      toast({
+        variant: 'warning',
+        title: 'Voice capture unavailable',
+        description: 'Microphone recording is not supported in this browser.',
+      });
+      return;
+    }
 
     setIsListening(true);
     setActiveVoiceField(fieldName);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Request audio with better quality settings
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true, // Automatically adjust volume
+          sampleRate: 48000,     // Higher quality
+        }
+      });
       streamRef.current = stream;
-      const r = tryInitRecorder(stream);
-      if (!r) {
-        toast({ variant: 'warning', title: 'Recording error', description: 'Your browser does not support audio recording.' });
-        setIsListening(false);
-        setActiveVoiceField(null);
-        try { stream.getTracks().forEach(t => t.stop()); } catch {}
-        return;
-      }
 
-      recorderRef.current = r;
-      r.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-      r.onstop = async () => {
+      const mimeType = (window as any).MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : ((window as any).MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } as any : undefined);
+      recorderRef.current = recorder;
+      // Accumulate chunks instead of sending individually (MediaRecorder chunks aren't standalone files)
+      const chunksAccumulator: Blob[] = [];
+      recorder.ondataavailable = (e) => {
+        if (!e.data || e.data.size <= 0) return;
+        // Accumulate all chunks - MediaRecorder fragments need to be combined into a complete file
+        chunksAccumulator.push(e.data);
+        // eslint-disable-next-line no-console
+        console.log(`Accumulated chunk ${chunksAccumulator.length}: ${e.data.size} bytes`);
+      };
+      recorder.onstop = async () => {
         try { stream.getTracks().forEach(t => t.stop()); } catch {}
         streamRef.current = null;
         recorderRef.current = null;
-        const recordedType: string = mimeType || 'audio/webm';
-        const blob = new Blob(chunks, { type: recordedType });
         try {
-          const baseUrl = '/api';
-          const fd = new FormData();
-          const filename = recordedType === 'audio/mp4' ? 'speech.m4a' : 'speech.webm';
-          fd.append('file', blob, filename);
-          const res = await fetch(`${baseUrl}/visits/transcribe`, { method: 'POST', body: fd, credentials: 'include' });
-          if (!res.ok) {
-            let errText = '';
-            try { errText = await res.text(); } catch {}
-            // eslint-disable-next-line no-console
-            console.error('Transcription request failed:', res.status, errText);
-            toast({ variant: 'warning', title: 'Transcription failed', description: `Speech-to-text request returned ${res.status}.` });
+          // Combine all accumulated chunks into a single complete audio file
+          if (chunksAccumulator.length === 0) {
+            toast({ variant: 'warning', title: 'No audio recorded', description: 'Please try recording again.' });
             return;
           }
-          const data = await res.json();
-          const text = (data?.text as string) || '';
-          if (text) {
+
+          // Create a single Blob from all chunks
+          const completeAudio = new Blob(chunksAccumulator, { type: mimeType || 'audio/webm' });
+          // eslint-disable-next-line no-console
+          console.log(`Sending complete audio file: ${completeAudio.size} bytes from ${chunksAccumulator.length} chunks`);
+
+          // Upload the complete audio file using the simple transcribe endpoint
+          const recordedType: string = mimeType || 'audio/webm';
+          const filename = recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm';
+          const fd = new FormData();
+          fd.append('file', completeAudio, filename);
+
+          const transcribeRes = await fetch(`/api/visits/transcribe`, {
+            method: 'POST',
+            body: fd,
+            credentials: 'include',
+          });
+
+          if (!transcribeRes.ok) {
+            let errText = '';
+            try { errText = await transcribeRes.text(); } catch {}
+            // eslint-disable-next-line no-console
+            console.error('Transcription failed:', transcribeRes.status, errText);
+            toast({ 
+              variant: 'warning', 
+              title: 'Transcription failed', 
+              description: `Server returned ${transcribeRes.status}. ${errText ? errText.slice(0, 100) : ''}` 
+            });
+            return;
+          }
+
+          const data = await transcribeRes.json();
+          const combinedText = (data?.text as string) || '';
+          const patientOnly = (data?.speakers?.patientText as string) || '';
+          const appendText = patientOnly || combinedText;
+
+          if (appendText) {
             switch (fieldName) {
               case 'chiefComplaints':
-                setChiefComplaints(prev => (prev ? prev + ' ' : '') + text);
+                setChiefComplaints(prev => (prev ? prev + ' ' : '') + appendText);
                 break;
             }
+          } else {
+            toast({ variant: 'info', title: 'No speech detected', description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.' });
           }
         } catch (e) {
           // eslint-disable-next-line no-console
@@ -362,20 +399,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           setActiveVoiceField(null);
         }
       };
-
-      try { r.start(); } catch {
-        toast({ variant: 'warning', title: 'Recording error', description: 'Failed to start recording.' });
-        setIsListening(false);
-        setActiveVoiceField(null);
-        try { stream.getTracks().forEach(t => t.stop()); } catch {}
-        return;
-      }
-      setTimeout(() => { if (r.state !== 'inactive') r.stop(); }, 300000);
+      // Record in chunks (e.g., every 30s)
+      recorder.start(30000);
+      // Auto-stop after up to 10 minutes or when button clicked again (toggle)
+      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 600000);
     } catch (e) {
       setIsListening(false);
       setActiveVoiceField(null);
       try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
       recorderRef.current = null;
+      streamRef.current = null;
       toast({ variant: 'warning', title: 'Microphone access denied', description: getErrorMessage(e) || 'Check browser permissions and try again.' });
     }
   }, [activeVoiceField, isListening, toast]);
@@ -418,12 +451,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [vitalsBpSys, setVitalsBpSys] = useState<number | ''>('');
   const [vitalsBpDia, setVitalsBpDia] = useState<number | ''>('');
   const [vitalsPulse, setVitalsPulse] = useState<number | ''>('');
-  // Restore drug search states
-  const [drugQuery, setDrugQuery] = useState('');
+  // Restore drug search states (now per-row)
+  const [rowDrugQueries, setRowDrugQueries] = useState<Record<number, string>>({});
+  const [rowDrugResults, setRowDrugResults] = useState<Record<number, any[]>>({});
+  const [rowLoadingDrugs, setRowLoadingDrugs] = useState<Record<number, boolean>>({});
+  const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [drugStockById, setDrugStockById] = useState<Record<string, number>>({});
   const [drugStockLoading, setDrugStockLoading] = useState<Record<string, boolean>>({});
-  const [drugResults, setDrugResults] = useState<any[]>([]);
-  const [loadingDrugs, setLoadingDrugs] = useState(false);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const lastTemplateApplyRef = useRef<number>(0);
@@ -524,8 +560,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
-  const [orderOpen, setOrderOpen] = useState(false);
-  const [printTotals, setPrintTotals] = useState<Record<string, number>>({});
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -538,10 +572,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [breakBeforeSignature, setBreakBeforeSignature] = useState(false);
   const [avoidBreakInsideTables, setAvoidBreakInsideTables] = useState(true);
   const [interactions, setInteractions] = useState<any[]>([]);
-  type OneMgSelection = { sku: string; name: string; price?: number };
-  const [oneMgMap, setOneMgMap] = useState<Array<{ q: string; loading: boolean; results: any[]; selection?: OneMgSelection; qty: number }>>([]);
-  const [oneMgChecking, setOneMgChecking] = useState(false);
-  const [oneMgTotals, setOneMgTotals] = useState<any>(null);
   const [confirmPharmacy, setConfirmPharmacy] = useState<{
     open: boolean;
     prescriptionId: string;
@@ -969,16 +999,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   // removed doctor's personal notes composition and autocomplete logic
 
-  // Debounced drug search (uses prescriptions autocomplete)
+  // Debounced drug search per row
   useEffect(() => {
+    if (activeSearchRow === null) return;
+    
     const t = setTimeout(async () => {
-      const q = (drugQuery || '').trim();
+      const q = (rowDrugQueries[activeSearchRow] || '').trim();
       if (q.length < 2) {
-        setDrugResults([]);
+        setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: [] }));
         return;
       }
       try {
-        setLoadingDrugs(true);
+        setRowLoadingDrugs(prev => ({ ...prev, [activeSearchRow]: true }));
         const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
         const primary = Array.isArray(res)
           ? res
@@ -997,25 +1029,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         // Sort by relevance if available
         const sorted = sortDrugsByRelevance(Array.isArray(list) ? list : [], q);
-        setDrugResults(sorted.slice(0, 10));
+        setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: sorted.slice(0, 10) }));
       } catch (e) {
         try {
           const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
           const list2 = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
           const sorted2 = sortDrugsByRelevance(Array.isArray(list2) ? list2 : [], q);
-          setDrugResults(sorted2.slice(0, 10));
+          setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: sorted2.slice(0, 10) }));
         } catch {
-          setDrugResults([]);
+          setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: [] }));
         }
       } finally {
-        setLoadingDrugs(false);
+        setRowLoadingDrugs(prev => ({ ...prev, [activeSearchRow]: false }));
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [drugQuery]);
+  }, [rowDrugQueries, activeSearchRow]);
 
-  const searchDrugs = (q: string) => {
-    setDrugQuery(q);
+  const searchDrugsForRow = (rowIdx: number, q: string) => {
+    setRowDrugQueries(prev => ({ ...prev, [rowIdx]: q }));
+    setActiveSearchRow(rowIdx);
+    
+    // Calculate dropdown position based on input element
+    const inputEl = inputRefs.current[rowIdx];
+    if (inputEl) {
+      const rect = inputEl.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 4,
+        left: rect.left + window.scrollX,
+        width: Math.max(500, rect.width)
+      });
+    }
+    
     pushRecent('drugQueries', q);
   };
 
@@ -1193,9 +1238,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return true;
   };
 
-  const addItemFromDrug = (drug: any) => {
+  const addItemFromDrugToRow = (rowIdx: number, drug: any) => {
     if (!shouldAllowDrugAdd(drug)) return;
-    const base: PrescriptionItemForm = {
+    const base: Partial<PrescriptionItemForm> = {
       drugName: drug.name,
       genericName: drug.genericName,
       dosage: 1,
@@ -1209,20 +1254,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       quantity: 5,
       isGeneric: true,
     };
-    setItems(prev => {
-      const next = [...prev];
-      const last = next[next.length - 1];
-      const hasBlankLast = last && !((last.drugName || '').trim());
-      if (hasBlankLast) {
-        next[next.length - 1] = base;
-      } else {
-        next.push(base);
-      }
-      if (!hasTrailingBlank(next)) next.push(createBlankItem());
-      return next;
-    });
-    setDrugResults([]);
-    setDrugQuery('');
+    // Update the specific row with drug data
+    updateItem(rowIdx, base);
+    
+    // Clear search results for this row
+    setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
+    setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
+    setActiveSearchRow(null);
+    
     pushRecent('drugNames', drug.name);
     if (drug.genericName) pushRecent('drugGeneric', drug.genericName);
   };
@@ -1921,106 +1960,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setTemplateNameError,
   ]);
 
-  useEffect(() => {
-    if (!orderOpen) return;
-    // Initialize mapping state from current items when dialog opens
-    const next = validItems.map((it) => ({ q: it.drugName || '', loading: false, results: [], selection: undefined, qty: Number(it.quantity || 1) || 1 }));
-    setOneMgMap(next);
-    // Auto-search initial queries
-    next.forEach(async (_row, idx) => {
-      const q = next[idx].q?.trim();
-      if (q && q.length >= 2) {
-        try {
-          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, loading: true } : r)));
-          const res = await apiClient.oneMgSearch(q, 8);
-          const arr = Array.isArray(res) ? (res as any[]) : [];
-          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: arr, loading: false } : r)));
-        } catch {
-          setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [], loading: false } : r)));
-        }
-      }
-    });
-  }, [orderOpen]);
-
-  const handleOneMgSearch = async (idx: number, q: string) => {
-    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, q } : r)));
-    const term = q.trim();
-    if (!term || term.length < 2) {
-      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [] } : r)));
-      return;
-    }
-    try {
-      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, loading: true } : r)));
-      const res = await apiClient.oneMgSearch(term, 8);
-      const arr = Array.isArray(res) ? (res as any[]) : [];
-      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: arr, loading: false } : r)));
-    } catch {
-      setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, results: [], loading: false } : r)));
-    }
-  };
-
-  const selectOneMgProduct = (idx: number, p: any) => {
-    const selection: OneMgSelection = { sku: String(p.sku || p.id || p.code || ''), name: String(p.name || p.title || ''), price: Number(p.price || p.mrp || p.salePrice || 0) || undefined };
-    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, selection, results: [] } : r)));
-  };
-
-  const updateOneMgQty = (idx: number, qty: number) => {
-    const safe = qty > 0 ? qty : 1;
-    setOneMgMap((prev) => prev.map((r, i) => (i === idx ? { ...r, qty: safe } : r)));
-  };
-
-  const checkOneMgInventory = async () => {
-    try {
-      setOneMgChecking(true);
-      const itemsPayload = oneMgMap
-        .map((r) => (r.selection ? { sku: r.selection.sku, qty: r.qty } : null))
-        .filter(Boolean);
-      const res = await apiClient.oneMgCheckInventory({ items: itemsPayload });
-      setOneMgTotals(res || {});
-    } catch {
-      setOneMgTotals(null);
-    } finally {
-      setOneMgChecking(false);
-    }
-  };
-
-  const placeOneMgOrder = async () => {
-    try {
-      const itemsPayload = oneMgMap
-        .map((r, idx) => (r.selection ? { rxIndex: idx, sku: r.selection.sku, name: r.selection.name, qty: r.qty, price: r.selection.price } : null))
-        .filter(Boolean);
-      if (itemsPayload.length === 0) {
-        toast({
-          variant: 'warning',
-          title: 'No products selected',
-          description: 'Select at least one product to place an order.',
-        });
-        return;
-      }
-      const payload = {
-        patientId,
-        visitId,
-        prescriptionItems: itemsPayload,
-        shippingAddress: {},
-        paymentMode: 'COD',
-      } as any;
-      const res: any = await apiClient.oneMgCreateOrder(payload);
-      const orderId = res && (res as any).orderId ? `#${(res as any).orderId}` : 'successfully';
-      toast({
-        variant: 'success',
-        title: '1MG order created',
-        description: `Prescription items sent to pharmacy ${orderId}.`,
-      });
-      setOrderOpen(false);
-    } catch (e: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Unable to create 1MG order',
-        description: getErrorMessage(e) || 'Please retry shortly.',
-      });
-    }
-  };
-
   const [assets, setAssets] = useState<any[]>([]);
   const [printerProfiles, setPrinterProfiles] = useState<any[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
@@ -2053,17 +1992,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     })();
   }, []);
 
-  // Fetch aggregated print/share totals when preview is opened
-  useEffect(() => {
-    const prescId = (visitData as any)?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-    if (!previewOpen || !prescId) return;
-    (async () => {
-      try {
-        const res: any = await apiClient.getPrescriptionPrintEvents(prescId);
-        if (res?.totals) setPrintTotals(res.totals as Record<string, number>);
-      } catch {}
-    })();
-  }, [previewOpen, visitData]);
 
   // Old custom pagination removed - now using unified Paged.js system
 
@@ -2661,12 +2589,28 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => {
     const t = setTimeout(() => {
       try {
-        const data = { items, followUpInstructions };
+        const data = { 
+          items, 
+          followUpInstructions,
+          chiefComplaints,
+          diagnosis,
+          pastHistory,
+          medicationHistory,
+          menstrualHistory,
+          exObjective,
+          procedurePlanned,
+          vitalsHeightCm,
+          vitalsWeightKg,
+          vitalsBmi,
+          vitalsBpSys,
+          vitalsBpDia,
+          vitalsPulse,
+        };
         localStorage.setItem(draftKey, JSON.stringify(data));
       } catch {}
     }, 600);
     return () => clearTimeout(t);
-  }, [draftKey, items, followUpInstructions]);
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(draftKey);
@@ -2674,6 +2618,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const data = JSON.parse(raw);
         if (Array.isArray(data?.items)) setItems(data.items);
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
+        if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
+        if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
+        if (typeof data?.pastHistory === 'string') setPastHistory(data.pastHistory);
+        if (typeof data?.medicationHistory === 'string') setMedicationHistory(data.medicationHistory);
+        if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
+        if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
+        if (typeof data?.procedurePlanned === 'string') setProcedurePlanned(data.procedurePlanned);
+        if (data?.vitalsHeightCm !== undefined) setVitalsHeightCm(data.vitalsHeightCm);
+        if (data?.vitalsWeightKg !== undefined) setVitalsWeightKg(data.vitalsWeightKg);
+        if (data?.vitalsBmi !== undefined) setVitalsBmi(data.vitalsBmi);
+        if (data?.vitalsBpSys !== undefined) setVitalsBpSys(data.vitalsBpSys);
+        if (data?.vitalsBpDia !== undefined) setVitalsBpDia(data.vitalsBpDia);
+        if (data?.vitalsPulse !== undefined) setVitalsPulse(data.vitalsPulse);
       }
     } catch {}
     pushHistory();
@@ -2697,42 +2654,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, []);
 
   return (
-    <div className="space-y-6">
-      {!standalone && validItems.length > 0 && (
-        <div className="sticky top-0 z-10 bg-white border-b py-2 flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&doctorId=${encodeURIComponent(doctorId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
-              window.location.href = url;
-            }}
-          >
-            Go to Pharmacy
-          </Button>
-        </div>
-      )}
+    <div className="space-y-6 overflow-visible">
       <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Prescription Builder</span>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
-                  {standalone ? 'Prescription Pad' : 'Visit-linked'}
-                </Badge>
-                {!standalone && (
-                  <Button variant="secondary" size="sm" onClick={() => setOrderOpen(true)}>Order via 1MG</Button>
-                )}
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loadingVisit && (
-              <div className="text-xs text-gray-500">Loading visit details…</div>
-            )}
-
-            {/* Templates quick bar */}
+        <div className="space-y-4">
+          {/* Templates quick bar */}
             <div className="flex flex-wrap gap-2 items-end">
               <div className="min-w-[240px]">
                 <label className="text-xs text-gray-600">Templates</label>
@@ -2897,12 +2822,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       ))}
                     </div>
                   )}
-                </div>
-                <div className="mt-2 text-xs text-gray-600 flex items-center gap-3">
-                  <span>Totals:</span>
-                  <span>Prints: {printTotals['PRINT_PREVIEW_PDF'] || 0}</span>
-                  <span>WhatsApp shares: {printTotals['WHATSAPP_SHARE'] || 0}</span>
-                  <span>Email shares: {printTotals['EMAIL_SHARE'] || 0}</span>
                 </div>
               </div>
             </CollapsibleSection>
@@ -3135,89 +3054,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
             {/* Treatment */}
             <CollapsibleSection title="Treatment" section="treatment">
-              <div className="space-y-3">
-                {/* Drug search to add rows */}
-                <div>
-                  <label className="text-sm text-gray-700">Add Medicine</label>
-                  <Input 
-                    key="drug-search"
-                    placeholder="Search drug name or brand (min 2 chars)" 
-                    value={drugQuery}
-                    onChange={(e) => void searchDrugs(e.target.value)}
-                  />
-                  {canAddDrugToDB && (
-                    <div className="mt-1">
-                      <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
-                    </div>
-                  )}
-                  {drugQuery.trim().length >= 2 && (
-                    <div className="mt-2 border rounded divide-y max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
-                      {loadingDrugs && (
-                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
-                      )}
-                      {!loadingDrugs && drugResults.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
-                      )}
-                      {!loadingDrugs && drugResults.length > 0 && (
-                        <>
-                          {drugResults.map((d: any, index: number) => (
-                            <div 
-                              key={`${d.id}-${d.name}`} 
-                              className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 ${
-                                index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
-                                index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
-                              }`}
-                              onMouseEnter={() => prefetchDrugStockById(d.id)}
-                              onDoubleClick={() => { addItemFromDrug(d); }}
-                              title={((): string => {
-                                const stock = drugStockById[d.id];
-                                if (stock === undefined) return 'Checking stock…';
-                                return `Remaining stock: ${stock}`;
-                              })()}
-                            >
-                              <div className="flex-1">
-                                <div className="flex items-center">
-                                  <div className="font-medium">
-                                    {highlightMatch(d.name, drugQuery)}
-                                  </div>
-                                  {getRelevanceBadge(d, drugQuery, index)}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', drugQuery)}
-                                  {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
-                                </div>
-                                <div className="text-xs mt-0.5">
-                                  <span className="text-gray-500">Stock:</span>{' '}
-                                  {drugStockById[d.id] !== undefined ? (
-                                    <span className={drugStockById[d.id] <= 5 ? 'text-red-600' : 'text-gray-700'}>
-                                      {drugStockById[d.id]}
-                                    </span>
-                                  ) : (
-                                    <span className="text-gray-400">—</span>
-                                  )}
-                                </div>
-                              </div>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={(e) => { e.stopPropagation(); addItemFromDrug(d); }}
-                                onDoubleClick={(e) => { e.stopPropagation(); }}
-                              >
-                                Add
-                              </Button>
-                            </div>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
+              <div className="space-y-3 overflow-visible">
                 <div className="flex justify-between items-center">
-              <div className="text-sm text-gray-600">Total items: {items.length}</div>
-                  <Button size="sm" variant="outline" onClick={() => setItems(prev => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '', duration: '', durationUnit: 'DAYS', instructions: '', timing: '', quantity: '' }])}>Add Row</Button>
+                  <div className="text-sm text-gray-600">Total items: {items.length}</div>
+                  <div className="flex gap-2">
+                    {canAddDrugToDB && (
+                      <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => setItems(prev => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '', duration: '', durationUnit: 'DAYS', instructions: '', timing: '', quantity: '' }])}>Add Row</Button>
+                  </div>
                 </div>
-                <div className="overflow-auto border rounded">
-                  <table className="min-w-full text-sm">
+                <div className="overflow-visible border rounded">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-sm">
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
@@ -3238,7 +3087,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <tr key={idx} className="border-t">
                           <td className="px-3 py-2 align-top" onMouseEnter={() => prefetchDrugStockByName(it.drugName)} title={(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; if (stock === undefined) return 'Remaining stock: —'; return `Remaining stock: ${stock}`; })()}>
                             <div className="flex items-center gap-2">
-                              <Input value={it.drugName} onChange={(e) => updateItem(idx, { drugName: e.target.value })} placeholder="Medicine name" />
+                              <Input 
+                                ref={(el) => { inputRefs.current[idx] = el; }}
+                                value={it.drugName} 
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateItem(idx, { drugName: val });
+                                  searchDrugsForRow(idx, val);
+                                }}
+                                onFocus={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  setDropdownPosition({
+                                    top: rect.bottom + window.scrollY + 4,
+                                    left: rect.left + window.scrollX,
+                                    width: Math.max(500, rect.width)
+                                  });
+                                  if (it.drugName.trim().length >= 2) {
+                                    searchDrugsForRow(idx, it.drugName);
+                                  }
+                                }}
+                                onBlur={() => {
+                                  setTimeout(() => {
+                                    if (activeSearchRow === idx) {
+                                      setActiveSearchRow(null);
+                                      setDropdownPosition(null);
+                                    }
+                                  }, 200);
+                                }}
+                                placeholder="Search medicine name..." 
+                              />
                               <span className="text-xs text-gray-500 whitespace-nowrap">
                                 Stock:{' '}
                                 {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
@@ -3339,6 +3216,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 </div>
               </div>
             </CollapsibleSection>
@@ -3454,7 +3332,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <div className="flex items-center justify-between pt-2 opacity-100">
               <div className="text-sm text-gray-600">Total items: {validItems.length} • Total qty: {totalQuantity}</div>
               <div className="flex gap-2">
-                <Button variant="secondary" onClick={() => setOrderOpen(true)} disabled={validItems.length === 0}>Order via 1MG</Button>
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
                   <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
@@ -3491,10 +3368,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 <Button onClick={create} disabled={!canCreate}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
+                {!standalone && validItems.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const url = `/dashboard/pharmacy?patientId=${encodeURIComponent(patientId)}&doctorId=${encodeURIComponent(doctorId)}${visitId ? `&visitId=${encodeURIComponent(visitId)}` : ''}`;
+                      window.location.href = url;
+                    }}
+                  >
+                    Go to Pharmacy
+                  </Button>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Print Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
@@ -4455,87 +4342,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           </DialogContent>
         </Dialog>
 
-        {/* 1MG Order Dialog (placeholder) */}
-        <Dialog open={orderOpen} onOpenChange={setOrderOpen}>
-          <DialogContent className="sm:max-w-4xl">
-            <DialogHeader>
-              <DialogTitle>Order via 1MG</DialogTitle>
-            </DialogHeader>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-              <div className="lg:col-span-2 max-h-[60vh] overflow-auto mt-1 pr-1">
-                {validItems.map((it, idx) => (
-                  <div key={`map-${idx}`} className="border rounded p-2 mb-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-medium">{it.drugName}</div>
-                        <div className="text-xs text-gray-500">{it.frequency?.replaceAll('_',' ')} • {it.duration} {it.durationUnit?.toLowerCase()}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-600">Qty</span>
-                        <Input className="h-8 w-20" type="number" min={1} value={oneMgMap[idx]?.qty ?? 1} onChange={(e) => updateOneMgQty(idx, Number(e.target.value) || 1)} />
-                      </div>
-                    </div>
-                    <div className="mt-2">
-                      <Input placeholder="Search 1MG product" value={oneMgMap[idx]?.q || ''} onChange={(e) => void handleOneMgSearch(idx, e.target.value)} />
-                      {oneMgMap[idx]?.loading && (<div className="text-xs text-gray-500 mt-1">Searching…</div>)}
-                      {!oneMgMap[idx]?.loading && (oneMgMap[idx]?.results?.length || 0) > 0 && (
-                        <div className="mt-2 border rounded divide-y max-h-40 overflow-auto">
-                          {oneMgMap[idx]?.results?.map((p: any) => (
-                            <div key={`${p.sku || p.id || p.code}`} className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer" onClick={() => selectOneMgProduct(idx, p)}>
-                              <div className="font-medium">{p.name || p.title}</div>
-                              <div className="text-xs text-gray-500">{p.manufacturer || ''} {p.mrp ? `• ₹${p.mrp}` : ''}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {oneMgMap[idx]?.selection && (
-                      <div className="mt-2 text-xs">
-                        Selected: <span className="font-medium">{oneMgMap[idx].selection?.name}</span> {oneMgMap[idx].selection?.price ? `• ₹${oneMgMap[idx].selection?.price}` : ''}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <div className="lg:col-span-1">
-                <div className="border rounded p-3 sticky top-2">
-                  <div className="font-medium mb-2">Cart Summary</div>
-                  <div className="space-y-1 text-sm max-h-[40vh] overflow-auto">
-                    {oneMgMap.filter((r) => !!r.selection).length === 0 && (<div className="text-xs text-gray-500">No items selected yet</div>)}
-                    {oneMgMap.map((r, i) => r.selection ? (
-                      <div key={`sel-${i}`} className="flex items-center justify-between">
-                        <div className="mr-2 truncate">
-                          <div className="font-medium truncate max-w-[180px]" title={r.selection?.name}>{r.selection?.name}</div>
-                          <div className="text-xs text-gray-500">SKU: {r.selection?.sku}</div>
-                        </div>
-                        <div className="text-right">
-                          <div>x{r.qty}</div>
-                          {r.selection?.price ? <div className="text-xs text-gray-600">₹{(r.selection.price * r.qty).toFixed(2)}</div> : null}
-                        </div>
-                      </div>
-                    ) : null)}
-                  </div>
-                  <div className="mt-3">
-                    <Button variant="outline" size="sm" className="w-full" onClick={checkOneMgInventory} disabled={oneMgChecking || oneMgMap.filter((r) => !!r.selection).length === 0}>{oneMgChecking ? 'Checking…' : 'Check Inventory & Totals'}</Button>
-                    {oneMgTotals && (
-                      <div className="mt-2 text-sm">
-                        <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span>₹{oneMgTotals?.subtotal ?? '—'}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-600">Delivery</span><span>₹{oneMgTotals?.delivery ?? '—'}</span></div>
-                        <div className="flex justify-between font-medium border-t pt-1"><span>Total</span><span>₹{oneMgTotals?.total ?? '—'}</span></div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 flex justify-end">
-                    <Button onClick={placeOneMgOrder} disabled={oneMgMap.filter((r) => !!r.selection).length === 0}>Place Order</Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-3 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setOrderOpen(false)}>Close</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
         <Dialog
           open={templatePromptOpen}
           onOpenChange={(open: boolean) => {
@@ -4597,6 +4403,77 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Fixed position drug search dropdown - rendered outside table structure */}
+      {activeSearchRow !== null && dropdownPosition && (rowDrugQueries[activeSearchRow] || '').trim().length >= 2 && (
+        <div 
+          className="fixed z-[10000] bg-white border-2 border-blue-500 rounded-lg shadow-2xl max-h-64 overflow-auto"
+          style={{ 
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {rowLoadingDrugs[activeSearchRow] && (
+            <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+          )}
+          {!rowLoadingDrugs[activeSearchRow] && (!rowDrugResults[activeSearchRow] || rowDrugResults[activeSearchRow].length === 0) && (
+            <div className="px-3 py-2 text-xs text-gray-500">No results found</div>
+          )}
+          {!rowLoadingDrugs[activeSearchRow] && rowDrugResults[activeSearchRow] && rowDrugResults[activeSearchRow].length > 0 && (
+            <>
+              {rowDrugResults[activeSearchRow].map((d: any, index: number) => (
+                <div 
+                  key={`${d.id}-${d.name}`} 
+                  className={`px-3 py-2 text-sm flex items-center justify-between hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
+                    index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
+                    index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
+                  }`}
+                  onMouseEnter={() => prefetchDrugStockById(d.id)}
+                  onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
+                  title={((): string => {
+                    const stock = drugStockById[d.id];
+                    if (stock === undefined) return 'Checking stock…';
+                    return `Remaining stock: ${stock}`;
+                  })()}
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <div className="font-medium">
+                        {highlightMatch(d.name, rowDrugQueries[activeSearchRow])}
+                      </div>
+                      {getRelevanceBadge(d, rowDrugQueries[activeSearchRow], index)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {highlightMatch(d.manufacturer || d.manufacturerName || d.genericName || '', rowDrugQueries[activeSearchRow])}
+                      {d.packSizeLabel ? ` • ${d.packSizeLabel}` : ''}
+                    </div>
+                    <div className="text-xs mt-0.5">
+                      <span className="text-gray-500">Stock:</span>{' '}
+                      {drugStockById[d.id] !== undefined ? (
+                        <span className={drugStockById[d.id] <= 5 ? 'text-red-600' : 'text-gray-700'}>
+                          {drugStockById[d.id]}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={(e) => { e.stopPropagation(); addItemFromDrugToRow(activeSearchRow, d); }}
+                  >
+                    Select
+                  </Button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
