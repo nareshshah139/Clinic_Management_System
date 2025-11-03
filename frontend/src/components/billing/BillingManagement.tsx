@@ -833,7 +833,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
         <div className="flex gap-2">
           <Dialog open={open} onOpenChange={handleDialogOpenChange}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" /> Create Invoice</Button>
+              <Button data-tour="create-invoice-btn"><Plus className="h-4 w-4 mr-2" /> Create Invoice</Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>New Invoice</DialogTitle></DialogHeader>
@@ -1340,7 +1340,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-            <div>
+            <div data-tour="search-invoices">
               <Label>Search</Label>
               <Input
                 placeholder="Search by invoice # or patient"
@@ -1461,7 +1461,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" data-tour="invoices-table">
               <Table>
                 <TableHeader>
                   <TableRow>

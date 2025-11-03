@@ -696,7 +696,7 @@ export default function PatientsManagement() {
         </div>
         <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
           <DialogTrigger asChild>
-            <Button>
+            <Button data-tour="add-patient-btn">
               <Plus className="h-4 w-4 mr-2" /> New Patient
             </Button>
           </DialogTrigger>
@@ -859,7 +859,7 @@ export default function PatientsManagement() {
       <Card>
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 items-center">
-            <div className="relative w-full sm:flex-1">
+            <div className="relative w-full sm:flex-1" data-tour="search-patients">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 id="patients-search"
@@ -974,7 +974,7 @@ export default function PatientsManagement() {
               {search.length >= 2 || genderFilter !== 'ALL' ? 'No patients found matching your search criteria' : 'No patients found'}
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto" data-tour="patients-table">
               <Table>
                 <TableHeader>
                   <TableRow>

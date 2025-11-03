@@ -76,7 +76,9 @@ export default function RoomsPage() {
             <Calendar className="h-5 w-5 text-blue-600" />
             <h2 className="text-xl font-semibold">Room Calendar & Occupancy</h2>
           </div>
-          <RoomCalendar />
+          <div data-tour="room-calendar">
+            <RoomCalendar />
+          </div>
         </TabsContent>
 
         {canManageRooms && (

@@ -20,6 +20,7 @@ import {
   Pill,
   FilePlus2,
   TrendingUp,
+  Mic,
 } from 'lucide-react';
 
 const navigation = [
@@ -101,6 +102,12 @@ const navigation = [
     icon: UserIcon,
     allowedRoles: ['OWNER', 'ADMIN', 'MANAGER'],
   },
+  {
+    name: 'Test Transcribe',
+    href: '/test-transcribe',
+    icon: Mic,
+    allowedRoles: ['OWNER', 'ADMIN', 'DOCTOR'],
+  },
 ];
 
 type NavigationItem = (typeof navigation)[number];
@@ -128,7 +135,7 @@ export function Sidebar() {
   const navigationItems = useMemo(() => filterNavigationByRole(navigation, role), [role]);
 
   return (
-    <div className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]">
+    <div className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]" data-tour="sidebar">
       {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b border-[var(--border)]">
         <div className="flex items-center">

@@ -206,7 +206,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">
         {statCards.map((stat, index) => (
           <Card key={index}>
             <CardContent className="p-6">
@@ -327,7 +327,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Today's Appointments */}
-        <Card>
+        <Card data-tour="appointments-list">
           <CardHeader>
             <CardTitle className="flex items-center">
               <Clock className="h-5 w-5 text-blue-500 mr-2" />
