@@ -70,7 +70,7 @@ const navigation = [
     name: 'Pharmacy',
     href: '/dashboard/pharmacy',
     icon: Pill,
-    allowedRoles: ['ADMIN', 'PHARMACIST'],
+    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
   },
   {
     name: 'Prescription Pad',
@@ -82,7 +82,7 @@ const navigation = [
     name: 'Inventory',
     href: '/dashboard/inventory',
     icon: Package,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'],
+    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST', 'RECEPTION'],
   },
   {
     name: 'Stock Predictions',
