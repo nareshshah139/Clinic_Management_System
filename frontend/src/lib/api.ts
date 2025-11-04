@@ -373,6 +373,10 @@ export class ApiClient {
     return this.post('/inventory/items', data);
   }
 
+  async deleteInventoryItem(id: string) {
+    return this.delete(`/inventory/items/${id}`);
+  }
+
   async getInventoryStatistics() {
     return this.get('/inventory/statistics');
   }

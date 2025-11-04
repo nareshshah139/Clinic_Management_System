@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   TrendingUp,
   TrendingDown,
+  Trash2,
   // Calendar,
   // Filter,
 } from 'lucide-react';
@@ -175,6 +176,19 @@ export default function InventoryPage() {
     setStockItem(null);
     // Optionally refresh list
     fetchInventoryItems(1);
+  };
+
+  const handleDeleteItem = async (item: InventoryItem) => {
+    const confirmed = window.confirm('Are you sure you want to delete this item? This cannot be undone.');
+    if (!confirmed) return;
+    try {
+      await apiClient.deleteInventoryItem(item.id);
+      toast({ description: 'Item deleted successfully' });
+      fetchInventoryItems(1);
+    } catch (error: any) {
+      const message = error?.body?.message || error?.message || 'Failed to delete item';
+      toast({ variant: 'destructive', title: 'Delete failed', description: message });
+    }
   };
 
   return (
@@ -397,6 +411,15 @@ export default function InventoryPage() {
                             <Button variant="outline" size="sm" onClick={() => openStock(item)}>
                               Stock
                             </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void handleDeleteItem(item)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete Item"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                           </div>
                         </TableCell>
                       </TableRow>
