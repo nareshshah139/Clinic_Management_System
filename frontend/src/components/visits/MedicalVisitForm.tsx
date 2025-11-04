@@ -351,6 +351,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const [headerHeightMm, setHeaderHeightMm] = useState<number>(20);
   const [footerHeightMm, setFooterHeightMm] = useState<number>(20);
 
+  // File picker for print background image
+  const printBgFileRef = useRef<HTMLInputElement>(null);
+
   // Persist customization locally so users keep their letterhead and layout
   useEffect(() => {
     try {
@@ -2178,8 +2181,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
                         <div className="flex items-center gap-2 text-sm">
                           <input
+                            ref={printBgFileRef}
                             type="file"
                             accept="image/*"
+                            className="sr-only"
                             onChange={async (e) => {
                               const f = e.target.files?.[0];
                               if (!f) return;
@@ -2191,6 +2196,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                               reader.readAsDataURL(f);
                             }}
                           />
+                          <Button type="button" onClick={() => printBgFileRef.current?.click()}>
+                            Choose File
+                          </Button>
                           <Button type="button" variant="outline" onClick={() => setPrintBgUrl('')}>Clear</Button>
                         </div>
                       </div>
