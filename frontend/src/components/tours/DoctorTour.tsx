@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { HelpCircle } from 'lucide-react';
@@ -129,12 +129,14 @@ function injectTourStyles() {
         justify-content: center !important;
         transition: all 0.2s !important;
         text-shadow: none !important;
-        font-size: 18px !important;
         cursor: pointer !important;
-        position: static !important;
+        position: relative !important;
         margin: 0 4px !important;
         white-space: nowrap !important;
         min-width: unset !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+        overflow: hidden !important;
       }
       
       .introjs-skipbutton:hover {
@@ -149,6 +151,11 @@ function injectTourStyles() {
         content: "✕" !important;
         font-weight: 700 !important;
         font-size: 20px !important;
+        line-height: 1 !important;
+        position: absolute !important;
+        left: 50% !important;
+        top: 50% !important;
+        transform: translate(-50%, -50%) !important;
       }
       
       /* Button navigation wrapper */
@@ -237,6 +244,15 @@ function injectTourStyles() {
           max-width: 100% !important;
           width: 100% !important;
           box-sizing: border-box !important;
+          border-radius: 8px !important;
+          height: auto !important;
+          padding: 10px !important;
+        }
+        
+        .introjs-skipbutton:before {
+          position: static !important;
+          transform: none !important;
+          margin-right: 6px !important;
         }
       }
     `;
@@ -1326,10 +1342,10 @@ function getDoctorVisitTourSteps(): TourStep[] {
 export function DoctorTour({ autoStart = false }: DoctorTourProps) {
   const pathname = usePathname();
   const [hasSeenTour, setHasSeenTour] = useState(true);
-  
-  const steps = getDoctorVisitTourSteps();
-  
-  const { start } = useIntroTour({
+
+  // Memoize steps and options to avoid re-initializing intro.js on re-renders
+  const steps = useMemo(() => getDoctorVisitTourSteps(), []);
+  const tourOptions = useMemo(() => ({
     steps,
     showProgress: true,
     showBullets: true,
@@ -1337,7 +1353,9 @@ export function DoctorTour({ autoStart = false }: DoctorTourProps) {
     exitOnOverlayClick: true,
     skipLabel: '',
     doneLabel: 'Finish',
-  });
+  }), [steps]);
+
+  const { start } = useIntroTour(tourOptions);
 
   // Check if user has seen the tour before
   useEffect(() => {
