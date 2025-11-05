@@ -23,6 +23,9 @@ async function main(): Promise<void> {
     'billing:payment:process',
     'billing:payment:confirm',
     'billing:payment:read',
+    // Inventory access for reception
+    'inventory:item:create',
+    'inventory:item:read',
   ];
 
   try {

@@ -58,7 +58,7 @@ export class InventoryController {
 
   // Inventory Item Management
   @Post('items')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:create')
   createInventoryItem(
     @Body() createItemDto: CreateInventoryItemDto,
@@ -68,7 +68,7 @@ export class InventoryController {
   }
 
   @Get('items')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:read')
   findAllInventoryItems(
     @Query() query: QueryInventoryItemsDto,
@@ -78,7 +78,7 @@ export class InventoryController {
   }
 
   @Get('items/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:read')
   findInventoryItemById(
     @Param('id') id: string,

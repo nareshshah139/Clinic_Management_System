@@ -44,6 +44,9 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'billing:payment:process',
     'billing:payment:confirm',
     'billing:payment:read',
+    // Inventory access for reception
+    'inventory:item:create',
+    'inventory:item:read',
   ],
   ACCOUNTANT: [
     'billing:invoice:read',
