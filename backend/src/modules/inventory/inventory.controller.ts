@@ -88,7 +88,7 @@ export class InventoryController {
   }
 
   @Patch('items/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:update')
   updateInventoryItem(
     @Param('id') id: string,
@@ -99,7 +99,7 @@ export class InventoryController {
   }
 
   @Delete('items/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:delete')
   deleteInventoryItem(
     @Param('id') id: string,
@@ -217,7 +217,7 @@ export class InventoryController {
   }
 
   @Get('purchase-orders/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:po:read')
   findPurchaseOrderById(
     @Param('id') id: string,
@@ -387,7 +387,7 @@ export class InventoryController {
   }
 
   @Get('suppliers')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:read')
   getSuppliers(@Request() req: AuthenticatedRequest) {
     return this.inventoryService.getSuppliers(req.user.branchId);
