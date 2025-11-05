@@ -110,7 +110,7 @@ export class InventoryController {
 
   // Stock Transaction Management
   @Post('transactions')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:create')
   createStockTransaction(
     @Body() createTransactionDto: CreateStockTransactionDto,
@@ -124,7 +124,7 @@ export class InventoryController {
   }
 
   @Get('transactions')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:read')
   findAllStockTransactions(
     @Query() query: QueryStockTransactionsDto,
@@ -134,7 +134,7 @@ export class InventoryController {
   }
 
   @Get('transactions/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:read')
   findStockTransactionById(
     @Param('id') id: string,
@@ -144,7 +144,7 @@ export class InventoryController {
   }
 
   @Patch('transactions/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:update')
   updateStockTransaction(
     @Param('id') id: string,
@@ -155,7 +155,7 @@ export class InventoryController {
   }
 
   @Delete('transactions/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:delete')
   deleteStockTransaction(
     @Param('id') id: string,
@@ -166,7 +166,7 @@ export class InventoryController {
 
   // Bulk Operations
   @Post('transactions/bulk')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:bulk')
   bulkStockUpdate(
     @Body() bulkUpdateDto: BulkStockUpdateDto,
@@ -176,7 +176,7 @@ export class InventoryController {
   }
 
   @Post('adjustments')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:adjustment:create')
   adjustStock(
     @Body() stockAdjustmentDto: StockAdjustmentDto,
@@ -186,7 +186,7 @@ export class InventoryController {
   }
 
   @Post('transfers')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transfer:create')
   transferStock(
     @Body() stockTransferDto: StockTransferDto,
@@ -197,7 +197,7 @@ export class InventoryController {
 
   // Purchase Order Management
   @Post('purchase-orders')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:po:create')
   createPurchaseOrder(
     @Body() createOrderDto: CreatePurchaseOrderDto,
@@ -207,7 +207,7 @@ export class InventoryController {
   }
 
   @Get('purchase-orders')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:po:read')
   findAllPurchaseOrders(
     @Query() query: QueryPurchaseOrdersDto,
@@ -227,7 +227,7 @@ export class InventoryController {
   }
 
   @Patch('purchase-orders/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:po:update')
   updatePurchaseOrder(
     @Param('id') id: string,
@@ -238,7 +238,7 @@ export class InventoryController {
   }
 
   @Delete('purchase-orders/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:po:delete')
   deletePurchaseOrder(
     @Param('id') id: string,
@@ -249,7 +249,7 @@ export class InventoryController {
 
   // Supplier Management
   @Post('suppliers')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:create')
   createSupplier(
     @Body() createSupplierDto: CreateSupplierDto,
@@ -259,7 +259,7 @@ export class InventoryController {
   }
 
   @Get('suppliers')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:read')
   findAllSuppliers(
     @Query() query: QuerySuppliersDto,
@@ -269,7 +269,7 @@ export class InventoryController {
   }
 
   @Get('suppliers/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:read')
   findSupplierById(
     @Param('id') id: string,
@@ -279,7 +279,7 @@ export class InventoryController {
   }
 
   @Patch('suppliers/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:update')
   updateSupplier(
     @Param('id') id: string,
@@ -290,7 +290,7 @@ export class InventoryController {
   }
 
   @Delete('suppliers/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:supplier:delete')
   deleteSupplier(
     @Param('id') id: string,
@@ -301,7 +301,7 @@ export class InventoryController {
 
   // Reports and Analytics
   @Get('reports/stock')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:report:stock')
   getStockReport(
     @Query() query: StockReportDto,
@@ -311,7 +311,7 @@ export class InventoryController {
   }
 
   @Get('statistics')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:statistics:read')
   getInventoryStatistics(
     @Query() query: InventoryStatisticsDto,
@@ -321,7 +321,7 @@ export class InventoryController {
   }
 
   @Get('alerts/low-stock')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:alerts:lowStock')
   getLowStockAlerts(
     @Query() query: LowStockAlertDto,
@@ -331,7 +331,7 @@ export class InventoryController {
   }
 
   @Get('alerts/expiry')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:alerts:expiry')
   getExpiryAlerts(
     @Query() query: ExpiryAlertDto,
@@ -341,7 +341,7 @@ export class InventoryController {
   }
 
   @Get('movement')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:movement:read')
   getInventoryMovement(
     @Query() query: InventoryMovementDto,
@@ -352,7 +352,7 @@ export class InventoryController {
 
   // Search Functions
   @Get('search/barcode')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:search:barcode')
   searchByBarcode(
     @Query() query: BarcodeSearchDto,
@@ -362,7 +362,7 @@ export class InventoryController {
   }
 
   @Get('search/sku')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:search:sku')
   searchBySku(
     @Query() query: SkuSearchDto,
@@ -373,14 +373,14 @@ export class InventoryController {
 
   // Additional Utility Endpoints
   @Get('categories')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:catalog:categories')
   getCategories(@Request() req: AuthenticatedRequest) {
     return this.inventoryService.getCategories(req.user.branchId);
   }
 
   @Get('manufacturers')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:catalog:manufacturers')
   getManufacturers(@Request() req: AuthenticatedRequest) {
     return this.inventoryService.getManufacturers(req.user.branchId);
@@ -394,14 +394,14 @@ export class InventoryController {
   }
 
   @Get('storage-locations')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:storage:read')
   getStorageLocations(@Request() req: AuthenticatedRequest) {
     return this.inventoryService.getStorageLocations(req.user.branchId);
   }
 
   @Get('dashboard')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:dashboard:read')
   getInventoryDashboard(@Request() req: AuthenticatedRequest) {
     return this.inventoryService.getInventoryDashboard(req.user.branchId);
