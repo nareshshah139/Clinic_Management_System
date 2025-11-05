@@ -115,7 +115,7 @@ export class AppointmentsController {
   }
 
   @Get('rooms/all')
-  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTION)
   @Permissions('rooms:read')
   getAllRooms(@Request() req: AuthenticatedRequest) {
     return this.appointmentsService.getAllRooms(req.user.branchId);
