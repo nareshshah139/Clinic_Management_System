@@ -1251,14 +1251,31 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         return bt - at;
       });
       setPatientHistory(historyEntries);
-      setCurrentVisitNumber(historyEntries.length + 1);
+
+      // For new visits (no visitId yet), suggest next visit number.
+      // For existing visits (resuming), preserve the original visit number when available.
+      if (!visitId) {
+        setCurrentVisitNumber(historyEntries.length + 1);
+      } else {
+        const current = historyEntries.find((v: any) => v && v.id === visitId);
+        if (current) {
+          const scribe = parseJsonValue<Record<string, unknown>>(current.scribeJson);
+          const fromScribe = scribe && typeof (scribe as any).visitNumber !== 'undefined' ? Number((scribe as any).visitNumber) : undefined;
+          if (fromScribe && !Number.isNaN(fromScribe)) {
+            setCurrentVisitNumber(fromScribe);
+          } else {
+            const idx = historyEntries.findIndex((v: any) => v && v.id === visitId);
+            setCurrentVisitNumber(idx >= 0 ? idx + 1 : historyEntries.length + 1);
+          }
+        }
+      }
     } catch (error) {
       console.error('Failed to load patient history:', error);
       setPatientHistory([]);
     } finally {
       setLoadingHistory(false);
     }
-  }, [patientId]);
+  }, [patientId, visitId, parseJsonValue]);
 
   useEffect(() => {
     void loadPatientHistory();
