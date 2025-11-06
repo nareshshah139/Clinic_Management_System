@@ -17,6 +17,16 @@ export class ApiClient {
     this.token = null;
   }
 
+  // Lightweight deterministic hash for idempotency keys
+  private djb2Hash(input: string): string {
+    let hash = 5381;
+    for (let i = 0; i < input.length; i++) {
+      hash = ((hash << 5) + hash) + input.charCodeAt(i);
+      hash |= 0; // Force 32-bit
+    }
+    return Math.abs(hash).toString(36);
+  }
+
   // Legacy method retained as no-op for compatibility
   setToken(_token: string) {
     // Intentionally not storing tokens on client to reduce XSS/CSRF risk
@@ -448,12 +458,22 @@ export class ApiClient {
   }
 
   // Prescriptions
-  async createPrescription(data: Record<string, unknown>) {
-    return this.post('/prescriptions', data);
+  async createPrescription(
+    data: Record<string, unknown>,
+    opts?: { idempotencyKey?: string; timeoutMs?: number }
+  ) {
+    const base = JSON.stringify(data || {});
+    const autoKey = `cms:POST:prescriptions:create:${this.djb2Hash(base)}`;
+    return this.post('/prescriptions', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
   }
 
-  async createQuickPrescription(data: Record<string, unknown>) {
-    return this.post('/prescriptions/pad', data);
+  async createQuickPrescription(
+    data: Record<string, unknown>,
+    opts?: { idempotencyKey?: string; timeoutMs?: number }
+  ) {
+    const base = JSON.stringify(data || {});
+    const autoKey = `cms:POST:prescriptions:pad:${this.djb2Hash(base)}`;
+    return this.post('/prescriptions/pad', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
   }
 
   async getPrescription<T = unknown>(id: string): Promise<T> {
