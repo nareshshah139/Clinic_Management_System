@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '@/components/ui/tabs';
 import {
   TrendingUp,
   TrendingDown,
@@ -255,6 +255,9 @@ export function StockPredictionDashboard() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="predictions" className="space-y-4">
+        <div className="flex justify-end">
+          <TabsFontSizeControls />
+        </div>
         <TabsList>
           <TabsTrigger value="predictions">All Predictions</TabsTrigger>
           <TabsTrigger value="critical">Critical Items</TabsTrigger>

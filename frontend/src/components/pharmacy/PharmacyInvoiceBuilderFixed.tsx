@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '@/components/ui/tabs';
 import { 
   Search, 
   Plus, 
@@ -1276,6 +1276,9 @@ export function PharmacyInvoiceBuilderFixed({ prefill }: { prefill?: { patientId
               </CardHeader>
               <CardContent>
                 <Tabs value={selectedTab} onValueChange={(value: 'drugs' | 'packages') => setSelectedTab(value)}>
+                  <div className="flex justify-end mb-2">
+                    <TabsFontSizeControls />
+                  </div>
                   <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="drugs" className="flex items-center gap-2">
                       <Pill className="h-4 w-4" />

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '@/components/ui/tabs';
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
@@ -234,6 +234,9 @@ export default function PharmacyPage() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="billing" className="space-y-6">
+        <div className="flex justify-end">
+          <TabsFontSizeControls />
+        </div>
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="billing" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
