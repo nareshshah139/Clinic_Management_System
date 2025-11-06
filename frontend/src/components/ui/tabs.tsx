@@ -77,7 +77,6 @@ function Tabs({
         className={cn("flex flex-col gap-2", className)}
         // Expose the scale as a CSS variable for child components
         style={{
-          // @ts-expect-error -- CSS variable
           "--tabs-font-scale": String(fontScale),
         }}
         {...props}
