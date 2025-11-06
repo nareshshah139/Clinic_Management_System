@@ -886,15 +886,67 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         setVisitData(res || null);
         // Seed fields from visit if empty
         try {
-          const diag = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
-          if (!diagnosis && Array.isArray(diag) && diag.length > 0) {
-            setDiagnosis(diag.map((d: any) => d?.diagnosis || '').filter(Boolean).join(', '));
+          const diagArr = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
+          if (!diagnosis && Array.isArray(diagArr) && diagArr.length > 0) {
+            setDiagnosis(diagArr.map((d: any) => d?.diagnosis || '').filter(Boolean).join(', '));
           }
         } catch {}
         try {
-          const plan = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
-          const follow = plan?.dermatology?.followUpDays;
+          // Complaints
+          const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
+          if (!chiefComplaints && Array.isArray(complaintsArr) && complaintsArr.length > 0) {
+            setChiefComplaints(complaintsArr.map((c: any) => c?.complaint || '').filter(Boolean).join(', '));
+          }
+        } catch {}
+        try {
+          // History & family history
+          const historyObj = typeof res?.history === 'object' ? res.history : (res?.history ? JSON.parse(res.history) : null);
+          if (historyObj) {
+            if (!pastHistory && typeof historyObj.pastHistory === 'string') setPastHistory(historyObj.pastHistory);
+            if (!medicationHistory && typeof historyObj.medicationHistory === 'string') setMedicationHistory(historyObj.medicationHistory);
+            if (!menstrualHistory && typeof historyObj.menstrualHistory === 'string') setMenstrualHistory(historyObj.menstrualHistory);
+            if (!exTriggers && typeof historyObj.triggers === 'string') setExTriggers(historyObj.triggers);
+            if (!exPriorTx && typeof historyObj.priorTreatments === 'string') setExPriorTx(historyObj.priorTreatments);
+            const fam = historyObj.familyHistory || {};
+            if (familyHistoryDM === false && typeof fam.dm === 'boolean') setFamilyHistoryDM(!!fam.dm);
+            if (familyHistoryHTN === false && typeof fam.htn === 'boolean') setFamilyHistoryHTN(!!fam.htn);
+            if (familyHistoryThyroid === false && typeof fam.thyroid === 'boolean') setFamilyHistoryThyroid(!!fam.thyroid);
+            if (!familyHistoryOthers && typeof fam.others === 'string') setFamilyHistoryOthers(fam.others);
+          }
+        } catch {}
+        try {
+          // Examination
+          const examObj = typeof res?.exam === 'object' ? res.exam : (res?.exam ? JSON.parse(res.exam) : null);
+          if (examObj) {
+            if (!exObjective && typeof examObj.generalAppearance === 'string') setExObjective(examObj.generalAppearance);
+            const derm = examObj.dermatology || {};
+            if (!exSkinType && typeof derm.skinType === 'string') setExSkinType(derm.skinType);
+            if (exMorphology.size === 0 && Array.isArray(derm.morphology)) setExMorphology(new Set(derm.morphology));
+            if (exDistribution.size === 0 && Array.isArray(derm.distribution)) setExDistribution(new Set(derm.distribution));
+            if (!exAcneSeverity && typeof derm.acneSeverity === 'string') setExAcneSeverity(derm.acneSeverity);
+            if (!exItchScore && (typeof derm.itchScore === 'string' || typeof derm.itchScore === 'number')) setExItchScore(String(derm.itchScore));
+            if (skinConcerns.size === 0 && Array.isArray(derm.skinConcerns)) setSkinConcerns(new Set(derm.skinConcerns));
+          }
+        } catch {}
+        try {
+          // Plan and dermatology sub-plan
+          const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
+          const dermaPlan = planObj?.dermatology || {};
+          const follow = dermaPlan?.followUpDays;
           if (!followUpInstructions && follow) setFollowUpInstructions(`Follow up in ${follow} days`);
+          if (Array.isArray(dermaPlan.investigations) && investigations.length === 0) setInvestigations(dermaPlan.investigations);
+          if (!procedurePlanned && typeof dermaPlan.procedurePlanned === 'string') setProcedurePlanned(dermaPlan.procedurePlanned);
+        } catch {}
+        try {
+          // Vitals
+          const vitalsObj = typeof res?.vitals === 'object' ? res.vitals : (res?.vitals ? JSON.parse(res.vitals) : null);
+          if (vitalsObj) {
+            if (vitalsHeightCm === '' && vitalsObj.height != null) setVitalsHeightCm(Number(vitalsObj.height));
+            if (vitalsWeightKg === '' && vitalsObj.weight != null) setVitalsWeightKg(Number(vitalsObj.weight));
+            if (vitalsBpSys === '' && vitalsObj.systolicBP != null) setVitalsBpSys(Number(vitalsObj.systolicBP));
+            if (vitalsBpDia === '' && vitalsObj.diastolicBP != null) setVitalsBpDia(Number(vitalsObj.diastolicBP));
+            if (vitalsPulse === '' && vitalsObj.heartRate != null) setVitalsPulse(Number(vitalsObj.heartRate));
+          }
         } catch {}
         // Enable sections based on visit content
         setIncludeSections({
@@ -1384,7 +1436,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       // Persist all builder fields to Visit for future autocomplete (DB-backed)
       if (ensuredVisitId) {
         const visitUpdatePayload: Record<string, unknown> = {
-          complaints: chiefComplaints || undefined,
+          vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
+            ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
+            ...(vitalsBpDia !== '' ? { diastolicBP: Number(vitalsBpDia) } : {}),
+            ...(vitalsPulse !== '' ? { heartRate: Number(vitalsPulse) } : {}),
+            ...(vitalsWeightKg !== '' ? { weight: Number(vitalsWeightKg) } : {}),
+            ...(vitalsHeightCm !== '' ? { height: Number(vitalsHeightCm) } : {}),
+          } : undefined,
+          complaints: chiefComplaints ? [{ complaint: chiefComplaints }] : undefined,
           history: {
             pastHistory: pastHistory || undefined,
             medicationHistory: medicationHistory || undefined,
@@ -2586,31 +2645,46 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     redoStackRef.current = [];
   }, [items, followUpInstructions]);
+  const saveDraftNow = useCallback(() => {
+    try {
+      const data = {
+        items,
+        followUpInstructions,
+        chiefComplaints,
+        diagnosis,
+        pastHistory,
+        medicationHistory,
+        menstrualHistory,
+        exObjective,
+        procedurePlanned,
+        investigations,
+        vitalsHeightCm,
+        vitalsWeightKg,
+        vitalsBmi,
+        vitalsBpSys,
+        vitalsBpDia,
+        vitalsPulse,
+        skinConcerns: Array.from(skinConcerns),
+        exSkinType,
+        exMorphology: Array.from(exMorphology),
+        exDistribution: Array.from(exDistribution),
+        exAcneSeverity,
+        exItchScore,
+        exTriggers,
+        exPriorTx,
+        familyHistoryDM,
+        familyHistoryHTN,
+        familyHistoryThyroid,
+        familyHistoryOthers,
+        customSections,
+      };
+      localStorage.setItem(draftKey, JSON.stringify(data));
+    } catch {}
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections]);
   useEffect(() => {
-    const t = setTimeout(() => {
-      try {
-        const data = { 
-          items, 
-          followUpInstructions,
-          chiefComplaints,
-          diagnosis,
-          pastHistory,
-          medicationHistory,
-          menstrualHistory,
-          exObjective,
-          procedurePlanned,
-          vitalsHeightCm,
-          vitalsWeightKg,
-          vitalsBmi,
-          vitalsBpSys,
-          vitalsBpDia,
-          vitalsPulse,
-        };
-        localStorage.setItem(draftKey, JSON.stringify(data));
-      } catch {}
-    }, 600);
+    const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse]);
+  }, [saveDraftNow]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(draftKey);
@@ -2625,17 +2699,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
         if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
         if (typeof data?.procedurePlanned === 'string') setProcedurePlanned(data.procedurePlanned);
+        if (Array.isArray(data?.investigations)) setInvestigations(data.investigations);
         if (data?.vitalsHeightCm !== undefined) setVitalsHeightCm(data.vitalsHeightCm);
         if (data?.vitalsWeightKg !== undefined) setVitalsWeightKg(data.vitalsWeightKg);
         if (data?.vitalsBmi !== undefined) setVitalsBmi(data.vitalsBmi);
         if (data?.vitalsBpSys !== undefined) setVitalsBpSys(data.vitalsBpSys);
         if (data?.vitalsBpDia !== undefined) setVitalsBpDia(data.vitalsBpDia);
         if (data?.vitalsPulse !== undefined) setVitalsPulse(data.vitalsPulse);
+        if (Array.isArray(data?.skinConcerns)) setSkinConcerns(new Set(data.skinConcerns));
+        if (typeof data?.exSkinType === 'string') setExSkinType(data.exSkinType);
+        if (Array.isArray(data?.exMorphology)) setExMorphology(new Set(data.exMorphology));
+        if (Array.isArray(data?.exDistribution)) setExDistribution(new Set(data.exDistribution));
+        if (typeof data?.exAcneSeverity === 'string') setExAcneSeverity(data.exAcneSeverity);
+        if (typeof data?.exItchScore === 'string') setExItchScore(data.exItchScore);
+        if (typeof data?.exTriggers === 'string') setExTriggers(data.exTriggers);
+        if (typeof data?.exPriorTx === 'string') setExPriorTx(data.exPriorTx);
+        if (typeof data?.familyHistoryDM === 'boolean') setFamilyHistoryDM(data.familyHistoryDM);
+        if (typeof data?.familyHistoryHTN === 'boolean') setFamilyHistoryHTN(data.familyHistoryHTN);
+        if (typeof data?.familyHistoryThyroid === 'boolean') setFamilyHistoryThyroid(data.familyHistoryThyroid);
+        if (typeof data?.familyHistoryOthers === 'string') setFamilyHistoryOthers(data.familyHistoryOthers);
+        if (Array.isArray(data?.customSections)) setCustomSections(data.customSections);
       }
     } catch {}
     pushHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
+  // Flush draft on nav/unload/back
+  useEffect(() => {
+    const handler = () => saveDraftNow();
+    const visHandler = () => { if (document.visibilityState === 'hidden') saveDraftNow(); };
+    window.addEventListener('pagehide', handler);
+    window.addEventListener('beforeunload', handler);
+    document.addEventListener('visibilitychange', visHandler);
+    return () => {
+      window.removeEventListener('pagehide', handler);
+      window.removeEventListener('beforeunload', handler);
+      document.removeEventListener('visibilitychange', visHandler);
+    };
+  }, [saveDraftNow]);
   const undo = useCallback(() => {
     if (undoStackRef.current.length <= 1) return;
     const cur = undoStackRef.current.pop();
