@@ -560,6 +560,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
+  const pagedJsPreloadedRef = useRef(false);
+  const prevPreviewOpenRef = useRef(previewOpen);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -577,6 +579,32 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     prescriptionId: string;
     summary: { medicationsCount: number } | null;
   }>({ open: false, prescriptionId: '', summary: null });
+
+  // Warm up Paged.js chunk during idle time to avoid first-use delay
+  useEffect(() => {
+    let cancelled = false;
+    const warm = () => {
+      // @ts-ignore dynamic import cached after first load
+      import('pagedjs')
+        .then(() => {
+          if (!cancelled) pagedJsPreloadedRef.current = true;
+        })
+        .catch(() => {
+          // non-fatal; preview flow will still dynamically import on demand
+        });
+    };
+    if (typeof window !== 'undefined' && (window as any).requestIdleCallback) {
+      (window as any).requestIdleCallback(warm, { timeout: 2000 });
+    } else {
+      setTimeout(warm, 1000);
+    }
+    return () => { cancelled = true; };
+  }, []);
+
+  // Track previous previewOpen to detect first-open transitions
+  useEffect(() => {
+    prevPreviewOpenRef.current = previewOpen;
+  }, [previewOpen]);
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -2611,7 +2639,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
       void processWithPagedJs();
     };
-    const timer = setTimeout(ensureAndProcess, 300);
+    const justOpened = (previewOpen && !prevPreviewOpenRef.current);
+    const timer = setTimeout(ensureAndProcess, justOpened ? 0 : 300);
     
     return () => {
       cancelled = true;
