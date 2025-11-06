@@ -426,6 +426,7 @@ export interface VisitSummary {
   vitals?: unknown;
   complaints?: unknown;
   diagnosis?: unknown;
+  scribeJson?: unknown;
 }
 
 export interface ProcedureVisitResponse {
