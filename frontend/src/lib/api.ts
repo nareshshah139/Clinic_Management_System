@@ -142,6 +142,25 @@ export class ApiClient {
             body = { message: 'Network error' };
           }
         }
+
+        // Centralized 401 handling: clear client token and redirect to login with next param
+        if (response.status === 401 && typeof window !== 'undefined') {
+          try {
+            this.clearToken();
+          } catch {}
+          try {
+            const isOnLogin = window.location.pathname.startsWith('/login');
+            if (!isOnLogin) {
+              const nextUrl = window.location.pathname + window.location.search + window.location.hash;
+              // Store next for fallback
+              try { window.localStorage.setItem('cms_next_after_login', nextUrl); } catch {}
+              window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
+            }
+          } catch {
+            // ignore redirect errors
+          }
+        }
+
         const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
         apiErr.status = response.status;
         apiErr.body = body;

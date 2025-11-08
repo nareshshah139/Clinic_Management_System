@@ -64,6 +64,8 @@ export class InventoryService {
         currentStock: 0,
         stockStatus: StockStatus.OUT_OF_STOCK,
         status: createItemDto.status || InventoryStatus.ACTIVE,
+        // Ensure DateTime field receives a JS Date
+        expiryDate: createItemDto.expiryDate ? new Date(createItemDto.expiryDate) : undefined,
         tags: createItemDto.tags ? JSON.stringify(createItemDto.tags) : null,
         metadata: null,
       },
@@ -223,6 +225,8 @@ export class InventoryService {
       where: { id },
       data: {
         ...updateItemDto,
+        // Ensure DateTime field receives a JS Date
+        expiryDate: updateItemDto.expiryDate ? new Date(updateItemDto.expiryDate) : undefined,
         tags: updateItemDto.tags ? JSON.stringify(updateItemDto.tags) : existingItem.tags,
       },
     });
@@ -343,7 +347,7 @@ export class InventoryService {
         include: {
           item: true,
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
       }),
@@ -367,7 +371,7 @@ export class InventoryService {
       include: {
         item: true,
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
       },
     });
@@ -611,7 +615,7 @@ export class InventoryService {
         orderBy: { [sortBy]: sortOrder },
         include: {
           user: {
-            select: { id: true, name: true, email: true },
+            select: { id: true, firstName: true, lastName: true, email: true },
           },
         },
       }),
@@ -634,7 +638,7 @@ export class InventoryService {
       where: { id, branchId },
       include: {
         user: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, firstName: true, lastName: true, email: true },
         },
       },
     });
@@ -1178,7 +1182,7 @@ export class InventoryService {
   async getSuppliers(branchId: string) {
     const suppliers = await this.prisma.supplier.findMany({
       where: { branchId, isActive: true },
-      select: { id: true, name: true },
+      select: { id: true, name: true, contactPerson: true, phone: true },
     });
 
     return suppliers;
@@ -1226,6 +1230,7 @@ export class InventoryService {
         orderBy: { createdAt: 'desc' },
         include: {
           item: { select: { id: true, name: true } },
+          user: { select: { id: true, firstName: true, lastName: true, email: true } },
         },
       }),
       this.prisma.stockTransaction.groupBy({

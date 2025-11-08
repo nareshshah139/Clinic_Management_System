@@ -737,16 +737,26 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         console.error('Auto-save failed:', error);
         hasUnsavedChangesRef.current = true;
         setSaveStatus('error');
-        toast({
-          variant: 'warning',
-          title: 'Auto-save failed',
-          description: getErrorMessage(error) || 'We will retry shortly.',
-        });
-        clearAutoSaveTimer();
-        autoSaveTimerRef.current = window.setTimeout(() => {
-          autoSaveTimerRef.current = null;
-          void runAutoSave();
-        }, AUTO_SAVE_RETRY_MS);
+        // If unauthorized, prompt sign-in and do not retry
+        if ((error as any)?.status === 401) {
+          toast({
+            variant: 'destructive',
+            title: 'Not signed in',
+            description: 'Your session expired. Please sign in to continue.',
+          });
+          clearAutoSaveTimer();
+        } else {
+          toast({
+            variant: 'warning',
+            title: 'Auto-save failed',
+            description: getErrorMessage(error) || 'We will retry shortly.',
+          });
+          clearAutoSaveTimer();
+          autoSaveTimerRef.current = window.setTimeout(() => {
+            autoSaveTimerRef.current = null;
+            void runAutoSave();
+          }, AUTO_SAVE_RETRY_MS);
+        }
       } finally {
         autoSavePromiseRef.current = null;
       }
