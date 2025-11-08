@@ -3538,12 +3538,30 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  /* Print only the preview scroll container (and its contents) */
-                  body *:not(#print-preview-scroll):not(#print-preview-scroll *) {
+                  /* Print only the pagedjs container */
+                  body *:not(#pagedjs-container):not(#pagedjs-container *) {
                     visibility: hidden !important;
                   }
-                  #print-preview-scroll, #print-preview-scroll * {
+                  #pagedjs-container, #pagedjs-container * {
                     visibility: visible !important;
+                  }
+                  /* Remove zoom transform during print */
+                  #print-preview-scroll > div {
+                    transform: none !important;
+                  }
+                  /* Ensure pagedjs container is properly positioned for print */
+                  #print-preview-scroll {
+                    position: static !important;
+                    overflow: visible !important;
+                  }
+                  #pagedjs-container {
+                    position: static !important;
+                    min-height: auto !important;
+                  }
+                  /* Remove page shadows and margins for actual print output */
+                  #pagedjs-container .pagedjs_page {
+                    margin: 0 !important;
+                    box-shadow: none !important;
                   }
                 }
                 /* Ensure a print-safe font stack with bullet glyph support */
