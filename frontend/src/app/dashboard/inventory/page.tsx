@@ -170,12 +170,47 @@ export default function InventoryPage() {
   };
 
   const handleApplyStock = async () => {
-    // No-op placeholder; backend stock adjust endpoint not wired yet
-    toast({ description: 'Applied stock adjustment (no-op). Not yet implemented.' });
-    setShowStockDialog(false);
-    setStockItem(null);
-    // Optionally refresh list
-    fetchInventoryItems(1);
+    if (!stockItem) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No item selected for stock adjustment' });
+      return;
+    }
+
+    const adjustmentQuantity = parseFloat(stockDelta);
+    if (isNaN(adjustmentQuantity) || adjustmentQuantity === 0) {
+      toast({ variant: 'destructive', title: 'Invalid Input', description: 'Please enter a valid non-zero quantity change' });
+      return;
+    }
+
+    // Ensure integer value (database stores quantity as Int)
+    const integerQuantity = Math.round(adjustmentQuantity);
+    if (integerQuantity === 0) {
+      toast({ variant: 'destructive', title: 'Invalid Input', description: 'Quantity must be a non-zero whole number' });
+      return;
+    }
+
+    try {
+      await apiClient.adjustStock({
+        itemId: stockItem.id,
+        adjustmentQuantity: integerQuantity,
+        reason: stockNote || undefined,
+        notes: stockNote || undefined,
+      });
+      
+      toast({ 
+        description: `Stock adjusted successfully. ${integerQuantity > 0 ? 'Added' : 'Removed'} ${Math.abs(integerQuantity)} units.` 
+      });
+      
+      setShowStockDialog(false);
+      setStockItem(null);
+      setStockDelta('0');
+      setStockNote('');
+      
+      // Refresh the inventory list to show updated stock
+      await fetchInventoryItems(currentPage);
+    } catch (error: any) {
+      const message = error?.body?.message || error?.message || 'Failed to adjust stock';
+      toast({ variant: 'destructive', title: 'Stock Adjustment Failed', description: message });
+    }
   };
 
   const handleDeleteItem = async (item: InventoryItem) => {
@@ -524,25 +559,61 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Stock Adjust Dialog (no-op) */}
+      {/* Stock Adjust Dialog */}
       <Dialog open={showStockDialog} onOpenChange={setShowStockDialog}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Adjust Stock{stockItem ? ` — ${stockItem.name}` : ''}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 gap-4">
+            {stockItem && (
+              <div className="p-3 bg-gray-50 rounded-md">
+                <div className="text-sm text-gray-600">Current Stock</div>
+                <div className="text-2xl font-bold text-gray-900">{stockItem.currentStock} units</div>
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="inv-delta">Quantity Change (use negative to reduce)</Label>
-              <Input id="inv-delta" type="number" inputMode="numeric" value={stockDelta} onChange={(e) => setStockDelta(e.target.value)} />
+              <Label htmlFor="inv-delta">Quantity Change</Label>
+              <div className="space-y-1">
+                <Input 
+                  id="inv-delta" 
+                  type="number" 
+                  inputMode="numeric" 
+                  step="1"
+                  value={stockDelta} 
+                  onChange={(e) => setStockDelta(e.target.value)}
+                  placeholder="e.g., +10 to add, -5 to remove"
+                />
+                <p className="text-xs text-gray-500">
+                  Enter positive number to increase stock, negative number to decrease stock (whole numbers only)
+                </p>
+                {stockItem && stockDelta && !isNaN(parseFloat(stockDelta)) && (
+                  <p className="text-sm font-medium text-gray-700">
+                    New stock will be: <span className={Math.round(parseFloat(stockDelta)) + stockItem.currentStock < 0 ? 'text-red-600' : 'text-green-600'}>
+                      {stockItem.currentStock + Math.round(parseFloat(stockDelta))} units
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
             <div className="space-y-2">
               <Label htmlFor="inv-note">Reason/Note</Label>
-              <Input id="inv-note" value={stockNote} onChange={(e) => setStockNote(e.target.value)} placeholder="e.g., New purchase, damaged stock" />
+              <Input 
+                id="inv-note" 
+                value={stockNote} 
+                onChange={(e) => setStockNote(e.target.value)} 
+                placeholder="e.g., New purchase, damaged stock, inventory count correction"
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowStockDialog(false)}>Cancel</Button>
-            <Button onClick={() => void handleApplyStock()}>Apply</Button>
+            <Button variant="outline" onClick={() => {
+              setShowStockDialog(false);
+              setStockItem(null);
+              setStockDelta('0');
+              setStockNote('');
+            }}>Cancel</Button>
+            <Button onClick={() => void handleApplyStock()}>Apply Adjustment</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

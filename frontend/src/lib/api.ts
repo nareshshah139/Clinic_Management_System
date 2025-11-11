@@ -406,6 +406,10 @@ export class ApiClient {
     return this.delete(`/inventory/items/${id}`);
   }
 
+  async adjustStock(data: { itemId: string; adjustmentQuantity: number; reason?: string; notes?: string; batchNumber?: string; expiryDate?: string }) {
+    return this.post('/inventory/adjustments', data);
+  }
+
   async getInventoryStatistics() {
     return this.get('/inventory/statistics');
   }
