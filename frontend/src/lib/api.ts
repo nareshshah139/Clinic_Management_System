@@ -383,6 +383,14 @@ export class ApiClient {
     return this.get<import('./types').PharmacyInvoiceSummary>(`/pharmacy/invoices/${id}`);
   }
 
+  async updatePharmacyInvoice(id: string, data: Record<string, unknown>) {
+    return this.patch<import('./types').PharmacyInvoiceSummary>(`/pharmacy/invoices/${id}`, data);
+  }
+
+  async getPharmacyDashboard<T = unknown>() {
+    return this.get<T>('/pharmacy/dashboard');
+  }
+
   async processPayment(data: Record<string, unknown>) {
     return this.post('/billing/payments', data);
   }

@@ -6,7 +6,7 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 ## Architecture
 - **Backend**: NestJS with TypeScript, Prisma ORM, PostgreSQL
 - **Frontend**: Next.js with TypeScript, Tailwind CSS, shadcn/ui
-- **Infrastructure**: Docker Compose (PostgreSQL, Redis, MinIO, Temporal, Keycloak)
+- **Infrastructure**: Docker Compose (PostgreSQL, Redis, Temporal, Keycloak)
 
 ## Current Status
 ✅ **Completed:**
@@ -490,7 +490,6 @@ Clinic Management System for Hyderabad - OPD-first platform with Dermatology foc
 
 **Integrations needed:**
 - ❌ **Keycloak**: Complete OAuth2/OIDC setup
-- ❌ **MinIO**: File upload/download for documents/photos
 - ❌ **Redis**: Caching and session management
 - ❌ **Temporal**: Workflow orchestration for complex processes
 - ❌ **Payment Gateways**: Razorpay/Cashfree integration

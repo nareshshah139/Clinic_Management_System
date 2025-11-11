@@ -29,9 +29,19 @@ export class AuthService {
       }
       lookupField = { email: { equals: emailCandidate, mode: 'insensitive' } };
     } else {
-      const normalizedPhone = trimmedIdentifier.replace(/\D/g, '');
-      if (normalizedPhone.length !== 10) {
-        throw new HttpException('Phone number must be 10 digits', HttpStatus.BAD_REQUEST);
+      // Normalize phone number: remove all non-digit characters except leading +
+      let normalizedPhone = trimmedIdentifier.replace(/[^\d+]/g, '');
+      // Remove leading + if present for database lookup (we store without +)
+      if (normalizedPhone.startsWith('+')) {
+        normalizedPhone = normalizedPhone.substring(1);
+      }
+      // Validate: must have at least 7 digits (minimum international format) and max 15 digits (E.164 max)
+      if (normalizedPhone.length < 7 || normalizedPhone.length > 15) {
+        throw new HttpException('Phone number must be between 7 and 15 digits', HttpStatus.BAD_REQUEST);
+      }
+      // Ensure it starts with a valid country code (1-9)
+      if (!/^[1-9]/.test(normalizedPhone)) {
+        throw new HttpException('Phone number must start with a valid country code', HttpStatus.BAD_REQUEST);
       }
       lookupField = { phone: normalizedPhone };
     }

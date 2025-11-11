@@ -342,9 +342,17 @@ export function PharmacyInvoiceList() {
   };
 
   const handleEditInvoice = (invoiceId: string) => {
-    // TODO: Implement edit invoice functionality
-    console.log('Edit invoice:', invoiceId);
-    alert('Edit functionality coming soon');
+    // Dispatch event to trigger edit mode in PharmacyInvoiceBuilder
+    window.dispatchEvent(new CustomEvent('pharmacy-invoice-edit', {
+      detail: { invoiceId }
+    }));
+    
+    // Scroll to the invoice builder (assuming it's on the same page)
+    // If it's in a different tab/page, you might need to navigate there first
+    const builderElement = document.querySelector('[data-pharmacy-invoice-builder]');
+    if (builderElement) {
+      builderElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   const handleConfirmInvoice = async (invoiceId: string) => {

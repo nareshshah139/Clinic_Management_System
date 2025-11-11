@@ -132,7 +132,9 @@ export class AppointmentsService {
       }
       // WhatsApp (only if doctor opted in)
       if (allowWhatsApp && appointment.patient?.phone) {
-        const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+91${appointment.patient.phone}`;
+        // Format phone number as E.164 for WhatsApp (add + prefix if not present)
+        // Phone is stored without +, so we add it for E.164 format
+        const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+${appointment.patient.phone}`;
         // Prefer template if configured on doctor
         if (useTemplate && templateName && templateLanguage) {
           this.notifications

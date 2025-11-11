@@ -40,25 +40,89 @@ export default function DashboardPage() {
           console.warn('Unable to load system statistics', error);
         }
 
-        // TODO: Replace placeholder alerts with real endpoint data once available
-        setAlerts([
-          {
+        // Fetch system alerts from backend
+        try {
+          const alertsData = await apiClient.getSystemAlerts<any>();
+          const transformedAlerts: SystemAlert[] = [];
+
+          // Transform overdue invoices to alerts
+          if (alertsData.overdueInvoices && alertsData.overdueInvoices.length > 0) {
+            const count = alertsData.overdueInvoices.length;
+            transformedAlerts.push({
+              id: 'overdue-invoices-summary',
+              title: 'Overdue Invoices',
+              message: `${count} invoice${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} overdue. Total amount: ₹${alertsData.overdueInvoices.reduce((sum: number, inv: any) => sum + (inv.total || 0), 0).toFixed(2)}`,
+              severity: 'HIGH',
+              type: 'billing',
+              createdAt: alertsData.generatedAt || new Date().toISOString(),
+            });
+          }
+
+          // Transform low stock alerts
+          if (alertsData.lowStockAlerts && alertsData.lowStockAlerts.length > 0) {
+            const count = alertsData.lowStockAlerts.length;
+            transformedAlerts.push({
+              id: 'low-stock-summary',
+              title: 'Low Stock Alert',
+              message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} below reorder level`,
+              severity: 'MEDIUM',
+              type: 'inventory',
+              createdAt: alertsData.generatedAt || new Date().toISOString(),
+            });
+          }
+
+          // Transform expiry alerts
+          if (alertsData.expiryAlerts && alertsData.expiryAlerts.length > 0) {
+            const count = alertsData.expiryAlerts.length;
+            const expiringSoon = alertsData.expiryAlerts.filter((a: any) => a.daysUntilExpiry <= 7).length;
+            transformedAlerts.push({
+              id: 'expiry-alerts-summary',
+              title: 'Expiring Items',
+              message: `${count} item${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} expiring within 30 days${expiringSoon > 0 ? ` (${expiringSoon} within 7 days)` : ''}`,
+              severity: expiringSoon > 0 ? 'HIGH' : 'MEDIUM',
+              type: 'inventory',
+              createdAt: alertsData.generatedAt || new Date().toISOString(),
+            });
+          }
+
+          // Transform pending payments
+          if (alertsData.pendingPayments && alertsData.pendingPayments.length > 0) {
+            const count = alertsData.pendingPayments.length;
+            transformedAlerts.push({
+              id: 'pending-payments-summary',
+              title: 'Pending Payments',
+              message: `${count} payment${count > 1 ? 's' : ''} ${count > 1 ? 'are' : 'is'} pending reconciliation`,
+              severity: 'LOW',
+              type: 'billing',
+              createdAt: alertsData.generatedAt || new Date().toISOString(),
+            });
+          }
+
+          // Add system status alert (always present)
+          transformedAlerts.push({
             id: 'system-status',
             title: 'System Status',
             message: 'All systems operational',
             severity: 'LOW',
             type: 'system',
             createdAt: new Date().toISOString(),
-          },
-          {
-            id: 'database-connection',
-            title: 'Database Connection',
-            message: 'PostgreSQL connection stable',
-            severity: 'LOW',
-            type: 'database',
-            createdAt: new Date().toISOString(),
-          },
-        ]);
+          });
+
+          setAlerts(transformedAlerts);
+        } catch (error: unknown) {
+          console.warn('Unable to load system alerts', error);
+          // Fallback to basic system status alert
+          setAlerts([
+            {
+              id: 'system-status',
+              title: 'System Status',
+              message: 'All systems operational',
+              severity: 'LOW',
+              type: 'system',
+              createdAt: new Date().toISOString(),
+            },
+          ]);
+        }
 
         // Load today's appointments for the current user/role
         const today = new Date();
