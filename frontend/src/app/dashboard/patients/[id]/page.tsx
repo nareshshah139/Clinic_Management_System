@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { formatDob } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import VisitPhotos from '@/components/visits/VisitPhotos';
+import { Calendar, Stethoscope, Users, ArrowLeft } from 'lucide-react';
 
 type VisitEntry = Record<string, unknown> & {
   id?: string;
