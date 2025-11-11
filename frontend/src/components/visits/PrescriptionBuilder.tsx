@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, ChevronUp, Languages, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Languages, X, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -439,9 +439,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, []);
   // Removed Topicals UI
   // Removed Post Procedure Care UI
-  const investigationOptions: string[] = [
+  const defaultInvestigationOptions: string[] = [
     'CBC', 'ESR', 'CRP', 'LFT', 'Fasting lipid profile', 'RFT', 'Creatinine', 'FBS', 'Fasting Insulin', 'HbA1c', 'RBS', 'CUE', 'Stool examination', 'Total Testosterone', 'S. Prolactin', 'Vitamin B12', 'Vitamin D', 'Ferritin', 'TSH', 'Thyroid profile', 'HIV-I,II', 'HbS Ag', 'Anti HCV', 'VDRL', 'RPR', 'TPHA', 'TB Gold Quantiferon Test', 'Montoux Test', 'Chest Xray PA view', '2D Echo', 'Skin Biopsy'
   ];
+  const [customInvestigationOptions, setCustomInvestigationOptions] = useState<string[]>([]);
+  const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
+  const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
   const [investigations, setInvestigations] = useState<string[]>([]);
   const [procedurePlanned, setProcedurePlanned] = useState<string>('');
   // Vitals (with BMI)
@@ -1000,7 +1003,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           const dermaPlan = planObj?.dermatology || {};
           const follow = dermaPlan?.followUpDays;
           if (!followUpInstructions && follow) setFollowUpInstructions(`Follow up in ${follow} days`);
-          if (Array.isArray(dermaPlan.investigations) && investigations.length === 0) setInvestigations(dermaPlan.investigations);
+          if (Array.isArray(dermaPlan.investigations) && investigations.length === 0) {
+            setInvestigations(dermaPlan.investigations);
+            // Extract custom investigations that aren't in the default list
+            const customInvs = dermaPlan.investigations.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
+            if (customInvs.length > 0) {
+              setCustomInvestigationOptions(customInvs);
+            }
+          }
           if (!procedurePlanned && typeof dermaPlan.procedurePlanned === 'string') setProcedurePlanned(dermaPlan.procedurePlanned);
         } catch {}
         try {
@@ -1742,8 +1752,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // topicals removed
         // postProcedureCare removed
         if (md.investigations) {
-          if (Array.isArray(md.investigations)) setInvestigations(md.investigations as string[]);
-          else if (typeof md.investigations === 'string') setInvestigations((md.investigations as string).split(',').map(s => s.trim()).filter(Boolean));
+          let invs: string[] = [];
+          if (Array.isArray(md.investigations)) invs = md.investigations as string[];
+          else if (typeof md.investigations === 'string') invs = (md.investigations as string).split(',').map(s => s.trim()).filter(Boolean);
+          setInvestigations(invs);
+          // Extract custom investigations that aren't in the default list
+          const customInvs = invs.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
+          if (customInvs.length > 0) {
+            setCustomInvestigationOptions(customInvs);
+          }
         }
         if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
         // procedureParams removed
@@ -2121,6 +2138,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx]);
   const effectiveTopMarginMm = useMemo(() => Math.max(0, Math.round((effectiveTopMarginPx / 3.78) * 10) / 10), [effectiveTopMarginPx]);
   const effectiveBottomMarginMm = useMemo(() => Math.max(0, Math.round((effectiveBottomMarginPx / 3.78) * 10) / 10), [effectiveBottomMarginPx]);
+
+  // Memoize slider values to prevent frequent re-renders of sidebar
+  const activeProfile = useMemo(() => {
+    return activeProfileId ? printerProfiles.find((p:any)=>p.id===activeProfileId) : null;
+  }, [activeProfileId, printerProfiles]);
+
+  const topMarginSliderValue = useMemo(() => {
+    return overrideTopMarginPx ?? (activeProfile?.topMarginPx ?? printTopMarginPx ?? 170);
+  }, [overrideTopMarginPx, activeProfile, printTopMarginPx]);
+
+  const bottomMarginSliderValue = useMemo(() => {
+    return overrideBottomMarginPx ?? (activeProfile?.bottomMarginPx ?? printBottomMarginPx ?? 45);
+  }, [overrideBottomMarginPx, activeProfile, printBottomMarginPx]);
 
   useEffect(() => {
     (async () => {
@@ -2824,6 +2854,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         exObjective,
         procedurePlanned,
         investigations,
+        customInvestigationOptions,
         vitalsHeightCm,
         vitalsWeightKg,
         vitalsBmi,
@@ -2846,7 +2877,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections]);
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -2865,7 +2896,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
         if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
         if (typeof data?.procedurePlanned === 'string') setProcedurePlanned(data.procedurePlanned);
-        if (Array.isArray(data?.investigations)) setInvestigations(data.investigations);
+        if (Array.isArray(data?.investigations)) {
+          setInvestigations(data.investigations);
+          // Extract custom investigations that aren't in the default list
+          const customInvs = data.investigations.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
+          if (customInvs.length > 0) {
+            setCustomInvestigationOptions(customInvs);
+          }
+        }
+        // Also load saved custom investigation options (in case they were added but not selected)
+        if (Array.isArray(data?.customInvestigationOptions)) {
+          const savedCustomInvs = data.customInvestigationOptions.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
+          if (savedCustomInvs.length > 0) {
+            setCustomInvestigationOptions((prev) => {
+              const combined = [...prev, ...savedCustomInvs];
+              // Remove duplicates
+              return Array.from(new Set(combined));
+            });
+          }
+        }
         if (data?.vitalsHeightCm !== undefined) setVitalsHeightCm(data.vitalsHeightCm);
         if (data?.vitalsWeightKg !== undefined) setVitalsWeightKg(data.vitalsWeightKg);
         if (data?.vitalsBmi !== undefined) setVitalsBmi(data.vitalsBmi);
@@ -3509,7 +3558,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               highlight={hasInvestigations}
               badge={hasInvestigations ? "Has Data" : ""}
             >
-              <div className="opacity-100">
+              <div className="opacity-100 space-y-3">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {investigationOptions.map((opt) => (
                     <label key={opt} className="flex items-center gap-2 text-sm">
@@ -3517,6 +3566,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <span>{opt}</span>
                     </label>
                   ))}
+                </div>
+                <div className="flex gap-2 items-end pt-2 border-t">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-600 mb-1 block">Add Custom Investigation</label>
+                    <Input
+                      placeholder="e.g., MRI Brain, CT Scan"
+                      value={newCustomInvestigation}
+                      onChange={(e) => setNewCustomInvestigation(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newCustomInvestigation.trim()) {
+                          e.preventDefault();
+                          const trimmed = newCustomInvestigation.trim();
+                          if (!investigationOptions.includes(trimmed)) {
+                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
+                            setInvestigations((prev) => [...prev, trimmed]);
+                            setNewCustomInvestigation('');
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                          const trimmed = newCustomInvestigation.trim();
+                          if (trimmed && !investigationOptions.includes(trimmed)) {
+                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
+                            setInvestigations((prev) => [...prev, trimmed]);
+                            setNewCustomInvestigation('');
+                          }
+                    }}
+                    disabled={!newCustomInvestigation.trim() || investigationOptions.includes(newCustomInvestigation.trim())}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
                 </div>
               </div>
             </CollapsibleSection>
@@ -4111,7 +4198,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       min={0}
                       max={300}
                       step={1}
-                      value={overrideTopMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.topMarginPx ?? printTopMarginPx ?? 170) : (printTopMarginPx ?? 170))}
+                      value={topMarginSliderValue}
                       onChange={(e) => setOverrideTopMarginPx(Number(e.target.value))}
                     />
                     <div className="flex items-center justify-between">
@@ -4123,7 +4210,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       min={0}
                       max={200}
                       step={1}
-                      value={overrideBottomMarginPx ?? (activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.bottomMarginPx ?? printBottomMarginPx ?? 45) : (printBottomMarginPx ?? 45))}
+                      value={bottomMarginSliderValue}
                       onChange={(e) => setOverrideBottomMarginPx(Number(e.target.value))}
                     />
                     <div className="flex gap-2">
