@@ -997,13 +997,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         } catch {}
         // Enable sections based on visit content OR current form state
         // Only update if visit has content, otherwise preserve user's current settings
-        setIncludeSections((prev) => ({
-          ...prev,
+        setIncludeSections({
+          ...includeSections,
           // Show diagnosis if visit has it OR if form already has diagnosis entered
           diagnosis: Boolean(res?.diagnosis) || Boolean(diagnosis?.trim()),
           counseling: Boolean(res?.plan) || Boolean(counselingText?.trim()),
           vitals: Boolean(res?.vitals) || Boolean(vitalsHeightCm || vitalsWeightKg || vitalsBpSys || vitalsBpDia || vitalsPulse),
-        }));
+        });
       } catch (e) {
         setVisitData(null);
       } finally {
