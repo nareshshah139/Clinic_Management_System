@@ -564,6 +564,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const isPrintingRef = useRef(false);
   const pagedJsPreloadedRef = useRef(false);
   const prevPreviewOpenRef = useRef(previewOpen);
+  // Refs to track previous values for change detection to prevent unnecessary refreshes
+  const prevDepsRef = useRef<{
+    items: string;
+    diagnosis: string;
+    followUpInstructions: string;
+    chiefComplaints: string;
+    investigations: string;
+    customSections: string;
+    contentOffsetXPx: number | undefined;
+    contentOffsetYPx: number | undefined;
+    printTopMarginPx: number | undefined;
+    printLeftMarginPx: number | undefined;
+    printRightMarginPx: number | undefined;
+    printBottomMarginPx: number | undefined;
+    activeProfileId: string | null;
+    overrideTopMarginPx: number | null;
+    overrideBottomMarginPx: number | null;
+  } | null>(null);
+  const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -2118,6 +2137,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (autoPreview && !previewOpen) setPreviewOpen(true);
   }, [autoPreview, previewOpen]);
 
+  // Memoize array dependencies to prevent unnecessary re-renders
+  const itemsStringified = useMemo(() => JSON.stringify(items), [items]);
+  const investigationsStringified = useMemo(() => JSON.stringify(investigations), [investigations]);
+  const customSectionsStringified = useMemo(() => JSON.stringify(customSections), [customSections]);
+
   useEffect(() => {
     // Avoid Paged.js DOM work during print preview to prevent internal nextSibling errors
     const handleBeforePrint = () => {
@@ -2130,21 +2154,75 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     window.addEventListener('beforeprint', handleBeforePrint);
     window.addEventListener('afterprint', handleAfterPrint);
 
-    if (!(previewOpen || autoPreview)) return;
-    let t: any;
-    const run = () => {
+    if (!(previewOpen || autoPreview)) {
+      // Clear any pending refresh when preview closes
+      if (previewRefreshTimeoutRef.current) {
+        clearTimeout(previewRefreshTimeoutRef.current);
+        previewRefreshTimeoutRef.current = null;
+      }
+      // Reset prevDepsRef when preview closes to ensure fresh comparison when reopening
+      prevDepsRef.current = null;
+      return;
+    }
+
+    // Create a snapshot of current dependencies for comparison
+    const currentDeps = {
+      items: itemsStringified,
+      diagnosis,
+      followUpInstructions,
+      chiefComplaints,
+      investigations: investigationsStringified,
+      customSections: customSectionsStringified,
+      contentOffsetXPx,
+      contentOffsetYPx,
+      printTopMarginPx,
+      printLeftMarginPx,
+      printRightMarginPx,
+      printBottomMarginPx,
+      activeProfileId,
+      overrideTopMarginPx,
+      overrideBottomMarginPx,
+    };
+
+    // Check if dependencies actually changed
+    const prevDeps = prevDepsRef.current;
+    if (prevDeps) {
+      const hasChanged = Object.keys(currentDeps).some(key => {
+        const currentKey = key as keyof typeof currentDeps;
+        return prevDeps[currentKey] !== currentDeps[currentKey];
+      });
+      
+      if (!hasChanged) {
+        // Dependencies haven't changed, skip refresh
+        return;
+      }
+    }
+
+    // Update ref with current dependencies
+    prevDepsRef.current = currentDeps;
+
+    // Clear any existing timeout
+    if (previewRefreshTimeoutRef.current) {
+      clearTimeout(previewRefreshTimeoutRef.current);
+    }
+
+    // Debounce the preview refresh to prevent rapid-fire updates
+    previewRefreshTimeoutRef.current = setTimeout(() => {
       if (language !== 'EN') void translateForPreview();
       setPreviewJustUpdated(true);
       setTimeout(() => setPreviewJustUpdated(false), 600);
-    };
-    // Reduced delay from 250ms to 50ms for faster response
-    t = setTimeout(run, 50);
+      previewRefreshTimeoutRef.current = null;
+    }, 300); // Increased from 50ms to 300ms to prevent spam
+
     return () => {
-      if (t) clearTimeout(t);
+      if (previewRefreshTimeoutRef.current) {
+        clearTimeout(previewRefreshTimeoutRef.current);
+        previewRefreshTimeoutRef.current = null;
+      }
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, items, diagnosis, followUpInstructions, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx]);
+  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -2689,7 +2767,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [previewOpen, autoPreview, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
+  }, [previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
