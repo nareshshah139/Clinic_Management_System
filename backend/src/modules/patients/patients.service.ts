@@ -11,12 +11,27 @@ import { NotificationsService } from '../notifications/notifications.service';
 export class PatientsService {
   constructor(private prisma: PrismaService, private usersService: UsersService, private notifications: NotificationsService) {}
 
+  /**
+   * Normalize phone number for consistent storage (removes + and non-digit characters)
+   * This ensures phone numbers are stored consistently for lookup purposes
+   */
+  private normalizePhone(phone: string): string {
+    if (!phone) return phone;
+    // Remove all non-digit characters including +
+    return phone.replace(/\D/g, '');
+  }
+
   async create(createPatientDto: CreatePatientDto, branchId: string) {
+    // Normalize phone number before storing
+    const normalizedPhone = this.normalizePhone(createPatientDto.phone);
+    // Use provided DOB or default to today's date if not provided
+    const dob = createPatientDto.dob ? new Date(createPatientDto.dob) : new Date();
     return this.prisma.patient.create({
       data: {
         ...createPatientDto,
+        phone: normalizedPhone,
         branchId,
-        dob: new Date(createPatientDto.dob),
+        dob,
       },
     });
   }
@@ -163,7 +178,9 @@ export class PatientsService {
     summaryLines.push('', 'Please arrive 10 minutes early.');
     const text = summaryLines.join('\n');
 
-    const e164 = patient.phone.startsWith('+') ? patient.phone : `+91${patient.phone}`;
+    // Format phone number as E.164 for WhatsApp (add + prefix)
+    // Phone is stored without +, so we add it for E.164 format
+    const e164 = patient.phone.startsWith('+') ? patient.phone : `+${patient.phone}`;
     await this.notifications.sendWhatsApp({ toPhoneE164: e164, text });
 
     return { success: true };
@@ -173,13 +190,20 @@ export class PatientsService {
     // Ensure patient exists in this branch
     await this.findOne(id, branchId);
 
-    const { dob, ...rest } = updatePatientDto as any;
+    const { dob, phone, ...rest } = updatePatientDto as any;
+    const updateData: any = {
+      ...rest,
+      ...(dob ? { dob: new Date(dob as any) } : {}),
+    };
+    
+    // Normalize phone number if provided
+    if (phone !== undefined) {
+      updateData.phone = this.normalizePhone(phone);
+    }
+    
     return this.prisma.patient.update({
       where: { id },
-      data: {
-        ...rest,
-        ...(dob ? { dob: new Date(dob as any) } : {}),
-      },
+      data: updateData,
     });
   }
 

@@ -16,10 +16,11 @@ export class CreatePatientDto {
   @IsString()
   gender: string;
 
+  @IsOptional()
   @IsDateString()
-  dob: string;
+  dob?: string;
 
-  @Matches(/^(\+91\s?)?[6-9]\d{9}$/,{ message: 'phone must be a valid Indian mobile number' })
+  @Matches(/^\+?[1-9]\d{6,14}$/, { message: 'phone must be a valid international phone number (E.164 format)' })
   phone: string;
 
   @IsOptional()

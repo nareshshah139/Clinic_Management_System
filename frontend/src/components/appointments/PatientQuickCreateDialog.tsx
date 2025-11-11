@@ -100,7 +100,7 @@ export default function PatientQuickCreateDialog({
     const validationErrors: string[] = [];
     if (!form.firstName.trim()) validationErrors.push('First name is required');
     if (!form.phone.trim()) validationErrors.push('Phone number is required');
-    if (!form.dob) validationErrors.push('Date of birth is required');
+    // Date of birth is now optional
     return validationErrors;
   };
 
@@ -122,7 +122,7 @@ export default function PatientQuickCreateDialog({
       const payload = {
         name: `${form.firstName} ${form.lastName}`.trim() || form.firstName,
         gender: form.gender,
-        dob: form.dob,
+        dob: form.dob || undefined,
         phone: form.phone,
         email: form.email || undefined,
         abhaId: form.abhaId || undefined,
@@ -193,12 +193,11 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div>
-              <Label>Date of Birth *</Label>
+              <Label>Date of Birth</Label>
               <Input
                 type="date"
                 value={form.dob}
                 onChange={(e) => setForm((prev) => ({ ...prev, dob: e.target.value }))}
-                required
               />
             </div>
             <div>
@@ -222,7 +221,7 @@ export default function PatientQuickCreateDialog({
               <Input
                 value={form.phone}
                 onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                placeholder="10-digit mobile number"
+                placeholder="Phone number (e.g., +1234567890 or 9876543210)"
                 required
               />
             </div>

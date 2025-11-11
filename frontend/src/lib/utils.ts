@@ -25,11 +25,22 @@ export function formatPatientName(patient: MinimalPatient): string {
 }
 
 // Calculate age from date of birth
+// Returns null if DOB is missing or if DOB is today's date (default placeholder)
 export function calculateAge(dob: string | Date): number | null {
   if (!dob) return null;
   try {
     const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return null;
+    
     const today = new Date();
+    // Check if DOB is today's date (default placeholder) - ignore time component
+    const isToday = 
+      birthDate.getFullYear() === today.getFullYear() &&
+      birthDate.getMonth() === today.getMonth() &&
+      birthDate.getDate() === today.getDate();
+    
+    if (isToday) return null; // Skip calculation for default date
+    
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -38,6 +49,36 @@ export function calculateAge(dob: string | Date): number | null {
     return age >= 0 ? age : null;
   } catch {
     return null;
+  }
+}
+
+// Check if DOB is today's date (default placeholder)
+export function isDefaultDob(dob: string | Date | null | undefined): boolean {
+  if (!dob) return false;
+  try {
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return false;
+    const today = new Date();
+    return (
+      birthDate.getFullYear() === today.getFullYear() &&
+      birthDate.getMonth() === today.getMonth() &&
+      birthDate.getDate() === today.getDate()
+    );
+  } catch {
+    return false;
+  }
+}
+
+// Format DOB for display - returns "N/A" if it's the default date
+export function formatDob(dob: string | Date | null | undefined): string {
+  if (!dob) return 'N/A';
+  if (isDefaultDob(dob)) return 'N/A';
+  try {
+    const date = new Date(dob);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString();
+  } catch {
+    return 'N/A';
   }
 }
 

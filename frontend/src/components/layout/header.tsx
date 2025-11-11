@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect, useRef } from 'react';
-import { apiClient } from '@/lib/api';
+import { formatDob } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useDashboardUser } from './dashboard-user-context';
 import {
@@ -311,7 +311,7 @@ export function Header() {
             type: 'patient',
             title: `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || patient.name || 'Unknown Patient',
             subtitle: patient.phone || patient.email,
-            description: `Patient • ${patient.gender || 'Unknown'} • ${patient.dob ? new Date(patient.dob).toLocaleDateString() : 'Unknown DOB'}`,
+            description: `Patient • ${patient.gender || 'Unknown'} • ${formatDob(patient.dob)}`,
             icon: Users,
             href: `/dashboard/patients?search=${encodeURIComponent(patient.id)}`,
           });

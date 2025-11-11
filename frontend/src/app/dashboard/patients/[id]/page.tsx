@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Users, Calendar, Stethoscope, ArrowLeft } from 'lucide-react';
+import { formatDob } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 
@@ -405,7 +405,7 @@ export default function PatientDetailsPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
-              <div><span className="text-gray-600">Date of Birth:</span> <span className="text-gray-900">{patient.dob ? new Date(patient.dob).toLocaleDateString() : '—'}</span></div>
+              <div><span className="text-gray-600">Date of Birth:</span> <span className="text-gray-900">{formatDob(patient.dob)}</span></div>
               <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
               <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
               <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>

@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { formatPatientName, filterRoomsByVisitType } from '@/lib/utils';
+import { formatPatientName, filterRoomsByVisitType, calculateAge, isDefaultDob, formatDob } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
@@ -256,6 +256,12 @@ export default function PatientsManagement() {
           const d = new Date(a.dob);
           if (isNaN(d.getTime())) return -Infinity;
           const today = new Date();
+          // Check if DOB is today's date (default placeholder)
+          const isToday = 
+            d.getFullYear() === today.getFullYear() &&
+            d.getMonth() === today.getMonth() &&
+            d.getDate() === today.getDate();
+          if (isToday) return -Infinity; // Treat default date as missing DOB for sorting
           let age = today.getFullYear() - d.getFullYear();
           const m = today.getMonth() - d.getMonth();
           if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
@@ -266,6 +272,12 @@ export default function PatientsManagement() {
           const d = new Date(b.dob);
           if (isNaN(d.getTime())) return -Infinity;
           const today = new Date();
+          // Check if DOB is today's date (default placeholder)
+          const isToday = 
+            d.getFullYear() === today.getFullYear() &&
+            d.getMonth() === today.getMonth() &&
+            d.getDate() === today.getDate();
+          if (isToday) return -Infinity; // Treat default date as missing DOB for sorting
           let age = today.getFullYear() - d.getFullYear();
           const m = today.getMonth() - d.getMonth();
           if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
@@ -310,7 +322,7 @@ export default function PatientsManagement() {
 
   const exportCsv = () => {
     const headers = [
-      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Portal Linked','Created At'
+      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Portal Linked','Date of Birth','Created At'
     ];
     const lines = [headers.join(',')];
     const csvEscape = (v: unknown) => {
@@ -319,26 +331,19 @@ export default function PatientsManagement() {
       return s;
     };
     for (const p of displayPatients) {
-      const age = (() => {
-        if (!p.dob) return '';
-        const d = new Date(p.dob);
-        if (isNaN(d.getTime())) return '';
-        const today = new Date();
-        let age = today.getFullYear() - d.getFullYear();
-        const m = today.getMonth() - d.getMonth();
-        if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-        return age;
-      })();
+      const age = calculateAge(p.dob);
+      const dobDisplay = formatDob(p.dob);
       const row = [
         p.id,
         p.name,
-        age,
+        age !== null ? age : 'N/A',
         p.gender,
         p.phone,
         p.email || '',
         p.abhaId || '',
         p.referralSource || '',
         p.portalUserId ? 'Yes' : 'No',
+        dobDisplay, // Add DOB column with N/A for default dates
         p.createdAt,
       ].map(csvEscape);
       lines.push(row.join(','));
@@ -399,8 +404,8 @@ export default function PatientsManagement() {
       setError(null);
       
       // Basic validation
-      if (!form.firstName.trim() || !form.phone.trim() || !form.dateOfBirth) {
-        setError('Please fill in all required fields (Name, Phone, Date of Birth)');
+      if (!form.firstName.trim() || !form.phone.trim()) {
+        setError('Please fill in all required fields (Name, Phone)');
         return;
       }
       if (form.abhaId && form.abhaId.trim().length > 0) {
@@ -419,7 +424,7 @@ export default function PatientsManagement() {
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
         gender: form.gender,
-        dob: form.dateOfBirth,
+        dob: form.dateOfBirth || undefined,
         phone: form.phone,
         email: form.email || undefined,
         address: form.address || undefined,
@@ -520,12 +525,14 @@ export default function PatientsManagement() {
   };
 
   const onEdit = (p: Patient) => {
+    // If DOB is the default date (today), show empty string in the input
+    const dobValue = p.dob && !isDefaultDob(p.dob) ? (p.dob || '').split('T')[0] || '' : '';
     setForm({
       id: p.id,
       abhaId: p.abhaId || '',
       firstName: p.firstName,
       lastName: p.lastName,
-      dateOfBirth: (p.dob || '').split('T')[0] || '',
+      dateOfBirth: dobValue,
       gender: (p.gender as Gender) || 'OTHER',
       phone: p.phone,
       email: p.email || '',
@@ -555,6 +562,14 @@ export default function PatientsManagement() {
     const birthDate = new Date(dob);
     if (isNaN(birthDate.getTime())) return null;
     const today = new Date();
+    // Check if DOB is today's date (default placeholder) - ignore time component
+    const isToday = 
+      birthDate.getFullYear() === today.getFullYear() &&
+      birthDate.getMonth() === today.getMonth() &&
+      birthDate.getDate() === today.getDate();
+    
+    if (isToday) return null; // Skip calculation for default date
+    
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -1026,7 +1041,10 @@ export default function PatientsManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm">{calculateAge(p.dob) !== null ? `${calculateAge(p.dob)} yrs` : <span className="text-gray-400">—</span>}</div>
+                        <div className="text-sm">{(() => {
+                          const age = calculateAge(p.dob);
+                          return age !== null ? `${age} yrs` : <span className="text-gray-400">—</span>;
+                        })()}</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>

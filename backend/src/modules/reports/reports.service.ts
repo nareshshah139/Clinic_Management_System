@@ -260,6 +260,7 @@ export class ReportsService {
     const now = new Date();
     const filtered = patients.filter((p) => {
       const age = this.ageFromDob(new Date(p.dob), now);
+      if (age === null) return true; // Include patients with default/missing DOB in all filters
       if (minAge != null && age < minAge) return false;
       if (maxAge != null && age > maxAge) return false;
       return true;
@@ -276,6 +277,10 @@ export class ReportsService {
     const ageGroupMap = new Map<string, number>();
     for (const p of filtered) {
       const age = this.ageFromDob(new Date(p.dob), now);
+      if (age === null) {
+        // Skip age grouping for patients with default/missing DOB
+        continue;
+      }
       const bucket = ageBuckets.find((b) => b[1](age))?.[0] ?? 'Unknown';
       ageGroupMap.set(bucket, (ageGroupMap.get(bucket) || 0) + 1);
     }
@@ -331,11 +336,20 @@ export class ReportsService {
     };
   }
 
-  private ageFromDob(dob: Date, now: Date): number {
+  private ageFromDob(dob: Date, now: Date): number | null {
+    if (!dob) return null;
+    // Check if DOB is today's date (default placeholder) - ignore time component
+    const isToday = 
+      dob.getFullYear() === now.getFullYear() &&
+      dob.getMonth() === now.getMonth() &&
+      dob.getDate() === now.getDate();
+    
+    if (isToday) return null; // Skip calculation for default date
+    
     let age = now.getFullYear() - dob.getFullYear();
     const m = now.getMonth() - dob.getMonth();
     if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
-    return age;
+    return age >= 0 ? age : null;
   }
 
   private async getTopVisitingPatients(branchId: string, dateRange: { start: Date; end: Date }): Promise<TopVisitingPatientDto[]> {

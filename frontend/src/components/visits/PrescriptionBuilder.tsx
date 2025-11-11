@@ -11,7 +11,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronDown, ChevronUp, Languages, X } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferTimingFromDosePattern } from '@/lib/frequency';
@@ -3748,7 +3748,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                     <div>
                       <div className="text-gray-600">Gender / DOB</div>
-                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} {(visitData?.patient?.dob || patientData?.dob) ? `· ${new Date(visitData?.patient?.dob || patientData?.dob).toLocaleDateString()}` : ''}</div>
+                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} · {formatDob(visitData?.patient?.dob || patientData?.dob)}</div>
                     </div>
                   </div>
                   )}
@@ -4092,7 +4092,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
                       if (!prescId) return;
                       const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
-                      await apiClient.sharePrescription(prescId, { channel: 'WHATSAPP', to: phone.startsWith('+') ? phone : `+91${phone}`, message: 'Your prescription is ready.' });
+                      await apiClient.sharePrescription(prescId, { channel: 'WHATSAPP', to: phone.startsWith('+') ? phone : `+${phone}`, message: 'Your prescription is ready.' });
                       toast({ title: 'WhatsApp queued', description: 'WhatsApp message queued.' });
                     } catch (e) {
                       toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not send message.' });
