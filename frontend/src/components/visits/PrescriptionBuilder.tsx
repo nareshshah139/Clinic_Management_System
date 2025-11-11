@@ -1358,13 +1358,31 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return true;
   };
 
+  // Helper function to infer dosageUnit from drug's dosageForm
+  const inferDosageUnitFromDosageForm = (dosageForm?: string): DosageUnit => {
+    if (!dosageForm) return 'TABLET';
+    const form = dosageForm.toLowerCase().trim();
+    if (form.includes('tablet')) return 'TABLET';
+    if (form.includes('capsule')) return 'CAPSULE';
+    if (form.includes('drop')) return 'DROP';
+    if (form.includes('spray')) return 'SPRAY';
+    if (form.includes('patch')) return 'PATCH';
+    if (form.includes('injection') || form.includes('injectable')) return 'INJECTION';
+    if (form.includes('ml') || form.includes('liquid') || form.includes('syrup') || form.includes('suspension')) return 'ML';
+    if (form.includes('mg')) return 'MG';
+    if (form.includes('mcg')) return 'MCG';
+    if (form.includes('iu')) return 'IU';
+    // Default to TABLET if no match
+    return 'TABLET';
+  };
+
   const addItemFromDrugToRow = (rowIdx: number, drug: any) => {
     if (!shouldAllowDrugAdd(drug)) return;
     const base: Partial<PrescriptionItemForm> = {
       drugName: drug.name,
       genericName: drug.genericName,
       dosage: 1,
-      dosageUnit: 'TABLET',
+      dosageUnit: inferDosageUnitFromDosageForm(drug.dosageForm),
       frequency: 'ONCE_DAILY',
       duration: 5,
       durationUnit: 'DAYS',
