@@ -551,6 +551,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
+  // Translation cache: content hash -> translations map
+  const translationCacheRef = useRef<Map<string, Record<string, string>>>(new Map());
   // Multi-page preview state - now unified with Paged.js
   const [currentPreviewPage, setCurrentPreviewPage] = useState(1);
   const [totalPreviewPages, setTotalPreviewPages] = useState(1);
@@ -850,6 +852,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setTranslationsMap({});
       return;
     }
+    
+    // Check cache: create content hash from plan texts
+    const contentHash = `${language}:${plan.map(p => p.text).join('|')}`;
+    const cached = translationCacheRef.current.get(contentHash);
+    if (cached) {
+      console.debug('[PrescriptionBuilder] translateForPreview: using cached translations');
+      setTranslationsMap(cached);
+      return;
+    }
+    
     try {
       const target = (language === 'HI' ? 'HI' : 'TE') as 'HI' | 'TE';
       toast({
@@ -862,6 +874,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       plan.forEach((p, idx) => {
         map[p.key] = translations[idx] ?? p.text;
       });
+      // Cache the result
+      translationCacheRef.current.set(contentHash, map);
+      // Limit cache size to prevent memory issues
+      if (translationCacheRef.current.size > 50) {
+        const firstKey = translationCacheRef.current.keys().next().value;
+        if (firstKey) translationCacheRef.current.delete(firstKey);
+      }
       setTranslationsMap(map);
       console.debug('[PrescriptionBuilder] translateForPreview: received', { received: translations.length });
     } catch (e) {
@@ -976,13 +995,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             if (vitalsPulse === '' && vitalsObj.heartRate != null) setVitalsPulse(Number(vitalsObj.heartRate));
           }
         } catch {}
-        // Enable sections based on visit content
-        setIncludeSections({
-          ...includeSections,
-          diagnosis: Boolean(res?.diagnosis),
-          counseling: Boolean(res?.plan),
-          vitals: Boolean(res?.vitals),
-        });
+        // Enable sections based on visit content OR current form state
+        // Only update if visit has content, otherwise preserve user's current settings
+        setIncludeSections((prev) => ({
+          ...prev,
+          // Show diagnosis if visit has it OR if form already has diagnosis entered
+          diagnosis: Boolean(res?.diagnosis) || Boolean(diagnosis?.trim()),
+          counseling: Boolean(res?.plan) || Boolean(counselingText?.trim()),
+          vitals: Boolean(res?.vitals) || Boolean(vitalsHeightCm || vitalsWeightKg || vitalsBpSys || vitalsBpDia || vitalsPulse),
+        }));
       } catch (e) {
         setVisitData(null);
       } finally {
@@ -2116,7 +2137,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setPreviewJustUpdated(true);
       setTimeout(() => setPreviewJustUpdated(false), 600);
     };
-    t = setTimeout(run, 250);
+    // Reduced delay from 250ms to 50ms for faster response
+    t = setTimeout(run, 50);
     return () => {
       if (t) clearTimeout(t);
       window.removeEventListener('beforeprint', handleBeforePrint);
@@ -2180,7 +2202,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         return;
       }
       pagedJsRunningRef.current = true;
-      console.log('⏱️  Starting paged.js processing (after 300ms debounce)...');
+      console.log('⏱️  Starting paged.js processing (after 100ms debounce)...');
       
       // Store error handler reference for cleanup
       let errorHandler: ((event: ErrorEvent | PromiseRejectionEvent) => void) | null = null;
@@ -2206,7 +2228,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             setTimeout(() => {
               // Re-run once the container is likely visible
               if (previewOpen || autoPreview) void processWithPagedJs();
-            }, 150);
+            }, 50); // Reduced from 150ms to 50ms
             return;
           }
         } catch {
@@ -2215,7 +2237,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           pagedJsRunningRef.current = false;
           setTimeout(() => {
             if (previewOpen || autoPreview) void processWithPagedJs();
-          }, 150);
+          }, 50); // Reduced from 150ms to 50ms
           return;
         }
         
@@ -2233,6 +2255,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const content = printRef.current?.innerHTML || '';
         
         console.log('📄 Source content length:', content.length, 'chars');
+        console.log('📋 Medications check:', {
+          includeSections_medications: includeSections.medications,
+          validItems_length: validItems.length,
+          rxPrintFormat,
+          content_includes_Rx: content.includes('Rx') || content.includes('rx-row') || content.includes('Medicine'),
+        });
         
         if (!content || content.length < 50) {
           console.warn('⚠️ Source content is empty or too short, skipping paged.js processing');
@@ -2261,7 +2289,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           pagedJsRunningRef.current = false;
           setTimeout(() => {
             if (previewOpen || autoPreview) void processWithPagedJs();
-          }, 150);
+          }, 50); // Reduced from 150ms to 50ms
           return;
         }
         if (!tempDiv.isConnected) {
@@ -2270,7 +2298,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           pagedJsRunningRef.current = false;
           setTimeout(() => {
             if (previewOpen || autoPreview) void processWithPagedJs();
-          }, 150);
+          }, 50); // Reduced from 150ms to 50ms
           return;
         }
         
@@ -2311,9 +2339,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           }
         }
         
-        // Initialize a fresh Paged.js instance with dynamic import (client-side only)
+        // Initialize a fresh Paged.js instance - use preloaded module if available
         // @ts-ignore - pagedjs has no type definitions
-        const { Previewer } = await import('pagedjs');
+        let Previewer;
+        if (pagedJsPreloadedRef.current) {
+          // Module already loaded, use it directly (faster)
+          // @ts-ignore - pagedjs has no type definitions
+          const pagedModule = await import('pagedjs');
+          Previewer = pagedModule.Previewer;
+        } else {
+          // First-time load
+          // @ts-ignore - pagedjs has no type definitions
+          const { Previewer: P } = await import('pagedjs');
+          Previewer = P;
+          pagedJsPreloadedRef.current = true;
+        }
         const paged = new Previewer();
         pagedInstanceRef.current = paged;
         
@@ -2640,7 +2680,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       void processWithPagedJs();
     };
     const justOpened = (previewOpen && !prevPreviewOpenRef.current);
-    const timer = setTimeout(ensureAndProcess, justOpened ? 0 : 300);
+    // Reduced debounce from 300ms to 100ms for faster response
+    const timer = setTimeout(ensureAndProcess, justOpened ? 0 : 100);
     
     return () => {
       cancelled = true;
@@ -2651,7 +2692,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [previewOpen, autoPreview, items, diagnosis, chiefComplaints, investigations, customSections, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, grayscale]);
+      designAids, frames, bleedSafe, showRefillStamp, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -3570,14 +3611,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 #prescription-print-root, #prescription-print-root * {
                   font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
+                  /* Ensure source content is never hidden - Paged.js needs full content */
+                  visibility: visible !important;
+                }
+                #prescription-print-root {
+                  display: none !important; /* Only hide the root container itself */
                 }
                 ${rxPrintFormat === 'TEXT' ? `
-                  /* Text print mode */
-                  #prescription-print-content > :not(.rx-text) { display: none !important; }
-                  .rx-text { display: block !important; }
+                  /* Text print mode - hide non-text content in Paged.js output only */
+                  .pagedjs_page_content > *:not(.rx-text) { 
+                    display: none !important; 
+                  }
+                  .pagedjs_page_content .rx-text { 
+                    display: block !important; 
+                  }
                 ` : `
-                  /* Table/normal mode */
-                  .rx-text { display: none !important; }
+                  /* Table/normal mode - hide text format in Paged.js output */
+                  .pagedjs_page_content .rx-text { 
+                    display: none !important; 
+                  }
                 `}
                 
                 /* Unified Paged.js styling */
