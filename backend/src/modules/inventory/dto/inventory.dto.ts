@@ -317,7 +317,7 @@ export class UpdateInventoryItemDto {
 
 // Stock Transaction DTOs
 export class CreateStockTransactionDto {
-  @IsUUID()
+  @IsString()
   itemId: string;
 
   @IsEnum(TransactionType)
@@ -432,7 +432,7 @@ export class BulkStockUpdateDto {
 }
 
 export class StockAdjustmentDto {
-  @IsUUID()
+  @IsString()
   itemId: string;
 
   @IsNumber()
@@ -456,7 +456,7 @@ export class StockAdjustmentDto {
 }
 
 export class StockTransferDto {
-  @IsUUID()
+  @IsString()
   itemId: string;
 
   @IsNumber()
@@ -506,7 +506,7 @@ export class CreatePurchaseOrderDto {
 }
 
 export class PurchaseOrderItemDto {
-  @IsUUID()
+  @IsString()
   itemId: string;
 
   @IsNumber()
