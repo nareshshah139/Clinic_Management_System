@@ -80,53 +80,63 @@ export function PharmacyDashboard() {
     try {
       setLoading(true);
       
-      // TODO: Replace with actual API calls
-      // const [salesStats, invoiceStats, drugStats, topSelling, recentInvoices, alerts] = await Promise.all([
-      //   apiClient.get('/pharmacy/dashboard/sales'),
-      //   apiClient.get('/pharmacy/dashboard/invoices'),
-      //   apiClient.get('/pharmacy/dashboard/drugs'),
-      //   apiClient.get('/pharmacy/dashboard/top-selling'),
-      //   apiClient.get('/pharmacy/dashboard/recent-invoices'),
-      //   apiClient.get('/pharmacy/dashboard/alerts'),
-      // ]);
+      // Call the actual dashboard API
+      const dashboardData = await apiClient.getPharmacyDashboard() as any;
       
-      // Mock data for now
-      const mockStats: DashboardStats = {
-        todaySales: 12450.75,
-        todayGrowth: 8.5,
-        monthSales: 345680.25,
-        monthGrowth: 12.3,
-        totalInvoices: 1247,
-        pendingInvoices: 23,
-        completedInvoices: 1224,
-        totalDrugs: 253973, // From the Indian Medicine Dataset
-        lowStockDrugs: 45,
-        expiredDrugs: 12,
-        topSellingDrugs: [
-          { id: '1', name: 'Paracetamol 500mg Tablet', quantity: 450, revenue: 11250 },
-          { id: '2', name: 'Azithromycin 500mg Tablet', quantity: 180, revenue: 35820 },
-          { id: '3', name: 'Amoxyclav 625 Tablet', quantity: 120, revenue: 38400 },
-          { id: '4', name: 'Omeprazole 20mg Capsule', quantity: 200, revenue: 16000 },
-          { id: '5', name: 'Metformin 500mg Tablet', quantity: 300, revenue: 9600 },
-        ],
-        recentInvoices: [
-          { id: '1', invoiceNumber: 'PHI-2024-001', patientName: 'John Doe', amount: 477.90, status: 'COMPLETED', createdAt: new Date().toISOString() },
-          { id: '2', invoiceNumber: 'PHI-2024-002', patientName: 'Alice Johnson', amount: 377.60, status: 'PENDING', createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString() },
-          { id: '3', invoiceNumber: 'PHI-2024-003', patientName: 'Bob Smith', amount: 156.25, status: 'COMPLETED', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: '4', invoiceNumber: 'PHI-2024-004', patientName: 'Emma Wilson', amount: 892.50, status: 'DISPENSED', createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
-          { id: '5', invoiceNumber: 'PHI-2024-005', patientName: 'Michael Brown', amount: 234.75, status: 'COMPLETED', createdAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000).toISOString() },
-        ],
-        lowStockAlerts: [
-          { id: '1', name: 'Insulin Glargine 100IU/ml', currentStock: 2, minStock: 10, manufacturerName: 'Sanofi' },
-          { id: '2', name: 'Salbutamol Inhaler 100mcg', currentStock: 5, minStock: 15, manufacturerName: 'GSK' },
-          { id: '3', name: 'Atorvastatin 20mg Tablet', currentStock: 8, minStock: 25, manufacturerName: 'Pfizer' },
-          { id: '4', name: 'Losartan 50mg Tablet', currentStock: 12, minStock: 30, manufacturerName: 'Teva' },
-        ]
+      // Map backend response to frontend DashboardStats interface
+      const mappedStats: DashboardStats = {
+        todaySales: dashboardData.todaySales || 0,
+        todayGrowth: dashboardData.todayGrowth || 0,
+        monthSales: dashboardData.monthSales || 0,
+        monthGrowth: dashboardData.monthGrowth || 0,
+        totalInvoices: dashboardData.totalInvoices || 0,
+        pendingInvoices: dashboardData.pendingInvoices || dashboardData.todayPendingInvoices || 0,
+        completedInvoices: dashboardData.completedInvoices || dashboardData.todayCompletedInvoices || 0,
+        totalDrugs: dashboardData.totalDrugs || 0,
+        lowStockDrugs: dashboardData.lowStockDrugs || 0,
+        expiredDrugs: dashboardData.expiredDrugs || 0,
+        topSellingDrugs: (dashboardData.topSellingDrugs || []).map((drug: any) => ({
+          id: drug.id || '',
+          name: drug.name || 'Unknown Drug',
+          quantity: drug.quantity || 0,
+          revenue: drug.revenue || 0,
+        })),
+        recentInvoices: (dashboardData.recentInvoices || []).map((invoice: any) => ({
+          id: invoice.id || '',
+          invoiceNumber: invoice.invoiceNumber || '',
+          patientName: invoice.patientName || 'Unknown Patient',
+          amount: invoice.amount || 0,
+          status: invoice.status || 'PENDING',
+          createdAt: invoice.createdAt || new Date().toISOString(),
+        })),
+        lowStockAlerts: (dashboardData.lowStockAlerts || []).map((alert: any) => ({
+          id: alert.id || '',
+          name: alert.name || 'Unknown Drug',
+          currentStock: alert.currentStock || 0,
+          minStock: alert.minStock || 0,
+          manufacturerName: alert.manufacturerName || 'Unknown',
+        })),
       };
       
-      setStats(mockStats);
-    } catch (error) {
+      setStats(mappedStats);
+    } catch (error: any) {
       console.error('Failed to load dashboard data:', error);
+      // Set empty stats on error to show empty state
+      setStats({
+        todaySales: 0,
+        todayGrowth: 0,
+        monthSales: 0,
+        monthGrowth: 0,
+        totalInvoices: 0,
+        pendingInvoices: 0,
+        completedInvoices: 0,
+        totalDrugs: 0,
+        lowStockDrugs: 0,
+        expiredDrugs: 0,
+        topSellingDrugs: [],
+        recentInvoices: [],
+        lowStockAlerts: [],
+      });
     } finally {
       setLoading(false);
     }

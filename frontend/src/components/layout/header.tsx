@@ -9,6 +9,7 @@ import { useState, useEffect, useRef } from 'react';
 import { formatDob } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useDashboardUser } from './dashboard-user-context';
+import { apiClient } from '@/lib/api';
 import {
   DropdownMenu,
   DropdownMenuContent,

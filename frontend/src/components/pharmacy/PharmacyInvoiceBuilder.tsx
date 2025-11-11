@@ -140,6 +140,9 @@ export function PharmacyInvoiceBuilder() {
 
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [printFormat, setPrintFormat] = useState<'TABLE' | 'TEXT'>('TABLE');
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Load initial data
   // Load initial data when component mounts
@@ -147,6 +150,27 @@ export function PharmacyInvoiceBuilder() {
     loadPatients();
     loadDoctors();
     // Reset form for new invoice
+    resetForm();
+  }, []);
+
+  // Listen for edit invoice events
+  useEffect(() => {
+    const handleEditInvoice = (event: CustomEvent<{ invoiceId: string }>) => {
+      const { invoiceId } = event.detail;
+      if (invoiceId) {
+        setEditingInvoiceId(invoiceId);
+        setIsEditMode(true);
+        loadInvoice(invoiceId);
+      }
+    };
+
+    window.addEventListener('pharmacy-invoice-edit' as any, handleEditInvoice as EventListener);
+    return () => {
+      window.removeEventListener('pharmacy-invoice-edit' as any, handleEditInvoice as EventListener);
+    };
+  }, []);
+
+  const resetForm = () => {
     setInvoiceData({
       patientId: "",
       doctorId: "",
@@ -161,7 +185,12 @@ export function PharmacyInvoiceBuilder() {
       notes: "",
     });
     setItems([]);
-  }, []);
+    setEditingInvoiceId(null);
+    setEditingInvoiceNumber(null);
+    setIsEditMode(false);
+    setPatientSearchQuery('');
+    setDoctorSearchQuery('');
+  };
   const loadPatients = async () => {
     try {
       const response = await apiClient.getPatients({ limit: 100 }) as unknown as { data?: any[] };
@@ -187,10 +216,95 @@ export function PharmacyInvoiceBuilder() {
   const loadInvoice = async (id: string) => {
     try {
       setLoading(true);
-      // TODO: Implement load invoice API
-      console.log('Loading invoice:', id);
-    } catch (error) {
+      const invoice = await apiClient.getPharmacyInvoiceById(id);
+      
+      if (!invoice) {
+        alert('Invoice not found');
+        resetForm();
+        return;
+      }
+
+      // Check if invoice can be edited (only DRAFT status)
+      if (invoice.status !== 'DRAFT') {
+        alert(`Cannot edit invoice with status: ${invoice.status}. Only DRAFT invoices can be edited.`);
+        resetForm();
+        return;
+      }
+
+      // Map invoice data to form state
+      // Note: PharmacyInvoiceSummary type doesn't include all fields, but backend returns them
+      const invoiceAny = invoice as any;
+      setInvoiceData({
+        patientId: invoice.patientId || invoice.patient?.id || '',
+        doctorId: invoice.doctor?.id || '',
+        prescriptionId: invoiceAny.prescriptionId || invoiceAny.prescription?.id || '',
+        paymentMethod: invoice.paymentMethod || 'CASH',
+        billingName: invoice.billingName || invoice.patient?.name || '',
+        billingPhone: invoice.billingPhone || invoice.patient?.phone || '',
+        billingAddress: invoiceAny.billingAddress || '',
+        billingCity: invoiceAny.billingCity || '',
+        billingState: invoiceAny.billingState || '',
+        billingPincode: invoiceAny.billingPincode || '',
+        notes: invoiceAny.notes || '',
+      });
+
+      // Set patient and doctor search queries for display
+      if (invoice.patient?.name) {
+        setPatientSearchQuery(invoice.patient.name);
+      }
+      if (invoice.doctor) {
+        const doctorName = `${invoice.doctor.firstName || ''} ${invoice.doctor.lastName || ''}`.trim();
+        setDoctorSearchQuery(doctorName);
+      }
+
+      // Map invoice items to form items
+      const mappedItems: InvoiceItem[] = (invoice.items || []).map((item: any) => {
+        const drug = item.drug || item.drugId ? {
+          id: item.drugId || item.drug?.id,
+          name: item.drug?.name || 'Unknown Drug',
+          price: item.unitPrice,
+          manufacturerName: item.drug?.manufacturerName || '',
+          packSizeLabel: item.drug?.packSizeLabel || '',
+          composition1: item.drug?.composition1,
+          composition2: item.drug?.composition2,
+          category: item.drug?.category,
+          dosageForm: item.drug?.dosageForm,
+          strength: item.drug?.strength,
+        } : undefined;
+
+        return {
+          id: item.id,
+          drugId: item.drugId,
+          packageId: item.packageId,
+          itemType: item.itemType || 'DRUG',
+          drug: drug,
+          package: item.package,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent || 0,
+          taxPercent: item.taxPercent || 0,
+          discountAmount: item.discountAmount || 0,
+          taxAmount: item.taxAmount || 0,
+          totalAmount: item.totalAmount || 0,
+          dosage: item.dosage,
+          frequency: item.frequency,
+          duration: item.duration,
+          instructions: item.instructions,
+        };
+      });
+
+      setItems(mappedItems);
+      setEditingInvoiceId(id);
+      setEditingInvoiceNumber(invoice.invoiceNumber || null);
+      setIsEditMode(true);
+
+      // Scroll to top to show the form
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error: any) {
       console.error('Failed to load invoice:', error);
+      const message = error?.body?.message || error?.message || 'Failed to load invoice';
+      alert(`Error: ${message}`);
+      resetForm();
     } finally {
       setLoading(false);
     }
@@ -486,41 +600,50 @@ export function PharmacyInvoiceBuilder() {
           duration: item.duration || undefined,
           instructions: item.instructions || undefined,
         })),
+        ...(status === 'CONFIRMED' && { status: 'CONFIRMED' }),
       };
 
-      const created = await apiClient.post<any>('/pharmacy/invoices', invoicePayload);
+      let result: any;
+      
+      if (isEditMode && editingInvoiceId) {
+        // Update existing invoice
+        result = await apiClient.updatePharmacyInvoice(editingInvoiceId, invoicePayload);
+        
+        // If confirmed, update status separately if not already set
+        if (status === 'CONFIRMED' && result?.id && result?.status !== 'CONFIRMED') {
+          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, { status: 'CONFIRMED' });
+          result.status = 'CONFIRMED';
+        }
+        
+        alert(`Invoice ${result?.invoiceNumber || result?.id || editingInvoiceId} updated ${status === 'CONFIRMED' ? 'and confirmed' : ''} successfully`);
+        
+        // Dispatch refresh event for invoice list
+        window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
+      } else {
+        // Create new invoice
+        result = await apiClient.post<any>('/pharmacy/invoices', invoicePayload);
 
-      // If confirmed, update status
-      if (status === 'CONFIRMED' && created?.id) {
-        await apiClient.patch(`/pharmacy/invoices/${created.id}`, { status: 'CONFIRMED' });
-        openPrintPreview(created);
+        // If confirmed, update status
+        if (status === 'CONFIRMED' && result?.id) {
+          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, { status: 'CONFIRMED' });
+          openPrintPreview(result);
+        }
+
+        alert(`Invoice ${result?.invoiceNumber || result?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`);
+        
+        // Dispatch refresh event for invoice list
+        window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
       }
 
-      alert(`Invoice ${created?.invoiceNumber || created?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`);
-
       // Reset form
-      setInvoiceData({
-        patientId: '',
-        doctorId: '',
-        prescriptionId: '',
-        paymentMethod: 'CASH',
-        billingName: '',
-        billingPhone: '',
-        billingAddress: '',
-        billingCity: '',
-        billingState: '',
-        billingPincode: '',
-        notes: '',
-      });
-      setPatientSearchQuery('');
-      setDoctorSearchQuery('');
-      setItems([]);
+      resetForm();
       setShowSearchResults(false);
       setShowPatientResults(false);
       setShowDoctorResults(false);
     } catch (error: any) {
       console.error('Failed to save invoice:', error);
-      alert(`Failed to save invoice. ${error?.body?.message || error?.message || ''}`);
+      const message = error?.body?.message || error?.message || 'Failed to save invoice';
+      alert(`Failed to save invoice. ${message}`);
     } finally {
       setLoading(false);
     }
@@ -662,7 +785,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
         alert('Billing phone required to send via WhatsApp');
         return;
       }
-      const cleaned = invoiceData.billingPhone.startsWith('+') ? invoiceData.billingPhone : `+91${invoiceData.billingPhone}`;
+      const cleaned = invoiceData.billingPhone.startsWith('+') ? invoiceData.billingPhone : `+${invoiceData.billingPhone}`;
       const text = `Invoice ${new Date().toLocaleDateString()} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
       alert(`This will send via backend: ${cleaned}\n${text}`);
       // Backend endpoint could be added later to send with selected template
@@ -672,12 +795,28 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
   };
 
   return (
-    <Card>
+    <Card data-pharmacy-invoice-builder>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Pill className="h-5 w-5" />
-          New Pharmacy Invoice
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Pill className="h-5 w-5" />
+            {isEditMode ? `Edit Invoice ${editingInvoiceNumber || editingInvoiceId ? `#${editingInvoiceNumber || editingInvoiceId?.slice(-8)}` : ''}` : 'New Pharmacy Invoice'}
+          </CardTitle>
+          {isEditMode && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (confirm('Cancel editing? All unsaved changes will be lost.')) {
+                  resetForm();
+                }
+              }}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel Edit
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
 
