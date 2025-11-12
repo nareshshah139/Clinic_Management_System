@@ -446,6 +446,11 @@ export class AppointmentsService {
       throw new BadRequestException('Cannot cancel appointment in progress');
     }
 
+    // Check if already cancelled
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      return { message: 'Appointment is already cancelled' };
+    }
+
     await this.prisma.appointment.update({
       where: { id },
       data: {

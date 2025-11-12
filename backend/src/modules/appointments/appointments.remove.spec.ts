@@ -48,6 +48,14 @@ describe('AppointmentsService.remove', () => {
     });
     expect(res).toEqual({ message: 'Appointment cancelled successfully' });
   });
+
+  it('returns success message if appointment is already cancelled', async () => {
+    jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'a1', status: 'CANCELLED' } as any);
+
+    const res = await service.remove('a1', branchId);
+    expect(prismaMock.appointment.update).not.toHaveBeenCalled();
+    expect(res).toEqual({ message: 'Appointment is already cancelled' });
+  });
 });
 
 

@@ -238,8 +238,10 @@ export default function DoctorDayCalendar({
   const confirmCancelAppointment = async () => {
     if (!cancellingAppointment) return;
     
+    const appointmentIdToCancel = cancellingAppointment;
+    
     try {
-      await apiClient.deleteAppointment(cancellingAppointment);
+      await apiClient.deleteAppointment(appointmentIdToCancel);
       
       toast({
         variant: "success",
@@ -259,11 +261,14 @@ export default function DoctorDayCalendar({
       setCancellingAppointment(null);
     } catch (error) {
       const errorMessage = getErrorMessage(error);
+      console.error('Failed to cancel appointment:', error);
       toast({
         variant: "destructive",
         title: "Failed to cancel appointment",
         description: errorMessage,
       });
+      // Clear cancelling state even on error to allow retry
+      setCancellingAppointment(null);
     }
   };
 
