@@ -15,6 +15,7 @@ import { apiClient } from '@/lib/api';
 import { formatPatientName, filterRoomsByVisitType, calculateAge, isDefaultDob, formatDob } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import type { Patient, BackendPatientRow, GetPatientsResponseWithMeta, VisitType, Room } from '@/lib/types';
 
 type Gender = 'MALE' | 'FEMALE' | 'OTHER';
@@ -589,23 +590,29 @@ export default function PatientsManagement() {
       toast({
         title: 'Patient archived',
         description: `${patientName} has been archived`,
-        action: {
-          label: 'Undo',
-          onClick: async () => {
-            try {
-              await apiClient.unarchivePatient(patient.id);
-              await fetchPatients(currentPage);
-              toast({ title: 'Archive undone', description: `${patientName} has been restored` });
-            } catch (e: any) {
-              toast({ title: 'Failed to restore', description: e?.message || 'Please try again', variant: 'destructive' });
-            }
-          },
-        },
+        action: (
+          <ToastAction
+            altText="Undo archive"
+            onClick={async () => {
+              try {
+                await apiClient.unarchivePatient(patient.id);
+                await fetchPatients(currentPage);
+                toast({ title: 'Archive undone', description: `${patientName} has been restored` });
+              } catch (e: unknown) {
+                const errMsg = e instanceof Error ? e.message : 'Please try again';
+                toast({ title: 'Failed to restore', description: errMsg, variant: 'destructive' });
+              }
+            }}
+          >
+            Undo
+          </ToastAction>
+        ),
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       // Revert on failure
       await fetchPatients(currentPage);
-      toast({ title: 'Failed to archive', description: e?.message || 'Please try again', variant: 'destructive' });
+      const errMsg = e instanceof Error ? e.message : 'Please try again';
+      toast({ title: 'Failed to archive', description: errMsg, variant: 'destructive' });
     } finally {
       setActionLoading(false);
     }
