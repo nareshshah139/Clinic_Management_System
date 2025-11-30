@@ -3792,34 +3792,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <style dangerouslySetInnerHTML={{
                 __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-                @media print {
-                  * {
-                    -webkit-print-color-adjust: exact !important;
-                    print-color-adjust: exact !important;
-                  }
-                  /* Page break helpers */
-                  .pb-before-page { break-before: page !important; page-break-before: always !important; }
-                  .pb-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
-                  html, body {
-                    margin: 0 !important;
-                    padding: 0 !important;
-                  }
-                  /* Position the print content at the top of the page */
-                  #pagedjs-container {
-                    position: absolute !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                  }
-                  /* Remove zoom transform */
-                  #print-preview-scroll > div {
-                    transform: none !important;
-                  }
-                  /* Remove page shadows for clean print */
-                  #pagedjs-container .pagedjs_page {
-                    margin: 0 !important;
-                    box-shadow: none !important;
-                  }
-                }
+                /* Print is handled by opening a new window - no @media print rules needed here */
                 /* Ensure a print-safe font stack with bullet glyph support */
                 #pagedjs-container, #pagedjs-container * {
                   font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
@@ -4315,7 +4288,80 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   }}>WhatsApp</Button>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
                   <Button className="col-span-1" onClick={() => {
-                    try { window.print(); } catch (e) { console.error('Browser print failed', e); }
+                    try {
+                      // Get the rendered Paged.js content
+                      const container = document.getElementById('pagedjs-container');
+                      if (!container) {
+                        toast({ variant: 'destructive', title: 'Print failed', description: 'No content to print.' });
+                        return;
+                      }
+                      
+                      // Open a new window with just the print content
+                      const printWindow = window.open('', '_blank', 'width=800,height=600');
+                      if (!printWindow) {
+                        toast({ variant: 'destructive', title: 'Print blocked', description: 'Please allow popups to print.' });
+                        return;
+                      }
+                      
+                      // Write the print content to the new window
+                      printWindow.document.write(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                          <title>Prescription</title>
+                          <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+                          <style>
+                            @page {
+                              size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
+                              margin: 0;
+                            }
+                            * {
+                              -webkit-print-color-adjust: exact !important;
+                              print-color-adjust: exact !important;
+                            }
+                            html, body {
+                              margin: 0;
+                              padding: 0;
+                              font-family: 'Fira Sans', sans-serif;
+                            }
+                            .pagedjs_page {
+                              margin: 0 !important;
+                              box-shadow: none !important;
+                              page-break-after: always;
+                            }
+                            .pagedjs_page:last-child {
+                              page-break-after: auto;
+                            }
+                            .pagedjs_pagebox {
+                              background-image: url('${printBgUrl ?? '/letterhead.png'}');
+                              background-repeat: no-repeat;
+                              background-position: top left;
+                              background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
+                            }
+                            ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+                          </style>
+                        </head>
+                        <body>
+                          ${container.innerHTML}
+                        </body>
+                        </html>
+                      `);
+                      printWindow.document.close();
+                      
+                      // Wait for fonts and images to load, then print
+                      printWindow.onload = () => {
+                        setTimeout(() => {
+                          printWindow.print();
+                        }, 500);
+                      };
+                      // Fallback if onload doesn't fire
+                      setTimeout(() => {
+                        printWindow.print();
+                      }, 1000);
+                    } catch (e) {
+                      console.error('Browser print failed', e);
+                      toast({ variant: 'destructive', title: 'Print failed', description: 'Could not open print dialog.' });
+                    }
                   }}>Print</Button>
                   <Button className="col-span-1" onClick={async () => {
                     try {
