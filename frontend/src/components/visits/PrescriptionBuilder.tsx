@@ -586,8 +586,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     overrideBottomMarginPx: number | null;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Ref for change detection in Paged.js processing useEffect to prevent flickering
-  const prevPagedJsDepsRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -2315,50 +2313,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     // Only proceed in preview or autoPreview mode; container may not be mounted yet
     if (!(previewOpen || autoPreview)) {
       console.log('⚠️ Early return from paged.js effect - preview disabled');
-      // Reset change detection ref when preview closes
-      prevPagedJsDepsRef.current = null;
       return;
     }
-
-    // Create a stable hash of all dependencies for change detection
-    // This prevents unnecessary Paged.js re-processing when dependencies haven't actually changed
-    const currentDepsHash = JSON.stringify({
-      items: itemsStringified,
-      diagnosis,
-      chiefComplaints,
-      investigations: investigationsStringified,
-      customSections: customSectionsStringified,
-      followUpInstructions,
-      paperPreset,
-      effectiveTopMarginMm,
-      effectiveBottomMarginMm,
-      overrideTopMarginPx,
-      overrideBottomMarginPx,
-      activeProfileId,
-      printLeftMarginPx,
-      printRightMarginPx,
-      contentOffsetXPx,
-      contentOffsetYPx,
-      designAids,
-      frames: JSON.stringify(frames),
-      bleedSafe,
-      showRefillStamp,
-      grayscale,
-      translationsMap: JSON.stringify(translationsMap),
-    });
-
-    // Check if this is the first render or if dependencies actually changed
-    const isFirstRender = prevPagedJsDepsRef.current === null;
-    const depsChanged = prevPagedJsDepsRef.current !== currentDepsHash;
-
-    if (!isFirstRender && !depsChanged) {
-      console.log('⏭️ Skipping Paged.js processing - no actual changes detected');
-      return;
-    }
-
-    // Update the ref with current hash
-    prevPagedJsDepsRef.current = currentDepsHash;
-    console.log('📝 Dependencies changed, proceeding with Paged.js processing');
     
     const processWithPagedJs = async () => {
       // Skip processing if a print dialog/preview is active
