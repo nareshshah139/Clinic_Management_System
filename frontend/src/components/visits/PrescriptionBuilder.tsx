@@ -4252,6 +4252,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         return;
                       }
                       
+                      // Collect all stylesheets from the current page
+                      const stylesheets: string[] = [];
+                      document.querySelectorAll('style').forEach(style => {
+                        stylesheets.push(style.outerHTML);
+                      });
+                      document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
+                        stylesheets.push(link.outerHTML);
+                      });
+                      
                       // Open a new window with just the print content
                       const printWindow = window.open('', '_blank', 'width=800,height=600');
                       if (!printWindow) {
@@ -4259,13 +4268,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         return;
                       }
                       
-                      // Write the print content to the new window with comprehensive styles
+                      // Write the print content to the new window with all styles from current page
                       printWindow.document.write(`
                         <!DOCTYPE html>
                         <html>
                         <head>
                           <title>Prescription</title>
                           <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+                          ${stylesheets.join('\n')}
                           <style>
                             @page {
                               size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
@@ -4274,18 +4284,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             * {
                               -webkit-print-color-adjust: exact !important;
                               print-color-adjust: exact !important;
-                              box-sizing: border-box;
                             }
                             html, body {
                               margin: 0;
                               padding: 0;
-                              font-family: 'Fira Sans', sans-serif;
-                              font-size: 14px;
-                              line-height: 1.5;
-                              color: #111827;
                             }
-                            
-                            /* Paged.js page structure */
+                            /* Remove page shadows and ensure clean print */
                             .pagedjs_page {
                               margin: 0 !important;
                               box-shadow: none !important;
@@ -4301,126 +4305,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
                             }
                             ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
-                            
-                            /* Typography */
-                            .font-semibold { font-weight: 600; }
-                            .font-medium { font-weight: 500; }
-                            .font-bold { font-weight: 700; }
-                            .text-sm { font-size: 0.875rem; }
-                            .text-xs { font-size: 0.75rem; }
-                            .text-lg { font-size: 1.125rem; }
-                            .text-xl { font-size: 1.25rem; }
-                            .text-gray-600 { color: #4b5563; }
-                            .text-gray-700 { color: #374151; }
-                            .text-gray-800 { color: #1f2937; }
-                            .text-gray-900 { color: #111827; }
-                            .text-center { text-align: center; }
-                            .text-right { text-align: right; }
-                            .uppercase { text-transform: uppercase; }
-                            .italic { font-style: italic; }
-                            .underline { text-decoration: underline; }
-                            
-                            /* Spacing */
-                            .mb-1 { margin-bottom: 0.25rem; }
-                            .mb-2 { margin-bottom: 0.5rem; }
-                            .mb-3 { margin-bottom: 0.75rem; }
-                            .mb-4 { margin-bottom: 1rem; }
-                            .mt-1 { margin-top: 0.25rem; }
-                            .mt-2 { margin-top: 0.5rem; }
-                            .mt-3 { margin-top: 0.75rem; }
-                            .mt-4 { margin-top: 1rem; }
-                            .mr-1 { margin-right: 0.25rem; }
-                            .mr-2 { margin-right: 0.5rem; }
-                            .ml-1 { margin-left: 0.25rem; }
-                            .ml-2 { margin-left: 0.5rem; }
-                            .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-                            .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-                            .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-                            .px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
-                            .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-                            .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-                            .p-2 { padding: 0.5rem; }
-                            .p-3 { padding: 0.75rem; }
-                            .p-4 { padding: 1rem; }
-                            .space-y-1 > * + * { margin-top: 0.25rem; }
-                            .space-y-2 > * + * { margin-top: 0.5rem; }
-                            .gap-1 { gap: 0.25rem; }
-                            .gap-2 { gap: 0.5rem; }
-                            .gap-3 { gap: 0.75rem; }
-                            .gap-4 { gap: 1rem; }
-                            
-                            /* Layout */
-                            .flex { display: flex; }
-                            .flex-col { flex-direction: column; }
-                            .flex-row { flex-direction: row; }
-                            .flex-wrap { flex-wrap: wrap; }
-                            .items-center { align-items: center; }
-                            .items-start { align-items: flex-start; }
-                            .justify-between { justify-content: space-between; }
-                            .justify-center { justify-content: center; }
-                            .grid { display: grid; }
-                            .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-                            .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-                            .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-                            .col-span-2 { grid-column: span 2 / span 2; }
-                            .col-span-3 { grid-column: span 3 / span 3; }
-                            .w-full { width: 100%; }
-                            .min-w-0 { min-width: 0; }
-                            .hidden { display: none; }
-                            .block { display: block; }
-                            .inline { display: inline; }
-                            .inline-block { display: inline-block; }
-                            
-                            /* Borders */
-                            .border { border: 1px solid #e5e7eb; }
-                            .border-t { border-top: 1px solid #e5e7eb; }
-                            .border-b { border-bottom: 1px solid #e5e7eb; }
-                            .border-gray-200 { border-color: #e5e7eb; }
-                            .border-gray-300 { border-color: #d1d5db; }
-                            .rounded { border-radius: 0.25rem; }
-                            .rounded-md { border-radius: 0.375rem; }
-                            
-                            /* Backgrounds */
-                            .bg-white { background-color: white; }
-                            .bg-gray-50 { background-color: #f9fafb; }
-                            .bg-gray-100 { background-color: #f3f4f6; }
-                            
-                            /* Tables */
-                            table { border-collapse: collapse; width: 100%; }
-                            th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
-                            th { font-weight: 600; background-color: #f9fafb; }
-                            thead { display: table-header-group; }
-                            tbody tr { break-inside: avoid; }
-                            
-                            /* Lists */
-                            ul, ol { padding-left: 1.5rem; margin: 0.5rem 0; }
-                            li { margin-bottom: 0.25rem; }
-                            .list-disc { list-style-type: disc; }
-                            .list-decimal { list-style-type: decimal; }
-                            .list-none { list-style-type: none; padding-left: 0; }
-                            
-                            /* Prescription-specific */
-                            .medication-item { 
-                              break-inside: avoid; 
-                              page-break-inside: avoid;
-                              padding: 0.5rem 0;
-                              border-bottom: 1px solid #e5e7eb;
-                            }
-                            .medication-item:last-child { border-bottom: none; }
-                            .section-header {
-                              font-weight: 600;
-                              margin-bottom: 0.5rem;
-                              padding-bottom: 0.25rem;
-                              border-bottom: 1px solid #e5e7eb;
-                            }
-                            .whitespace-pre-wrap { white-space: pre-wrap; }
-                            .whitespace-nowrap { white-space: nowrap; }
-                            .break-words { word-wrap: break-word; }
-                            .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                            
-                            /* Print page breaks */
-                            .pb-before-page { break-before: page !important; page-break-before: always !important; }
-                            .pb-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
                           </style>
                         </head>
                         <body>
