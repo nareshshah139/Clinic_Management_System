@@ -475,7 +475,7 @@ export class VisitsController {
   }
 
   @Delete(':id/photos/:attachmentId')
-  @Roles(UserRole.DOCTOR)
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   async deleteVisitPhoto(
     @Param('id') id: string,
     @Param('attachmentId') attachmentId: string,
@@ -486,7 +486,7 @@ export class VisitsController {
   }
 
   @Delete(':id/photos/legacy')
-  @Roles(UserRole.DOCTOR)
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   async deleteLegacyPhoto(
     @Param('id') id: string,
     @Body() body: { url?: string },
