@@ -3806,55 +3806,63 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     -webkit-print-color-adjust: exact !important;
                     print-color-adjust: exact !important;
                   }
-                  /* Hide everything by default */
-                  body > * {
-                    visibility: hidden !important;
+                  
+                  /* === PRINT VISIBILITY: Use position-based approach === */
+                  /* Move pagedjs-container to top-left corner of page and make it the only visible element */
+                  #pagedjs-container {
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    z-index: 999999 !important;
+                    background: white !important;
+                    min-height: auto !important;
                   }
-                  /* Show the Radix dialog portal and its ancestors chain */
-                  [data-radix-portal],
-                  [data-radix-portal] > *,
-                  [role="dialog"],
-                  [role="dialog"] > *,
-                  #print-preview-scroll,
-                  #print-preview-scroll > *,
+                  
+                  /* Ensure pagedjs content is visible */
                   #pagedjs-container,
                   #pagedjs-container * {
                     visibility: visible !important;
                   }
-                  /* Hide dialog overlay and close button during print */
-                  [data-radix-portal] > [data-state],
-                  [role="dialog"] button[class*="absolute"],
-                  [role="dialog"] > header,
-                  .sr-only {
+                  
+                  /* Hide everything else using a specific list of common containers */
+                  /* Radix dialog overlay */
+                  [data-radix-dialog-overlay],
+                  /* Dialog close button */
+                  [role="dialog"] > button,
+                  /* Screen reader only content */
+                  .sr-only,
+                  /* The sidebar/controls panel - class-based targeting */
+                  [role="dialog"] > div > div.w-80,
+                  [role="dialog"] > div > div.w-72,
+                  [role="dialog"] > div > div.border-l,
+                  /* Hidden source content */
+                  #prescription-print-root,
+                  /* Page indicators and floating elements */
+                  #print-preview-scroll > .absolute,
+                  /* Zoom wrapper - hide but keep content */
+                  #print-preview-scroll > div:not(:has(#pagedjs-container)) {
                     display: none !important;
                   }
-                  /* Hide the sidebar controls panel during print */
-                  [role="dialog"] > div > div:last-child:not(#print-preview-scroll) {
-                    display: none !important;
-                  }
+                  
                   /* Remove zoom transform during print */
                   #print-preview-scroll > div {
                     transform: none !important;
                   }
-                  /* Ensure pagedjs container is properly positioned for print */
+                  
+                  /* Ensure scroll container doesn't clip */
                   #print-preview-scroll {
                     position: static !important;
                     overflow: visible !important;
                     width: 100% !important;
                     height: auto !important;
                   }
-                  #pagedjs-container {
-                    position: static !important;
-                    min-height: auto !important;
-                  }
+                  
                   /* Remove page shadows and margins for actual print output */
                   #pagedjs-container .pagedjs_page {
                     margin: 0 !important;
                     box-shadow: none !important;
-                  }
-                  /* Hide the prescription source content (used only for Paged.js processing) */
-                  #prescription-print-root {
-                    display: none !important;
                   }
                 }
                 /* Ensure a print-safe font stack with bullet glyph support */
