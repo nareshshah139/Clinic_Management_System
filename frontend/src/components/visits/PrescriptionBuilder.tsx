@@ -590,6 +590,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
+  // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
+  const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
   const [overrideBottomMarginPx, setOverrideBottomMarginPx] = useState<number | null>(null);
@@ -2340,6 +2342,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       offsetY: contentOffsetYPx,
       showRefillStamp,
       grayscale,
+      letterheadOption,
     });
     
     // Skip processing if: initial render is done AND content hash hasn't changed
@@ -2854,7 +2857,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -2915,6 +2918,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         overrideBottomMarginPx,
         activeProfileId,
         showRefillStamp,
+        letterheadOption,
         breakBeforeMedications,
         breakBeforeInvestigations,
         breakBeforeFollowUp,
@@ -2923,7 +2927,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -2985,6 +2989,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.overrideBottomMarginPx === 'number') setOverrideBottomMarginPx(data.overrideBottomMarginPx);
         if (typeof data?.activeProfileId === 'string') setActiveProfileId(data.activeProfileId);
         if (typeof data?.showRefillStamp === 'boolean') setShowRefillStamp(data.showRefillStamp);
+        if (data?.letterheadOption === 'default' || data?.letterheadOption === 'none') setLetterheadOption(data.letterheadOption);
         if (typeof data?.breakBeforeMedications === 'boolean') setBreakBeforeMedications(data.breakBeforeMedications);
         if (typeof data?.breakBeforeInvestigations === 'boolean') setBreakBeforeInvestigations(data.breakBeforeInvestigations);
         if (typeof data?.breakBeforeFollowUp === 'boolean') setBreakBeforeFollowUp(data.breakBeforeFollowUp);
@@ -3841,7 +3846,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 
                 #pagedjs-container .pagedjs_pagebox {
-                  background-image: ${(printBgUrl ?? '/letterhead.png') ? `url('${printBgUrl ?? '/letterhead.png'}')` : 'none'};
+                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
                   background-repeat: no-repeat;
                   background-position: top left;
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
@@ -4258,6 +4263,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Select>
                   </div>
                   <div className="space-y-1">
+                    <span className="text-sm text-gray-700">Letterhead</span>
+                    <Select value={letterheadOption} onValueChange={(v: 'default' | 'none') => setLetterheadOption(v)}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select letterhead" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Letterhead ({printBgUrl ? 'Custom' : 'letterhead.png'})</SelectItem>
+                        <SelectItem value="none">None (Plain)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
                     <span className="text-sm text-gray-700">Page Breaks</span>
                     <div className="space-y-2 text-sm text-gray-700">
                       <label className="flex items-center gap-2"><input type="checkbox" checked={breakBeforeMedications} onChange={(e) => setBreakBeforeMedications(e.target.checked)} /> Break before Rx</label>
@@ -4366,7 +4383,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               page-break-after: auto;
                             }
                             .pagedjs_pagebox {
-                              background-image: url('${printBgUrl ?? '/letterhead.png'}');
+                              background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
                               background-repeat: no-repeat;
                               background-position: top left;
                               background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
