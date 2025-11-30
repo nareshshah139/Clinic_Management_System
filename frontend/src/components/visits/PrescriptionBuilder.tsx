@@ -206,7 +206,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         durationUnit: 'DAYS',
         instructions: '',
         route: 'Oral',
-        timing: 'After meals',
+        timing: '',
         quantity: 5,
         isGeneric: true,
       };
@@ -3927,8 +3927,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
                     </div>
                     <div>
-                      <div className="text-gray-600">Gender / DOB</div>
-                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} · {formatDob(visitData?.patient?.dob || patientData?.dob)}</div>
+                      <div className="text-gray-600">Gender / Age</div>
+                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} · {(() => {
+                        const dob = visitData?.patient?.dob || patientData?.dob;
+                        if (!dob) return '—';
+                        const birthDate = new Date(dob);
+                        const today = new Date();
+                        let age = today.getFullYear() - birthDate.getFullYear();
+                        const monthDiff = today.getMonth() - birthDate.getMonth();
+                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                          age--;
+                        }
+                        return `${age} yrs`;
+                      })()}</div>
                     </div>
                   </div>
                   )}
@@ -4009,7 +4020,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                                <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
+                                <th className="px-3 py-2 text-left font-medium">Frequency</th>
                                 <th className="px-3 py-2 text-left font-medium">When</th>
                                 <th className="px-3 py-2 text-left font-medium">Duration</th>
                                 <th className="px-3 py-2 text-left font-medium">Instructions</th>
