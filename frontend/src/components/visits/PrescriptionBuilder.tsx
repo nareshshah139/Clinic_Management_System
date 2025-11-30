@@ -2910,10 +2910,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         familyHistoryThyroid,
         familyHistoryOthers,
         customSections,
+        // Customization settings
+        overrideTopMarginPx,
+        overrideBottomMarginPx,
+        activeProfileId,
+        showRefillStamp,
+        breakBeforeMedications,
+        breakBeforeInvestigations,
+        breakBeforeFollowUp,
+        breakBeforeSignature,
+        avoidBreakInsideTables,
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections]);
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -2970,6 +2980,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.familyHistoryThyroid === 'boolean') setFamilyHistoryThyroid(data.familyHistoryThyroid);
         if (typeof data?.familyHistoryOthers === 'string') setFamilyHistoryOthers(data.familyHistoryOthers);
         if (Array.isArray(data?.customSections)) setCustomSections(data.customSections);
+        // Restore customization settings
+        if (typeof data?.overrideTopMarginPx === 'number') setOverrideTopMarginPx(data.overrideTopMarginPx);
+        if (typeof data?.overrideBottomMarginPx === 'number') setOverrideBottomMarginPx(data.overrideBottomMarginPx);
+        if (typeof data?.activeProfileId === 'string') setActiveProfileId(data.activeProfileId);
+        if (typeof data?.showRefillStamp === 'boolean') setShowRefillStamp(data.showRefillStamp);
+        if (typeof data?.breakBeforeMedications === 'boolean') setBreakBeforeMedications(data.breakBeforeMedications);
+        if (typeof data?.breakBeforeInvestigations === 'boolean') setBreakBeforeInvestigations(data.breakBeforeInvestigations);
+        if (typeof data?.breakBeforeFollowUp === 'boolean') setBreakBeforeFollowUp(data.breakBeforeFollowUp);
+        if (typeof data?.breakBeforeSignature === 'boolean') setBreakBeforeSignature(data.breakBeforeSignature);
+        if (typeof data?.avoidBreakInsideTables === 'boolean') setAvoidBreakInsideTables(data.avoidBreakInsideTables);
       }
     } catch {}
     pushHistory();
