@@ -586,6 +586,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     overrideBottomMarginPx: number | null;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Change detection refs to prevent flickering - track if initial render is done and last content hash
+  const initialRenderDoneRef = useRef(false);
+  const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -2313,6 +2316,35 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     // Only proceed in preview or autoPreview mode; container may not be mounted yet
     if (!(previewOpen || autoPreview)) {
       console.log('⚠️ Early return from paged.js effect - preview disabled');
+      // Reset change detection when preview closes so next open gets fresh render
+      initialRenderDoneRef.current = false;
+      lastContentHashRef.current = null;
+      return;
+    }
+    
+    // Create a content hash of values that actually affect the rendered output
+    // This prevents re-processing when React re-renders but content hasn't changed
+    const contentHash = JSON.stringify({
+      items: itemsStringified,
+      diagnosis,
+      chiefComplaints,
+      investigations: investigationsStringified,
+      customSections: customSectionsStringified,
+      followUpInstructions,
+      paperPreset,
+      topMargin: effectiveTopMarginMm,
+      bottomMargin: effectiveBottomMarginMm,
+      leftMargin: printLeftMarginPx,
+      rightMargin: printRightMarginPx,
+      offsetX: contentOffsetXPx,
+      offsetY: contentOffsetYPx,
+      showRefillStamp,
+      grayscale,
+    });
+    
+    // Skip processing if: initial render is done AND content hash hasn't changed
+    if (initialRenderDoneRef.current && lastContentHashRef.current === contentHash) {
+      console.log('⏭️ Skipping Paged.js - content unchanged');
       return;
     }
     
@@ -2563,6 +2595,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         const pages = container.querySelectorAll('.pagedjs_page');
         setTotalPreviewPages(pages.length);
         console.log('✅ Paged.js processing complete - Generated', pages.length, 'pages');
+        
+        // Mark initial render as done and update content hash to prevent flickering
+        initialRenderDoneRef.current = true;
+        lastContentHashRef.current = contentHash;
         console.log('📏 Container dimensions:', {
           width: container.offsetWidth,
           height: container.offsetHeight,
