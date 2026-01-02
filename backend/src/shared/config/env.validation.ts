@@ -35,6 +35,21 @@ export function validateEnv(config: Record<string, unknown>) {
     config['OPENAI_TEMPLATE_MODEL'] = 'gpt-5-mini';
   }
 
+  // Google Calendar (optional)
+  const hasGoogle = config['GOOGLE_CLIENT_ID'] && config['GOOGLE_CLIENT_SECRET'] && config['GOOGLE_REDIRECT_URI'];
+  if (!hasGoogle) {
+    logger.warn('Google Calendar is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI to enable calendar sync.');
+  }
+
+  // WhatsApp Cloud (optional)
+  const hasWhatsAppToken = !!config['WHATSAPP_TOKEN'];
+  const hasWhatsAppPhoneId = !!config['WHATSAPP_PHONE_NUMBER_ID'];
+  if (!hasWhatsAppToken || !hasWhatsAppPhoneId) {
+    logger.warn(
+      'WhatsApp Cloud is not configured. Set WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID to enable outbound WhatsApp.',
+    );
+  }
+
   return config;
 }
 

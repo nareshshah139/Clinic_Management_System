@@ -28,6 +28,7 @@ import { validateEnv } from './shared/config/env.validation';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { WhatsAppTemplatesModule } from './modules/whatsapp-templates/whatsapp-templates.module';
+import { GoogleCalendarModule } from './modules/google-calendar/google-calendar.module';
 
 const minimalBoot = process.env.MINIMAL_BOOT === 'true';
 
@@ -62,6 +63,7 @@ const fullFeatureModules = [
   StockPredictionModule,
   AuditLogsModule,
   WhatsAppTemplatesModule,
+  GoogleCalendarModule,
 ];
 
 const minimalModules = [AuthModule];

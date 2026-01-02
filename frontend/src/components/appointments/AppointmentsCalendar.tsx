@@ -61,6 +61,10 @@ export default function AppointmentsCalendar({
   const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
   const [gridMinutes, setGridMinutes] = useState<number>(30);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
+  const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; calendarId?: string | null; email?: string | null }>({
+    connected: false,
+  });
+  const [googleLoading, setGoogleLoading] = useState<boolean>(false);
 
   // Booking dialog state
   const [bookingDialogOpen, setBookingDialogOpen] = useState<boolean>(false);
@@ -100,6 +104,10 @@ export default function AppointmentsCalendar({
     }
   }, [doctorId, date]);
 
+  useEffect(() => {
+    void fetchGoogleStatus();
+  }, []);
+
   const fetchDoctors = async () => {
     try {
       const res: any = await apiClient.getUsers({ limit: 100 });
@@ -118,6 +126,51 @@ export default function AppointmentsCalendar({
       setRooms(res.rooms || []);
     } catch (e) {
       console.error('Failed to fetch rooms', e);
+    }
+  };
+
+  const fetchGoogleStatus = async () => {
+    try {
+      const res: any = await apiClient.getGoogleCalendarStatus();
+      setGoogleStatus({
+        connected: !!res?.connected,
+        calendarId: res?.calendarId ?? null,
+        email: res?.email ?? null,
+      });
+    } catch (e) {
+      console.error('Failed to fetch Google Calendar status', e);
+    }
+  };
+
+  const startGoogleConnect = async () => {
+    try {
+      setGoogleLoading(true);
+      const redirectTarget = typeof window !== 'undefined' ? window.location.href : '/dashboard/appointments';
+      const res = await apiClient.getGoogleCalendarAuthUrl(redirectTarget);
+      if (res?.url) {
+        window.location.href = res.url;
+      } else {
+        throw new Error('Missing auth URL');
+      }
+    } catch (e: any) {
+      const msg = e?.body?.message || e?.message || 'Failed to start Google connect';
+      toast({ variant: 'destructive', title: 'Google Calendar', description: msg });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const disconnectGoogle = async () => {
+    try {
+      setGoogleLoading(true);
+      await apiClient.disconnectGoogleCalendar();
+      setGoogleStatus({ connected: false });
+      toast({ title: 'Google Calendar', description: 'Disconnected successfully.' });
+    } catch (e: any) {
+      const msg = e?.body?.message || e?.message || 'Failed to disconnect';
+      toast({ variant: 'destructive', title: 'Google Calendar', description: msg });
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -276,12 +329,32 @@ export default function AppointmentsCalendar({
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" /> 
-            Doctor Calendar
-          </CardTitle>
-          <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
+        <CardHeader className="space-y-2">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5" /> 
+                Doctor Calendar
+              </CardTitle>
+              <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {googleStatus.connected ? (
+                <>
+                  <Badge variant="secondary">
+                    Google Calendar connected {googleStatus.calendarId ? `(${googleStatus.calendarId})` : ''}
+                  </Badge>
+                  <Button variant="outline" size="sm" onClick={disconnectGoogle} disabled={googleLoading}>
+                    {googleLoading ? 'Disconnecting...' : 'Disconnect'}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" onClick={startGoogleConnect} disabled={googleLoading}>
+                  {googleLoading ? 'Opening Google...' : 'Connect Google Calendar'}
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">

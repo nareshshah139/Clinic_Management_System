@@ -6,10 +6,19 @@ import { QueryAppointmentsDto, AvailableSlotsDto } from './dto/query-appointment
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
 import { AppointmentStatus, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
+import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
+
+type WhatsAppTemplateComponent = { type: 'body'; parameters: { type: 'text'; text: string }[] };
 
 @Injectable()
 export class AppointmentsService {
-  constructor(private prisma: PrismaService, private notifications?: NotificationsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications?: NotificationsService,
+    private whatsappTemplates?: WhatsAppTemplatesService,
+    private googleCalendar?: GoogleCalendarService,
+  ) {}
 
   async create(createAppointmentDto: CreateAppointmentDto, branchId: string) {
     const { patientId, doctorId, roomId, date, slot, visitType, notes, source } = createAppointmentDto;
@@ -98,7 +107,10 @@ export class AppointmentsService {
     // Fire-and-forget notifications (if configured and doctor has enabled)
     if (this.notifications) {
       // Check if the doctor has enabled auto WhatsApp confirmations
-      const doctorSettings = await this.prisma.user.findUnique({ where: { id: doctorId }, select: { metadata: true, role: true } });
+      const doctorSettings = await this.prisma.user.findUnique({
+        where: { id: doctorId },
+        select: { metadata: true, role: true },
+      });
       let allowWhatsApp = false;
       let useTemplate = false;
       let templateName: string | undefined;
@@ -117,8 +129,15 @@ export class AppointmentsService {
       } catch {}
 
       const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
-      const humanDate = new Date(date).toLocaleDateString();
-      const summary = `Appointment confirmed with Dr. ${doctorName} on ${humanDate} at ${slot}. Token #${appointment.tokenNumber ?? ''}.`;
+      const appointmentDateObj = new Date(date);
+      const humanDate = appointmentDateObj.toLocaleDateString();
+      const humanTime = slot;
+      const summary = this.buildAppointmentSummary({
+        doctorName,
+        date: humanDate,
+        time: humanTime,
+        tokenNumber: appointment.tokenNumber ?? undefined,
+      });
       // Email
       if (appointment.patient?.email) {
         this.notifications
@@ -133,33 +152,53 @@ export class AppointmentsService {
       // WhatsApp (only if doctor opted in)
       if (allowWhatsApp && appointment.patient?.phone) {
         // Format phone number as E.164 for WhatsApp (add + prefix if not present)
-        // Phone is stored without +, so we add it for E.164 format
         const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+${appointment.patient.phone}`;
-        // Prefer template if configured on doctor
-        if (useTemplate && templateName && templateLanguage) {
-          this.notifications
-            .sendWhatsApp({
-              toPhoneE164: e164,
-              template: {
-                name: templateName,
+        const touchpoint = 'appointment_confirmation';
+        const template =
+          useTemplate && this.whatsappTemplates
+            ? await this.whatsappTemplates.resolveActiveTemplate({
+                branchId,
+                touchpoint,
                 language: templateLanguage,
-              },
-              overrideToken: waOverrideToken,
-              overridePhoneId: waOverridePhoneId,
-            })
-            .catch(() => void 0);
-        } else {
-          this.notifications
-            .sendWhatsApp({
-              toPhoneE164: e164,
-              text: summary,
-              overrideToken: waOverrideToken,
-              overridePhoneId: waOverridePhoneId,
-            })
-            .catch(() => void 0);
-        }
+                ownerId: doctorId,
+                name: templateName,
+              })
+            : null;
+        const templateComponents =
+          template && template.variables
+            ? this.buildAppointmentTemplateComponents(template.variables, {
+                patientName: appointment.patient?.name ?? '',
+                doctorName,
+                appointmentDate: humanDate,
+                appointmentTime: humanTime,
+                visitType: appointment.visitType,
+                tokenNumber: appointment.tokenNumber ?? undefined,
+              })
+            : undefined;
+        const whatsappPayload =
+          template && template.name
+            ? {
+                template: {
+                  name: template.name,
+                  language: template.language || templateLanguage || 'en',
+                  components: templateComponents,
+                },
+              }
+            : { text: template?.contentText || summary };
+
+        this.notifications
+          .sendWhatsApp({
+            toPhoneE164: e164,
+            overrideToken: waOverrideToken,
+            overridePhoneId: waOverridePhoneId,
+            ...whatsappPayload,
+          })
+          .catch(() => void 0);
       }
     }
+
+    // Google Calendar sync (fire-and-forget; non-blocking)
+    void this.googleCalendar?.syncAppointmentEvent(appointment.id).catch(() => void 0);
 
     return appointment;
   }
@@ -337,6 +376,8 @@ export class AppointmentsService {
       },
     });
 
+    void this.googleCalendar?.syncAppointmentEvent(updatedAppointment.id).catch(() => void 0);
+
     return updatedAppointment;
   }
 
@@ -401,6 +442,9 @@ export class AppointmentsService {
       },
     });
 
+    // Update linked Google Calendar event (non-blocking)
+    void this.googleCalendar?.syncAppointmentEvent(rescheduledAppointment.id).catch(() => void 0);
+
     return rescheduledAppointment;
   }
 
@@ -457,6 +501,9 @@ export class AppointmentsService {
         status: AppointmentStatus.CANCELLED,
       },
     });
+
+    // Remove Google Calendar event if one exists
+    void this.googleCalendar?.deleteAppointmentEvent(id).catch(() => void 0);
 
     return { message: 'Appointment cancelled successfully' };
   }
@@ -764,6 +811,64 @@ export class AppointmentsService {
     });
 
     return { message: 'Room deleted successfully' };
+  }
+
+  private buildAppointmentSummary(input: { doctorName: string; date: string; time: string; tokenNumber?: number }) {
+    const tokenText = input.tokenNumber ? ` Token #${input.tokenNumber}.` : '';
+    return `Appointment confirmed with Dr. ${input.doctorName} on ${input.date} at ${input.time}.${tokenText}`;
+  }
+
+  private buildAppointmentTemplateComponents(
+    variables: string[] | undefined,
+    data: {
+      patientName: string;
+      patientPhone?: string;
+      doctorName: string;
+      appointmentDate: string;
+      appointmentTime: string;
+      visitType: VisitType;
+      tokenNumber?: number;
+    },
+  ): WhatsAppTemplateComponent[] | undefined {
+    if (!variables || variables.length === 0) return undefined;
+    const parameters = variables.map((variable) => ({
+      type: 'text' as const,
+      text: this.resolveTemplateVariable(variable, data),
+    }));
+    return [{ type: 'body', parameters }];
+  }
+
+  private resolveTemplateVariable(key: string, data: {
+    patientName: string;
+    patientPhone?: string;
+    doctorName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    visitType: VisitType;
+    tokenNumber?: number;
+  }) {
+    switch (key) {
+      case 'patient_name':
+        return data.patientName || 'Patient';
+      case 'patient_phone':
+        return data.patientPhone || '';
+      case 'doctor_name':
+        return data.doctorName || 'Doctor';
+      case 'appointment_date':
+        return data.appointmentDate;
+      case 'appointment_time':
+        return data.appointmentTime;
+      case 'appointment_mode':
+        return data.visitType || 'OPD';
+      case 'queue_token':
+        return data.tokenNumber ? String(data.tokenNumber) : '-';
+      case 'clinic_name':
+        return '';
+      case 'whatsapp_help_number':
+        return '';
+      default:
+        return '';
+    }
   }
 
   // Private helper methods

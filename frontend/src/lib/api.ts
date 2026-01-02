@@ -682,6 +682,23 @@ export class ApiClient {
   }) {
     return this.post('/whatsapp/templates/generate', data, { timeoutMs: 15000 });
   }
+
+  async testWhatsAppTemplate(id: string, data: { to: string; variables?: Record<string, string> }) {
+    return this.post(`/whatsapp/templates/${id}/test`, data);
+  }
+
+  // Google Calendar
+  async getGoogleCalendarStatus() {
+    return this.get('/google-calendar/status');
+  }
+
+  async getGoogleCalendarAuthUrl(redirect?: string) {
+    return this.get<{ url: string }>('/google-calendar/auth-url', redirect ? { redirect } : undefined);
+  }
+
+  async disconnectGoogleCalendar() {
+    return this.post('/google-calendar/disconnect', {});
+  }
 }
 
 export const apiClient = new ApiClient();
