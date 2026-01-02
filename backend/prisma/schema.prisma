@@ -50,6 +50,9 @@ model User {
   statusReason      String?
   isActive          Boolean            @default(true)
   metadata          String?
+  // Google Calendar integration (per-user)
+  googleCalendarId  String?
+  googleRefreshToken String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   appointments      Appointment[]
@@ -229,6 +232,8 @@ model Appointment {
   visitType   VisitType         @default(OPD)
   notes       String?
   source      String?
+  // Google Calendar event linkage
+  googleEventId String?
   branchId    String
   roomId      String?
   tokenNumber Int?
