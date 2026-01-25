@@ -461,6 +461,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const justSavedRef = useRef(false);
   const lastIdempotencyKeyRef = useRef<string | null>(null);
   const mountedRef = useRef(true);
+  const lastChangeHashRef = useRef<string | null>(null);
   const stableHash = useCallback((input: string): string => {
     let hash = 5381;
     for (let i = 0; i < input.length; i++) {
@@ -975,6 +976,18 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       return;
     }
 
+    // Skip if the draft state is logically unchanged to avoid re-render loops
+    try {
+      const draftSnapshot = serializeDraft();
+      const draftHash = stableHash(JSON.stringify(draftSnapshot));
+      if (draftHash === lastChangeHashRef.current) {
+        return;
+      }
+      lastChangeHashRef.current = draftHash;
+    } catch {
+      // If hashing fails, proceed with save path to avoid losing changes
+    }
+
     hasUnsavedChangesRef.current = true;
     setSaveStatus('unsaved');
     autoSaveFailureNotifiedRef.current = false;
@@ -983,6 +996,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       scheduleAutoSave();
     }
   }, [
+    serializeDraft,
     persistDraftToStorage,
     scheduleAutoSave,
     vitals,
