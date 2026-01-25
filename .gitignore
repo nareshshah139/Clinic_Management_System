@@ -34,3 +34,4 @@ DATABASE_BACKUP_SUMMARY.md
 *.sql
 *.dump
 backend/src/data/indian_medicine_data.csv
+prod-backup*.list
