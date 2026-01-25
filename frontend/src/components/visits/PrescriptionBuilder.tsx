@@ -90,6 +90,7 @@ interface Props {
   includeSections?: Record<string, boolean>;
   onChangeIncludeSections?: (next: Record<string, boolean>) => void;
   ensureVisitId?: () => Promise<string>;
+  onChangeChiefComplaints?: (value: string) => void;
   onChangeContentOffset?: (x: number, y: number) => void;
   designAids?: {
     enabled: boolean;
@@ -144,7 +145,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
@@ -153,6 +154,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [followUpInstructions, setFollowUpInstructions] = useState('');
 
   const [items, setItems] = useState<PrescriptionItemForm[]>([]);
+  const [loadingPrevMeds, setLoadingPrevMeds] = useState(false);
   const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
   const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
 
@@ -230,6 +232,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
   const [creatingTemplate, setCreatingTemplate] = useState<boolean>(false);
   const [savingFieldsTemplate, setSavingFieldsTemplate] = useState<boolean>(false);
+
+  // Bubble chief complaint changes up so parent (visit form) stays in sync
+  useEffect(() => {
+    onChangeChiefComplaints?.(chiefComplaints);
+  }, [chiefComplaints, onChangeChiefComplaints]);
 
   const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
     const status = error?.status;
@@ -960,8 +967,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   );
 
   const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
-  const patientIdDisplay = useMemo(() => visitData?.patient?.id || patientData?.id || '', [visitData, patientData]);
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
+  const reviewDateDisplay = useMemo(() => {
+    if (!reviewDate) return '';
+    const parsed = new Date(reviewDate);
+    return Number.isNaN(parsed.getTime()) ? reviewDate : parsed.toLocaleDateString();
+  }, [reviewDate]);
   const patientGender = useMemo(() => visitData?.patient?.gender || patientData?.gender || '', [visitData, patientData]);
   const patientDob = useMemo(() => visitData?.patient?.dob || patientData?.dob || '', [visitData, patientData]);
   const patientAgeYears = useMemo(() => {
@@ -1491,6 +1502,123 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (!list || list.length === 0) return false;
     const last = list[list.length - 1];
     return !((last.drugName || '').trim());
+  };
+
+  const normalizeHistoryResponse = (res: any): any[] => {
+    if (Array.isArray(res)) return res;
+    if (res && typeof res === 'object') {
+      if (Array.isArray(res.visits)) return res.visits;
+      if (Array.isArray(res.data)) return res.data;
+    }
+    return [];
+  };
+
+  const normalizeFrequency = (raw: any, pattern?: string): Frequency => {
+    const upper = typeof raw === 'string' ? raw.toUpperCase() : '';
+    const fromList = (FREQUENCY_OPTIONS as readonly string[]).find((f) => f === upper);
+    if (fromList) return fromList as Frequency;
+    const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
+    return (inferred as Frequency) || 'ONCE_DAILY';
+  };
+
+  const normalizeDurationUnit = (raw: any): DurationUnit => {
+    const upper = typeof raw === 'string' ? raw.toUpperCase() : '';
+    if (upper === 'DAYS' || upper === 'WEEKS' || upper === 'MONTHS' || upper === 'YEARS') return upper as DurationUnit;
+    return 'DAYS';
+  };
+
+  const numberOrBlank = (val: any): number | '' => {
+    const n = Number(val);
+    return Number.isFinite(n) ? n : '';
+  };
+
+  const mapPrevRxItem = (raw: any): PrescriptionItemForm | null => {
+    const name = String(raw?.drugName || raw?.name || raw?.medicine || '').trim();
+    if (!name) return null;
+    const dosePattern = raw?.dosePattern || raw?.dose_pattern || '';
+    const durationUnit = normalizeDurationUnit(raw?.durationUnit);
+    const frequency = normalizeFrequency(raw?.frequency, dosePattern);
+    const timing = raw?.timing || inferTimingFromDosePattern(dosePattern || '') || '';
+    const dosageUnitRaw = typeof raw?.dosageUnit === 'string' ? raw.dosageUnit.toUpperCase() : '';
+    const dosageUnit: DosageUnit = (['MG','ML','MCG','IU','TABLET','CAPSULE','DROP','SPRAY','PATCH','INJECTION'] as const).includes(dosageUnitRaw as DosageUnit)
+      ? (dosageUnitRaw as DosageUnit)
+      : 'TABLET';
+
+    return {
+      drugName: name,
+      dosePattern: dosePattern || '',
+      frequency,
+      timing,
+      duration: numberOrBlank(raw?.duration),
+      durationUnit,
+      instructions: raw?.instructions ? String(raw.instructions) : '',
+      dosage: numberOrBlank(raw?.dosage),
+      dosageUnit,
+      quantity: numberOrBlank(raw?.quantity),
+      route: raw?.route ? String(raw.route) : '',
+      isGeneric: Boolean(raw?.isGeneric),
+    };
+  };
+
+  const addPreviousMedications = async () => {
+    if (!patientId) {
+      toast({
+        variant: 'warning',
+        title: 'Select a patient',
+        description: 'Choose a patient before importing previous medications.',
+      });
+      return;
+    }
+    setLoadingPrevMeds(true);
+    try {
+      const res = await apiClient.getPatientVisitHistory<any>(patientId, { limit: 5 });
+      const visits = normalizeHistoryResponse(res)
+        .sort((a, b) => {
+          const at = a?.createdAt ? Date.parse(String(a.createdAt)) : 0;
+          const bt = b?.createdAt ? Date.parse(String(b.createdAt)) : 0;
+          return bt - at; // newest first
+        });
+      const prevWithRx = visits.find((v) => v && v.id !== visitId && Array.isArray((v as any).prescriptionItems) && (v as any).prescriptionItems.length > 0);
+      const rawItems: any[] = prevWithRx ? (prevWithRx as any).prescriptionItems : [];
+      const mapped = rawItems
+        .map(mapPrevRxItem)
+        .filter((it): it is PrescriptionItemForm => Boolean(it && (it as PrescriptionItemForm).drugName));
+      if (!mapped.length) {
+        toast({
+          variant: 'warning',
+          title: 'No previous medications found',
+          description: 'Could not find medications in the last visits for this patient.',
+        });
+        return;
+      }
+      setItems((prev) => {
+        const base = prev.filter((it) => (it.drugName || '').trim());
+        const existingKeys = new Set(base.map((it) => `${it.drugName.toLowerCase()}|${it.frequency}|${it.dosePattern || ''}|${it.timing || ''}|${it.duration}|${it.durationUnit}`));
+        const merged = [...base];
+        for (const m of mapped) {
+          const key = `${m.drugName.toLowerCase()}|${m.frequency}|${m.dosePattern || ''}|${m.timing || ''}|${m.duration}|${m.durationUnit}`;
+          if (!existingKeys.has(key)) {
+            merged.push(m);
+            existingKeys.add(key);
+          }
+        }
+        if (!hasTrailingBlank(merged)) merged.push(createBlankItem());
+        return merged;
+      });
+      toast({
+        variant: 'success',
+        title: 'Previous medications added',
+        description: `Added ${mapped.length} item${mapped.length === 1 ? '' : 's'} from the last visit.`,
+      });
+    } catch (e) {
+      toast({
+        variant: 'destructive',
+        title: 'Unable to load previous medications',
+        description: getErrorMessage(e) || 'Please try again.',
+      });
+    } finally {
+      setLoadingPrevMeds(false);
+    }
   };
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
@@ -3642,6 +3770,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
+                    <Button size="sm" variant="outline" onClick={addPreviousMedications} disabled={loadingPrevMeds}>
+                      {loadingPrevMeds ? 'Adding...' : 'Add previous meds'}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={addRowAndFocus}>Add Row</Button>
                   </div>
                 </div>
@@ -4192,8 +4323,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         ];
                         const patientLines = [
                           `Patient: ${visitData?.patient?.name || patientData?.name || '—'}`,
-                          `Patient ID: ${visitData?.patient?.id || patientData?.id || '—'}`,
-                        ];
+                          `Patient Code: ${patientCodeDisplay || '—'}`,
+                          reviewDateDisplay ? `Review Date: ${reviewDateDisplay}` : null,
+                          (followUpInstructions || '').trim().length ? `Follow-up Instructions: ${tt('followUpInstructions', followUpInstructions)}` : null,
+                        ].filter(Boolean);
                         const medsLines = (items || []).map((it: any, idx: number) => {
                           const parts: string[] = [];
                           parts.push(`${idx + 1}. ${it.drugName}`);
@@ -4233,8 +4366,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <span className="text-gray-800">{todayStr}</span>
                         <span className="font-semibold">{patientName}</span>
                         {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
-                        <span className="text-gray-700">{patientIdDisplay || '—'}</span>
-                        {patientCodeDisplay ? <span className="text-gray-500">{patientCodeDisplay}</span> : null}
+                        {patientCodeDisplay ? <span className="text-gray-700">{patientCodeDisplay}</span> : <span className="text-gray-500">—</span>}
+                        {reviewDateDisplay ? <span className="text-gray-700">Review: {reviewDateDisplay}</span> : null}
                       </div>
                     ) : (
                       <div className="flex justify-between text-sm py-3">
@@ -4243,12 +4376,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <div className="font-medium">{patientName}</div>
                         </div>
                         <div>
-                          <div className="text-gray-600">Patient ID</div>
-                          <div className="font-medium">{patientIdDisplay || '—'}</div>
-                        </div>
-                        <div>
                           <div className="text-gray-600">Patient Code</div>
                           <div className="font-medium">{patientCodeDisplay || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Review Date</div>
+                          <div className="font-medium">{reviewDateDisplay || '—'}</div>
                         </div>
                         <div>
                           <div className="text-gray-600">Gender / Age</div>
@@ -4427,6 +4560,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   ) : null
                 ))}
+
+                {/* Review Date */}
+                {reviewDateDisplay ? (
+                  <div className="py-3">
+                    <div className="font-semibold mb-1">Review Date</div>
+                    <div className="text-sm">{reviewDateDisplay}</div>
+                  </div>
+                ) : null}
 
                 {/* Follow-up Instructions */}
                 {(followUpInstructions?.trim()?.length) ? (

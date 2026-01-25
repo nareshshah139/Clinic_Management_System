@@ -634,14 +634,24 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         temperatureC = ((n - 32) * 5) / 9;
       }
     }
+    const complaintValues = (() => {
+      if (complaints.length > 0) {
+        return complaints;
+      }
+      if (!visitId) {
+        if (subjective) return [subjective];
+        return ['General consultation'];
+      }
+      return [];
+    })();
+
     const payload: Record<string, unknown> = {
       patientId,
       doctorId,
       appointmentId, // Include appointment ID if available
       visitNumber: currentVisitNumber,
       status: visitStatus,
-      complaints: (complaints.length > 0 ? complaints : (subjective ? [subjective] : ['General consultation']))
-        .map((complaint) => ({ complaint })),
+      complaints: complaintValues.map((complaint) => ({ complaint })),
       examination: {
         ...(objective ? { generalAppearance: objective } : {}),
         dermatology: {
@@ -700,7 +710,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     return payload;
-  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective]);
+  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const runAutoSave = useCallback(async () => {
     if (!visitId || !hasUnsavedChangesRef.current) {
@@ -2165,6 +2175,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   doctorId={doctorId}
                   visitId={visitId}
+                  onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
                   ensureVisitId={async () => {
                     if (visitId) return visitId;
                     if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
