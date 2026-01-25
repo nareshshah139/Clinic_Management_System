@@ -1093,6 +1093,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, []);
 
   useEffect(() => {
+    // Defer templates bar mount to avoid initial render churn
+    setShowTemplatesBar(true);
+  }, []);
+
+  useEffect(() => {
     const loadVisit = async () => {
       if (!visitId || standalone) return;
       try {
@@ -2128,6 +2133,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Default to explicit "none" option to avoid Radix cycling refs on missing value
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
   const [templatesReady, setTemplatesReady] = useState(false);
+  const [showTemplatesBar, setShowTemplatesBar] = useState(false);
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
@@ -2249,6 +2255,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [newTplDrugQuery]);
 
   const allTemplates = useMemo(() => {
+    const seen = new Set<string>();
     const server = (templates || []).map((t: any) => ({
       id: String(t.id ?? t._id ?? t.name),
       name: String(t.name || 'Untitled'),
@@ -2263,7 +2270,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }));
     // Prepend a "No template" option
     const none = [{ id: 'none', name: 'No template', source: 'none' as const, tpl: { items: [], metadata: {} } }];
-    return [...none, ...server, ...defaults];
+    const merged = [...none, ...server, ...defaults];
+    return merged.filter((t) => {
+      const k = t.id;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
   }, [templates, defaultDermTemplates]);
 
 // Prevent redundant template selection state updates that can recurse during ref detaches
@@ -3402,39 +3415,45 @@ const handleTemplateChange = React.useCallback(
       <div className="space-y-6">
         <div className="space-y-4">
           {/* Templates quick bar */}
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="min-w-[240px]">
-                <label className="text-xs text-gray-600">Templates</label>
-                <Select value={templateSelectValue} onValueChange={handleTemplateChange} disabled={!templatesReady || loadingTemplates}>
-                  <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
-                  <SelectContent>
-                    {allTemplates.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
+              <div className="flex flex-wrap gap-2 items-end">
+                <div className="min-w-[240px]">
+                  <label className="text-xs text-gray-600">Templates</label>
+                  <Select value={templateSelectValue} onValueChange={handleTemplateChange} disabled={!templatesReady || loadingTemplates}>
+                    <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
+                    <SelectContent>
+                      {allTemplates.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const entry = allTemplates.find(t => t.id === selectedTemplateId);
+                    if (entry) applyTemplateToBuilder(entry.tpl);
+                  }}
+                  disabled={!selectedTemplateId || selectedTemplateId === 'none'}
+                >
+                  Apply
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
+                <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
+                <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>
+                <Button variant="destructive" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
+                  <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
+                  <Button size="sm" onClick={() => setNewTemplateOpen(true)}>New template</Button>
+                </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const entry = allTemplates.find(t => t.id === selectedTemplateId);
-                  if (entry) applyTemplateToBuilder(entry.tpl);
-                }}
-                disabled={!selectedTemplateId}
-              >
-                Apply
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
-              <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
-              <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>
-              <Button variant="destructive" size="sm" onClick={() => { try { localStorage.removeItem(`rxDraft:${patientId}:${visitId || 'standalone'}`); } catch {}; setItems([]); setFollowUpInstructions(''); pushHistory(); }}>Reset to default</Button>
-              <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setTemplatePromptOpen(true)}>Save current</Button>
-                <Button variant="outline" size="sm" onClick={() => setFieldTemplatePromptOpen(true)}>Save fields</Button>
-                <Button size="sm" onClick={() => setNewTemplateOpen(true)}>New template</Button>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                {loadingTemplates ? 'Loading templates…' : 'Templates will appear once loaded.'}
               </div>
-            </div>
+            )}
 
             {/* Basic Information */}
             {/* Moved to bottom of builder; removed Doctor's Personal Notes field */}
