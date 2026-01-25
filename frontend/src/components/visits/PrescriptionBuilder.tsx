@@ -553,6 +553,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [previewZoom, setPreviewZoom] = useState(1);
   const [previewJustUpdated, setPreviewJustUpdated] = useState(false);
   const [rxPrintFormat, setRxPrintFormat] = useState<'TEXT' | 'TABLE'>('TABLE');
+  const [spaceOptimized, setSpaceOptimized] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
   const [translatingPreview, setTranslatingPreview] = useState(false);
   const [translationsMap, setTranslationsMap] = useState<Record<string, string>>({});
@@ -586,6 +587,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     activeProfileId: string | null;
     overrideTopMarginPx: number | null;
     overrideBottomMarginPx: number | null;
+    spaceOptimized: boolean;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Change detection refs to prevent flickering - track if initial render is done and last content hash
@@ -594,6 +596,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
   // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
+  const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
   const [overrideBottomMarginPx, setOverrideBottomMarginPx] = useState<number | null>(null);
@@ -825,6 +828,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return translationsMap[key] ?? (fallback ?? '');
   }, [language, translationsMap]);
 
+  // Keep rx layout consistent in space-optimized mode
+  useEffect(() => {
+    if (spaceOptimized && rxPrintFormat !== 'TABLE') {
+      setRxPrintFormat('TABLE');
+    }
+  }, [spaceOptimized, rxPrintFormat]);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
@@ -948,6 +958,47 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     ),
     [patientId, visitId, doctorId, validItems.length, standalone, ensureVisitId]
   );
+
+  const patientName = useMemo(() => visitData?.patient?.name || patientData?.name || '—', [visitData, patientData]);
+  const patientIdDisplay = useMemo(() => visitData?.patient?.id || patientData?.id || '', [visitData, patientData]);
+  const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
+  const patientGender = useMemo(() => visitData?.patient?.gender || patientData?.gender || '', [visitData, patientData]);
+  const patientDob = useMemo(() => visitData?.patient?.dob || patientData?.dob || '', [visitData, patientData]);
+  const patientAgeYears = useMemo(() => {
+    if (!patientDob) return '';
+    const birthDate = new Date(patientDob);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age >= 0 ? `${age} yrs` : '';
+  }, [patientDob]);
+  const patientAgeSex = useMemo(() => {
+    const parts = [];
+    if (patientAgeYears) parts.push(patientAgeYears);
+    if (patientGender) parts.push(patientGender);
+    return parts.join(' / ');
+  }, [patientAgeYears, patientGender]);
+  const todayStr = useMemo(() => new Date().toLocaleDateString(), []);
+
+  const historyLine = useMemo(() => {
+    const parts: string[] = [];
+    if (pastHistory?.trim()) parts.push(`Past: ${tt('pastHistory', pastHistory)}`);
+    if (medicationHistory?.trim()) parts.push(`Medication: ${tt('medicationHistory', medicationHistory)}`);
+    if (menstrualHistory?.trim()) parts.push(`Menstrual: ${tt('menstrualHistory', menstrualHistory)}`);
+    if (exTriggers?.trim()) parts.push(`Triggers: ${tt('triggers', exTriggers)}`);
+    if (exPriorTx?.trim()) parts.push(`Prior Tx: ${tt('priorTreatments', exPriorTx)}`);
+    return parts.join(' | ');
+  }, [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, tt]);
+
+  const familyHistoryLine = useMemo(() => {
+    const parts: string[] = [];
+    if (familyHistoryDM) parts.push('DM');
+    if (familyHistoryHTN) parts.push('HTN');
+    if (familyHistoryThyroid) parts.push('Thyroid disorder');
+    if (familyHistoryOthers?.trim()) parts.push(tt('familyHistoryOthers', familyHistoryOthers));
+    return parts.join(', ');
+  }, [familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, tt]);
 
   const mapCreateErrorToToast = (error: any): { title: string; description: string; variant?: 'destructive' | 'warning' | 'default' | 'success' | 'secondary' } => {
     const status = error?.status;
@@ -2383,6 +2434,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       activeProfileId,
       overrideTopMarginPx,
       overrideBottomMarginPx,
+      spaceOptimized,
     };
 
     // Check if dependencies actually changed
@@ -2423,7 +2475,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, translateForPreview]);
+  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -2491,6 +2543,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       showRefillStamp,
       grayscale,
       letterheadOption,
+      rxPrintFormat,
+      spaceOptimized,
     });
     
     // Skip processing if: initial render is done AND content hash hasn't changed
@@ -3960,13 +4014,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="flex gap-2">
                 <div className="hidden sm:flex items-center gap-2">
                   <span className="text-sm text-gray-700">Print</span>
-                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
+                  <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
                     <SelectTrigger className="w-36 h-9">
                       <SelectValue placeholder="Format" />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="TABLE">Table</SelectItem>
-                      <SelectItem value="TEXT">Text</SelectItem>
+                      <SelectItem value="TEXT" disabled={spaceOptimized}>Text</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -4125,7 +4179,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 <div id="prescription-print-content">
-                  <div className="text-sm text-gray-700 mb-2">{new Date().toLocaleDateString()}</div>
+                  {!spaceOptimized && (
+                    <div className="text-sm text-gray-700 mb-2">{todayStr}</div>
+                  )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
                     <div className="rx-text p-4 text-sm whitespace-pre-wrap font-mono border rounded mb-3">
@@ -4172,69 +4228,86 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                   {/* Patient Info */}
                   {includeSections.patientInfo && (
-                  <div className="flex justify-between text-sm py-3">
-                    <div>
-                      <div className="text-gray-600">Patient</div>
-                      <div className="font-medium">{visitData?.patient?.name || patientData?.name || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Patient ID</div>
-                      <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Patient Code</div>
-                      <div className="font-medium">{visitData?.patient?.patientCode || patientData?.patientCode || '—'}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Gender / Age</div>
-                      <div className="font-medium">{(visitData?.patient?.gender || patientData?.gender || '—')} · {(() => {
-                        const dob = visitData?.patient?.dob || patientData?.dob;
-                        if (!dob) return '—';
-                        const birthDate = new Date(dob);
-                        const today = new Date();
-                        let age = today.getFullYear() - birthDate.getFullYear();
-                        const monthDiff = today.getMonth() - birthDate.getMonth();
-                        if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-                          age--;
-                        }
-                        return `${age} yrs`;
-                      })()}</div>
-                    </div>
-                  </div>
+                    spaceOptimized ? (
+                      <div className="py-2 text-sm flex flex-wrap gap-x-4 gap-y-1 items-baseline">
+                        <span className="text-gray-800">{todayStr}</span>
+                        <span className="font-semibold">{patientName}</span>
+                        {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
+                        <span className="text-gray-700">{patientIdDisplay || '—'}</span>
+                        {patientCodeDisplay ? <span className="text-gray-500">{patientCodeDisplay}</span> : null}
+                      </div>
+                    ) : (
+                      <div className="flex justify-between text-sm py-3">
+                        <div>
+                          <div className="text-gray-600">Patient</div>
+                          <div className="font-medium">{patientName}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Patient ID</div>
+                          <div className="font-medium">{patientIdDisplay || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Patient Code</div>
+                          <div className="font-medium">{patientCodeDisplay || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Gender / Age</div>
+                          <div className="font-medium">{patientAgeSex || '—'}</div>
+                        </div>
+                      </div>
+                    )
                   )}
 
                 {/* Vitals (manual override) */}
                 {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Vitals</div>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
-                      {((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) && (
-                        <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</span></div>
-                      )}
-                      {((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) && (
-                        <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</span></div>
-                      )}
-                      {(() => {
-                        const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
-                        const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
-                        const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
-                        return bmi !== '' ? (<div><span className="text-gray-600 mr-1">BMI:</span><span className="font-medium">{bmi}</span></div>) : null;
-                      })()}
-                      {(((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) && (
-                        <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</span></div>
-                      )}
-                      {((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) && (
-                        <div><span className="text-gray-600 mr-1">PR:</span><span className="font-medium">{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</span></div>
-                      )}
-                    </div>
-                  </div>
+                  (() => {
+                    const entries: Array<{ label: string; value: React.ReactNode }> = [];
+                    if ((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) {
+                      entries.push({ label: 'Height', value: <>{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</> });
+                    }
+                    if ((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) {
+                      entries.push({ label: 'Weight', value: <>{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</> });
+                    }
+                    const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
+                    const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
+                    const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
+                    if (bmi !== '' && bmi != null) {
+                      entries.push({ label: 'BMI', value: <>{bmi}</> });
+                    }
+                    if (((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) {
+                      entries.push({ label: 'BP', value: <>{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</> });
+                    }
+                    if ((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) {
+                      entries.push({ label: 'PR', value: <>{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</> });
+                    }
+                    return (
+                      <div className="py-3">
+                        <div className="font-semibold mb-1">Vitals</div>
+                        {spaceOptimized ? (
+                          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm">
+                            {entries.map((e, idx) => (
+                              <span key={`vitals-${idx}`} className="text-gray-800"><span className="text-gray-600 mr-1">{e.label}:</span>{e.value}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                            {entries.map((e, idx) => (
+                              <div key={`vitals-${idx}`}><span className="text-gray-600 mr-1">{e.label}:</span><span className="font-medium">{e.value}</span></div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
                 )}
 
                 {/* Diagnosis */}
                 {includeSections.diagnosis && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Diagnosis</div>
-                    <div className="text-sm">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</div>
+                  <div className="py-3 text-sm">
+                    <div className={`flex flex-wrap gap-2 items-start ${spaceOptimized ? '' : 'mb-1'}`}>
+                      <span className="font-semibold">Diagnosis:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{(diagnosis?.trim() || '').length > 0 ? tt('diagnosis', diagnosis) : '—'}</span>
+                    </div>
                   </div>
                 )}
 
@@ -4248,23 +4321,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Histories */}
                 {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length)) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">History</div>
-                    <div className="space-y-1 text-sm">
-                      {pastHistory?.trim()?.length ? (<div><span className="text-gray-600">Past:</span> {tt('pastHistory', pastHistory)}</div>) : null}
-                      {medicationHistory?.trim()?.length ? (<div><span className="text-gray-600">Medication:</span> {tt('medicationHistory', medicationHistory)}</div>) : null}
-                      {menstrualHistory?.trim()?.length ? (<div><span className="text-gray-600">Menstrual:</span> {tt('menstrualHistory', menstrualHistory)}</div>) : null}
-                      {exTriggers?.trim()?.length ? (<div><span className="text-gray-600">Triggers:</span> {tt('triggers', exTriggers)}</div>) : null}
-                      {exPriorTx?.trim()?.length ? (<div><span className="text-gray-600">Prior Treatments:</span> {tt('priorTreatments', exPriorTx)}</div>) : null}
+                  <div className="py-3 text-sm">
+                    <div className="flex flex-wrap gap-2 items-start">
+                      <span className="font-semibold">History:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{historyLine || '—'}</span>
                     </div>
                   </div>
                 )}
 
                 {/* Family History */}
                 {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Family History</div>
-                    <div className="text-sm">{[familyHistoryDM ? 'DM' : null, familyHistoryHTN ? 'HTN' : null, familyHistoryThyroid ? 'Thyroid disorder' : null, familyHistoryOthers?.trim()?.length ? tt('familyHistoryOthers', familyHistoryOthers) : null].filter(Boolean).join(', ')}</div>
+                  <div className="py-3 text-sm">
+                    <div className="flex flex-wrap gap-2 items-start">
+                      <span className="font-semibold">Family History:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{familyHistoryLine || '—'}</span>
+                    </div>
                   </div>
                 )}
 
@@ -4274,7 +4345,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <div className={`overflow-auto border rounded ${avoidBreakInsideTables ? 'pb-avoid-break' : ''}`}>
+                        <div className={`overflow-auto border rounded ${avoidBreakInsideTables || spaceOptimized ? 'pb-avoid-break' : ''}`}>
                           <table className="min-w-full text-sm">
                             <thead className="bg-gray-50">
                               <tr>
@@ -4322,9 +4393,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 {/* Investigations */}
                 {(Array.isArray(investigations) && investigations.length > 0) && (
                   <div className={`py-3 ${breakBeforeInvestigations ? 'pb-before-page' : ''}`}>
-                    <div className="font-semibold mb-1">Investigations</div>
-                    <div className="text-sm">
-                      {investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}
+                    <div className="text-sm flex flex-wrap gap-2 items-start">
+                      <span className="font-semibold">Investigations:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{investigations.map((inv, i) => tt(`investigations.${i}`, inv)).join(', ')}</span>
                     </div>
                   </div>
                 )}
@@ -4339,9 +4410,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Procedure Planned */}
         {(procedurePlanned?.trim()?.length > 0) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Procedure Planned</div>
-                    <div className="text-sm">{tt('procedurePlanned', procedurePlanned)}</div>
+                  <div className="py-3 text-sm">
+                    <div className="flex flex-wrap gap-2 items-start">
+                      <span className="font-semibold">Procedure Planned:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedurePlanned', procedurePlanned)}</span>
+                    </div>
                   </div>
                 )}
 
@@ -4370,7 +4443,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <div className="text-right">
                         <div className="h-10" />
                         <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
-                        <div className="text-gray-600">Signature</div>
+                        {!spaceOptimized && <div className="text-gray-600">Signature</div>}
                       </div>
                     </div>
                   </div>
@@ -4485,14 +4558,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                   <div className="space-y-1">
+                    <label className="flex items-center gap-2 text-sm text-gray-700">
+                      <input type="checkbox" checked={spaceOptimized} onChange={(e) => setSpaceOptimized(e.target.checked)} />
+                      Space-optimized layout
+                    </label>
+                    <p className="text-xs text-gray-500">Inline headers for patient info, vitals, diagnosis, histories, and procedures. Forces Rx table format.</p>
+                  </div>
+                  <div className="space-y-1">
                     <span className="text-sm text-gray-700">Print Format</span>
-                    <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)}>
+                    <Select value={rxPrintFormat} onValueChange={(v: 'TEXT' | 'TABLE') => setRxPrintFormat(v)} disabled={spaceOptimized}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select format" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="TABLE">Table</SelectItem>
-                        <SelectItem value="TEXT">Text</SelectItem>
+                        <SelectItem value="TEXT" disabled={spaceOptimized}>Text</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -4507,6 +4587,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <SelectItem value="none">None (Plain)</SelectItem>
                       </SelectContent>
                     </Select>
+                    <p className="text-xs text-gray-500">Applies to preview and PDF download.</p>
                   </div>
                   <div className="space-y-1">
                     <span className="text-sm text-gray-700">Page Breaks</span>
@@ -4651,7 +4732,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     try {
                       const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
                       if (!prescId) return;
-                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, {} as any);
+                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
                       try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
                       const a = document.createElement('a');
                       a.href = fileUrl;
