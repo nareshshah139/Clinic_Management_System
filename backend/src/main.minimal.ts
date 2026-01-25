@@ -27,6 +27,8 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 4000);
   await app.listen(port);
-  logger.log(`Clinic Management System minimal backend listening on port ${port}`);
+  logger.log(
+    `Clinic Management System minimal backend listening on port ${port}`,
+  );
 }
 void bootstrap();

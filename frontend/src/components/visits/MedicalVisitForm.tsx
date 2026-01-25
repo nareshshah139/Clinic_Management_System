@@ -1384,6 +1384,33 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, [photoCount]);
 
   const save = async (complete = false) => {
+    if (!patientId || !doctorId) {
+      toast({
+        variant: 'destructive',
+        title: 'Missing patient or doctor',
+        description: 'Select both a patient and a doctor before saving the visit.',
+      });
+      return;
+    }
+    if (complete) {
+      if (!hasPermission('all')) {
+        toast({
+          variant: 'warning',
+          title: 'Doctor access required',
+          description: 'Only doctors can complete a visit. Save a draft instead.',
+        });
+        return;
+      }
+      const progress = getProgress();
+      if (progress < 80) {
+        toast({
+          variant: 'warning',
+          title: 'More details needed to complete',
+          description: 'Fill vitals, complaints, diagnosis, and prescription to reach at least 80% before completing.',
+        });
+        return;
+      }
+    }
     try {
       setSaving(true);
       setSaveStatus('saving');

@@ -165,6 +165,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setNewDrugForm({ name: '', manufacturerName: '', price: '', packSizeLabel: '' });
     setAddDrugOpen(true);
   };
+  const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
+  const pendingFocusRef = useRef<number | null>(null);
   const handleCreateDrug = async () => {
     try {
       const payload: any = {
@@ -613,7 +615,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => {
     let cancelled = false;
     const warm = () => {
-      // @ts-ignore dynamic import cached after first load
+      // @ts-expect-error dynamic import cached after first load
       import('pagedjs')
         .then(() => {
           if (!cancelled) pagedJsPreloadedRef.current = true;
@@ -925,6 +927,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedurePlanned, investigations, customSections, items, counselingText]);
 
   // Derived flags to show inline UI feedback for auto-included sections
+  const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
     pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
@@ -946,6 +949,74 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     ),
     [patientId, visitId, doctorId, validItems.length, standalone, ensureVisitId]
   );
+
+  const mapCreateErrorToToast = (error: any): { title: string; description: string; variant?: 'destructive' | 'warning' | 'default' | 'success' | 'secondary' } => {
+    const status = error?.status;
+    const msg = getErrorMessage(error);
+    const lower = (msg || '').toLowerCase();
+
+    if (status === 409 || lower.includes('already exists')) {
+      return {
+        title: 'Prescription already exists',
+        description: 'A prescription is already linked to this visit. Open the existing Rx from the visit or Pharmacy tab instead of creating a new one.',
+      };
+    }
+    if (status === 404 && lower.includes('visit not found')) {
+      return {
+        title: 'Visit not found',
+        description: 'The visit session could not be found for this patient. Save or reopen the visit, then retry.',
+        variant: 'warning',
+      };
+    }
+    if (status === 404 && lower.includes('patient not found')) {
+      return {
+        title: 'Patient unavailable in this branch',
+        description: 'This patient is not available in the current branch. Switch branch or pick the correct patient record.',
+        variant: 'warning',
+      };
+    }
+    if (status === 400 && lower.includes('doctor must belong')) {
+      return {
+        title: 'Doctor not assigned to branch',
+        description: 'Select a doctor who belongs to this branch, or switch to the doctor’s branch and try again.',
+        variant: 'warning',
+      };
+    }
+    if (status === 404 && lower.includes('doctor not found')) {
+      return {
+        title: 'Doctor not found',
+        description: 'The selected doctor record is missing. Re-select the doctor and try again.',
+        variant: 'warning',
+      };
+    }
+    if (status === 400 && lower.includes('at least one prescription item')) {
+      return {
+        title: 'Add a medicine',
+        description: 'Add at least one medication before creating the prescription.',
+        variant: 'warning',
+      };
+    }
+    if (status === 408 || lower.includes('timed out')) {
+      return {
+        title: 'Connection timed out',
+        description: 'Network was slow while saving. Please retry in a few seconds.',
+        variant: 'warning',
+      };
+    }
+    if (status === 401) {
+      return {
+        title: 'Signed out',
+        description: 'Your session expired. Log in again and retry.',
+        variant: 'warning',
+      };
+    }
+
+    return {
+      title: 'Unable to create prescription',
+      description: msg || 'Please try again.',
+      variant: 'destructive',
+    };
+  };
 
   useEffect(() => {
     void loadTemplates();
@@ -1355,6 +1426,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     quantity: ''
   });
 
+  useEffect(() => {
+    if (pendingFocusRef.current != null) {
+      const idx = pendingFocusRef.current;
+      pendingFocusRef.current = null;
+      setTimeout(() => {
+        const el = inputRefs.current[idx];
+        if (el) el.focus();
+      }, 10);
+    }
+  }, [items.length]);
+
   const hasTrailingBlank = (list: PrescriptionItemForm[]): boolean => {
     if (!list || list.length === 0) return false;
     const last = list[list.length - 1];
@@ -1416,6 +1498,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setActiveSearchRow(null);
     
     pushRecent('drugNames', drug.name);
+    if (patientId) pushRecent(`drugNames:${patientId}`, drug.name);
     if (drug.genericName) pushRecent('drugGeneric', drug.genericName);
   };
 
@@ -1430,6 +1513,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
       return next;
     });
+  };
+
+  const addRowAndFocus = () => {
+    setItems(prev => {
+      const next = [...prev, createBlankItem()];
+      pendingFocusRef.current = next.length - 1;
+      return next;
+    });
+  };
+
+  const applyPresetToRow = (rowIdx: number, preset: Partial<PrescriptionItemForm>) => {
+    if (rowIdx < 0 || rowIdx >= items.length) return;
+    updateItem(rowIdx, preset);
   };
 
   const inferFrequencyFromDosePattern = (pattern: string): Frequency | null => {
@@ -1499,8 +1595,56 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return validItems.reduce((sum, it) => sum + (Number(it.quantity || 0) || 0), 0);
   }, [validItems]);
 
+  const previewPatientName = useMemo(() => {
+    return (visitData as any)?.patient?.name || (patientData as any)?.name || patientId || '—';
+  }, [visitData, patientData, patientId]);
+
+  const previewDoctorName = useMemo(() => {
+    const doc = (visitData as any)?.doctor;
+    if (doc) return `Dr. ${(doc.firstName ?? '')} ${(doc.lastName ?? '')}`.trim();
+    return doctorId ? `Doctor ${String(doctorId).slice(0, 6)}` : 'Doctor';
+  }, [visitData, doctorId]);
+
+  const summaryChips = useMemo(() => {
+    return [
+      { label: 'Rx', value: validItems.length },
+      { label: 'Investigations', value: Array.isArray(investigations) ? investigations.length : 0 },
+      { label: 'Follow-up', value: followUpInstructions?.trim()?.length ? 'Yes' : '—' },
+    ];
+  }, [validItems.length, investigations, followUpInstructions]);
+
+  const recentDrugsForPatient = useMemo(() => patientId ? getLocalSuggestions(`drugNames:${patientId}`, '', 5) : [], [patientId]);
+  const recentDrugsGlobal = useMemo(() => getLocalSuggestions('drugNames', '', 5), []);
+  const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency }> = [
+    { label: '1-0-1', pattern: '1-0-1' },
+    { label: '0-1-0', pattern: '0-1-0' },
+    { label: '1-1-1', pattern: '1-1-1' },
+    { label: 'HS', frequency: 'ONCE_DAILY' },
+  ];
+  const durationPresets: Array<{ label: string; duration: number; unit: DurationUnit }> = [
+    { label: '5d', duration: 5, unit: 'DAYS' },
+    { label: '7d', duration: 7, unit: 'DAYS' },
+    { label: '14d', duration: 14, unit: 'DAYS' },
+    { label: '4w', duration: 4, unit: 'WEEKS' },
+  ];
+
   const create = useCallback(async () => {
-    if (!canCreate) return;
+    if (!canCreate) {
+      const missing: string[] = [];
+      if (!patientId) missing.push('patient');
+      if (!doctorId) missing.push('doctor');
+      if (validItems.length === 0) missing.push('at least one medication');
+      if (!standalone && !visitId && !ensureVisitId) missing.push('an active visit');
+      const description = missing.length
+        ? `Add ${missing.join(', ')} to create a prescription.`
+        : 'Missing required information. Please check patient, doctor, visit, and medications.';
+      toast({
+        variant: 'destructive',
+        title: 'Cannot create prescription',
+        description,
+      });
+      return;
+    }
     try {
       // Prefer IDs from loaded visit if available
       const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
@@ -1531,6 +1675,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         } catch (e) {
           // If visit creation fails, continue as best-effort without blocking prescription if standalone allowed
           console.warn('[PrescriptionBuilder] Failed to ensure visitId', e);
+          toast({
+            variant: 'warning',
+            title: 'Visit not linked',
+            description: 'Unable to create or resume the visit. The prescription will save without linking unless you retry.',
+          });
         }
       }
 
@@ -1669,11 +1818,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setDiagnosis('');
       setFollowUpInstructions('');
     } catch (e: any) {
-      const msg = getErrorMessage(e) || 'Failed to create prescription';
+      const { title, description, variant } = mapCreateErrorToToast(e);
       toast({
-        variant: 'destructive',
-        title: 'Unable to create prescription',
-        description: msg,
+        variant: variant || 'destructive',
+        title,
+        description,
       });
     }
   }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedurePlanned, onCreated]);
@@ -2501,16 +2650,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         
         // Initialize a fresh Paged.js instance - use preloaded module if available
-        // @ts-ignore - pagedjs has no type definitions
+        // @ts-expect-error - pagedjs has no type definitions
         let Previewer;
         if (pagedJsPreloadedRef.current) {
           // Module already loaded, use it directly (faster)
-          // @ts-ignore - pagedjs has no type definitions
+          // @ts-expect-error - pagedjs has no type definitions
           const pagedModule = await import('pagedjs');
           Previewer = pagedModule.Previewer;
         } else {
           // First-time load
-          // @ts-ignore - pagedjs has no type definitions
+          // @ts-expect-error - pagedjs has no type definitions
           const { Previewer: P } = await import('pagedjs');
           Previewer = P;
           pagedJsPreloadedRef.current = true;
@@ -3185,7 +3334,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             </CollapsibleSection>
 
             {/* Diagnosis */}
-            <CollapsibleSection title="Diagnosis" section="diagnosis">
+            <CollapsibleSection 
+              title="Diagnosis" 
+              section="diagnosis" 
+              highlight={hasDiagnosis}
+              badge={hasDiagnosis ? 'Has Data' : ''}
+            >
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
@@ -3438,7 +3592,57 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     {canAddDrugToDB && (
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
-                    <Button size="sm" variant="outline" onClick={() => setItems(prev => [...prev, { drugName: '', dosage: '', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', dosePattern: '', duration: '', durationUnit: 'DAYS', instructions: '', timing: '', quantity: '' }])}>Add Row</Button>
+                    <Button size="sm" variant="outline" onClick={addRowAndFocus}>Add Row</Button>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2 text-xs">
+                  {(recentDrugsForPatient.length > 0 || recentDrugsGlobal.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-gray-600">Recent meds:</span>
+                      {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
+                        <Button key={d} size="sm" variant="outline" onClick={() => {
+                          const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          updateItem(target, { drugName: d });
+                          if (patientId) pushRecent(`drugNames:${patientId}`, d);
+                          pushRecent('drugNames', d);
+                        }}>
+                          {d}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-gray-600">Presets:</span>
+                    {frequencyPresets.map((p) => (
+                      <Button
+                        key={p.label}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          applyPresetToRow(target, {
+                            dosePattern: p.pattern,
+                            frequency: p.frequency ?? (p.pattern ? inferFrequencyFromDosePattern(p.pattern) ?? 'ONCE_DAILY' : undefined),
+                            timing: p.pattern ? inferTimingFromDosePattern(p.pattern) || undefined : undefined,
+                          });
+                        }}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
+                    {durationPresets.map((p) => (
+                      <Button
+                        key={p.label}
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          applyPresetToRow(target, { duration: p.duration, durationUnit: p.unit });
+                        }}
+                      >
+                        {p.label}
+                      </Button>
+                    ))}
                   </div>
                 </div>
                 <div className="overflow-visible border rounded">
@@ -3473,6 +3677,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   searchDrugsForRow(idx, val);
                                 }}
                                 onFocus={(e) => {
+                                  setActiveRowIdx(idx);
                                   const rect = e.currentTarget.getBoundingClientRect();
                                   setDropdownPosition({
                                     top: rect.bottom + window.scrollY + 4,
@@ -3484,12 +3689,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   }
                                 }}
                                 onBlur={() => {
+                                  if (it.drugName.trim()) {
+                                    pushRecent('drugNames', it.drugName);
+                                    if (patientId) pushRecent(`drugNames:${patientId}`, it.drugName);
+                                  }
                                   setTimeout(() => {
                                     if (activeSearchRow === idx) {
                                       setActiveSearchRow(null);
                                       setDropdownPosition(null);
                                     }
                                   }, 200);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    addRowAndFocus();
+                                  }
                                 }}
                                 placeholder="Search medicine name..." 
                               />
@@ -3501,7 +3716,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
+                              <Select value={it.dosePattern || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
@@ -3517,7 +3732,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <Select value={it.frequency} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
+                              <Select value={it.frequency} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {FREQUENCY_OPTIONS.map(f => (
@@ -3528,7 +3743,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <Select value={it.timing || ''} onValueChange={(v: string) => updateItem(idx, { timing: v })}>
+                            <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => updateItem(idx, { timing: v })}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
                                 {['AM','PM','After Breakfast','After Lunch','After Dinner','Before Meals','QHS','HS','With Food','Empty Stomach'].map(t => (
@@ -3539,8 +3754,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
-                              <Input type="number" value={it.duration} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
-                              <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
+                              <Input type="number" value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                              <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
@@ -3554,7 +3769,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <div className="space-y-1">
                               <Input
                                 value={it.instructions || ''}
-                                onFocus={() => setInstrFocusIdx(idx)}
+                                onFocus={() => { setInstrFocusIdx(idx); setActiveRowIdx(idx); }}
                                 onBlur={(e) => {
                                   setTimeout(() => setInstrFocusIdx((cur) => (cur === idx ? null : cur)), 120);
                                   updateItem(idx, { instructions: e.target.value });
@@ -3859,6 +4074,25 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `
               }} />
             <div id="print-preview-scroll" className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+              <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap gap-2 items-center text-gray-800">
+                    <span className="font-semibold">{previewPatientName}</span>
+                    <span className="text-gray-500">•</span>
+                    <span>{previewDoctorName}</span>
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    Date: {new Date().toLocaleDateString()} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {summaryChips.map((chip) => (
+                    <Badge key={chip.label} variant="secondary" className="text-xs">
+                      {chip.label}: {chip.value}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
               {previewJustUpdated && (
                 <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
@@ -3950,6 +4184,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div>
                       <div className="text-gray-600">Patient ID</div>
                       <div className="font-medium">{visitData?.patient?.id || patientData?.id || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-600">Patient Code</div>
+                      <div className="font-medium">{visitData?.patient?.patientCode || patientData?.patientCode || '—'}</div>
                     </div>
                     <div>
                       <div className="text-gray-600">Gender / Age</div>

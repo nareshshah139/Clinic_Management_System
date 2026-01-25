@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@cms/shared-types"],
@@ -17,8 +18,6 @@ const nextConfig: NextConfig = {
     externalDir: true,
   },
   webpack: (config, { isServer }) => {
-    const path = require('path');
-    
     // Fix for pagedjs and es5-ext module resolution issues
     if (!isServer) {
       config.resolve.fallback = {

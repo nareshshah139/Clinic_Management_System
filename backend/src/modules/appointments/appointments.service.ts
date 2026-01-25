@@ -316,6 +316,7 @@ export class AppointmentsService {
         patient: {
           select: { 
             id: true, 
+            patientCode: true, 
             name: true, 
             phone: true, 
             email: true, 

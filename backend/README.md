@@ -43,6 +43,9 @@ JWT_EXPIRES_IN="1d"
 OPENAI_API_KEY="sk-..."
 # Optional – choose the transcription model (defaults to gpt-4o-transcribe)
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-transcribe" # or whisper-1, gpt-4o-mini-transcribe
+# Optional – enable outbound WhatsApp via Meta Cloud
+WHATSAPP_TOKEN="your-meta-whatsapp-cloud-api-token"
+WHATSAPP_PHONE_NUMBER_ID="your-meta-whatsapp-phone-number-id"
 ```
 
 The application performs a startup validation and will refuse to boot if `DATABASE_URL` or `JWT_SECRET` are missing. Missing optional values log helpful warnings.

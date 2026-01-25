@@ -6,6 +6,8 @@ import { LinkPatientUserDto } from './dto/link-patient-user.dto';
 import { UsersService } from '../users/users.service';
 import { UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
+import { Prisma } from '@prisma/client';
+import { generatePatientCode } from '../../shared/ids/patient-code.util';
 
 @Injectable()
 export class PatientsService {
@@ -21,19 +23,52 @@ export class PatientsService {
     return phone.replace(/\D/g, '');
   }
 
+  /**
+   * Generate a unique patientCode with collision retries.
+   */
+  private async createPatientWithCode(tx: Prisma.TransactionClient, data: CreatePatientDto & { branchId: string; dob: Date }) {
+    const maxAttempts = 5;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const code = generatePatientCode();
+      try {
+        return await tx.patient.create({
+          data: {
+            ...data,
+            patientCode: code,
+          },
+        });
+      } catch (err) {
+        // Handle unique constraint on patientCode and retry
+        if (
+          err instanceof Prisma.PrismaClientKnownRequestError &&
+          err.code === 'P2002' &&
+          Array.isArray((err as any).meta?.target) &&
+          (err as any).meta?.target?.includes('patientCode')
+        ) {
+          if (attempt === maxAttempts) {
+            throw new ConflictException('Could not generate unique patient code after retries');
+          }
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new ConflictException('Could not generate unique patient code after retries');
+  }
+
   async create(createPatientDto: CreatePatientDto, branchId: string) {
     // Normalize phone number before storing
     const normalizedPhone = this.normalizePhone(createPatientDto.phone);
     // Use provided DOB or default to today's date if not provided
     const dob = createPatientDto.dob ? new Date(createPatientDto.dob) : new Date();
-    return this.prisma.patient.create({
-      data: {
+    return this.prisma.$transaction((tx) =>
+      this.createPatientWithCode(tx, {
         ...createPatientDto,
         phone: normalizedPhone,
         branchId,
         dob,
-      },
-    });
+      }),
+    );
   }
 
   async findAll(
@@ -78,6 +113,7 @@ export class PatientsService {
           { name: { contains: searchTerm, mode: 'insensitive' } },
           { phone: { startsWith: searchTerm } }, // More efficient for phone searches
           { abhaId: { contains: searchTerm } },
+          { patientCode: { startsWith: searchTerm.toUpperCase() } },
           { email: { contains: searchTerm, mode: 'insensitive' } },
         ],
       }),
@@ -91,6 +127,7 @@ export class PatientsService {
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          patientCode: true,
           abhaId: true,
           name: true,
           gender: true,
@@ -123,7 +160,35 @@ export class PatientsService {
   async findOne(id: string, branchId: string) {
     const patient = await this.prisma.patient.findFirst({
       where: { id, branchId },
-      include: {
+      select: {
+        id: true,
+        patientCode: true,
+        abhaId: true,
+        name: true,
+        gender: true,
+        dob: true,
+        phone: true,
+        email: true,
+        address: true,
+        city: true,
+        state: true,
+        pincode: true,
+        emergencyContact: true,
+        allergies: true,
+        photoUrl: true,
+        referralSource: true,
+        secondaryPhone: true,
+        maritalStatus: true,
+        bloodGroup: true,
+        occupation: true,
+        guardianName: true,
+        medicalHistory: true,
+        portalUserId: true,
+        branchId: true,
+        isArchived: true,
+        archivedAt: true,
+        createdAt: true,
+        updatedAt: true,
         appointments: {
           orderBy: { date: 'desc' },
           take: 5,

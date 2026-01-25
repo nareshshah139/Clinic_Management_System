@@ -33,6 +33,11 @@ class GenerateTemplateBody {
   tone?: 'formal' | 'friendly' | 'concise' | 'detailed';
 }
 
+class SendTestBody {
+  to!: string; // E.164
+  variables?: Record<string, string>;
+}
+
 @ApiTags('WhatsApp Templates')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -84,6 +89,22 @@ export class WhatsAppTemplatesController {
   @ApiOperation({ summary: 'Generate a WhatsApp template suggestion via OpenAI GPT' })
   async generate(@Body() body: GenerateTemplateBody) {
     return this.svc.generate(body);
+  }
+
+  @Post(':id/test')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @ApiOperation({ summary: 'Send a test WhatsApp message using this template' })
+  async sendTest(@Param('id') id: string, @Body() body: SendTestBody, @Request() req: any) {
+    const role: string = req.user?.role;
+    const isAdminOrOwner = role === 'ADMIN' || role === 'OWNER';
+    return this.svc.sendTest({
+      templateId: id,
+      branchId: req.user.branchId,
+      requesterId: req.user.id,
+      isAdminOrOwner,
+      toPhoneE164: body.to,
+      variables: body.variables,
+    });
   }
 }
 

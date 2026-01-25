@@ -110,6 +110,7 @@ export default function PatientsManagement() {
       const phone = p.phone || '';
       const abha = p.abhaId || '';
       const email = p.email || '';
+      const code = p.patientCode || '';
 
       // Prefer prefix matches, then includes
       if (name.toLowerCase().startsWith(q)) candidates.add(name);
@@ -118,6 +119,7 @@ export default function PatientsManagement() {
       if (phone.startsWith(q)) candidates.add(phone);
       if (abha.toLowerCase().startsWith(q)) candidates.add(abha);
       if (email.toLowerCase().startsWith(q)) candidates.add(email);
+      if (code.toLowerCase().startsWith(q)) candidates.add(code);
       if (candidates.size >= 8) break; // cap to avoid long lists
     }
 
@@ -193,6 +195,7 @@ export default function PatientsManagement() {
         const displayName = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
         return {
           id: bp.id,
+          patientCode: bp.patientCode || undefined,
           abhaId: bp.abhaId || undefined,
           firstName: firstName || rawName || '',
           lastName: lastName,
@@ -1003,6 +1006,7 @@ export default function PatientsManagement() {
                     <TableHead onClick={() => toggleSort('NAME')} className="cursor-pointer select-none">
                       Patient {sortBy === 'NAME' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
                     </TableHead>
+                    <TableHead>Patient Code</TableHead>
                     <TableHead onClick={() => toggleSort('AGE')} className="cursor-pointer select-none">
                       Age {sortBy === 'AGE' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
                     </TableHead>
@@ -1045,6 +1049,28 @@ export default function PatientsManagement() {
                             </button>
                             {p.portalUserId && <Badge variant="outline" className="text-xs mt-1">Portal Linked</Badge>}
                           </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col text-sm">
+                          <div className="font-mono">
+                            {p.patientCode ? p.patientCode : <span className="text-gray-400">—</span>}
+                          </div>
+                          {p.patientCode && (
+                            <button
+                              type="button"
+                              className="text-xs text-gray-500 hover:underline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard?.writeText(p.patientCode || '').then(() => {
+                                  toast({ title: 'Copied', description: 'Patient code copied to clipboard' });
+                                }).catch(() => {});
+                              }}
+                              title="Click to copy patient code"
+                            >
+                              Copy code
+                            </button>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>

@@ -169,6 +169,7 @@ model Room {
 
 model Patient {
   id               String            @id @default(cuid())
+  patientCode      String?           @unique @db.VarChar(5)
   abhaId           String?           @unique
   name             String
   gender           String

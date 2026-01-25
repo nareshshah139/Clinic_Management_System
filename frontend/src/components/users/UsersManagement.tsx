@@ -44,7 +44,20 @@ export default function UsersManagement() {
   const [tplOwnerScope, setTplOwnerScope] = useState<'ME' | 'BRANCH'>('ME');
   const [tplHtml, setTplHtml] = useState('');
   const [tplText, setTplText] = useState('');
-  const [tplVars, setTplVars] = useState<string[]>(['patient_name','patient_phone','doctor_name','appointment_date','appointment_time','invoice_number','invoice_total','prescription_link']);
+  const [tplVars, setTplVars] = useState<string[]>([
+    'patient_name',
+    'patient_phone',
+    'doctor_name',
+    'appointment_date',
+    'appointment_time',
+    'queue_token',
+    'invoice_number',
+    'invoice_total',
+    'prescription_link',
+  ]);
+  const [tplActive, setTplActive] = useState(true);
+  const [tplTestTo, setTplTestTo] = useState('');
+  const [tplTestStatus, setTplTestStatus] = useState<{ ok: boolean; msg: string } | null>(null);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [genLoading, setGenLoading] = useState(false);
   const [genHints, setGenHints] = useState('');
@@ -207,6 +220,23 @@ export default function UsersManagement() {
     }
   };
 
+  const extractPlaceholders = (text: string) => {
+    const set = new Set<string>();
+    const regex = /{{\s*([a-zA-Z0-9_]+)\s*}}/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      set.add(match[1]);
+    }
+    return Array.from(set);
+  };
+
+  const syncVarsWithContent = (html: string, text: string) => {
+    const placeholders = new Set([...extractPlaceholders(html), ...extractPlaceholders(text)]);
+    if (placeholders.size === 0) return;
+    const merged = Array.from(new Set([...tplVars, ...Array.from(placeholders)]));
+    setTplVars(merged);
+  };
+
   const loadTemplates = async () => {
     try {
       setTplLoading(true);
@@ -227,6 +257,10 @@ export default function UsersManagement() {
     setTplOwnerScope('ME');
     setTplHtml('');
     setTplText('');
+    setTplVars(['patient_name','doctor_name','appointment_date','appointment_time','queue_token']);
+    setTplActive(true);
+    setTplTestTo('');
+    setTplTestStatus(null);
     setTplOpen(true);
   };
 
@@ -238,6 +272,11 @@ export default function UsersManagement() {
     setTplOwnerScope(tpl.ownerId ? 'ME' : 'BRANCH');
     setTplHtml(String(tpl.contentHtml || ''));
     setTplText(String(tpl.contentText || ''));
+    const hydratedVars = Array.isArray(tpl.variables) ? tpl.variables : [];
+    setTplVars(hydratedVars.length ? hydratedVars : ['patient_name','doctor_name','appointment_date','appointment_time','queue_token']);
+    setTplActive(tpl.isActive !== false);
+    setTplTestTo('');
+    setTplTestStatus(null);
   };
 
   const saveTemplate = async () => {
@@ -245,6 +284,16 @@ export default function UsersManagement() {
       alert('Name and Plain Text are required');
       return;
     }
+    const placeholders = new Set([...extractPlaceholders(tplHtml), ...extractPlaceholders(tplText)]);
+    const missing: string[] = [];
+    placeholders.forEach((p) => {
+      if (!tplVars.includes(p)) missing.push(p);
+    });
+    if (missing.length) {
+      alert(`Add these variables or remove placeholders: ${missing.join(', ')}`);
+      return;
+    }
+
     if (tplEditing?.id) {
       await apiClient.updateWhatsAppTemplate(tplEditing.id, {
         name: tplName,
@@ -253,6 +302,7 @@ export default function UsersManagement() {
         contentHtml: tplHtml || undefined,
         contentText: tplText,
         variables: tplVars,
+        isActive: tplActive,
       });
     } else {
       await apiClient.createWhatsAppTemplate({
@@ -276,6 +326,31 @@ export default function UsersManagement() {
     await loadTemplates();
   };
 
+  const testSendTemplate = async () => {
+    if (!tplEditing?.id) {
+      alert('Save the template before sending a test');
+      return;
+    }
+    if (!tplTestTo) {
+      alert('Enter a phone number in E.164 format (e.g., +15551234567)');
+      return;
+    }
+    try {
+      setTplTestStatus(null);
+      await apiClient.testWhatsAppTemplate(String(tplEditing.id), {
+        to: tplTestTo,
+        variables: tplVars.reduce<Record<string, string>>((acc, key) => {
+          acc[key] = '';
+          return acc;
+        }, {}),
+      });
+      setTplTestStatus({ ok: true, msg: 'Test sent (check your WhatsApp)' });
+    } catch (e: any) {
+      const msg = (e?.body as any)?.message || e?.message || 'Failed to send test';
+      setTplTestStatus({ ok: false, msg });
+    }
+  };
+
   const applyEditorCommand = (cmd: string) => {
     try {
       document.execCommand(cmd, false);
@@ -296,6 +371,7 @@ export default function UsersManagement() {
         const html = editorRef.current.innerHTML;
         setTplHtml(html);
         setTplText(stripHtml(html));
+        syncVarsWithContent(html, stripHtml(html));
       }
     } catch {}
   };
@@ -769,7 +845,9 @@ export default function UsersManagement() {
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-sm">{t.name}</div>
-                          <div className="text-xs text-gray-500">{t.touchpoint} • {t.language || 'en'} {t.ownerId ? '• Mine' : '• Branch'}</div>
+                          <div className="text-xs text-gray-500">
+                            {t.touchpoint} • {t.language || 'en'} {t.ownerId ? '• Mine' : '• Branch'} {t.isActive === false ? '• Inactive' : ''}
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <Button size="sm" variant="outline" onClick={() => startEditTemplate(t)}>Edit</Button>
@@ -812,6 +890,10 @@ export default function UsersManagement() {
                       <SelectItem value="BRANCH">Branch Template (Admin)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch checked={tplActive} onCheckedChange={setTplActive} />
+                  <span className="text-sm">Active</span>
                 </div>
               </div>
 
@@ -893,6 +975,35 @@ export default function UsersManagement() {
                     <Button key={v} size="sm" variant="outline" onClick={() => insertVariable(v)}>{`{{${v}}}`}</Button>
                   ))}
                 </div>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    placeholder="Add variable (letters/numbers/underscore)"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const val = (e.target as HTMLInputElement).value.trim();
+                        if (/^[a-zA-Z0-9_]+$/.test(val) && !tplVars.includes(val)) {
+                          setTplVars([...tplVars, val]);
+                          (e.target as HTMLInputElement).value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const input = (document.activeElement as HTMLInputElement) ?? null;
+                      if (!input) return;
+                      const val = input.value.trim();
+                      if (/^[a-zA-Z0-9_]+$/.test(val) && !tplVars.includes(val)) {
+                        setTplVars([...tplVars, val]);
+                        input.value = '';
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
               </div>
 
               <div>
@@ -903,6 +1014,30 @@ export default function UsersManagement() {
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setTplOpen(false)}>Close</Button>
                 <Button onClick={() => void saveTemplate()}>Save Template</Button>
+              </div>
+
+              <div className="border rounded p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">Send Test</div>
+                    <div className="text-xs text-gray-500">Send a test message to verify mapping.</div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => void testSendTemplate()} disabled={!tplEditing?.id}>Send Test</Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="md:col-span-2">
+                    <Label className="text-sm">Test Phone (E.164)</Label>
+                    <Input value={tplTestTo} onChange={(e) => setTplTestTo(e.target.value)} placeholder="+15551234567" />
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Variables will be sent blank unless you extend UI mapping; backend will still accept.
+                  </div>
+                </div>
+                {tplTestStatus && (
+                  <div className={`text-sm ${tplTestStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                    {tplTestStatus.msg}
+                  </div>
+                )}
               </div>
             </div>
           </div>

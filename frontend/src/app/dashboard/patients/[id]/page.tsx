@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { formatDob } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import VisitPhotos from '@/components/visits/VisitPhotos';
@@ -29,6 +30,10 @@ export default function PatientDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
   const [visits, setVisits] = useState<VisitEntry[]>([]);
+  const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [collapsedDates, setCollapsedDates] = useState<Record<string, boolean>>({});
 
   // Normalize thumbnail/image URLs so they work both for legacy `/uploads/*` files
   // and new DB-backed endpoints served under `/api/visits/...`.
@@ -75,6 +80,80 @@ export default function PatientDetailsPage() {
     const last = String(patient.lastName || '').trim();
     return (raw || `${first} ${last}`).trim();
   }, [patient]);
+
+  const calculateAge = (dob: string | undefined) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+    return age;
+  };
+
+  const sortedVisits = useMemo(() => {
+    return [...visits].sort((a, b) => {
+      const da = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
+      const db = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
+      return db - da;
+    });
+  }, [visits]);
+
+  const doctorOptions = useMemo(() => {
+    const set = new Set<string>();
+    sortedVisits.forEach((v) => {
+      const label = `${v.doctor?.firstName ?? ''} ${v.doctor?.lastName ?? ''}`.trim();
+      if (label) set.add(label);
+    });
+    return Array.from(set);
+  }, [sortedVisits]);
+
+  const filteredVisits = useMemo(() => {
+    return sortedVisits.filter((v) => {
+      const created = v.createdAt ? new Date(String(v.createdAt)) : null;
+      if (doctorFilter !== 'ALL') {
+        const label = `${v.doctor?.firstName ?? ''} ${v.doctor?.lastName ?? ''}`.trim();
+        if (label !== doctorFilter) return false;
+      }
+      if (fromDate && created) {
+        const from = new Date(fromDate);
+        if (created < from) return false;
+      }
+      if (toDate && created) {
+        const to = new Date(toDate);
+        to.setHours(23, 59, 59, 999);
+        if (created > to) return false;
+      }
+      return true;
+    });
+  }, [sortedVisits, doctorFilter, fromDate, toDate]);
+
+  const groupedByDate = useMemo(() => {
+    const groups: Array<{ dateLabel: string; entries: VisitEntry[] }> = [];
+    for (const v of filteredVisits) {
+      const d = v.createdAt ? new Date(String(v.createdAt)) : null;
+      const key = d ? d.toLocaleDateString() : 'Unknown date';
+      const last = groups[groups.length - 1];
+      if (last && last.dateLabel === key) {
+        last.entries.push(v);
+      } else {
+        groups.push({ dateLabel: key, entries: [v] });
+      }
+    }
+    return groups;
+  }, [filteredVisits]);
+
+  const lastVisit = sortedVisits[0];
+  const lastVisitDate = lastVisit?.createdAt ? new Date(String(lastVisit.createdAt)) : null;
+
+  const nextAppointmentLabel = (() => {
+    const upcoming = patient?.nextAppointment as any;
+    if (upcoming?.date && upcoming?.slot) {
+      return `${new Date(String(upcoming.date)).toLocaleDateString()} @ ${upcoming.slot}`;
+    }
+    return 'Not scheduled';
+  })();
 
   const getPrimaryDiagnosis = (entry: VisitEntry): string | undefined => {
     const d = entry.diagnosis;
@@ -375,18 +454,60 @@ export default function PatientDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="h-5 w-5" />
-          <h1 className="text-2xl font-semibold text-gray-900">{patientName || 'Patient'}</h1>
-          <Badge variant="secondary" className="ml-1">ID: {patient.id}</Badge>
+      <div className="space-y-3">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            <div>
+              <h1 className="text-2xl font-semibold text-gray-900 leading-tight">{patientName || 'Patient'}</h1>
+              <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-600">
+                <Badge variant="secondary">ID: {patient.id}</Badge>
+                {patient.patientCode && <Badge variant="secondary">Code: {patient.patientCode}</Badge>}
+                {patient.abhaId && <Badge variant="outline">ABHA: {patient.abhaId}</Badge>}
+                {patient.gender && <Badge variant="outline">{patient.gender}</Badge>}
+                {calculateAge(patient.dob) !== null && <Badge variant="outline">{calculateAge(patient.dob)} yrs</Badge>}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {lastVisit?.id && (
+              <Button variant="outline" onClick={() => router.push(`/dashboard/visits?visitId=${encodeURIComponent(String(lastVisit.id))}&patientId=${encodeURIComponent(id)}`)}>
+                Resume last visit
+              </Button>
+            )}
+            <Button onClick={() => router.push(`/dashboard/visits?patientId=${encodeURIComponent(id)}&autoStart=true`)}>
+              Start new visit
+            </Button>
+            <Button variant="outline" onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
+            <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>
+              <ArrowLeft className="h-4 w-4 mr-2" /> Back
+            </Button>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>
-            <ArrowLeft className="h-4 w-4 mr-2" /> Back
-          </Button>
-          <Button onClick={() => router.push(`/dashboard/appointments?patientId=${encodeURIComponent(id)}`)}>Book appointment</Button>
-        </div>
+
+        <Card>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+            <div className="space-y-1">
+              <div className="text-gray-500">Primary contact</div>
+              <div className="font-medium text-gray-900">{patient.phone || '—'}</div>
+              <div className="text-gray-600">{patient.email || '—'}</div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-gray-500">Last visit</div>
+              <div className="font-medium text-gray-900">
+                {lastVisitDate ? lastVisitDate.toLocaleDateString() : 'No visits yet'}
+              </div>
+              {lastVisit?.doctor && (
+                <div className="text-gray-600">Dr. {(lastVisit.doctor.firstName ?? '')} {(lastVisit.doctor.lastName ?? '')}</div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <div className="text-gray-500">Next appointment</div>
+              <div className="font-medium text-gray-900">{nextAppointmentLabel}</div>
+              <div className="text-gray-600">{patient.referralSource ? `Referral: ${patient.referralSource}` : ''}</div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Minimal Patient Progress Tracker */}
@@ -424,8 +545,63 @@ export default function PatientDetailsPage() {
               {visits.length === 0 ? (
                 <div className="text-sm text-gray-500">None</div>
               ) : (
-                <div className="space-y-3">
-                  {visits.map(renderVisitItem)}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
+                    <div className="flex flex-wrap gap-2 items-center text-sm">
+                      <span className="text-gray-600">Filter:</span>
+                      <select
+                        className="border border-gray-200 rounded px-3 py-2 text-sm"
+                        value={doctorFilter}
+                        onChange={(e) => setDoctorFilter(e.target.value)}
+                      >
+                        <option value="ALL">All doctors</option>
+                        {doctorOptions.map((d) => (
+                          <option key={d} value={d}>{d}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date" />
+                      <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="To date" />
+                    </div>
+                    <div className="flex items-center justify-end">
+                      <Button variant="outline" size="sm" onClick={() => { setDoctorFilter('ALL'); setFromDate(''); setToDate(''); }}>
+                        Clear filters
+                      </Button>
+                    </div>
+                  </div>
+
+                  {groupedByDate.length === 0 ? (
+                    <div className="text-sm text-gray-500">No visits match the current filters.</div>
+                  ) : (
+                    <div className="space-y-3">
+                      {groupedByDate.map((group) => {
+                        const collapsed = collapsedDates[group.dateLabel];
+                        const toggle = () => setCollapsedDates((prev) => ({ ...prev, [group.dateLabel]: !prev[group.dateLabel] }));
+                        return (
+                          <div key={group.dateLabel} className="border border-gray-200 rounded">
+                            <button
+                              type="button"
+                              className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                              onClick={toggle}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Calendar className="h-4 w-4 text-gray-500" />
+                                <span className="font-medium text-gray-900">{group.dateLabel}</span>
+                                <Badge variant="secondary">{group.entries.length} visit{group.entries.length > 1 ? 's' : ''}</Badge>
+                              </div>
+                              <span className="text-sm text-gray-600">{collapsed ? 'Show' : 'Hide'}</span>
+                            </button>
+                            {!collapsed && (
+                              <div className="p-3 space-y-2">
+                                {group.entries.map(renderVisitItem)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

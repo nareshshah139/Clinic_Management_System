@@ -1,5 +1,13 @@
-import { Injectable, NotFoundException, ForbiddenException, RequestTimeoutException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  RequestTimeoutException,
+  ServiceUnavailableException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 interface CreateTemplateDto {
   name: string;
@@ -16,9 +24,13 @@ interface UpdateTemplateDto extends Partial<CreateTemplateDto> {
 
 @Injectable()
 export class WhatsAppTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async create(branchId: string, ownerId: string | null, dto: CreateTemplateDto) {
+    this.validateVariables(dto.variables, dto.contentText, dto.contentHtml);
     const tpl = await this.prisma.whatsAppTemplate.create({
       data: {
         branchId,
@@ -58,6 +70,12 @@ export class WhatsAppTemplatesService {
     if (!isAdminOrOwner && existing.ownerId && existing.ownerId !== requesterId) {
       throw new ForbiddenException('Not allowed to edit this template');
     }
+
+    const hydrated = this.hydrate(existing);
+    const nextVariables = dto.variables ?? hydrated.variables;
+    const nextContentText = dto.contentText ?? hydrated.contentText;
+    const nextContentHtml = dto.contentHtml ?? hydrated.contentHtml;
+    this.validateVariables(nextVariables, nextContentText, nextContentHtml);
 
     const updated = await this.prisma.whatsAppTemplate.update({
       where: { id },
@@ -193,6 +211,127 @@ export class WhatsAppTemplatesService {
     const outVars = Array.isArray(parsed?.variables) ? parsed.variables.filter((v: any) => typeof v === 'string') : variables;
 
     return { contentHtml, contentText, variables: outVars };
+  }
+
+  async sendTest(params: {
+    templateId: string;
+    branchId: string;
+    requesterId: string;
+    isAdminOrOwner: boolean;
+    toPhoneE164: string;
+    variables?: Record<string, string>;
+  }) {
+    const { templateId, branchId, requesterId, isAdminOrOwner, toPhoneE164, variables } = params;
+    const tpl = await this.prisma.whatsAppTemplate.findFirst({
+      where: { id: templateId, branchId },
+    });
+    if (!tpl) throw new NotFoundException('Template not found');
+    if (!isAdminOrOwner && tpl.ownerId && tpl.ownerId !== requesterId) {
+      throw new ForbiddenException('Not allowed to send test for this template');
+    }
+    const hydrated = this.hydrate(tpl);
+    const components = this.buildTemplateComponents(hydrated.variables, variables || {});
+    await this.notifications.sendWhatsApp({
+      toPhoneE164,
+      template: {
+        name: hydrated.name,
+        language: hydrated.language || 'en',
+        components,
+      },
+    });
+    return { success: true };
+  }
+
+  async resolveActiveTemplate(params: {
+    branchId: string;
+    touchpoint: string;
+    language?: string;
+    ownerId?: string | null;
+    name?: string;
+  }) {
+    const { branchId, touchpoint, language, ownerId, name } = params;
+    const where: any = { branchId, touchpoint, isActive: true };
+    if (ownerId) {
+      where.OR = [{ ownerId }, { ownerId: null }];
+    }
+    const templates = await this.prisma.whatsAppTemplate.findMany({
+      where,
+      orderBy: [{ updatedAt: 'desc' }],
+    });
+    if (!templates.length) return null;
+
+    const prefer = (list: any[]) => {
+      if (!list.length) return undefined;
+      if (name && language) {
+        const withNameLang = list.find((tpl) => tpl.name === name && tpl.language === language);
+        if (withNameLang) return withNameLang;
+      }
+      if (name) {
+        const withName = list.find((tpl) => tpl.name === name);
+        if (withName) return withName;
+      }
+      if (language) {
+        const withLang = list.find((tpl) => tpl.language === language);
+        if (withLang) return withLang;
+      }
+      if (language) {
+        const withoutLang = list.find((tpl) => !tpl.language);
+        if (withoutLang) return withoutLang;
+      }
+      return list[0];
+    };
+
+    const ownerTemplates = ownerId ? templates.filter((tpl) => tpl.ownerId === ownerId) : [];
+    const branchTemplates = templates.filter((tpl) => tpl.ownerId === null);
+
+    const chosen =
+      prefer(ownerTemplates) ||
+      prefer(branchTemplates) ||
+      templates[0];
+
+    return chosen ? this.hydrate(chosen) : null;
+  }
+
+  private buildTemplateComponents(variableKeys: string[], values: Record<string, string>) {
+    if (!Array.isArray(variableKeys) || variableKeys.length === 0) return undefined;
+    const parameters = variableKeys.map((key) => ({
+      type: 'text' as const,
+      text: values[key] ?? '',
+    }));
+    return [{ type: 'body' as const, parameters }];
+  }
+
+  private validateVariables(vars: string[] | undefined, contentText?: string | null, contentHtml?: string | null) {
+    if (!vars && !contentText && !contentHtml) return;
+    const list = Array.isArray(vars)
+      ? Array.from(new Set(vars.filter((v) => typeof v === 'string' && v.trim() !== '').map((v) => v.trim())))
+      : [];
+
+    const placeholders = new Set<string>();
+    const capture = (source?: string | null) => {
+      if (!source) return;
+      const regex = /{{\s*([a-zA-Z0-9_]+)\s*}}/g;
+      let match: RegExpExecArray | null;
+      while ((match = regex.exec(source)) !== null) {
+        placeholders.add(match[1]);
+      }
+    };
+    capture(contentText || undefined);
+    capture(contentHtml || undefined);
+
+    if (placeholders.size > 0 && list.length === 0) {
+      throw new BadRequestException(
+        `Template content contains placeholders ${Array.from(placeholders).join(', ')} but no variables were provided`,
+      );
+    }
+
+    for (const p of placeholders) {
+      if (!list.includes(p)) {
+        throw new BadRequestException(
+          `Placeholder "{{${p}}}" is not declared in variables. Declare it in variables or remove from content.`,
+        );
+      }
+    }
   }
 
   private hydrate(row: any) {

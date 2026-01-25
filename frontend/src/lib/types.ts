@@ -126,6 +126,7 @@ export interface DoctorSchedule {
 // Patient
 export interface Patient {
   id: string;
+  patientCode?: string;
   abhaId?: string;
   firstName: string;
   lastName: string;
@@ -196,6 +197,7 @@ export interface GetPatientsResponse {
 // Backend select shape for patients listing
 export interface BackendPatientRow {
   id: string;
+  patientCode?: string | null;
   abhaId?: string | null;
   name?: string | null;
   firstName?: string | null;

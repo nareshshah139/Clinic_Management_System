@@ -8,9 +8,19 @@ interface EmailOptions {
   text?: string;
 }
 
+type WhatsAppTemplateParameter =
+  | { type: 'text'; text: string }
+  | { type: 'currency'; currency: { fallback_value: string; code: string; amount_1000: number } }
+  | { type: 'date_time'; date_time: { fallback_value: string } };
+
+type WhatsAppTemplateComponent =
+  | { type: 'header'; parameters?: WhatsAppTemplateParameter[] }
+  | { type: 'body'; parameters?: WhatsAppTemplateParameter[] }
+  | { type: 'button'; sub_type?: 'quick_reply' | 'url'; index?: string; parameters?: WhatsAppTemplateParameter[] };
+
 interface WhatsAppOptions {
   toPhoneE164: string; // E.164 format, e.g., +919999999999
-  template?: { name: string; language: string; components?: any[] };
+  template?: { name: string; language: string; components?: WhatsAppTemplateComponent[] };
   text?: string;
   // Optional per-doctor overrides
   overrideToken?: string;
@@ -45,6 +55,57 @@ export class NotificationsService {
     this.whatsappPhoneId = process.env.WHATSAPP_PHONE_NUMBER_ID || undefined;
   }
 
+  private normalizeE164(phone: string | undefined | null): string | null {
+    if (!phone || typeof phone !== 'string') return null;
+    const digits = phone.replace(/[^\d+]/g, '');
+    if (!digits) return null;
+    return digits.startsWith('+') ? digits : `+${digits}`;
+  }
+
+  private async postWhatsApp(
+    phoneId: string,
+    token: string,
+    body: Record<string, any>,
+    attempt = 1,
+    maxAttempts = 2,
+  ): Promise<void> {
+    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    } as Record<string, string>;
+
+    let res: Response;
+    try {
+      res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    } catch (err: any) {
+      const retryable = attempt < maxAttempts;
+      this.logger.error(
+        `WhatsApp send failed (network): ${err?.message ?? err}. attempt=${attempt}/${maxAttempts}`,
+      );
+      if (retryable) {
+        return this.postWhatsApp(phoneId, token, body, attempt + 1, maxAttempts);
+      }
+      throw err;
+    }
+
+    if (!res.ok) {
+      const isRetryable = (res.status >= 500 || res.status === 429) && attempt < maxAttempts;
+      let errText: string | undefined;
+      try {
+        errText = await res.text();
+      } catch {
+        errText = undefined;
+      }
+      this.logger.error(
+        `WhatsApp send failed: status=${res.status} attempt=${attempt}/${maxAttempts} body=${errText || 'n/a'}`,
+      );
+      if (isRetryable) {
+        return this.postWhatsApp(phoneId, token, body, attempt + 1, maxAttempts);
+      }
+    }
+  }
+
   async sendEmail(opts: EmailOptions): Promise<void> {
     if (!this.smtpTransporter) {
       this.logger.warn('SMTP is not configured; skipping email');
@@ -67,30 +128,30 @@ export class NotificationsService {
       this.logger.warn('WhatsApp is not configured; skipping message');
       return;
     }
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
-    const headers = {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    } as any;
-    const body: any = {
+    const normalized = this.normalizeE164(opts.toPhoneE164);
+    if (!normalized) {
+      this.logger.warn(`WhatsApp send skipped: invalid phone ${opts.toPhoneE164}`);
+      return;
+    }
+
+    const payload: any = {
       messaging_product: 'whatsapp',
-      to: opts.toPhoneE164.replace(/^\+/, ''),
+      to: normalized.replace(/^\+/, ''),
       type: opts.template ? 'template' : 'text',
     };
     if (opts.template) {
-      body.template = {
+      payload.template = {
         name: opts.template.name,
         language: { code: opts.template.language },
         components: opts.template.components || [],
       };
     } else if (opts.text) {
-      body.text = { body: opts.text };
+      payload.text = { body: opts.text };
+    } else {
+      this.logger.warn('WhatsApp send skipped: neither template nor text provided');
+      return;
     }
 
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const msg = await res.text();
-      this.logger.error(`WhatsApp send failed: ${res.status} ${msg}`);
-    }
+    await this.postWhatsApp(phoneId, token, payload);
   }
 } 

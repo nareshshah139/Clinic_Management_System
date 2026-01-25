@@ -261,7 +261,7 @@ export class VisitsService {
         where,
         include: {
           patient: {
-            select: { id: true, name: true, phone: true, gender: true },
+            select: { id: true, patientCode: true, name: true, phone: true, gender: true },
           },
           doctor: {
             select: { id: true, firstName: true, lastName: true },
@@ -313,6 +313,7 @@ export class VisitsService {
         patient: {
           select: { 
             id: true, 
+            patientCode: true,
             name: true, 
             phone: true, 
             email: true, 
