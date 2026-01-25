@@ -1303,9 +1303,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, [loadPatientContext, loadPatientHistory]);
 
   // Section completion tracking
-  const markSectionComplete = (section: string) => {
+  const markSectionComplete = useCallback((section: string) => {
     setCompletedSections(prev => new Set([...prev, section]));
-  };
+  }, []);
 
   const isSectionComplete = (section: string) => {
     return completedSections.has(section);
@@ -2236,6 +2236,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     if (typeof next.footerHeightMm === 'number') setFooterHeightMm(next.footerHeightMm);
                   }}
                   onChangeReviewDate={setReviewDate}
+                  onPreview={() => markSectionComplete('prescription')}
                   onCreated={() => markSectionComplete('prescription')}
                   refreshKey={builderRefreshKey}
                   includeSections={rxIncludeSections}

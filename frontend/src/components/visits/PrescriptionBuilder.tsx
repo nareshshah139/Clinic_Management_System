@@ -75,6 +75,7 @@ interface Props {
   doctorId: string;
   userRole?: string;
   onCreated?: (id?: string) => void;
+  onPreview?: () => void;
   reviewDate?: string;
   printBgUrl?: string;
   printTopMarginPx?: number;
@@ -145,7 +146,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
@@ -641,10 +642,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => { cancelled = true; };
   }, []);
 
-  // Track previous previewOpen to detect first-open transitions
+  // Track previous previewOpen to detect first-open transitions and mark completion
   useEffect(() => {
+    if (previewOpen && !prevPreviewOpenRef.current) {
+      onPreview?.();
+    }
     prevPreviewOpenRef.current = previewOpen;
-  }, [previewOpen]);
+  }, [previewOpen, onPreview]);
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -1663,7 +1667,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       durationUnit: 'DAYS',
       instructions: '',
       route: 'Oral',
-      timing: 'After meals',
+      timing: '',
       quantity: 5,
       isGeneric: true,
     };
