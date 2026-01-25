@@ -456,6 +456,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
   const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
   const [investigations, setInvestigations] = useState<string[]>([]);
+  const [procedures, setProcedures] = useState<string>('');
   const [procedurePlanned, setProcedurePlanned] = useState<string>('');
   // Vitals (with BMI)
   const [vitalsHeightCm, setVitalsHeightCm] = useState<number | ''>('');
@@ -875,6 +876,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     pushIf('familyHistoryOthers', familyHistoryOthers);
     pushIf('followUpInstructions', followUpInstructions);
     pushIf('counseling', counselingText);
+    pushIf('procedures', procedures);
     pushIf('procedurePlanned', procedurePlanned);
     // Investigations
     (Array.isArray(investigations) ? investigations : []).forEach((inv, i) => {
@@ -944,7 +946,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: 'Showing original text. Check server OPENAI_API_KEY and network.',
       });
     }
-  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedurePlanned, investigations, customSections, items, counselingText]);
+  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedures, procedurePlanned, investigations, customSections, items, counselingText]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
@@ -958,6 +960,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   ), [familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers]);
   
   const hasInvestigations = useMemo(() => Array.isArray(investigations) && investigations.length > 0, [investigations]);
+  const hasProcedures = useMemo(() => Boolean(procedures?.trim()?.length), [procedures]);
   const hasProcedurePlanned = useMemo(() => Boolean(procedurePlanned?.trim()?.length), [procedurePlanned]);
   const validItems = useMemo(() => items.filter((it) => (it.drugName || '').trim().length > 0), [items]);
   const canCreate = useMemo(
@@ -1151,6 +1154,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             if (customInvs.length > 0) {
               setCustomInvestigationOptions(customInvs);
             }
+          }
+          if (!procedures && Array.isArray(dermaPlan.procedures) && dermaPlan.procedures.length > 0) {
+            const procLine = dermaPlan.procedures.map((p: any) => p?.type).filter(Boolean).join(', ');
+            if (procLine) setProcedures(procLine);
           }
           if (!procedurePlanned && typeof dermaPlan.procedurePlanned === 'string') setProcedurePlanned(dermaPlan.procedurePlanned);
         } catch {}
@@ -1894,6 +1901,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             investigations: (investigations && investigations.length) ? investigations : undefined,
             procedurePlanned: procedurePlanned || undefined,
             followUp: followUpInstructions || undefined,
+            dermatology: procedures?.trim()?.length ? { procedures: [{ type: procedures.trim() }] } : undefined,
           },
           dermatology: {
             skinConcerns: Array.from(skinConcerns),
@@ -1970,6 +1978,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             others: familyHistoryOthers || undefined,
           },
           investigations: investigations && investigations.length ? investigations : undefined,
+          procedures: procedures || undefined,
           procedurePlanned: procedurePlanned || undefined,
         },
       };
@@ -2007,7 +2016,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description,
       });
     }
-  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedurePlanned, onCreated]);
+  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
@@ -2097,6 +2106,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           if (customInvs.length > 0) {
             setCustomInvestigationOptions(customInvs);
           }
+        }
+        if (md.procedures) {
+          const procVal = Array.isArray(md.procedures) ? md.procedures.join(', ') : md.procedures;
+          if (typeof procVal === 'string') setProcedures(procVal);
         }
         if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
         // procedureParams removed
@@ -3222,6 +3235,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         medicationHistory,
         menstrualHistory,
         exObjective,
+        procedures,
         procedurePlanned,
         investigations,
         customInvestigationOptions,
@@ -3258,7 +3272,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -3276,6 +3290,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.medicationHistory === 'string') setMedicationHistory(data.medicationHistory);
         if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
         if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
+        if (typeof data?.procedures === 'string') setProcedures(data.procedures);
         if (typeof data?.procedurePlanned === 'string') setProcedurePlanned(data.procedurePlanned);
         if (Array.isArray(data?.investigations)) {
           setInvestigations(data.investigations);
@@ -4001,14 +4016,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
             {/* Procedures */}
             <CollapsibleSection 
-              title="Procedure Planned" 
+              title="Procedures" 
               section="procedures" 
-              highlight={hasProcedurePlanned}
-              badge={hasProcedurePlanned ? "Has Data" : ""}
+              highlight={hasProcedures || hasProcedurePlanned}
+              badge={(hasProcedures || hasProcedurePlanned) ? "Has Data" : ""}
             >
               <div className="space-y-3 opacity-100">
-                <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                <Textarea rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
+                <div>
+                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <Textarea rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <Textarea rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
+                </div>
               </div>
             </CollapsibleSection>
 
@@ -4121,7 +4142,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div>
                       On print preview, free‑form fields will be translated to {language === 'HI' ? 'Hindi' : 'Telugu'}.
                       This includes: Diagnosis, Chief complaints, Histories, Family history (other), Post‑procedure care,
-                      Procedure planned, Investigations, Custom sections, and per‑medication notes. Medication names,
+                      Procedures, Procedure planned, Investigations, Custom sections, and per‑medication notes. Medication names,
                       numbers, and units remain unchanged.
                     </div>
                   </div>
@@ -4347,6 +4368,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         sections.push('');
                         sections.push('Rx:');
                         sections.push(medsLines.length ? medsLines.join('\n') : '—');
+                        if ((procedures || '').trim().length > 0) {
+                          sections.push('');
+                          sections.push('Procedures:');
+                          sections.push(tt('procedures', procedures));
+                        }
+                        if ((procedurePlanned || '').trim().length > 0) {
+                          sections.push('');
+                          sections.push('Procedure Planned:');
+                          sections.push(tt('procedurePlanned', procedurePlanned));
+                        }
+                        const printableCustomSections = (customSections || []).filter(
+                          (s) => (s?.title || '').trim().length > 0 || (s?.content || '').trim().length > 0
+                        );
+                        if (printableCustomSections.length) {
+                          sections.push('');
+                          sections.push('Custom Sections:');
+                          printableCustomSections.forEach((s, idx) => {
+                            const title = (s.title || '').trim();
+                            const content = (s.content || '').trim();
+                            if (title && content) {
+                              sections.push(`${tt(`custom.${idx}.title`, title)}: ${tt(`custom.${idx}.content`, content)}`);
+                            } else if (title) {
+                              sections.push(tt(`custom.${idx}.title`, title));
+                            } else if (content) {
+                              sections.push(tt(`custom.${idx}.content`, content));
+                            }
+                          });
+                        }
                         if ((counselingText || '').trim().length > 0) {
                           sections.push('');
                           sections.push('Counseling:');
@@ -4544,6 +4593,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="text-sm whitespace-pre-wrap">{tt('counseling', counselingText)}</div>
                   </div>
                 ) : null}
+
+                {/* Procedures */}
+                {(procedures?.trim()?.length > 0) && (
+                  <div className="py-3 text-sm">
+                    <div className="flex flex-wrap gap-2 items-start">
+                      <span className="font-semibold">Procedures:</span>
+                      <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{tt('procedures', procedures)}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Procedure Planned */}
         {(procedurePlanned?.trim()?.length > 0) && (
