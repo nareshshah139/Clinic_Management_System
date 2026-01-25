@@ -2124,7 +2124,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [templatePromptOpen, setTemplatePromptOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [templateNameError, setTemplateNameError] = useState('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  // Default to explicit "none" option to avoid Radix cycling refs on missing value
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
@@ -2268,6 +2269,12 @@ const handleTemplateChange = React.useCallback(
   (v: string) => setSelectedTemplateId((prev) => (prev === v ? prev : v)),
   []
 );
+
+// Ensure the select value always exists in options to avoid Radix ref churn
+const templateSelectValue = useMemo(() => {
+  if (allTemplates.some((t) => t.id === selectedTemplateId)) return selectedTemplateId;
+  return 'none';
+}, [allTemplates, selectedTemplateId]);
 
   const persistLocalFieldTemplate = useCallback(async (name: string) => {
     // Save as server-side template with no items
@@ -3392,7 +3399,7 @@ const handleTemplateChange = React.useCallback(
             <div className="flex flex-wrap gap-2 items-end">
               <div className="min-w-[240px]">
                 <label className="text-xs text-gray-600">Templates</label>
-                <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
+                <Select value={templateSelectValue} onValueChange={handleTemplateChange}>
                   <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
                   <SelectContent>
                     {allTemplates.map((t) => (
