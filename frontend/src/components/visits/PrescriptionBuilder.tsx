@@ -11,6 +11,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronDown, ChevronUp, Languages, X, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
@@ -374,6 +375,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           });
 
           if (!transcribeRes.ok) {
+            handleUnauthorizedRedirect(transcribeRes);
             let errText = '';
             try { errText = await transcribeRes.text(); } catch {}
             // eslint-disable-next-line no-console
@@ -2261,6 +2263,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return [...none, ...server, ...defaults];
   }, [templates, defaultDermTemplates]);
 
+// Prevent redundant template selection state updates that can recurse during ref detaches
+const handleTemplateChange = React.useCallback(
+  (v: string) => setSelectedTemplateId((prev) => (prev === v ? prev : v)),
+  []
+);
+
   const persistLocalFieldTemplate = useCallback(async (name: string) => {
     // Save as server-side template with no items
     try {
@@ -3384,7 +3392,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <div className="flex flex-wrap gap-2 items-end">
               <div className="min-w-[240px]">
                 <label className="text-xs text-gray-600">Templates</label>
-                <Select value={selectedTemplateId} onValueChange={(v: string) => setSelectedTemplateId(v)}>
+                <Select value={selectedTemplateId} onValueChange={handleTemplateChange}>
                   <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
                   <SelectContent>
                     {allTemplates.map((t) => (

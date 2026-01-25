@@ -7,6 +7,7 @@ import { Camera, Upload, Image as ImageIcon, Trash2, ChevronLeft, ChevronRight, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 
 interface Props {
   visitId: string;
@@ -85,6 +86,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       if (!patientId) { setItems([]); try { onChangeCount?.(0); } catch {} return; }
       try {
         const res = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, { credentials: 'include' });
+        if (res.status === 401) handleUnauthorizedRedirect(res);
         if (!res.ok) { setItems([]); return; }
         const data = await res.json();
         const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || []).map((it: PhotoItem) => ({
@@ -102,6 +104,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       const res = await fetch(`${baseUrl}/visits/${visitId}/photos`, {
         credentials: 'include',
       });
+      if (res.status === 401) handleUnauthorizedRedirect(res);
       if (!res.ok) {
         console.error('Failed to load photos:', res.status);
         return;
@@ -135,6 +138,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       if (!patientId) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
       try {
         const resp = await fetch(`${baseUrl}/visits/patient/${patientId}/history?limit=50`, { credentials: 'include' });
+        if (resp.status === 401) handleUnauthorizedRedirect(resp);
         if (!resp.ok) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
         const data = await resp.json();
         const visits = Array.isArray((data as any)?.visits) ? (data as any).visits as any[] : [];
@@ -176,6 +180,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
       if (!selectedCompareVisitId) { setCompareItems([]); return; }
       try {
         const res = await fetch(`${baseUrl}/visits/${selectedCompareVisitId}/photos`, { credentials: 'include' });
+        if (res.status === 401) handleUnauthorizedRedirect(res);
         if (!res.ok) { setCompareItems([]); return; }
         const data = await res.json();
         const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
@@ -568,6 +573,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         // Draft mode deletion
         const draftUrl = active.url.startsWith('/visits/photos/draft/') ? `${baseUrl}${active.url}` : active.url;
         const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
+        if (resp.status === 401) handleUnauthorizedRedirect(resp);
         if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
         try { const data = await resp.json(); applyResponseList(data); }
         catch { await load(); }
@@ -576,6 +582,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         if (/\/visits\//i.test(active.url) && !/\/uploads\//i.test(active.url)) {
           const target = active.url.startsWith('http') ? active.url : `${baseUrl}${active.url}`;
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
+          if (resp.status === 401) handleUnauthorizedRedirect(resp);
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
           try { const data = await resp.json(); applyResponseList(data); }
           catch { await load(); }
@@ -586,6 +593,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             body: JSON.stringify({ url: active.url }),
             credentials: 'include',
           });
+          if (resp.status === 401) handleUnauthorizedRedirect(resp);
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
           try { const data = await resp.json(); applyResponseList(data); }
           catch { await load(); }

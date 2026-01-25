@@ -45,6 +45,7 @@ import {
   Keyboard
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
@@ -1157,6 +1158,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           });
 
           if (!transcribeRes.ok) {
+            handleUnauthorizedRedirect(transcribeRes);
             let errText = '';
             try { errText = await transcribeRes.text(); } catch {}
             // eslint-disable-next-line no-console
@@ -2102,6 +2104,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                                 const fd = new FormData();
                                 fd.append('file', f);
                                 const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
+                                if (res.status === 401) handleUnauthorizedRedirect(res);
                                 if (!res.ok) {
                                   let t = '';
                                   try { t = await res.text(); } catch {}
