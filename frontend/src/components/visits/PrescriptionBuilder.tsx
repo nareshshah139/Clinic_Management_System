@@ -1098,6 +1098,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, []);
 
   useEffect(() => {
+    // Defer initial client-only render to avoid SSR/client mismatches and select ref thrash
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
     const loadVisit = async () => {
       if (!visitId || standalone) return;
       try {
@@ -1181,13 +1186,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         } catch {}
         // Enable sections based on visit content OR current form state
         // Only update if visit has content, otherwise preserve user's current settings
-        setIncludeSections({
+        const nextSections: Record<string, boolean> = {
           ...includeSections,
-          // Show diagnosis if visit has it OR if form already has diagnosis entered
           diagnosis: Boolean(res?.diagnosis) || Boolean(diagnosis?.trim()),
           counseling: Boolean(res?.plan) || Boolean(counselingText?.trim()),
           vitals: Boolean(res?.vitals) || Boolean(vitalsHeightCm || vitalsWeightKg || vitalsBpSys || vitalsBpDia || vitalsPulse),
-        });
+        };
+        const unchanged =
+          nextSections.diagnosis === includeSections.diagnosis &&
+          nextSections.counseling === includeSections.counseling &&
+          nextSections.vitals === includeSections.vitals;
+        if (!unchanged) {
+          setIncludeSections(nextSections);
+        }
       } catch (e) {
         setVisitData(null);
       } finally {
@@ -1196,7 +1207,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey, standalone, includeSections, setIncludeSections]);
+  }, [visitId, refreshKey, standalone, setIncludeSections]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
@@ -2134,6 +2145,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
   const [templatesReady, setTemplatesReady] = useState(false);
   const [showTemplatesBar, setShowTemplatesBar] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
@@ -3415,7 +3427,7 @@ const handleTemplateChange = React.useCallback(
       <div className="space-y-6">
         <div className="space-y-4">
           {/* Templates quick bar */}
-            {showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
+            {hydrated && showTemplatesBar && templatesReady && allTemplates.length > 0 ? (
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-[240px]">
                   <label className="text-xs text-gray-600">Templates</label>
