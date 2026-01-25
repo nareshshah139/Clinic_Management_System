@@ -1231,6 +1231,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setTemplates([]);
     } finally {
       setLoadingTemplates(false);
+      setTemplatesReady(true);
     }
   };
 
@@ -2126,6 +2127,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [templateNameError, setTemplateNameError] = useState('');
   // Default to explicit "none" option to avoid Radix cycling refs on missing value
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
+  const [templatesReady, setTemplatesReady] = useState(false);
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
@@ -2271,10 +2273,11 @@ const handleTemplateChange = React.useCallback(
 );
 
 // Ensure the select value always exists in options to avoid Radix ref churn
-const templateSelectValue = useMemo(() => {
-  if (allTemplates.some((t) => t.id === selectedTemplateId)) return selectedTemplateId;
-  return 'none';
-}, [allTemplates, selectedTemplateId]);
+  const templateSelectValue = useMemo(() => {
+    if (!templatesReady) return 'none';
+    if (allTemplates.some((t) => t.id === selectedTemplateId)) return selectedTemplateId;
+    return 'none';
+  }, [allTemplates, selectedTemplateId, templatesReady]);
 
   const persistLocalFieldTemplate = useCallback(async (name: string) => {
     // Save as server-side template with no items
@@ -3292,7 +3295,10 @@ const templateSelectValue = useMemo(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
   }, [saveDraftNow]);
+  const draftLoadedRef = useRef(false);
   useEffect(() => {
+    if (draftLoadedRef.current) return;
+    draftLoadedRef.current = true;
     try {
       const raw = localStorage.getItem(draftKey);
       if (raw) {
@@ -3399,7 +3405,7 @@ const templateSelectValue = useMemo(() => {
             <div className="flex flex-wrap gap-2 items-end">
               <div className="min-w-[240px]">
                 <label className="text-xs text-gray-600">Templates</label>
-                <Select value={templateSelectValue} onValueChange={handleTemplateChange}>
+                <Select value={templateSelectValue} onValueChange={handleTemplateChange} disabled={!templatesReady || loadingTemplates}>
                   <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
                   <SelectContent>
                     {allTemplates.map((t) => (
