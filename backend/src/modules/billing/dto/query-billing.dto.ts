@@ -7,13 +7,17 @@ import {
   Min,
   Max,
   IsEnum,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from './invoice.dto';
 
+// Allow either UUID (v1-5) or CUID (e.g., cxxxxxxxxxxxxxxxxxxxxxxx) for patient identifiers
+const UUID_OR_CUID_REGEX = /(^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$)|(^c[0-9a-z]{24}$)/i;
+
 export class QueryInvoicesDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
@@ -76,7 +80,7 @@ export class QueryPaymentsDto {
   invoiceId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
@@ -135,7 +139,7 @@ export class PaymentSummaryDto {
   method?: PaymentMethod;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 }
 
@@ -163,7 +167,7 @@ export class RevenueReportDto {
 
 export class OutstandingInvoicesDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
