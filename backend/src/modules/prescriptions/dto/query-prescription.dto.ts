@@ -8,13 +8,17 @@ import {
   Max,
   IsEnum,
   IsBoolean,
+  Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PrescriptionStatus, PrescriptionLanguage, RefillStatus } from './prescription.dto';
 
+// Accept either UUID (v1-5) or CUID (e.g., cxxxxxxxxxxxxxxxxxxxxxxx) for patient identifiers
+const UUID_OR_CUID_REGEX = /(^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$)|(^c[0-9a-z]{24}$)/i;
+
 export class QueryPrescriptionsDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
@@ -89,7 +93,7 @@ export class QueryRefillsDto {
   prescriptionId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
@@ -132,7 +136,7 @@ export class QueryRefillsDto {
 
 export class PrescriptionHistoryDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
@@ -207,7 +211,7 @@ export class ExpiringPrescriptionsDto {
   expireBefore?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
