@@ -1091,6 +1091,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
   };
 
+  const loadTemplates = async () => {
+    try {
+      setLoadingTemplates(true);
+      const res: any = await apiClient.getPrescriptionTemplates({ limit: 50 });
+      setTemplates(res.templates || res.data || []);
+    } catch (e) {
+      setTemplates([]);
+    } finally {
+      setLoadingTemplates(false);
+      setTemplatesReady(true);
+    }
+  };
+
   useEffect(() => {
     void loadTemplates();
   }, []);
@@ -1245,19 +1258,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setVitalsBmi('');
     }
   }, [vitalsHeightCm, vitalsWeightKg]);
-
-  const loadTemplates = async () => {
-    try {
-      setLoadingTemplates(true);
-      const res: any = await apiClient.getPrescriptionTemplates({ limit: 50 });
-      setTemplates(res.templates || res.data || []);
-    } catch (e) {
-      setTemplates([]);
-    } finally {
-      setLoadingTemplates(false);
-      setTemplatesReady(true);
-    }
-  };
 
   // Debounced clinical autocomplete loaders
   useEffect(() => {
