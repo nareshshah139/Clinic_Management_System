@@ -319,9 +319,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           const loadBitmap = async () => {
             try {
               // Prefer createImageBitmap for performance
-              // @ts-expect-error createImageBitmap may be missing in some browsers
               if (typeof createImageBitmap === 'function') {
-                // @ts-expect-error createImageBitmap result lacks TS types here
                 const bmp = await createImageBitmap(await fetch(url).then(r => r.blob()));
                 return { width: bmp.width, height: bmp.height, bitmap: bmp } as any;
               }

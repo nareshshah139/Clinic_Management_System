@@ -615,7 +615,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => {
     let cancelled = false;
     const warm = () => {
-      // @ts-expect-error dynamic import cached after first load
       import('pagedjs')
         .then(() => {
           if (!cancelled) pagedJsPreloadedRef.current = true;
@@ -2650,16 +2649,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         
         // Initialize a fresh Paged.js instance - use preloaded module if available
-        // @ts-expect-error - pagedjs has no type definitions
         let Previewer;
         if (pagedJsPreloadedRef.current) {
           // Module already loaded, use it directly (faster)
-          // @ts-expect-error - pagedjs has no type definitions
           const pagedModule = await import('pagedjs');
           Previewer = pagedModule.Previewer;
         } else {
           // First-time load
-          // @ts-expect-error - pagedjs has no type definitions
           const { Previewer: P } = await import('pagedjs');
           Previewer = P;
           pagedJsPreloadedRef.current = true;
