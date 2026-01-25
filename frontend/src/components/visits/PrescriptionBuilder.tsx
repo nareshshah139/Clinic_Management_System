@@ -4666,6 +4666,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         toast({ variant: 'destructive', title: 'Print blocked', description: 'Please allow popups to print.' });
                         return;
                       }
+                      const closePreview = () => {
+                        try { printWindow.close(); } catch {}
+                        setPreviewOpen(false);
+                      };
                       
                       // Write the print content to the new window with all styles from current page
                       printWindow.document.write(`
@@ -4716,12 +4720,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       // Wait for fonts and images to load, then print
                       printWindow.onload = () => {
                         setTimeout(() => {
-                          printWindow.print();
+                          try { printWindow.print(); } catch (e) { console.error('Print dialog failed', e); }
                         }, 500);
                       };
-                      // Fallback if onload doesn't fire
+                      // Ensure cleanup after print
+                      printWindow.onafterprint = closePreview;
+                      // Fallback if onload doesn't fire or afterprint never fires
                       setTimeout(() => {
-                        printWindow.print();
+                        try { printWindow.print(); } catch {}
+                        setTimeout(closePreview, 1500);
                       }, 1000);
                     } catch (e) {
                       console.error('Browser print failed', e);
