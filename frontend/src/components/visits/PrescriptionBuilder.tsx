@@ -1118,11 +1118,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setHydrated(true);
   }, []);
 
-  // Avoid rendering Select-heavy UI until client is hydrated
-  if (!hydrated) {
-    return <div className="text-sm text-gray-500">Loading prescription builder…</div>;
-  }
-
   useEffect(() => {
     const loadVisit = async () => {
       if (!visitId || standalone) return;
