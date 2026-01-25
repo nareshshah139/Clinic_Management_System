@@ -234,6 +234,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
   const [creatingTemplate, setCreatingTemplate] = useState<boolean>(false);
   const [savingFieldsTemplate, setSavingFieldsTemplate] = useState<boolean>(false);
+  const [templatesReady, setTemplatesReady] = useState(false);
+  const [showTemplatesBar, setShowTemplatesBar] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   // Bubble chief complaint changes up so parent (visit form) stays in sync
   useEffect(() => {
@@ -1101,6 +1104,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     // Defer initial client-only render to avoid SSR/client mismatches and select ref thrash
     setHydrated(true);
   }, []);
+
+  // Avoid rendering Select-heavy UI until client is hydrated
+  if (!hydrated) {
+    return <div className="text-sm text-gray-500">Loading prescription builder…</div>;
+  }
 
   useEffect(() => {
     const loadVisit = async () => {
@@ -2143,9 +2151,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [templateNameError, setTemplateNameError] = useState('');
   // Default to explicit "none" option to avoid Radix cycling refs on missing value
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('none');
-  const [templatesReady, setTemplatesReady] = useState(false);
-  const [showTemplatesBar, setShowTemplatesBar] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
   const [fieldTemplatePromptOpen, setFieldTemplatePromptOpen] = useState(false);
   const [fieldTemplateName, setFieldTemplateName] = useState('');
   const [newTemplateOpen, setNewTemplateOpen] = useState(false);
