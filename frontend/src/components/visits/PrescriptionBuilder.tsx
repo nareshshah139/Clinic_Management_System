@@ -238,10 +238,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [showTemplatesBar, setShowTemplatesBar] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
+  // Stabilize callback props to prevent infinite loops
+  const onChangeChiefComplaintsRef = useRef(onChangeChiefComplaints);
+  useEffect(() => {
+    onChangeChiefComplaintsRef.current = onChangeChiefComplaints;
+  }, [onChangeChiefComplaints]);
+  
   // Bubble chief complaint changes up so parent (visit form) stays in sync
   useEffect(() => {
-    onChangeChiefComplaints?.(chiefComplaints);
-  }, [chiefComplaints, onChangeChiefComplaints]);
+    onChangeChiefComplaintsRef.current?.(chiefComplaints);
+  }, [chiefComplaints]);
 
   const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
     const status = error?.status;
@@ -648,13 +654,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return () => { cancelled = true; };
   }, []);
 
+  // Stabilize onPreview callback
+  const onPreviewRef = useRef(onPreview);
+  useEffect(() => {
+    onPreviewRef.current = onPreview;
+  }, [onPreview]);
+  
   // Track previous previewOpen to detect first-open transitions and mark completion
   useEffect(() => {
     if (previewOpen && !prevPreviewOpenRef.current) {
-      onPreview?.();
+      onPreviewRef.current?.();
     }
     prevPreviewOpenRef.current = previewOpen;
-  }, [previewOpen, onPreview]);
+  }, [previewOpen]);
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -838,7 +850,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   });
 
   const includeSections = includeSectionsProp ?? localIncludeSections;
-  const setIncludeSections = onChangeIncludeSections ?? setLocalIncludeSections;
+  
+  // Stabilize setIncludeSections using useRef to prevent infinite loops
+  const onChangeIncludeSectionsRef = useRef(onChangeIncludeSections);
+  useEffect(() => {
+    onChangeIncludeSectionsRef.current = onChangeIncludeSections;
+  }, [onChangeIncludeSections]);
+  
+  const setIncludeSections = useCallback((next: Record<string, boolean>) => {
+    if (onChangeIncludeSectionsRef.current) {
+      onChangeIncludeSectionsRef.current(next);
+    } else {
+      setLocalIncludeSections(next);
+    }
+  }, []);
 
   const tt = useCallback((key: string, fallback?: string) => {
     if (language === 'EN') return fallback ?? '';
@@ -1223,7 +1248,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     };
     void loadVisit();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey, standalone, setIncludeSections]);
+  }, [visitId, refreshKey, standalone]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
