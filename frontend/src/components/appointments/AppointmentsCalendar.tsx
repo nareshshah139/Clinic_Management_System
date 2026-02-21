@@ -38,6 +38,7 @@ export default function AppointmentsCalendar({
   hideHeaderControls,
 }: AppointmentsCalendarProps) {
   const { toast } = useToast();
+  const [slotConfig, setSlotConfig] = useState<TimeSlotConfig>(timeSlotConfig);
   const [date, setDate] = useState<string>(getISTDateString());
   const [doctorId, setDoctorId] = useState<string>('');
   const [patientSearch, setPatientSearch] = useState<string>('');
@@ -59,7 +60,7 @@ export default function AppointmentsCalendar({
   );
   const [refreshKey, setRefreshKey] = useState<number>(0);
   const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
-  const [gridMinutes, setGridMinutes] = useState<number>(30);
+  const [gridMinutes, setGridMinutes] = useState<number>(timeSlotConfig.stepMinutes ?? 30);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; calendarId?: string | null; email?: string | null }>({
     connected: false,
@@ -84,6 +85,57 @@ export default function AppointmentsCalendar({
       setSelectedPatientId(prefillPatientId);
     }
   }, [prefillPatientId]);
+
+  // Keep local slot config in sync with prop defaults
+  useEffect(() => {
+    setSlotConfig((prev) => {
+      const next = timeSlotConfig;
+      if (
+        prev.startHour === next.startHour &&
+        prev.endHour === next.endHour &&
+        prev.stepMinutes === next.stepMinutes &&
+        prev.timezone === next.timezone
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
+
+  // Apply doctor working hours when doctor/date changes (mirrors AppointmentScheduler behavior)
+  useEffect(() => {
+    const applyHours = async () => {
+      if (!doctorId || !date) return;
+      try {
+        const res: any = await apiClient.getUser(doctorId);
+        const meta = (res?.metadata && typeof res.metadata === 'object') ? res.metadata : (res?.metadata ? JSON.parse(res.metadata) : {});
+        const wh = meta?.workingHours;
+        if (!wh) return;
+        const tz = 'Asia/Kolkata';
+        const noonUtc = new Date(`${date}T12:00:00.000Z`);
+        const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
+        const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][localNoon.getDay()];
+        const byDay = wh?.byDay?.[dayKey] || {};
+        const startHour = Number.isInteger(byDay?.startHour) ? byDay.startHour : wh?.startHour;
+        const endHour = Number.isInteger(byDay?.endHour) ? byDay.endHour : wh?.endHour;
+        setSlotConfig((prev) => ({
+          ...prev,
+          ...(Number.isInteger(startHour) ? { startHour } : {}),
+          ...(Number.isInteger(endHour) ? { endHour } : {}),
+        }));
+      } catch (error) {
+        console.error('Failed to apply working hours', error);
+      }
+    };
+    void applyHours();
+  }, [doctorId, date]);
+
+  // Keep grid dropdown aligned if stepMinutes changes
+  useEffect(() => {
+    if (typeof slotConfig.stepMinutes === 'number') {
+      setGridMinutes(slotConfig.stepMinutes);
+    }
+  }, [slotConfig.stepMinutes]);
 
   // Apply controlled doctor/date when provided
   useEffect(() => {
@@ -552,7 +604,7 @@ export default function AppointmentsCalendar({
             onAppointmentUpdate={() => setRefreshKey(prev => prev + 1)}
             disableSlotBooking={!selectedPatientId}
             selectedRoomName={selectedRoom?.name}
-            timeSlotConfig={{ ...timeSlotConfig, stepMinutes: Math.max(10, gridMinutes) }}
+            timeSlotConfig={{ ...slotConfig, stepMinutes: Math.max(10, gridMinutes) }}
           />
         </CardContent>
       </Card>
