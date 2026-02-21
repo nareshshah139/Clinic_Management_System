@@ -58,10 +58,12 @@ export class QueryPrescriptionsDto {
   drugName?: string; // Filter by specific drug
 
   @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
   isExpired?: boolean;
 
   @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
   hasRefills?: boolean;
 
@@ -168,6 +170,7 @@ export class DrugSearchDto {
   query: string;
 
   @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
   isGeneric?: boolean;
 
