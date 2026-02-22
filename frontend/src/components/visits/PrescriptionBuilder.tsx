@@ -2969,7 +2969,9 @@ const handleTemplateChange = React.useCallback(
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
+          .overflow-visible { overflow: visible !important; }
           table { break-inside: auto; }
+          thead { display: table-header-group; }
           tr { break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; page-break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; }
         `;
         
@@ -4608,7 +4610,7 @@ const handleTemplateChange = React.useCallback(
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <div className="overflow-auto border rounded">
+                        <div className="overflow-visible border rounded">
                           <table className="min-w-full text-sm">
                             <thead className="bg-gray-50">
                               <tr>
