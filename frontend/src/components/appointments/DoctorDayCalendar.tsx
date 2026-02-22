@@ -651,8 +651,13 @@ export default function DoctorDayCalendar({
                     }
                     
                     if (rescheduleTarget) return; // creation only
-                    // In flexible mode, allow booking within tile if sub-range free
-                    if (disableSlotBooking || past) return;
+                    if (past) return;
+                    if (disableSlotBooking) {
+                      if (!hasAny) {
+                        toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
+                      }
+                      return;
+                    }
                     setSelecting(true);
                     setSelectionStartIdx(idx);
                     setSelectionEndIdx(idx);
@@ -846,8 +851,11 @@ export default function DoctorDayCalendar({
                       aria-label={rescheduleTarget ? `Move to ${slot}` : `Book ${slot}`}
                       onClick={async () => {
                         if (selecting) return;
-                        // Read-only/disallowed
-                        if (past || (disableSlotBooking && !rescheduleTarget)) return;
+                        if (past) return;
+                        if (disableSlotBooking && !rescheduleTarget) {
+                          toast({ variant: 'destructive', title: 'Patient required', description: 'Search and select a patient before booking a slot.' });
+                          return;
+                        }
                         if (rescheduleTarget && rescheduleTarget.id) {
                           const dur = Math.max(1, getSlotDurationMinutes(rescheduleTarget.slot));
                           // Flexible reschedule: try to place within this tile's first free sub-range

@@ -175,7 +175,7 @@ export class AppointmentsController {
   }
 
   @Post(':id/reschedule')
-  @Roles(UserRole.ADMIN, UserRole.RECEPTION)
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR, UserRole.RECEPTION)
   @Permissions('appointments:reschedule')
   reschedule(
     @Param('id') id: string,
