@@ -2688,7 +2688,7 @@ const handleTemplateChange = React.useCallback(
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, translateForPreview]);
+  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -2967,10 +2967,10 @@ const handleTemplateChange = React.useCallback(
         // Content styling (can be inline or in CSS string)
         const contentCSS = `
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
-          .medication-item, .pb-avoid-break { break-inside: avoid; page-break-inside: avoid; }
+          .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           table { break-inside: auto; }
-          tr { break-inside: avoid; page-break-inside: avoid; }
+          tr { break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; page-break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; }
         `;
         
         // Add content styles as inline style tag
@@ -4608,7 +4608,7 @@ const handleTemplateChange = React.useCallback(
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <div className={`overflow-auto border rounded ${avoidBreakInsideTables || spaceOptimized ? 'pb-avoid-break' : ''}`}>
+                        <div className="overflow-auto border rounded">
                           <table className="min-w-full text-sm">
                             <thead className="bg-gray-50">
                               <tr>
