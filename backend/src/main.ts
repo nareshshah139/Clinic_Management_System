@@ -50,6 +50,8 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     SwaggerModule.setup('docs', app, document);
 
+    app.enableShutdownHooks();
+
     const port = Number(process.env.PORT ?? 4000);
     await app.listen(port, '0.0.0.0');
     logger.log(
@@ -72,6 +74,7 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.enableShutdownHooks();
 
   // Serve uploads
   app.use('/uploads', express.static(join(process.cwd(), 'uploads')));

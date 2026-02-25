@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { RequestContextService } from '../context/request-context.service';
 
@@ -30,7 +30,7 @@ function redactSensitiveFields<T>(input: T): T {
 }
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
+export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(private readonly requestContext: RequestContextService) {
@@ -150,9 +150,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit {
     }
   }
 
-  async enableShutdownHooks(app: any) {
-    (this as any).$on('beforeExit', async () => {
-      await app.close();
-    });
+  async onModuleDestroy() {
+    this.logger.log('Disconnecting from database...');
+    await this.$disconnect();
+    this.logger.log('Database disconnected');
   }
 }

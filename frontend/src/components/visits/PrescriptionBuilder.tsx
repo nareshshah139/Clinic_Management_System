@@ -490,7 +490,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const lastTemplateApplyRef = useRef<number>(0);
   // Removed local-only field templates in favor of server persistence
   // Default dermatology templates (client-side suggestions)
-  const defaultDermTemplates: Array<any> = [
+  const defaultDermTemplates = useMemo<Array<any>>(() => [
     {
       id: 'derm-acne-mild',
       name: 'Acne (Mild) — Topical regimen',
@@ -561,7 +561,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       },
     },
-  ];
+  ], []);
   // Autocomplete state for clinical fields
   const [diagOptions, setDiagOptions] = useState<string[]>([]);
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
@@ -1122,7 +1122,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       const res: any = await apiClient.getPrescriptionTemplates({ limit: 50 });
       setTemplates(res.templates || res.data || []);
     } catch (e) {
+      console.warn('Failed to load prescription templates', e);
       setTemplates([]);
+      toast({ variant: 'destructive', title: 'Could not load templates', description: 'Default templates are still available.' });
     } finally {
       setLoadingTemplates(false);
       setTemplatesReady(true);
@@ -2099,69 +2101,49 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         foodInstructions: x.foodInstructions,
         pulseRegimen: x.pulseRegimen,
       }));
-      setItems(prev => {
-        const next = [...prev];
-        const last = next[next.length - 1];
-        const hasBlankLast = last && !((last?.drugName || '').trim());
-        if (hasBlankLast && mapped.length > 0) {
-          next[next.length - 1] = mapped[0];
-          if (mapped.length > 1) next.push(...mapped.slice(1));
-        } else {
-          next.push(...mapped);
-        }
+      setItems(() => {
+        const next = [...mapped];
         if (!hasTrailingBlank(next)) next.push(createBlankItem());
         return next;
       });
       pushHistory();
       const md = typeof tpl.metadata === 'object' ? tpl.metadata : (tpl.metadata ? JSON.parse(tpl.metadata) : null);
-      if (md) {
-        if (md.diagnosis) setDiagnosis(md.diagnosis);
-        if (md.chiefComplaints) setChiefComplaints(md.chiefComplaints);
-        if (md.histories) {
-          if (md.histories.pastHistory) setPastHistory(md.histories.pastHistory);
-          if (md.histories.medicationHistory) setMedicationHistory(md.histories.medicationHistory);
-          if (md.histories.menstrualHistory) setMenstrualHistory(md.histories.menstrualHistory);
-          // triggers and prior treatments are no longer applied from templates
-        }
-        if (md.examination) {
-          if (md.examination.generalAppearance) setExObjective(md.examination.generalAppearance);
-          if (md.examination.dermatology) {
-            const der = md.examination.dermatology;
-            if (der.skinType) setExSkinType(der.skinType);
-            if (Array.isArray(der.morphology)) setExMorphology(new Set<string>(der.morphology));
-            if (Array.isArray(der.distribution)) setExDistribution(new Set<string>(der.distribution));
-            if (der.acneSeverity) setExAcneSeverity(der.acneSeverity);
-            if (der.itchScore !== undefined && der.itchScore !== null) setExItchScore(String(der.itchScore));
-            if (Array.isArray(der.skinConcerns)) setSkinConcerns(new Set<string>(der.skinConcerns));
-          }
-        }
-        if (md.familyHistory) {
-          if (typeof md.familyHistory.dm === 'boolean') setFamilyHistoryDM(md.familyHistory.dm);
-          if (typeof md.familyHistory.htn === 'boolean') setFamilyHistoryHTN(md.familyHistory.htn);
-          if (typeof md.familyHistory.thyroid === 'boolean') setFamilyHistoryThyroid(md.familyHistory.thyroid);
-          if (md.familyHistory.others) setFamilyHistoryOthers(md.familyHistory.others);
-        }
-        // topicals removed
-        // postProcedureCare removed
-        if (md.investigations) {
-          let invs: string[] = [];
-          if (Array.isArray(md.investigations)) invs = md.investigations as string[];
-          else if (typeof md.investigations === 'string') invs = (md.investigations as string).split(',').map(s => s.trim()).filter(Boolean);
-          setInvestigations(invs);
-          // Extract custom investigations that aren't in the default list
-          const customInvs = invs.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
-          if (customInvs.length > 0) {
-            setCustomInvestigationOptions(customInvs);
-          }
-        }
-        if (md.procedures) {
-          const procVal = Array.isArray(md.procedures) ? md.procedures.join(', ') : md.procedures;
-          if (typeof procVal === 'string') setProcedures(procVal);
-        }
-        if (md.procedurePlanned) setProcedurePlanned(md.procedurePlanned);
-        // procedureParams removed
-        // doctor's personal notes removed from builder
-      }
+
+      // Always clear+set every field so switching templates never leaves stale values behind
+      setDiagnosis(md?.diagnosis || '');
+      setChiefComplaints(md?.chiefComplaints || '');
+
+      setPastHistory(md?.histories?.pastHistory || '');
+      setMedicationHistory(md?.histories?.medicationHistory || '');
+      setMenstrualHistory(md?.histories?.menstrualHistory || '');
+
+      setExObjective(md?.examination?.generalAppearance || '');
+      const der = md?.examination?.dermatology;
+      setExSkinType(der?.skinType || '');
+      setExMorphology(new Set<string>(der?.morphology ?? []));
+      setExDistribution(new Set<string>(der?.distribution ?? []));
+      setExAcneSeverity(der?.acneSeverity || '');
+      setExItchScore(der?.itchScore != null ? String(der.itchScore) : '');
+      setSkinConcerns(new Set<string>(der?.skinConcerns ?? []));
+
+      setFamilyHistoryDM(md?.familyHistory?.dm ?? false);
+      setFamilyHistoryHTN(md?.familyHistory?.htn ?? false);
+      setFamilyHistoryThyroid(md?.familyHistory?.thyroid ?? false);
+      setFamilyHistoryOthers(md?.familyHistory?.others || '');
+
+      const invs: string[] = Array.isArray(md?.investigations)
+        ? md.investigations
+        : typeof md?.investigations === 'string'
+          ? md.investigations.split(',').map((s: string) => s.trim()).filter(Boolean)
+          : [];
+      setInvestigations(invs);
+      setCustomInvestigationOptions(invs.filter((inv: string) => !defaultInvestigationOptions.includes(inv)));
+
+      const procVal = md?.procedures
+        ? (Array.isArray(md.procedures) ? md.procedures.join(', ') : String(md.procedures))
+        : '';
+      setProcedures(procVal);
+      setProcedurePlanned(md?.procedurePlanned || '');
       try { void apiClient.recordTemplateUsage?.(tpl?.id, { variant: undefined }).catch(() => {}); } catch {}
     } catch {}
   };

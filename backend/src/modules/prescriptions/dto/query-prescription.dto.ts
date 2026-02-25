@@ -239,6 +239,7 @@ export class PrescriptionTemplateQueryDto {
   specialty?: string;
 
   @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
   isPublic?: boolean;
 
