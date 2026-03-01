@@ -229,6 +229,15 @@ export class PrescriptionsController {
     return this.prescriptionsService.findAllPrescriptionTemplates(query, req.user.branchId);
   }
 
+  @Delete('templates/:templateId')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
+  deletePrescriptionTemplate(
+    @Param('templateId') templateId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.prescriptionsService.deletePrescriptionTemplate(templateId, req.user.branchId);
+  }
+
   // Template versioning & approvals
   @Get('templates/:templateId/versions')
   listTemplateVersions(

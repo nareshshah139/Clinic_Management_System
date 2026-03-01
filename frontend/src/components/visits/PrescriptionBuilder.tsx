@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, ChevronUp, Languages, X, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, Languages, X, Plus, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
@@ -2298,18 +2299,41 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     });
   }, [templates, defaultDermTemplates]);
 
-// Prevent redundant template selection state updates that can recurse during ref detaches
-const handleTemplateChange = React.useCallback(
-  (v: string) => setSelectedTemplateId((prev) => (prev === v ? prev : v)),
-  []
-);
+  const [deletingTemplateId, setDeletingTemplateId] = useState<string | null>(null);
 
-// Ensure the select value always exists in options to avoid Radix ref churn
-  const templateSelectValue = useMemo(() => {
-    if (!templatesReady) return 'none';
-    if (allTemplates.some((t) => t.id === selectedTemplateId)) return selectedTemplateId;
-    return 'none';
-  }, [allTemplates, selectedTemplateId, templatesReady]);
+  const handleTemplateSelect = React.useCallback(
+    (entry: { id: string; source: string; tpl: any }) => {
+      if (entry.id === 'none') {
+        setSelectedTemplateId('none');
+        return;
+      }
+      setSelectedTemplateId(entry.id);
+      applyTemplateToBuilder(entry.tpl);
+    },
+    [applyTemplateToBuilder]
+  );
+
+  const handleDeleteTemplate = React.useCallback(async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (deletingTemplateId) return;
+    setDeletingTemplateId(templateId);
+    try {
+      await apiClient.deletePrescriptionTemplate(templateId);
+      toast({ variant: 'success', title: 'Template deleted' });
+      if (selectedTemplateId === templateId) setSelectedTemplateId('none');
+      await loadTemplates();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Failed to delete template', description: err?.message || 'Unknown error' });
+    } finally {
+      setDeletingTemplateId(null);
+    }
+  }, [deletingTemplateId, selectedTemplateId, toast, loadTemplates]);
+
+  const selectedTemplateName = useMemo(() => {
+    const entry = allTemplates.find((t) => t.id === selectedTemplateId);
+    return entry?.name || 'Select a template';
+  }, [allTemplates, selectedTemplateId]);
 
   const persistLocalFieldTemplate = useCallback(async (name: string) => {
     // Save as server-side template with no items
@@ -3440,26 +3464,49 @@ const handleTemplateChange = React.useCallback(
               <div className="flex flex-wrap gap-2 items-end">
                 <div className="min-w-[240px]">
                   <label className="text-xs text-gray-600">Templates</label>
-                  <Select value={templateSelectValue} onValueChange={handleTemplateChange} disabled={!templatesReady || loadingTemplates}>
-                    <SelectTrigger><SelectValue placeholder={loadingTemplates ? 'Loading templates…' : 'Select a template'} /></SelectTrigger>
-                    <SelectContent>
-                      {allTemplates.map((t) => (
-                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild disabled={!templatesReady || loadingTemplates}>
+                      <Button variant="outline" className="w-full justify-between font-normal">
+                        <span className="truncate">{loadingTemplates ? 'Loading templates…' : selectedTemplateName}</span>
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent className="min-w-[240px] max-h-[320px] overflow-y-auto" align="start">
+                      <DropdownMenuItem onClick={() => handleTemplateSelect({ id: 'none', source: 'none', tpl: { items: [], metadata: {} } })}>
+                        <span className="text-muted-foreground">No template</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      {allTemplates.filter(t => t.source === 'server').length > 0 && (
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">Saved templates</DropdownMenuLabel>
+                      )}
+                      {allTemplates.filter(t => t.source === 'server').map((t) => (
+                        <DropdownMenuItem key={t.id} className="flex items-center justify-between gap-2 pr-1" onSelect={() => handleTemplateSelect(t)}>
+                          <span className="truncate flex-1">{t.name}</span>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            onClick={(e) => handleDeleteTemplate(t.id, e)}
+                            disabled={deletingTemplateId === t.id}
+                            title="Delete template"
+                          >
+                            <Trash2 className={`h-3.5 w-3.5 ${deletingTemplateId === t.id ? 'animate-pulse' : ''}`} />
+                          </button>
+                        </DropdownMenuItem>
                       ))}
-                    </SelectContent>
-                  </Select>
+                      {allTemplates.filter(t => t.source === 'default').length > 0 && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">Default templates</DropdownMenuLabel>
+                        </>
+                      )}
+                      {allTemplates.filter(t => t.source === 'default').map((t) => (
+                        <DropdownMenuItem key={t.id} onSelect={() => handleTemplateSelect(t)}>
+                          {t.name}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const entry = allTemplates.find(t => t.id === selectedTemplateId);
-                    if (entry) applyTemplateToBuilder(entry.tpl);
-                  }}
-                  disabled={!selectedTemplateId || selectedTemplateId === 'none'}
-                >
-                  Apply
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => void loadTemplates()} disabled={loadingTemplates}>Refresh</Button>
                 <Button variant="ghost" size="sm" onClick={undo}>Undo</Button>
                 <Button variant="ghost" size="sm" onClick={redo}>Redo</Button>

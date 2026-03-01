@@ -527,6 +527,10 @@ export class ApiClient {
     return this.post('/prescriptions/templates', data, opts);
   }
 
+  async deletePrescriptionTemplate(templateId: string) {
+    return this.delete(`/prescriptions/templates/${templateId}`);
+  }
+
   async recordTemplateUsage(templateId: string, data: { prescriptionId?: string; variant?: string; alignmentDx?: unknown }) {
     return this.post(`/prescriptions/templates/${templateId}/usage`, data);
   }

@@ -1299,6 +1299,32 @@ export class PrescriptionsService {
     };
   }
 
+  async deletePrescriptionTemplate(templateId: string, branchId: string) {
+    const hasModel = (this.prisma as any).prescriptionTemplate &&
+      typeof (this.prisma as any).prescriptionTemplate.findUnique === 'function';
+    if (!hasModel) {
+      throw new NotFoundException('Template feature not available');
+    }
+
+    const template = await this.prisma.prescriptionTemplate.findUnique({
+      where: { id: templateId },
+    });
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    if (template.branchId !== branchId) {
+      throw new BadRequestException('Template does not belong to your branch');
+    }
+
+    await this.prisma.prescriptionTemplate.delete({
+      where: { id: templateId },
+    });
+
+    return { message: 'Template deleted successfully' };
+  }
+
   // Private helper methods
   private async enrichItemsWithDrugPricing(items: any[], branchId: string): Promise<any[]> {
     if (!Array.isArray(items) || items.length === 0) return items;
