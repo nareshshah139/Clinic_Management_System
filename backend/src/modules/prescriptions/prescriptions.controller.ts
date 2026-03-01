@@ -356,7 +356,7 @@ export class PrescriptionsController {
   sharePrescription(
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
-    @Body() body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string },
+    @Body() body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
   ) {
     return this.prescriptionsService.sharePrescription(id, req.user.branchId, req.user.id, body);
   }

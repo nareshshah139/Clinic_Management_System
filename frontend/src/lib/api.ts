@@ -591,7 +591,7 @@ export class ApiClient {
     return this.post<{ fileUrl: string; fileName: string; fileSize: number }>(`/prescriptions/${id}/pdf`, data || {});
   }
 
-  async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }) {
+  async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean }) {
     return this.post(`/prescriptions/${id}/share`, data);
   }
 

@@ -1636,35 +1636,30 @@ export class PrescriptionsService {
     return { id };
   }
 
-  // SERVER-SIDE PDF RENDERING (basic pdfkit layout)
-  async generatePrescriptionPdf(
+  private async buildPrescriptionPdfBuffer(
     prescriptionId: string,
     branchId: string,
-    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
-  ) {
+    body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+  ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, visit: { patient: { branchId } } },
       include: { visit: { include: { patient: true, doctor: true } } },
     });
     if (!prescription) throw new NotFoundException('Prescription not found');
 
-    const profile = body?.profileId ? await this.prisma.printerProfile.findFirst({ where: { id: body.profileId, branchId } }) : null;
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     const finish = new Promise<Buffer>((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
-    // Build render context & optional macros
     const ctx = this.buildRenderContext(prescription);
-    // Header
     doc.fontSize(16).text(this.renderTemplate('Prescription', ctx), { align: 'center' });
     doc.moveDown(0.5);
     doc.fontSize(10).text(this.renderTemplate('Patient: {{ patient.name }}', ctx));
     doc.text(this.renderTemplate('Doctor: {{ doctor.firstName }} {{ doctor.lastName }}', ctx));
     doc.moveDown();
 
-    // Items
     try {
       const items = JSON.parse(prescription.items as any) as any[];
       items.forEach((it, idx) => {
@@ -1676,28 +1671,46 @@ export class PrescriptionsService {
 
     doc.end();
     const pdfBuffer = await finish;
+    return { pdfBuffer, fileName: `prescription-${prescriptionId}.pdf` };
+  }
+
+  // SERVER-SIDE PDF RENDERING (basic pdfkit layout)
+  async generatePrescriptionPdf(
+    prescriptionId: string,
+    branchId: string,
+    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+  ) {
+    const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body);
     const base64 = pdfBuffer.toString('base64');
-    // Record event
     await this.prisma.prescriptionPrintEvent.create({
       data: { prescriptionId, eventType: 'PDF_DOWNLOAD', channel: 'SERVER', count: 1 },
     });
-    return { fileUrl: `data:application/pdf;base64,${base64}`, fileName: `prescription-${prescriptionId}.pdf`, fileSize: pdfBuffer.length };
+    return { fileUrl: `data:application/pdf;base64,${base64}`, fileName, fileSize: pdfBuffer.length };
   }
 
   async sharePrescription(
     prescriptionId: string,
     branchId: string,
     userId: string,
-    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string },
+    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
   ) {
-    // Minimal: send via configured providers if available
     if (body.channel === 'EMAIL') {
       await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached/generated.' });
     } else if (body.channel === 'WHATSAPP') {
-      await this.notifications.sendWhatsApp({ toPhoneE164: body.to, text: body.message || 'Your prescription is ready.' });
+      if (body.includePdf) {
+        const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId);
+        await this.notifications.sendWhatsAppDocument({
+          toPhoneE164: body.to,
+          pdfBuffer,
+          fileName,
+          caption: body.message || 'Your prescription is ready.',
+        });
+      } else {
+        await this.notifications.sendWhatsApp({ toPhoneE164: body.to, text: body.message || 'Your prescription is ready.' });
+      }
     }
     await this.prisma.prescriptionPrintEvent.create({
-      data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message }) : null },
+      data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message, includePdf: !!body.includePdf }) : null },
     });
     return { status: 'QUEUED', channel: body.channel, to: body.to };
   }
