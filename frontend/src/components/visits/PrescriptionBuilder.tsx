@@ -4935,7 +4935,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <Button variant="secondary" onClick={async () => {
                     try {
                       const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) return;
+                      if (!prescId) {
+                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before sharing.' });
+                        return;
+                      }
                       await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
                       toast({ title: 'Email sent', description: 'Prescription email queued.' });
                     } catch (e) {
@@ -4945,7 +4948,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <Button variant="secondary" onClick={async () => {
                     try {
                       const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) return;
+                      if (!prescId) {
+                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before sharing.' });
+                        return;
+                      }
                       const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
                       if (!phone) {
                         toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
@@ -5093,7 +5099,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <Button className="col-span-1" onClick={async () => {
                     try {
                       const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) return;
+                      if (!prescId) {
+                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before downloading.' });
+                        return;
+                      }
                       const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
                       try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
                       const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);

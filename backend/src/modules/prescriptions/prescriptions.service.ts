@@ -1318,8 +1318,22 @@ export class PrescriptionsService {
       throw new BadRequestException('Template does not belong to your branch');
     }
 
-    await this.prisma.prescriptionTemplate.delete({
-      where: { id: templateId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.templateUsage.deleteMany({ where: { templateId } });
+
+      const versions = await tx.prescriptionTemplateVersion.findMany({
+        where: { templateId },
+        select: { id: true },
+      });
+      if (versions.length > 0) {
+        const versionIds = versions.map((v) => v.id);
+        await tx.templateVersionApproval.deleteMany({ where: { versionId: { in: versionIds } } });
+        await tx.prescriptionTemplateVersion.deleteMany({ where: { templateId } });
+      }
+
+      await tx.layoutVariant.updateMany({ where: { templateId }, data: { templateId: null } });
+
+      await tx.prescriptionTemplate.delete({ where: { id: templateId } });
     });
 
     return { message: 'Template deleted successfully' };
