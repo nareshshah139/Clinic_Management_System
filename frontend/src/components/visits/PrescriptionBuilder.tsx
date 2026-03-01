@@ -4614,7 +4614,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
 
                 {/* Histories */}
-                {((pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length)) && (
+                {!!(pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length) && (
                   <div className="py-3 text-sm">
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
@@ -4624,7 +4624,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 )}
 
                 {/* Family History */}
-                {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length) && (
+                {(familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || !!familyHistoryOthers?.trim()?.length) && (
                   <div className="py-3 text-sm">
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">Family History:</span>
@@ -5053,12 +5053,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       if (!prescId) return;
                       const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
                       try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                      const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
+                      let blobUrl: string;
+                      if (base64Match) {
+                        const raw = atob(base64Match[1]);
+                        const bytes = new Uint8Array(raw.length);
+                        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+                        const blob = new Blob([bytes], { type: 'application/pdf' });
+                        blobUrl = URL.createObjectURL(blob);
+                      } else {
+                        blobUrl = fileUrl;
+                      }
                       const a = document.createElement('a');
-                      a.href = fileUrl;
+                      a.href = blobUrl;
                       a.download = fileName || 'prescription.pdf';
                       document.body.appendChild(a);
                       a.click();
                       a.remove();
+                      if (base64Match) URL.revokeObjectURL(blobUrl);
                     } catch (e) {
                       console.error('PDF generation failed', e);
                       toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
