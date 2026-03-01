@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronDown, ChevronUp, Languages, X, Plus, Trash2 } from 'lucide-react';
@@ -569,6 +570,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
   const createdPrescriptionIdRef = useRef<string | null>(null);
+  const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
+  const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -1029,6 +1032,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return parts.join(' / ');
   }, [patientAgeYears, patientGender]);
   const todayStr = useMemo(() => new Date().toLocaleDateString(), []);
+  const hasSavedPrescription = !!(visitData?.prescriptionId || savedPrescriptionId);
 
   const historyLine = useMemo(() => {
     const parts: string[] = [];
@@ -2036,9 +2040,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
       createdPrescriptionIdRef.current = res?.id || null;
+      setSavedPrescriptionId(res?.id || null);
       onCreated?.(res?.id);
 
-      if (!standalone) {
+      const skipCleanup = skipPostSaveCleanupRef.current;
+      skipPostSaveCleanupRef.current = false;
+
+      if (!skipCleanup && !standalone) {
         setConfirmPharmacy({
           open: true,
           prescriptionId: res?.id || '',
@@ -2054,10 +2062,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: `${validItems.length} medications recorded for the patient.`,
       });
 
-      // Reset form
-      setItems([]);
-      setDiagnosis('');
-      setFollowUpInstructions('');
+      if (!skipCleanup) {
+        setItems([]);
+        setDiagnosis('');
+        setFollowUpInstructions('');
+      }
     } catch (e: any) {
       const { title, description, variant } = mapCreateErrorToToast(e);
       toast({
@@ -4930,78 +4939,98 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </label>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
+                  {!hasSavedPrescription && (
+                    <Button className="col-span-2 bg-green-600 hover:bg-green-700 text-white" disabled={!canCreate} onClick={async () => {
+                      skipPostSaveCleanupRef.current = true;
+                      await create();
+                    }}>
+                      {canCreate ? 'Save Prescription' : 'Add medications to save'}
+                    </Button>
+                  )}
                   <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
                   <Button variant="outline" onClick={() => void openInteractions()}>Interactions</Button>
-                  <Button variant="secondary" onClick={async () => {
-                    try {
-                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) {
-                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before sharing.' });
-                        return;
-                      }
-                      await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
-                      toast({ title: 'Email sent', description: 'Prescription email queued.' });
-                    } catch (e) {
-                      toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
-                    }
-                  }}>Email</Button>
-                  <Button variant="secondary" onClick={async () => {
-                    try {
-                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) {
-                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before sharing.' });
-                        return;
-                      }
-                      const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
-                      if (!phone) {
-                        toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
-                        return;
-                      }
-                      toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
+                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                            try {
+                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
+                              if (!prescId) return;
+                              await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
+                              toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                            } catch (e) {
+                              toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                            }
+                          }}>Email</Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
+                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                            try {
+                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
+                              if (!prescId) return;
+                              const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
+                              if (!phone) {
+                                toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
+                                return;
+                              }
+                              toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
 
-                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
-                      try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
+                              const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
+                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
-                      const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
-                      let pdfBlob: Blob;
-                      if (base64Match) {
-                        const raw = atob(base64Match[1]);
-                        const bytes = new Uint8Array(raw.length);
-                        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-                        pdfBlob = new Blob([bytes], { type: 'application/pdf' });
-                      } else {
-                        const res = await fetch(fileUrl);
-                        pdfBlob = await res.blob();
-                      }
+                              const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
+                              let pdfBlob: Blob;
+                              if (base64Match) {
+                                const raw = atob(base64Match[1]);
+                                const bytes = new Uint8Array(raw.length);
+                                for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+                                pdfBlob = new Blob([bytes], { type: 'application/pdf' });
+                              } else {
+                                const res = await fetch(fileUrl);
+                                pdfBlob = await res.blob();
+                              }
 
-                      const pdfFile = new File([pdfBlob], fileName || 'prescription.pdf', { type: 'application/pdf' });
-                      const canShareFile = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] });
+                              const pdfFile = new File([pdfBlob], fileName || 'prescription.pdf', { type: 'application/pdf' });
+                              const canShareFile = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] });
 
-                      if (canShareFile) {
-                        await navigator.share({ files: [pdfFile], title: 'Prescription', text: 'Your prescription is ready.' });
-                        toast({ title: 'Shared', description: 'Prescription shared successfully.' });
-                      } else {
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(pdfBlob);
-                        a.download = fileName || 'prescription.pdf';
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        URL.revokeObjectURL(a.href);
+                              if (canShareFile) {
+                                await navigator.share({ files: [pdfFile], title: 'Prescription', text: 'Your prescription is ready.' });
+                                toast({ title: 'Shared', description: 'Prescription shared successfully.' });
+                              } else {
+                                const a = document.createElement('a');
+                                a.href = URL.createObjectURL(pdfBlob);
+                                a.download = fileName || 'prescription.pdf';
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                URL.revokeObjectURL(a.href);
 
-                        const digits = phone.replace(/[^\d]/g, '');
-                        window.open(`https://wa.me/${digits}?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank');
-                        toast({ title: 'PDF downloaded', description: 'Attach the downloaded PDF in the WhatsApp chat that just opened.' });
-                      }
-                    } catch (e: any) {
-                      if (e?.name === 'AbortError') return;
-                      console.error('WhatsApp share failed', e);
-                      toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not share prescription PDF.' });
-                    }
-                  }}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
-                    PDF via WhatsApp
-                  </Button>
+                                const digits = phone.replace(/[^\d]/g, '');
+                                window.open(`https://wa.me/${digits}?text=${encodeURIComponent('Hi, please find your prescription attached.')}`, '_blank');
+                                toast({ title: 'PDF downloaded', description: 'Attach the downloaded PDF in the WhatsApp chat that just opened.' });
+                              }
+                            } catch (e: any) {
+                              if (e?.name === 'AbortError') return;
+                              console.error('WhatsApp share failed', e);
+                              toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'Could not share prescription PDF.' });
+                            }
+                          }}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="mr-1"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                            PDF via WhatsApp
+                          </Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
+                    </Tooltip>
+                  </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
                   <Button className="col-span-1" onClick={() => {
                     try {
@@ -5096,38 +5125,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       toast({ variant: 'destructive', title: 'Print failed', description: 'Could not open print dialog.' });
                     }
                   }}>Print</Button>
-                  <Button className="col-span-1" onClick={async () => {
-                    try {
-                      const prescId = visitData?.prescriptionId || createdPrescriptionIdRef?.current || undefined;
-                      if (!prescId) {
-                        toast({ variant: 'destructive', title: 'Not saved', description: 'Please save the prescription first before downloading.' });
-                        return;
-                      }
-                      const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
-                      try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
-                      const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
-                      let blobUrl: string;
-                      if (base64Match) {
-                        const raw = atob(base64Match[1]);
-                        const bytes = new Uint8Array(raw.length);
-                        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-                        const blob = new Blob([bytes], { type: 'application/pdf' });
-                        blobUrl = URL.createObjectURL(blob);
-                      } else {
-                        blobUrl = fileUrl;
-                      }
-                      const a = document.createElement('a');
-                      a.href = blobUrl;
-                      a.download = fileName || 'prescription.pdf';
-                      document.body.appendChild(a);
-                      a.click();
-                      a.remove();
-                      if (base64Match) URL.revokeObjectURL(blobUrl);
-                    } catch (e) {
-                      console.error('PDF generation failed', e);
-                      toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
-                    }
-                  }}>Download PDF</Button>
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={!hasSavedPrescription ? 'cursor-not-allowed col-span-1' : 'col-span-1'}>
+                          <Button className="w-full" disabled={!hasSavedPrescription} style={!hasSavedPrescription ? { pointerEvents: 'none', opacity: 0.5 } : undefined} onClick={async () => {
+                            try {
+                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
+                              if (!prescId) return;
+                              const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
+                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                              const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
+                              let blobUrl: string;
+                              if (base64Match) {
+                                const raw = atob(base64Match[1]);
+                                const bytes = new Uint8Array(raw.length);
+                                for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+                                const blob = new Blob([bytes], { type: 'application/pdf' });
+                                blobUrl = URL.createObjectURL(blob);
+                              } else {
+                                blobUrl = fileUrl;
+                              }
+                              const a = document.createElement('a');
+                              a.href = blobUrl;
+                              a.download = fileName || 'prescription.pdf';
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                              if (base64Match) URL.revokeObjectURL(blobUrl);
+                            } catch (e) {
+                              console.error('PDF generation failed', e);
+                              toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
+                            }
+                          }}>Download PDF</Button>
+                        </span>
+                      </TooltipTrigger>
+                      {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
+                    </Tooltip>
+                  </TooltipProvider>
             </div>
             </div>
             </div>
