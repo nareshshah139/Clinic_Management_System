@@ -90,8 +90,8 @@ export class PrescriptionItemDto {
   @IsEnum(DosageUnit)
   dosageUnit: DosageUnit;
 
-  @IsEnum(Frequency)
-  frequency: Frequency;
+  @IsString()
+  frequency: string;
 
   @IsNumber()
   @Min(1)
@@ -366,8 +366,8 @@ export class PrescriptionTemplateItemDto {
   dosageUnit?: DosageUnit;
 
   @IsOptional()
-  @IsEnum(Frequency)
-  frequency?: Frequency;
+  @IsString()
+  frequency?: string;
 
   @IsOptional()
   @IsNumber()

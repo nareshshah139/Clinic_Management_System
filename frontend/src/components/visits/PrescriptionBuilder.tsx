@@ -17,7 +17,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferTimingFromDosePattern } from '@/lib/frequency';
+import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS } from '@/lib/frequency';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -25,18 +25,7 @@ type Language = 'EN' | 'TE' | 'HI';
 
 type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | 'SPRAY' | 'PATCH' | 'INJECTION';
 
-type Frequency =
-  | 'ONCE_DAILY'
-  | 'TWICE_DAILY'
-  | 'THREE_TIMES_DAILY'
-  | 'FOUR_TIMES_DAILY'
-  | 'EVERY_4_HOURS'
-  | 'EVERY_6_HOURS'
-  | 'EVERY_8_HOURS'
-  | 'EVERY_12_HOURS'
-  | 'AS_NEEDED'
-  | 'WEEKLY'
-  | 'MONTHLY';
+type Frequency = string;
 
 type DurationUnit = 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS';
 
@@ -173,6 +162,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
   const pendingFocusRef = useRef<number | null>(null);
+  const [frequencyOptions, setFrequencyOptions] = useState<string[]>(getAllFrequencyOptions());
+  const [customFreqInput, setCustomFreqInput] = useState('');
+  const [customFreqRowIdx, setCustomFreqRowIdx] = useState<number | null>(null);
+  const [showCustomFreqDialog, setShowCustomFreqDialog] = useState(false);
+  const handleAddCustomFrequency = () => {
+    const val = customFreqInput.trim().toUpperCase().replace(/\s+/g, '_');
+    if (!val) return;
+    const updated = addCustomFrequency(val);
+    setFrequencyOptions(getAllFrequencyOptions());
+    if (customFreqRowIdx !== null) {
+      updateItem(customFreqRowIdx, { frequency: val });
+    }
+    setCustomFreqInput('');
+    setCustomFreqRowIdx(null);
+    setShowCustomFreqDialog(false);
+  };
   const handleCreateDrug = async () => {
     try {
       const payload: any = {
@@ -1579,11 +1584,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const normalizeFrequency = (raw: any, pattern?: string): Frequency => {
-    const upper = typeof raw === 'string' ? raw.toUpperCase() : '';
-    const fromList = (FREQUENCY_OPTIONS as readonly string[]).find((f) => f === upper);
-    if (fromList) return fromList as Frequency;
+    const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
+    if (upper) {
+      const allOpts = getAllFrequencyOptions();
+      if (allOpts.includes(upper)) return upper;
+    }
     const inferred = pattern ? inferFrequencyFromDosePattern(pattern) : null;
-    return (inferred as Frequency) || 'ONCE_DAILY';
+    if (inferred) return inferred;
+    if (upper) return upper;
+    return 'ONCE_DAILY';
   };
 
   const normalizeDurationUnit = (raw: any): DurationUnit => {
@@ -1603,7 +1612,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     const dosePattern = raw?.dosePattern || raw?.dose_pattern || '';
     const durationUnit = normalizeDurationUnit(raw?.durationUnit);
     const frequency = normalizeFrequency(raw?.frequency, dosePattern);
-    const timing = raw?.timing || inferTimingFromDosePattern(dosePattern || '') || '';
+    const rawTiming = raw?.timing || inferTimingFromDosePattern(dosePattern || '') || '';
+    const allowedTimings = getTimingOptionsForFrequency(frequency);
+    const timing = rawTiming && allowedTimings.includes(rawTiming) ? rawTiming : (raw?.timing || '');
     const dosageUnitRaw = typeof raw?.dosageUnit === 'string' ? raw.dosageUnit.toUpperCase() : '';
     const dosageUnit: DosageUnit = (['MG','ML','MCG','IU','TABLET','CAPSULE','DROP','SPRAY','PATCH','INJECTION'] as const).includes(dosageUnitRaw as DosageUnit)
       ? (dosageUnitRaw as DosageUnit)
@@ -3606,6 +3617,33 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </DialogContent>
             </Dialog>
 
+            {/* Custom Frequency Dialog */}
+            <Dialog open={showCustomFreqDialog} onOpenChange={setShowCustomFreqDialog}>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Add Custom Frequency</DialogTitle>
+                  <DialogDescription>Enter a custom frequency option. It will be saved for future use.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-600">Frequency</label>
+                    <Input
+                      value={customFreqInput}
+                      onChange={(e) => setCustomFreqInput(e.target.value)}
+                      placeholder="e.g., ALTERNATE DAYS, TWICE WEEKLY"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomFrequency(); }}
+                      autoFocus
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">Spaces will be converted to underscores. Stored in uppercase.</p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowCustomFreqDialog(false)}>Cancel</Button>
+                  <Button onClick={handleAddCustomFrequency} disabled={!customFreqInput.trim()}>Add & Apply</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
             {/* Chief Complaints - dedicated card */}
             <CollapsibleSection 
               title="Chief Complaints" 
@@ -3937,10 +3975,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         variant="ghost"
                         onClick={() => {
                           const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
+                          const presetFreq = p.frequency ?? (p.pattern ? inferFrequencyFromDosePattern(p.pattern) ?? 'ONCE_DAILY' : undefined);
+                          const rawTiming = p.pattern ? inferTimingFromDosePattern(p.pattern) || undefined : undefined;
+                          const allowed = presetFreq ? getTimingOptionsForFrequency(presetFreq) : TIMING_OPTIONS;
+                          const timing = rawTiming && allowed.includes(rawTiming) ? rawTiming : undefined;
                           applyPresetToRow(target, {
                             dosePattern: p.pattern,
-                            frequency: p.frequency ?? (p.pattern ? inferFrequencyFromDosePattern(p.pattern) ?? 'ONCE_DAILY' : undefined),
-                            timing: p.pattern ? inferTimingFromDosePattern(p.pattern) || undefined : undefined,
+                            frequency: presetFreq,
+                            timing,
                           });
                         }}
                       >
@@ -4038,8 +4080,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
                                 if (inferred) patch.frequency = inferred;
-                                // Only set timing if empty
-                                if (!it.timing && inferredTiming) patch.timing = inferredTiming;
+                                const effectiveFreq = inferred || it.frequency;
+                                const allowedTimings = getTimingOptionsForFrequency(effectiveFreq);
+                                if (!it.timing && inferredTiming && allowedTimings.includes(inferredTiming)) {
+                                  patch.timing = inferredTiming;
+                                }
                                 updateItem(idx, patch);
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
@@ -4049,12 +4094,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <Select value={it.frequency} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: Frequency) => updateItem(idx, { frequency: v })}>
+                              <Select value={it.frequency} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: Frequency) => {
+                                if (v === '__CUSTOM__') {
+                                  setCustomFreqRowIdx(idx);
+                                  setCustomFreqInput('');
+                                  setShowCustomFreqDialog(true);
+                                  return;
+                                }
+                                const patch: Partial<PrescriptionItemForm> = { frequency: v };
+                                const allowed = getTimingOptionsForFrequency(v);
+                                if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
+                                updateItem(idx, patch);
+                              }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {FREQUENCY_OPTIONS.map(f => (
-                                    <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
+                                  {frequencyOptions.map(f => (
+                                    <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom frequency...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -4063,7 +4120,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => updateItem(idx, { timing: v })}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
-                                {['AM','PM','After Breakfast','After Lunch','After Dinner','Before Meals','QHS','HS','With Food','Empty Stomach'].map(t => (
+                                {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -5362,7 +5419,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
                                 if (inferred) patch.frequency = inferred;
-                                if (!it.timing && inferredTiming) patch.timing = inferredTiming;
+                                const effectiveFreq = inferred || it.frequency;
+                                const allowedTimings = getTimingOptionsForFrequency(effectiveFreq);
+                                if (!it.timing && inferredTiming && allowedTimings.includes(inferredTiming)) {
+                                  patch.timing = inferredTiming;
+                                }
                                 updateNewTplItem(idx, patch);
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
@@ -5372,12 +5433,24 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   ))}
                                 </SelectContent>
                               </Select>
-                              <Select value={it.frequency} onValueChange={(v: Frequency) => updateNewTplItem(idx, { frequency: v })}>
+                              <Select value={it.frequency} onValueChange={(v: Frequency) => {
+                                if (v === '__CUSTOM__') {
+                                  setCustomFreqRowIdx(idx);
+                                  setCustomFreqInput('');
+                                  setShowCustomFreqDialog(true);
+                                  return;
+                                }
+                                const patch: Partial<PrescriptionItemForm> = { frequency: v };
+                                const allowed = getTimingOptionsForFrequency(v);
+                                if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
+                                updateNewTplItem(idx, patch);
+                              }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {FREQUENCY_OPTIONS.map(f => (
-                                    <SelectItem key={f} value={f as Frequency}>{f.replaceAll('_',' ')}</SelectItem>
+                                  {frequencyOptions.map(f => (
+                                    <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom frequency...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -5386,7 +5459,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             <Select value={it.timing || ''} onValueChange={(v: string) => updateNewTplItem(idx, { timing: v })}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
-                                {['AM','PM','After Breakfast','After Lunch','After Dinner','Before Meals','QHS','HS','With Food','Empty Stomach'].map(t => (
+                                {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
                               </SelectContent>

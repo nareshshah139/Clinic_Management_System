@@ -1,6 +1,6 @@
 // Centralized frequency and dose pattern options for reuse across UI modules
 
-export const FREQUENCY_OPTIONS = [
+export const DEFAULT_FREQUENCY_OPTIONS = [
   'ONCE_DAILY',
   'TWICE_DAILY',
   'THREE_TIMES_DAILY',
@@ -14,7 +14,73 @@ export const FREQUENCY_OPTIONS = [
   'MONTHLY',
 ] as const;
 
-export type FrequencyOption = typeof FREQUENCY_OPTIONS[number];
+/** @deprecated Use DEFAULT_FREQUENCY_OPTIONS + custom frequencies via getFrequencyOptions() */
+export const FREQUENCY_OPTIONS = DEFAULT_FREQUENCY_OPTIONS;
+
+export type FrequencyOption = typeof DEFAULT_FREQUENCY_OPTIONS[number] | string;
+
+const CUSTOM_FREQ_STORAGE_KEY = 'clinic_custom_frequencies';
+
+export function getCustomFrequencies(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const stored = localStorage.getItem(CUSTOM_FREQ_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addCustomFrequency(freq: string): string[] {
+  const normalized = freq.trim().toUpperCase().replace(/\s+/g, '_');
+  if (!normalized) return getCustomFrequencies();
+  const existing = getCustomFrequencies();
+  if (
+    (DEFAULT_FREQUENCY_OPTIONS as readonly string[]).includes(normalized) ||
+    existing.includes(normalized)
+  ) {
+    return existing;
+  }
+  const updated = [...existing, normalized];
+  localStorage.setItem(CUSTOM_FREQ_STORAGE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function getAllFrequencyOptions(): string[] {
+  return [...DEFAULT_FREQUENCY_OPTIONS, ...getCustomFrequencies()];
+}
+
+export function formatFrequency(f: string): string {
+  return f.replaceAll('_', ' ');
+}
+
+const ALL_TIMING_OPTIONS = [
+  'AM', 'PM',
+  'After Breakfast', 'After Lunch', 'After Dinner',
+  'Before Meals', 'QHS', 'HS', 'With Food', 'Empty Stomach',
+] as const;
+
+/**
+ * Returns appropriate timing/when options for a given frequency.
+ * - ONCE_DAILY / TWICE_DAILY / WEEKLY / MONTHLY: no AM/PM (those imply
+ *   a full-day schedule, not a specific half of day)
+ * - Hourly intervals: all options
+ * - AS_NEEDED: all options
+ */
+export function getTimingOptionsForFrequency(frequency: string): string[] {
+  const f = (frequency || '').toUpperCase();
+  switch (f) {
+    case 'ONCE_DAILY':
+    case 'TWICE_DAILY':
+    case 'WEEKLY':
+    case 'MONTHLY':
+      return ALL_TIMING_OPTIONS.filter((t) => t !== 'AM' && t !== 'PM') as unknown as string[];
+    default:
+      return [...ALL_TIMING_OPTIONS];
+  }
+}
+
+export const TIMING_OPTIONS = [...ALL_TIMING_OPTIONS] as string[];
 
 export const DOSE_PATTERN_OPTIONS = [
   '1-0-0',
