@@ -19,31 +19,52 @@ export const FREQUENCY_OPTIONS = DEFAULT_FREQUENCY_OPTIONS;
 
 export type FrequencyOption = typeof DEFAULT_FREQUENCY_OPTIONS[number] | string;
 
-const CUSTOM_FREQ_STORAGE_KEY = 'clinic_custom_frequencies';
+// ---------------------------------------------------------------------------
+// Generic localStorage-backed custom option helpers
+// ---------------------------------------------------------------------------
 
-export function getCustomFrequencies(): string[] {
+function getCustomOptions(storageKey: string): string[] {
   if (typeof window === 'undefined') return [];
   try {
-    const stored = localStorage.getItem(CUSTOM_FREQ_STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
   }
 }
 
-export function addCustomFrequency(freq: string): string[] {
-  const normalized = freq.trim().toUpperCase().replace(/\s+/g, '_');
-  if (!normalized) return getCustomFrequencies();
-  const existing = getCustomFrequencies();
+function addCustomOption(
+  storageKey: string,
+  value: string,
+  defaults: readonly string[],
+  normalize: (v: string) => string = (v) => v.trim().toUpperCase().replace(/\s+/g, '_'),
+): string[] {
+  const normalized = normalize(value);
+  if (!normalized) return getCustomOptions(storageKey);
+  const existing = getCustomOptions(storageKey);
   if (
-    (DEFAULT_FREQUENCY_OPTIONS as readonly string[]).includes(normalized) ||
+    (defaults as readonly string[]).includes(normalized) ||
     existing.includes(normalized)
   ) {
     return existing;
   }
   const updated = [...existing, normalized];
-  localStorage.setItem(CUSTOM_FREQ_STORAGE_KEY, JSON.stringify(updated));
+  localStorage.setItem(storageKey, JSON.stringify(updated));
   return updated;
+}
+
+// ---------------------------------------------------------------------------
+// Frequency
+// ---------------------------------------------------------------------------
+
+const CUSTOM_FREQ_STORAGE_KEY = 'clinic_custom_frequencies';
+
+export function getCustomFrequencies(): string[] {
+  return getCustomOptions(CUSTOM_FREQ_STORAGE_KEY);
+}
+
+export function addCustomFrequency(freq: string): string[] {
+  return addCustomOption(CUSTOM_FREQ_STORAGE_KEY, freq, DEFAULT_FREQUENCY_OPTIONS);
 }
 
 export function getAllFrequencyOptions(): string[] {
@@ -54,11 +75,34 @@ export function formatFrequency(f: string): string {
   return f.replaceAll('_', ' ');
 }
 
+// ---------------------------------------------------------------------------
+// Timing / When
+// ---------------------------------------------------------------------------
+
 const ALL_TIMING_OPTIONS = [
   'AM', 'PM',
   'After Breakfast', 'After Lunch', 'After Dinner',
   'Before Meals', 'QHS', 'HS', 'With Food', 'Empty Stomach',
 ] as const;
+
+const CUSTOM_TIMING_STORAGE_KEY = 'clinic_custom_timings';
+
+export function getCustomTimings(): string[] {
+  return getCustomOptions(CUSTOM_TIMING_STORAGE_KEY);
+}
+
+export function addCustomTiming(timing: string): string[] {
+  return addCustomOption(
+    CUSTOM_TIMING_STORAGE_KEY,
+    timing,
+    ALL_TIMING_OPTIONS as unknown as readonly string[],
+    (v) => v.trim(),
+  );
+}
+
+export function getAllTimingOptions(): string[] {
+  return [...ALL_TIMING_OPTIONS, ...getCustomTimings()];
+}
 
 /**
  * Returns appropriate timing/when options for a given frequency.
@@ -66,21 +110,68 @@ const ALL_TIMING_OPTIONS = [
  *   a full-day schedule, not a specific half of day)
  * - Hourly intervals: all options
  * - AS_NEEDED: all options
+ * Custom timings are always included.
  */
 export function getTimingOptionsForFrequency(frequency: string): string[] {
   const f = (frequency || '').toUpperCase();
+  const custom = getCustomTimings();
   switch (f) {
     case 'ONCE_DAILY':
     case 'TWICE_DAILY':
     case 'WEEKLY':
-    case 'MONTHLY':
-      return ALL_TIMING_OPTIONS.filter((t) => t !== 'AM' && t !== 'PM') as unknown as string[];
+    case 'MONTHLY': {
+      const base = (ALL_TIMING_OPTIONS as unknown as string[]).filter((t) => t !== 'AM' && t !== 'PM');
+      return [...base, ...custom];
+    }
     default:
-      return [...ALL_TIMING_OPTIONS];
+      return [...ALL_TIMING_OPTIONS, ...custom];
   }
 }
 
 export const TIMING_OPTIONS = [...ALL_TIMING_OPTIONS] as string[];
+
+// ---------------------------------------------------------------------------
+// Dose Pattern
+// ---------------------------------------------------------------------------
+
+const CUSTOM_DOSE_PATTERN_STORAGE_KEY = 'clinic_custom_dose_patterns';
+
+export function getCustomDosePatterns(): string[] {
+  return getCustomOptions(CUSTOM_DOSE_PATTERN_STORAGE_KEY);
+}
+
+export function addCustomDosePattern(pattern: string): string[] {
+  return addCustomOption(
+    CUSTOM_DOSE_PATTERN_STORAGE_KEY,
+    pattern,
+    DOSE_PATTERN_OPTIONS as unknown as readonly string[],
+    (v) => v.trim().toLowerCase(),
+  );
+}
+
+export function getAllDosePatternOptions(): string[] {
+  return [...DOSE_PATTERN_OPTIONS, ...getCustomDosePatterns()];
+}
+
+// ---------------------------------------------------------------------------
+// Duration Unit
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_DURATION_UNITS = ['DAYS', 'WEEKS', 'MONTHS', 'YEARS'] as const;
+
+const CUSTOM_DURATION_UNIT_STORAGE_KEY = 'clinic_custom_duration_units';
+
+export function getCustomDurationUnits(): string[] {
+  return getCustomOptions(CUSTOM_DURATION_UNIT_STORAGE_KEY);
+}
+
+export function addCustomDurationUnit(unit: string): string[] {
+  return addCustomOption(CUSTOM_DURATION_UNIT_STORAGE_KEY, unit, DEFAULT_DURATION_UNITS);
+}
+
+export function getAllDurationUnitOptions(): string[] {
+  return [...DEFAULT_DURATION_UNITS, ...getCustomDurationUnits()];
+}
 
 export const DOSE_PATTERN_OPTIONS = [
   '1-0-0',

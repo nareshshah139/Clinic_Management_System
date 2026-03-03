@@ -17,7 +17,7 @@ import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
-import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS } from '@/lib/frequency';
+import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -27,7 +27,7 @@ type DosageUnit = 'MG' | 'ML' | 'MCG' | 'IU' | 'TABLET' | 'CAPSULE' | 'DROP' | '
 
 type Frequency = string;
 
-type DurationUnit = 'DAYS' | 'WEEKS' | 'MONTHS' | 'YEARS';
+type DurationUnit = string;
 
 // Use centralized options from lib/frequency
 
@@ -162,21 +162,72 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
   const [activeRowIdx, setActiveRowIdx] = useState<number | null>(null);
   const pendingFocusRef = useRef<number | null>(null);
+  // Custom option state for all extendable dropdowns
   const [frequencyOptions, setFrequencyOptions] = useState<string[]>(getAllFrequencyOptions());
-  const [customFreqInput, setCustomFreqInput] = useState('');
-  const [customFreqRowIdx, setCustomFreqRowIdx] = useState<number | null>(null);
-  const [showCustomFreqDialog, setShowCustomFreqDialog] = useState(false);
-  const handleAddCustomFrequency = () => {
-    const val = customFreqInput.trim().toUpperCase().replace(/\s+/g, '_');
-    if (!val) return;
-    const updated = addCustomFrequency(val);
-    setFrequencyOptions(getAllFrequencyOptions());
-    if (customFreqRowIdx !== null) {
-      updateItem(customFreqRowIdx, { frequency: val });
+  const [dosePatternOptions, setDosePatternOptions] = useState<string[]>(getAllDosePatternOptions());
+  const [timingOptions, setTimingOptions] = useState<string[]>(getAllTimingOptions());
+  const [durationUnitOptions, setDurationUnitOptions] = useState<string[]>(getAllDurationUnitOptions());
+
+  type CustomDialogType = 'frequency' | 'dosePattern' | 'timing' | 'durationUnit' | null;
+  const [customDialogType, setCustomDialogType] = useState<CustomDialogType>(null);
+  const [customDialogInput, setCustomDialogInput] = useState('');
+  const [customDialogRowIdx, setCustomDialogRowIdx] = useState<number | null>(null);
+  const [customDialogIsTemplate, setCustomDialogIsTemplate] = useState(false);
+
+  const openCustomDialog = (type: NonNullable<CustomDialogType>, rowIdx: number, isTemplate = false) => {
+    setCustomDialogType(type);
+    setCustomDialogInput('');
+    setCustomDialogRowIdx(rowIdx);
+    setCustomDialogIsTemplate(isTemplate);
+  };
+
+  const handleAddCustomOption = () => {
+    const raw = customDialogInput.trim();
+    if (!raw || customDialogRowIdx === null || !customDialogType) return;
+
+    const updater = customDialogIsTemplate ? updateNewTplItem : updateItem;
+
+    switch (customDialogType) {
+      case 'frequency': {
+        const val = raw.toUpperCase().replace(/\s+/g, '_');
+        addCustomFrequency(val);
+        setFrequencyOptions(getAllFrequencyOptions());
+        updater(customDialogRowIdx, { frequency: val });
+        break;
+      }
+      case 'dosePattern': {
+        const val = raw.toLowerCase();
+        addCustomDosePattern(val);
+        setDosePatternOptions(getAllDosePatternOptions());
+        updater(customDialogRowIdx, { dosePattern: val });
+        break;
+      }
+      case 'timing': {
+        addCustomTiming(raw);
+        setTimingOptions(getAllTimingOptions());
+        updater(customDialogRowIdx, { timing: raw });
+        break;
+      }
+      case 'durationUnit': {
+        const val = raw.toUpperCase().replace(/\s+/g, '_');
+        addCustomDurationUnit(val);
+        setDurationUnitOptions(getAllDurationUnitOptions());
+        updater(customDialogRowIdx, { durationUnit: val });
+        break;
+      }
     }
-    setCustomFreqInput('');
-    setCustomFreqRowIdx(null);
-    setShowCustomFreqDialog(false);
+
+    setCustomDialogInput('');
+    setCustomDialogRowIdx(null);
+    setCustomDialogType(null);
+    setCustomDialogIsTemplate(false);
+  };
+
+  const customDialogMeta: Record<NonNullable<CustomDialogType>, { title: string; placeholder: string; hint: string }> = {
+    frequency: { title: 'Add Custom Frequency', placeholder: 'e.g., Alternate Days, Twice Weekly', hint: 'Stored in uppercase with underscores.' },
+    dosePattern: { title: 'Add Custom Dose Pattern', placeholder: 'e.g., 3-0-3, 1-1-1-1, stat', hint: 'Stored in lowercase.' },
+    timing: { title: 'Add Custom Timing', placeholder: 'e.g., Bedtime, Before Sleep, After Snack', hint: 'Stored as entered.' },
+    durationUnit: { title: 'Add Custom Duration Unit', placeholder: 'e.g., Doses, Cycles, Applications', hint: 'Stored in uppercase with underscores.' },
   };
   const handleCreateDrug = async () => {
     try {
@@ -576,6 +627,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [visitData, setVisitData] = useState<any>(null);
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
+  const [savingFromPreview, setSavingFromPreview] = useState(false);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
@@ -1596,8 +1648,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const normalizeDurationUnit = (raw: any): DurationUnit => {
-    const upper = typeof raw === 'string' ? raw.toUpperCase() : '';
-    if (upper === 'DAYS' || upper === 'WEEKS' || upper === 'MONTHS' || upper === 'YEARS') return upper as DurationUnit;
+    const upper = typeof raw === 'string' ? raw.toUpperCase().replace(/\s+/g, '_') : '';
+    if (upper) return upper;
     return 'DAYS';
   };
 
@@ -3000,10 +3052,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
-          .overflow-visible { overflow: visible !important; }
-          table { break-inside: auto; page-break-inside: auto; }
-          thead { display: table-header-group; }
-          tr { break-inside: auto; page-break-inside: auto; }
+          div, table, tbody, thead, ol, ul { overflow: visible !important; }
+          table { break-inside: auto; page-break-inside: auto; width: 100%; border-collapse: collapse; }
+          thead { display: table-row-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
           ${avoidBreakInsideTables ? 'tr.no-break { break-inside: avoid; page-break-inside: avoid; }' : ''}
         `;
         
@@ -3623,30 +3675,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </DialogContent>
             </Dialog>
 
-            {/* Custom Frequency Dialog */}
-            <Dialog open={showCustomFreqDialog} onOpenChange={setShowCustomFreqDialog}>
+            {/* Custom Option Dialog (frequency / dose pattern / timing / duration unit) */}
+            <Dialog open={customDialogType !== null} onOpenChange={(open: boolean) => { if (!open) setCustomDialogType(null); }}>
               <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>Add Custom Frequency</DialogTitle>
-                  <DialogDescription>Enter a custom frequency option. It will be saved for future use.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-gray-600">Frequency</label>
-                    <Input
-                      value={customFreqInput}
-                      onChange={(e) => setCustomFreqInput(e.target.value)}
-                      placeholder="e.g., ALTERNATE DAYS, TWICE WEEKLY"
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomFrequency(); }}
-                      autoFocus
-                    />
-                    <p className="text-[10px] text-muted-foreground mt-1">Spaces will be converted to underscores. Stored in uppercase.</p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowCustomFreqDialog(false)}>Cancel</Button>
-                  <Button onClick={handleAddCustomFrequency} disabled={!customFreqInput.trim()}>Add & Apply</Button>
-                </DialogFooter>
+                {customDialogType && (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle>{customDialogMeta[customDialogType].title}</DialogTitle>
+                      <DialogDescription>Enter a custom option. It will be saved for future use.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs text-gray-600">Value</label>
+                        <Input
+                          value={customDialogInput}
+                          onChange={(e) => setCustomDialogInput(e.target.value)}
+                          placeholder={customDialogMeta[customDialogType].placeholder}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomOption(); }}
+                          autoFocus
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">{customDialogMeta[customDialogType].hint}</p>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setCustomDialogType(null)}>Cancel</Button>
+                      <Button onClick={handleAddCustomOption} disabled={!customDialogInput.trim()}>Add & Apply</Button>
+                    </DialogFooter>
+                  </>
+                )}
               </DialogContent>
             </Dialog>
 
@@ -4082,6 +4138,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
+                                if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
@@ -4095,18 +4152,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
-                                  {DOSE_PATTERN_OPTIONS.map(p => (
+                                  {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Select value={it.frequency} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: Frequency) => {
-                                if (v === '__CUSTOM__') {
-                                  setCustomFreqRowIdx(idx);
-                                  setCustomFreqInput('');
-                                  setShowCustomFreqDialog(true);
-                                  return;
-                                }
+                                if (v === '__CUSTOM__') { openCustomDialog('frequency', idx); return; }
                                 const patch: Partial<PrescriptionItemForm> = { frequency: v };
                                 const allowed = getTimingOptionsForFrequency(v);
                                 if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
@@ -4117,30 +4170,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom frequency...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => updateItem(idx, { timing: v })}>
+                            <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
+                              if (v === '__CUSTOM__') { openCustomDialog('timing', idx); return; }
+                              updateItem(idx, { timing: v });
+                            }}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
+                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
                               <Input type="number" value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
-                              <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => updateItem(idx, { durationUnit: v })}>
+                              <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
+                                if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
+                                updateItem(idx, { durationUnit: v });
+                              }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
-                                    <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
+                                  {durationUnitOptions.map(u => (
+                                    <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -4453,9 +4514,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
                 }
                 
-                /* Ensure paged.js respects @page margins */
+                /* Ensure paged.js respects @page margins and content flows across pages */
                 #pagedjs-container .pagedjs_page_content {
                   box-sizing: border-box !important;
+                  overflow: visible !important;
                 }
                 `
               }} />
@@ -4600,7 +4662,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <span className="font-semibold">{patientName}</span>
                         {patientAgeSex ? <span className="text-gray-700">{patientAgeSex}</span> : null}
                         {patientCodeDisplay ? <span className="text-gray-700">{patientCodeDisplay}</span> : <span className="text-gray-500">—</span>}
-                        {reviewDateDisplay ? <span className="text-gray-700">Review: {reviewDateDisplay}</span> : null}
                       </div>
                     ) : (
                       <div className="flex justify-between text-sm py-3">
@@ -4611,10 +4672,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         <div>
                           <div className="text-gray-600">Patient Code</div>
                           <div className="font-medium">{patientCodeDisplay || '—'}</div>
-                        </div>
-                        <div>
-                          <div className="text-gray-600">Review Date</div>
-                          <div className="font-medium">{reviewDateDisplay || '—'}</div>
                         </div>
                         <div>
                           <div className="text-gray-600">Gender / Age</div>
@@ -4711,7 +4768,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <table className="min-w-full text-sm border-collapse">
+                        <table className="min-w-full text-sm border-collapse" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
                             <thead className="bg-gray-50">
                               <tr>
                                 <th className="px-3 py-2 text-left font-medium border-b">Medicine</th>
@@ -5001,11 +5058,73 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {!hasSavedPrescription && (
-                    <Button className="col-span-2 bg-green-600 hover:bg-green-700 text-white" disabled={!canCreate} onClick={async () => {
-                      skipPostSaveCleanupRef.current = true;
-                      await create();
-                    }}>
-                      {canCreate ? 'Save Prescription' : 'Add medications to save'}
+                    <Button
+                      className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
+                      disabled={!canCreate || savingFromPreview}
+                      onClick={async () => {
+                        setSavingFromPreview(true);
+                        try {
+                          const effectivePatientId = (visitData as any)?.patientId || (visitData as any)?.patient?.id || patientId;
+                          const effectiveDoctorId = (visitData as any)?.doctorId || (visitData as any)?.doctor?.id || doctorId;
+                          let effectiveVisitId = visitId;
+                          if (!standalone && !effectiveVisitId && ensureVisitId) {
+                            try { effectiveVisitId = await ensureVisitId(); } catch {}
+                          }
+                          const payload: Record<string, unknown> = {
+                            patientId: effectivePatientId,
+                            visitId: standalone ? undefined : (effectiveVisitId || visitId || undefined),
+                            doctorId: effectiveDoctorId,
+                            items: validItems.map(it => ({
+                              drugName: it.drugName,
+                              genericName: it.genericName || undefined,
+                              dosage: Number(it.dosage),
+                              dosageUnit: it.dosageUnit,
+                              frequency: it.frequency,
+                              duration: Number(it.duration),
+                              durationUnit: it.durationUnit,
+                              instructions: it.instructions || undefined,
+                              route: it.route || undefined,
+                              timing: it.timing || undefined,
+                              quantity: it.quantity ? Number(it.quantity) : undefined,
+                              isGeneric: it.isGeneric ?? true,
+                            })),
+                            diagnosis: diagnosis || undefined,
+                            language,
+                            validUntil: reviewDate || undefined,
+                            followUpInstructions: followUpInstructions || undefined,
+                          };
+                          const res: any = standalone
+                            ? await apiClient.createQuickPrescription(payload)
+                            : await apiClient.createPrescription(payload);
+                          const newId = res?.id;
+                          if (newId) {
+                            createdPrescriptionIdRef.current = newId;
+                            setSavedPrescriptionId(newId);
+                            onCreated?.(newId);
+                            toast({ variant: 'success', title: 'Prescription saved', description: 'You can now download or share the PDF.' });
+                          } else {
+                            toast({ variant: 'destructive', title: 'Save issue', description: 'Prescription created but ID missing. Close preview and try again.' });
+                          }
+                        } catch (err: any) {
+                          const msg = err?.message || err?.statusText || 'Unknown error';
+                          const is409 = err?.status === 409 || msg.toLowerCase().includes('already exists');
+                          if (is409) {
+                            const existingId = (visitData as any)?.prescriptionId || createdPrescriptionIdRef.current;
+                            if (existingId) {
+                              setSavedPrescriptionId(existingId);
+                              toast({ title: 'Already saved', description: 'This prescription was already saved. You can share or download it now.' });
+                            } else {
+                              toast({ variant: 'destructive', title: 'Already exists', description: 'A prescription already exists for this visit. Close preview to view it.' });
+                            }
+                          } else {
+                            toast({ variant: 'destructive', title: 'Save failed', description: msg });
+                          }
+                        } finally {
+                          setSavingFromPreview(false);
+                        }
+                      }}
+                    >
+                      {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
                     </Button>
                   )}
                   <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close</Button>
@@ -5482,6 +5601,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
                               <Select value={it.dosePattern || ''} onValueChange={(v: string) => {
+                                if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx, true); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
@@ -5495,18 +5615,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
-                                  {DOSE_PATTERN_OPTIONS.map(p => (
+                                  {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                               <Select value={it.frequency} onValueChange={(v: Frequency) => {
-                                if (v === '__CUSTOM__') {
-                                  setCustomFreqRowIdx(idx);
-                                  setCustomFreqInput('');
-                                  setShowCustomFreqDialog(true);
-                                  return;
-                                }
+                                if (v === '__CUSTOM__') { openCustomDialog('frequency', idx, true); return; }
                                 const patch: Partial<PrescriptionItemForm> = { frequency: v };
                                 const allowed = getTimingOptionsForFrequency(v);
                                 if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
@@ -5517,30 +5633,38 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   {frequencyOptions.map(f => (
                                     <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom frequency...</SelectItem>
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <Select value={it.timing || ''} onValueChange={(v: string) => updateNewTplItem(idx, { timing: v })}>
+                            <Select value={it.timing || ''} onValueChange={(v: string) => {
+                              if (v === '__CUSTOM__') { openCustomDialog('timing', idx, true); return; }
+                              updateNewTplItem(idx, { timing: v });
+                            }}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
                                 {getTimingOptionsForFrequency(it.frequency).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
+                                <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">
                               <Input type="number" value={it.duration ?? ''} onChange={(e) => updateNewTplItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
-                              <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => updateNewTplItem(idx, { durationUnit: v })}>
+                              <Select value={it.durationUnit} onValueChange={(v: DurationUnit) => {
+                                if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx, true); return; }
+                                updateNewTplItem(idx, { durationUnit: v });
+                              }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {['DAYS','WEEKS','MONTHS','YEARS'].map(u => (
-                                    <SelectItem key={u} value={u as DurationUnit}>{u}</SelectItem>
+                                  {durationUnitOptions.map(u => (
+                                    <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
+                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>

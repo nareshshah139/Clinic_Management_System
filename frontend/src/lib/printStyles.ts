@@ -60,12 +60,13 @@ export const GLOBAL_PRINT_CSS = `
   .pb-avoid-break { break-inside: avoid !important; page-break-inside: avoid !important; }
   .pb-after-page { break-after: page !important; page-break-after: always !important; }
 
-  /* Tables: repeat header, keep rows intact */
-  table { page-break-inside: auto; border-collapse: collapse; width: 100%; }
+  /* Tables: allow splitting across pages, keep individual rows intact */
+  table { page-break-inside: auto; break-inside: auto; border-collapse: collapse; width: 100%; }
   thead { display: table-header-group; }
   tfoot { display: table-footer-group; }
   tr { page-break-inside: avoid; break-inside: avoid; }
   th, td { page-break-inside: avoid; break-inside: avoid; }
+  div, table, tbody, ol, ul { overflow: visible !important; }
 }
 
 /* Screen preview helpers: show page outline when previewing in-app */

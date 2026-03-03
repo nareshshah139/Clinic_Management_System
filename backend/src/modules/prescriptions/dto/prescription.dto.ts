@@ -97,8 +97,8 @@ export class PrescriptionItemDto {
   @Min(1)
   duration: number;
 
-  @IsEnum(DurationUnit)
-  durationUnit: DurationUnit;
+  @IsString()
+  durationUnit: string;
 
   @IsOptional()
   @IsString()
@@ -375,8 +375,8 @@ export class PrescriptionTemplateItemDto {
   duration?: number;
 
   @IsOptional()
-  @IsEnum(DurationUnit)
-  durationUnit?: DurationUnit;
+  @IsString()
+  durationUnit?: string;
 
   @IsOptional()
   @IsString()
