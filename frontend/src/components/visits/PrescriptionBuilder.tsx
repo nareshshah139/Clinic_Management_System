@@ -2991,14 +2991,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         `;
         
         // Content styling (can be inline or in CSS string)
+        // NOTE: Paged.js splits the DOM manually — CSS properties like
+        // `table-header-group` and blanket `break-inside: avoid` on every
+        // <tr> confuse its layout engine and cause empty / overflowing pages
+        // on multi-page tables.  We let Paged.js break between rows freely
+        // and only protect individual medication-item blocks.
         const contentCSS = `
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           .overflow-visible { overflow: visible !important; }
-          table { break-inside: auto; }
+          table { break-inside: auto; page-break-inside: auto; }
           thead { display: table-header-group; }
-          tr { break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; page-break-inside: ${avoidBreakInsideTables ? 'avoid' : 'auto'}; }
+          tr { break-inside: auto; page-break-inside: auto; }
+          ${avoidBreakInsideTables ? 'tr.no-break { break-inside: avoid; page-break-inside: avoid; }' : ''}
         `;
         
         // Add content styles as inline style tag
@@ -4705,15 +4711,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <div className="overflow-visible border rounded">
-                          <table className="min-w-full text-sm">
+                        <table className="min-w-full text-sm border-collapse">
                             <thead className="bg-gray-50">
                               <tr>
-                                <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                                <th className="px-3 py-2 text-left font-medium">Frequency</th>
-                                <th className="px-3 py-2 text-left font-medium">When</th>
-                                <th className="px-3 py-2 text-left font-medium">Duration</th>
-                                <th className="px-3 py-2 text-left font-medium">Instructions</th>
+                                <th className="px-3 py-2 text-left font-medium border-b">Medicine</th>
+                                <th className="px-3 py-2 text-left font-medium border-b">Frequency</th>
+                                <th className="px-3 py-2 text-left font-medium border-b">When</th>
+                                <th className="px-3 py-2 text-left font-medium border-b">Duration</th>
+                                <th className="px-3 py-2 text-left font-medium border-b">Instructions</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -4728,7 +4733,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               ))}
                             </tbody>
                           </table>
-                        </div>
                       ) : (
                         <ol className="list-decimal ml-5 space-y-1 text-sm">
                           {validItems.map((it: any, idx: number) => (
@@ -5038,24 +5042,51 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
                               }
+                              const container = document.getElementById('pagedjs-container');
+                              if (!container) {
+                                toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'No preview content. Open the preview first.' });
+                                return;
+                              }
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
 
-                              const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
+                              const stylesheets: string[] = [];
+                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
+                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
+
+                              const wrapper = document.createElement('div');
+                              wrapper.innerHTML = `
+                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+                                ${stylesheets.join('\n')}
+                                <style>
+                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
+                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                                  html, body { margin: 0; padding: 0; }
+                                  .pagedjs_page { margin: 0 !important; box-shadow: none !important; }
+                                  .pagedjs_pagebox {
+                                    background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+                                    background-repeat: no-repeat;
+                                    background-position: top left;
+                                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
+                                  }
+                                  ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+                                </style>
+                                ${container.innerHTML}
+                              `;
+
+                              const { default: html2pdf } = await import('html2pdf.js');
+                              const fileName = `prescription-${prescId}.pdf`;
+                              const pdfBlob: Blob = await html2pdf().set({
+                                margin: 0,
+                                filename: fileName,
+                                image: { type: 'jpeg', quality: 0.98 },
+                                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                                jsPDF: { unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' },
+                                pagebreak: { mode: ['css', 'legacy'] },
+                              }).from(wrapper).outputPdf('blob');
+
                               try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
-                              const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
-                              let pdfBlob: Blob;
-                              if (base64Match) {
-                                const raw = atob(base64Match[1]);
-                                const bytes = new Uint8Array(raw.length);
-                                for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-                                pdfBlob = new Blob([bytes], { type: 'application/pdf' });
-                              } else {
-                                const res = await fetch(fileUrl);
-                                pdfBlob = await res.blob();
-                              }
-
-                              const pdfFile = new File([pdfBlob], fileName || 'prescription.pdf', { type: 'application/pdf' });
+                              const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
                               const canShareFile = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] });
 
                               if (canShareFile) {
@@ -5064,7 +5095,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               } else {
                                 const a = document.createElement('a');
                                 a.href = URL.createObjectURL(pdfBlob);
-                                a.download = fileName || 'prescription.pdf';
+                                a.download = fileName;
                                 document.body.appendChild(a);
                                 a.click();
                                 a.remove();
@@ -5118,14 +5149,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                         setPreviewOpen(false);
                       };
                       
-                      // Write the print content to the new window with all styles from current page
+                      // Filter stylesheets: only keep Paged.js polyfill styles
+                      // and linked stylesheets — skip scoped preview styles that
+                      // contain conflicting #pagedjs-container rules with 20px margins.
+                      const filteredStyles = stylesheets.filter(s => {
+                        if (s.startsWith('<link')) return true;
+                        if (s.includes('#pagedjs-container') || s.includes('#prescription-print-root')) return false;
+                        return true;
+                      });
+
                       printWindow.document.write(`
                         <!DOCTYPE html>
                         <html>
                         <head>
                           <title>Prescription</title>
                           <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                          ${stylesheets.join('\n')}
+                          ${filteredStyles.join('\n')}
                           <style>
                             @page {
                               size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
@@ -5139,7 +5178,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               margin: 0;
                               padding: 0;
                             }
-                            /* Remove page shadows and ensure clean print */
                             .pagedjs_page {
                               margin: 0 !important;
                               box-shadow: none !important;
@@ -5164,19 +5202,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       `);
                       printWindow.document.close();
                       
-                      // Wait for fonts and images to load, then print
-                      printWindow.onload = () => {
-                        setTimeout(() => {
-                          try { printWindow.print(); } catch (e) { console.error('Print dialog failed', e); }
-                        }, 500);
+                      let didPrint = false;
+                      const safePrint = () => {
+                        if (didPrint) return;
+                        didPrint = true;
+                        try { printWindow.print(); } catch (e) { console.error('Print dialog failed', e); }
                       };
-                      // Ensure cleanup after print
                       printWindow.onafterprint = closePreview;
-                      // Fallback if onload doesn't fire or afterprint never fires
-                      setTimeout(() => {
-                        try { printWindow.print(); } catch {}
-                        setTimeout(closePreview, 1500);
-                      }, 1000);
+                      printWindow.onload = () => { setTimeout(safePrint, 500); };
+                      // Single fallback — only fires if onload never did
+                      setTimeout(safePrint, 2000);
                     } catch (e) {
                       console.error('Browser print failed', e);
                       toast({ variant: 'destructive', title: 'Print failed', description: 'Could not open print dialog.' });
@@ -5190,26 +5225,58 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             try {
                               const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
                               if (!prescId) return;
-                              const { fileUrl, fileName } = await apiClient.generatePrescriptionPdf(prescId, { includeAssets: useLetterheadForDownload, grayscale });
-                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
-                              const base64Match = fileUrl.match(/^data:application\/pdf;base64,(.+)$/);
-                              let blobUrl: string;
-                              if (base64Match) {
-                                const raw = atob(base64Match[1]);
-                                const bytes = new Uint8Array(raw.length);
-                                for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-                                const blob = new Blob([bytes], { type: 'application/pdf' });
-                                blobUrl = URL.createObjectURL(blob);
-                              } else {
-                                blobUrl = fileUrl;
+                              const container = document.getElementById('pagedjs-container');
+                              if (!container) {
+                                toast({ variant: 'destructive', title: 'PDF failed', description: 'No preview content. Open the preview first.' });
+                                return;
                               }
+                              toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
+
+                              const stylesheets: string[] = [];
+                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
+                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
+
+                              const wrapper = document.createElement('div');
+                              wrapper.innerHTML = `
+                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+                                ${stylesheets.join('\n')}
+                                <style>
+                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
+                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                                  html, body { margin: 0; padding: 0; }
+                                  .pagedjs_page { margin: 0 !important; box-shadow: none !important; }
+                                  .pagedjs_pagebox {
+                                    background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+                                    background-repeat: no-repeat;
+                                    background-position: top left;
+                                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
+                                  }
+                                  ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+                                </style>
+                                ${container.innerHTML}
+                              `;
+
+                              const { default: html2pdf } = await import('html2pdf.js');
+                              const pdfBlob: Blob = await html2pdf().set({
+                                margin: 0,
+                                filename: `prescription-${prescId}.pdf`,
+                                image: { type: 'jpeg', quality: 0.98 },
+                                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                                jsPDF: { unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' },
+                                pagebreak: { mode: ['css', 'legacy'] },
+                              }).from(wrapper).outputPdf('blob');
+
+                              const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');
                               a.href = blobUrl;
-                              a.download = fileName || 'prescription.pdf';
+                              a.download = `prescription-${prescId}.pdf`;
                               document.body.appendChild(a);
                               a.click();
                               a.remove();
-                              if (base64Match) URL.revokeObjectURL(blobUrl);
+                              URL.revokeObjectURL(blobUrl);
+
+                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                              toast({ title: 'PDF ready', description: 'Prescription PDF downloaded.' });
                             } catch (e) {
                               console.error('PDF generation failed', e);
                               toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
