@@ -3042,21 +3042,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           }
         `;
         
-        // Content styling (can be inline or in CSS string)
-        // NOTE: Paged.js splits the DOM manually — CSS properties like
-        // `table-header-group` and blanket `break-inside: avoid` on every
-        // <tr> confuse its layout engine and cause empty / overflowing pages
-        // on multi-page tables.  We let Paged.js break between rows freely
-        // and only protect individual medication-item blocks.
+        // Content styling for Paged.js
+        // The Rx section uses flex-div rows (class .rx-row) instead of <table>
+        // so Paged.js can split between medication rows across pages reliably.
         const contentCSS = `
           body { font-family: 'Fira Sans', sans-serif; font-size: 14px; color: #111827; }
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
-          div, table, tbody, thead, ol, ul { overflow: visible !important; }
-          table { break-inside: auto; page-break-inside: auto; width: 100%; border-collapse: collapse; }
-          thead { display: table-row-group; }
-          tr { break-inside: avoid; page-break-inside: avoid; }
-          ${avoidBreakInsideTables ? 'tr.no-break { break-inside: avoid; page-break-inside: avoid; }' : ''}
+          .rx-row { break-inside: avoid; page-break-inside: avoid; }
         `;
         
         // Add content styles as inline style tag
@@ -4514,10 +4507,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
                 }
                 
-                /* Ensure paged.js respects @page margins and content flows across pages */
+                /* Ensure paged.js respects @page margins */
                 #pagedjs-container .pagedjs_page_content {
                   box-sizing: border-box !important;
-                  overflow: visible !important;
                 }
                 `
               }} />
@@ -4768,38 +4760,34 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <div className="font-semibold mb-2">Rx</div>
                     {validItems.length > 0 ? (
                       rxPrintFormat === 'TABLE' ? (
-                        <table className="min-w-full text-sm border-collapse" style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-3 py-2 text-left font-medium border-b">Medicine</th>
-                                <th className="px-3 py-2 text-left font-medium border-b">Frequency</th>
-                                <th className="px-3 py-2 text-left font-medium border-b">When</th>
-                                <th className="px-3 py-2 text-left font-medium border-b">Duration</th>
-                                <th className="px-3 py-2 text-left font-medium border-b">Instructions</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {validItems.map((it: any, idx: number) => (
-                                <tr key={`rx-row-${idx}`} className="border-t">
-                                  <td className="px-3 py-2">{it.drugName}</td>
-                                  <td className="px-3 py-2">{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</td>
-                                  <td className="px-3 py-2">{it.timing || '—'}</td>
-                                  <td className="px-3 py-2">{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</td>
-                                  <td className="px-3 py-2">{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                      ) : (
-                        <ol className="list-decimal ml-5 space-y-1 text-sm">
+                        <div className="text-sm" style={{ width: '100%' }}>
+                          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #d1d5db', background: '#f9fafb', fontWeight: 500, padding: '6px 0' }}>
+                            <div style={{ flex: '2 1 0%', padding: '0 12px' }}>Medicine</div>
+                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Frequency</div>
+                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>When</div>
+                            <div style={{ flex: '1 1 0%', padding: '0 12px' }}>Duration</div>
+                            <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>Instructions</div>
+                          </div>
                           {validItems.map((it: any, idx: number) => (
-                            <li key={`rx-${idx}`}>
-                              <span className="font-medium">{it.drugName}</span>
+                            <div key={`rx-row-${idx}`} className="rx-row" style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e7eb', padding: '6px 0' }}>
+                              <div style={{ flex: '2 1 0%', padding: '0 12px' }}>{it.drugName}</div>
+                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{(it.dosePattern || '').trim() || it.frequency.replaceAll('_',' ').toLowerCase()}</div>
+                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{it.timing || '—'}</div>
+                              <div style={{ flex: '1 1 0%', padding: '0 12px' }}>{`${it.duration ?? '—'} ${String(it.durationUnit || '').toLowerCase()}`}</div>
+                              <div style={{ flex: '1.5 1 0%', padding: '0 12px' }}>{it.instructions ? tt(`items.${idx}.instructions`, it.instructions) : '—'}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-sm" style={{ width: '100%' }}>
+                          {validItems.map((it: any, idx: number) => (
+                            <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
+                              <span style={{ fontWeight: 500 }}>{idx + 1}. {it.drugName}</span>
                               {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
                               {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
-                            </li>
+                            </div>
                           ))}
-                        </ol>
+                        </div>
                       )
                     ) : (
                       <div className="text-sm text-gray-600">—</div>
