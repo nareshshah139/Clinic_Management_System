@@ -172,7 +172,7 @@ export class SchedulingUtils {
   static canRescheduleAppointment(
     appointmentDate: Date,
     status: AppointmentStatus,
-    minAdvanceHours: number = 2,
+    minAdvanceHours: number = 0,
   ): { canReschedule: boolean; reason?: string } {
     const now = new Date();
     const hoursUntilAppointment =
