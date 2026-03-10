@@ -93,10 +93,10 @@ export class PatientsService {
   }
 
   async findAll(
-    options: { page: number; limit: number; search?: string; gender?: string },
+    options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string },
     branchId: string,
   ) {
-    const { page, limit, search, gender } = options;
+    const { page, limit, search, gender, consultationType, dateRange } = options;
     const skip = (page - 1) * limit;
 
     // Optimize search by requiring minimum 2 characters and using more efficient queries
@@ -125,19 +125,45 @@ export class PatientsService {
         ]
       : undefined;
 
-    const where = {
-      branchId,
-      isArchived: false,
-      ...(genderVariants ? { gender: { in: genderVariants } } : {}),
-      ...(searchTerm && {
+    // Compute date-range cutoff for "registered or visited within" filter
+    let dateRangeCutoff: Date | undefined;
+    if (dateRange === 'LAST_1_WEEK') {
+      dateRangeCutoff = new Date();
+      dateRangeCutoff.setDate(dateRangeCutoff.getDate() - 7);
+    } else if (dateRange === 'LAST_1_MONTH') {
+      dateRangeCutoff = new Date();
+      dateRangeCutoff.setMonth(dateRangeCutoff.getMonth() - 1);
+    }
+
+    const andConditions: any[] = [];
+
+    if (dateRangeCutoff) {
+      andConditions.push({
+        OR: [
+          { createdAt: { gte: dateRangeCutoff } },
+          { visits: { some: { createdAt: { gte: dateRangeCutoff } } } },
+        ],
+      });
+    }
+
+    if (searchTerm) {
+      andConditions.push({
         OR: [
           { name: { contains: searchTerm, mode: 'insensitive' } },
-          { phone: { startsWith: searchTerm } }, // More efficient for phone searches
+          { phone: { startsWith: searchTerm } },
           { abhaId: { contains: searchTerm } },
           { patientCode: { startsWith: searchTerm.toUpperCase() } },
           { email: { contains: searchTerm, mode: 'insensitive' } },
         ],
-      }),
+      });
+    }
+
+    const where = {
+      branchId,
+      isArchived: false,
+      ...(genderVariants ? { gender: { in: genderVariants } } : {}),
+      ...(consultationType ? { consultationType } : {}),
+      ...(andConditions.length > 0 ? { AND: andConditions } : {}),
     } as any;
 
     const [patients, total] = await Promise.all([

@@ -48,6 +48,8 @@ export default function PatientsManagement() {
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
+  const [consultationTypeFilter, setConsultationTypeFilter] = useState<'ALL' | 'ONLINE' | 'OFFLINE'>('ALL');
+  const [dateRangeFilter, setDateRangeFilter] = useState<'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH'>('ALL');
   const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
   const [open, setOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -145,10 +147,10 @@ export default function PatientsManagement() {
     return () => clearTimeout(t);
   }, [search, genderFilter]);
 
-  // Trigger fetch when pagination, page size, gender, or debounced search changes
+  // Trigger fetch when pagination, page size, gender, date range, or debounced search changes
   useEffect(() => {
     void fetchPatients(currentPage);
-  }, [currentPage, pageSize, debouncedSearch, genderFilter]);
+  }, [currentPage, pageSize, debouncedSearch, genderFilter, consultationTypeFilter, dateRangeFilter]);
 
   // Save page size preference
   useEffect(() => {
@@ -163,8 +165,9 @@ export default function PatientsManagement() {
       setError(null);
       const requestId = ++fetchIdRef.current;
       const normGender = genderFilter !== 'ALL' ? genderFilter : undefined;
+      const normConsultationType = consultationTypeFilter !== 'ALL' ? consultationTypeFilter : undefined;
+      const normDateRange = dateRangeFilter !== 'ALL' ? dateRangeFilter : undefined;
       
-      // Only search if we have at least 2 characters
       const searchTerm = debouncedSearch.length >= 2 ? debouncedSearch : undefined;
       
       const response = await apiClient.getPatients({
@@ -172,7 +175,9 @@ export default function PatientsManagement() {
         limit: pageSize,
         search: searchTerm,
         gender: normGender,
-      abhaPresent: undefined,
+        consultationType: normConsultationType,
+        dateRange: normDateRange,
+        abhaPresent: undefined,
         sortBy: sortBy,
         sortOrder: sortOrder,
       });
@@ -281,6 +286,8 @@ export default function PatientsManagement() {
     setSearch('');
     setDebouncedSearch('');
     setGenderFilter('ALL');
+    setConsultationTypeFilter('ALL');
+    setDateRangeFilter('ALL');
     setCurrentPage(1);
   };
 
@@ -885,6 +892,22 @@ export default function PatientsManagement() {
                 <SelectItem value="OTHER">Other</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={consultationTypeFilter} onValueChange={(v: 'ALL' | 'ONLINE' | 'OFFLINE') => setConsultationTypeFilter(v)}>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Consultation Type" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Consultations</SelectItem>
+                <SelectItem value="ONLINE">Online</SelectItem>
+                <SelectItem value="OFFLINE">Offline</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={dateRangeFilter} onValueChange={(v: 'ALL' | 'LAST_1_WEEK' | 'LAST_1_MONTH') => { setDateRangeFilter(v); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Date Range" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Time</SelectItem>
+                <SelectItem value="LAST_1_WEEK">Last 1 Week</SelectItem>
+                <SelectItem value="LAST_1_MONTH">Last 1 Month</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
               <SelectTrigger className="w-full sm:w-32"><SelectValue placeholder="Per page" /></SelectTrigger>
               <SelectContent>
@@ -934,7 +957,7 @@ export default function PatientsManagement() {
             <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
           ) : patients.length === 0 ? (
             <div className="text-center py-10 text-gray-500">
-              {search.length >= 2 || genderFilter !== 'ALL' ? 'No patients found matching your search criteria' : 'No patients found'}
+              {search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'No patients found matching your search criteria' : 'No patients found'}
             </div>
           ) : (
             <div className="overflow-x-auto" data-tour="patients-table">

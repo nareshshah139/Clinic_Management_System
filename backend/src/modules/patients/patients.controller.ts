@@ -39,20 +39,25 @@ export class PatientsController {
     @Query('limit') limit = 10,
     @Query('search') search?: string,
     @Query('gender') gender?: string,
+    @Query('consultationType') consultationType?: string,
+    @Query('dateRange') dateRange?: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    // Validate and sanitize inputs
     const pageNum = Math.max(1, +page || 1);
-    const limitNum = Math.min(100, Math.max(1, +limit || 10)); // Cap at 100 for performance
+    const limitNum = Math.min(100, Math.max(1, +limit || 10));
     const searchTerm = search?.trim() || undefined;
     const genderFilter = gender?.trim() || undefined;
+    const consultationTypeFilter = consultationType?.trim() || undefined;
+    const dateRangeFilter = dateRange?.trim() || undefined;
 
     return this.patientsService.findAll(
       { 
         page: pageNum, 
         limit: limitNum, 
         search: searchTerm, 
-        gender: genderFilter 
+        gender: genderFilter,
+        consultationType: consultationTypeFilter,
+        dateRange: dateRangeFilter,
       },
       req.user.branchId,
     );
