@@ -2093,45 +2093,48 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     <div className="flex items-center justify-between pt-2 border-t">
                       <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
                       <div className="flex gap-2">
-                        <label className="text-sm">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              try {
-                                setLabsAutofillLoading(true);
-                                const fd = new FormData();
-                                fd.append('file', f);
-                                const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
-                                if (res.status === 401) handleUnauthorizedRedirect(res);
-                                if (!res.ok) {
-                                  let t = '';
-                                  try { t = await res.text(); } catch {}
-                                  throw new Error(`AI autofill failed: ${res.status} ${t}`);
+                        <div className="flex flex-col gap-0.5">
+                          <label className="text-sm">
+                            <input
+                              type="file"
+                              accept="image/*,application/pdf"
+                              onChange={async (e) => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                try {
+                                  setLabsAutofillLoading(true);
+                                  const fd = new FormData();
+                                  fd.append('file', f);
+                                  const res = await fetch('/api/visits/labs/autofill', { method: 'POST', body: fd, credentials: 'include' });
+                                  if (res.status === 401) handleUnauthorizedRedirect(res);
+                                  if (!res.ok) {
+                                    let t = '';
+                                    try { t = await res.text(); } catch {}
+                                    throw new Error(`AI autofill failed: ${res.status} ${t}`);
+                                  }
+                                  const data = await res.json();
+                                  const labs = (data?.labs as any) || {};
+                                  const newSelections = new Set(labSelections);
+                                  const newResults: typeof labResults = { ...labResults };
+                                  Object.keys(labs).forEach((name) => {
+                                    newSelections.add(name);
+                                    newResults[name] = labs[name];
+                                  });
+                                  setLabSelections(Array.from(newSelections));
+                                  setLabResults(newResults);
+                                  toast({ variant: 'success', title: 'Autofill complete', description: 'Extracted results inserted.' });
+                                } catch (err) {
+                                  console.error(err);
+                                  toast({ variant: 'warning', title: 'Autofill failed', description: getErrorMessage(err) || 'Try another file.' });
+                                } finally {
+                                  setLabsAutofillLoading(false);
+                                  try { (e.target as any).value = ''; } catch {}
                                 }
-                                const data = await res.json();
-                                const labs = (data?.labs as any) || {};
-                                const newSelections = new Set(labSelections);
-                                const newResults: typeof labResults = { ...labResults };
-                                Object.keys(labs).forEach((name) => {
-                                  newSelections.add(name);
-                                  newResults[name] = labs[name];
-                                });
-                                setLabSelections(Array.from(newSelections));
-                                setLabResults(newResults);
-                                toast({ variant: 'success', title: 'Autofill complete', description: 'Extracted results inserted.' });
-                              } catch (err) {
-                                console.error(err);
-                                toast({ variant: 'warning', title: 'Autofill failed', description: getErrorMessage(err) || 'Try another image.' });
-                              } finally {
-                                setLabsAutofillLoading(false);
-                                try { (e.target as any).value = ''; } catch {}
-                              }
-                            }}
-                          />
-                        </label>
+                              }}
+                            />
+                          </label>
+                          <span className="text-[10px] text-gray-400">Accepts JPG, PNG, or PDF</span>
+                        </div>
                         <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { await save(false); markSectionComplete('labs'); }}>
                           {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
                         </Button>

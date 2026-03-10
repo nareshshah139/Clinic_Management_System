@@ -179,6 +179,22 @@ function imageFileFilter(_req: any, file: any, cb: any) {
   return cb(null, true);
 }
 
+function imageOrPdfFileFilter(_req: any, file: any, cb: any) {
+  if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
+  if (!/^image\//i.test(file.mimetype) && file.mimetype !== 'application/pdf')
+    return cb(new BadRequestException('Only image or PDF files are allowed'), false);
+  return cb(null, true);
+}
+
+async function pdfToImageBuffers(pdfBuffer: Buffer): Promise<Buffer[]> {
+  const { pdf } = await import('pdf-to-img');
+  const pages: Buffer[] = [];
+  for await (const image of await pdf(pdfBuffer, { scale: 2 })) {
+    pages.push(Buffer.from(image));
+  }
+  return pages;
+}
+
 const VISIT_UPLOAD_LIMIT_BYTES = (() => {
   const mb = Number(process.env.UPLOAD_MAX_FILE_MB || 25);
   const safeMb = Number.isFinite(mb) && mb > 0 ? mb : 25;
@@ -1095,11 +1111,11 @@ export class VisitsController {
     return { text: combinedText, segments: normalized, speakers: { doctorText, patientText } };
   }
 
-  // Extract lab results from an uploaded image using OpenAI Vision
+  // Extract lab results from an uploaded image or PDF using OpenAI Vision
   @Post('labs/autofill')
   @UseInterceptors(FileInterceptor('file', {
     storage: memoryStorage(),
-    fileFilter: imageFileFilter,
+    fileFilter: imageOrPdfFileFilter,
     limits: {
       fileSize: VISIT_UPLOAD_LIMIT_BYTES,
       files: 1,
@@ -1110,7 +1126,7 @@ export class VisitsController {
     @Request() _req: AuthenticatedRequest,
   ) {
     if (!file || !file.buffer) {
-      throw new BadRequestException('No image provided');
+      throw new BadRequestException('No file provided');
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
@@ -1119,11 +1135,21 @@ export class VisitsController {
       throw new ServiceUnavailableException('AI autofill is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
     }
 
-    // Normalize image and build data URL for OpenAI Vision
-    const processed = await processImageUpload(file);
-    const base64 = processed.buffer.toString('base64');
-    const mime = `image/${processed.ext || 'jpeg'}`;
-    const dataUrl = `data:${mime};base64,${base64}`;
+    const isPdf = file.mimetype === 'application/pdf';
+
+    let imageDataUrls: string[];
+    if (isPdf) {
+      const pageBuffers = await pdfToImageBuffers(file.buffer);
+      if (pageBuffers.length === 0) {
+        throw new BadRequestException('PDF contains no pages');
+      }
+      imageDataUrls = pageBuffers.map((buf) => `data:image/png;base64,${buf.toString('base64')}`);
+    } else {
+      const processed = await processImageUpload(file);
+      const base64 = processed.buffer.toString('base64');
+      const mime = `image/${processed.ext || 'jpeg'}`;
+      imageDataUrls = [`data:${mime};base64,${base64}`];
+    }
 
     const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
 
@@ -1134,50 +1160,61 @@ export class VisitsController {
       'Prefer standard units: CBC->Hb g/dL, WBC 10^9/L, Platelets 10^9/L; LFT->AST/ALT U/L, Bilirubin mg/dL; ' +
       'RFT->Urea mg/dL, Creatinine mg/dL; Lipid Profile->TC/TG/HDL/LDL mg/dL; Thyroid Profile->TSH µIU/mL, T3/T4 ng/dL; ' +
       'HbA1c %; Vitamin D ng/mL; Vitamin B12 pg/mL; Ferritin ng/mL. ' +
-      'Do not include commentary. Use null for missing values. Avoid strings like "N/A".';
+      'Do not include commentary. Use null for missing values. Avoid strings like "N/A". ' +
+      'If the image contains no lab results, return {"labs": {}}.';
 
-    const messages: any[] = [
-      { role: 'system', content: system },
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Extract structured lab results as per the schema.' },
-          { type: 'image_url', image_url: { url: dataUrl } },
-        ],
-      },
-    ];
+    const extractFromSingleImage = async (dataUrl: string): Promise<Record<string, any>> => {
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Extract structured lab results as per the schema.' },
+                { type: 'image_url', image_url: { url: dataUrl } },
+              ],
+            },
+          ],
+        }),
+      });
 
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        messages,
-      }),
-    });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        this.logger.error(`labs/autofill OpenAI error: ${resp.status} ${errText}`);
+        throw new ServiceUnavailableException('Failed to extract lab results');
+      }
 
-    if (!resp.ok) {
-      const errText = await resp.text();
-      this.logger.error(`labs/autofill OpenAI error: ${resp.status} ${errText}`);
-      throw new ServiceUnavailableException('Failed to extract lab results');
+      const data = (await resp.json()) as any;
+      const content = data?.choices?.[0]?.message?.content || '{}';
+      try {
+        const parsed = JSON.parse(content);
+        return parsed?.labs ?? parsed ?? {};
+      } catch {
+        this.logger.error('labs/autofill: failed to parse JSON response from OpenAI');
+        return {};
+      }
+    };
+
+    const pageResults = await Promise.all(imageDataUrls.map((url) => extractFromSingleImage(url)));
+
+    const labs: Record<string, any> = {};
+    for (const pageLabs of pageResults) {
+      for (const [key, value] of Object.entries(pageLabs)) {
+        if (value != null && !(typeof value === 'object' && Object.keys(value).length === 0)) {
+          labs[key] = value;
+        }
+      }
     }
 
-    const data = (await resp.json()) as any;
-    const content = data?.choices?.[0]?.message?.content || '{}';
-    let parsed: any = {};
-    try {
-      parsed = JSON.parse(content);
-    } catch (e) {
-      this.logger.error('labs/autofill: failed to parse JSON response from OpenAI');
-      throw new ServiceUnavailableException('Invalid AI response');
-    }
-
-    const labs = parsed?.labs ?? parsed ?? {};
     return { labs };
   }
 
