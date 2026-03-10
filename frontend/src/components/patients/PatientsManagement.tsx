@@ -48,7 +48,6 @@ export default function PatientsManagement() {
   const [search, setSearch] = useState<string>('');
   const [debouncedSearch, setDebouncedSearch] = useState<string>('');
   const [genderFilter, setGenderFilter] = useState<'ALL' | Gender>('ALL');
-  const [portalFilter, setPortalFilter] = useState<'ALL' | 'LINKED' | 'UNLINKED'>('ALL');
   const [abhaFilter, setAbhaFilter] = useState<'ALL' | 'HAS' | 'NONE'>('ALL');
   const [open, setOpen] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -173,9 +172,7 @@ export default function PatientsManagement() {
         limit: pageSize,
         search: searchTerm,
         gender: normGender,
-        // Pass-through filters if backend supports (no-op otherwise)
-        portalLinked: portalFilter === 'ALL' ? undefined : portalFilter === 'LINKED',
-        abhaPresent: abhaFilter === 'ALL' ? undefined : abhaFilter === 'HAS',
+      abhaPresent: undefined,
         sortBy: sortBy,
         sortOrder: sortOrder,
       });
@@ -244,14 +241,6 @@ export default function PatientsManagement() {
   // Derived rows with client-side filters + sorting (in case backend ignores params)
   const displayPatients = useMemo(() => {
     let rows = [...patients];
-    if (portalFilter !== 'ALL') {
-      const wantLinked = portalFilter === 'LINKED';
-      rows = rows.filter(p => (wantLinked ? !!p.portalUserId : !p.portalUserId));
-    }
-    if (abhaFilter !== 'ALL') {
-      const wantAbha = abhaFilter === 'HAS';
-      rows = rows.filter(p => (wantAbha ? !!p.abhaId : !p.abhaId));
-    }
     const cmp = <T,>(a: T, b: T) => (a === b ? 0 : (a as any) < (b as any) ? -1 : 1);
     rows.sort((a, b) => {
       let r = 0;
@@ -277,7 +266,7 @@ export default function PatientsManagement() {
       return sortOrder === 'asc' ? r : -r;
     });
     return rows;
-  }, [patients, portalFilter, abhaFilter, sortBy, sortOrder]);
+  }, [patients, sortBy, sortOrder]);
 
   const toggleSort = (key: typeof sortBy) => {
     if (sortBy === key) {
@@ -292,8 +281,6 @@ export default function PatientsManagement() {
     setSearch('');
     setDebouncedSearch('');
     setGenderFilter('ALL');
-    setPortalFilter('ALL');
-    setAbhaFilter('ALL');
     setCurrentPage(1);
   };
 
@@ -896,22 +883,6 @@ export default function PatientsManagement() {
                 <SelectItem value="MALE">Male</SelectItem>
                 <SelectItem value="FEMALE">Female</SelectItem>
                 <SelectItem value="OTHER">Other</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={portalFilter} onValueChange={(v: 'ALL' | 'LINKED' | 'UNLINKED') => setPortalFilter(v)}>
-              <SelectTrigger className="w-full sm:w-48"><SelectValue placeholder="Portal" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All Portal</SelectItem>
-                <SelectItem value="LINKED">Portal Linked</SelectItem>
-                <SelectItem value="UNLINKED">Not Linked</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={abhaFilter} onValueChange={(v: 'ALL' | 'HAS' | 'NONE') => setAbhaFilter(v)}>
-              <SelectTrigger className="w-full sm:w-40"><SelectValue placeholder="ABHA" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">All ABHA</SelectItem>
-                <SelectItem value="HAS">Has ABHA</SelectItem>
-                <SelectItem value="NONE">No ABHA</SelectItem>
               </SelectContent>
             </Select>
             <Select value={pageSize.toString()} onValueChange={(v: string) => setPageSize(parseInt(v, 10))}>
