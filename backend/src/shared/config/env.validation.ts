@@ -36,9 +36,9 @@ export function validateEnv(config: Record<string, unknown>) {
   }
 
   // Google Calendar (optional)
-  const hasGoogle = config['GOOGLE_CLIENT_ID'] && config['GOOGLE_CLIENT_SECRET'] && config['GOOGLE_REDIRECT_URI'];
+  const hasGoogle = config['GCAL_CLIENT_ID'] && config['GCAL_CLIENT_SECRET'] && config['GCAL_REDIRECT_URI'];
   if (!hasGoogle) {
-    logger.warn('Google Calendar is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI to enable calendar sync.');
+    logger.warn('Google Calendar is not configured. Set GCAL_CLIENT_ID, GCAL_CLIENT_SECRET, and GCAL_REDIRECT_URI to enable calendar sync.');
   }
 
   // WhatsApp Cloud (optional)
