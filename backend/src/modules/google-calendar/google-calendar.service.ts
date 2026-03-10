@@ -11,6 +11,10 @@ export class GoogleCalendarService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  isConfigured(): boolean {
+    return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && process.env.GOOGLE_REDIRECT_URI);
+  }
+
   private createOAuthClient() {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;

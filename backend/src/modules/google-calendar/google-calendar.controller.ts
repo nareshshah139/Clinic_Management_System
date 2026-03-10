@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query, Request, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Param, Request, UseGuards, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
@@ -15,19 +15,37 @@ interface AuthenticatedRequest {
 export class GoogleCalendarController {
   constructor(private readonly googleCalendar: GoogleCalendarService) {}
 
+  @Get('configured')
+  async configured() {
+    return { configured: this.googleCalendar.isConfigured() };
+  }
+
   @Get('status')
   async status(@Request() req: AuthenticatedRequest) {
     const userId = req.user?.sub || req.user?.id;
     return this.googleCalendar.getStatus(userId);
   }
 
+  @Get('status/:doctorId')
+  async doctorStatus(@Param('doctorId') doctorId: string) {
+    return this.googleCalendar.getStatus(doctorId);
+  }
+
   @Get('auth-url')
   async authUrl(@Request() req: AuthenticatedRequest, @Query('redirect') redirect?: string) {
-    const userId = req.user?.sub || req.user?.id;
-    // state can be used as a return-to path; keep it simple for now
     const state = redirect || '/dashboard/appointments';
     const url = await this.googleCalendar.generateAuthUrl(state);
     return { url };
+  }
+
+  @Post('exchange')
+  async exchange(
+    @Request() req: AuthenticatedRequest,
+    @Body('code') code: string,
+  ) {
+    const userId = req.user?.sub || req.user?.id;
+    const result = await this.googleCalendar.handleOAuthCallback(userId, code);
+    return { success: true, ...result };
   }
 
   @Post('disconnect')

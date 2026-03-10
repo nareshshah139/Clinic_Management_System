@@ -692,12 +692,24 @@ export class ApiClient {
   }
 
   // Google Calendar
+  async getGoogleCalendarConfigured() {
+    return this.get<{ configured: boolean }>('/google-calendar/configured');
+  }
+
   async getGoogleCalendarStatus() {
-    return this.get('/google-calendar/status');
+    return this.get<{ connected: boolean; calendarId?: string | null; email?: string | null }>('/google-calendar/status');
+  }
+
+  async getGoogleCalendarDoctorStatus(doctorId: string) {
+    return this.get<{ connected: boolean; calendarId?: string | null; email?: string | null }>(`/google-calendar/status/${doctorId}`);
   }
 
   async getGoogleCalendarAuthUrl(redirect?: string) {
     return this.get<{ url: string }>('/google-calendar/auth-url', redirect ? { redirect } : undefined);
+  }
+
+  async exchangeGoogleCalendarCode(code: string) {
+    return this.post<{ success: boolean; calendarId?: string; email?: string | null }>('/google-calendar/exchange', { code });
   }
 
   async disconnectGoogleCalendar() {

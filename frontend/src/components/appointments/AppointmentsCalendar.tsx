@@ -62,7 +62,11 @@ export default function AppointmentsCalendar({
   const [optimisticAppointment, setOptimisticAppointment] = useState<AppointmentInSlot | null>(null);
   const [gridMinutes, setGridMinutes] = useState<number>(timeSlotConfig.stepMinutes ?? 30);
   const [recentBookedSlot, setRecentBookedSlot] = useState<string>('');
+  const [googleConfigured, setGoogleConfigured] = useState<boolean | null>(null);
   const [googleStatus, setGoogleStatus] = useState<{ connected: boolean; calendarId?: string | null; email?: string | null }>({
+    connected: false,
+  });
+  const [doctorGoogleStatus, setDoctorGoogleStatus] = useState<{ connected: boolean; calendarId?: string | null; email?: string | null }>({
     connected: false,
   });
   const [googleLoading, setGoogleLoading] = useState<boolean>(false);
@@ -157,8 +161,17 @@ export default function AppointmentsCalendar({
   }, [doctorId, date]);
 
   useEffect(() => {
+    void fetchGoogleConfigured();
     void fetchGoogleStatus();
   }, []);
+
+  useEffect(() => {
+    if (doctorId) {
+      void fetchDoctorGoogleStatus(doctorId);
+    } else {
+      setDoctorGoogleStatus({ connected: false });
+    }
+  }, [doctorId]);
 
   const fetchDoctors = async () => {
     try {
@@ -181,9 +194,18 @@ export default function AppointmentsCalendar({
     }
   };
 
+  const fetchGoogleConfigured = async () => {
+    try {
+      const res = await apiClient.getGoogleCalendarConfigured();
+      setGoogleConfigured(!!res?.configured);
+    } catch {
+      setGoogleConfigured(false);
+    }
+  };
+
   const fetchGoogleStatus = async () => {
     try {
-      const res: any = await apiClient.getGoogleCalendarStatus();
+      const res = await apiClient.getGoogleCalendarStatus();
       setGoogleStatus({
         connected: !!res?.connected,
         calendarId: res?.calendarId ?? null,
@@ -194,11 +216,23 @@ export default function AppointmentsCalendar({
     }
   };
 
+  const fetchDoctorGoogleStatus = async (dId: string) => {
+    try {
+      const res = await apiClient.getGoogleCalendarDoctorStatus(dId);
+      setDoctorGoogleStatus({
+        connected: !!res?.connected,
+        calendarId: res?.calendarId ?? null,
+        email: res?.email ?? null,
+      });
+    } catch {
+      setDoctorGoogleStatus({ connected: false });
+    }
+  };
+
   const startGoogleConnect = async () => {
     try {
       setGoogleLoading(true);
-      const redirectTarget = typeof window !== 'undefined' ? window.location.href : '/dashboard/appointments';
-      const res = await apiClient.getGoogleCalendarAuthUrl(redirectTarget);
+      const res = await apiClient.getGoogleCalendarAuthUrl('/dashboard/appointments');
       if (res?.url) {
         window.location.href = res.url;
       } else {
@@ -217,6 +251,7 @@ export default function AppointmentsCalendar({
       setGoogleLoading(true);
       await apiClient.disconnectGoogleCalendar();
       setGoogleStatus({ connected: false });
+      void fetchDoctorGoogleStatus(doctorId);
       toast({ title: 'Google Calendar', description: 'Disconnected successfully.' });
     } catch (e: any) {
       const msg = e?.body?.message || e?.message || 'Failed to disconnect';
@@ -378,6 +413,13 @@ export default function AppointmentsCalendar({
     setPendingBookingSlot('');
   };
 
+  const currentDoctor = doctors.find((d) => d.id === doctorId);
+  const currentDoctorName = currentDoctor
+    ? `Dr. ${currentDoctor.firstName ?? ''} ${currentDoctor.lastName ?? ''}`.trim()
+    : 'the selected doctor';
+  const isCurrentUserTheDoctor = googleStatus.connected && doctorGoogleStatus.connected
+    && googleStatus.calendarId === doctorGoogleStatus.calendarId;
+
   return (
     <>
       <Card>
@@ -390,23 +432,68 @@ export default function AppointmentsCalendar({
               </CardTitle>
               <CardDescription>Daily calendar for selected doctor. Click an empty slot to schedule.</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
-              {googleStatus.connected ? (
-                <>
-                  <Badge variant="secondary">
-                    Google Calendar connected {googleStatus.calendarId ? `(${googleStatus.calendarId})` : ''}
-                  </Badge>
-                  <Button variant="outline" size="sm" onClick={disconnectGoogle} disabled={googleLoading}>
-                    {googleLoading ? 'Disconnecting...' : 'Disconnect'}
+            {googleConfigured !== false && (
+              <div className="flex items-center gap-2">
+                {googleStatus.connected ? (
+                  <>
+                    <div className="flex items-center gap-1.5">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                      </svg>
+                      <span className="text-xs font-medium text-green-700">Syncing</span>
+                    </div>
+                    <Badge variant="outline" className="text-xs border-green-200 bg-green-50 text-green-700">
+                      {googleStatus.email || googleStatus.calendarId || 'Connected'}
+                    </Badge>
+                    <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-red-600" onClick={disconnectGoogle} disabled={googleLoading}>
+                      {googleLoading ? 'Disconnecting...' : 'Disconnect'}
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-gray-300"
+                    onClick={startGoogleConnect}
+                    disabled={googleLoading}
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    {googleLoading ? 'Connecting...' : 'Sync with Google Calendar'}
                   </Button>
-                </>
-              ) : (
-                <Button size="sm" onClick={startGoogleConnect} disabled={googleLoading}>
-                  {googleLoading ? 'Opening Google...' : 'Connect Google Calendar'}
-                </Button>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* Doctor-specific Google Calendar status */}
+          {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <AlertCircle className="h-4 w-4 flex-shrink-0" />
+              <span>
+                {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
+                {!isCurrentUserTheDoctor && ' Ask the doctor to log in and connect their own Google Calendar.'}
+              </span>
+            </div>
+          )}
+          {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
+            <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
+              <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span>
+                {currentDoctorName}&apos;s appointments will auto-sync to Google Calendar
+                {doctorGoogleStatus.email ? ` (${doctorGoogleStatus.email})` : ''}
+              </span>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
