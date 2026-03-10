@@ -4,8 +4,9 @@
     {
       "name": "backend",
       "rootDir": "backend",
-      "startCommand": "node dist/main.js",
-      "buildCommand": "npm ci && npx prisma generate && npm run build",
+      "builder": "dockerfile",
+      "dockerfilePath": "Dockerfile",
+      "startCommand": "sh start.sh",
       "healthcheckPath": "/health",
       "envVarGroups": [],
       "variables": {
@@ -15,8 +16,9 @@
     {
       "name": "frontend",
       "rootDir": "frontend",
-      "startCommand": "npm run start",
-      "buildCommand": "npm install --no-audit --no-fund && npm run build",
+      "builder": "dockerfile",
+      "dockerfilePath": "Dockerfile",
+      "startCommand": "node server.js",
       "envVarGroups": [],
       "variables": {
         "PORT": "3000"
