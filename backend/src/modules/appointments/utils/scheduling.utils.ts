@@ -192,7 +192,7 @@ export class SchedulingUtils {
       };
     }
 
-    if (hoursUntilAppointment < minAdvanceHours) {
+    if (minAdvanceHours > 0 && hoursUntilAppointment < minAdvanceHours) {
       return {
         canReschedule: false,
         reason: `Cannot reschedule within ${minAdvanceHours} hours of appointment`,
