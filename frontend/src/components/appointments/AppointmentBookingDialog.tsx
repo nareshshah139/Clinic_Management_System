@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { getErrorMessage, filterRoomsByVisitType, formatPatientName, addMinutesToHHMM, doTimeSlotsOverlap, getSlotDurationMinutes, hhmmToMinutes } from '@/lib/utils';
@@ -28,6 +29,7 @@ interface AppointmentBookingDialogProps {
     visitType: VisitType; 
     roomId?: string;
     slot?: string;
+    notes?: string;
   }) => Promise<void>;
   onCancel: () => void;
 }
@@ -50,6 +52,7 @@ export default function AppointmentBookingDialog({
   const [loading, setLoading] = useState(false);
   const [fetchingRooms, setFetchingRooms] = useState(false);
   const [fetchingSchedules, setFetchingSchedules] = useState(false);
+  const [procedureName, setProcedureName] = useState<string>('');
   const [errors, setErrors] = useState<string[]>([]);
   const [durationMinutes, setDurationMinutes] = useState<number>(() => {
     // Default to the slot's current duration if provided, else 30
@@ -114,9 +117,9 @@ export default function AppointmentBookingDialog({
     if (open) {
       void fetchRooms();
     } else {
-      // Reset form when dialog closes
       setVisitType('OPD');
       setSelectedRoomId('');
+      setProcedureName('');
       setRoomSchedules({});
       setErrors([]);
     }
@@ -259,7 +262,8 @@ export default function AppointmentBookingDialog({
       await onConfirm({ 
         visitType, 
         roomId: selectedRoomId || undefined,
-        slot: derivedSlot
+        slot: derivedSlot,
+        notes: visitType === 'PROCEDURE' && procedureName.trim() ? procedureName.trim() : undefined,
       });
     } catch (error) {
       // Error handling is done in parent component
@@ -330,7 +334,8 @@ export default function AppointmentBookingDialog({
             <label className="text-sm font-medium text-gray-700 mb-2 block">Appointment Type *</label>
             <Select value={visitType} onValueChange={(value: VisitType) => {
               setVisitType(value);
-              setSelectedRoomId(''); // Reset room selection when visit type changes
+              setSelectedRoomId('');
+              setProcedureName('');
               setErrors([]);
             }}>
               <SelectTrigger>
@@ -348,6 +353,20 @@ export default function AppointmentBookingDialog({
               {visitType === 'TELEMED' && 'Virtual consultation via video call'}
             </p>
           </div>
+
+          {visitType === 'PROCEDURE' && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-2 block">Procedure Name</label>
+              <Input
+                placeholder="e.g. Chemical Peel, Botox, Laser Hair Removal"
+                value={procedureName}
+                onChange={(e) => setProcedureName(e.target.value)}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                This will be shown on the calendar next to the patient name for quick reference.
+              </p>
+            </div>
+          )}
 
           {/* Room Selection and Availability */}
           {visitType && (

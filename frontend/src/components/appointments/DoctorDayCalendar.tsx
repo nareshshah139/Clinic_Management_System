@@ -197,6 +197,7 @@ export default function DoctorDayCalendar({
               status: (a.status as AppointmentStatus) || AppointmentStatus.SCHEDULED,
               visit: a.visit ? { id: a.visit.id, status: a.visit.status ?? undefined } : undefined,
               isFollowUp,
+              notes: (a as any).notes ?? undefined,
             };
           })
       );
@@ -473,7 +474,12 @@ export default function DoctorDayCalendar({
                       {/* Left side - Time and Patient */}
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-blue-700 font-bold">{`${as}-${ae}`}</span>
-                        <span className="font-semibold">{formatPatientName(apt.patient ?? { name: 'Unknown' })}</span>
+                        <span className="font-semibold">
+                          {formatPatientName(apt.patient ?? { name: 'Unknown' })}
+                          {apt.visitType === 'PROCEDURE' && apt.notes && (
+                            <span className="text-purple-700 font-medium ml-1">({apt.notes})</span>
+                          )}
+                        </span>
                       </div>
                       
                       {/* Center - Status indicators */}
@@ -966,6 +972,9 @@ export default function DoctorDayCalendar({
                   {selectedAppointment.visitType || 'OPD'}
                 </Badge>
               </div>
+              {selectedAppointment.visitType === 'PROCEDURE' && selectedAppointment.notes && (
+                <div><span className="text-gray-600">Procedure:</span> {selectedAppointment.notes}</div>
+              )}
               {selectedAppointment.room && (
                 <div><span className="text-gray-600">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
               )}

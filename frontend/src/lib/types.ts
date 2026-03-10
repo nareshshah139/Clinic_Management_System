@@ -58,6 +58,7 @@ export interface RoomSchedule {
     status?: string;
     isFollowUp?: boolean;
     visit?: { id: string; status?: string | null };
+    notes?: string;
   }>;
 }
 
@@ -108,6 +109,7 @@ export interface AppointmentInSlot {
   status: AppointmentStatus;
   visit?: { id: string; status?: string | null };
   isFollowUp?: boolean;
+  notes?: string;
 }
 
 // Available Slots

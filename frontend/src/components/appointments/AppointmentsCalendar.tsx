@@ -316,6 +316,7 @@ export default function AppointmentsCalendar({
     visitType: 'OPD' | 'PROCEDURE' | 'TELEMED'; 
     roomId?: string;
     slot?: string;
+    notes?: string;
   }) => {
     try {
       setLoading(true);
@@ -351,6 +352,7 @@ export default function AppointmentsCalendar({
         visitType: appointmentData.visitType,
         room: selectedRoom ? { id: selectedRoom.id, name: selectedRoom.name, type: selectedRoom.type } : undefined,
         status: AppointmentStatus.SCHEDULED,
+        notes: appointmentData.notes,
       };
       
       setOptimisticAppointment(optimisticAppt);
@@ -361,7 +363,8 @@ export default function AppointmentsCalendar({
         date, 
         slot: finalSlot, 
         visitType: appointmentData.visitType,
-        roomId: appointmentData.roomId
+        roomId: appointmentData.roomId,
+        notes: appointmentData.notes,
       });
       
       // Clear optimistic appointment and refresh with real data

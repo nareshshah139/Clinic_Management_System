@@ -516,6 +516,9 @@ export default function RoomCalendar() {
                             <div className="font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: '0.75rem', lineHeight: '1.2' }}>
                               <div className="truncate font-semibold">
                                 {apt.patient.name}
+                                {apt.visitType === 'PROCEDURE' && apt.notes && (
+                                  <span className="text-purple-700 font-medium ml-0.5">({apt.notes})</span>
+                                )}
                               </div>
                             </div>
                             
