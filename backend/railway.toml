@@ -1,9 +1,9 @@
-[build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+[service]
+name = "backend"
+start = "sh start.sh"
+build = "NODE_OPTIONS=--max-old-space-size=4096 npm ci && npx prisma generate && npm run build"
 
 [deploy]
-startCommand = "sh start.sh"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
 restartPolicyType = "on_failure"
