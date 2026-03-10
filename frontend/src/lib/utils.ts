@@ -24,23 +24,36 @@ export function formatPatientName(patient: MinimalPatient): string {
   return `Patient ${patient.id?.slice(-4) || 'Unknown'}`;
 }
 
-// Calculate age from date of birth
-// Returns null if DOB is missing or if DOB is today's date (default placeholder)
-export function calculateAge(dob: string | Date): number | null {
+/**
+ * Resolve age from the patient's `age` field or fallback to computing from `dob`.
+ * Accepts an object with optional age/dob, or a raw dob string for backward compat.
+ */
+export function calculateAge(dobOrPatient: string | Date | { age?: number | null; dob?: string | Date | null } | null | undefined): number | null {
+  if (!dobOrPatient) return null;
+
+  if (typeof dobOrPatient === 'object' && !(dobOrPatient instanceof Date) && ('age' in dobOrPatient || 'dob' in dobOrPatient)) {
+    if (dobOrPatient.age != null) return dobOrPatient.age;
+    if (!dobOrPatient.dob) return null;
+    return calculateAgeFromDob(dobOrPatient.dob);
+  }
+
+  return calculateAgeFromDob(dobOrPatient as string | Date);
+}
+
+function calculateAgeFromDob(dob: string | Date): number | null {
   if (!dob) return null;
   try {
     const birthDate = new Date(dob);
     if (isNaN(birthDate.getTime())) return null;
-    
+
     const today = new Date();
-    // Check if DOB is today's date (default placeholder) - ignore time component
-    const isToday = 
+    const isToday =
       birthDate.getFullYear() === today.getFullYear() &&
       birthDate.getMonth() === today.getMonth() &&
       birthDate.getDate() === today.getDate();
-    
-    if (isToday) return null; // Skip calculation for default date
-    
+
+    if (isToday) return null;
+
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
@@ -52,7 +65,6 @@ export function calculateAge(dob: string | Date): number | null {
   }
 }
 
-// Check if DOB is today's date (default placeholder)
 export function isDefaultDob(dob: string | Date | null | undefined): boolean {
   if (!dob) return false;
   try {
@@ -69,7 +81,6 @@ export function isDefaultDob(dob: string | Date | null | undefined): boolean {
   }
 }
 
-// Format DOB for display - returns "N/A" if it's the default date
 export function formatDob(dob: string | Date | null | undefined): string {
   if (!dob) return 'N/A';
   if (isDefaultDob(dob)) return 'N/A';
@@ -80,6 +91,12 @@ export function formatDob(dob: string | Date | null | undefined): string {
   } catch {
     return 'N/A';
   }
+}
+
+export function formatAge(patient: { age?: number | null; dob?: string | Date | null } | null | undefined): string {
+  if (!patient) return 'N/A';
+  const age = calculateAge(patient);
+  return age != null ? `${age} yrs` : 'N/A';
 }
 
 // Default time slot configuration for IST

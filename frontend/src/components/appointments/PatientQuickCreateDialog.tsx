@@ -23,10 +23,11 @@ interface QuickCreateFormState {
   firstName: string;
   lastName: string;
   phone: string;
-  dob: string;
+  age: string;
   gender: string;
   email: string;
   abhaId: string;
+  consultationType: string;
 }
 
 function parseInitialValues(initialName?: string, initialPhone?: string): Partial<QuickCreateFormState> {
@@ -68,10 +69,11 @@ export default function PatientQuickCreateDialog({
     firstName: defaults.firstName ?? '',
     lastName: defaults.lastName ?? '',
     phone: defaults.phone ?? '',
-    dob: '',
+    age: '',
     gender: 'OTHER',
     email: '',
     abhaId: '',
+    consultationType: 'OFFLINE',
   });
 
   useEffect(() => {
@@ -88,10 +90,11 @@ export default function PatientQuickCreateDialog({
         firstName: '',
         lastName: '',
         phone: '',
-        dob: '',
+        age: '',
         gender: 'OTHER',
         email: '',
         abhaId: '',
+        consultationType: 'OFFLINE',
       });
     }
   }, [open, defaults]);
@@ -119,13 +122,15 @@ export default function PatientQuickCreateDialog({
 
     setSubmitting(true);
     try {
+      const parsedAge = form.age ? parseInt(form.age, 10) : undefined;
       const payload = {
         name: `${form.firstName} ${form.lastName}`.trim() || form.firstName,
         gender: form.gender,
-        dob: form.dob || undefined,
+        age: parsedAge != null && !isNaN(parsedAge) ? parsedAge : undefined,
         phone: form.phone,
         email: form.email || undefined,
         abhaId: form.abhaId || undefined,
+        consultationType: form.consultationType || undefined,
       };
 
       const created = (await apiClient.createPatient(payload)) as Patient & { data?: Patient };
@@ -193,11 +198,14 @@ export default function PatientQuickCreateDialog({
               />
             </div>
             <div>
-              <Label>Date of Birth</Label>
+              <Label>Age (years)</Label>
               <Input
-                type="date"
-                value={form.dob}
-                onChange={(e) => setForm((prev) => ({ ...prev, dob: e.target.value }))}
+                type="number"
+                min="0"
+                max="150"
+                placeholder="e.g. 35"
+                value={form.age}
+                onChange={(e) => setForm((prev) => ({ ...prev, age: e.target.value }))}
               />
             </div>
             <div>
@@ -241,6 +249,21 @@ export default function PatientQuickCreateDialog({
                 onChange={(e) => setForm((prev) => ({ ...prev, abhaId: e.target.value }))}
                 placeholder="Optional - 14-digit ABHA number"
               />
+            </div>
+            <div className="md:col-span-2">
+              <Label>Consultation Type</Label>
+              <Select
+                value={form.consultationType}
+                onValueChange={(value: string) => setForm((prev) => ({ ...prev, consultationType: value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select consultation type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ONLINE">Online</SelectItem>
+                  <SelectItem value="OFFLINE">Offline (In-Clinic Visit)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

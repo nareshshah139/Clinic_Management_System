@@ -14,7 +14,7 @@ import { ChevronDown, ChevronUp, Languages, X, Plus, Trash2 } from 'lucide-react
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage, formatDob } from '@/lib/utils';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
@@ -1072,16 +1072,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return Number.isNaN(parsed.getTime()) ? reviewDate : parsed.toLocaleDateString();
   }, [reviewDate]);
   const patientGender = useMemo(() => visitData?.patient?.gender || patientData?.gender || '', [visitData, patientData]);
-  const patientDob = useMemo(() => visitData?.patient?.dob || patientData?.dob || '', [visitData, patientData]);
   const patientAgeYears = useMemo(() => {
-    if (!patientDob) return '';
-    const birthDate = new Date(patientDob);
+    const p = visitData?.patient || patientData;
+    if (!p) return '';
+    if ((p as any).age != null) return `${(p as any).age} yrs`;
+    const dob = p.dob;
+    if (!dob) return '';
+    const birthDate = new Date(dob);
     const today = new Date();
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
     return age >= 0 ? `${age} yrs` : '';
-  }, [patientDob]);
+  }, [visitData, patientData]);
   const patientAgeSex = useMemo(() => {
     const parts = [];
     if (patientAgeYears) parts.push(patientAgeYears);

@@ -26,7 +26,7 @@ export class PatientsService {
   /**
    * Generate a unique patientCode with collision retries.
    */
-  private async createPatientWithCode(tx: Prisma.TransactionClient, data: CreatePatientDto & { branchId: string; dob: Date }) {
+  private async createPatientWithCode(tx: Prisma.TransactionClient, data: CreatePatientDto & { branchId: string; dob?: Date | null; age?: number | null }) {
     const maxAttempts = 5;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const code = generatePatientCode();
@@ -56,17 +56,38 @@ export class PatientsService {
     throw new ConflictException('Could not generate unique patient code after retries');
   }
 
+  private ageToApproximateDob(age: number): Date {
+    const now = new Date();
+    return new Date(now.getFullYear() - age, 0, 1);
+  }
+
   async create(createPatientDto: CreatePatientDto, branchId: string) {
-    // Normalize phone number before storing
     const normalizedPhone = this.normalizePhone(createPatientDto.phone);
-    // Use provided DOB or default to today's date if not provided
-    const dob = createPatientDto.dob ? new Date(createPatientDto.dob) : new Date();
+    const { dob: dobStr, age, ...rest } = createPatientDto;
+
+    let dob: Date | null = null;
+    let resolvedAge: number | null = age != null ? age : null;
+
+    if (dobStr) {
+      dob = new Date(dobStr);
+      if (resolvedAge == null) {
+        const now = new Date();
+        let computed = now.getFullYear() - dob.getFullYear();
+        const m = now.getMonth() - dob.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) computed--;
+        resolvedAge = computed >= 0 ? computed : null;
+      }
+    } else if (resolvedAge != null) {
+      dob = this.ageToApproximateDob(resolvedAge);
+    }
+
     return this.prisma.$transaction((tx) =>
       this.createPatientWithCode(tx, {
-        ...createPatientDto,
+        ...rest,
         phone: normalizedPhone,
         branchId,
         dob,
+        age: resolvedAge,
       }),
     );
   }
@@ -132,6 +153,7 @@ export class PatientsService {
           name: true,
           gender: true,
           dob: true,
+          age: true,
           phone: true,
           email: true,
           address: true,
@@ -139,6 +161,7 @@ export class PatientsService {
           city: true,
           state: true,
           referralSource: true,
+          consultationType: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -167,6 +190,7 @@ export class PatientsService {
         name: true,
         gender: true,
         dob: true,
+        age: true,
         phone: true,
         email: true,
         address: true,
@@ -183,6 +207,7 @@ export class PatientsService {
         occupation: true,
         guardianName: true,
         medicalHistory: true,
+        consultationType: true,
         portalUserId: true,
         branchId: true,
         isArchived: true,
@@ -252,20 +277,34 @@ export class PatientsService {
   }
 
   async update(id: string, updatePatientDto: UpdatePatientDto, branchId: string) {
-    // Ensure patient exists in this branch
     await this.findOne(id, branchId);
 
-    const { dob, phone, ...rest } = updatePatientDto as any;
-    const updateData: any = {
-      ...rest,
-      ...(dob ? { dob: new Date(dob as any) } : {}),
-    };
-    
-    // Normalize phone number if provided
+    const { dob, age, phone, ...rest } = updatePatientDto as any;
+    const updateData: any = { ...rest };
+
+    if (age != null) {
+      updateData.age = age;
+      if (!dob) {
+        updateData.dob = this.ageToApproximateDob(age);
+      }
+    }
+
+    if (dob) {
+      updateData.dob = new Date(dob as any);
+      if (age == null) {
+        const now = new Date();
+        const d = new Date(dob);
+        let computed = now.getFullYear() - d.getFullYear();
+        const m = now.getMonth() - d.getMonth();
+        if (m < 0 || (m === 0 && now.getDate() < d.getDate())) computed--;
+        if (computed >= 0) updateData.age = computed;
+      }
+    }
+
     if (phone !== undefined) {
       updateData.phone = this.normalizePhone(phone);
     }
-    
+
     return this.prisma.patient.update({
       where: { id },
       data: updateData,

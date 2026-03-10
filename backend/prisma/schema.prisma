@@ -173,7 +173,8 @@ model Patient {
   abhaId           String?           @unique
   name             String
   gender           String
-  dob              DateTime
+  dob              DateTime?
+  age              Int?
   phone            String
   email            String?
   address          String?
@@ -190,6 +191,7 @@ model Patient {
   occupation       String?
   guardianName     String?
   medicalHistory   String?
+  consultationType String?
   portalUserId     String?           @unique
   branchId         String
   isArchived       Boolean           @default(false)

@@ -130,11 +130,12 @@ export interface Patient {
   abhaId?: string;
   firstName: string;
   lastName: string;
-  name: string; // Computed field for display
+  name: string;
   email?: string;
   phone: string;
   gender: string;
-  dob: string;
+  dob?: string | null;
+  age?: number | null;
   address?: string;
   city?: string;
   state?: string;
@@ -144,6 +145,7 @@ export interface Patient {
   updatedAt: string;
   allergies?: string | null;
   medicalHistory?: string | null;
+  consultationType?: string | null;
   portalUserId?: string | null;
   lastVisitDate?: string | null;
 }
@@ -203,7 +205,8 @@ export interface BackendPatientRow {
   firstName?: string | null;
   lastName?: string | null;
   gender?: string | null;
-  dob: string;
+  dob?: string | null;
+  age?: number | null;
   phone: string;
   email?: string | null;
   address?: string | null;
@@ -211,6 +214,7 @@ export interface BackendPatientRow {
   city?: string | null;
   state?: string | null;
   referralSource?: string | null;
+  consultationType?: string | null;
   portalUserId?: string | null;
   createdAt: string;
   updatedAt: string;

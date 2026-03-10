@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Plus, Search, Edit, Eye, Phone, Mail, Archive, Link as LinkIcon, Unlink, Undo, MessageSquare, Stethoscope, Download } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { formatPatientName, filterRoomsByVisitType, calculateAge, isDefaultDob, formatDob } from '@/lib/utils';
+import { formatPatientName, filterRoomsByVisitType, calculateAge, formatAge } from '@/lib/utils';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
@@ -25,13 +25,14 @@ interface PatientFormState {
   abhaId?: string;
   firstName: string;
   lastName: string;
-  dateOfBirth: string;
+  age: string;
   gender: Gender;
   phone: string;
   email?: string;
   address?: string;
   emergencyContact?: string;
   referralSource?: string;
+  consultationType?: 'ONLINE' | 'OFFLINE';
   patientType?: 'WALKIN' | 'NON_WALKIN';
   walkinDoctorId?: string;
   walkinVisitType?: VisitType;
@@ -74,13 +75,14 @@ export default function PatientsManagement() {
     abhaId: '',
     firstName: '',
     lastName: '',
-    dateOfBirth: '',
+    age: '',
     gender: 'OTHER',
     phone: '',
     email: '',
     address: '',
     emergencyContact: '',
     referralSource: '',
+    consultationType: 'OFFLINE',
     patientType: 'NON_WALKIN',
     walkinDoctorId: '',
     walkinVisitType: 'OPD',
@@ -203,7 +205,8 @@ export default function PatientsManagement() {
           email: bp.email || undefined,
           phone: bp.phone,
           gender: normalizeGender(bp.gender),
-          dob: bp.dob,
+          dob: bp.dob || undefined,
+          age: bp.age ?? undefined,
           address: bp.address || undefined,
           city: bp.city || undefined,
           state: bp.state || undefined,
@@ -255,38 +258,8 @@ export default function PatientsManagement() {
       if (sortBy === 'NAME') {
         r = cmp((a.name || '').toLowerCase(), (b.name || '').toLowerCase());
       } else if (sortBy === 'AGE') {
-        const ageA = (() => {
-          if (!a.dob) return -Infinity;
-          const d = new Date(a.dob);
-          if (isNaN(d.getTime())) return -Infinity;
-          const today = new Date();
-          // Check if DOB is today's date (default placeholder)
-          const isToday = 
-            d.getFullYear() === today.getFullYear() &&
-            d.getMonth() === today.getMonth() &&
-            d.getDate() === today.getDate();
-          if (isToday) return -Infinity; // Treat default date as missing DOB for sorting
-          let age = today.getFullYear() - d.getFullYear();
-          const m = today.getMonth() - d.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-          return age;
-        })();
-        const ageB = (() => {
-          if (!b.dob) return -Infinity;
-          const d = new Date(b.dob);
-          if (isNaN(d.getTime())) return -Infinity;
-          const today = new Date();
-          // Check if DOB is today's date (default placeholder)
-          const isToday = 
-            d.getFullYear() === today.getFullYear() &&
-            d.getMonth() === today.getMonth() &&
-            d.getDate() === today.getDate();
-          if (isToday) return -Infinity; // Treat default date as missing DOB for sorting
-          let age = today.getFullYear() - d.getFullYear();
-          const m = today.getMonth() - d.getMonth();
-          if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
-          return age;
-        })();
+        const ageA = calculateAge(a) ?? -Infinity;
+        const ageB = calculateAge(b) ?? -Infinity;
         r = cmp(ageA, ageB);
       } else if (sortBy === 'GENDER') {
         r = cmp((a.gender || '').toString(), (b.gender || '').toString());
@@ -326,7 +299,7 @@ export default function PatientsManagement() {
 
   const exportCsv = () => {
     const headers = [
-      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Portal Linked','Date of Birth','Created At'
+      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Consultation Type','Portal Linked','Created At'
     ];
     const lines = [headers.join(',')];
     const csvEscape = (v: unknown) => {
@@ -335,8 +308,7 @@ export default function PatientsManagement() {
       return s;
     };
     for (const p of displayPatients) {
-      const age = calculateAge(p.dob);
-      const dobDisplay = formatDob(p.dob);
+      const age = calculateAge(p);
       const row = [
         p.id,
         p.name,
@@ -346,8 +318,8 @@ export default function PatientsManagement() {
         p.email || '',
         p.abhaId || '',
         p.referralSource || '',
+        (p as any).consultationType === 'ONLINE' ? 'Online' : (p as any).consultationType === 'OFFLINE' ? 'Offline' : '',
         p.portalUserId ? 'Yes' : 'No',
-        dobDisplay, // Add DOB column with N/A for default dates
         p.createdAt,
       ].map(csvEscape);
       lines.push(row.join(','));
@@ -387,13 +359,14 @@ export default function PatientsManagement() {
       abhaId: '',
       firstName: '',
       lastName: '',
-      dateOfBirth: '',
+      age: '',
       gender: 'OTHER',
       phone: '',
       email: '',
       address: '',
       emergencyContact: '',
       referralSource: '',
+      consultationType: 'OFFLINE',
       patientType: 'NON_WALKIN',
       walkinDoctorId: '',
       walkinVisitType: 'OPD',
@@ -422,18 +395,20 @@ export default function PatientsManagement() {
       }
       
       const name = `${form.firstName} ${form.lastName}`.trim();
+      const parsedAge = form.age ? parseInt(form.age, 10) : undefined;
       const payload = {
         abhaId: form.abhaId || undefined,
         name: name || form.firstName || form.lastName,
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
         gender: form.gender,
-        dob: form.dateOfBirth || undefined,
+        age: parsedAge != null && !isNaN(parsedAge) ? parsedAge : undefined,
         phone: form.phone,
         email: form.email || undefined,
         address: form.address || undefined,
         emergencyContact: form.emergencyContact || undefined,
         referralSource: form.referralSource || undefined,
+        consultationType: form.consultationType || undefined,
       };
       
       let savedPatientId = form.id;
@@ -529,20 +504,20 @@ export default function PatientsManagement() {
   };
 
   const onEdit = (p: Patient) => {
-    // If DOB is the default date (today), show empty string in the input
-    const dobValue = p.dob && !isDefaultDob(p.dob) ? (p.dob || '').split('T')[0] || '' : '';
+    const resolvedAge = calculateAge(p);
     setForm({
       id: p.id,
       abhaId: p.abhaId || '',
       firstName: p.firstName,
       lastName: p.lastName,
-      dateOfBirth: dobValue,
+      age: resolvedAge != null ? String(resolvedAge) : '',
       gender: (p.gender as Gender) || 'OTHER',
       phone: p.phone,
       email: p.email || '',
       address: p.address || '',
       emergencyContact: p.emergencyContact || '',
       referralSource: p.referralSource || '',
+      consultationType: (p as any).consultationType === 'ONLINE' ? 'ONLINE' : 'OFFLINE',
       patientType: 'NON_WALKIN',
       walkinDoctorId: '',
     });
@@ -561,26 +536,6 @@ export default function PatientsManagement() {
     })();
   };
 
-  const calculateAge = (dob: string): number | null => {
-    if (!dob) return null;
-    const birthDate = new Date(dob);
-    if (isNaN(birthDate.getTime())) return null;
-    const today = new Date();
-    // Check if DOB is today's date (default placeholder) - ignore time component
-    const isToday = 
-      birthDate.getFullYear() === today.getFullYear() &&
-      birthDate.getMonth() === today.getMonth() &&
-      birthDate.getDate() === today.getDate();
-    
-    if (isToday) return null; // Skip calculation for default date
-    
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
-      age--;
-    }
-    return age;
-  };
 
   const handleArchive = async (patient: Patient) => {
     const patientName = formatPatientName(patient);
@@ -744,8 +699,8 @@ export default function PatientsManagement() {
                 <Input id="lastName" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} />
               </div>
               <div>
-                <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                <Input id="dateOfBirth" type="date" value={form.dateOfBirth} onChange={(e) => setForm({ ...form, dateOfBirth: e.target.value })} />
+                <Label htmlFor="age">Age (years)</Label>
+                <Input id="age" type="number" min="0" max="150" placeholder="e.g. 35" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
               </div>
               <div>
                 <Label id="gender-label" htmlFor="gender">Gender</Label>
@@ -785,6 +740,18 @@ export default function PatientsManagement() {
               <div className="md:col-span-2">
                 <Label htmlFor="emergencyContact">Emergency Contact</Label>
                 <Input id="emergencyContact" value={form.emergencyContact} onChange={(e) => setForm({ ...form, emergencyContact: e.target.value })} />
+              </div>
+              <div>
+                <Label id="consultationType-label" htmlFor="consultationType">Consultation Type</Label>
+                <Select value={form.consultationType || 'OFFLINE'} onValueChange={(v: 'ONLINE' | 'OFFLINE') => setForm({ ...form, consultationType: v })}>
+                  <SelectTrigger id="consultationType" aria-labelledby="consultationType-label">
+                    <SelectValue placeholder="Select consultation type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ONLINE">Online</SelectItem>
+                    <SelectItem value="OFFLINE">Offline (In-Clinic Visit)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
               <div className="md:col-span-2">
                 <Label id="referralSource-label" htmlFor="referralSource">How did the patient hear about us?</Label>
@@ -1023,6 +990,7 @@ export default function PatientsManagement() {
                     <TableHead onClick={() => toggleSort('REFERRAL')} className="cursor-pointer select-none">
                       Referral {sortBy === 'REFERRAL' ? (sortOrder === 'asc' ? '▲' : '▼') : ''}
                     </TableHead>
+                    <TableHead>Consultation</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1075,7 +1043,7 @@ export default function PatientsManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">{(() => {
-                          const age = calculateAge(p.dob);
+                          const age = calculateAge(p);
                           return age !== null ? `${age} yrs` : <span className="text-gray-400">—</span>;
                         })()}</div>
                       </TableCell>
@@ -1098,6 +1066,15 @@ export default function PatientsManagement() {
                       )}
                       <TableCell>
                         <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
+                      </TableCell>
+                      <TableCell>
+                        {(p as any).consultationType === 'ONLINE' ? (
+                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">Online</Badge>
+                        ) : (p as any).consultationType === 'OFFLINE' ? (
+                          <Badge variant="secondary" className="bg-green-100 text-green-700">Offline</Badge>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-2">

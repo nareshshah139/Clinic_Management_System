@@ -256,11 +256,16 @@ export class ReportsService {
       this.prisma.patient.count({ where: wherePatients }),
     ]);
 
-    // Age filter and groups
     const now = new Date();
+    const resolveAge = (p: any): number | null => {
+      if (p.age != null) return p.age;
+      if (p.dob) return this.ageFromDob(new Date(p.dob), now);
+      return null;
+    };
+
     const filtered = patients.filter((p) => {
-      const age = this.ageFromDob(new Date(p.dob), now);
-      if (age === null) return true; // Include patients with default/missing DOB in all filters
+      const age = resolveAge(p);
+      if (age === null) return true;
       if (minAge != null && age < minAge) return false;
       if (maxAge != null && age > maxAge) return false;
       return true;
@@ -276,11 +281,8 @@ export class ReportsService {
 
     const ageGroupMap = new Map<string, number>();
     for (const p of filtered) {
-      const age = this.ageFromDob(new Date(p.dob), now);
-      if (age === null) {
-        // Skip age grouping for patients with default/missing DOB
-        continue;
-      }
+      const age = resolveAge(p);
+      if (age === null) continue;
       const bucket = ageBuckets.find((b) => b[1](age))?.[0] ?? 'Unknown';
       ageGroupMap.set(bucket, (ageGroupMap.get(bucket) || 0) + 1);
     }

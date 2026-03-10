@@ -269,6 +269,7 @@ async function main() {
         id: 'patient-seed-1',
         name: 'John Doe',
         gender: 'M',
+        age: 36,
         dob: new Date('1990-01-01'),
         phone: '9000001000',
         email: 'john.doe@patient.test',

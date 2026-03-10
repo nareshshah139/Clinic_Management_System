@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatDob } from '@/lib/utils';
+import { calculateAge, formatAge } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Stethoscope, Users, ArrowLeft } from 'lucide-react';
@@ -80,17 +80,6 @@ export default function PatientDetailsPage() {
     const last = String(patient.lastName || '').trim();
     return (raw || `${first} ${last}`).trim();
   }, [patient]);
-
-  const calculateAge = (dob: string | undefined) => {
-    if (!dob) return null;
-    const birthDate = new Date(dob);
-    if (isNaN(birthDate.getTime())) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const m = today.getMonth() - birthDate.getMonth();
-    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
-    return age;
-  };
 
   const sortedVisits = useMemo(() => {
     return [...visits].sort((a, b) => {
@@ -465,7 +454,7 @@ export default function PatientDetailsPage() {
                 {patient.patientCode && <Badge variant="secondary">Code: {patient.patientCode}</Badge>}
                 {patient.abhaId && <Badge variant="outline">ABHA: {patient.abhaId}</Badge>}
                 {patient.gender && <Badge variant="outline">{patient.gender}</Badge>}
-                {calculateAge(patient.dob) !== null && <Badge variant="outline">{calculateAge(patient.dob)} yrs</Badge>}
+                {calculateAge(patient) !== null && <Badge variant="outline">{calculateAge(patient)} yrs</Badge>}
               </div>
             </div>
           </div>
@@ -527,7 +516,7 @@ export default function PatientDetailsPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
-              <div><span className="text-gray-600">Date of Birth:</span> <span className="text-gray-900">{formatDob(patient.dob)}</span></div>
+              <div><span className="text-gray-600">Age:</span> <span className="text-gray-900">{formatAge(patient)}</span></div>
               <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
               <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
               <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>

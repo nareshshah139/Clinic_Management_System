@@ -175,7 +175,9 @@ export default function DoctorDayCalendar({
               }
             }
             
-            const age = patientDetails?.dob ? calculateAge(patientDetails.dob) : undefined;
+            const age = (patientDetails as any)?.age != null
+              ? (patientDetails as any).age
+              : patientDetails?.dob ? calculateAge(patientDetails.dob) : undefined;
             
             return {
               slot: a.slot,

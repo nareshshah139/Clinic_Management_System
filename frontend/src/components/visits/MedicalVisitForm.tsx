@@ -1573,10 +1573,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
                   </div>
                   <div className="text-sm text-gray-600">
-                    Age: {patientDetails.dob ? (() => {
+                    Age: {(() => {
+                      if ((patientDetails as any).age != null) return (patientDetails as any).age;
+                      if (!patientDetails.dob) return 'N/A';
                       const dob = new Date(patientDetails.dob);
                       const today = new Date();
-                      // Check if DOB is today's date (default placeholder)
                       const isToday = 
                         dob.getFullYear() === today.getFullYear() &&
                         dob.getMonth() === today.getMonth() &&
@@ -1586,7 +1587,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       const monthDiff = today.getMonth() - dob.getMonth();
                       const adjustedAge = (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) ? age - 1 : age;
                       return adjustedAge >= 0 ? adjustedAge : 'N/A';
-                    })() : 'N/A'} • {patientDetails.gender || 'N/A'}
+                    })()} • {patientDetails.gender || 'N/A'}
                   </div>
                   <div className="text-sm text-gray-600">
                     Phone: {patientDetails.phone || 'N/A'}

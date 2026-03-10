@@ -322,6 +322,7 @@ export class AppointmentsService {
             email: true, 
             gender: true,
             dob: true,
+            age: true,
             address: true,
           },
         },

@@ -2,6 +2,9 @@ import {
   IsString,
   IsOptional,
   IsDateString,
+  IsInt,
+  Min,
+  Max,
   Matches,
 } from 'class-validator';
 
@@ -19,6 +22,12 @@ export class CreatePatientDto {
   @IsOptional()
   @IsDateString()
   dob?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(150)
+  age?: number;
 
   @Matches(/^\+?[1-9]\d{6,14}$/, { message: 'phone must be a valid international phone number (E.164 format)' })
   phone: string;
@@ -84,4 +93,8 @@ export class CreatePatientDto {
   @IsOptional()
   @IsString()
   medicalHistory?: string;
+
+  @IsOptional()
+  @IsString()
+  consultationType?: string;
 }
