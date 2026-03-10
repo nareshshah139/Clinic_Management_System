@@ -291,40 +291,103 @@ export default function PatientsManagement() {
     setCurrentPage(1);
   };
 
-  const exportCsv = () => {
-    const headers = [
-      'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Consultation Type','Portal Linked','Created At'
-    ];
-    const lines = [headers.join(',')];
-    const csvEscape = (v: unknown) => {
-      const s = String(v ?? '');
-      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-      return s;
-    };
-    for (const p of displayPatients) {
-      const age = calculateAge(p);
-      const row = [
-        p.id,
-        p.name,
-        age !== null ? age : 'N/A',
-        p.gender,
-        p.phone,
-        p.email || '',
-        p.abhaId || '',
-        p.referralSource || '',
-        (p as any).consultationType === 'ONLINE' ? 'Online' : (p as any).consultationType === 'OFFLINE' ? 'Offline' : '',
-        p.portalUserId ? 'Yes' : 'No',
-        p.createdAt,
-      ].map(csvEscape);
-      lines.push(row.join(','));
+  const [exporting, setExporting] = useState(false);
+
+  const exportCsv = async () => {
+    try {
+      setExporting(true);
+      const normGender = genderFilter !== 'ALL' ? genderFilter : undefined;
+      const normConsultationType = consultationTypeFilter !== 'ALL' ? consultationTypeFilter : undefined;
+      const normDateRange = dateRangeFilter !== 'ALL' ? dateRangeFilter : undefined;
+      const searchTerm = debouncedSearch.length >= 2 ? debouncedSearch : undefined;
+
+      const response = await apiClient.getPatients({
+        export: 'true',
+        search: searchTerm,
+        gender: normGender,
+        consultationType: normConsultationType,
+        dateRange: normDateRange,
+      });
+
+      const extractRows = (payload: unknown): BackendPatientRow[] => {
+        if (!payload) return [];
+        const p = payload as Partial<GetPatientsResponseWithMeta> | BackendPatientRow[];
+        if (Array.isArray(p)) return p as BackendPatientRow[];
+        if (Array.isArray((p as any).data)) return (p as any).data as BackendPatientRow[];
+        if (Array.isArray((p as any).patients)) return (p as any).patients as BackendPatientRow[];
+        return [];
+      };
+
+      const allRows = extractRows(response);
+      const allPatients: Patient[] = allRows.map((bp: BackendPatientRow) => {
+        const rawName = String(bp.name || '').trim();
+        const firstName = String(bp.firstName || '').trim();
+        const lastName = String(bp.lastName || '').trim();
+        const displayName = formatPatientName({ id: bp.id, name: rawName, firstName, lastName });
+        return {
+          id: bp.id,
+          patientCode: bp.patientCode || undefined,
+          abhaId: bp.abhaId || undefined,
+          firstName: firstName || rawName || '',
+          lastName: lastName,
+          name: displayName,
+          email: bp.email || undefined,
+          phone: bp.phone,
+          gender: normalizeGender(bp.gender),
+          dob: bp.dob || undefined,
+          age: bp.age ?? undefined,
+          address: bp.address || undefined,
+          city: bp.city || undefined,
+          state: bp.state || undefined,
+          referralSource: bp.referralSource || undefined,
+          emergencyContact: bp.emergencyContact || undefined,
+          portalUserId: bp.portalUserId || undefined,
+          createdAt: bp.createdAt,
+          updatedAt: bp.updatedAt,
+        };
+      });
+
+      const headers = [
+        'ID','Name','Age','Gender','Phone','Email','ABHA ID','Referral','Consultation Type','Portal Linked','Created At'
+      ];
+      const lines = [headers.join(',')];
+      const csvEscape = (v: unknown) => {
+        const s = String(v ?? '');
+        if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      };
+      for (const p of allPatients) {
+        const age = calculateAge(p);
+        const row = [
+          p.id,
+          p.name,
+          age !== null ? age : 'N/A',
+          p.gender,
+          p.phone,
+          p.email || '',
+          p.abhaId || '',
+          p.referralSource || '',
+          (p as any).consultationType === 'ONLINE' ? 'Online' : (p as any).consultationType === 'OFFLINE' ? 'Offline' : '',
+          p.portalUserId ? 'Yes' : 'No',
+          p.createdAt,
+        ].map(csvEscape);
+        lines.push(row.join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `patients_export_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast({ title: `Exported ${allPatients.length} patients to CSV` });
+    } catch (err: any) {
+      console.error('CSV export failed', err);
+      toast({ title: 'Export failed', description: err?.message || 'Could not export patients.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
     }
-    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `patients_export_${new Date().toISOString().slice(0,10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -838,7 +901,7 @@ export default function PatientsManagement() {
         </Dialog>
         <div className="flex gap-2">
           <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
-          <Button variant="outline" onClick={exportCsv}><Download className="h-4 w-4 mr-2" /> Export CSV</Button>
+          <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         </div>
       </div>
 

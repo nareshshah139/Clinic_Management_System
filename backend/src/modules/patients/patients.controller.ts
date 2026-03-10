@@ -41,10 +41,12 @@ export class PatientsController {
     @Query('gender') gender?: string,
     @Query('consultationType') consultationType?: string,
     @Query('dateRange') dateRange?: string,
+    @Query('export') exportAll?: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    const pageNum = Math.max(1, +page || 1);
-    const limitNum = Math.min(100, Math.max(1, +limit || 10));
+    const isExport = exportAll === 'true';
+    const pageNum = isExport ? 1 : Math.max(1, +page || 1);
+    const limitNum = isExport ? 10000 : Math.min(100, Math.max(1, +limit || 10));
     const searchTerm = search?.trim() || undefined;
     const genderFilter = gender?.trim() || undefined;
     const consultationTypeFilter = consultationType?.trim() || undefined;
