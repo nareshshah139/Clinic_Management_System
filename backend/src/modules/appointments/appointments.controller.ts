@@ -54,6 +54,7 @@ export class AppointmentsController {
     return this.appointmentsService.create(
       createAppointmentDto,
       req.user.branchId,
+      req.user.id,
     );
   }
 
@@ -171,6 +172,7 @@ export class AppointmentsController {
       id,
       updateAppointmentDto,
       req.user.branchId,
+      req.user.id,
     );
   }
 
@@ -186,6 +188,7 @@ export class AppointmentsController {
       id,
       rescheduleDto,
       req.user.branchId,
+      req.user.id,
     );
   }
 
@@ -206,6 +209,6 @@ export class AppointmentsController {
   @Roles(UserRole.ADMIN, UserRole.RECEPTION)
   @Permissions('appointments:delete')
   remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.appointmentsService.remove(id, req.user.branchId);
+    return this.appointmentsService.remove(id, req.user.branchId, req.user.id);
   }
 }

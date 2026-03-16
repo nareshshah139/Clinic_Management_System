@@ -1,6 +1,6 @@
-import { Controller, Get, Post, Query, Body, Param, Request, UseGuards, Res } from '@nestjs/common';
+import { Controller, Get, Post, Query, Body, Param, Request, UseGuards, Res, Logger } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { GoogleCalendarService } from './google-calendar.service';
 
@@ -13,6 +13,8 @@ interface AuthenticatedRequest {
 @UseGuards(JwtAuthGuard)
 @Controller('google-calendar')
 export class GoogleCalendarController {
+  private readonly logger = new Logger('GoogleCalendarController');
+
   constructor(private readonly googleCalendar: GoogleCalendarService) {}
 
   @Get('configured')
@@ -22,7 +24,7 @@ export class GoogleCalendarController {
 
   @Get('status')
   async status(@Request() req: AuthenticatedRequest) {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.user?.sub || req.user?.id || '';
     return this.googleCalendar.getStatus(userId);
   }
 
@@ -32,7 +34,10 @@ export class GoogleCalendarController {
   }
 
   @Get('auth-url')
-  async authUrl(@Request() req: AuthenticatedRequest, @Query('redirect') redirect?: string) {
+  async authUrl(
+    @Request() req: AuthenticatedRequest,
+    @Query('redirect') redirect?: string,
+  ) {
     const state = redirect || '/dashboard/appointments';
     const url = await this.googleCalendar.generateAuthUrl(state);
     return { url };
@@ -43,14 +48,15 @@ export class GoogleCalendarController {
     @Request() req: AuthenticatedRequest,
     @Body('code') code: string,
   ) {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.user?.sub || req.user?.id || '';
+    this.logger.log(`OAuth exchange for user ${userId}`);
     const result = await this.googleCalendar.handleOAuthCallback(userId, code);
     return { success: true, ...result };
   }
 
   @Post('disconnect')
   async disconnect(@Request() req: AuthenticatedRequest) {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.user?.sub || req.user?.id || '';
     await this.googleCalendar.disconnect(userId);
     return { success: true };
   }
@@ -62,7 +68,8 @@ export class GoogleCalendarController {
     @Query('state') state: string,
     @Res() res: Response,
   ) {
-    const userId = req.user?.sub || req.user?.id;
+    const userId = req.user?.sub || req.user?.id || '';
+    this.logger.log(`OAuth callback for user ${userId}`);
     await this.googleCalendar.handleOAuthCallback(userId, code);
 
     const redirect = typeof state === 'string' && state ? state : '/dashboard/appointments';

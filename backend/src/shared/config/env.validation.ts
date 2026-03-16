@@ -39,6 +39,12 @@ export function validateEnv(config: Record<string, unknown>) {
   const hasGoogle = config['GCAL_CLIENT_ID'] && config['GCAL_CLIENT_SECRET'] && config['GCAL_REDIRECT_URI'];
   if (!hasGoogle) {
     logger.warn('Google Calendar is not configured. Set GCAL_CLIENT_ID, GCAL_CLIENT_SECRET, and GCAL_REDIRECT_URI to enable calendar sync.');
+  } else {
+    const redirectUri = String(config['GCAL_REDIRECT_URI']);
+    if (redirectUri.includes('localhost')) {
+      logger.warn(`GCAL_REDIRECT_URI is set to a localhost URL (${redirectUri}). This will not work in production — update it to match your deployed frontend URL.`);
+    }
+    logger.log(`Google Calendar configured. Redirect URI: ${redirectUri}`);
   }
 
   // WhatsApp Cloud (optional)

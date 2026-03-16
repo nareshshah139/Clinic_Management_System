@@ -58,7 +58,7 @@ export class GoogleCalendarService {
       access_type: 'offline',
       prompt: 'consent',
       scope: [CALENDAR_SCOPE],
-      state,
+      state: state || undefined,
     });
   }
 
@@ -126,9 +126,26 @@ export class GoogleCalendarService {
     });
   }
 
-  async syncAppointmentEvent(appointmentId: string) {
+  /**
+   * Resolve Google Calendar credentials for the sync.
+   * Uses the caller's credentials (whoever is logged in and has connected their Google Calendar).
+   */
+  private async resolveCalendarCredentials(callerUserId?: string) {
+    if (!callerUserId) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: callerUserId },
+      select: { googleRefreshToken: true, googleCalendarId: true },
+    });
+    if (!user?.googleRefreshToken) return null;
+    return { refreshToken: user.googleRefreshToken, calendarId: user.googleCalendarId || 'primary' };
+  }
+
+  async syncAppointmentEvent(appointmentId: string, callerUserId?: string): Promise<{ eventId?: string; error?: string }> {
     const oauth2Client = this.createOAuthClient();
-    if (!oauth2Client) return; // Not configured, fail silently
+    if (!oauth2Client) {
+      this.logger.warn(`Calendar sync skipped for appointment ${appointmentId}: Google Calendar not configured (missing GCAL_* env vars)`);
+      return { error: 'Google Calendar not configured on server' };
+    }
 
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -148,23 +165,33 @@ export class GoogleCalendarService {
       },
     });
 
-    if (!appointment?.doctor?.googleRefreshToken) {
-      return; // Doctor not connected
+    if (!appointment) {
+      this.logger.warn(`Calendar sync: appointment ${appointmentId} not found`);
+      return { error: 'Appointment not found' };
+    }
+
+    // Try caller first (the logged-in user), then fall back to the doctor
+    const callerCreds = await this.resolveCalendarCredentials(callerUserId);
+    const doctorCreds = appointment.doctor?.googleRefreshToken
+      ? { refreshToken: appointment.doctor.googleRefreshToken, calendarId: appointment.doctor.googleCalendarId || 'primary' }
+      : null;
+    const creds = callerCreds || doctorCreds;
+
+    if (!creds) {
+      this.logger.warn(`Calendar sync skipped for appointment ${appointmentId}: no connected Google Calendar (caller=${callerUserId}, doctor=${appointment.doctorId})`);
+      return { error: 'No connected Google Calendar. Please connect via the appointments page.' };
     }
 
     const slot = SchedulingUtils.parseTimeSlot(appointment.slot);
     const dateStr = appointment.date.toISOString().split('T')[0];
     const tz = 'Asia/Kolkata';
 
-    oauth2Client.setCredentials({
-      refresh_token: appointment.doctor.googleRefreshToken,
-    });
+    oauth2Client.setCredentials({ refresh_token: creds.refreshToken });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const calendarId = appointment.doctor.googleCalendarId || 'primary';
 
     const patientName = appointment.patient?.name || 'Patient';
-    const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
+    const doctorName = `${appointment.doctor?.firstName ?? ''} ${appointment.doctor?.lastName ?? ''}`.trim();
 
     const requestBody: calendar_v3.Schema$Event = {
       summary: `${patientName} — ${appointment.visitType ?? 'Appointment'}`,
@@ -175,7 +202,7 @@ export class GoogleCalendarService {
       end: { dateTime: `${dateStr}T${slot.end}:00`, timeZone: tz },
       attendees: [
         appointment.patient?.email ? { email: appointment.patient.email, displayName: patientName } : undefined,
-        appointment.doctor.email ? { email: appointment.doctor.email, displayName: doctorName || undefined } : undefined,
+        appointment.doctor?.email ? { email: appointment.doctor.email, displayName: doctorName || undefined } : undefined,
       ].filter(Boolean) as calendar_v3.Schema$EventAttendee[],
       reminders: { useDefault: true },
     };
@@ -183,15 +210,16 @@ export class GoogleCalendarService {
     try {
       if (appointment.googleEventId) {
         await calendar.events.patch({
-          calendarId,
+          calendarId: creds.calendarId,
           eventId: appointment.googleEventId,
           requestBody,
         });
-        return appointment.googleEventId;
+        this.logger.log(`Calendar event updated: ${appointment.googleEventId} for appointment ${appointmentId}`);
+        return { eventId: appointment.googleEventId };
       }
 
       const insert = await calendar.events.insert({
-        calendarId,
+        calendarId: creds.calendarId,
         requestBody,
       });
 
@@ -200,16 +228,19 @@ export class GoogleCalendarService {
           where: { id: appointment.id },
           data: { googleEventId: insert.data.id },
         });
-        return insert.data.id;
+        this.logger.log(`Calendar event created: ${insert.data.id} for appointment ${appointmentId}`);
+        return { eventId: insert.data.id };
       }
-    } catch (err) {
-      this.logger.warn(`Failed to sync appointment ${appointmentId} to Google: ${err instanceof Error ? err.message : String(err)}`);
-    }
 
-    return undefined;
+      return { error: 'Google API returned no event ID' };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to sync appointment ${appointmentId} to Google Calendar: ${msg}`);
+      return { error: msg };
+    }
   }
 
-  async deleteAppointmentEvent(appointmentId: string) {
+  async deleteAppointmentEvent(appointmentId: string, callerUserId?: string) {
     const oauth2Client = this.createOAuthClient();
     if (!oauth2Client) return;
 
@@ -223,23 +254,25 @@ export class GoogleCalendarService {
 
     if (!appointment?.googleEventId) return;
 
+    const callerCreds = await this.resolveCalendarCredentials(callerUserId);
     const doctor = await this.prisma.user.findUnique({
       where: { id: appointment.doctorId },
       select: { googleRefreshToken: true, googleCalendarId: true },
     });
+    const doctorCreds = doctor?.googleRefreshToken
+      ? { refreshToken: doctor.googleRefreshToken, calendarId: doctor.googleCalendarId || 'primary' }
+      : null;
+    const creds = callerCreds || doctorCreds;
 
-    if (!doctor?.googleRefreshToken) return;
+    if (!creds) return;
 
-    oauth2Client.setCredentials({
-      refresh_token: doctor.googleRefreshToken,
-    });
+    oauth2Client.setCredentials({ refresh_token: creds.refreshToken });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-    const calendarId = doctor.googleCalendarId || 'primary';
 
     try {
       await calendar.events.delete({
-        calendarId,
+        calendarId: creds.calendarId,
         eventId: appointment.googleEventId,
       });
       await this.prisma.appointment.update({

@@ -20,7 +20,7 @@ export class AppointmentsService {
     private googleCalendar?: GoogleCalendarService,
   ) {}
 
-  async create(createAppointmentDto: CreateAppointmentDto, branchId: string) {
+  async create(createAppointmentDto: CreateAppointmentDto, branchId: string, callerUserId?: string) {
     const { patientId, doctorId, roomId, date, slot, visitType, notes, source } = createAppointmentDto;
 
     // Validate inputs
@@ -198,7 +198,7 @@ export class AppointmentsService {
     }
 
     // Google Calendar sync (fire-and-forget; non-blocking)
-    void this.googleCalendar?.syncAppointmentEvent(appointment.id).catch(() => void 0);
+    void this.googleCalendar?.syncAppointmentEvent(appointment.id, callerUserId).catch(() => void 0);
 
     return appointment;
   }
@@ -345,7 +345,7 @@ export class AppointmentsService {
     return appointment;
   }
 
-  async update(id: string, updateAppointmentDto: UpdateAppointmentDto, branchId: string) {
+  async update(id: string, updateAppointmentDto: UpdateAppointmentDto, branchId: string, callerUserId?: string) {
     const appointment = await this.findOne(id, branchId);
 
     // Validate room if provided
@@ -378,12 +378,12 @@ export class AppointmentsService {
       },
     });
 
-    void this.googleCalendar?.syncAppointmentEvent(updatedAppointment.id).catch(() => void 0);
+    void this.googleCalendar?.syncAppointmentEvent(updatedAppointment.id, callerUserId).catch(() => void 0);
 
     return updatedAppointment;
   }
 
-  async reschedule(id: string, rescheduleDto: RescheduleAppointmentDto, branchId: string) {
+  async reschedule(id: string, rescheduleDto: RescheduleAppointmentDto, branchId: string, callerUserId?: string) {
     const appointment = await this.findOne(id, branchId);
 
     // Check if appointment can be rescheduled
@@ -445,7 +445,7 @@ export class AppointmentsService {
     });
 
     // Update linked Google Calendar event (non-blocking)
-    void this.googleCalendar?.syncAppointmentEvent(rescheduledAppointment.id).catch(() => void 0);
+    void this.googleCalendar?.syncAppointmentEvent(rescheduledAppointment.id, callerUserId).catch(() => void 0);
 
     return rescheduledAppointment;
   }
@@ -480,7 +480,7 @@ export class AppointmentsService {
     };
   }
 
-  async remove(id: string, branchId: string) {
+  async remove(id: string, branchId: string, callerUserId?: string) {
     const appointment = await this.findOne(id, branchId);
 
     // Check if appointment can be cancelled
@@ -505,7 +505,7 @@ export class AppointmentsService {
     });
 
     // Remove Google Calendar event if one exists
-    void this.googleCalendar?.deleteAppointmentEvent(id).catch(() => void 0);
+    void this.googleCalendar?.deleteAppointmentEvent(id, callerUserId).catch(() => void 0);
 
     return { message: 'Appointment cancelled successfully' };
   }
