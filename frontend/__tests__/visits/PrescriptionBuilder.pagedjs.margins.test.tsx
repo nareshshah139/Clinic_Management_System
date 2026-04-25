@@ -5,11 +5,15 @@ import { jest } from '@jest/globals';
 // Mock API client methods used by PrescriptionBuilder
 jest.mock('@/lib/api', () => ({
   apiClient: {
+    get: jest.fn().mockResolvedValue({}),
     getClinicAssets: jest.fn().mockResolvedValue([]),
+    getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
       { id: 'prof-1', name: 'Default', isDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
     ]),
+    getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }),
     getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
+    autocompletePrescriptionField: jest.fn().mockResolvedValue([]),
     translateTexts: jest.fn().mockResolvedValue({ translations: [] }),
     sharePrescription: jest.fn().mockResolvedValue({}),
     previewDrugInteractions: jest.fn().mockResolvedValue({ interactions: [] }),
@@ -130,5 +134,4 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     });
   });
 });
-
 

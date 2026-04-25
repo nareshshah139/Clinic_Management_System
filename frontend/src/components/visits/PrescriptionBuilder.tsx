@@ -1,5 +1,5 @@
 'use client';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,14 +10,15 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, ChevronUp, Languages, X, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
+import { sortDrugsByRelevance, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
+import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -143,6 +144,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
   const [diagnosis, setDiagnosis] = useState('');
+  const deferredDiagnosis = useDeferredValue(diagnosis);
   // Removed doctor's personal notes field from UI; retain no top-level notes state
   const [followUpInstructions, setFollowUpInstructions] = useState('');
 
@@ -525,6 +527,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
   const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
   const [investigations, setInvestigations] = useState<string[]>([]);
+  const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
+  const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
+  const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [learningSourcesError, setLearningSourcesError] = useState('');
+  const [lastAutofillPlanSignature, setLastAutofillPlanSignature] = useState<string | null>(null);
+  const [lastAutofillStateSignature, setLastAutofillStateSignature] = useState<string | null>(null);
+  const [suppressedAutofillSignature, setSuppressedAutofillSignature] = useState<string | null>(null);
+  const [autofillUndoSnapshot, setAutofillUndoSnapshot] = useState<{
+    items: PrescriptionItemForm[];
+    investigations: string[];
+    customInvestigationOptions: string[];
+    followUpInstructions: string;
+    reviewDate: string;
+  } | null>(null);
   const [procedures, setProcedures] = useState<string>('');
   const [procedurePlanned, setProcedurePlanned] = useState<string>('');
   // Vitals (with BMI)
@@ -1662,6 +1678,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return Number.isFinite(n) ? n : '';
   };
 
+  const clonePrescriptionItems = (list: PrescriptionItemForm[]): PrescriptionItemForm[] => JSON.parse(JSON.stringify(list || []));
+
   const mapPrevRxItem = (raw: any): PrescriptionItemForm | null => {
     const name = String(raw?.drugName || raw?.name || raw?.medicine || '').trim();
     if (!name) return null;
@@ -1678,6 +1696,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
     return {
       drugName: name,
+      genericName: raw?.genericName ? String(raw.genericName) : undefined,
+      brandName: raw?.brandName ? String(raw.brandName) : undefined,
       dosePattern: dosePattern || '',
       frequency,
       timing,
@@ -1688,9 +1708,64 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       dosageUnit,
       quantity: numberOrBlank(raw?.quantity),
       route: raw?.route ? String(raw.route) : '',
+      notes: raw?.notes ? String(raw.notes) : '',
       isGeneric: Boolean(raw?.isGeneric),
+      applicationSite: raw?.applicationSite ? String(raw.applicationSite) : '',
+      applicationAmount: raw?.applicationAmount ? String(raw.applicationAmount) : '',
+      dayPart: raw?.dayPart ? String(raw.dayPart) : '',
+      leaveOn: typeof raw?.leaveOn === 'boolean' ? raw.leaveOn : undefined,
+      washOffAfterMinutes: raw?.washOffAfterMinutes === '' ? '' : numberOrBlank(raw?.washOffAfterMinutes),
+      taperSchedule: raw?.taperSchedule ? String(raw.taperSchedule) : '',
+      weightMgPerKgPerDay: raw?.weightMgPerKgPerDay === '' ? '' : numberOrBlank(raw?.weightMgPerKgPerDay),
+      calculatedDailyDoseMg: raw?.calculatedDailyDoseMg === '' ? '' : numberOrBlank(raw?.calculatedDailyDoseMg),
+      pregnancyWarning: typeof raw?.pregnancyWarning === 'boolean' ? raw.pregnancyWarning : undefined,
+      photosensitivityWarning: typeof raw?.photosensitivityWarning === 'boolean' ? raw.photosensitivityWarning : undefined,
+      foodInstructions: raw?.foodInstructions ? String(raw.foodInstructions) : '',
+      pulseRegimen: raw?.pulseRegimen ? String(raw.pulseRegimen) : '',
     };
   };
+
+  const normalizePrescriptionResponse = (res: any): any[] => {
+    if (Array.isArray(res)) return res;
+    if (res && typeof res === 'object') {
+      if (Array.isArray(res.prescriptions)) return res.prescriptions;
+      if (Array.isArray(res.data)) return res.data;
+    }
+    return [];
+  };
+
+  const serializeTreatmentState = useCallback((snapshot: {
+    items: PrescriptionItemForm[];
+    investigations: string[];
+    followUpInstructions: string;
+    reviewDate: string;
+  }) => JSON.stringify({
+    items: (snapshot.items || [])
+      .filter((entry) => (entry?.drugName || '').trim())
+      .map((entry) => ({
+        drugName: String(entry.drugName || '').trim().toLowerCase(),
+        frequency: String(entry.frequency || '').trim(),
+        dosePattern: String(entry.dosePattern || '').trim(),
+        timing: String(entry.timing || '').trim(),
+        duration: entry.duration === '' ? '' : Number(entry.duration || 0),
+        durationUnit: String(entry.durationUnit || '').trim(),
+        instructions: String(entry.instructions || '').trim(),
+        quantity: entry.quantity === '' ? '' : Number(entry.quantity || 0),
+      })),
+    investigations: Array.from(new Set((snapshot.investigations || []).map((entry) => String(entry || '').trim()).filter(Boolean))).sort(),
+    followUpInstructions: String(snapshot.followUpInstructions || '').trim(),
+    reviewDate: String(snapshot.reviewDate || '').trim(),
+  }), []);
+
+  const formatSuggestedReviewDate = useCallback((days: number | null) => {
+    if (!days || days <= 0) return '';
+    const next = new Date();
+    next.setDate(next.getDate() + days);
+    const year = next.getFullYear();
+    const month = String(next.getMonth() + 1).padStart(2, '0');
+    const day = String(next.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   const addPreviousMedications = async () => {
     if (!patientId) {
@@ -1752,6 +1827,170 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setLoadingPrevMeds(false);
     }
   };
+
+  useEffect(() => {
+    setLastAutofillPlanSignature(null);
+    setLastAutofillStateSignature(null);
+    setSuppressedAutofillSignature(null);
+    setAutofillUndoSnapshot(null);
+  }, [patientId, doctorId, visitId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLearningSources = async () => {
+      if (!patientId && !doctorId) {
+        setPatientHistoryForLearning([]);
+        setDoctorPrescriptionsForLearning([]);
+        setLearningSourcesStatus('idle');
+        setLearningSourcesError('');
+        return;
+      }
+
+      setLearningSourcesStatus('loading');
+      setLearningSourcesError('');
+
+      const [patientResult, doctorResult] = await Promise.allSettled([
+        patientId ? apiClient.getPatientVisitHistory<any>(patientId, { limit: 12 }) : Promise.resolve([]),
+        doctorId ? apiClient.get<any>(`/prescriptions/doctor/${doctorId}`, { limit: 60, page: 1 }) : Promise.resolve([]),
+      ]);
+
+      if (cancelled) return;
+
+      const nextPatientHistory = patientResult.status === 'fulfilled'
+        ? normalizeHistoryResponse(patientResult.value)
+        : [];
+      const nextDoctorPrescriptions = doctorResult.status === 'fulfilled'
+        ? normalizePrescriptionResponse(doctorResult.value)
+        : [];
+
+      setPatientHistoryForLearning(nextPatientHistory);
+      setDoctorPrescriptionsForLearning(nextDoctorPrescriptions);
+
+      if (patientResult.status === 'rejected' && doctorResult.status === 'rejected') {
+        setLearningSourcesStatus('error');
+        setLearningSourcesError('Could not load practice patterns right now.');
+        return;
+      }
+
+      if (patientResult.status === 'rejected' || doctorResult.status === 'rejected') {
+        setLearningSourcesError('Some practice pattern signals are temporarily unavailable.');
+      } else {
+        setLearningSourcesError('');
+      }
+
+      setLearningSourcesStatus('ready');
+    };
+
+    void loadLearningSources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId, doctorId]);
+
+  const learnedPlan = useMemo<LearnedPlanSuggestion | null>(() => buildLearnedPrescriptionPlan({
+    diagnosis: deferredDiagnosis,
+    patientVisits: patientHistoryForLearning,
+    doctorPrescriptions: doctorPrescriptionsForLearning,
+    templates,
+    currentVisitId: visitId,
+    doctorId,
+  }), [deferredDiagnosis, patientHistoryForLearning, doctorPrescriptionsForLearning, templates, visitId, doctorId]);
+
+  const treatmentHasMeaningfulData = useMemo(
+    () => Boolean(validItems.length || investigations.length || followUpInstructions.trim() || reviewDate),
+    [validItems.length, investigations.length, followUpInstructions, reviewDate]
+  );
+  const treatmentIsEmpty = useMemo(
+    () => !validItems.length && investigations.length === 0 && !followUpInstructions.trim() && !reviewDate,
+    [validItems.length, investigations.length, followUpInstructions, reviewDate]
+  );
+  const currentTreatmentSignature = useMemo(() => serializeTreatmentState({
+    items,
+    investigations,
+    followUpInstructions,
+    reviewDate: reviewDate || '',
+  }), [serializeTreatmentState, items, investigations, followUpInstructions, reviewDate]);
+  const treatmentMachineOwned = Boolean(lastAutofillStateSignature && currentTreatmentSignature === lastAutofillStateSignature);
+  const learnedPlanSuppressed = Boolean(learnedPlan && suppressedAutofillSignature === learnedPlan.signature);
+  const learnedPlanApplied = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && treatmentMachineOwned);
+  const learnedPlanCustomized = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && !treatmentMachineOwned && treatmentHasMeaningfulData);
+  const learnedPlanBlocked = Boolean(learnedPlan && !learnedPlanApplied && !learnedPlanSuppressed && treatmentHasMeaningfulData && !treatmentMachineOwned);
+
+  const applyLearnedPlan = useCallback((plan: LearnedPlanSuggestion, options?: { force?: boolean }) => {
+    const allowOverwrite = options?.force || treatmentIsEmpty || treatmentMachineOwned;
+    if (!allowOverwrite) return false;
+
+    const mappedItems = plan.items
+      .map(mapPrevRxItem)
+      .filter((entry): entry is PrescriptionItemForm => Boolean(entry && entry.drugName));
+    const nextItems = mappedItems.length ? [...mappedItems] : [];
+    if (nextItems.length > 0 && !hasTrailingBlank(nextItems)) nextItems.push(createBlankItem());
+
+    const nextInvestigations = Array.from(new Set((plan.investigations || []).map((entry) => String(entry || '').trim()).filter(Boolean)));
+    const nextCustomInvestigations = nextInvestigations.filter((entry) => !defaultInvestigationOptions.includes(entry));
+    const nextFollowUp = plan.followUpInstructions || '';
+    const nextReviewDate = onChangeReviewDate ? formatSuggestedReviewDate(plan.reviewDays) : (reviewDate || '');
+
+    setAutofillUndoSnapshot({
+      items: clonePrescriptionItems(items),
+      investigations: [...investigations],
+      customInvestigationOptions: [...customInvestigationOptions],
+      followUpInstructions,
+      reviewDate: reviewDate || '',
+    });
+
+    setItems(nextItems);
+    setInvestigations(nextInvestigations);
+    setCustomInvestigationOptions(nextCustomInvestigations);
+    setFollowUpInstructions(nextFollowUp);
+    if (onChangeReviewDate) onChangeReviewDate(nextReviewDate);
+    setSuppressedAutofillSignature(null);
+    setLastAutofillPlanSignature(plan.signature);
+    setLastAutofillStateSignature(serializeTreatmentState({
+      items: mappedItems,
+      investigations: nextInvestigations,
+      followUpInstructions: nextFollowUp,
+      reviewDate: nextReviewDate,
+    }));
+    return true;
+  }, [
+    treatmentIsEmpty,
+    treatmentMachineOwned,
+    defaultInvestigationOptions,
+    formatSuggestedReviewDate,
+    items,
+    investigations,
+    customInvestigationOptions,
+    followUpInstructions,
+    reviewDate,
+    onChangeReviewDate,
+    serializeTreatmentState,
+  ]);
+
+  const undoLearnedAutofill = useCallback(() => {
+    if (!autofillUndoSnapshot) return;
+
+    const restoredItems = clonePrescriptionItems(autofillUndoSnapshot.items);
+    if (restoredItems.length > 0 && !hasTrailingBlank(restoredItems)) restoredItems.push(createBlankItem());
+
+    setItems(restoredItems);
+    setInvestigations([...autofillUndoSnapshot.investigations]);
+    setCustomInvestigationOptions([...autofillUndoSnapshot.customInvestigationOptions]);
+    setFollowUpInstructions(autofillUndoSnapshot.followUpInstructions);
+    onChangeReviewDate?.(autofillUndoSnapshot.reviewDate);
+    setSuppressedAutofillSignature(lastAutofillPlanSignature);
+    setLastAutofillPlanSignature(null);
+    setLastAutofillStateSignature(null);
+    setAutofillUndoSnapshot(null);
+  }, [autofillUndoSnapshot, onChangeReviewDate, lastAutofillPlanSignature]);
+
+  useEffect(() => {
+    if (!learnedPlan || learnedPlanSuppressed || learnedPlanApplied) return;
+    if (!treatmentIsEmpty && !treatmentMachineOwned) return;
+    applyLearnedPlan(learnedPlan);
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanApplied, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
@@ -3581,6 +3820,54 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setFollowUpInstructions(next.followUpInstructions || '');
   }, []);
 
+  const shouldShowLearnedPlanPanel = true;
+  const learnedPlanConfidenceLabel = useMemo(() => {
+    if (!learnedPlan) return '';
+    if (learnedPlan.confidence >= 0.84) return 'High confidence';
+    if (learnedPlan.confidence >= 0.68) return 'Practice-backed';
+    return 'Emerging pattern';
+  }, [learnedPlan]);
+  const learnedPlanTitle = useMemo(() => {
+    if (!diagnosis.trim()) return 'Name the diagnosis. The plan can assemble itself.';
+    if (learningSourcesStatus === 'loading' && !learnedPlan) return 'Reading recent plans, patterns, and saved order sets…';
+    if (learnedPlanSuppressed) return 'Autofill paused for this diagnosis.';
+    if (learnedPlanApplied) return 'Treatment assembled from live practice patterns.';
+    if (learnedPlanCustomized) return 'Customized after autofill.';
+    if (learnedPlanBlocked) return 'Learned plan ready. Your manual edits were preserved.';
+    if (learnedPlan) return 'A learned plan is ready to prefill.';
+    if (learningSourcesError) return 'Pattern learning is partially offline right now.';
+    return 'No strong pattern yet for this diagnosis.';
+  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  const learnedPlanDescription = useMemo(() => {
+    if (!diagnosis.trim()) {
+      return 'Once diagnosis is entered, this panel learns from the patient’s similar visits, recent prescriptions from the database, and saved server order sets.';
+    }
+    if (learningSourcesStatus === 'loading' && !learnedPlan) {
+      return 'Scanning live prescription history. The full row editor remains editable underneath.';
+    }
+    if (learnedPlanSuppressed) {
+      return 'You rolled back the machine draft. It will stay out of the way until you reapply it or change the diagnosis.';
+    }
+    if (learnedPlanApplied) {
+      return learnedPlan?.sourceLabel || '';
+    }
+    if (learnedPlanCustomized) {
+      return 'The suggested regimen is still available, but your edits now take precedence.';
+    }
+    if (learnedPlanBlocked) {
+      return 'A stronger pattern exists for this diagnosis, but the builder already contains doctor-entered treatment so nothing was overwritten.';
+    }
+    if (learnedPlan) {
+      return learnedPlan.sourceLabel;
+    }
+    if (learningSourcesError) {
+      return learningSourcesError;
+    }
+    return 'Keep building manually once. As more prescriptions land in the database, this section becomes a faster diagnosis-to-treatment shortcut.';
+  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  const learnedPlanVisibleComboNames = learnedPlan?.comboDrugNames.slice(0, 4) || [];
+  const learnedPlanHiddenComboCount = Math.max(0, (learnedPlan?.comboDrugNames.length || 0) - learnedPlanVisibleComboNames.length);
+
   return (
     <div className="space-y-6 overflow-visible">
       <div className="space-y-6">
@@ -4048,6 +4335,138 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             {/* Treatment */}
             <CollapsibleSection title="Treatment" section="treatment">
               <div className="space-y-3 overflow-visible">
+                {shouldShowLearnedPlanPanel && (
+                  <div className="relative overflow-hidden rounded-[30px] border border-slate-900/10 bg-[linear-gradient(135deg,rgba(15,23,42,0.96),rgba(13,148,136,0.92),rgba(249,115,22,0.78))] p-[1px] shadow-[0_24px_80px_rgba(15,23,42,0.16)]">
+                    <div className="relative overflow-hidden rounded-[29px] bg-slate-950/90 px-5 py-5 text-white">
+                      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(45,212,191,0.24),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(251,146,60,0.22),transparent_30%)]" />
+                      <div className="relative flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="space-y-3">
+                          <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-100">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Diagnosis Autopilot
+                          </div>
+                          <div>
+                            <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
+                            <div className={`mt-1 max-w-3xl text-sm leading-6 ${learningSourcesStatus === 'loading' && !learnedPlan ? 'text-white/80 animate-pulse' : 'text-white/74'}`}>
+                              {learnedPlanDescription}
+                            </div>
+                          </div>
+
+                          {learnedPlan && (
+                            <>
+                              <div className="flex flex-wrap gap-2 text-xs">
+                                <span className="inline-flex items-center rounded-full border border-white/15 bg-white/10 px-3 py-1 font-medium text-white/90">
+                                  {learnedPlan.sourceLabel}
+                                </span>
+                                <span className="inline-flex items-center rounded-full border border-emerald-200/20 bg-emerald-300/10 px-3 py-1 font-medium text-emerald-100">
+                                  {learnedPlanConfidenceLabel}
+                                </span>
+                                {learnedPlan.diagnosisText && (
+                                  <span className="inline-flex items-center rounded-full border border-white/10 bg-slate-900/40 px-3 py-1 font-medium text-white/75">
+                                    Matched on {learnedPlan.diagnosisText}
+                                  </span>
+                                )}
+                              </div>
+
+                              {learnedPlanVisibleComboNames.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {learnedPlanVisibleComboNames.map((drugName) => (
+                                    <div
+                                      key={drugName}
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-white/12 bg-white/10 px-3 py-2 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
+                                    >
+                                      <Pill className="h-3.5 w-3.5 text-teal-200" />
+                                      <span>{drugName}</span>
+                                    </div>
+                                  ))}
+                                  {learnedPlanHiddenComboCount > 0 && (
+                                    <div className="inline-flex items-center rounded-2xl border border-white/12 bg-white/5 px-3 py-2 text-sm font-medium text-white/70">
+                                      +{learnedPlanHiddenComboCount} more
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {learnedPlan.supportingLabel && (
+                                <div className="text-xs text-white/70">{learnedPlan.supportingLabel}</div>
+                              )}
+                            </>
+                          )}
+                        </div>
+
+                        <div className="relative xl:min-w-[280px]">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                                <Pill className="h-3.5 w-3.5" />
+                                Combo
+                              </div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.comboDrugNames.length : '—'}</div>
+                              <div className="text-xs text-white/60">meds prefilled</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                                <CalendarDays className="h-3.5 w-3.5" />
+                                Review
+                              </div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan?.reviewDays ? `${learnedPlan.reviewDays}d` : '—'}</div>
+                              <div className="text-xs text-white/60">suggested window</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                                <FlaskConical className="h-3.5 w-3.5" />
+                                Labs
+                              </div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.investigations.length : '—'}</div>
+                              <div className="text-xs text-white/60">auto-suggested</div>
+                            </div>
+                            <div className="rounded-2xl border border-white/10 bg-white/8 p-3">
+                              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-white/50">
+                                <Wand2 className="h-3.5 w-3.5" />
+                                Evidence
+                              </div>
+                              <div className="mt-2 text-lg font-semibold">{learnedPlan ? learnedPlan.evidenceCount : '—'}</div>
+                              <div className="text-xs text-white/60">matching plans</div>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {learnedPlan && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="bg-white text-slate-950 hover:bg-white/90"
+                                onClick={() => { void applyLearnedPlan(learnedPlan, { force: true }); }}
+                              >
+                                <Wand2 className="mr-2 h-4 w-4" />
+                                Reapply learned plan
+                              </Button>
+                            )}
+                            {autofillUndoSnapshot && learnedPlanApplied && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                                onClick={undoLearnedAutofill}
+                              >
+                                <RotateCcw className="mr-2 h-4 w-4" />
+                                Undo autofill
+                              </Button>
+                            )}
+                          </div>
+
+                          {learningSourcesError && (
+                            <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{learningSourcesError}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-600">Total items: {items.length}</div>
                   <div className="flex gap-2">
@@ -4055,7 +4474,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       <Button size="sm" variant="ghost" onClick={openAddDrugDialog}>+ Add to Drug Database</Button>
                     )}
                     <Button size="sm" variant="outline" onClick={addPreviousMedications} disabled={loadingPrevMeds}>
-                      {loadingPrevMeds ? 'Adding...' : 'Add previous meds'}
+                      {loadingPrevMeds ? 'Adding...' : 'Reuse last meds'}
                     </Button>
                     <Button size="sm" variant="outline" onClick={addRowAndFocus}>Add Row</Button>
                   </div>
