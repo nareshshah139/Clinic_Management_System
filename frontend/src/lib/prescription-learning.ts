@@ -431,7 +431,7 @@ function buildDoctorPatternRecords(
   const rawRecords = prescriptions
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
     .filter((entry): entry is Record<string, unknown> => Boolean(entry))
-    .map((record) => {
+    .map<FlatPlanRecord | null>((record) => {
       const items = normalizeItems(record.items);
       const diagnosisText = extractPrescriptionDiagnosis(record);
       const metadata = asObject(record.metadata);
