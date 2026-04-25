@@ -649,6 +649,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
+  const previewPrintCleanupTimeoutRef = useRef<number | null>(null);
   const pagedJsPreloadedRef = useRef(false);
   const prevPreviewOpenRef = useRef(previewOpen);
   // Refs to track previous values for change detection to prevent unnecessary refreshes
@@ -1922,6 +1923,52 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     ];
   }, [validItems.length, investigations, followUpInstructions]);
 
+  const pagedPrintPageWidth = paperPreset === 'LETTER' ? '216mm' : '210mm';
+  const pagedPrintPageHeight = paperPreset === 'LETTER' ? '279mm' : '297mm';
+  const pagedPrintExportCss = `
+    .pagedjs_pages {
+      display: block !important;
+      width: ${pagedPrintPageWidth} !important;
+      margin: 0 auto !important;
+    }
+    .pagedjs_page {
+      display: block !important;
+      width: ${pagedPrintPageWidth} !important;
+      min-width: ${pagedPrintPageWidth} !important;
+      max-width: ${pagedPrintPageWidth} !important;
+      height: ${pagedPrintPageHeight} !important;
+      min-height: ${pagedPrintPageHeight} !important;
+      max-height: ${pagedPrintPageHeight} !important;
+      overflow: hidden !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      break-after: page !important;
+      page-break-after: always !important;
+    }
+    .pagedjs_page:last-child {
+      break-after: auto !important;
+      page-break-after: auto !important;
+    }
+    .pagedjs_pagebox {
+      width: ${pagedPrintPageWidth} !important;
+      height: ${pagedPrintPageHeight} !important;
+      min-height: ${pagedPrintPageHeight} !important;
+      max-height: ${pagedPrintPageHeight} !important;
+      overflow: hidden !important;
+      box-sizing: border-box !important;
+      background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+      background-repeat: no-repeat;
+      background-position: top left;
+      background-size: ${pagedPrintPageWidth} ${pagedPrintPageHeight};
+    }
+    .pagedjs_page_content {
+      box-sizing: border-box !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+  `;
+
   const recentDrugsForPatient = useMemo(() => patientId ? getLocalSuggestions(`drugNames:${patientId}`, '', 5) : [], [patientId]);
   const recentDrugsGlobal = useMemo(() => getLocalSuggestions('drugNames', '', 5), []);
   const frequencyPresets: Array<{ label: string; pattern?: string; frequency?: Frequency }> = [
@@ -2679,6 +2726,57 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
   }, [items]);
 
+  const cleanupPreviewPrintMode = useCallback(() => {
+    if (typeof document !== 'undefined') {
+      document.body.classList.remove('prescription-preview-printing');
+    }
+    if (previewPrintCleanupTimeoutRef.current !== null) {
+      window.clearTimeout(previewPrintCleanupTimeoutRef.current);
+      previewPrintCleanupTimeoutRef.current = null;
+    }
+  }, []);
+
+  const printPreviewInPlace = useCallback(() => {
+    const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
+    if (!container || !container.querySelector('.pagedjs_page')) {
+      toast({ variant: 'destructive', title: 'Print failed', description: 'No paginated preview is ready yet.' });
+      return;
+    }
+
+    cleanupPreviewPrintMode();
+    document.body.classList.add('prescription-preview-printing');
+
+    const handleAfterPrint = () => {
+      cleanupPreviewPrintMode();
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+
+    window.addEventListener('afterprint', handleAfterPrint);
+    previewPrintCleanupTimeoutRef.current = window.setTimeout(() => {
+      window.removeEventListener('afterprint', handleAfterPrint);
+      cleanupPreviewPrintMode();
+    }, 3000);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          window.print();
+        } catch (error) {
+          window.removeEventListener('afterprint', handleAfterPrint);
+          cleanupPreviewPrintMode();
+          console.error('Browser print failed', error);
+          toast({ variant: 'destructive', title: 'Print failed', description: 'Could not open print dialog.' });
+        }
+      });
+    });
+  }, [cleanupPreviewPrintMode, toast]);
+
+  useEffect(() => {
+    return () => {
+      cleanupPreviewPrintMode();
+    };
+  }, [cleanupPreviewPrintMode]);
+
   useEffect(() => {
     if (autoPreview && !previewOpen) setPreviewOpen(true);
   }, [autoPreview, previewOpen]);
@@ -2863,8 +2961,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       
       // Store error handler reference for cleanup
       let errorHandler: ((event: ErrorEvent | PromiseRejectionEvent) => void) | null = null;
-      // Keep a handle to the temp content node so we can always clean it up
-      let tempDiv: HTMLDivElement | null = null;
       
       try {
         setPagedJsProcessing(true);
@@ -2922,40 +3018,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (!content || content.length < 50) {
           console.warn('⚠️ Source content is empty or too short, skipping paged.js processing');
           setPagedJsProcessing(false);
-          return;
-        }
-        
-        // Create a temporary div with the content
-        tempDiv = document.createElement('div');
-        tempDiv.innerHTML = content;
-        tempDiv.style.fontFamily = 'Fira Sans, sans-serif';
-        tempDiv.style.fontSize = '14px';
-        // Attach offscreen to DOM so Paged.js can safely measure layout
-        tempDiv.style.position = 'fixed';
-        tempDiv.style.left = '-10000px';
-        tempDiv.style.top = '0';
-        if (document && document.body) {
-          try {
-            document.body.appendChild(tempDiv);
-          } catch (e) {
-            console.warn('⚠️ Failed to append temp content to body:', e);
-          }
-        } else {
-          console.warn('⏸️ document.body not ready; delaying Paged.js processing');
-          setPagedJsProcessing(false);
-          pagedJsRunningRef.current = false;
-          setTimeout(() => {
-            if (previewOpen || autoPreview) void processWithPagedJs();
-          }, 50); // Reduced from 150ms to 50ms
-          return;
-        }
-        if (!tempDiv.isConnected) {
-          console.warn('⏸️ Temp content not connected; delaying Paged.js processing');
-          setPagedJsProcessing(false);
-          pagedJsRunningRef.current = false;
-          setTimeout(() => {
-            if (previewOpen || autoPreview) void processWithPagedJs();
-          }, 50); // Reduced from 150ms to 50ms
           return;
         }
         
@@ -3055,16 +3117,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           .rx-row { break-inside: avoid; page-break-inside: avoid; }
         `;
         
-        // Add content styles as inline style tag
-        const styleEl = document.createElement('style');
-        styleEl.setAttribute('type', 'text/css');
-        styleEl.appendChild(document.createTextNode(contentCSS));
-        tempDiv.prepend(styleEl);
-
-        // Process with Paged.js - pass @page rules via a Blob URL stylesheet
-        // Raw CSS strings are treated as URLs by Paged.js; use an object URL instead
+        // Process with Paged.js - pass CSS via Blob URLs so the content markup stays clean.
+        // Raw CSS strings are treated as URLs by Paged.js; use object URLs instead.
         const pageRulesBlob = new Blob([pageRulesCSS], { type: 'text/css' });
         const pageRulesUrl = URL.createObjectURL(pageRulesBlob);
+        const contentRulesBlob = new Blob([contentCSS], { type: 'text/css' });
+        const contentRulesUrl = URL.createObjectURL(contentRulesBlob);
         // Ensure a stable pages host element exists for Paged.js to render into
         let pagesHost = container.querySelector('.pagedjs_pages') as HTMLElement | null;
         if (!pagesHost) {
@@ -3081,9 +3139,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         let flow: any;
         try {
-          flow = await paged.preview(tempDiv, [pageRulesUrl], pagesHost);
+          flow = await paged.preview(content, [pageRulesUrl, contentRulesUrl], pagesHost);
         } finally {
           URL.revokeObjectURL(pageRulesUrl);
+          URL.revokeObjectURL(contentRulesUrl);
         }
         
         console.log('📦 Paged.js flow result:', flow);
@@ -3303,13 +3362,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         });
       } finally {
         console.log('🏁 Paged.js processing finished (finally block)');
-        // Ensure the temporary content node is removed from DOM
-        try {
-          if (tempDiv && tempDiv.parentNode) {
-            tempDiv.parentNode.removeChild(tempDiv);
-          }
-        } catch {}
-        
         // Remove the error handlers
         if (errorHandler) {
           window.removeEventListener('error', errorHandler as EventListener);
@@ -4458,16 +4510,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
         {/* Print Preview Dialog */}
         <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+          <DialogContent data-prescription-preview-dialog className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div className="h-full min-h-0 flex flex-row">
+            <div data-prescription-preview-main className="h-full min-h-0 flex flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-                /* Print is handled by opening a new window - no @media print rules needed here */
+                /* Browser print uses the live preview container to avoid copying Paged.js fragments. */
                 /* Ensure a print-safe font stack with bullet glyph support */
                 #pagedjs-container, #pagedjs-container * {
                   font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
@@ -4514,10 +4566,74 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 #pagedjs-container .pagedjs_page_content {
                   box-sizing: border-box !important;
                 }
+
+                @media print {
+                  body.prescription-preview-printing {
+                    background: white !important;
+                  }
+                  body.prescription-preview-printing > * {
+                    visibility: hidden !important;
+                  }
+                  body.prescription-preview-printing [data-prescription-preview-dialog],
+                  body.prescription-preview-printing [data-prescription-preview-dialog] * {
+                    visibility: visible !important;
+                  }
+                  body.prescription-preview-printing [data-radix-dialog-overlay],
+                  body.prescription-preview-printing [data-prescription-preview-toolbar],
+                  body.prescription-preview-printing [data-prescription-preview-status],
+                  body.prescription-preview-printing [data-prescription-preview-sidebar],
+                  body.prescription-preview-printing [data-prescription-preview-dialog] > button {
+                    display: none !important;
+                  }
+                  body.prescription-preview-printing [data-prescription-preview-dialog] {
+                    position: absolute !important;
+                    inset: 0 !important;
+                    width: 100% !important;
+                    max-width: none !important;
+                    height: auto !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    border: 0 !important;
+                    border-radius: 0 !important;
+                    box-shadow: none !important;
+                    transform: none !important;
+                    background: white !important;
+                  }
+                  body.prescription-preview-printing [data-prescription-preview-main] {
+                    display: block !important;
+                    min-height: 0 !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                  }
+                  body.prescription-preview-printing [data-prescription-preview-scroll] {
+                    overflow: visible !important;
+                    min-height: 0 !important;
+                    height: auto !important;
+                  }
+                  body.prescription-preview-printing [data-prescription-preview-scale] {
+                    transform: none !important;
+                    width: auto !important;
+                  }
+                  body.prescription-preview-printing #pagedjs-container {
+                    min-height: 0 !important;
+                  }
+                  body.prescription-preview-printing #pagedjs-container .pagedjs_page {
+                    margin: 0 auto !important;
+                    box-shadow: none !important;
+                    break-after: page !important;
+                    page-break-after: always !important;
+                  }
+                  body.prescription-preview-printing #pagedjs-container .pagedjs_page:last-child {
+                    break-after: auto !important;
+                    page-break-after: auto !important;
+                  }
+                }
                 `
               }} />
-            <div id="print-preview-scroll" className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
-              <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
+            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+              <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
                   <div className="flex flex-wrap gap-2 items-center text-gray-800">
                     <span className="font-semibold">{previewPatientName}</span>
@@ -4537,15 +4653,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
               </div>
               {previewJustUpdated && (
-                <div className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
+                <div data-prescription-preview-status className="absolute top-2 right-3 z-20 text-xs px-2 py-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">Updated</div>
               )}
               {/* Page indicator */}
               {totalPreviewPages > 1 && (
-                <div className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
+                <div data-prescription-preview-status className="absolute top-2 left-1/2 transform -translate-x-1/2 z-20 text-xs px-3 py-1.5 rounded-full bg-gray-900 text-white shadow-lg">
                   Page {currentPreviewPage} of {totalPreviewPages}
                 </div>
               )}
-              <div style={{ 
+              <div data-prescription-preview-scale style={{ 
                 transform: `scale(${previewZoom})`, 
                 transformOrigin: 'top left'
               }}>
@@ -4883,7 +4999,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </div>
             {/* Right Sidebar Controls */}
-            <div className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
@@ -5171,14 +5287,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
                                   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                                   html, body { margin: 0; padding: 0; }
-                                  .pagedjs_page { margin: 0 !important; box-shadow: none !important; }
-                                  .pagedjs_pagebox {
-                                    background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
-                                    background-repeat: no-repeat;
-                                    background-position: top left;
-                                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
-                                  }
-                                  ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+                                  ${pagedPrintExportCss}
                                 </style>
                                 ${container.innerHTML}
                               `;
@@ -5230,103 +5339,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" onClick={() => {
-                    try {
-                      // Get the rendered Paged.js content
-                      const container = document.getElementById('pagedjs-container');
-                      if (!container) {
-                        toast({ variant: 'destructive', title: 'Print failed', description: 'No content to print.' });
-                        return;
-                      }
-                      
-                      // Collect all stylesheets from the current page
-                      const stylesheets: string[] = [];
-                      document.querySelectorAll('style').forEach(style => {
-                        stylesheets.push(style.outerHTML);
-                      });
-                      document.querySelectorAll('link[rel="stylesheet"]').forEach(link => {
-                        stylesheets.push(link.outerHTML);
-                      });
-                      
-                      // Open a new window with just the print content
-                      const printWindow = window.open('', '_blank', 'width=800,height=600');
-                      if (!printWindow) {
-                        toast({ variant: 'destructive', title: 'Print blocked', description: 'Please allow popups to print.' });
-                        return;
-                      }
-                      const closePreview = () => {
-                        try { printWindow.close(); } catch {}
-                        setPreviewOpen(false);
-                      };
-                      
-                      // Filter stylesheets: only keep Paged.js polyfill styles
-                      // and linked stylesheets — skip scoped preview styles that
-                      // contain conflicting #pagedjs-container rules with 20px margins.
-                      const filteredStyles = stylesheets.filter(s => {
-                        if (s.startsWith('<link')) return true;
-                        if (s.includes('#pagedjs-container') || s.includes('#prescription-print-root')) return false;
-                        return true;
-                      });
-
-                      printWindow.document.write(`
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                          <title>Prescription</title>
-                          <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                          ${filteredStyles.join('\n')}
-                          <style>
-                            @page {
-                              size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
-                              margin: 0;
-                            }
-                            * {
-                              -webkit-print-color-adjust: exact !important;
-                              print-color-adjust: exact !important;
-                            }
-                            html, body {
-                              margin: 0;
-                              padding: 0;
-                            }
-                            .pagedjs_page {
-                              margin: 0 !important;
-                              box-shadow: none !important;
-                              page-break-after: always;
-                            }
-                            .pagedjs_page:last-child {
-                              page-break-after: auto;
-                            }
-                            .pagedjs_pagebox {
-                              background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
-                              background-repeat: no-repeat;
-                              background-position: top left;
-                              background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
-                            }
-                            ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
-                          </style>
-                        </head>
-                        <body>
-                          ${container.innerHTML}
-                        </body>
-                        </html>
-                      `);
-                      printWindow.document.close();
-                      
-                      let didPrint = false;
-                      const safePrint = () => {
-                        if (didPrint) return;
-                        didPrint = true;
-                        try { printWindow.print(); } catch (e) { console.error('Print dialog failed', e); }
-                      };
-                      printWindow.onafterprint = closePreview;
-                      printWindow.onload = () => { setTimeout(safePrint, 500); };
-                      // Single fallback — only fires if onload never did
-                      setTimeout(safePrint, 2000);
-                    } catch (e) {
-                      console.error('Browser print failed', e);
-                      toast({ variant: 'destructive', title: 'Print failed', description: 'Could not open print dialog.' });
-                    }
-                  }}>Print</Button>
+                  <Button className="col-span-1" onClick={printPreviewInPlace}>Print</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -5354,14 +5367,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
                                   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                                   html, body { margin: 0; padding: 0; }
-                                  .pagedjs_page { margin: 0 !important; box-shadow: none !important; }
-                                  .pagedjs_pagebox {
-                                    background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
-                                    background-repeat: no-repeat;
-                                    background-position: top left;
-                                    background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
-                                  }
-                                  ${grayscale ? '.pagedjs_page { filter: grayscale(100%); }' : ''}
+                                  ${pagedPrintExportCss}
                                 </style>
                                 ${container.innerHTML}
                               `;
