@@ -7,6 +7,8 @@ import { apiClient } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
+const googleCodeExchangePromises = new Map<string, Promise<unknown>>();
+
 function GoogleCallbackInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -36,7 +38,13 @@ function GoogleCallbackInner() {
 
     (async () => {
       try {
-        await apiClient.exchangeGoogleCalendarCode(code);
+        let exchangePromise = googleCodeExchangePromises.get(code);
+        if (!exchangePromise) {
+          exchangePromise = apiClient.exchangeGoogleCalendarCode(code);
+          googleCodeExchangePromises.set(code, exchangePromise);
+        }
+
+        await exchangePromise;
         if (cancelled) return;
         setStatus('success');
         setMessage('Google Calendar connected successfully!');

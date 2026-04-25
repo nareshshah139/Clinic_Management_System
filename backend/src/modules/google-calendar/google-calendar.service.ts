@@ -68,7 +68,18 @@ export class GoogleCalendarService {
     }
 
     const oauth2Client = this.ensureClient();
-    const { tokens } = await oauth2Client.getToken(code);
+    let tokens;
+    try {
+      ({ tokens } = await oauth2Client.getToken(code));
+    } catch (err: any) {
+      const apiMessage =
+        err?.response?.data?.error_description ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Unknown token exchange error';
+      this.logger.warn(`Google token exchange failed for user ${userId}: ${apiMessage}`);
+      throw new BadRequestException(`Google token exchange failed: ${apiMessage}`);
+    }
 
     // Preserve existing refresh token if Google returns only an access token
     const user = await this.prisma.user.findUnique({
@@ -90,17 +101,14 @@ export class GoogleCalendarService {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    let selectedCalendar: calendar_v3.Schema$CalendarListEntry | undefined;
+    const calendarId = 'primary';
+    let selectedCalendar: calendar_v3.Schema$Calendar | null = null;
     try {
-      const list = await calendar.calendarList.list({ maxResults: 5 });
-      selectedCalendar =
-        list.data.items?.find((c) => c.primary) ||
-        list.data.items?.[0];
+      const primaryCalendar = await calendar.calendars.get({ calendarId });
+      selectedCalendar = primaryCalendar.data;
     } catch (err) {
-      this.logger.warn(`Failed to read calendar list: ${err instanceof Error ? err.message : String(err)}`);
+      this.logger.warn(`Failed to read primary calendar: ${err instanceof Error ? err.message : String(err)}`);
     }
-
-    const calendarId = selectedCalendar?.id || 'primary';
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -284,4 +292,3 @@ export class GoogleCalendarService {
     }
   }
 }
-
