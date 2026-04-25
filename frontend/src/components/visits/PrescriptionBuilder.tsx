@@ -665,6 +665,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
+  const previewPrintHostRef = useRef<HTMLDivElement | null>(null);
   const previewPrintCleanupTimeoutRef = useRef<number | null>(null);
   const pagedJsPreloadedRef = useRef(false);
   const prevPreviewOpenRef = useRef(previewOpen);
@@ -2965,15 +2966,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
   }, [items]);
 
+  const removePreviewPrintHost = useCallback(() => {
+    if (previewPrintHostRef.current) {
+      previewPrintHostRef.current.remove();
+      previewPrintHostRef.current = null;
+    }
+  }, []);
+
+  const createPreviewPrintHost = useCallback(() => {
+    const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
+    if (!container || !container.querySelector('.pagedjs_page')) return null;
+
+    removePreviewPrintHost();
+
+    const host = document.createElement('div');
+    host.id = 'prescription-print-host';
+    host.setAttribute('aria-hidden', 'true');
+
+    const pages = document.createElement('div');
+    pages.className = 'prescription-print-pages';
+    pages.innerHTML = container.innerHTML;
+
+    host.appendChild(pages);
+    document.body.appendChild(host);
+    previewPrintHostRef.current = host;
+
+    return host;
+  }, [removePreviewPrintHost]);
+
   const cleanupPreviewPrintMode = useCallback(() => {
     if (typeof document !== 'undefined') {
       document.body.classList.remove('prescription-preview-printing');
     }
+    removePreviewPrintHost();
     if (previewPrintCleanupTimeoutRef.current !== null) {
       window.clearTimeout(previewPrintCleanupTimeoutRef.current);
       previewPrintCleanupTimeoutRef.current = null;
     }
-  }, []);
+  }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(() => {
     const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
@@ -2983,6 +3013,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
 
     cleanupPreviewPrintMode();
+
+    const printHost = createPreviewPrintHost();
+    if (!printHost) {
+      toast({ variant: 'destructive', title: 'Print failed', description: 'Could not prepare the print layout.' });
+      return;
+    }
+    previewPrintHostRef.current = printHost;
     document.body.classList.add('prescription-preview-printing');
 
     const handleAfterPrint = () => {
@@ -3008,7 +3045,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       });
     });
-  }, [cleanupPreviewPrintMode, toast]);
+  }, [cleanupPreviewPrintMode, createPreviewPrintHost, toast]);
 
   useEffect(() => {
     return () => {
@@ -3431,6 +3468,49 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
         
         // Note: Avoid forcing React re-render here to prevent resize races
+
+        const findFirstTextElement = (root: HTMLElement | null): HTMLElement | null => {
+          if (!root) return null;
+          const walker = document.createTreeWalker(
+            root,
+            NodeFilter.SHOW_TEXT,
+            {
+              acceptNode(node) {
+                return node.textContent?.trim()
+                  ? NodeFilter.FILTER_ACCEPT
+                  : NodeFilter.FILTER_SKIP;
+              },
+            },
+          );
+
+          let textNode = walker.nextNode();
+          while (textNode) {
+            const parent = textNode.parentElement;
+            if (parent) {
+              return parent;
+            }
+            textNode = walker.nextNode();
+          }
+          return null;
+        };
+
+        // Match continuation pages to page 1 by copying the vertical offset of
+        // the first rendered text block, so page 2+ starts at the same default
+        // text position under the letterhead.
+        let firstPageTextOffsetPx = 0;
+        const firstPageContent = pages[0]?.querySelector('.pagedjs_page_content') as HTMLElement | null;
+        const firstPageBox = pages[0]?.querySelector('.pagedjs_pagebox') as HTMLElement | null;
+        const firstPageText = findFirstTextElement(firstPageContent);
+        if (firstPageBox && firstPageText) {
+          const pageBoxRect = firstPageBox.getBoundingClientRect();
+          const textRect = firstPageText.getBoundingClientRect();
+          const measuredOffset = Math.round(textRect.top - pageBoxRect.top);
+          firstPageTextOffsetPx = Math.max(0, Math.min(measuredOffset, 240));
+          console.log('↕️ First text offset copied from page 1:', {
+            measuredOffset,
+            appliedOffset: firstPageTextOffsetPx,
+          });
+        }
         
         // Apply custom overlays to each page
         pages.forEach((page, idx) => {
@@ -3456,8 +3536,21 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           const contentArea = page.querySelector('.pagedjs_page_content');
           if (contentArea) {
             const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
-            const offsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
-            (contentArea as HTMLElement).style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+            const baseOffsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
+            let continuationOffsetY = 0;
+            if (idx > 0 && firstPageTextOffsetPx > 0) {
+              const pageBox = page.querySelector('.pagedjs_pagebox') as HTMLElement | null;
+              const firstText = findFirstTextElement(contentArea as HTMLElement);
+              if (pageBox && firstText) {
+                const pageBoxRect = pageBox.getBoundingClientRect();
+                const textRect = firstText.getBoundingClientRect();
+                const currentOffset = Math.round(textRect.top - pageBoxRect.top);
+                continuationOffsetY = Math.max(0, Math.min(firstPageTextOffsetPx - currentOffset, 240));
+              }
+            }
+            const effectiveOffsetY = baseOffsetY + continuationOffsetY;
+            (contentArea as HTMLElement).style.transform = `translate(${offsetX}px, ${effectiveOffsetY}px)`;
+            (contentArea as HTMLElement).style.transformOrigin = 'top left';
           }
           
           // Add bleed-safe overlay if enabled
@@ -4938,9 +5031,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <style dangerouslySetInnerHTML={{
                 __html: `
                 @import url('https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap');
-                /* Browser print uses the live preview container to avoid copying Paged.js fragments. */
+                @page {
+                  size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'};
+                  margin: 0;
+                }
+                /* Browser print uses a body-level clone of the rendered pages to avoid dialog offsets. */
                 /* Ensure a print-safe font stack with bullet glyph support */
-                #pagedjs-container, #pagedjs-container * {
+                #prescription-print-host {
+                  display: none !important;
+                }
+                #pagedjs-container,
+                #pagedjs-container *,
+                #prescription-print-host .prescription-print-pages,
+                #prescription-print-host .prescription-print-pages * {
                   font-family: 'Fira Sans', 'Segoe UI Symbol', 'Arial Unicode MS', system-ui, sans-serif !important;
                 }
                 #prescription-print-root, #prescription-print-root * {
@@ -4967,14 +5070,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 `}
                 
                 /* Unified Paged.js styling */
-                #pagedjs-container .pagedjs_page {
+                #pagedjs-container .pagedjs_page,
+                #prescription-print-host .prescription-print-pages .pagedjs_page {
                   margin: 20px auto !important;
                   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
                   background: white;
                   ${grayscale ? 'filter: grayscale(100%);' : ''}
                 }
                 
-                #pagedjs-container .pagedjs_pagebox {
+                #pagedjs-container .pagedjs_pagebox,
+                #prescription-print-host .prescription-print-pages .pagedjs_pagebox {
                   background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
                   background-repeat: no-repeat;
                   background-position: top left;
@@ -4982,7 +5087,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 
                 /* Ensure paged.js respects @page margins */
-                #pagedjs-container .pagedjs_page_content {
+                #pagedjs-container .pagedjs_page_content,
+                #prescription-print-host .prescription-print-pages .pagedjs_page_content {
                   box-sizing: border-box !important;
                 }
 
@@ -4990,61 +5096,44 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   body.prescription-preview-printing {
                     background: white !important;
                   }
-                  body.prescription-preview-printing > * {
-                    visibility: hidden !important;
-                  }
-                  body.prescription-preview-printing [data-prescription-preview-dialog],
-                  body.prescription-preview-printing [data-prescription-preview-dialog] * {
-                    visibility: visible !important;
-                  }
-                  body.prescription-preview-printing [data-radix-dialog-overlay],
-                  body.prescription-preview-printing [data-prescription-preview-toolbar],
-                  body.prescription-preview-printing [data-prescription-preview-status],
-                  body.prescription-preview-printing [data-prescription-preview-sidebar],
-                  body.prescription-preview-printing [data-prescription-preview-dialog] > button {
+                  body.prescription-preview-printing > *:not(#prescription-print-host) {
                     display: none !important;
                   }
-                  body.prescription-preview-printing [data-prescription-preview-dialog] {
-                    position: absolute !important;
-                    inset: 0 !important;
-                    width: 100% !important;
+                  body.prescription-preview-printing #prescription-print-host,
+                  body.prescription-preview-printing #prescription-print-host * {
+                    visibility: visible !important;
+                  }
+                  body.prescription-preview-printing #prescription-print-host {
+                    display: block !important;
+                    position: static !important;
+                    inset: auto !important;
+                    width: auto !important;
+                    min-width: 0 !important;
                     max-width: none !important;
                     height: auto !important;
+                    min-height: 0 !important;
                     max-height: none !important;
                     overflow: visible !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     border: 0 !important;
-                    border-radius: 0 !important;
-                    box-shadow: none !important;
-                    transform: none !important;
                     background: white !important;
                   }
-                  body.prescription-preview-printing [data-prescription-preview-main] {
-                    display: block !important;
+                  body.prescription-preview-printing #prescription-print-host .prescription-print-pages {
                     min-height: 0 !important;
-                    height: auto !important;
-                    overflow: visible !important;
-                  }
-                  body.prescription-preview-printing [data-prescription-preview-scroll] {
-                    overflow: visible !important;
-                    min-height: 0 !important;
-                    height: auto !important;
-                  }
-                  body.prescription-preview-printing [data-prescription-preview-scale] {
-                    transform: none !important;
                     width: auto !important;
                   }
-                  body.prescription-preview-printing #pagedjs-container {
-                    min-height: 0 !important;
-                  }
-                  body.prescription-preview-printing #pagedjs-container .pagedjs_page {
+                  body.prescription-preview-printing #prescription-print-host .pagedjs_pages {
+                    width: ${pagedPrintPageWidth} !important;
                     margin: 0 auto !important;
+                  }
+                  body.prescription-preview-printing #prescription-print-host .pagedjs_page {
+                    margin: 0 !important;
                     box-shadow: none !important;
                     break-after: page !important;
                     page-break-after: always !important;
                   }
-                  body.prescription-preview-printing #pagedjs-container .pagedjs_page:last-child {
+                  body.prescription-preview-printing #prescription-print-host .pagedjs_page:last-child {
                     break-after: auto !important;
                     page-break-after: auto !important;
                   }
