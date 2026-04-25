@@ -46,6 +46,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
+import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
@@ -2510,7 +2511,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 <div className="text-center py-8 text-gray-500">
                   <History className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>No previous visits found</p>
-                  <p className="text-sm">This will be the patient's first visit</p>
+                  <p className="text-sm">This will be the patient&apos;s first visit</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -2534,84 +2535,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
                         {/* Visit details */}
                         <div className="flex-1 min-w-0">
-                          <Card>
-                            <CardContent className="p-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <div>
-                                  <h4 className="text-sm font-semibold">
-                                    Visit #{patientHistory.length - index}
-                                  </h4>
-                                  <p className="text-xs text-gray-500">
-                                    {new Date(visit.createdAt || (visit as any).date || Date.now()).toLocaleDateString('en-US', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  {(() => {
-                                    const normalizedStatus = typeof visit.status === 'string'
-                                      ? visit.status.toLowerCase()
-                                      : 'unknown';
-                                    const badgeVariant = normalizedStatus === 'completed'
-                                      ? 'default'
-                                      : normalizedStatus === 'in-progress'
-                                      ? 'secondary'
-                                      : 'outline';
-                                    const statusLabel = typeof visit.status === 'string'
-                                      ? visit.status.replace(/-/g, ' ').toUpperCase()
-                                      : 'UNKNOWN';
-                                    return (
-                                      <Badge variant={badgeVariant}>
-                                        {statusLabel}
-                                      </Badge>
-                                    );
-                                  })()}
-                                  {/* photos may be absent in VisitSummary; show if present */}
-                                  {typeof (visit as any).photos !== 'undefined' && Number((visit as any).photos || 0) > 0 && (
-                                    <Badge variant="outline" className="text-xs">
-                                      {Number((visit as any).photos)} Photos
-                                    </Badge>
-                                  )}
-                                </div>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                <div className="flex items-center text-sm">
-                                  <User className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className="text-gray-600">Dr. {(visit as any)?.doctor?.firstName || ''} {(visit as any)?.doctor?.lastName || ''}</span>
-                                </div>
-                                
-                                <div className="flex items-center text-sm">
-                                  <FileText className="h-4 w-4 mr-2 text-gray-400" />
-                                  <span className="text-gray-600">{visit.visitType}</span>
-                                </div>
-                                
-                                {Array.isArray(visit.diagnosis) && visit.diagnosis.length > 0 && (
-                                  <div className="flex items-start text-sm">
-                                    <Stethoscope className="h-4 w-4 mr-2 text-gray-400 mt-0.5" />
-                                    <div className="flex-1">
-                                      <span className="text-gray-600">Diagnosis:</span>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                        {(visit.diagnosis as unknown[]).map((dx: unknown, i: number) => {
-                                          const label = typeof dx === 'string' ? dx : (dx && typeof dx === 'object' && 'diagnosis' in (dx as any)) ? String((dx as any).diagnosis) : '';
-                                          if (!label) return null;
-                                          return (
-                                            <Badge key={i} variant="outline" className="text-xs">
-                                              {label}
-                                            </Badge>
-                                          );
-                                        })}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
+                          <PatientHistoryVisitCard
+                            visit={visit as unknown as Record<string, unknown>}
+                            visitLabel={`Visit #${patientHistory.length - index}`}
+                            onResume={() => {
+                              window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}&patientId=${encodeURIComponent(patientId)}`;
+                            }}
+                          />
                         </div>
                       </div>
                     ))}

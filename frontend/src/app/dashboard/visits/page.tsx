@@ -248,6 +248,7 @@ import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -265,65 +266,11 @@ import type {
   PatientVisitHistoryResponse,
   User as UserSummary,
   VisitTimelineEntry,
-  VisitSummary,
 } from '@/lib/types';
 
 type AppointmentWithVisit = Appointment & { visit?: { id: string } | null };
 type DoctorSummary = UserSummary & { specialization?: string };
 type PatientMatch = Patient & { name?: string };
-
-type VisitComplaint = {
-  complaint?: string;
-  [key: string]: unknown;
-};
-
-type VisitDiagnosis = {
-  diagnosis?: string;
-  [key: string]: unknown;
-};
-
-type VisitMedication = string | { name?: string; dosage?: string; duration?: string };
-
-type VisitTreatment = {
-  medications?: VisitMedication[];
-  [key: string]: unknown;
-};
-
-type VisitScribeData = {
-  visitType?: string;
-  notes?: string;
-  [key: string]: unknown;
-};
-
-const parseJsonArray = <T,>(value: unknown): T[] => {
-  if (!value) return [];
-  if (Array.isArray(value)) return value as T[];
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? (parsed as T[]) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-};
-
-const parseJsonObject = <T extends Record<string, unknown>>(value: unknown): T | undefined => {
-  if (!value) return undefined;
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    return value as T;
-  }
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as T) : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  return undefined;
-};
 
 const normalizePatientVisits = (payload: PatientVisitHistoryResponse): VisitTimelineEntry[] => {
   if (Array.isArray(payload)) {
@@ -430,96 +377,10 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
         {/* Timeline items */}
         <div className="space-y-6">
           {history.map((visit, index) => {
-            const complaints = parseJsonArray<VisitComplaint>(visit.complaints);
-            const diagnosis = parseJsonArray<VisitDiagnosis>(visit.diagnosis);
-            const treatment = parseJsonObject<VisitTreatment>(visit.plan) ?? {};
-            const scribeData = parseJsonObject<VisitScribeData>(visit.scribeJson) ?? {};
-            const visitDate = visit.createdAt ? new Date(visit.createdAt) : new Date();
-            const chiefComplaint = complaints[0]?.complaint ?? 'No chief complaint recorded';
-            const primaryDiagnosis = diagnosis[0]?.diagnosis ?? 'No diagnosis recorded';
-            const visitTypeLabel = scribeData.visitType ?? 'OPD Consultation';
-            const medicationEntries = (Array.isArray(treatment.medications) ? treatment.medications : []) as VisitMedication[];
-            const isProcedure = visitTypeLabel.toLowerCase().includes('procedure');
-            const badgeVariant: 'default' | 'destructive' = isProcedure ? 'destructive' : 'default';
+            const isProcedure = JSON.stringify(visit.scribeJson ?? visit.visitType ?? '')
+              .toLowerCase()
+              .includes('procedure');
             const hasPrescription = !!visit.prescription?.id;
-            const photoCount = Number((visit as any)?.photos || 0);
-            // Normalize preview URLs so both legacy `/uploads/*` and API routes render
-            const toAbsolute = (path: string) => {
-              if (!path) return path as unknown as string;
-              const p = String(path);
-              if (/^https?:\/\//i.test(p)) return p;
-              const cleaned = p.replace(/^\/?api\/+/, '/');
-              if (/^\/?uploads\//i.test(cleaned) || /\/uploads\//i.test(cleaned)) {
-                const startIdx = cleaned.toLowerCase().indexOf('/uploads/');
-                const suffix = startIdx >= 0 ? cleaned.slice(startIdx) : `/${cleaned.replace(/^\/?/, '')}`;
-                return suffix.startsWith('/uploads/') ? suffix : `/uploads/${suffix.replace(/^\/?uploads\//i, '')}`;
-              }
-              // Ensure we always insert exactly one slash between /api and the path
-              return `/api/${cleaned.replace(/^\//, '')}`;
-            };
-            const photoPreviews = Array.isArray((visit as any)?.photoPreviewUrls)
-              ? ((visit as any).photoPreviewUrls as string[]).map(toAbsolute)
-              : [];
-            const drugNames = Array.isArray((visit as any)?.prescriptionDrugNames)
-              ? ((visit as any).prescriptionDrugNames as string[])
-              : [];
-            const visitVitals = ((): any => {
-              const raw = (visit as any)?.vitals as unknown;
-              if (!raw) return undefined;
-              if (typeof raw === 'object') return raw as any;
-              try { return JSON.parse(String(raw)); } catch { return undefined; }
-            })();
-            const bpS = (visitVitals?.bpS ?? visitVitals?.bpSys ?? visitVitals?.systolicBP) as string | number | undefined;
-            const bpD = (visitVitals?.bpD ?? visitVitals?.bpDia ?? visitVitals?.diastolicBP) as string | number | undefined;
-            const hrVal = (visitVitals?.hr ?? visitVitals?.heartRate ?? visitVitals?.pulse ?? visitVitals?.pr) as string | number | undefined;
-            const tempVal = (visitVitals?.temp ?? visitVitals?.temperature) as string | number | undefined;
-            const spo2Val = (visitVitals?.spo2) as string | number | undefined;
-            const rrVal = (visitVitals?.rr ?? visitVitals?.respiratoryRate) as string | number | undefined;
-            const heightCm = (visitVitals?.height ?? visitVitals?.heightCm) as string | number | undefined;
-            const weightKg = (visitVitals?.weight) as string | number | undefined;
-            const rxItems = Array.isArray((visit as any)?.prescriptionItems)
-              ? ((visit as any).prescriptionItems as Array<Record<string, unknown>>)
-              : [];
-            const rxMeta = (visit as any)?.prescriptionMeta as Record<string, unknown> | undefined;
-            const planSummary = (visit as any)?.planSummary as Record<string, unknown> | undefined;
-            const historySummary = (visit as any)?.historySummary as Record<string, unknown> | undefined;
-            const examSummary = (visit as any)?.examSummary as Record<string, unknown> | undefined;
-            const invs: string[] = Array.isArray((planSummary as any)?.investigations)
-              ? ((planSummary as any).investigations as unknown[]).map((x) => String(x))
-              : [];
-            const procedurePlannedText: string | undefined = (planSummary && (planSummary as any).procedurePlanned != null)
-              ? String((planSummary as any).procedurePlanned)
-              : undefined;
-            const followUpText: string | undefined = (planSummary && (planSummary as any).followUpInstructions != null)
-              ? String((planSummary as any).followUpInstructions)
-              : undefined;
-            const counselingText: string | undefined = (planSummary && (planSummary as any).counseling != null)
-              ? String((planSummary as any).counseling)
-              : undefined;
-            const validUntilIso: string | undefined = (rxMeta && (rxMeta as any).validUntil != null)
-              ? String((rxMeta as any).validUntil)
-              : undefined;
-            const pastHistoryText: string | undefined = (historySummary && (historySummary as any).pastHistory != null)
-              ? String((historySummary as any).pastHistory)
-              : undefined;
-            const medicationHistoryText: string | undefined = (historySummary && (historySummary as any).medicationHistory != null)
-              ? String((historySummary as any).medicationHistory)
-              : undefined;
-            const menstrualHistoryText: string | undefined = (historySummary && (historySummary as any).menstrualHistory != null)
-              ? String((historySummary as any).menstrualHistory)
-              : undefined;
-            const familyHistoryObj: unknown = historySummary ? (historySummary as any).familyHistory : undefined;
-            const generalAppearanceText: string | undefined = (examSummary && (examSummary as any).generalAppearance != null)
-              ? String((examSummary as any).generalAppearance)
-              : undefined;
-            const dermatologyText: string | undefined = (() => {
-              if (!examSummary) return undefined;
-              const val = (examSummary as any).dermatology as unknown;
-              if (val == null) return undefined;
-              if (typeof val === 'string') return val;
-              try { return JSON.stringify(val); } catch { return String(val); }
-            })();
-            const hasHistorySummary: boolean = Boolean(pastHistoryText) || Boolean(medicationHistoryText) || Boolean(menstrualHistoryText) || Boolean(familyHistoryObj && Object.keys((familyHistoryObj as Record<string, unknown>) || {}).length > 0);
             
             return (
               <div key={visit.id} className="relative flex items-start space-x-4">
@@ -538,261 +399,53 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 
                 {/* Visit details */}
                 <div className="flex-1 min-w-0">
-                  <Card className={`${index === 0 ? 'border-blue-200 bg-blue-50' : ''}`}>
-                    <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4 text-gray-400" />
-                          <span className="text-sm font-medium text-gray-900">
-                            {visitDate.toLocaleDateString()} at {visitDate.toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={badgeVariant}>
-                          {visitTypeLabel}
-                          </Badge>
-                          {visit.id && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}`;
-                              }}
-                            >
-                              Resume
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <p className="text-gray-600">Doctor: <span className="font-medium text-gray-900">{visit.doctor?.firstName} {visit.doctor?.lastName}</span></p>
-                          <p className="text-gray-600">Chief Complaint: <span className="text-gray-900">{chiefComplaint}</span></p>
-                        </div>
-                        <div>
-                          <p className="text-gray-600">Diagnosis: <span className="font-medium text-gray-900">{primaryDiagnosis}</span></p>
-                          {visit.followUp && (
-                            <p className="text-gray-600">Follow-up: <span className="text-gray-900">{new Date(visit.followUp).toLocaleDateString()}</span></p>
-                          )}
-                            {photoCount > 0 && (
-                              <p className="text-gray-600">Photos: <span className="text-gray-900">{photoCount}</span></p>
-                            )}
-                        </div>
-                      </div>
-                      
-                      {treatment.medications && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600">
-                            <span className="font-medium">Treatment:</span>
-                            <ul className="list-disc ml-5 mt-1 text-gray-700">
-                                {medicationEntries.map((medication, idx) => {
-                                  const summary =
-                                    typeof medication === 'string'
-                                      ? medication
-                                      : [medication?.name, medication?.dosage, medication?.duration]
-                                          .filter(Boolean)
-                                          .join(' • ');
-                                  return <li key={idx}>{summary}</li>;
-                                })}
-                              </ul>
-                            </div>
-                          </div>
-                        )}
-                        
-                      {scribeData.notes && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-medium">Notes:</span> {scribeData.notes}
-                          </p>
-                        </div>
-                      )}
-
-                      {drugNames.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-gray-200">
-                          <div className="text-sm text-gray-600">
-                            <span className="font-medium">Drugs:</span>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {drugNames.slice(0, 6).map((d, i) => (
-                                <Badge key={`${visit.id}-drug-${i}`} variant="outline">{String(d)}</Badge>
-                              ))}
-                              {drugNames.length > 6 && (
-                                <span className="text-xs text-gray-500 ml-1">+{drugNames.length - 6} more</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {(bpS || bpD || hrVal || tempVal || spo2Val || rrVal || heightCm || weightKg) && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-1">Vitals</div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                            {(bpS || bpD) && (
-                              <div><span className="text-gray-600 mr-1">BP:</span><span className="font-medium">{bpS ?? '?'} / {bpD ?? '?'}</span></div>
-                            )}
-                            {hrVal !== undefined && hrVal !== null && String(hrVal) !== '' && (
-                              <div><span className="text-gray-600 mr-1">Pulse:</span><span className="font-medium">{hrVal} bpm</span></div>
-                            )}
-                            {tempVal !== undefined && tempVal !== null && String(tempVal) !== '' && (
-                              <div><span className="text-gray-600 mr-1">Temp:</span><span className="font-medium">{tempVal} °F</span></div>
-                            )}
-                            {spo2Val !== undefined && spo2Val !== null && String(spo2Val) !== '' && (
-                              <div><span className="text-gray-600 mr-1">SpO₂:</span><span className="font-medium">{spo2Val} %</span></div>
-                            )}
-                            {rrVal !== undefined && rrVal !== null && String(rrVal) !== '' && (
-                              <div><span className="text-gray-600 mr-1">RR:</span><span className="font-medium">{rrVal} /min</span></div>
-                            )}
-                            {heightCm !== undefined && heightCm !== null && String(heightCm) !== '' && (
-                              <div><span className="text-gray-600 mr-1">Height:</span><span className="font-medium">{heightCm} cm</span></div>
-                            )}
-                            {weightKg !== undefined && weightKg !== null && String(weightKg) !== '' && (
-                              <div><span className="text-gray-600 mr-1">Weight:</span><span className="font-medium">{weightKg} kg</span></div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {rxItems.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-1">Prescription Items</div>
-                          <div className="space-y-2">
-                            {rxItems.map((it, idx) => {
-                              const name = typeof it.drugName === 'string' ? it.drugName : undefined;
-                              const dosage = (it.dosage != null) ? String(it.dosage) : undefined;
-                              const dosageUnit = typeof it.dosageUnit === 'string' ? it.dosageUnit : undefined;
-                              const frequency = typeof it.frequency === 'string' ? it.frequency.replaceAll('_', ' ') : undefined;
-                              const duration = (it.duration != null) ? String(it.duration) : undefined;
-                              const durationUnit = typeof it.durationUnit === 'string' ? it.durationUnit : undefined;
-                              const route = typeof it.route === 'string' ? it.route : undefined;
-                              const timing = typeof it.timing === 'string' ? it.timing : undefined;
-                              const instructions = typeof it.instructions === 'string' ? it.instructions : undefined;
-                              const quantity = (it.quantity != null) ? String(it.quantity) : undefined;
-                              const line: string[] = [];
-                              if (dosage) line.push(dosage + (dosageUnit ? ` ${dosageUnit}` : ''));
-                              if (frequency) line.push(frequency);
-                              if (duration) line.push(`${duration}${durationUnit ? ` ${durationUnit}` : ''}`);
-                              if (route) line.push(route);
-                              if (timing) line.push(timing);
-                              if (quantity) line.push(`Qty: ${quantity}`);
-                              return (
-                                <div key={`${visit.id}-rx-${idx}`} className="rounded border border-gray-200 p-2">
-                                  <div className="text-sm">
-                                    <div className="font-medium text-gray-900">{name || `Item ${idx + 1}`}</div>
-                                    {line.length > 0 && (
-                                      <div className="text-gray-700">{line.join(' • ')}</div>
-                                    )}
-                                    {instructions && (
-                                      <div className="text-gray-700 mt-1">Instructions: {instructions}</div>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {(invs.length > 0 || procedurePlannedText || followUpText || counselingText || validUntilIso) && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-1">Prescription Summary</div>
-                          <div className="space-y-1 text-sm">
-                            {invs.length > 0 && (
-                              <div><span className="text-gray-600 mr-1">Investigations:</span><span className="font-medium">{invs.join(', ')}</span></div>
-                            )}
-                            {procedurePlannedText && (
-                              <div><span className="text-gray-600 mr-1">Procedure Planned:</span><span className="font-medium">{procedurePlannedText}</span></div>
-                            )}
-                            {followUpText && (
-                              <div><span className="text-gray-600 mr-1">Follow-up:</span><span className="font-medium">{followUpText}</span></div>
-                            )}
-                            {validUntilIso && (
-                              <div><span className="text-gray-600 mr-1">Valid Until:</span><span className="font-medium">{new Date(validUntilIso).toLocaleDateString()}</span></div>
-                            )}
-                            {counselingText && (
-                              <div><span className="text-gray-600 mr-1">Counseling:</span><span className="font-medium">{counselingText}</span></div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {hasHistorySummary && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-1">History</div>
-                          <div className="space-y-1 text-sm">
-                            {pastHistoryText && (
-                              <div><span className="text-gray-600 mr-1">Past:</span><span className="font-medium">{pastHistoryText}</span></div>
-                            )}
-                            {medicationHistoryText && (
-                              <div><span className="text-gray-600 mr-1">Medications:</span><span className="font-medium">{medicationHistoryText}</span></div>
-                            )}
-                            {menstrualHistoryText && (
-                              <div><span className="text-gray-600 mr-1">Menstrual:</span><span className="font-medium">{menstrualHistoryText}</span></div>
-                            )}
-                            {familyHistoryObj ? (
-                              <div><span className="text-gray-600 mr-1">Family:</span><span className="font-medium">{(() => { try { return String(JSON.stringify(familyHistoryObj)); } catch { return String(familyHistoryObj as any); } })()}</span></div>
-                            ) : null}
-                          </div>
-                        </div>
-                      )}
-
-                      {(generalAppearanceText || dermatologyText) && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-1">Examination</div>
-                          <div className="space-y-1 text-sm">
-                            {generalAppearanceText && (
-                              <div><span className="text-gray-600 mr-1">General:</span><span className="font-medium">{generalAppearanceText}</span></div>
-                            )}
-                            {dermatologyText ? (
-                              <div><span className="text-gray-600 mr-1">Dermatology:</span><span className="font-medium">{String(dermatologyText)}</span></div>
-                            ) : null}
-                          </div>
-                        </div>
-                      )}
-
-                      {photoPreviews.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-sm text-gray-600 font-medium mb-2">Photos</div>
-                          <div className="flex gap-2 overflow-x-auto">
-                            {photoPreviews.map((u, i) => (
-                              <img key={`${visit.id}-p-${i}`} src={u} alt="preview" className="h-16 w-24 object-cover rounded border" />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {hasPrescription && (
-                        <div className="mt-4 pt-3 border-t border-gray-200">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              const prescriptionId = visit.prescription!.id;
-                              setViewingPrescription({ visitId: visit.id, prescriptionId });
-                              if (!prescriptionsCache[prescriptionId]) {
-                                setPrescriptionError(null);
-                                setPrescriptionLoading(true);
-                                void apiClient
-                                  .getPrescription(prescriptionId)
-                                  .then((data) => {
-                                    setPrescriptionsCache((prev) => ({ ...prev, [prescriptionId]: data }));
-                                  })
-                                  .catch((error: unknown) => {
-                                    console.error('Failed to load prescription', error);
-                                    setPrescriptionError('Unable to load prescription. Please try again.');
-                                  })
-                                  .finally(() => {
-                                    setPrescriptionLoading(false);
-                                  });
-                              }
-                            }}
-                          >
-                            View Prescription
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                  <PatientHistoryVisitCard
+                    visit={visit as unknown as Record<string, unknown>}
+                    visitLabel={index === 0 ? 'Most recent visit' : undefined}
+                    highlight={index === 0}
+                    onResume={
+                      visit.id
+                        ? () => {
+                            window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}`;
+                          }
+                        : undefined
+                    }
+                    footerActions={
+                      hasPrescription ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const prescriptionId = visit.prescription!.id;
+                            setViewingPrescription({ visitId: visit.id, prescriptionId });
+                            if (!prescriptionsCache[prescriptionId]) {
+                              setPrescriptionError(null);
+                              setPrescriptionLoading(true);
+                              void apiClient
+                                .getPrescription(prescriptionId)
+                                .then((data) => {
+                                  setPrescriptionsCache((prev) => ({
+                                    ...prev,
+                                    [prescriptionId]: data,
+                                  }));
+                                })
+                                .catch((error: unknown) => {
+                                  console.error('Failed to load prescription', error);
+                                  setPrescriptionError(
+                                    'Unable to load prescription. Please try again.'
+                                  );
+                                })
+                                .finally(() => {
+                                  setPrescriptionLoading(false);
+                                });
+                            }
+                          }}
+                        >
+                          View Prescription
+                        </Button>
+                      ) : undefined
+                    }
+                  />
                 </div>
               </div>
             );
