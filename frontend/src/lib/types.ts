@@ -452,6 +452,8 @@ export interface StaffSummary {
 export interface VisitTimelineEntry {
   id: string;
   createdAt?: string;
+  status?: string | null;
+  visitType?: string | null;
   complaints?: unknown;
   diagnosis?: unknown;
   plan?: unknown;
