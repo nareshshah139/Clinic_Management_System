@@ -3495,8 +3495,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         };
 
         // Match continuation pages to page 1 by copying the vertical offset of
-        // the first rendered text block, so page 2+ starts at the same default
-        // text position under the letterhead.
+        // the first rendered text block, then nudge continuation pages down by
+        // about one line so the second page breathes a bit more under the
+        // letterhead.
+        const continuationExtraOffsetPx = 36;
         let firstPageTextOffsetPx = 0;
         const firstPageContent = pages[0]?.querySelector('.pagedjs_page_content') as HTMLElement | null;
         const firstPageBox = pages[0]?.querySelector('.pagedjs_pagebox') as HTMLElement | null;
@@ -3505,9 +3507,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           const pageBoxRect = firstPageBox.getBoundingClientRect();
           const textRect = firstPageText.getBoundingClientRect();
           const measuredOffset = Math.round(textRect.top - pageBoxRect.top);
-          firstPageTextOffsetPx = Math.max(0, Math.min(measuredOffset, 240));
+          firstPageTextOffsetPx = Math.max(0, Math.min(measuredOffset + continuationExtraOffsetPx, 240));
           console.log('↕️ First text offset copied from page 1:', {
             measuredOffset,
+            continuationExtraOffsetPx,
             appliedOffset: firstPageTextOffsetPx,
           });
         }

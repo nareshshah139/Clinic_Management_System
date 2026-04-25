@@ -284,6 +284,6 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     const pageContents = document.querySelectorAll('#pagedjs-container .pagedjs_page_content');
     expect(pageContents).toHaveLength(2);
     expect((pageContents[0] as HTMLElement).style.transform).toBe('translate(0px, 0px)');
-    expect((pageContents[1] as HTMLElement).style.transform).toBe('translate(0px, 50px)');
+    expect((pageContents[1] as HTMLElement).style.transform).toBe('translate(0px, 86px)');
   });
 });
