@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './shared/database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { PatientsModule } from './modules/patients/patients.module';
@@ -39,6 +40,7 @@ const commonImports = [
     validate: validateEnv,
   }),
   PrismaModule,
+  ScheduleModule.forRoot(),
   PassportModule.register({ defaultStrategy: 'jwt' }),
   JwtModule.register({
     secret: process.env.JWT_SECRET,
