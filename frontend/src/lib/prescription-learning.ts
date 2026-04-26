@@ -15,6 +15,16 @@ export interface LearnedPlanSuggestion {
   signature: string;
 }
 
+export interface LearnedMedicationSuggestion {
+  sourceKind: Exclude<LearnedPlanSourceKind, 'doctor-template'>;
+  sourceLabel: string;
+  diagnosisText: string;
+  confidence: number;
+  evidenceCount: number;
+  item: Record<string, unknown>;
+  signature: string;
+}
+
 interface FlatPlanRecord {
   sourceKind: LearnedPlanSourceKind;
   sourceLabel: string;
@@ -27,6 +37,18 @@ interface FlatPlanRecord {
   followUpInstructions: string;
   reviewDays: number | null;
   comboDrugNames: string[];
+  signature: string;
+  createdAtMs: number;
+}
+
+interface FlatMedicationRecord {
+  sourceKind: Exclude<LearnedPlanSourceKind, 'doctor-template'>;
+  sourceLabel: string;
+  diagnosisText: string;
+  diagnosisScore: number;
+  confidence: number;
+  evidenceCount: number;
+  item: Record<string, unknown>;
   signature: string;
   createdAtMs: number;
 }
@@ -55,6 +77,18 @@ const NOISE_WORDS = new Set([
   'disorder',
   'unspecified',
 ]);
+
+const DIAGNOSIS_ALIAS_REPLACEMENTS: Array<{ pattern: RegExp; replacement: string }> = [
+  { pattern: /\bpih\b/g, replacement: 'post inflammatory hyperpigmentation' },
+  { pattern: /\bpost acne marks\b/g, replacement: 'post inflammatory hyperpigmentation' },
+  { pattern: /\bav\b/g, replacement: 'acne vulgaris' },
+  { pattern: /\bacne\b/g, replacement: 'acne vulgaris' },
+  { pattern: /\bad\b/g, replacement: 'atopic dermatitis' },
+  { pattern: /\bsd\b/g, replacement: 'seborrheic dermatitis' },
+  { pattern: /\bseb[\s-]*derm(?:atitis)?\b/g, replacement: 'seborrheic dermatitis' },
+  { pattern: /\blp\b/g, replacement: 'lichen planus' },
+  { pattern: /\btinea\b/g, replacement: 'tinea corporis' },
+];
 
 function parseUnknown(value: unknown): unknown {
   if (typeof value !== 'string') return value;
@@ -108,9 +142,33 @@ function uniqCaseInsensitive(values: string[]): string[] {
   return out;
 }
 
+function expandDiagnosisAliases(value: string): string {
+  let expanded = normalizeText(value);
+  for (const { pattern, replacement } of DIAGNOSIS_ALIAS_REPLACEMENTS) {
+    expanded = expanded.replace(pattern, replacement);
+  }
+  return expanded.replace(/\s+/g, ' ').trim();
+}
+
+function buildDiagnosisVariants(value: string): string[] {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return [];
+  const withoutParens = normalized.replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  return uniqCaseInsensitive(
+    [normalized, withoutParens]
+      .filter(Boolean)
+      .flatMap((entry) => {
+        const expanded = expandDiagnosisAliases(entry);
+        return expanded && expanded !== normalizeText(entry)
+          ? [entry, expanded]
+          : [entry];
+      })
+  );
+}
+
 function toWordSet(value: string): Set<string> {
   return new Set(
-    normalizeText(value)
+    expandDiagnosisAliases(value)
       .split(WORD_DELIMITER)
       .map((token) => token.trim())
       .filter((token) => token && !NOISE_WORDS.has(token))
@@ -124,7 +182,7 @@ function splitDiagnosisPhrases(value: unknown): string[] {
     .split(DIAGNOSIS_DELIMITER)
     .map((part) => part.trim())
     .filter(Boolean);
-  return uniqCaseInsensitive([normalized, ...phrases]);
+  return uniqCaseInsensitive([normalized, ...phrases].flatMap((entry) => buildDiagnosisVariants(entry)));
 }
 
 function toDiagnosisText(value: unknown): string {
@@ -158,8 +216,8 @@ export function scoreDiagnosisMatch(query: string, candidate: string): number {
   let best = 0;
   for (const left of queryPhrases) {
     for (const right of candidatePhrases) {
-      const a = normalizeText(left);
-      const b = normalizeText(right);
+      const a = expandDiagnosisAliases(left);
+      const b = expandDiagnosisAliases(right);
       if (!a || !b) continue;
       if (a === b) return 1;
 
@@ -271,6 +329,17 @@ function extractDrugName(raw: unknown): string {
   return normalizeWhitespace(record.drugName || record.name || record.medicine || '');
 }
 
+function normalizeDrugKey(value: unknown): string {
+  return normalizeText(value).replace(/\s+/g, ' ').trim();
+}
+
+function drugNamesMatch(left: unknown, right: unknown): boolean {
+  const a = normalizeDrugKey(left);
+  const b = normalizeDrugKey(right);
+  if (!a || !b) return false;
+  return a === b || a.includes(b) || b.includes(a);
+}
+
 function normalizeItems(value: unknown): Array<Record<string, unknown>> {
   return asArray(value)
     .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
@@ -287,6 +356,26 @@ function buildSignature(items: Array<Record<string, unknown>>): string {
 
 function extractComboDrugNames(items: Array<Record<string, unknown>>): string[] {
   return uniqCaseInsensitive(items.map((entry) => extractDrugName(entry)).filter(Boolean));
+}
+
+function buildMedicationSignature(item: Record<string, unknown>): string {
+  const durationRaw = item.duration;
+  const duration =
+    typeof durationRaw === 'number'
+      ? String(durationRaw)
+      : normalizeWhitespace(durationRaw);
+  return [
+    normalizeDrugKey(extractDrugName(item)),
+    normalizeWhitespace(item.dosage),
+    normalizeText(item.dosageUnit),
+    normalizeText(item.frequency),
+    normalizeText(item.dosePattern),
+    normalizeText(item.timing),
+    duration,
+    normalizeText(item.durationUnit),
+    normalizeText(item.instructions),
+    normalizeText(item.route),
+  ].join('|');
 }
 
 function mostCommonString(values: string[]): string {
@@ -510,6 +599,115 @@ function buildDoctorPatternRecords(
     });
 }
 
+function buildPatientMedicationRecords(input: {
+  visits: unknown[];
+  diagnosis: string;
+  drugName: string;
+  currentVisitId?: string | null;
+  doctorId?: string;
+}): FlatMedicationRecord[] {
+  return (input.visits || [])
+    .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .flatMap((visit) => {
+      if (normalizeWhitespace(visit.id) === normalizeWhitespace(input.currentVisitId || '')) return [];
+      const diagnosisText = toDiagnosisText(visit.diagnosis);
+      const diagnosisScore = scoreDiagnosisMatch(input.diagnosis, diagnosisText);
+      if (diagnosisScore < MIN_DIAGNOSIS_SCORE) return [];
+
+      const sameDoctor = normalizeWhitespace(visit.doctorId || asObject(visit.doctor).id) === normalizeWhitespace(input.doctorId || '');
+      const createdAtMs = parseDateMs(visit.createdAt);
+      const recentBoost = createdAtMs > 0
+        ? Math.max(0, 0.14 - Math.min(0.1, ((Date.now() - createdAtMs) / DAY_MS) / 365))
+        : 0;
+
+      return normalizeItems(visit.prescriptionItems || visit.items)
+        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .map<FlatMedicationRecord>((item) => ({
+          sourceKind: 'patient-last-plan',
+          sourceLabel: sameDoctor
+            ? `Usual sig from this patient’s last similar ${extractDrugName(item)} plan`
+            : `Usual sig from this patient’s similar ${extractDrugName(item)} history`,
+          diagnosisText,
+          diagnosisScore,
+          confidence: Math.min(0.98, diagnosisScore * 0.8 + recentBoost + (sameDoctor ? 0.08 : 0) + 0.06),
+          evidenceCount: 1,
+          item,
+          signature: buildMedicationSignature(item),
+          createdAtMs,
+        }));
+    })
+    .sort((a, b) => {
+      if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+      return b.createdAtMs - a.createdAtMs;
+    });
+}
+
+function buildDoctorMedicationRecords(input: {
+  prescriptions: unknown[];
+  diagnosis: string;
+  drugName: string;
+}): FlatMedicationRecord[] {
+  const rawRecords = (input.prescriptions || [])
+    .map((entry) => (entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null))
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry))
+    .flatMap((record) => {
+      const diagnosisText = extractPrescriptionDiagnosis(record);
+      const diagnosisScore = scoreDiagnosisMatch(input.diagnosis, diagnosisText);
+      if (diagnosisScore < MIN_DIAGNOSIS_SCORE) return [];
+
+      const createdAtMs = parseDateMs(record.createdAt || asObject(record.visit).createdAt);
+      return normalizeItems(record.items)
+        .filter((item) => drugNamesMatch(extractDrugName(item), input.drugName))
+        .map<FlatMedicationRecord>((item) => ({
+          sourceKind: 'doctor-pattern',
+          sourceLabel: '',
+          diagnosisText,
+          diagnosisScore,
+          confidence: 0,
+          evidenceCount: 1,
+          item,
+          signature: buildMedicationSignature(item),
+          createdAtMs,
+        }));
+    });
+
+  const grouped = new Map<string, FlatMedicationRecord[]>();
+  for (const record of rawRecords) {
+    const key = record.signature || `single:${record.createdAtMs}`;
+    const bucket = grouped.get(key) || [];
+    bucket.push(record);
+    grouped.set(key, bucket);
+  }
+
+  return [...grouped.values()]
+    .map((group) => {
+      const representative = [...group].sort((a, b) => {
+        if (b.diagnosisScore !== a.diagnosisScore) return b.diagnosisScore - a.diagnosisScore;
+        return b.createdAtMs - a.createdAtMs;
+      })[0];
+      const avgScore = group.reduce((sum, record) => sum + record.diagnosisScore, 0) / group.length;
+      const evidenceCount = group.length;
+      return {
+        ...representative,
+        sourceLabel: evidenceCount > 1
+          ? `Usual sig learned from ${evidenceCount} similar ${extractDrugName(representative.item)} prescriptions`
+          : `Usual sig from your most recent similar ${extractDrugName(representative.item)} prescription`,
+        confidence: Math.min(
+          0.95,
+          avgScore * 0.64 +
+            Math.min(0.24, Math.max(0, evidenceCount - 1) * 0.08) +
+            0.04
+        ),
+        evidenceCount,
+      } satisfies FlatMedicationRecord;
+    })
+    .sort((a, b) => {
+      if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+      return b.createdAtMs - a.createdAtMs;
+    });
+}
+
 function rankCandidate(candidate: FlatPlanRecord): number {
   const sourceBias =
     candidate.sourceKind === 'patient-last-plan'
@@ -528,6 +726,11 @@ function buildSupportingLabel(primary: FlatPlanRecord, pattern: FlatPlanRecord |
     return 'Saved order-set history also points to the same pattern.';
   }
   return undefined;
+}
+
+function rankMedicationCandidate(candidate: FlatMedicationRecord): number {
+  const sourceBias = candidate.sourceKind === 'patient-last-plan' ? 0.12 : 0.03;
+  return candidate.confidence + sourceBias;
 }
 
 export function buildLearnedPrescriptionPlan(input: {
@@ -603,6 +806,53 @@ export function buildLearnedPrescriptionPlan(input: {
       reviewDays ?? '',
       investigations.join('|'),
       followUpInstructions,
+    ].join('::'),
+  };
+}
+
+export function buildLearnedMedicationSuggestion(input: {
+  drugName: string;
+  diagnosis: string;
+  patientVisits?: unknown[];
+  doctorPrescriptions?: unknown[];
+  currentVisitId?: string | null;
+  doctorId?: string;
+}): LearnedMedicationSuggestion | null {
+  const drugName = normalizeWhitespace(input.drugName);
+  const diagnosis = normalizeWhitespace(input.diagnosis);
+  if (drugName.length < 2 || diagnosis.length < 3) return null;
+
+  const patientCandidate = buildPatientMedicationRecords({
+    visits: input.patientVisits || [],
+    diagnosis,
+    drugName,
+    currentVisitId: input.currentVisitId,
+    doctorId: input.doctorId,
+  })[0] || null;
+
+  const doctorCandidate = buildDoctorMedicationRecords({
+    prescriptions: input.doctorPrescriptions || [],
+    diagnosis,
+    drugName,
+  })[0] || null;
+
+  const primary = [patientCandidate, doctorCandidate]
+    .filter((entry): entry is FlatMedicationRecord => Boolean(entry))
+    .sort((a, b) => rankMedicationCandidate(b) - rankMedicationCandidate(a))[0];
+
+  if (!primary || primary.confidence < 0.58) return null;
+
+  return {
+    sourceKind: primary.sourceKind,
+    sourceLabel: primary.sourceLabel,
+    diagnosisText: primary.diagnosisText,
+    confidence: Number(primary.confidence.toFixed(2)),
+    evidenceCount: primary.evidenceCount,
+    item: { ...primary.item },
+    signature: [
+      primary.sourceKind,
+      primary.signature,
+      primary.diagnosisText,
     ].join('::'),
   };
 }

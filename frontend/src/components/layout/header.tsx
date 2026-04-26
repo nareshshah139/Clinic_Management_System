@@ -699,7 +699,7 @@ export function Header() {
                             <label className="text-sm">Approved Templates</label>
                             <Select
                               value={selectedSavedTemplateValue}
-                              onValueChange={(value) => {
+                              onValueChange={(value: string) => {
                                 const next = parseTemplateSelectionValue(value);
                                 setWhatsappTemplateName(next.templateName);
                                 setWhatsappTemplateLanguage(next.templateLanguage);

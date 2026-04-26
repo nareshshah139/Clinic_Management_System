@@ -18,7 +18,7 @@ import { sortDrugsByRelevance, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
-import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
+import { buildLearnedMedicationSuggestion, buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
@@ -446,6 +446,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [learningSourcesError, setLearningSourcesError] = useState('');
   const [lastAutofillPlanSignature, setLastAutofillPlanSignature] = useState<string | null>(null);
   const [lastAutofillStateSignature, setLastAutofillStateSignature] = useState<string | null>(null);
+  const [lastAutofillMode, setLastAutofillMode] = useState<'replace' | 'merge' | null>(null);
   const [suppressedAutofillSignature, setSuppressedAutofillSignature] = useState<string | null>(null);
   const [autofillUndoSnapshot, setAutofillUndoSnapshot] = useState<{
     items: PrescriptionItemForm[];
@@ -1745,6 +1746,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   useEffect(() => {
     setLastAutofillPlanSignature(null);
     setLastAutofillStateSignature(null);
+    setLastAutofillMode(null);
     setSuppressedAutofillSignature(null);
     setAutofillUndoSnapshot(null);
   }, [patientId, doctorId, visitId]);
@@ -1828,9 +1830,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }), [serializeTreatmentState, items, investigations, followUpInstructions, reviewDate]);
   const treatmentMachineOwned = Boolean(lastAutofillStateSignature && currentTreatmentSignature === lastAutofillStateSignature);
   const learnedPlanSuppressed = Boolean(learnedPlan && suppressedAutofillSignature === learnedPlan.signature);
-  const learnedPlanApplied = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && treatmentMachineOwned);
+  const learnedPlanCurrent = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && treatmentMachineOwned);
+  const learnedPlanMerged = Boolean(learnedPlanCurrent && lastAutofillMode === 'merge');
+  const learnedPlanApplied = Boolean(learnedPlanCurrent && lastAutofillMode !== 'merge');
   const learnedPlanCustomized = Boolean(learnedPlan && lastAutofillPlanSignature === learnedPlan.signature && !treatmentMachineOwned && treatmentHasMeaningfulData);
-  const learnedPlanBlocked = Boolean(learnedPlan && !learnedPlanApplied && !learnedPlanSuppressed && treatmentHasMeaningfulData && !treatmentMachineOwned);
+  const learnedPlanBlocked = Boolean(learnedPlan && !learnedPlanCurrent && !learnedPlanSuppressed && treatmentHasMeaningfulData && !treatmentMachineOwned);
 
   const applyLearnedPlan = useCallback((plan: LearnedPlanSuggestion, options?: { force?: boolean }) => {
     const allowOverwrite = options?.force || treatmentIsEmpty || treatmentMachineOwned;
@@ -1861,6 +1865,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setFollowUpInstructions(nextFollowUp);
     if (onChangeReviewDate) onChangeReviewDate(nextReviewDate);
     setSuppressedAutofillSignature(null);
+    setLastAutofillMode('replace');
     setLastAutofillPlanSignature(plan.signature);
     setLastAutofillStateSignature(serializeTreatmentState({
       items: mappedItems,
@@ -1883,6 +1888,133 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     serializeTreatmentState,
   ]);
 
+  const isBlankPrescriptionValue = (value: unknown) => {
+    if (value == null) return true;
+    if (typeof value === 'string') return !value.trim();
+    return value === '';
+  };
+
+  const mergePrescriptionItems = (current: PrescriptionItemForm, learned: PrescriptionItemForm): PrescriptionItemForm => {
+    const next = { ...current };
+    for (const [rawKey, rawValue] of Object.entries(learned)) {
+      const key = rawKey as keyof PrescriptionItemForm;
+      const value = rawValue as PrescriptionItemForm[keyof PrescriptionItemForm];
+      if (key === 'drugName' || key === 'genericName' || key === 'brandName') continue;
+      if (value == null) continue;
+      if (typeof value === 'boolean') {
+        if (typeof next[key] !== 'boolean') {
+          next[key] = value as never;
+        }
+        continue;
+      }
+      if (isBlankPrescriptionValue(value)) continue;
+      if (isBlankPrescriptionValue(next[key])) {
+        next[key] = value as never;
+      }
+    }
+    return next;
+  };
+
+  const mergeLearnedPlanMissingFields = useCallback((plan: LearnedPlanSuggestion) => {
+    if (treatmentIsEmpty) {
+      return applyLearnedPlan(plan, { force: true });
+    }
+
+    const mappedItems = plan.items
+      .map(mapPrevRxItem)
+      .filter((entry): entry is PrescriptionItemForm => Boolean(entry && entry.drugName));
+    const currentItems = clonePrescriptionItems(items).filter((entry) => (entry.drugName || '').trim());
+    const normalizeDrugName = (value: string) => value.trim().toLowerCase();
+    const learnedByDrug = new Map<string, PrescriptionItemForm>(
+      mappedItems.map((entry) => [normalizeDrugName(entry.drugName), entry])
+    );
+
+    let changed = false;
+    const mergedItems = currentItems.map((entry) => {
+      const learnedEntry = learnedByDrug.get(normalizeDrugName(entry.drugName));
+      if (!learnedEntry) return entry;
+      learnedByDrug.delete(normalizeDrugName(entry.drugName));
+      const merged = mergePrescriptionItems(entry, learnedEntry);
+      if (JSON.stringify(merged) !== JSON.stringify(entry)) changed = true;
+      return merged;
+    });
+
+    for (const learnedEntry of learnedByDrug.values()) {
+      mergedItems.push(learnedEntry);
+      changed = true;
+    }
+
+    const nextInvestigations = [...investigations];
+    const investigationKeys = new Set(nextInvestigations.map((entry) => entry.trim().toLowerCase()).filter(Boolean));
+    for (const investigation of (plan.investigations || []).map((entry) => String(entry || '').trim()).filter(Boolean)) {
+      const key = investigation.toLowerCase();
+      if (investigationKeys.has(key)) continue;
+      investigationKeys.add(key);
+      nextInvestigations.push(investigation);
+      changed = true;
+    }
+    const nextCustomInvestigations = nextInvestigations.filter((entry) => !defaultInvestigationOptions.includes(entry));
+
+    const nextFollowUp = followUpInstructions.trim() ? followUpInstructions : (plan.followUpInstructions || '');
+    if (!followUpInstructions.trim() && nextFollowUp) changed = true;
+
+    const suggestedReviewDate = onChangeReviewDate ? formatSuggestedReviewDate(plan.reviewDays) : (reviewDate || '');
+    const nextReviewDate = reviewDate || suggestedReviewDate;
+    if (!reviewDate && suggestedReviewDate) changed = true;
+
+    if (!changed) {
+      toast({
+        title: 'Already covered',
+        description: 'The current treatment already includes the learned plan details.',
+      });
+      return false;
+    }
+
+    setAutofillUndoSnapshot({
+      items: clonePrescriptionItems(items),
+      investigations: [...investigations],
+      customInvestigationOptions: [...customInvestigationOptions],
+      followUpInstructions,
+      reviewDate: reviewDate || '',
+    });
+
+    const nextItems = mergedItems.length ? [...mergedItems] : [];
+    if (nextItems.length > 0 && !hasTrailingBlank(nextItems)) nextItems.push(createBlankItem());
+
+    setItems(nextItems);
+    setInvestigations(nextInvestigations);
+    setCustomInvestigationOptions(nextCustomInvestigations);
+    setFollowUpInstructions(nextFollowUp);
+    if (onChangeReviewDate) onChangeReviewDate(nextReviewDate);
+    setSuppressedAutofillSignature(null);
+    setLastAutofillMode('merge');
+    setLastAutofillPlanSignature(plan.signature);
+    setLastAutofillStateSignature(serializeTreatmentState({
+      items: mergedItems,
+      investigations: nextInvestigations,
+      followUpInstructions: nextFollowUp,
+      reviewDate: nextReviewDate,
+    }));
+    toast({
+      title: 'Missing fields filled',
+      description: 'The learned plan only filled blank treatment details and missing medications.',
+    });
+    return true;
+  }, [
+    treatmentIsEmpty,
+    applyLearnedPlan,
+    items,
+    investigations,
+    customInvestigationOptions,
+    followUpInstructions,
+    reviewDate,
+    defaultInvestigationOptions,
+    formatSuggestedReviewDate,
+    onChangeReviewDate,
+    serializeTreatmentState,
+    toast,
+  ]);
+
   const undoLearnedAutofill = useCallback(() => {
     if (!autofillUndoSnapshot) return;
 
@@ -1895,16 +2027,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setFollowUpInstructions(autofillUndoSnapshot.followUpInstructions);
     onChangeReviewDate?.(autofillUndoSnapshot.reviewDate);
     setSuppressedAutofillSignature(lastAutofillPlanSignature);
+    setLastAutofillMode(null);
     setLastAutofillPlanSignature(null);
     setLastAutofillStateSignature(null);
     setAutofillUndoSnapshot(null);
   }, [autofillUndoSnapshot, onChangeReviewDate, lastAutofillPlanSignature]);
 
   useEffect(() => {
-    if (!learnedPlan || learnedPlanSuppressed || learnedPlanApplied) return;
+    if (!learnedPlan || learnedPlanSuppressed || learnedPlanCurrent) return;
     if (!treatmentIsEmpty && !treatmentMachineOwned) return;
     applyLearnedPlan(learnedPlan);
-  }, [learnedPlan, learnedPlanSuppressed, learnedPlanApplied, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
+  }, [learnedPlan, learnedPlanSuppressed, learnedPlanCurrent, treatmentIsEmpty, treatmentMachineOwned, applyLearnedPlan]);
 
   // Throttle consecutive adds of the same drug (guards double/triple add)
   const lastDrugAddRef = useRef<{ key: string; at: number }>({ key: '', at: 0 });
@@ -1938,31 +2071,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const addItemFromDrugToRow = (rowIdx: number, drug: any) => {
     if (!shouldAllowDrugAdd(drug)) return;
-    const base: Partial<PrescriptionItemForm> = {
-      drugName: drug.name,
-      genericName: drug.genericName,
-      dosage: 1,
-      dosageUnit: inferDosageUnitFromDosageForm(drug.dosageForm),
-      frequency: 'ONCE_DAILY',
-      duration: 5,
-      durationUnit: 'DAYS',
-      instructions: '',
-      route: 'Oral',
-      timing: '',
-      quantity: 5,
-      isGeneric: true,
-    };
-    // Update the specific row with drug data
-    updateItem(rowIdx, base);
-    
-    // Clear search results for this row
-    setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
-    setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
-    setActiveSearchRow(null);
-    
-    pushRecent('drugNames', drug.name);
-    if (patientId) pushRecent(`drugNames:${patientId}`, drug.name);
-    if (drug.genericName) pushRecent('drugGeneric', drug.genericName);
+    applyDrugSelectionToRow(rowIdx, drug, { clearSearch: true, showToast: true });
   };
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
@@ -1977,6 +2086,82 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return next;
     });
   };
+
+  const buildMedicationPresetFromDrug = useCallback((drug: any): {
+    patch: Partial<PrescriptionItemForm>;
+    learnedLabel?: string;
+    learnedEvidenceCount?: number;
+  } => {
+    const base: Partial<PrescriptionItemForm> = {
+      drugName: drug.name,
+      genericName: drug.genericName,
+      dosage: 1,
+      dosageUnit: inferDosageUnitFromDosageForm(drug.dosageForm),
+      frequency: 'ONCE_DAILY',
+      duration: 5,
+      durationUnit: 'DAYS',
+      instructions: '',
+      route: 'Oral',
+      timing: '',
+      quantity: 5,
+      isGeneric: true,
+    };
+
+    const learnedSuggestion = buildLearnedMedicationSuggestion({
+      drugName: String(drug?.name || ''),
+      diagnosis,
+      patientVisits: patientHistoryForLearning,
+      doctorPrescriptions: doctorPrescriptionsForLearning,
+      currentVisitId: visitId,
+      doctorId,
+    });
+    const learnedItem = learnedSuggestion ? mapPrevRxItem(learnedSuggestion.item) : null;
+
+    if (!learnedItem) {
+      return { patch: base };
+    }
+
+    return {
+      patch: {
+        ...base,
+        ...learnedItem,
+        drugName: String(drug?.name || learnedItem.drugName || ''),
+        genericName: drug?.genericName || learnedItem.genericName,
+        isGeneric: typeof learnedItem.isGeneric === 'boolean' ? learnedItem.isGeneric : true,
+      },
+      learnedLabel: learnedSuggestion?.sourceLabel,
+      learnedEvidenceCount: learnedSuggestion?.evidenceCount,
+    };
+  }, [diagnosis, patientHistoryForLearning, doctorPrescriptionsForLearning, visitId, doctorId, inferDosageUnitFromDosageForm, mapPrevRxItem]);
+
+  const applyDrugSelectionToRow = useCallback((rowIdx: number, drug: any, options?: {
+    clearSearch?: boolean;
+    showToast?: boolean;
+  }) => {
+    const { patch, learnedLabel, learnedEvidenceCount } = buildMedicationPresetFromDrug(drug);
+    updateItem(rowIdx, patch);
+
+    if (options?.clearSearch) {
+      setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
+      setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
+      setActiveSearchRow(null);
+    }
+
+    if (patch.drugName) {
+      pushRecent('drugNames', String(patch.drugName));
+      if (patientId) pushRecent(`drugNames:${patientId}`, String(patch.drugName));
+    }
+    if (patch.genericName) pushRecent('drugGeneric', String(patch.genericName));
+
+    if (options?.showToast && learnedLabel) {
+      toast({
+        title: 'Usual sig filled',
+        description: learnedEvidenceCount && learnedEvidenceCount > 1
+          ? `${learnedLabel}. Review and adjust if needed.`
+          : `${learnedLabel}. Review before saving.`,
+      });
+    }
+  }, [buildMedicationPresetFromDrug, patientId, toast]);
 
   const addRowAndFocus = () => {
     setItems(prev => {
@@ -3840,13 +4025,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     if (!diagnosis.trim()) return 'Name the diagnosis. The plan can assemble itself.';
     if (learningSourcesStatus === 'loading' && !learnedPlan) return 'Reading recent plans, patterns, and saved order sets…';
     if (learnedPlanSuppressed) return 'Autofill paused for this diagnosis.';
+    if (learnedPlanMerged) return 'Missing treatment details were quick-filled.';
     if (learnedPlanApplied) return 'Treatment assembled from live practice patterns.';
     if (learnedPlanCustomized) return 'Customized after autofill.';
     if (learnedPlanBlocked) return 'Learned plan ready. Your manual edits were preserved.';
     if (learnedPlan) return 'A learned plan is ready to prefill.';
     if (learningSourcesError) return 'Pattern learning is partially offline right now.';
     return 'No strong pattern yet for this diagnosis.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
   const learnedPlanDescription = useMemo(() => {
     if (!diagnosis.trim()) {
       return 'Once diagnosis is entered, this panel learns from the patient’s similar visits, recent prescriptions from the database, and saved server order sets.';
@@ -3856,6 +4042,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
     if (learnedPlanSuppressed) {
       return 'You rolled back the machine draft. It will stay out of the way until you reapply it or change the diagnosis.';
+    }
+    if (learnedPlanMerged) {
+      return 'Only blank medication details, missing medications, and empty follow-up fields were filled from the learned plan.';
     }
     if (learnedPlanApplied) {
       return learnedPlan?.sourceLabel || '';
@@ -3873,9 +4062,76 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return learningSourcesError;
     }
     return 'Keep building manually once. As more prescriptions land in the database, this section becomes a faster diagnosis-to-treatment shortcut.';
-  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
+  }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
   const learnedPlanVisibleComboNames = learnedPlan?.comboDrugNames.slice(0, 4) || [];
   const learnedPlanHiddenComboCount = Math.max(0, (learnedPlan?.comboDrugNames.length || 0) - learnedPlanVisibleComboNames.length);
+  const followUpPresetTexts = useMemo(() => [
+    'Follow up in 7 days',
+    'Follow up in 14 days',
+    'Follow up in 21 days',
+    'Follow up in 30 days',
+    'Follow up in 6 weeks',
+  ], []);
+  const parseFollowUpDays = useCallback((value: string): number | null => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return null;
+    const match = normalized.match(/(\d+)\s*(day|days|d|week|weeks|w|month|months|mo)\b/);
+    if (!match) return null;
+    const amount = Number(match[1]);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    const unit = match[2];
+    if (unit.startsWith('w')) return amount * 7;
+    if (unit.startsWith('m')) return amount * 30;
+    return amount;
+  }, []);
+  const followUpSuggestions = useMemo(() => {
+    const learnedFollowUp = (learnedPlan?.followUpInstructions || '').trim()
+      || (learnedPlan?.reviewDays ? `Follow up in ${learnedPlan.reviewDays} days` : '');
+    const seen = new Set<string>();
+    const merged = [
+      learnedFollowUp,
+      ...getLocalSuggestions('followUp', followUpInstructions, 6),
+      ...followUpPresetTexts,
+    ].filter(Boolean).filter((entry) => {
+      const key = String(entry).trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return rankByQuery(
+      merged.filter((entry) => entry.toLowerCase() !== followUpInstructions.trim().toLowerCase()),
+      followUpInstructions
+    ).slice(0, 6);
+  }, [learnedPlan, followUpInstructions, followUpPresetTexts]);
+  const reviewDateShortcutDays = useMemo(() => {
+    const candidates = [
+      parseFollowUpDays(followUpInstructions),
+      learnedPlan?.reviewDays ?? null,
+      7,
+      14,
+      21,
+      30,
+      42,
+    ].filter((entry): entry is number => typeof entry === 'number' && Number.isFinite(entry) && entry > 0);
+    return Array.from(new Set(candidates)).slice(0, 6);
+  }, [followUpInstructions, learnedPlan, parseFollowUpDays]);
+  const applyFollowUpShortcut = useCallback((value: string) => {
+    setFollowUpInstructions(value);
+    const days = parseFollowUpDays(value);
+    if (days && onChangeReviewDate) {
+      onChangeReviewDate(formatSuggestedReviewDate(days));
+    }
+  }, [parseFollowUpDays, onChangeReviewDate, formatSuggestedReviewDate]);
+  const applyReviewDateShortcut = useCallback((days: number) => {
+    if (!onChangeReviewDate || days <= 0) return;
+    onChangeReviewDate(formatSuggestedReviewDate(days));
+    if (!followUpInstructions.trim()) {
+      const label = days % 7 === 0 && days >= 14
+        ? `Follow up in ${days / 7} weeks`
+        : `Follow up in ${days} days`;
+      setFollowUpInstructions(label);
+    }
+  }, [onChangeReviewDate, formatSuggestedReviewDate, followUpInstructions]);
 
   return (
     <div className="space-y-6 overflow-visible">
@@ -4451,7 +4707,19 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 Reapply learned plan
                               </Button>
                             )}
-                            {autofillUndoSnapshot && learnedPlanApplied && (
+                            {learnedPlan && treatmentHasMeaningfulData && !learnedPlanCurrent && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                                onClick={() => { void mergeLearnedPlanMissingFields(learnedPlan); }}
+                              >
+                                <Sparkles className="mr-2 h-4 w-4" />
+                                Fill missing only
+                              </Button>
+                            )}
+                            {autofillUndoSnapshot && learnedPlanCurrent && (
                               <Button
                                 type="button"
                                 size="sm"
@@ -4460,7 +4728,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 onClick={undoLearnedAutofill}
                               >
                                 <RotateCcw className="mr-2 h-4 w-4" />
-                                Undo autofill
+                                {lastAutofillMode === 'merge' ? 'Undo quick-fill' : 'Undo autofill'}
                               </Button>
                             )}
                           </div>
@@ -4495,9 +4763,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                       {(recentDrugsForPatient.length ? recentDrugsForPatient : recentDrugsGlobal).map((d) => (
                         <Button key={d} size="sm" variant="outline" onClick={() => {
                           const target = activeRowIdx ?? (items.length > 0 ? items.length - 1 : 0);
-                          updateItem(target, { drugName: d });
-                          if (patientId) pushRecent(`drugNames:${patientId}`, d);
-                          pushRecent('drugNames', d);
+                          applyDrugSelectionToRow(target, { name: d }, { showToast: false });
                         }}>
                           {d}
                         </Button>
@@ -4869,6 +5135,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div>
                     <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
                     <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    {followUpSuggestions.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {followUpSuggestions.map((suggestion) => (
+                          <Button
+                            key={suggestion}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs"
+                            onClick={() => applyFollowUpShortcut(suggestion)}
+                          >
+                            {suggestion}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -4879,6 +5161,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               <div className="md:col-span-1">
                 <label className="text-sm text-gray-700">Review Date</label>
                 <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
+                {reviewDateShortcutDays.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {reviewDateShortcutDays.map((days) => (
+                      <Button
+                        key={`review-${days}`}
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => applyReviewDateShortcut(days)}
+                      >
+                        {days % 7 === 0 && days >= 14 ? `${days / 7}w` : `${days}d`}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 

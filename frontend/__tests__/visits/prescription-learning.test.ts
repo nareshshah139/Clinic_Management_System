@@ -1,4 +1,4 @@
-import { buildLearnedPrescriptionPlan } from '@/lib/prescription-learning';
+import { buildLearnedMedicationSuggestion, buildLearnedPrescriptionPlan } from '@/lib/prescription-learning';
 
 describe('buildLearnedPrescriptionPlan', () => {
   it('prefers this patient’s last similar plan over generic doctor patterns', () => {
@@ -142,5 +142,103 @@ describe('buildLearnedPrescriptionPlan', () => {
     expect(suggestion?.comboDrugNames).toEqual(['Triple Combination Cream']);
     expect(suggestion?.investigations).toEqual(['TSH']);
     expect(suggestion?.reviewDays).toBe(42);
+  });
+
+  it('matches dermatology shorthand so diagnosis autopilot still fires', () => {
+    const suggestion = buildLearnedPrescriptionPlan({
+      diagnosis: 'PIH',
+      doctorPrescriptions: [
+        {
+          createdAt: '2026-04-12T00:00:00.000Z',
+          diagnosis: 'Post-inflammatory hyperpigmentation',
+          items: [{ drugName: 'Azelaic Acid 20% Cream' }],
+          metadata: {
+            followUpInstructions: 'Review in 6 weeks',
+          },
+        },
+      ],
+    });
+
+    expect(suggestion).not.toBeNull();
+    expect(suggestion?.comboDrugNames).toEqual(['Azelaic Acid 20% Cream']);
+    expect(suggestion?.reviewDays).toBe(42);
+  });
+});
+
+describe('buildLearnedMedicationSuggestion', () => {
+  it('prefills the usual sig from this patient’s last similar plan', () => {
+    const suggestion = buildLearnedMedicationSuggestion({
+      drugName: 'Doxycycline 40 mg',
+      diagnosis: 'Rosacea',
+      doctorId: 'doc-7',
+      patientVisits: [
+        {
+          id: 'visit-history-1',
+          createdAt: '2026-04-20T00:00:00.000Z',
+          doctor: { id: 'doc-7' },
+          diagnosis: [{ diagnosis: 'Rosacea flare' }],
+          prescriptionItems: [
+            {
+              drugName: 'Doxycycline 40 mg',
+              frequency: 'ONCE_DAILY',
+              dosePattern: '1-0-0',
+              duration: 21,
+              durationUnit: 'DAYS',
+              timing: 'After Breakfast',
+              instructions: 'Take after breakfast',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(suggestion).not.toBeNull();
+    expect(suggestion?.sourceKind).toBe('patient-last-plan');
+    expect(suggestion?.item.frequency).toBe('ONCE_DAILY');
+    expect(suggestion?.item.duration).toBe(21);
+    expect(suggestion?.item.instructions).toBe('Take after breakfast');
+  });
+
+  it('learns the most common doctor sig for the selected drug', () => {
+    const suggestion = buildLearnedMedicationSuggestion({
+      drugName: 'Triple Combination Cream',
+      diagnosis: 'Melasma',
+      doctorPrescriptions: [
+        {
+          createdAt: '2026-04-18T00:00:00.000Z',
+          diagnosis: 'Melasma',
+          items: [
+            {
+              drugName: 'Triple Combination Cream',
+              frequency: 'ONCE_DAILY',
+              duration: 8,
+              durationUnit: 'WEEKS',
+              timing: 'Bedtime',
+              instructions: 'Apply a thin layer at night',
+            },
+          ],
+        },
+        {
+          createdAt: '2026-03-29T00:00:00.000Z',
+          pharmacistNotes: 'Dx: Melasma',
+          items: [
+            {
+              drugName: 'Triple Combination Cream',
+              frequency: 'ONCE_DAILY',
+              duration: 8,
+              durationUnit: 'WEEKS',
+              timing: 'Bedtime',
+              instructions: 'Apply a thin layer at night',
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(suggestion).not.toBeNull();
+    expect(suggestion?.sourceKind).toBe('doctor-pattern');
+    expect(suggestion?.evidenceCount).toBe(2);
+    expect(suggestion?.item.timing).toBe('Bedtime');
+    expect(suggestion?.item.durationUnit).toBe('WEEKS');
   });
 });
