@@ -2,8 +2,18 @@ import { AppointmentsService } from './appointments.service';
 import { VisitType } from '@prisma/client';
 
 describe('AppointmentsService WhatsApp flow', () => {
-  const patientRecord = { id: 'patient-1', name: 'Alice Patient', phone: '9999999999', email: undefined };
-  const doctorRecord = { id: 'doctor-1', firstName: 'John', lastName: 'Doe', email: 'doc@example.com' };
+  const patientRecord = {
+    id: 'patient-1',
+    name: 'Alice Patient',
+    phone: '9999999999',
+    email: undefined,
+  };
+  const doctorRecord = {
+    id: 'doctor-1',
+    firstName: 'John',
+    lastName: 'Doe',
+    email: 'doc@example.com',
+  };
 
   const baseDto = {
     patientId: patientRecord.id,
@@ -29,6 +39,11 @@ describe('AppointmentsService WhatsApp flow', () => {
     };
 
     const prisma: any = {
+      branch: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ name: 'Downtown Clinic', phone: '9988776655' }),
+      },
       patient: { findFirst: jest.fn().mockResolvedValue(patientRecord) },
       user: {
         findFirst: jest.fn().mockResolvedValue(doctorRecord),
@@ -74,19 +89,62 @@ describe('AppointmentsService WhatsApp flow', () => {
       language: 'en',
       variables: ['patient_name', 'appointment_date'],
     });
-    const dateSpy = jest.spyOn(Date.prototype, 'toLocaleDateString').mockReturnValue('2099-01-01');
+    const dateSpy = jest
+      .spyOn(Date.prototype, 'toLocaleDateString')
+      .mockReturnValue('2099-01-01');
 
-    const svc = new AppointmentsService(prisma as any, notifications as any, templates as any);
+    const svc = new AppointmentsService(
+      prisma as any,
+      notifications as any,
+      templates as any,
+    );
     await svc.create(baseDto as any, 'branch-1');
 
     expect(notifications.sendWhatsApp).toHaveBeenCalledTimes(1);
     const payload = notifications.sendWhatsApp.mock.calls[0][0];
     expect(payload.toPhoneE164).toBe('+9999999999');
     expect(payload.template.name).toBe('appt_template');
-    expect(payload.template.components?.[0]?.parameters?.[0]?.text).toBe('Alice Patient');
-    expect(payload.template.components?.[0]?.parameters?.[1]?.text).toBe('2099-01-01');
+    expect(payload.template.components?.[0]?.parameters?.[0]?.text).toBe(
+      'Alice Patient',
+    );
+    expect(payload.template.components?.[0]?.parameters?.[1]?.text).toBe(
+      '2099-01-01',
+    );
 
     dateSpy.mockRestore();
+  });
+
+  it('supports object metadata and fills patient and clinic template variables', async () => {
+    const { prisma } = makePrisma();
+    const notifications = makeNotifications();
+    const templates = makeTemplates();
+    templates.resolveActiveTemplate.mockResolvedValue({
+      name: 'appt_template',
+      language: 'en',
+      variables: ['patient_phone', 'clinic_name', 'whatsapp_help_number'],
+    });
+    prisma.user.findUnique.mockResolvedValue({
+      metadata: {
+        whatsappAutoConfirmAppointments: true,
+        whatsappUseTemplate: true,
+        whatsappTemplateName: 'appt_template',
+        whatsappTemplateLanguage: 'en',
+      },
+    });
+
+    const svc = new AppointmentsService(
+      prisma as any,
+      notifications as any,
+      templates as any,
+    );
+    await svc.create(baseDto as any, 'branch-1');
+
+    const payload = notifications.sendWhatsApp.mock.calls[0][0];
+    expect(
+      payload.template.components?.[0]?.parameters?.map(
+        (param: any) => param.text,
+      ),
+    ).toEqual(['9999999999', 'Downtown Clinic', '9988776655']);
   });
 
   it('falls back to plain text when no template is resolved', async () => {
@@ -100,7 +158,11 @@ describe('AppointmentsService WhatsApp flow', () => {
         whatsappUseTemplate: false,
       }),
     });
-    const svc = new AppointmentsService(prisma as any, notifications as any, templates as any);
+    const svc = new AppointmentsService(
+      prisma as any,
+      notifications as any,
+      templates as any,
+    );
     await svc.create(baseDto as any, 'branch-1');
 
     expect(notifications.sendWhatsApp).toHaveBeenCalledTimes(1);
@@ -108,4 +170,3 @@ describe('AppointmentsService WhatsApp flow', () => {
     expect(payload.text).toContain('Appointment confirmed with Dr. John Doe');
   });
 });
-

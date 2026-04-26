@@ -15,6 +15,11 @@ import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import {
+  parseMetadataObject,
+  parseWhatsAppSettings,
+  validateWhatsAppTemplateChoice,
+} from '@/lib/whatsapp-settings';
 
 export default function UsersManagement() {
   const { toast } = useToast();
@@ -139,22 +144,13 @@ export default function UsersManagement() {
 
   const openWhatsAppSettings = (u: User) => {
     setSelectedUser(u);
-    const meta = (u as any)?.metadata || {};
-    try {
-      setWaAutoConfirm(Boolean(meta?.whatsappAutoConfirmAppointments));
-      setWaUseTemplate(Boolean(meta?.whatsappUseTemplate));
-      setWaTemplateName(String(meta?.whatsappTemplateName || ''));
-      setWaTemplateLanguage(String(meta?.whatsappTemplateLanguage || 'en'));
-      setWaPhoneNumberId(String(meta?.whatsappPhoneNumberId || ''));
-      setWaAccessToken(''); // do not prefill token for security; allow overwrite
-    } catch {
-      setWaAutoConfirm(false);
-      setWaUseTemplate(false);
-      setWaTemplateName('');
-      setWaTemplateLanguage('en');
-      setWaPhoneNumberId('');
-      setWaAccessToken('');
-    }
+    const settings = parseWhatsAppSettings((u as any)?.metadata);
+    setWaAutoConfirm(settings.autoConfirm);
+    setWaUseTemplate(settings.useTemplate);
+    setWaTemplateName(settings.templateName);
+    setWaTemplateLanguage(settings.templateLanguage);
+    setWaPhoneNumberId(settings.phoneNumberId);
+    setWaAccessToken(''); // do not prefill token for security; allow overwrite
     setWaOpen(true);
   };
 
@@ -378,24 +374,33 @@ export default function UsersManagement() {
 
   const saveWhatsAppSettings = async () => {
     if (!selectedUser) return;
+    const validationMessage = validateWhatsAppTemplateChoice({
+      useTemplate: waUseTemplate,
+      templateName: waTemplateName,
+      templateLanguage: waTemplateLanguage,
+    });
+    if (validationMessage) {
+      toast({ variant: 'warning', title: 'WhatsApp settings incomplete', description: validationMessage });
+      return;
+    }
     try {
       setLoading(true);
-      const existing = ((selectedUser as any)?.metadata || {}) as Record<string, any>;
+      const existing = parseMetadataObject((selectedUser as any)?.metadata);
       const metadata = {
         ...existing,
         whatsappAutoConfirmAppointments: waAutoConfirm,
         whatsappUseTemplate: waUseTemplate,
-        whatsappTemplateName: waTemplateName || undefined,
-        whatsappTemplateLanguage: waTemplateLanguage || undefined,
+        whatsappTemplateName: waUseTemplate ? waTemplateName.trim() || undefined : undefined,
+        whatsappTemplateLanguage: waUseTemplate ? waTemplateLanguage.trim() || undefined : undefined,
         // Admin-configurable per-doctor credentials
-        whatsappPhoneNumberId: waPhoneNumberId || undefined,
+        whatsappPhoneNumberId: waPhoneNumberId.trim() || undefined,
         // Only persist token if a new one is provided (avoid overwriting with empty)
-        ...(waAccessToken ? { whatsappAccessToken: waAccessToken } : {}),
+        ...(waAccessToken.trim() ? { whatsappAccessToken: waAccessToken.trim() } : {}),
       } as Record<string, any>;
       await apiClient.updateUserProfile(selectedUser.id, { metadata });
       setWaOpen(false);
       await fetchUsers();
-      alert('WhatsApp settings saved');
+      toast({ title: 'Saved', description: 'WhatsApp settings updated' });
     } finally {
       setLoading(false);
     }
@@ -1045,4 +1050,4 @@ export default function UsersManagement() {
       </Dialog>
     </div>
   );
-} 
+}

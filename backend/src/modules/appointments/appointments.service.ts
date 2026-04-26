@@ -1,15 +1,32 @@
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { CreateAppointmentDto, RescheduleAppointmentDto } from './dto/create-appointment.dto';
-import { UpdateAppointmentDto, BulkUpdateAppointmentsDto } from './dto/update-appointment.dto';
-import { QueryAppointmentsDto, AvailableSlotsDto } from './dto/query-appointment.dto';
+import {
+  CreateAppointmentDto,
+  RescheduleAppointmentDto,
+} from './dto/create-appointment.dto';
+import {
+  UpdateAppointmentDto,
+  BulkUpdateAppointmentsDto,
+} from './dto/update-appointment.dto';
+import {
+  QueryAppointmentsDto,
+  AvailableSlotsDto,
+} from './dto/query-appointment.dto';
 import { SchedulingUtils, SchedulingConflict } from './utils/scheduling.utils';
 import { AppointmentStatus, VisitType, UserRole } from '@prisma/client';
 import { NotificationsService } from '../notifications/notifications.service';
 import { WhatsAppTemplatesService } from '../whatsapp-templates/whatsapp-templates.service';
 import { GoogleCalendarService } from '../google-calendar/google-calendar.service';
 
-type WhatsAppTemplateComponent = { type: 'body'; parameters: { type: 'text'; text: string }[] };
+type WhatsAppTemplateComponent = {
+  type: 'body';
+  parameters: { type: 'text'; text: string }[];
+};
 
 @Injectable()
 export class AppointmentsService {
@@ -20,8 +37,21 @@ export class AppointmentsService {
     private googleCalendar?: GoogleCalendarService,
   ) {}
 
-  async create(createAppointmentDto: CreateAppointmentDto, branchId: string, callerUserId?: string) {
-    const { patientId, doctorId, roomId, date, slot, visitType, notes, source } = createAppointmentDto;
+  async create(
+    createAppointmentDto: CreateAppointmentDto,
+    branchId: string,
+    callerUserId?: string,
+  ) {
+    const {
+      patientId,
+      doctorId,
+      roomId,
+      date,
+      slot,
+      visitType,
+      notes,
+      source,
+    } = createAppointmentDto;
 
     // Validate inputs
     this.validateAppointmentInputs(createAppointmentDto);
@@ -54,9 +84,21 @@ export class AppointmentsService {
     }
 
     // Check for scheduling conflicts
-    const conflicts = await this.checkSchedulingConflicts(doctorId, roomId ?? null, date, slot, branchId);
+    const conflicts = await this.checkSchedulingConflicts(
+      doctorId,
+      roomId ?? null,
+      date,
+      slot,
+      branchId,
+    );
     if (conflicts.length > 0) {
-      const suggestions = await this.getAlternativeSlots(doctorId, roomId ?? null, date, slot, branchId);
+      const suggestions = await this.getAlternativeSlots(
+        doctorId,
+        roomId ?? null,
+        date,
+        slot,
+        branchId,
+      );
       throw new ConflictException({
         message: 'Scheduling conflict detected',
         conflicts,
@@ -111,24 +153,39 @@ export class AppointmentsService {
         where: { id: doctorId },
         select: { metadata: true, role: true },
       });
+      const branch = await this.prisma.branch.findUnique({
+        where: { id: branchId },
+        select: { name: true, phone: true },
+      });
       let allowWhatsApp = false;
       let useTemplate = false;
       let templateName: string | undefined;
       let templateLanguage: string | undefined;
       let waOverrideToken: string | undefined;
       let waOverridePhoneId: string | undefined;
-      try {
-        const meta = doctorSettings?.metadata ? JSON.parse(doctorSettings.metadata) : null;
-        allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
-        useTemplate = !!meta?.whatsappUseTemplate;
-        templateName = typeof meta?.whatsappTemplateName === 'string' ? meta.whatsappTemplateName : undefined;
-        templateLanguage = typeof meta?.whatsappTemplateLanguage === 'string' ? meta.whatsappTemplateLanguage : undefined;
-        // Optional per-doctor credential overrides
-        waOverrideToken = typeof meta?.whatsappAccessToken === 'string' ? meta.whatsappAccessToken : undefined;
-        waOverridePhoneId = typeof meta?.whatsappPhoneNumberId === 'string' ? meta.whatsappPhoneNumberId : undefined;
-      } catch {}
+      const meta = this.parseMetadataRecord(doctorSettings?.metadata);
+      allowWhatsApp = !!meta?.whatsappAutoConfirmAppointments;
+      useTemplate = !!meta?.whatsappUseTemplate;
+      templateName =
+        typeof meta?.whatsappTemplateName === 'string'
+          ? meta.whatsappTemplateName
+          : undefined;
+      templateLanguage =
+        typeof meta?.whatsappTemplateLanguage === 'string'
+          ? meta.whatsappTemplateLanguage
+          : undefined;
+      // Optional per-doctor credential overrides
+      waOverrideToken =
+        typeof meta?.whatsappAccessToken === 'string'
+          ? meta.whatsappAccessToken
+          : undefined;
+      waOverridePhoneId =
+        typeof meta?.whatsappPhoneNumberId === 'string'
+          ? meta.whatsappPhoneNumberId
+          : undefined;
 
-      const doctorName = `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
+      const doctorName =
+        `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
       const appointmentDateObj = new Date(date);
       const humanDate = appointmentDateObj.toLocaleDateString();
       const humanTime = slot;
@@ -152,7 +209,9 @@ export class AppointmentsService {
       // WhatsApp (only if doctor opted in)
       if (allowWhatsApp && appointment.patient?.phone) {
         // Format phone number as E.164 for WhatsApp (add + prefix if not present)
-        const e164 = appointment.patient.phone.startsWith('+') ? appointment.patient.phone : `+${appointment.patient.phone}`;
+        const e164 = appointment.patient.phone.startsWith('+')
+          ? appointment.patient.phone
+          : `+${appointment.patient.phone}`;
         const touchpoint = 'appointment_confirmation';
         const template =
           useTemplate && this.whatsappTemplates
@@ -168,11 +227,15 @@ export class AppointmentsService {
           template && template.variables
             ? this.buildAppointmentTemplateComponents(template.variables, {
                 patientName: appointment.patient?.name ?? '',
+                patientPhone: appointment.patient?.phone ?? undefined,
                 doctorName,
                 appointmentDate: humanDate,
                 appointmentTime: humanTime,
                 visitType: appointment.visitType,
                 tokenNumber: appointment.tokenNumber ?? undefined,
+                clinicName: branch?.name || process.env.CLINIC_NAME || '',
+                whatsappHelpNumber:
+                  branch?.phone || process.env.WHATSAPP_HELP_NUMBER || '',
               })
             : undefined;
         const whatsappPayload =
@@ -198,7 +261,9 @@ export class AppointmentsService {
     }
 
     // Google Calendar sync (fire-and-forget; non-blocking)
-    void this.googleCalendar?.syncAppointmentEvent(appointment.id, callerUserId).catch(() => void 0);
+    void this.googleCalendar
+      ?.syncAppointmentEvent(appointment.id, callerUserId)
+      .catch(() => void 0);
 
     return appointment;
   }
@@ -314,12 +379,12 @@ export class AppointmentsService {
       where: { id, branchId },
       include: {
         patient: {
-          select: { 
-            id: true, 
-            patientCode: true, 
-            name: true, 
-            phone: true, 
-            email: true, 
+          select: {
+            id: true,
+            patientCode: true,
+            name: true,
+            phone: true,
+            email: true,
             gender: true,
             dob: true,
             age: true,
@@ -345,16 +410,21 @@ export class AppointmentsService {
     return appointment;
   }
 
-  async update(id: string, updateAppointmentDto: UpdateAppointmentDto, branchId: string, callerUserId?: string) {
+  async update(
+    id: string,
+    updateAppointmentDto: UpdateAppointmentDto,
+    branchId: string,
+    callerUserId?: string,
+  ) {
     const appointment = await this.findOne(id, branchId);
 
     // Validate room if provided
     if (updateAppointmentDto.roomId) {
       const room = await this.prisma.room.findFirst({
-        where: { 
-          id: updateAppointmentDto.roomId, 
-          branchId, 
-          isActive: true 
+        where: {
+          id: updateAppointmentDto.roomId,
+          branchId,
+          isActive: true,
         },
       });
       if (!room) {
@@ -378,12 +448,19 @@ export class AppointmentsService {
       },
     });
 
-    void this.googleCalendar?.syncAppointmentEvent(updatedAppointment.id, callerUserId).catch(() => void 0);
+    void this.googleCalendar
+      ?.syncAppointmentEvent(updatedAppointment.id, callerUserId)
+      .catch(() => void 0);
 
     return updatedAppointment;
   }
 
-  async reschedule(id: string, rescheduleDto: RescheduleAppointmentDto, branchId: string, callerUserId?: string) {
+  async reschedule(
+    id: string,
+    rescheduleDto: RescheduleAppointmentDto,
+    branchId: string,
+    callerUserId?: string,
+  ) {
     const appointment = await this.findOne(id, branchId);
 
     // Check if appointment can be rescheduled
@@ -399,7 +476,7 @@ export class AppointmentsService {
     // Check for new scheduling conflicts
     const conflicts = await this.checkSchedulingConflicts(
       appointment.doctorId,
-      (rescheduleDto.roomId ?? appointment.roomId) ?? null,
+      rescheduleDto.roomId ?? appointment.roomId ?? null,
       rescheduleDto.date,
       rescheduleDto.slot,
       branchId,
@@ -409,7 +486,7 @@ export class AppointmentsService {
     if (conflicts.length > 0) {
       const suggestions = await this.getAlternativeSlots(
         appointment.doctorId,
-        (rescheduleDto.roomId ?? appointment.roomId) ?? null,
+        rescheduleDto.roomId ?? appointment.roomId ?? null,
         rescheduleDto.date,
         rescheduleDto.slot,
         branchId,
@@ -427,7 +504,7 @@ export class AppointmentsService {
       data: {
         date: new Date(rescheduleDto.date),
         slot: rescheduleDto.slot,
-        roomId: (rescheduleDto.roomId ?? appointment.roomId) ?? undefined,
+        roomId: rescheduleDto.roomId ?? appointment.roomId ?? undefined,
         notes: rescheduleDto.notes || appointment.notes,
         status: AppointmentStatus.SCHEDULED, // Reset to scheduled
       },
@@ -445,7 +522,9 @@ export class AppointmentsService {
     });
 
     // Update linked Google Calendar event (non-blocking)
-    void this.googleCalendar?.syncAppointmentEvent(rescheduledAppointment.id, callerUserId).catch(() => void 0);
+    void this.googleCalendar
+      ?.syncAppointmentEvent(rescheduledAppointment.id, callerUserId)
+      .catch(() => void 0);
 
     return rescheduledAppointment;
   }
@@ -505,13 +584,22 @@ export class AppointmentsService {
     });
 
     // Remove Google Calendar event if one exists
-    void this.googleCalendar?.deleteAppointmentEvent(id, callerUserId).catch(() => void 0);
+    void this.googleCalendar
+      ?.deleteAppointmentEvent(id, callerUserId)
+      .catch(() => void 0);
 
     return { message: 'Appointment cancelled successfully' };
   }
 
   async getAvailableSlots(query: AvailableSlotsDto, branchId: string) {
-    const { doctorId, roomId, date, durationMinutes = 30, startHour, endHour } = query;
+    const {
+      doctorId,
+      roomId,
+      date,
+      durationMinutes = 30,
+      startHour,
+      endHour,
+    } = query;
 
     // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
@@ -543,7 +631,12 @@ export class AppointmentsService {
     // Normalize and guard against any malformed/empty slot values
     const bookedSlots = bookedAppointments
       .map((apt) => apt.slot)
-      .filter((s) => typeof s === 'string' && s.length > 0 && SchedulingUtils.isValidTimeSlot(s));
+      .filter(
+        (s) =>
+          typeof s === 'string' &&
+          s.length > 0 &&
+          SchedulingUtils.isValidTimeSlot(s),
+      );
 
     // If room is specified, also check room availability
     if (roomId) {
@@ -566,7 +659,12 @@ export class AppointmentsService {
 
       const roomBookedSlots = roomAppointments
         .map((apt) => apt.slot)
-        .filter((s) => typeof s === 'string' && s.length > 0 && SchedulingUtils.isValidTimeSlot(s));
+        .filter(
+          (s) =>
+            typeof s === 'string' &&
+            s.length > 0 &&
+            SchedulingUtils.isValidTimeSlot(s),
+        );
       bookedSlots.push(...roomBookedSlots);
     }
 
@@ -576,16 +674,21 @@ export class AppointmentsService {
     let doctorEnd: number | undefined;
     try {
       if (doctor?.metadata) {
-        const meta = typeof doctor.metadata === 'string' ? JSON.parse(doctor.metadata) : doctor.metadata;
+        const meta =
+          typeof doctor.metadata === 'string'
+            ? JSON.parse(doctor.metadata)
+            : doctor.metadata;
         const hours = meta?.workingHours;
         if (hours && typeof hours === 'object') {
           // Allow per-day override; fallback to generic startHour/endHour if present
           // Resolve weekday in clinic timezone to avoid UTC off-by-one
           const tz = 'Asia/Kolkata';
           const noonUtc = new Date(`${date}T12:00:00.000Z`); // noon UTC mapped to local day deterministically
-          const localNoon = new Date(noonUtc.toLocaleString('en-US', { timeZone: tz }));
+          const localNoon = new Date(
+            noonUtc.toLocaleString('en-US', { timeZone: tz }),
+          );
           const day = localNoon.getDay(); // 0-6 in clinic TZ
-          const dayKey = ['sun','mon','tue','wed','thu','fri','sat'][day];
+          const dayKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][day];
           const byDay = hours?.byDay?.[dayKey];
           const startCandidate = byDay?.startHour ?? hours?.startHour;
           const endCandidate = byDay?.endHour ?? hours?.endHour;
@@ -595,16 +698,33 @@ export class AppointmentsService {
       }
     } catch {}
 
-    const clinicStart = Number.isInteger(startHour) ? (startHour as number) : (Number.isInteger(doctorStart) ? (doctorStart as number) : 9);
-    const clinicEnd = Number.isInteger(endHour) ? (endHour as number) : (Number.isInteger(doctorEnd) ? (doctorEnd as number) : 18);
+    const clinicStart = Number.isInteger(startHour)
+      ? (startHour as number)
+      : Number.isInteger(doctorStart)
+        ? (doctorStart as number)
+        : 9;
+    const clinicEnd = Number.isInteger(endHour)
+      ? (endHour as number)
+      : Number.isInteger(doctorEnd)
+        ? (doctorEnd as number)
+        : 18;
     const normalizedStart = Math.max(0, Math.min(23, clinicStart));
-    const normalizedEnd = Math.max(normalizedStart + 1, Math.min(24, clinicEnd));
+    const normalizedEnd = Math.max(
+      normalizedStart + 1,
+      Math.min(24, clinicEnd),
+    );
 
     // Generate all possible slots for the day
-    const allSlots = SchedulingUtils.generateTimeSlots(normalizedStart, normalizedEnd, durationMinutes);
+    const allSlots = SchedulingUtils.generateTimeSlots(
+      normalizedStart,
+      normalizedEnd,
+      durationMinutes,
+    );
 
     // Filter out booked slots by overlap, not exact string equality
-    let availableSlots = allSlots.filter(slot => bookedSlots.every(b => !SchedulingUtils.doTimeSlotsOverlap(slot, b)));
+    let availableSlots = allSlots.filter((slot) =>
+      bookedSlots.every((b) => !SchedulingUtils.doTimeSlotsOverlap(slot, b)),
+    );
 
     // For same-day scheduling, filter out past slots based on local time
     const getLocalDateStr = (d: Date): string => {
@@ -762,7 +882,15 @@ export class AppointmentsService {
     };
   }
 
-  async createRoom(roomData: { name: string; type: string; capacity: number; isActive: boolean }, branchId: string) {
+  async createRoom(
+    roomData: {
+      name: string;
+      type: string;
+      capacity: number;
+      isActive: boolean;
+    },
+    branchId: string,
+  ) {
     const room = await this.prisma.room.create({
       data: {
         ...roomData,
@@ -773,7 +901,16 @@ export class AppointmentsService {
     return room;
   }
 
-  async updateRoom(roomId: string, roomData: { name: string; type: string; capacity: number; isActive: boolean }, branchId: string) {
+  async updateRoom(
+    roomId: string,
+    roomData: {
+      name: string;
+      type: string;
+      capacity: number;
+      isActive: boolean;
+    },
+    branchId: string,
+  ) {
     const room = await this.prisma.room.findFirst({
       where: { id: roomId, branchId },
     });
@@ -805,7 +942,9 @@ export class AppointmentsService {
     });
 
     if (appointmentCount > 0) {
-      throw new BadRequestException('Cannot delete room with existing appointments');
+      throw new BadRequestException(
+        'Cannot delete room with existing appointments',
+      );
     }
 
     await this.prisma.room.delete({
@@ -815,7 +954,12 @@ export class AppointmentsService {
     return { message: 'Room deleted successfully' };
   }
 
-  private buildAppointmentSummary(input: { doctorName: string; date: string; time: string; tokenNumber?: number }) {
+  private buildAppointmentSummary(input: {
+    doctorName: string;
+    date: string;
+    time: string;
+    tokenNumber?: number;
+  }) {
     const tokenText = input.tokenNumber ? ` Token #${input.tokenNumber}.` : '';
     return `Appointment confirmed with Dr. ${input.doctorName} on ${input.date} at ${input.time}.${tokenText}`;
   }
@@ -830,6 +974,8 @@ export class AppointmentsService {
       appointmentTime: string;
       visitType: VisitType;
       tokenNumber?: number;
+      clinicName?: string;
+      whatsappHelpNumber?: string;
     },
   ): WhatsAppTemplateComponent[] | undefined {
     if (!variables || variables.length === 0) return undefined;
@@ -840,15 +986,20 @@ export class AppointmentsService {
     return [{ type: 'body', parameters }];
   }
 
-  private resolveTemplateVariable(key: string, data: {
-    patientName: string;
-    patientPhone?: string;
-    doctorName: string;
-    appointmentDate: string;
-    appointmentTime: string;
-    visitType: VisitType;
-    tokenNumber?: number;
-  }) {
+  private resolveTemplateVariable(
+    key: string,
+    data: {
+      patientName: string;
+      patientPhone?: string;
+      doctorName: string;
+      appointmentDate: string;
+      appointmentTime: string;
+      visitType: VisitType;
+      tokenNumber?: number;
+      clinicName?: string;
+      whatsappHelpNumber?: string;
+    },
+  ) {
     switch (key) {
       case 'patient_name':
         return data.patientName || 'Patient';
@@ -865,18 +1016,37 @@ export class AppointmentsService {
       case 'queue_token':
         return data.tokenNumber ? String(data.tokenNumber) : '-';
       case 'clinic_name':
-        return '';
+        return data.clinicName || '';
       case 'whatsapp_help_number':
-        return '';
+        return data.whatsappHelpNumber || '';
       default:
         return '';
     }
   }
 
+  private parseMetadataRecord(value: unknown): Record<string, any> {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, any>;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, any>;
+        }
+      } catch {}
+    }
+
+    return {};
+  }
+
   // Private helper methods
   private validateAppointmentInputs(dto: CreateAppointmentDto): void {
     if (!SchedulingUtils.isValidTimeSlot(dto.slot)) {
-      throw new BadRequestException('Invalid time slot format. Use HH:MM-HH:MM');
+      throw new BadRequestException(
+        'Invalid time slot format. Use HH:MM-HH:MM',
+      );
     }
 
     // Compare appointment slot start time against current time to allow same-day future bookings
@@ -982,8 +1152,17 @@ export class AppointmentsService {
     requestedSlot: string,
     branchId: string,
   ): Promise<string[]> {
-    const bookedSlots = await this.getBookedSlots(doctorId, roomId, date, branchId);
-    return SchedulingUtils.suggestAlternativeSlots(requestedSlot, bookedSlots, 3);
+    const bookedSlots = await this.getBookedSlots(
+      doctorId,
+      roomId,
+      date,
+      branchId,
+    );
+    return SchedulingUtils.suggestAlternativeSlots(
+      requestedSlot,
+      bookedSlots,
+      3,
+    );
   }
 
   private async getBookedSlots(
@@ -1013,10 +1192,13 @@ export class AppointmentsService {
       select: { slot: true },
     });
 
-    return [...new Set(appointments.map(apt => apt.slot))];
+    return [...new Set(appointments.map((apt) => apt.slot))];
   }
 
-  private async generateTokenNumber(date: string, branchId: string): Promise<number> {
+  private async generateTokenNumber(
+    date: string,
+    branchId: string,
+  ): Promise<number> {
     const startOfDay = new Date(`${date}T00:00:00.000Z`);
     const endOfDay = new Date(`${date}T23:59:59.999Z`);
 

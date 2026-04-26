@@ -19,8 +19,16 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { VisitsService } from './visits.service';
-import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
-import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
+import {
+  CreateVisitDto,
+  UpdateVisitDto,
+  CompleteVisitDto,
+} from './dto/create-visit.dto';
+import {
+  QueryVisitsDto,
+  PatientVisitHistoryDto,
+  DoctorVisitsDto,
+} from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -53,7 +61,7 @@ interface AuthenticatedRequest {
  */
 async function convertWebMToWAV(inputPath: string): Promise<string> {
   const outputPath = `${inputPath}.wav`;
-  
+
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .toFormat('wav')
@@ -61,7 +69,9 @@ async function convertWebMToWAV(inputPath: string): Promise<string> {
       .audioChannels(1) // Mono
       .audioFrequency(16000) // 16kHz sample rate (optimal for speech)
       .on('end', () => resolve(outputPath))
-      .on('error', (err) => reject(new Error(`FFmpeg conversion failed: ${err.message}`)))
+      .on('error', (err) =>
+        reject(new Error(`FFmpeg conversion failed: ${err.message}`)),
+      )
       .save(outputPath);
   });
 }
@@ -72,11 +82,19 @@ async function ensureUploadsDir() {
   return dir;
 }
 
-async function writeVisitFile(targetDir: string, buffer: Buffer, preferredExt: string) {
-  const ext = preferredExt.startsWith('.') ? preferredExt.toLowerCase() : `.${preferredExt.toLowerCase()}`;
+async function writeVisitFile(
+  targetDir: string,
+  buffer: Buffer,
+  preferredExt: string,
+) {
+  const ext = preferredExt.startsWith('.')
+    ? preferredExt.toLowerCase()
+    : `.${preferredExt.toLowerCase()}`;
   const unique = randomBytes(8).toString('hex');
   const filename = `${Date.now()}_${unique}${ext}`;
-  await fsPromises.writeFile(join(targetDir, filename), buffer, { mode: 0o600 });
+  await fsPromises.writeFile(join(targetDir, filename), buffer, {
+    mode: 0o600,
+  });
   return filename;
 }
 
@@ -91,19 +109,28 @@ async function processImageUpload(file: Express.Multer.File) {
   }
 
   // Normalize to performant formats: convert HEIC/HEIF/TIFF/GIF/JPG to JPEG
-  const normalizedExt = !detected.ext || ['heic', 'heif', 'tif', 'tiff', 'gif'].includes(detected.ext)
-    ? 'jpeg'
-    : (detected.ext === 'jpg' ? 'jpeg' : detected.ext);
+  const normalizedExt =
+    !detected.ext ||
+    ['heic', 'heif', 'tif', 'tiff', 'gif'].includes(detected.ext)
+      ? 'jpeg'
+      : detected.ext === 'jpg'
+        ? 'jpeg'
+        : detected.ext;
   const format = normalizedExt;
 
   try {
-    const pipeline = sharp(file.buffer, { failOn: 'error' }).rotate().withMetadata({ exif: undefined });
+    const pipeline = sharp(file.buffer, { failOn: 'error' })
+      .rotate()
+      .withMetadata({ exif: undefined });
     const { width = 0, height = 0 } = await pipeline.metadata();
     let working = pipeline;
     // Cap to 40MP and limit max dimension to ~1600px to reduce size/time significantly
     const MAX_PIXELS = 40_000_000;
     const MAX_DIM = 1600;
-    const pixelScale = width * height > MAX_PIXELS ? Math.sqrt(MAX_PIXELS / (width * height)) : 1;
+    const pixelScale =
+      width * height > MAX_PIXELS
+        ? Math.sqrt(MAX_PIXELS / (width * height))
+        : 1;
     const dimScale = Math.min(
       width > 0 ? MAX_DIM / width : 1,
       height > 0 ? MAX_DIM / height : 1,
@@ -113,7 +140,10 @@ async function processImageUpload(file: Express.Multer.File) {
     if (scale < 1) {
       const targetWidth = Math.max(1, Math.floor((width || 1) * scale));
       const targetHeight = Math.max(1, Math.floor((height || 1) * scale));
-      working = working.resize(targetWidth, targetHeight, { fit: 'inside', withoutEnlargement: true });
+      working = working.resize(targetWidth, targetHeight, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
     }
 
     // Apply sensible compression for faster uploads and smaller storage
@@ -125,7 +155,9 @@ async function processImageUpload(file: Express.Multer.File) {
       working = working.png({ compressionLevel: 9 });
     }
 
-    const sanitizedBuffer = await working.toFormat(format as keyof sharp.FormatEnum).toBuffer();
+    const sanitizedBuffer = await working
+      .toFormat(format as keyof sharp.FormatEnum)
+      .toBuffer();
 
     return {
       buffer: sanitizedBuffer,
@@ -174,15 +206,21 @@ async function writeJsonSafe(path: string, data: unknown) {
 }
 
 function imageFileFilter(_req: any, file: any, cb: any) {
-  if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
-  if (!/^image\//i.test(file.mimetype)) return cb(new BadRequestException('Only image files are allowed'), false);
+  if (!file || !file.mimetype)
+    return cb(new BadRequestException('Invalid file'), false);
+  if (!/^image\//i.test(file.mimetype))
+    return cb(new BadRequestException('Only image files are allowed'), false);
   return cb(null, true);
 }
 
 function imageOrPdfFileFilter(_req: any, file: any, cb: any) {
-  if (!file || !file.mimetype) return cb(new BadRequestException('Invalid file'), false);
+  if (!file || !file.mimetype)
+    return cb(new BadRequestException('Invalid file'), false);
   if (!/^image\//i.test(file.mimetype) && file.mimetype !== 'application/pdf')
-    return cb(new BadRequestException('Only image or PDF files are allowed'), false);
+    return cb(
+      new BadRequestException('Only image or PDF files are allowed'),
+      false,
+    );
   return cb(null, true);
 }
 
@@ -234,14 +272,16 @@ export class VisitsController {
 
   // Draft photo upload before a visit exists
   @Post('photos/draft/:patientId')
-  @UseInterceptors(FilesInterceptor('files', 6, {
-    storage: memoryStorage(),
-    limits: {
-      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
-      files: 6,
-    },
-    fileFilter: imageFileFilter,
-  }))
+  @UseInterceptors(
+    FilesInterceptor('files', 6, {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+        files: 6,
+      },
+      fileFilter: imageFileFilter,
+    }),
+  )
   async uploadDraftPhotos(
     @Param('patientId') patientId: string,
     @UploadedFiles() files: Express.Multer.File[],
@@ -249,25 +289,46 @@ export class VisitsController {
   ) {
     const { dateStr } = await ensurePatientDraftDir(patientId);
     const parsePositions = (): string[] => {
-      const allowed = new Set(['FRONT','LEFT_PROFILE','RIGHT_PROFILE','BACK','CLOSE_UP','OTHER']);
-      let positions: unknown = body?.positions ?? body?.['positions[]'] ?? body?.position ?? body?.['position[]'];
+      const allowed = new Set([
+        'FRONT',
+        'LEFT_PROFILE',
+        'RIGHT_PROFILE',
+        'BACK',
+        'CLOSE_UP',
+        'OTHER',
+      ]);
+      let positions: unknown =
+        body?.positions ??
+        body?.['positions[]'] ??
+        body?.position ??
+        body?.['position[]'];
       if (typeof positions === 'string') {
         try {
           const parsed = JSON.parse(positions);
           positions = parsed;
         } catch {
-          positions = (positions as string).split(',').map((s: string) => s.trim());
+          positions = (positions as string)
+            .split(',')
+            .map((s: string) => s.trim());
         }
       }
       const fileCount = files?.length || 0;
-      let arr: string[] = Array.isArray(positions) ? (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '') : [];
-      if (arr.length < fileCount) arr = arr.concat(Array(fileCount - arr.length).fill(''));
+      let arr: string[] = Array.isArray(positions)
+        ? (positions as any[]).map((v) =>
+            typeof v === 'string' ? v.toUpperCase() : '',
+          )
+        : [];
+      if (arr.length < fileCount)
+        arr = arr.concat(Array(fileCount - arr.length).fill(''));
       if (arr.length > fileCount) arr = arr.slice(0, fileCount);
-      const normalized = arr.map(p => (allowed.has(p) ? p : 'OTHER')) as string[];
+      const normalized = arr.map((p) =>
+        allowed.has(p) ? p : 'OTHER',
+      ) as string[];
       return normalized;
     };
 
-    if (!files || files.length === 0) throw new BadRequestException('No files provided');
+    if (!files || files.length === 0)
+      throw new BadRequestException('No files provided');
     const positions = parsePositions();
 
     const results = await Promise.allSettled(
@@ -284,17 +345,23 @@ export class VisitsController {
         });
       }),
     );
-    const processedCount = results.filter(r => r.status === 'fulfilled').length;
+    const processedCount = results.filter(
+      (r) => r.status === 'fulfilled',
+    ).length;
     results.forEach((r, idx) => {
       if (r.status === 'rejected') {
         const file = files[idx];
-        this.logger?.warn?.(`uploadDraftPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`);
+        this.logger?.warn?.(
+          `uploadDraftPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`,
+        );
       }
     });
     if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
-    this.logger.debug(`uploadDraftPhotos: processed ${processedCount}/${files?.length ?? 0} files for patient=${patientId}`);
+    this.logger.debug(
+      `uploadDraftPhotos: processed ${processedCount}/${files?.length ?? 0} files for patient=${patientId}`,
+    );
     return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
 
@@ -311,9 +378,17 @@ export class VisitsController {
     @Param('attachmentId') attachmentId: string,
     @Res({ passthrough: true }) res?: Response,
   ) {
-    const { data, contentType } = await this.visitsService.getDraftAttachmentBinary(patientId, dateStr, attachmentId);
+    const { data, contentType } =
+      await this.visitsService.getDraftAttachmentBinary(
+        patientId,
+        dateStr,
+        attachmentId,
+      );
     if (res) {
-      res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' });
+      res.set({
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
     }
     return new StreamableFile(data);
   }
@@ -324,7 +399,11 @@ export class VisitsController {
     @Param('dateStr') dateStr: string,
     @Param('attachmentId') attachmentId: string,
   ) {
-    await this.visitsService.deleteDraftAttachment(patientId, dateStr, attachmentId);
+    await this.visitsService.deleteDraftAttachment(
+      patientId,
+      dateStr,
+      attachmentId,
+    );
     return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
 
@@ -396,14 +475,16 @@ export class VisitsController {
   }
 
   @Post(':id/photos')
-  @UseInterceptors(FilesInterceptor('files', 6, {
-    storage: memoryStorage(),
-    limits: {
-      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
-      files: 6,
-    },
-    fileFilter: imageFileFilter,
-  }))
+  @UseInterceptors(
+    FilesInterceptor('files', 6, {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+        files: 6,
+      },
+      fileFilter: imageFileFilter,
+    }),
+  )
   async uploadPhotos(
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
@@ -411,25 +492,46 @@ export class VisitsController {
     @Body() body?: any,
   ) {
     const parsePositions = (): string[] => {
-      const allowed = new Set(['FRONT','LEFT_PROFILE','RIGHT_PROFILE','BACK','CLOSE_UP','OTHER']);
-      let positions: unknown = body?.positions ?? body?.['positions[]'] ?? body?.position ?? body?.['position[]'];
+      const allowed = new Set([
+        'FRONT',
+        'LEFT_PROFILE',
+        'RIGHT_PROFILE',
+        'BACK',
+        'CLOSE_UP',
+        'OTHER',
+      ]);
+      let positions: unknown =
+        body?.positions ??
+        body?.['positions[]'] ??
+        body?.position ??
+        body?.['position[]'];
       if (typeof positions === 'string') {
         try {
           const parsed = JSON.parse(positions);
           positions = parsed;
         } catch {
-          positions = (positions as string).split(',').map((s: string) => s.trim());
+          positions = (positions as string)
+            .split(',')
+            .map((s: string) => s.trim());
         }
       }
       const fileCount = files?.length || 0;
-      let arr: string[] = Array.isArray(positions) ? (positions as any[]).map(v => typeof v === 'string' ? v.toUpperCase() : '') : [];
-      if (arr.length < fileCount) arr = arr.concat(Array(fileCount - arr.length).fill(''));
+      let arr: string[] = Array.isArray(positions)
+        ? (positions as any[]).map((v) =>
+            typeof v === 'string' ? v.toUpperCase() : '',
+          )
+        : [];
+      if (arr.length < fileCount)
+        arr = arr.concat(Array(fileCount - arr.length).fill(''));
       if (arr.length > fileCount) arr = arr.slice(0, fileCount);
-      const normalized = arr.map(p => (allowed.has(p) ? p : 'OTHER')) as string[];
+      const normalized = arr.map((p) =>
+        allowed.has(p) ? p : 'OTHER',
+      ) as string[];
       return normalized;
     };
 
-    if (!files || files.length === 0) throw new BadRequestException('No files provided');
+    if (!files || files.length === 0)
+      throw new BadRequestException('No files provided');
     const positions = parsePositions();
 
     const results = await Promise.allSettled(
@@ -446,28 +548,40 @@ export class VisitsController {
         });
       }),
     );
-    const processedCount = results.filter(r => r.status === 'fulfilled').length;
+    const processedCount = results.filter(
+      (r) => r.status === 'fulfilled',
+    ).length;
     results.forEach((r, idx) => {
       if (r.status === 'rejected') {
         const file = files[idx];
-        this.logger?.warn?.(`uploadPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`);
+        this.logger?.warn?.(
+          `uploadPhotos: skipping file idx=${idx} name=${file?.originalname || 'n/a'} reason=${(r.reason as any)?.message || r.reason}`,
+        );
       }
     });
     if (processedCount === 0) {
       throw new BadRequestException('No valid images uploaded');
     }
-    this.logger.debug(`uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`);
+    this.logger.debug(
+      `uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`,
+    );
     return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
   private positionOrderValue(position?: string): number {
     switch ((position || 'OTHER').toUpperCase()) {
-      case 'FRONT': return 1;
-      case 'LEFT_PROFILE': return 2;
-      case 'RIGHT_PROFILE': return 3;
-      case 'BACK': return 4;
-      case 'CLOSE_UP': return 5;
-      default: return 99;
+      case 'FRONT':
+        return 1;
+      case 'LEFT_PROFILE':
+        return 2;
+      case 'RIGHT_PROFILE':
+        return 3;
+      case 'BACK':
+        return 4;
+      case 'CLOSE_UP':
+        return 5;
+      default:
+        return 99;
     }
   }
 
@@ -483,9 +597,17 @@ export class VisitsController {
     @Request() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res?: Response,
   ) {
-    const { data, contentType } = await this.visitsService.getVisitAttachmentBinary(id, attachmentId, req.user.branchId);
+    const { data, contentType } =
+      await this.visitsService.getVisitAttachmentBinary(
+        id,
+        attachmentId,
+        req.user.branchId,
+      );
     if (res) {
-      res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000, immutable' });
+      res.set({
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+      });
     }
     return new StreamableFile(data);
   }
@@ -497,7 +619,11 @@ export class VisitsController {
     @Param('attachmentId') attachmentId: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    await this.visitsService.deleteVisitAttachment(id, attachmentId, req.user.branchId);
+    await this.visitsService.deleteVisitAttachment(
+      id,
+      attachmentId,
+      req.user.branchId,
+    );
     return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
@@ -518,28 +644,32 @@ export class VisitsController {
 
   // Speech-to-text proxy to OpenAI Transcription API
   @Post('transcribe')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: async (_req, _file, cb) => {
-        try {
-          const dir = await ensureTranscribeTmpDir();
-          cb(null, dir);
-        } catch (e) {
-          cb(e as any, undefined as any);
-        }
-      },
-      filename: (_req, file, cb) => {
-        const base = file.originalname?.split(/[\/]/).pop() || 'audio';
-        const unique = `${Date.now()}_${randomBytes(6).toString('hex')}`;
-        const ext = (base.includes('.') ? base.slice(base.lastIndexOf('.')) : '.bin');
-        cb(null, `${unique}${ext}`);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: async (_req, _file, cb) => {
+          try {
+            const dir = await ensureTranscribeTmpDir();
+            cb(null, dir);
+          } catch (e) {
+            cb(e as any, undefined as any);
+          }
+        },
+        filename: (_req, file, cb) => {
+          const base = file.originalname?.split(/[\/]/).pop() || 'audio';
+          const unique = `${Date.now()}_${randomBytes(6).toString('hex')}`;
+          const ext = base.includes('.')
+            ? base.slice(base.lastIndexOf('.'))
+            : '.bin';
+          cb(null, `${unique}${ext}`);
+        },
+      }),
+      limits: {
+        fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
+        files: 1,
       },
     }),
-    limits: {
-      fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
-      files: 1,
-    },
-  }))
+  )
   async transcribeAudio(
     @UploadedFile() file: Express.Multer.File,
     @Request() _req: AuthenticatedRequest,
@@ -551,29 +681,49 @@ export class VisitsController {
     if ((file.size || 0) <= 0) {
       throw new BadRequestException('Empty audio upload');
     }
-    const allowedAudioTypes = ['audio/webm', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/ogg', 'audio/x-m4a', 'audio/m4a'];
+    const allowedAudioTypes = [
+      'audio/webm',
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/wav',
+      'audio/ogg',
+      'audio/x-m4a',
+      'audio/m4a',
+    ];
     if (!file.mimetype || !allowedAudioTypes.includes(file.mimetype)) {
       throw new BadRequestException('Unsupported audio type');
     }
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      this.logger.warn('transcribeAudio skipped: OPENAI_API_KEY is not configured');
-      throw new ServiceUnavailableException('Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
+      this.logger.warn(
+        'transcribeAudio skipped: OPENAI_API_KEY is not configured',
+      );
+      throw new ServiceUnavailableException(
+        'Speech transcription is unavailable. Contact an administrator to configure OPENAI_API_KEY.',
+      );
     }
-    let tempFilePath: string | undefined = (file as any)?.path || (file as any)?.filename; // multer diskStorage sets path
+    let tempFilePath: string | undefined =
+      (file as any)?.path || (file as any)?.filename; // multer diskStorage sets path
     let convertedWavPath: string | undefined;
     try {
       // Build multipart form-data for OpenAI Transcriptions using native undici FormData/Blob
       const form = new FormData();
       // gpt-4o-transcribe supports: wav, mp3, flac, opus, pcm16 (NOT webm!)
-      const pathToRead = tempFilePath ? join((file as any).destination || '', (file as any).filename) : undefined;
+      const pathToRead = tempFilePath
+        ? join((file as any).destination || '', (file as any).filename)
+        : undefined;
       let finalPath = pathToRead || (file as any).path || '';
       let finalMimeType = file.mimetype || 'audio/webm';
       let displayName = file.originalname || 'audio.webm';
-      
+
       // Convert WebM to WAV if needed
-      if (file.mimetype === 'audio/webm' || (displayName && displayName.endsWith('.webm'))) {
-        this.logger.log(`Converting WebM to WAV for gpt-4o-transcribe: ${finalPath}`);
+      if (
+        file.mimetype === 'audio/webm' ||
+        (displayName && displayName.endsWith('.webm'))
+      ) {
+        this.logger.log(
+          `Converting WebM to WAV for gpt-4o-transcribe: ${finalPath}`,
+        );
         try {
           convertedWavPath = await convertWebMToWAV(finalPath);
           finalPath = convertedWavPath;
@@ -582,35 +732,34 @@ export class VisitsController {
           this.logger.log(`Successfully converted to WAV: ${convertedWavPath}`);
         } catch (convErr: any) {
           this.logger.error(`WebM conversion failed: ${convErr.message}`);
-          throw new BadRequestException(`Audio format conversion failed: ${convErr.message}`);
+          throw new BadRequestException(
+            `Audio format conversion failed: ${convErr.message}`,
+          );
         }
       }
-      
-      if (typeof displayName !== 'string' || !displayName) displayName = 'audio.wav';
+
+      if (typeof displayName !== 'string' || !displayName)
+        displayName = 'audio.wav';
       // Read from disk to avoid keeping upload in memory
       const fileBuf = await fsPromises.readFile(finalPath);
       const uint8 = new Uint8Array(fileBuf);
       const blob = new Blob([uint8], { type: finalMimeType });
-      
-      // Log detailed file information
-      this.logger.log(`========== AUDIO FILE DETAILS ==========`);
-      this.logger.log(`Original file: ${file.originalname}`);
-      this.logger.log(`Original mimetype: ${file.mimetype}`);
-      this.logger.log(`Original size: ${file.size} bytes (${(file.size / 1024).toFixed(2)} KB)`);
-      this.logger.log(`Final file path: ${finalPath}`);
-      this.logger.log(`Final mimetype: ${finalMimeType}`);
-      this.logger.log(`Final size: ${fileBuf.length} bytes (${(fileBuf.length / 1024).toFixed(2)} KB)`);
-      this.logger.log(`Display name: ${displayName}`);
-      this.logger.log(`Was converted: ${convertedWavPath ? 'Yes (WebM → WAV)' : 'No'}`);
-      this.logger.log(`========================================`);
-      
+
       form.append('file', blob, displayName);
-      const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+      const transcribeModel =
+        process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+      const transcribeLanguage = (
+        process.env.OPENAI_TRANSCRIBE_LANGUAGE || ''
+      ).trim();
       form.append('model', transcribeModel);
-      // Improve accuracy by fixing language and disabling sampling randomness
-      // Note: Whisper ignores temperature for most use-cases, but passing 0 is safe
-      try { form.append('language', 'en'); } catch {}
-      try { form.append('temperature', '0'); } catch {}
+      if (transcribeLanguage) {
+        try {
+          form.append('language', transcribeLanguage);
+        } catch {}
+      }
+      try {
+        form.append('temperature', '0');
+      } catch {}
       try {
         const transcriptionPrompt =
           'Medical doctor–patient conversation transcription. ' +
@@ -622,71 +771,103 @@ export class VisitsController {
         form.append('prompt', transcriptionPrompt);
       } catch {}
       // Prefer structured output when supported (Whisper supports verbose_json). Safe to ignore if model does not support.
-      try { form.append('response_format', 'verbose_json'); } catch {}
+      try {
+        form.append('response_format', 'verbose_json');
+      } catch {}
+      this.logger.log(
+        `transcribeAudio: upload received size=${file.size} finalSize=${fileBuf.length} ` +
+          `mime=${finalMimeType} converted=${convertedWavPath ? 'yes' : 'no'} model=${transcribeModel}` +
+          `${transcribeLanguage ? ` language=${transcribeLanguage}` : ' language=auto'}`,
+      );
 
-      this.logger.log(`========== OPENAI TRANSCRIPTION REQUEST ==========`);
-      this.logger.log(`Endpoint: https://api.openai.com/v1/audio/transcriptions`);
-      this.logger.log(`Model: ${transcribeModel}`);
-      this.logger.log(`Language: en`);
-      this.logger.log(`Temperature: 0`);
-      this.logger.log(`Response format: verbose_json`);
-      this.logger.log(`API Key: ${apiKey.substring(0, 7)}...${apiKey.substring(apiKey.length - 4)} (length: ${apiKey.length})`);
-      this.logger.log(`==================================================`);
-      
-      const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        } as any,
-        body: form as any,
-      });
-      
-      this.logger.log(`========== OPENAI TRANSCRIPTION RESPONSE ==========`);
-      this.logger.log(`Status: ${resp.status} ${resp.statusText}`);
-      this.logger.log(`Headers: ${JSON.stringify(Object.fromEntries(resp.headers.entries()), null, 2)}`);
+      const resp = await fetch(
+        'https://api.openai.com/v1/audio/transcriptions',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+          } as any,
+          body: form as any,
+        },
+      );
       if (!resp.ok) {
-        const errText = await resp.text();
-        this.logger.error(`OpenAI error response body: ${errText}`);
-        this.logger.log(`===================================================`);
-        throw new Error(`OpenAI error: ${resp.status}`);
+        const errText = await resp.text().catch(() => '');
+        this.logger.error(
+          `transcribeAudio OpenAI error: status=${resp.status} model=${transcribeModel} ` +
+            `converted=${convertedWavPath ? 'yes' : 'no'} error=${errText.slice(0, 300)}`,
+        );
+        if (resp.status >= 400 && resp.status < 500) {
+          throw new BadRequestException(
+            'Speech transcription rejected the recording. Please retry with a shorter, clearer clip.',
+          );
+        }
+        throw new ServiceUnavailableException(
+          'Speech transcription service is temporarily unavailable. Please try again.',
+        );
       }
       const data = await resp.json();
-      this.logger.log(`Response body (parsed JSON):`);
-      this.logger.log(JSON.stringify(data, null, 2));
-      this.logger.log(`===================================================`);
-      
+
       const text = ((data as any)?.text as string) || '';
-      
-      this.logger.log(`========== TRANSCRIPTION RESULT ==========`);
-      this.logger.log(`Text extracted: ${text ? `"${text}"` : '(EMPTY)'}`);
-      this.logger.log(`Text length: ${text.length} characters`);
-      this.logger.log(`Has segments: ${Array.isArray((data as any)?.segments) ? 'Yes' : 'No'}`);
-      if (Array.isArray((data as any)?.segments)) {
-        this.logger.log(`Number of segments: ${(data as any).segments.length}`);
-      }
-      this.logger.log(`==========================================`);
-      
+      const segmentCount = Array.isArray((data as any)?.segments)
+        ? (data as any).segments.length
+        : 0;
+      this.logger.log(
+        `transcribeAudio: transcriptLength=${text.length} segmentCount=${segmentCount}`,
+      );
+
       if (!text) {
-        this.logger.warn('⚠️  EMPTY TRANSCRIPT: No speech detected by OpenAI Whisper API');
+        this.logger.warn(
+          '⚠️  EMPTY TRANSCRIPT: No speech detected by OpenAI Whisper API',
+        );
         this.logger.warn('Possible causes:');
         this.logger.warn('  1. Audio file contains only silence');
         this.logger.warn('  2. Audio level too low to detect speech');
-        this.logger.warn('  3. Audio format issue (though conversion should have fixed this)');
+        this.logger.warn(
+          '  3. Audio format issue (though conversion should have fixed this)',
+        );
         this.logger.warn('  4. Audio duration too short (< 0.1 seconds)');
-      } else {
-        this.logger.log(`✓ Successfully transcribed ${text.length} characters`);
+        return {
+          text: '',
+          segments: [],
+          speakers: {
+            doctorText: '',
+            patientText: '',
+          },
+        };
       }
+      this.logger.log(`✓ Successfully transcribed ${text.length} characters`);
 
       // Attempt speaker separation via LLM on transcript or segments
-      let diarized: { segments?: Array<{ speaker: 'DOCTOR' | 'PATIENT'; text: string; start_s?: number | null; end_s?: number | null; confidence?: number }>; doctorText?: string; patientText?: string } | null = null;
+      let diarized: {
+        segments?: Array<{
+          speaker: 'DOCTOR' | 'PATIENT';
+          text: string;
+          start_s?: number | null;
+          end_s?: number | null;
+          confidence?: number;
+        }>;
+        doctorText?: string;
+        patientText?: string;
+      } | null = null;
       try {
         // Build minimal segments if detailed segments are present in response
-        const rawSegments: Array<{ text?: string; start?: number; end?: number }> = Array.isArray((data as any)?.segments)
+        const rawSegments: Array<{
+          text?: string;
+          start?: number;
+          end?: number;
+        }> = Array.isArray((data as any)?.segments)
           ? ((data as any).segments as Array<any>)
           : [];
-        const input = rawSegments.length > 0
-          ? { segments: rawSegments.map(s => ({ text: typeof s?.text === 'string' ? s.text : '', start_s: typeof s?.start === 'number' ? s.start : null, end_s: typeof s?.end === 'number' ? s.end : null })) }
-          : { transcript: text };
+        const input =
+          rawSegments.length > 0
+            ? {
+                segments: rawSegments.map((s) => ({
+                  text: typeof s?.text === 'string' ? s.text : '',
+                  start_s: typeof s?.start === 'number' ? s.start : null,
+                  end_s: typeof s?.end === 'number' ? s.end : null,
+                })),
+              }
+            : { transcript: text };
 
         const messages = [
           {
@@ -735,50 +916,87 @@ export class VisitsController {
           },
           strict: true,
         } as const;
-        const diarizeResp = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey}`,
+        const diarizeResp = await fetch(
+          'https://api.openai.com/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: diarizeModel,
+              temperature: 0,
+              response_format: {
+                type: 'json_schema',
+                json_schema: diarizationJsonSchema,
+              },
+              messages,
+            }),
           },
-          body: JSON.stringify({
-            model: diarizeModel,
-            temperature: 0,
-            response_format: { type: 'json_schema', json_schema: diarizationJsonSchema },
-            messages,
-          }),
-        });
+        );
         if (!diarizeResp.ok) {
           const errText = await diarizeResp.text();
-          this.logger.warn(`transcribeAudio diarization step failed: ${diarizeResp.status} ${errText}`);
+          this.logger.warn(
+            `transcribeAudio diarization step failed: ${diarizeResp.status} ${errText}`,
+          );
         } else {
           const dj = (await diarizeResp.json()) as any;
           const content = dj?.choices?.[0]?.message?.content || '{}';
           try {
             const parsed = JSON.parse(content);
-            const segs = Array.isArray(parsed?.segments) ? parsed.segments as Array<any> : [];
+            const segs = Array.isArray(parsed?.segments)
+              ? (parsed.segments as Array<any>)
+              : [];
             const normalized = segs
-              .map(s => ({
-                speaker: (typeof s?.speaker === 'string' && s.speaker.toUpperCase().includes('DOC')) ? 'DOCTOR' : (s?.speaker === 'PATIENT' ? 'PATIENT' : 'PATIENT'),
+              .map((s) => ({
+                speaker:
+                  typeof s?.speaker === 'string' &&
+                  s.speaker.toUpperCase().includes('DOC')
+                    ? 'DOCTOR'
+                    : s?.speaker === 'PATIENT'
+                      ? 'PATIENT'
+                      : 'PATIENT',
                 text: typeof s?.text === 'string' ? s.text : '',
-                confidence: typeof s?.confidence === 'number' ? s.confidence : undefined,
-                start_s: (typeof s?.start_s === 'number' || s?.start_s === null) ? s.start_s : undefined,
-                end_s: (typeof s?.end_s === 'number' || s?.end_s === null) ? s.end_s : undefined,
+                confidence:
+                  typeof s?.confidence === 'number' ? s.confidence : undefined,
+                start_s:
+                  typeof s?.start_s === 'number' || s?.start_s === null
+                    ? s.start_s
+                    : undefined,
+                end_s:
+                  typeof s?.end_s === 'number' || s?.end_s === null
+                    ? s.end_s
+                    : undefined,
               }))
-              .filter(s => s.text);
-            const doctorText = (parsed?.doctorText && typeof parsed.doctorText === 'string')
-              ? parsed.doctorText
-              : normalized.filter(s => s.speaker === 'DOCTOR').map(s => s.text).join(' ');
-            const patientText = (parsed?.patientText && typeof parsed.patientText === 'string')
-              ? parsed.patientText
-              : normalized.filter(s => s.speaker === 'PATIENT').map(s => s.text).join(' ');
+              .filter((s) => s.text);
+            const doctorText =
+              parsed?.speakers?.doctorText &&
+              typeof parsed.speakers.doctorText === 'string'
+                ? parsed.speakers.doctorText
+                : normalized
+                    .filter((s) => s.speaker === 'DOCTOR')
+                    .map((s) => s.text)
+                    .join(' ');
+            const patientText =
+              parsed?.speakers?.patientText &&
+              typeof parsed.speakers.patientText === 'string'
+                ? parsed.speakers.patientText
+                : normalized
+                    .filter((s) => s.speaker === 'PATIENT')
+                    .map((s) => s.text)
+                    .join(' ');
             diarized = { segments: normalized, doctorText, patientText };
           } catch (e) {
-            this.logger.warn('transcribeAudio diarization: failed to parse JSON content');
+            this.logger.warn(
+              'transcribeAudio diarization: failed to parse JSON content',
+            );
           }
         }
       } catch (e) {
-        this.logger.warn(`transcribeAudio diarization step error: ${(e as any)?.message || e}`);
+        this.logger.warn(
+          `transcribeAudio diarization step error: ${(e as any)?.message || e}`,
+        );
       }
 
       const result = {
@@ -791,14 +1009,22 @@ export class VisitsController {
       };
       return result;
     } catch (e: any) {
-      this.logger.error(`transcribeAudio failed: ${e?.stack || e?.message || e}`);
-      return { text: '' };
-    }
-    finally {
+      if (e instanceof HttpException) {
+        throw e;
+      }
+      this.logger.error(
+        `transcribeAudio failed: ${e?.stack || e?.message || e}`,
+      );
+      throw new ServiceUnavailableException(
+        'Speech transcription failed. Please try again.',
+      );
+    } finally {
       try {
         // Clean up original uploaded file
         if ((file as any)?.path || (file as any)?.filename) {
-          const p = (file as any).path || join((file as any).destination || '', (file as any).filename);
+          const p =
+            (file as any).path ||
+            join((file as any).destination || '', (file as any).filename);
           if (p) await fsPromises.unlink(p).catch(() => {});
         }
         // Clean up converted WAV file if it exists
@@ -822,7 +1048,10 @@ export class VisitsController {
     try {
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
         body: JSON.stringify({
           model,
           temperature: 0,
@@ -836,8 +1065,16 @@ export class VisitsController {
       const roundTripMs = Date.now() - started;
       if (!resp.ok) {
         const errText = await resp.text();
-        this.logger.warn(`transcribe/health OpenAI error: ${resp.status} ${errText}`);
-        return { ok: false, status: resp.status, error: errText?.slice?.(0, 200) || 'OpenAI error', model, roundTripMs };
+        this.logger.warn(
+          `transcribe/health OpenAI error: ${resp.status} ${errText}`,
+        );
+        return {
+          ok: false,
+          status: resp.status,
+          error: errText?.slice?.(0, 200) || 'OpenAI error',
+          model,
+          roundTripMs,
+        };
       }
       const data = (await resp.json()) as any;
       const content: string = data?.choices?.[0]?.message?.content || '';
@@ -863,60 +1100,86 @@ export class VisitsController {
 
   // Upload a chunk for transcription (no diarization; we store raw segments)
   @Post('transcribe/chunk')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: diskStorage({
-      destination: async (_req, _file, cb) => {
-        try {
-          const dir = await ensureTranscribeTmpDir();
-          cb(null, dir);
-        } catch (e) {
-          cb(e as any, undefined as any);
-        }
-      },
-      filename: (_req, file, cb) => {
-        const base = file.originalname?.split(/[\\/]/).pop() || 'audio';
-        const unique = `${Date.now()}_${randomBytes(6).toString('hex')}`;
-        const ext = (base.includes('.') ? base.slice(base.lastIndexOf('.')) : '.bin');
-        cb(null, `${unique}${ext}`);
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: async (_req, _file, cb) => {
+          try {
+            const dir = await ensureTranscribeTmpDir();
+            cb(null, dir);
+          } catch (e) {
+            cb(e as any, undefined as any);
+          }
+        },
+        filename: (_req, file, cb) => {
+          const base = file.originalname?.split(/[\\/]/).pop() || 'audio';
+          const unique = `${Date.now()}_${randomBytes(6).toString('hex')}`;
+          const ext = base.includes('.')
+            ? base.slice(base.lastIndexOf('.'))
+            : '.bin';
+          cb(null, `${unique}${ext}`);
+        },
+      }),
+      limits: {
+        fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
+        files: 1,
       },
     }),
-    limits: {
-      fileSize: TRANSCRIBE_UPLOAD_LIMIT_BYTES,
-      files: 1,
-    },
-  }))
+  )
   async uploadTranscriptionChunk(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: { sessionId?: string; chunkIndex?: number; startMs?: number; endMs?: number },
+    @Body()
+    body: {
+      sessionId?: string;
+      chunkIndex?: number;
+      startMs?: number;
+      endMs?: number;
+    },
   ) {
     if (!file) throw new BadRequestException('No file provided');
     // OpenAI requires minimum 0.1s of audio (~1KB for WebM)
     // Very small chunks are likely errors or silence
     if (file.size < 500) {
-      this.logger.warn(`transcribe/chunk: chunk too small (${file.size} bytes), skipping`);
+      this.logger.warn(
+        `transcribe/chunk: chunk too small (${file.size} bytes), skipping`,
+      );
       return { text: '', segments: [] }; // Return empty result instead of error
     }
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
+    if (!apiKey)
+      throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
     const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
     if (!sessionId) throw new BadRequestException('Missing sessionId');
     const sessionDir = await ensureTranscribeSessionDir();
     const sessionPath = join(sessionDir, `${sessionId}.json`);
     const current = await readJsonSafe(sessionPath);
-    if (!current || !current.id) throw new BadRequestException('Invalid session');
+    if (!current || !current.id)
+      throw new BadRequestException('Invalid session');
 
-    const transcribeModel = process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
+    const transcribeModel =
+      process.env.OPENAI_TRANSCRIBE_MODEL || 'gpt-4o-transcribe';
     const form = new FormData();
-    const fileBuf = await fsPromises.readFile((file as any).path || join((file as any).destination || '', (file as any).filename));
+    const fileBuf = await fsPromises.readFile(
+      (file as any).path ||
+        join((file as any).destination || '', (file as any).filename),
+    );
     const uint8 = new Uint8Array(fileBuf);
     const blob = new Blob([uint8], { type: file.mimetype || 'audio/webm' });
     form.append('file', blob, file.originalname || 'audio.webm');
     form.append('model', transcribeModel);
-    try { form.append('language', 'en'); } catch {}
-    try { form.append('temperature', '0'); } catch {}
-    try { form.append('response_format', 'verbose_json'); } catch {}
+    try {
+      form.append('language', 'en');
+    } catch {}
+    try {
+      form.append('temperature', '0');
+    } catch {}
+    try {
+      form.append('response_format', 'verbose_json');
+    } catch {}
 
-    this.logger.debug(`transcribe/chunk: uploading ${file.size} bytes, model=${transcribeModel}`);
+    this.logger.debug(
+      `transcribe/chunk: uploading ${file.size} bytes, model=${transcribeModel}`,
+    );
     const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` } as any,
@@ -926,7 +1189,7 @@ export class VisitsController {
       const errText = await resp.text();
       this.logger.error(
         `transcribe/chunk OpenAI error: status=${resp.status}, fileSize=${file.size} bytes, ` +
-        `mimeType=${file.mimetype}, model=${transcribeModel}, error=${errText.slice(0, 500)}`
+          `mimeType=${file.mimetype}, model=${transcribeModel}, error=${errText.slice(0, 500)}`,
       );
       // Also log to console and file for immediate debugging
       const errorLog = [
@@ -945,7 +1208,7 @@ export class VisitsController {
       try {
         await fsPromises.appendFile(
           join(process.cwd(), 'transcribe_errors.log'),
-          errorLog + '\n\n'
+          errorLog + '\n\n',
         );
       } catch (e) {
         // Ignore file write errors
@@ -954,9 +1217,14 @@ export class VisitsController {
       let errorDetail = 'OpenAI transcription service error';
       if (errText.includes('duration') || errText.includes('too short')) {
         errorDetail = 'Audio chunk too short (minimum 0.1 seconds required)';
-      } else if (errText.includes('corrupted') || errText.includes('unsupported') || errText.includes('invalid')) {
+      } else if (
+        errText.includes('corrupted') ||
+        errText.includes('unsupported') ||
+        errText.includes('invalid')
+      ) {
         // MediaRecorder chunks are often corrupted - this is a known limitation
-        errorDetail = 'Browser audio format not supported. MediaRecorder chunks require reassembly.';
+        errorDetail =
+          'Browser audio format not supported. MediaRecorder chunks require reassembly.';
       } else if (errText.includes('format')) {
         errorDetail = 'Invalid audio format';
       }
@@ -968,17 +1236,23 @@ export class VisitsController {
     }
     const data = await resp.json();
     const text = ((data as any)?.text as string) || '';
-    const rawSegs = Array.isArray((data as any)?.segments) ? ((data as any).segments as Array<any>) : [];
+    const rawSegs = Array.isArray((data as any)?.segments)
+      ? ((data as any).segments as Array<any>)
+      : [];
     const startMs = Number.isFinite(body?.startMs) ? Number(body?.startMs) : 0;
-    const endMs = Number.isFinite(body?.endMs) ? Number(body?.endMs) : (startMs || 0);
+    const endMs = Number.isFinite(body?.endMs)
+      ? Number(body?.endMs)
+      : startMs || 0;
     const offsetS = Math.max(0, Math.floor(startMs) / 1000);
 
     const entry = {
-      index: Number.isFinite(body?.chunkIndex) ? Number(body?.chunkIndex) : (current.chunks.length || 0),
+      index: Number.isFinite(body?.chunkIndex)
+        ? Number(body?.chunkIndex)
+        : current.chunks.length || 0,
       start_s_offset: offsetS,
       end_s_offset: Math.max(offsetS, Math.floor(endMs) / 1000),
       text,
-      segments: rawSegs.map(s => ({
+      segments: rawSegs.map((s) => ({
         text: typeof s?.text === 'string' ? s.text : '',
         start_s: typeof s?.start === 'number' ? s.start : null,
         end_s: typeof s?.end === 'number' ? s.end : null,
@@ -986,53 +1260,68 @@ export class VisitsController {
     };
     current.chunks.push(entry);
     await writeJsonSafe(sessionPath, current);
-    try { if ((file as any)?.path) await fsPromises.unlink((file as any).path).catch(() => {}); } catch {}
+    try {
+      if ((file as any)?.path)
+        await fsPromises.unlink((file as any).path).catch(() => {});
+    } catch {}
     return { ok: true };
   }
 
   // Complete the session: merge chunks and run diarization once on combined segments
   @Post('transcribe/chunk-complete')
-  async completeTranscriptionSession(
-    @Body() body: { sessionId?: string },
-  ) {
+  async completeTranscriptionSession(@Body() body: { sessionId?: string }) {
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
+    if (!apiKey)
+      throw new ServiceUnavailableException('OPENAI_API_KEY not configured');
     const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : '';
     if (!sessionId) throw new BadRequestException('Missing sessionId');
     const sessionDir = await ensureTranscribeSessionDir();
     const sessionPath = join(sessionDir, `${sessionId}.json`);
     const current = await readJsonSafe(sessionPath);
-    if (!current || !Array.isArray(current?.chunks)) throw new BadRequestException('Invalid session');
+    if (!current || !Array.isArray(current?.chunks))
+      throw new BadRequestException('Invalid session');
 
-    const chunks = [...current.chunks].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
-    const combinedText = chunks.map((c: any) => typeof c.text === 'string' ? c.text : '').filter(Boolean).join(' ');
+    const chunks = [...current.chunks].sort(
+      (a, b) => (a.index ?? 0) - (b.index ?? 0),
+    );
+    const combinedText = chunks
+      .map((c: any) => (typeof c.text === 'string' ? c.text : ''))
+      .filter(Boolean)
+      .join(' ');
     const combinedSegments = chunks.flatMap((c: any) => {
       const off = Number(c?.start_s_offset) || 0;
       const segs = Array.isArray(c?.segments) ? c.segments : [];
       return segs.map((s: any) => ({
         text: typeof s?.text === 'string' ? s.text : '',
-        start_s: (typeof s?.start_s === 'number' ? s.start_s : null),
-        end_s: (typeof s?.end_s === 'number' ? s.end_s : null),
+        start_s: typeof s?.start_s === 'number' ? s.start_s : null,
+        end_s: typeof s?.end_s === 'number' ? s.end_s : null,
         // adjusted values for downstream use
-        adj_start_s: (typeof s?.start_s === 'number' ? s.start_s + off : null),
-        adj_end_s: (typeof s?.end_s === 'number' ? s.end_s + off : null),
+        adj_start_s: typeof s?.start_s === 'number' ? s.start_s + off : null,
+        adj_end_s: typeof s?.end_s === 'number' ? s.end_s + off : null,
       }));
     });
 
     // Build diarization input
-    const input = combinedSegments.length > 0
-      ? { segments: combinedSegments.map(s => ({ text: s.text, start_s: s.adj_start_s, end_s: s.adj_end_s })) }
-      : { transcript: combinedText };
+    const input =
+      combinedSegments.length > 0
+        ? {
+            segments: combinedSegments.map((s) => ({
+              text: s.text,
+              start_s: s.adj_start_s,
+              end_s: s.adj_end_s,
+            })),
+          }
+        : { transcript: combinedText };
 
     const messages = [
       {
         role: 'system',
         content:
-          'You are a medical scribe. Given a clinical conversation (full transcript or segments), split into speaker turns labeled DOCTOR or PATIENT only. '
-          + 'Cues: questions/instructions/orders/examination → DOCTOR; symptoms/history/concerns → PATIENT. '
-          + 'Preserve medical terms, numbers, and units verbatim. '
-          + 'Return STRICT JSON with keys: segments (array of {speaker, text, confidence, start_s, end_s}), and speakers ({doctorText, patientText}). '
-          + 'Concatenate segments chronologically for doctorText and patientText. If timestamps are provided in input, propagate them; otherwise use null. No extra commentary.',
+          'You are a medical scribe. Given a clinical conversation (full transcript or segments), split into speaker turns labeled DOCTOR or PATIENT only. ' +
+          'Cues: questions/instructions/orders/examination → DOCTOR; symptoms/history/concerns → PATIENT. ' +
+          'Preserve medical terms, numbers, and units verbatim. ' +
+          'Return STRICT JSON with keys: segments (array of {speaker, text, confidence, start_s, end_s}), and speakers ({doctorText, patientText}). ' +
+          'Concatenate segments chronologically for doctorText and patientText. If timestamps are provided in input, propagate them; otherwise use null. No extra commentary.',
       },
       { role: 'user', content: JSON.stringify(input) },
     ];
@@ -1070,57 +1359,107 @@ export class VisitsController {
       strict: true,
     } as const;
 
-    const diarizeResp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: diarizeModel,
-        temperature: 0,
-        response_format: { type: 'json_schema', json_schema: diarizationJsonSchema },
-        messages,
-      }),
-    });
+    const diarizeResp = await fetch(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: diarizeModel,
+          temperature: 0,
+          response_format: {
+            type: 'json_schema',
+            json_schema: diarizationJsonSchema,
+          },
+          messages,
+        }),
+      },
+    );
     if (!diarizeResp.ok) {
       const errText = await diarizeResp.text();
-      this.logger.warn(`transcribe/chunk-complete diarization failed: ${diarizeResp.status} ${errText}`);
+      this.logger.warn(
+        `transcribe/chunk-complete diarization failed: ${diarizeResp.status} ${errText}`,
+      );
       // fallback: return combined text only
-      return { text: combinedText, segments: [], speakers: { doctorText: '', patientText: '' } };
+      return {
+        text: combinedText,
+        segments: [],
+        speakers: { doctorText: '', patientText: '' },
+      };
     }
     const dj = (await diarizeResp.json()) as any;
     const content = dj?.choices?.[0]?.message?.content || '{}';
     let parsed: any = {};
-    try { parsed = JSON.parse(content); } catch {}
-    const segs = Array.isArray(parsed?.segments) ? parsed.segments as Array<any> : [];
-    const normalized = segs.map(s => ({
-      speaker: (typeof s?.speaker === 'string' && s.speaker.toUpperCase().includes('DOC')) ? 'DOCTOR' : 'PATIENT',
-      text: typeof s?.text === 'string' ? s.text : '',
-      confidence: typeof s?.confidence === 'number' ? s.confidence : undefined,
-      start_s: (typeof s?.start_s === 'number' || s?.start_s === null) ? s.start_s : undefined,
-      end_s: (typeof s?.end_s === 'number' || s?.end_s === null) ? s.end_s : undefined,
-    })).filter((s: any) => s.text);
-    const doctorText = (parsed?.speakers?.doctorText && typeof parsed.speakers.doctorText === 'string')
-      ? parsed.speakers.doctorText
-      : normalized.filter((s: any) => s.speaker === 'DOCTOR').map((s: any) => s.text).join(' ');
-    const patientText = (parsed?.speakers?.patientText && typeof parsed.speakers.patientText === 'string')
-      ? parsed.speakers.patientText
-      : normalized.filter((s: any) => s.speaker === 'PATIENT').map((s: any) => s.text).join(' ');
+    try {
+      parsed = JSON.parse(content);
+    } catch {}
+    const segs = Array.isArray(parsed?.segments)
+      ? (parsed.segments as Array<any>)
+      : [];
+    const normalized = segs
+      .map((s) => ({
+        speaker:
+          typeof s?.speaker === 'string' &&
+          s.speaker.toUpperCase().includes('DOC')
+            ? 'DOCTOR'
+            : 'PATIENT',
+        text: typeof s?.text === 'string' ? s.text : '',
+        confidence:
+          typeof s?.confidence === 'number' ? s.confidence : undefined,
+        start_s:
+          typeof s?.start_s === 'number' || s?.start_s === null
+            ? s.start_s
+            : undefined,
+        end_s:
+          typeof s?.end_s === 'number' || s?.end_s === null
+            ? s.end_s
+            : undefined,
+      }))
+      .filter((s: any) => s.text);
+    const doctorText =
+      parsed?.speakers?.doctorText &&
+      typeof parsed.speakers.doctorText === 'string'
+        ? parsed.speakers.doctorText
+        : normalized
+            .filter((s: any) => s.speaker === 'DOCTOR')
+            .map((s: any) => s.text)
+            .join(' ');
+    const patientText =
+      parsed?.speakers?.patientText &&
+      typeof parsed.speakers.patientText === 'string'
+        ? parsed.speakers.patientText
+        : normalized
+            .filter((s: any) => s.speaker === 'PATIENT')
+            .map((s: any) => s.text)
+            .join(' ');
 
     // Optionally clean up session file after completion
-    try { await fsPromises.unlink(sessionPath).catch(() => {}); } catch {}
+    try {
+      await fsPromises.unlink(sessionPath).catch(() => {});
+    } catch {}
 
-    return { text: combinedText, segments: normalized, speakers: { doctorText, patientText } };
+    return {
+      text: combinedText,
+      segments: normalized,
+      speakers: { doctorText, patientText },
+    };
   }
 
   // Extract lab results from an uploaded image or PDF using OpenAI Vision
   @Post('labs/autofill')
-  @UseInterceptors(FileInterceptor('file', {
-    storage: memoryStorage(),
-    fileFilter: imageOrPdfFileFilter,
-    limits: {
-      fileSize: VISIT_UPLOAD_LIMIT_BYTES,
-      files: 1,
-    },
-  }))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      fileFilter: imageOrPdfFileFilter,
+      limits: {
+        fileSize: VISIT_UPLOAD_LIMIT_BYTES,
+        files: 1,
+      },
+    }),
+  )
   async autofillLabsFromImage(
     @UploadedFile() file: Express.Multer.File,
     @Request() _req: AuthenticatedRequest,
@@ -1131,8 +1470,12 @@ export class VisitsController {
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      this.logger.warn('labs/autofill skipped: OPENAI_API_KEY is not configured');
-      throw new ServiceUnavailableException('AI autofill is unavailable. Contact an administrator to configure OPENAI_API_KEY.');
+      this.logger.warn(
+        'labs/autofill skipped: OPENAI_API_KEY is not configured',
+      );
+      throw new ServiceUnavailableException(
+        'AI autofill is unavailable. Contact an administrator to configure OPENAI_API_KEY.',
+      );
     }
 
     const isPdf = file.mimetype === 'application/pdf';
@@ -1143,7 +1486,9 @@ export class VisitsController {
       if (pageBuffers.length === 0) {
         throw new BadRequestException('PDF contains no pages');
       }
-      imageDataUrls = pageBuffers.map((buf) => `data:image/png;base64,${buf.toString('base64')}`);
+      imageDataUrls = pageBuffers.map(
+        (buf) => `data:image/png;base64,${buf.toString('base64')}`,
+      );
     } else {
       const processed = await processImageUpload(file);
       const base64 = processed.buffer.toString('base64');
@@ -1163,7 +1508,9 @@ export class VisitsController {
       'Do not include commentary. Use null for missing values. Avoid strings like "N/A". ' +
       'If the image contains no lab results, return {"labs": {}}.';
 
-    const extractFromSingleImage = async (dataUrl: string): Promise<Record<string, any>> => {
+    const extractFromSingleImage = async (
+      dataUrl: string,
+    ): Promise<Record<string, any>> => {
       const resp = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1179,7 +1526,10 @@ export class VisitsController {
             {
               role: 'user',
               content: [
-                { type: 'text', text: 'Extract structured lab results as per the schema.' },
+                {
+                  type: 'text',
+                  text: 'Extract structured lab results as per the schema.',
+                },
                 { type: 'image_url', image_url: { url: dataUrl } },
               ],
             },
@@ -1189,7 +1539,9 @@ export class VisitsController {
 
       if (!resp.ok) {
         const errText = await resp.text();
-        this.logger.error(`labs/autofill OpenAI error: ${resp.status} ${errText}`);
+        this.logger.error(
+          `labs/autofill OpenAI error: ${resp.status} ${errText}`,
+        );
         throw new ServiceUnavailableException('Failed to extract lab results');
       }
 
@@ -1199,17 +1551,24 @@ export class VisitsController {
         const parsed = JSON.parse(content);
         return parsed?.labs ?? parsed ?? {};
       } catch {
-        this.logger.error('labs/autofill: failed to parse JSON response from OpenAI');
+        this.logger.error(
+          'labs/autofill: failed to parse JSON response from OpenAI',
+        );
         return {};
       }
     };
 
-    const pageResults = await Promise.all(imageDataUrls.map((url) => extractFromSingleImage(url)));
+    const pageResults = await Promise.all(
+      imageDataUrls.map((url) => extractFromSingleImage(url)),
+    );
 
     const labs: Record<string, any> = {};
     for (const pageLabs of pageResults) {
       for (const [key, value] of Object.entries(pageLabs)) {
-        if (value != null && !(typeof value === 'object' && Object.keys(value).length === 0)) {
+        if (
+          value != null &&
+          !(typeof value === 'object' && Object.keys(value).length === 0)
+        ) {
           labs[key] = value;
         }
       }
@@ -1228,23 +1587,34 @@ export class VisitsController {
   ) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      this.logger.warn('translateTexts skipped: OPENAI_API_KEY is not configured');
-      throw new ServiceUnavailableException('Translation is unavailable. Configure OPENAI_API_KEY.');
+      this.logger.warn(
+        'translateTexts skipped: OPENAI_API_KEY is not configured',
+      );
+      throw new ServiceUnavailableException(
+        'Translation is unavailable. Configure OPENAI_API_KEY.',
+      );
     }
 
     const target = body?.target;
     const texts = Array.isArray(body?.texts) ? body.texts : [];
     if (!target || !['HI', 'TE'].includes(target) || texts.length === 0) {
-      throw new BadRequestException('Invalid request. Provide target (HI|TE) and non-empty texts array.');
+      throw new BadRequestException(
+        'Invalid request. Provide target (HI|TE) and non-empty texts array.',
+      );
     }
 
     // Limit payload size defensively
     const MAX_ITEMS = 200;
     const MAX_TOTAL_CHARS = 8000;
     const limited = texts.slice(0, MAX_ITEMS);
-    const totalChars = limited.reduce((sum, s) => sum + (typeof s === 'string' ? s.length : 0), 0);
+    const totalChars = limited.reduce(
+      (sum, s) => sum + (typeof s === 'string' ? s.length : 0),
+      0,
+    );
     if (totalChars > MAX_TOTAL_CHARS) {
-      throw new BadRequestException('Total text too large for translation. Reduce content.');
+      throw new BadRequestException(
+        'Total text too large for translation. Reduce content.',
+      );
     }
 
     const langName = target === 'HI' ? 'Hindi' : 'Telugu';
@@ -1277,7 +1647,9 @@ export class VisitsController {
 
       if (!resp.ok) {
         const errText = await resp.text();
-        this.logger.error(`translateTexts OpenAI error: ${resp.status} ${errText}`);
+        this.logger.error(
+          `translateTexts OpenAI error: ${resp.status} ${errText}`,
+        );
         throw new ServiceUnavailableException('Translation service error');
       }
       const data = (await resp.json()) as any;
@@ -1286,11 +1658,17 @@ export class VisitsController {
       try {
         parsed = JSON.parse(content);
       } catch (e) {
-        this.logger.error('translateTexts: failed to parse JSON response from OpenAI');
-        throw new ServiceUnavailableException('Failed to parse translation response');
+        this.logger.error(
+          'translateTexts: failed to parse JSON response from OpenAI',
+        );
+        throw new ServiceUnavailableException(
+          'Failed to parse translation response',
+        );
       }
       const translations = Array.isArray(parsed?.translations)
-        ? (parsed.translations as string[]).map((s) => (typeof s === 'string' ? s : ''))
+        ? (parsed.translations as string[]).map((s) =>
+            typeof s === 'string' ? s : '',
+          )
         : [];
       if (translations.length !== limited.length) {
         this.logger.warn(
@@ -1299,7 +1677,9 @@ export class VisitsController {
       }
       return { translations };
     } catch (e: any) {
-      this.logger.error(`translateTexts failed: ${e?.stack || e?.message || e}`);
+      this.logger.error(
+        `translateTexts failed: ${e?.stack || e?.message || e}`,
+      );
       throw new ServiceUnavailableException('Translation failed');
     }
   }

@@ -1,12 +1,12 @@
 'use client';
 
-import { Bell, Search, Settings, User, Calendar, Users, Palette } from 'lucide-react';
+import { Bell, Search, Settings, User, Calendar, Users, Palette, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { useState, useEffect, useRef } from 'react';
-import { formatAge } from '@/lib/utils';
+import { formatAge, getErrorMessage } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { useDashboardUser } from './dashboard-user-context';
 import { apiClient } from '@/lib/api';
@@ -20,8 +20,19 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useBrandedMode } from './branded-mode-context';
 import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
+import { useToast } from '@/hooks/use-toast';
+import {
+  buildTemplateSelectionValue,
+  getSelectableWhatsAppTemplates,
+  parseTemplateSelectionValue,
+  parseWhatsAppSettings,
+  parseMetadataObject,
+  validateWhatsAppTemplateChoice,
+  type WhatsAppTemplateOption,
+} from '@/lib/whatsapp-settings';
 
 interface SearchResult {
   id: string;
@@ -40,8 +51,9 @@ export function Header() {
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const { user, loading } = useDashboardUser();
+  const { user, loading, refresh } = useDashboardUser();
   const { brandedEnabled, toggleBranded, loading: brandedLoading } = useBrandedMode();
+  const { toast } = useToast();
 
   type NotificationItem = {
     id: string;
@@ -54,10 +66,13 @@ export function Header() {
   const [notifItems, setNotifItems] = useState<NotificationItem[]>([]);
   const [notifLoading, setNotifLoading] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   const [whatsappAutoConfirm, setWhatsappAutoConfirm] = useState(false);
   const [whatsappUseTemplate, setWhatsappUseTemplate] = useState(false);
   const [whatsappTemplateName, setWhatsappTemplateName] = useState('');
   const [whatsappTemplateLanguage, setWhatsappTemplateLanguage] = useState('en');
+  const [whatsappTemplates, setWhatsappTemplates] = useState<WhatsAppTemplateOption[]>([]);
+  const [whatsappTemplatesLoading, setWhatsappTemplatesLoading] = useState(false);
 
   // Load system alerts and map to role-based notifications
   useEffect(() => {
@@ -92,17 +107,42 @@ export function Header() {
   }, [loading, user]);
 
   useEffect(() => {
-    try {
-      const enabled = Boolean((user as any)?.metadata?.whatsappAutoConfirmAppointments);
-      setWhatsappAutoConfirm(enabled);
-      const useTpl = Boolean((user as any)?.metadata?.whatsappUseTemplate);
-      setWhatsappUseTemplate(useTpl);
-      const tplName = String((user as any)?.metadata?.whatsappTemplateName || '');
-      setWhatsappTemplateName(tplName);
-      const tplLang = String((user as any)?.metadata?.whatsappTemplateLanguage || 'en');
-      setWhatsappTemplateLanguage(tplLang);
-    } catch {}
+    const settings = parseWhatsAppSettings((user as any)?.metadata);
+    setWhatsappAutoConfirm(settings.autoConfirm);
+    setWhatsappUseTemplate(settings.useTemplate);
+    setWhatsappTemplateName(settings.templateName);
+    setWhatsappTemplateLanguage(settings.templateLanguage);
   }, [user]);
+
+  useEffect(() => {
+    const isDoctor = String((user as any)?.role || '').toUpperCase() === 'DOCTOR';
+    if (!settingsOpen || !isDoctor || loading) return;
+
+    let cancelled = false;
+    const loadTemplates = async () => {
+      try {
+        setWhatsappTemplatesLoading(true);
+        const templates = await apiClient.getWhatsAppTemplates({ touchpoint: 'appointment_confirmation' });
+        if (!cancelled) {
+          setWhatsappTemplates(getSelectableWhatsAppTemplates(templates));
+        }
+      } catch {
+        if (!cancelled) {
+          setWhatsappTemplates([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setWhatsappTemplatesLoading(false);
+        }
+      }
+    };
+
+    void loadTemplates();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, settingsOpen, user]);
 
   function buildRoleNotifications(alerts: any, role?: string): NotificationItem[] {
     const items: NotificationItem[] = [];
@@ -268,6 +308,63 @@ export function Header() {
     const days = Math.round(hrs / 24);
     return `${days}d ago`;
   }
+
+  const selectedTemplateValue = buildTemplateSelectionValue(
+    whatsappTemplateName,
+    whatsappTemplateLanguage,
+  );
+  const selectedSavedTemplateValue = whatsappTemplates.some(
+    (template) => template.value === selectedTemplateValue,
+  )
+    ? selectedTemplateValue
+    : undefined;
+
+  const saveDoctorSettings = async () => {
+    if (!user?.id) return;
+
+    const validationMessage = validateWhatsAppTemplateChoice({
+      useTemplate: whatsappUseTemplate,
+      templateName: whatsappTemplateName,
+      templateLanguage: whatsappTemplateLanguage,
+    });
+    if (validationMessage) {
+      toast({
+        variant: 'warning',
+        title: 'WhatsApp settings incomplete',
+        description: validationMessage,
+      });
+      return;
+    }
+
+    try {
+      setSettingsSaving(true);
+      const existingMetadata = parseMetadataObject((user as any)?.metadata);
+      const metadata = {
+        ...existingMetadata,
+        whatsappAutoConfirmAppointments: whatsappAutoConfirm,
+        whatsappUseTemplate,
+        whatsappTemplateName: whatsappUseTemplate ? whatsappTemplateName.trim() || undefined : undefined,
+        whatsappTemplateLanguage: whatsappUseTemplate ? whatsappTemplateLanguage.trim() || undefined : undefined,
+      };
+
+      await apiClient.updateUserProfile(user.id, { metadata });
+      await refresh();
+      setSettingsOpen(false);
+      toast({
+        variant: 'success',
+        title: 'Settings saved',
+        description: 'WhatsApp preferences updated.',
+      });
+    } catch (error) {
+      toast({
+        variant: 'warning',
+        title: 'Save failed',
+        description: getErrorMessage(error) || 'Could not save WhatsApp settings.',
+      });
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
 
   // Close search results when clicking outside
   useEffect(() => {
@@ -591,14 +688,61 @@ export function Header() {
                       <Switch checked={whatsappUseTemplate} onCheckedChange={(v: boolean) => setWhatsappUseTemplate(v)} />
                     </div>
                     {whatsappUseTemplate && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-sm">Template Name</label>
-                          <Input value={whatsappTemplateName} onChange={(e) => setWhatsappTemplateName(e.target.value)} placeholder="e.g., appointment_confirm" />
-                        </div>
-                        <div>
-                          <label className="text-sm">Language Code</label>
-                          <Input value={whatsappTemplateLanguage} onChange={(e) => setWhatsappTemplateLanguage(e.target.value)} placeholder="e.g., en, en_US, hi" />
+                      <div className="space-y-3">
+                        {whatsappTemplatesLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            Loading approved templates…
+                          </div>
+                        ) : whatsappTemplates.length > 0 ? (
+                          <div>
+                            <label className="text-sm">Approved Templates</label>
+                            <Select
+                              value={selectedSavedTemplateValue}
+                              onValueChange={(value) => {
+                                const next = parseTemplateSelectionValue(value);
+                                setWhatsappTemplateName(next.templateName);
+                                setWhatsappTemplateLanguage(next.templateLanguage);
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select a saved appointment template" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {whatsappTemplates.map((template) => (
+                                  <SelectItem key={template.value} value={template.value}>
+                                    {template.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="text-xs text-gray-500 mt-1">
+                              Selecting from saved templates avoids name and language mismatches.
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-500">
+                            No active appointment templates were found. You can still enter the template name and language manually.
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-sm">Template Name</label>
+                            <Input
+                              value={whatsappTemplateName}
+                              onChange={(e) => setWhatsappTemplateName(e.target.value)}
+                              placeholder="e.g., appointment_confirm"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm">Language Code</label>
+                            <Input
+                              value={whatsappTemplateLanguage}
+                              onChange={(e) => setWhatsappTemplateLanguage(e.target.value)}
+                              placeholder="e.g., en, en_US, hi"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -617,23 +761,17 @@ export function Header() {
               )}
 
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setSettingsOpen(false)}>Close</Button>
-                <Button onClick={async () => {
-                  try {
-                    if (!user?.id) return;
-                    const metadata = {
-                      ...(user as any)?.metadata,
-                      whatsappAutoConfirmAppointments: whatsappAutoConfirm,
-                      whatsappUseTemplate,
-                      whatsappTemplateName: whatsappTemplateName || undefined,
-                      whatsappTemplateLanguage: whatsappTemplateLanguage || undefined,
-                    };
-                    await apiClient.updateUserProfile(user.id, { metadata });
-                    setSettingsOpen(false);
-                  } catch (e) {
-                    // optional toast could be added here if available
-                  }
-                }}>Save</Button>
+                <Button variant="outline" onClick={() => setSettingsOpen(false)} disabled={settingsSaving}>Close</Button>
+                <Button onClick={() => void saveDoctorSettings()} disabled={settingsSaving}>
+                  {settingsSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
               </div>
             </div>
           </DialogContent>
@@ -653,4 +791,4 @@ export function Header() {
       </div>
     </header>
   );
-} 
+}

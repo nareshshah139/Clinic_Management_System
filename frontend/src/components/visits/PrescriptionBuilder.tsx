@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ToastAction } from '@/components/ui/toast';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
+import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Loader2, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
@@ -19,6 +19,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
 import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
+import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
+import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -369,130 +371,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   // Removed Topicals UI
 
   // Voice-to-text functionality (Chief Complaints)
-  const [isListening, setIsListening] = useState(false);
-  const [activeVoiceField, setActiveVoiceField] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const startVoiceInput = useCallback(async (fieldName: string) => {
-    if (isListening && activeVoiceField === fieldName && recorderRef.current && recorderRef.current.state !== 'inactive') {
-      try { recorderRef.current.stop(); } catch {}
-      return;
-    }
-
-    if (!navigator.mediaDevices || !(window as any).MediaRecorder) {
-      toast({
-        variant: 'warning',
-        title: 'Voice capture unavailable',
-        description: 'Microphone recording is not supported in this browser.',
-      });
-      return;
-    }
-
-    setIsListening(true);
-    setActiveVoiceField(fieldName);
-    try {
-      // Request audio with better quality settings
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true, // Automatically adjust volume
-          sampleRate: 48000,     // Higher quality
-        }
-      });
-      streamRef.current = stream;
-
-      const mimeType = (window as any).MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : ((window as any).MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } as any : undefined);
-      recorderRef.current = recorder;
-      // Accumulate chunks instead of sending individually (MediaRecorder chunks aren't standalone files)
-      const chunksAccumulator: Blob[] = [];
-      recorder.ondataavailable = (e) => {
-        if (!e.data || e.data.size <= 0) return;
-        // Accumulate all chunks - MediaRecorder fragments need to be combined into a complete file
-        chunksAccumulator.push(e.data);
-        // eslint-disable-next-line no-console
-        console.log(`Accumulated chunk ${chunksAccumulator.length}: ${e.data.size} bytes`);
-      };
-      recorder.onstop = async () => {
-        try { stream.getTracks().forEach(t => t.stop()); } catch {}
-        streamRef.current = null;
-        recorderRef.current = null;
-        try {
-          // Combine all accumulated chunks into a single complete audio file
-          if (chunksAccumulator.length === 0) {
-            toast({ variant: 'warning', title: 'No audio recorded', description: 'Please try recording again.' });
-            return;
-          }
-
-          // Create a single Blob from all chunks
-          const completeAudio = new Blob(chunksAccumulator, { type: mimeType || 'audio/webm' });
-          // eslint-disable-next-line no-console
-          console.log(`Sending complete audio file: ${completeAudio.size} bytes from ${chunksAccumulator.length} chunks`);
-
-          // Upload the complete audio file using the simple transcribe endpoint
-          const recordedType: string = mimeType || 'audio/webm';
-          const filename = recordedType === 'audio/mp4' ? 'recording.m4a' : 'recording.webm';
-          const fd = new FormData();
-          fd.append('file', completeAudio, filename);
-
-          const transcribeRes = await fetch(`/api/visits/transcribe`, {
-            method: 'POST',
-            body: fd,
-            credentials: 'include',
-          });
-
-          if (!transcribeRes.ok) {
-            handleUnauthorizedRedirect(transcribeRes);
-            let errText = '';
-            try { errText = await transcribeRes.text(); } catch {}
-            // eslint-disable-next-line no-console
-            console.error('Transcription failed:', transcribeRes.status, errText);
-            toast({ 
-              variant: 'warning', 
-              title: 'Transcription failed', 
-              description: `Server returned ${transcribeRes.status}. ${errText ? errText.slice(0, 100) : ''}` 
-            });
-            return;
-          }
-
-          const data = await transcribeRes.json();
-          const combinedText = (data?.text as string) || '';
-          const patientOnly = (data?.speakers?.patientText as string) || '';
-          const appendText = patientOnly || combinedText;
-
-          if (appendText) {
-            switch (fieldName) {
-              case 'chiefComplaints':
-                setChiefComplaints(prev => (prev ? prev + ' ' : '') + appendText);
-                break;
-            }
-          } else {
-            toast({ variant: 'info', title: 'No speech detected', description: 'The recording may have been too quiet or contained only silence. Try speaking louder and closer to the microphone.' });
-          }
-        } catch (e) {
-          // eslint-disable-next-line no-console
-          console.error('Speech-to-text error:', e);
-          toast({ variant: 'warning', title: 'Speech-to-text error', description: getErrorMessage(e) || 'Please try again.' });
-        } finally {
-          setIsListening(false);
-          setActiveVoiceField(null);
-        }
-      };
-      // Record in chunks (e.g., every 30s)
-      recorder.start(30000);
-      // Auto-stop after up to 10 minutes or when button clicked again (toggle)
-      setTimeout(() => { if (recorder.state !== 'inactive') recorder.stop(); }, 600000);
-    } catch (e) {
-      setIsListening(false);
-      setActiveVoiceField(null);
-      try { streamRef.current?.getTracks().forEach(t => t.stop()); } catch {}
-      recorderRef.current = null;
-      streamRef.current = null;
-      toast({ variant: 'warning', title: 'Microphone access denied', description: getErrorMessage(e) || 'Check browser permissions and try again.' });
-    }
-  }, [activeVoiceField, isListening, toast]);
+  const { activeVoiceField, isListening, isTranscribing, startVoiceInput } = useSpeechToTextRecorder({
+    toast,
+    resolveText: (fieldName, response) =>
+      fieldName === 'chiefComplaints'
+        ? pickSpeechToTextInsert(response, 'patient-preferred')
+        : pickSpeechToTextInsert(response, 'full-transcript'),
+    applyText: (fieldName, text) => {
+      switch (fieldName) {
+        case 'chiefComplaints':
+          setChiefComplaints((prev) => appendSpeechToText(prev, text));
+          break;
+        case 'objective':
+          setExObjective((prev) => appendSpeechToText(prev, text));
+          break;
+      }
+    },
+  });
 
   const VoiceButton = useCallback(({ fieldName }: { fieldName: string }) => (
     <Button
@@ -501,11 +396,29 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       size="sm"
       className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
-      disabled={isListening && activeVoiceField !== fieldName}
+      disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
+      aria-label={
+        activeVoiceField === fieldName
+          ? isListening
+            ? 'Stop voice input'
+            : 'Transcribing recording'
+          : 'Start voice input'
+      }
+      title={
+        activeVoiceField === fieldName
+          ? isListening
+            ? 'Stop voice input'
+            : 'Transcribing recording'
+          : 'Start voice input'
+      }
     >
-      {activeVoiceField === fieldName ? '🔴' : '🎤'}
+      {activeVoiceField === fieldName ? (
+        isListening ? <MicOff className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Mic className="h-4 w-4" />
+      )}
     </Button>
-  ), [activeVoiceField, isListening, startVoiceInput]);
+  ), [activeVoiceField, isListening, isTranscribing, startVoiceInput]);
 
   // Skin Concerns moved from Assessment into Chief Complaints
   const SKIN_CONCERNS = useMemo(() => (
