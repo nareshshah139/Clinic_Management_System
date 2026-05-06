@@ -115,6 +115,7 @@ model Branch {
   pharmacyInvoices         PharmacyInvoice[]
   pharmacyPackages         PharmacyPackage[]
   pharmacyPurchaseInvoices PharmacyPurchaseInvoice[]
+  pharmacyPurchasePayments PharmacyPurchasePayment[]
   whatsappTemplates        WhatsAppTemplate[]
 
   // Back-relations
@@ -1242,8 +1243,9 @@ model PharmacyPurchaseInvoice {
   createdAt              DateTime                      @default(now())
   updatedAt              DateTime                      @updatedAt
 
-  branch Branch                        @relation(fields: [branchId], references: [id])
-  items  PharmacyPurchaseInvoiceItem[]
+  branch             Branch                              @relation(fields: [branchId], references: [id])
+  items              PharmacyPurchaseInvoiceItem[]
+  paymentAllocations PharmacyPurchasePaymentAllocation[]
 
   @@unique([branchId, distributorGstin, invoiceNumber])
   @@index([branchId])
@@ -1296,6 +1298,46 @@ model PharmacyPurchaseInvoiceItem {
   @@map("pharmacy_purchase_invoice_items")
 }
 
+model PharmacyPurchasePayment {
+  id               String                      @id @default(cuid())
+  branchId         String
+  distributorGstin String
+  distributorName  String
+  paymentDate      DateTime
+  mode             PharmacyPurchasePaymentMode
+  paidBy           String
+  amount           Float
+  referenceNo      String?
+  notes            String?
+  createdAt        DateTime                    @default(now())
+  updatedAt        DateTime                    @updatedAt
+
+  branch      Branch                              @relation(fields: [branchId], references: [id])
+  allocations PharmacyPurchasePaymentAllocation[]
+
+  @@index([branchId])
+  @@index([distributorGstin])
+  @@index([paymentDate])
+  @@index([branchId, distributorGstin, paymentDate])
+  @@map("pharmacy_purchase_payments")
+}
+
+model PharmacyPurchasePaymentAllocation {
+  id                String   @id @default(cuid())
+  paymentId         String
+  purchaseInvoiceId String
+  amount            Float
+  createdAt         DateTime @default(now())
+
+  payment         PharmacyPurchasePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  purchaseInvoice PharmacyPurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, purchaseInvoiceId])
+  @@index([paymentId])
+  @@index([purchaseInvoiceId])
+  @@map("pharmacy_purchase_payment_allocations")
+}
+
 // Enums for Pharmacy System
 enum PharmacyInvoiceStatus {
   DRAFT
@@ -1335,6 +1377,14 @@ enum PharmacyPurchaseInvoiceStatus {
 enum PharmacyPurchaseBillType {
   CASH
   CREDIT
+}
+
+enum PharmacyPurchasePaymentMode {
+  CASH
+  CHEQUE
+  NEFT
+  UPI
+  CARD
 }
 
 enum UserRole {
