@@ -9,6 +9,8 @@ import { PharmacyPurchaseInvoiceController } from './pharmacy-purchase-invoice.c
 import { PharmacyPurchaseInvoiceService } from './pharmacy-purchase-invoice.service';
 import { PharmacyPackageController } from './pharmacy-package.controller';
 import { PharmacyPackageService } from './pharmacy-package.service';
+import { PharmacyPrescriptionQueueController } from './pharmacy-prescription-queue.controller';
+import { PharmacyPrescriptionQueueService } from './pharmacy-prescription-queue.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
 import { NumberingModule } from '../../shared/numbering/numbering.module';
 
@@ -20,6 +22,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceController,
     PharmacyPurchaseInvoiceController,
     PharmacyPackageController,
+    PharmacyPrescriptionQueueController,
   ],
   providers: [
     PharmacyService,
@@ -27,6 +30,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPackageService,
+    PharmacyPrescriptionQueueService,
   ],
   exports: [
     PharmacyService,
@@ -34,6 +38,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
     PharmacyPackageService,
+    PharmacyPrescriptionQueueService,
   ],
 })
 export class PharmacyModule {}
