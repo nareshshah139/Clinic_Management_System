@@ -102,6 +102,10 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'inventory:dashboard:read',
     'pharmacy:drug:*',
     'pharmacy:invoice:*',
+    'pharmacy:purchase-invoice:create',
+    'pharmacy:purchase-invoice:read',
+    'pharmacy:purchase-invoice:review',
+    'pharmacy:purchase-invoice:commit-stock',
     'pharmacy:dashboard:*',
   ],
   LAB_TECH: [],
@@ -161,4 +165,6 @@ async function main() {
   console.log('RBAC roles/permissions seeded successfully');
 }
 
-main().finally(async () => { await prisma.$disconnect(); }); 
+main().finally(async () => {
+  await prisma.$disconnect();
+});

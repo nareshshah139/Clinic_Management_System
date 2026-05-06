@@ -9,7 +9,9 @@ export class PharmacyService {
     try {
       // Handle null/undefined branchId
       if (!branchId) {
-        console.warn('[PharmacyService] getDashboard called with null/undefined branchId');
+        console.warn(
+          '[PharmacyService] getDashboard called with null/undefined branchId',
+        );
         // Return empty dashboard data
         return {
           todaySales: 0,
@@ -35,10 +37,21 @@ export class PharmacyService {
 
       const prisma = this.prisma as any;
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+      const lastMonthEnd = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+      );
 
       const [
         todayCompletedAgg,
@@ -120,10 +133,7 @@ export class PharmacyService {
           where: {
             branchId,
             status: 'ACTIVE',
-            OR: [
-              { stockStatus: 'LOW_STOCK' },
-              { stockStatus: 'OUT_OF_STOCK' },
-            ],
+            OR: [{ stockStatus: 'LOW_STOCK' }, { stockStatus: 'OUT_OF_STOCK' }],
           },
         }),
 
@@ -153,7 +163,7 @@ export class PharmacyService {
             select: { id: true },
           });
           const invoiceIds = completedInvoices.map((inv: any) => inv.id);
-          
+
           if (invoiceIds.length === 0) {
             return [];
           }
@@ -189,18 +199,26 @@ export class PharmacyService {
           take: 5,
         }),
 
-        // Low stock alerts (sample from low stock inventory items)
-        prisma.drug.findMany({
+        // Low stock alerts from real inventory records
+        prisma.inventoryItem.findMany({
           where: {
             branchId,
-            isActive: true,
-            isDiscontinued: false,
+            status: 'ACTIVE',
+            stockStatus: {
+              in: ['LOW_STOCK', 'OUT_OF_STOCK'],
+            },
           },
-          select: {
-            id: true,
-            name: true,
-            manufacturerName: true,
+          include: {
+            drugs: {
+              select: {
+                id: true,
+                name: true,
+                manufacturerName: true,
+              },
+              take: 1,
+            },
           },
+          orderBy: [{ currentStock: 'asc' }, { updatedAt: 'desc' }],
           take: 4,
         }),
       ]);
@@ -217,7 +235,9 @@ export class PharmacyService {
       });
 
       const topSellingWithDetails = topSellingDrugs.map((item: any) => {
-        const drug = (drugDetails as any[]).find((d: any) => d.id === item.drugId);
+        const drug = (drugDetails as any[]).find(
+          (d: any) => d.id === item.drugId,
+        );
         return {
           id: item.drugId,
           name: drug?.name || 'Unknown',
@@ -229,12 +249,12 @@ export class PharmacyService {
       // Calculate growth percentages
       const todayGrowth = this.calculateGrowthPercentage(
         todayCompletedAgg._sum.totalAmount || 0,
-        monthInvoices._sum.totalAmount || 0
+        monthInvoices._sum.totalAmount || 0,
       );
 
       const monthGrowth = this.calculateGrowthPercentage(
         monthInvoices._sum.totalAmount || 0,
-        lastMonthInvoices._sum.totalAmount || 0
+        lastMonthInvoices._sum.totalAmount || 0,
       );
 
       return {
@@ -264,13 +284,9 @@ export class PharmacyService {
           status: invoice.status,
           createdAt: invoice.createdAt.toISOString(),
         })),
-        lowStockAlerts: lowStockAlerts.map((drug: any) => ({
-          id: drug.id,
-          name: drug.name,
-          currentStock: Math.floor(Math.random() * 20) + 1, // Mock current stock
-          minStock: Math.floor(Math.random() * 50) + 20, // Mock min stock
-          manufacturerName: drug.manufacturerName,
-        })),
+        lowStockAlerts: (lowStockAlerts as any[]).map((item: any) =>
+          this.mapInventoryAlert(item),
+        ),
       };
     } catch (error) {
       console.error('[PharmacyService] getDashboard error:', error);
@@ -281,7 +297,9 @@ export class PharmacyService {
   async getSalesStats(branchId: string) {
     try {
       if (!branchId) {
-        console.warn('[PharmacyService] getSalesStats called with null/undefined branchId');
+        console.warn(
+          '[PharmacyService] getSalesStats called with null/undefined branchId',
+        );
         return {
           today: { amount: 0, count: 0 },
           week: { amount: 0, count: 0 },
@@ -290,7 +308,11 @@ export class PharmacyService {
       }
       const prisma = this.prisma as any;
       const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayStart = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
       const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -348,11 +370,17 @@ export class PharmacyService {
   async getTopSellingDrugs(branchId: string, limit: number = 10) {
     try {
       if (!branchId) {
-        console.warn('[PharmacyService] getTopSellingDrugs called with null/undefined branchId');
+        console.warn(
+          '[PharmacyService] getTopSellingDrugs called with null/undefined branchId',
+        );
         return [];
       }
       const prisma = this.prisma as any;
-      const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      const monthStart = new Date(
+        new Date().getFullYear(),
+        new Date().getMonth(),
+        1,
+      );
 
       // First get completed invoice IDs for this month
       const completedInvoices = await prisma.pharmacyInvoice.findMany({
@@ -364,7 +392,7 @@ export class PharmacyService {
         select: { id: true },
       });
       const invoiceIds = completedInvoices.map((inv: any) => inv.id);
-      
+
       if (invoiceIds.length === 0) {
         return [];
       }
@@ -399,7 +427,9 @@ export class PharmacyService {
       });
 
       return (topSelling as any[]).map((item: any) => {
-        const drug = (drugDetails as any[]).find((d: any) => d.id === item.drugId);
+        const drug = (drugDetails as any[]).find(
+          (d: any) => d.id === item.drugId,
+        );
         return {
           id: item.drugId,
           name: drug?.name || 'Unknown',
@@ -417,7 +447,9 @@ export class PharmacyService {
   async getRecentInvoices(branchId: string, limit: number = 10) {
     try {
       if (!branchId) {
-        console.warn('[PharmacyService] getRecentInvoices called with null/undefined branchId');
+        console.warn(
+          '[PharmacyService] getRecentInvoices called with null/undefined branchId',
+        );
         return [];
       }
       const prisma = this.prisma as any;
@@ -439,7 +471,9 @@ export class PharmacyService {
         id: invoice.id,
         invoiceNumber: invoice.invoiceNumber,
         patientName: invoice.patient.name,
-        doctorName: invoice.doctor ? `${invoice.doctor.firstName} ${invoice.doctor.lastName}` : null,
+        doctorName: invoice.doctor
+          ? `${invoice.doctor.firstName} ${invoice.doctor.lastName}`
+          : null,
         amount: invoice.totalAmount,
         status: invoice.status,
         paymentStatus: invoice.paymentStatus,
@@ -453,49 +487,83 @@ export class PharmacyService {
   async getAlerts(branchId: string) {
     try {
       if (!branchId) {
-        console.warn('[PharmacyService] getAlerts called with null/undefined branchId');
+        console.warn(
+          '[PharmacyService] getAlerts called with null/undefined branchId',
+        );
         return {
           lowStock: [],
           expired: [],
           nearExpiry: [],
         };
       }
-      // Mock low stock alerts for now
       const prisma = this.prisma as any;
-      const drugs = await prisma.drug.findMany({
-        where: {
-          branchId,
-          isActive: true,
-          isDiscontinued: false,
-        },
-        select: {
-          id: true,
-          name: true,
-          manufacturerName: true,
-        },
-        take: 10,
-      });
+      const now = new Date();
+      const ninetyDaysFromNow = new Date(
+        now.getTime() + 90 * 24 * 60 * 60 * 1000,
+      );
 
-      const lowStockAlerts = (drugs as any[]).slice(0, 4).map((drug: any) => ({
-        id: drug.id,
-        name: drug.name,
-        currentStock: Math.floor(Math.random() * 20) + 1,
-        minStock: Math.floor(Math.random() * 50) + 20,
-        manufacturerName: drug.manufacturerName,
-      }));
+      const inventoryInclude = {
+        drugs: {
+          select: {
+            id: true,
+            name: true,
+            manufacturerName: true,
+          },
+          take: 1,
+        },
+      };
 
-      const expiredDrugs = (drugs as any[]).slice(4, 6).map((drug: any) => ({
-        id: drug.id,
-        name: drug.name,
-        expiryDate: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
-        batchNumber: `BATCH${Math.floor(Math.random() * 10000)}`,
-        manufacturerName: drug.manufacturerName,
-      }));
+      const [lowStockAlerts, expiredDrugs, nearExpiryDrugs] = await Promise.all(
+        [
+          prisma.inventoryItem.findMany({
+            where: {
+              branchId,
+              status: 'ACTIVE',
+              stockStatus: {
+                in: ['LOW_STOCK', 'OUT_OF_STOCK'],
+              },
+            },
+            include: inventoryInclude,
+            orderBy: [{ currentStock: 'asc' }, { updatedAt: 'desc' }],
+            take: 10,
+          }),
+          prisma.inventoryItem.findMany({
+            where: {
+              branchId,
+              status: 'ACTIVE',
+              OR: [{ stockStatus: 'EXPIRED' }, { expiryDate: { lt: now } }],
+            },
+            include: inventoryInclude,
+            orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
+            take: 10,
+          }),
+          prisma.inventoryItem.findMany({
+            where: {
+              branchId,
+              status: 'ACTIVE',
+              currentStock: { gt: 0 },
+              expiryDate: {
+                gte: now,
+                lte: ninetyDaysFromNow,
+              },
+            },
+            include: inventoryInclude,
+            orderBy: [{ expiryDate: 'asc' }, { updatedAt: 'desc' }],
+            take: 10,
+          }),
+        ],
+      );
 
       return {
-        lowStock: lowStockAlerts,
-        expired: expiredDrugs,
-        nearExpiry: [],
+        lowStock: (lowStockAlerts as any[]).map((item: any) =>
+          this.mapInventoryAlert(item),
+        ),
+        expired: (expiredDrugs as any[]).map((item: any) =>
+          this.mapInventoryAlert(item),
+        ),
+        nearExpiry: (nearExpiryDrugs as any[]).map((item: any) =>
+          this.mapInventoryAlert(item),
+        ),
       };
     } catch (error) {
       throw new Error(`Failed to get alerts: ${error.message}`);
@@ -506,4 +574,22 @@ export class PharmacyService {
     if (previous === 0) return current > 0 ? 100 : 0;
     return ((current - previous) / previous) * 100;
   }
-} 
+
+  private mapInventoryAlert(item: any) {
+    const drug = Array.isArray(item.drugs) ? item.drugs[0] : undefined;
+    const threshold = item.minStockLevel ?? item.reorderLevel ?? 0;
+
+    return {
+      id: drug?.id || item.id,
+      inventoryItemId: item.id,
+      name: drug?.name || item.name,
+      currentStock: item.currentStock || 0,
+      minStock: threshold,
+      manufacturerName:
+        drug?.manufacturerName || item.manufacturer || 'Unknown',
+      batchNumber: item.batchNumber || null,
+      expiryDate: item.expiryDate ? item.expiryDate.toISOString() : null,
+      stockStatus: item.stockStatus,
+    };
+  }
+}

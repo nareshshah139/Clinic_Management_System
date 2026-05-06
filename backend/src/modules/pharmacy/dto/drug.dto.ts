@@ -1,36 +1,63 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max } from 'class-validator';
+import {
+  IsBoolean,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
 export class CreateDrugDto {
-  @ApiProperty({ description: 'Drug name', example: 'Paracetamol 500mg Tablet' })
+  @ApiProperty({
+    description: 'Drug name',
+    example: 'Paracetamol 500mg Tablet',
+  })
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Drug price in rupees', example: 25.50 })
+  @ApiProperty({ description: 'Drug price in rupees', example: 25.5 })
   @IsNumber()
   @Min(0)
   price: number;
 
-  @ApiProperty({ description: 'Manufacturer name', example: 'Sun Pharmaceuticals' })
+  @ApiProperty({
+    description: 'Manufacturer name',
+    example: 'Sun Pharmaceuticals',
+  })
   @IsString()
   manufacturerName: string;
 
-  @ApiPropertyOptional({ description: 'Drug type', example: 'allopathy', default: 'allopathy' })
+  @ApiPropertyOptional({
+    description: 'Drug type',
+    example: 'allopathy',
+    default: 'allopathy',
+  })
   @IsOptional()
   @IsString()
   type?: string = 'allopathy';
 
-  @ApiProperty({ description: 'Pack size label', example: 'strip of 10 tablets' })
+  @ApiProperty({
+    description: 'Pack size label',
+    example: 'strip of 10 tablets',
+  })
   @IsString()
   packSizeLabel: string;
 
-  @ApiPropertyOptional({ description: 'Primary composition', example: 'Paracetamol (500mg)' })
+  @ApiPropertyOptional({
+    description: 'Primary composition',
+    example: 'Paracetamol (500mg)',
+  })
   @IsOptional()
   @IsString()
   composition1?: string;
 
-  @ApiPropertyOptional({ description: 'Secondary composition', example: 'Caffeine (65mg)' })
+  @ApiPropertyOptional({
+    description: 'Secondary composition',
+    example: 'Caffeine (65mg)',
+  })
   @IsOptional()
   @IsString()
   composition2?: string;
@@ -65,25 +92,40 @@ export class CreateDrugDto {
   @IsString()
   strength?: string;
 
-  @ApiPropertyOptional({ description: 'Storage conditions', example: 'Store in cool, dry place' })
+  @ApiPropertyOptional({
+    description: 'Storage conditions',
+    example: 'Store in cool, dry place',
+  })
   @IsOptional()
   @IsString()
   storageConditions?: string;
 
-  @ApiPropertyOptional({ description: 'Expiry months', example: 24, default: 24 })
+  @ApiPropertyOptional({
+    description: 'Expiry months',
+    example: 24,
+    default: 24,
+  })
   @IsOptional()
   @IsNumber()
   @Min(1)
   @Max(120)
   expiryMonths?: number = 24;
 
-  @ApiPropertyOptional({ description: 'Minimum stock level', example: 10, default: 10 })
+  @ApiPropertyOptional({
+    description: 'Minimum stock level',
+    example: 10,
+    default: 10,
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   minStockLevel?: number = 10;
 
-  @ApiPropertyOptional({ description: 'Maximum stock level', example: 1000, default: 1000 })
+  @ApiPropertyOptional({
+    description: 'Maximum stock level',
+    example: 1000,
+    default: 1000,
+  })
   @IsOptional()
   @IsNumber()
   @Min(1)
@@ -113,18 +155,24 @@ export class CreateDrugDto {
 }
 
 export class UpdateDrugDto {
-  @ApiPropertyOptional({ description: 'Drug name', example: 'Paracetamol 500mg Tablet' })
+  @ApiPropertyOptional({
+    description: 'Drug name',
+    example: 'Paracetamol 500mg Tablet',
+  })
   @IsOptional()
   @IsString()
   name?: string;
 
-  @ApiPropertyOptional({ description: 'Drug price in rupees', example: 25.50 })
+  @ApiPropertyOptional({ description: 'Drug price in rupees', example: 25.5 })
   @IsOptional()
   @IsNumber()
   @Min(0)
   price?: number;
 
-  @ApiPropertyOptional({ description: 'Manufacturer name', example: 'Sun Pharmaceuticals' })
+  @ApiPropertyOptional({
+    description: 'Manufacturer name',
+    example: 'Sun Pharmaceuticals',
+  })
   @IsOptional()
   @IsString()
   manufacturerName?: string;
@@ -134,17 +182,26 @@ export class UpdateDrugDto {
   @IsString()
   type?: string;
 
-  @ApiPropertyOptional({ description: 'Pack size label', example: 'strip of 10 tablets' })
+  @ApiPropertyOptional({
+    description: 'Pack size label',
+    example: 'strip of 10 tablets',
+  })
   @IsOptional()
   @IsString()
   packSizeLabel?: string;
 
-  @ApiPropertyOptional({ description: 'Primary composition', example: 'Paracetamol (500mg)' })
+  @ApiPropertyOptional({
+    description: 'Primary composition',
+    example: 'Paracetamol (500mg)',
+  })
   @IsOptional()
   @IsString()
   composition1?: string;
 
-  @ApiPropertyOptional({ description: 'Secondary composition', example: 'Caffeine (65mg)' })
+  @ApiPropertyOptional({
+    description: 'Secondary composition',
+    example: 'Caffeine (65mg)',
+  })
   @IsOptional()
   @IsString()
   composition2?: string;
@@ -179,7 +236,10 @@ export class UpdateDrugDto {
   @IsString()
   strength?: string;
 
-  @ApiPropertyOptional({ description: 'Storage conditions', example: 'Store in cool, dry place' })
+  @ApiPropertyOptional({
+    description: 'Storage conditions',
+    example: 'Store in cool, dry place',
+  })
   @IsOptional()
   @IsString()
   storageConditions?: string;
@@ -232,17 +292,26 @@ export class QueryDrugDto {
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Category filter', example: 'Analgesics' })
+  @ApiPropertyOptional({
+    description: 'Category filter',
+    example: 'Analgesics',
+  })
   @IsOptional()
   @IsString()
   category?: string;
 
-  @ApiPropertyOptional({ description: 'Manufacturer filter', example: 'Sun Pharmaceuticals' })
+  @ApiPropertyOptional({
+    description: 'Manufacturer filter',
+    example: 'Sun Pharmaceuticals',
+  })
   @IsOptional()
   @IsString()
   manufacturer?: string;
 
-  @ApiPropertyOptional({ description: 'Drug type filter', example: 'allopathy' })
+  @ApiPropertyOptional({
+    description: 'Drug type filter',
+    example: 'allopathy',
+  })
   @IsOptional()
   @IsString()
   type?: string;
@@ -252,7 +321,10 @@ export class QueryDrugDto {
   @IsString()
   dosageForm?: string;
 
-  @ApiPropertyOptional({ description: 'Include discontinued drugs', default: false })
+  @ApiPropertyOptional({
+    description: 'Include discontinued drugs',
+    default: false,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -302,7 +374,11 @@ export class QueryDrugDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({ description: 'Items per page', example: 20, default: 20 })
+  @ApiPropertyOptional({
+    description: 'Items per page',
+    example: 20,
+    default: 20,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -317,15 +393,29 @@ export class QueryDrugDto {
   limit?: number = 20;
   @ApiPropertyOptional({ description: 'Sort by field', example: 'name' })
   @IsOptional()
-  @IsString()
+  @IsIn([
+    'name',
+    'createdAt',
+    'updatedAt',
+    'price',
+    'manufacturerName',
+    'category',
+  ])
   sortBy?: string = 'name';
 
-  @ApiPropertyOptional({ description: 'Sort order', example: 'asc', enum: ['asc', 'desc'] })
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    example: 'asc',
+    enum: ['asc', 'desc'],
+  })
   @IsOptional()
-  @IsString()
+  @IsIn(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc' = 'asc';
 
-  @ApiPropertyOptional({ description: 'Filter by active status', example: true })
+  @ApiPropertyOptional({
+    description: 'Filter by active status',
+    example: true,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -343,12 +433,21 @@ export class DrugAutocompleteDto {
   @IsString()
   q?: string;
 
-  @ApiPropertyOptional({ description: 'Search mode', example: 'name', enum: ['name', 'ingredient', 'all'], default: 'all' })
+  @ApiPropertyOptional({
+    description: 'Search mode',
+    example: 'name',
+    enum: ['name', 'ingredient', 'all'],
+    default: 'all',
+  })
   @IsOptional()
   @IsString()
   mode?: 'name' | 'ingredient' | 'all' = 'all';
 
-  @ApiPropertyOptional({ description: 'Limit results', example: 10, default: 10 })
+  @ApiPropertyOptional({
+    description: 'Limit results',
+    example: 10,
+    default: 10,
+  })
   @IsOptional()
   limit?: number = 10;
 }

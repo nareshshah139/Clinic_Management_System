@@ -10,16 +10,23 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
 import { PharmacyInvoiceService } from './pharmacy-invoice.service';
-import { 
-  CreatePharmacyInvoiceDto, 
-  UpdatePharmacyInvoiceDto, 
+import {
+  CreatePharmacyInvoiceDto,
+  UpdatePharmacyInvoiceDto,
+  UpdatePharmacyInvoiceStatusDto,
   QueryPharmacyInvoiceDto,
-  PharmacyPaymentDto 
+  QueryPharmacyInvoicePrintDto,
+  PharmacyPaymentDto,
 } from './dto/pharmacy-invoice.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
@@ -28,7 +35,9 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 @UseGuards(JwtAuthGuard)
 @Controller('pharmacy/invoices')
 export class PharmacyInvoiceController {
-  constructor(private readonly pharmacyInvoiceService: PharmacyInvoiceService) {}
+  constructor(
+    private readonly pharmacyInvoiceService: PharmacyInvoiceService,
+  ) {}
 
   @Post()
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
@@ -37,17 +46,44 @@ export class PharmacyInvoiceController {
   @ApiResponse({ status: 201, description: 'Invoice created successfully' })
   @ApiResponse({ status: 400, description: 'Invalid invoice data' })
   @ApiResponse({ status: 404, description: 'Patient or doctor not found' })
-  async create(@Body() createInvoiceDto: CreatePharmacyInvoiceDto, @Request() req: any) {
-    return this.pharmacyInvoiceService.create(createInvoiceDto, req.user.branchId, req.user.id);
+  async create(
+    @Body() createInvoiceDto: CreatePharmacyInvoiceDto,
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.create(
+      createInvoiceDto,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Get()
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:invoice:read')
-  @ApiOperation({ summary: 'Get all pharmacy invoices with filtering and pagination' })
+  @ApiOperation({
+    summary: 'Get all pharmacy invoices with filtering and pagination',
+  })
   @ApiResponse({ status: 200, description: 'Invoices retrieved successfully' })
   async findAll(@Query() query: QueryPharmacyInvoiceDto, @Request() req: any) {
     return this.pharmacyInvoiceService.findAll(query, req.user.branchId);
+  }
+
+  @Get(':id/print-data')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
+  @Permissions('pharmacy:invoice:read')
+  @ApiOperation({ summary: 'Get standardized pharmacy invoice print data' })
+  @ApiResponse({ status: 200, description: 'Print data retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Invoice not found' })
+  async getPrintData(
+    @Param('id') id: string,
+    @Query() query: QueryPharmacyInvoicePrintDto,
+    @Request() req: any,
+  ) {
+    return this.pharmacyInvoiceService.getPrintData(
+      id,
+      req.user.branchId,
+      query,
+    );
   }
 
   @Get(':id')
@@ -65,27 +101,42 @@ export class PharmacyInvoiceController {
   @Permissions('pharmacy:invoice:update')
   @ApiOperation({ summary: 'Update a pharmacy invoice' })
   @ApiResponse({ status: 200, description: 'Invoice updated successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid update data or invoice not in draft status' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid update data or invoice not in draft status',
+  })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
   async update(
     @Param('id') id: string,
     @Body() updateInvoiceDto: UpdatePharmacyInvoiceDto,
     @Request() req: any,
   ) {
-    return this.pharmacyInvoiceService.update(id, updateInvoiceDto, req.user.branchId);
+    return this.pharmacyInvoiceService.update(
+      id,
+      updateInvoiceDto,
+      req.user.branchId,
+    );
   }
 
   @Patch(':id/status')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
   @Permissions('pharmacy:invoice:update')
   @ApiOperation({ summary: 'Update invoice status' })
-  @ApiResponse({ status: 200, description: 'Invoice status updated successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Invoice status updated successfully',
+  })
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() body: UpdatePharmacyInvoiceStatusDto,
     @Request() req: any,
   ) {
-    return this.pharmacyInvoiceService.updateStatus(id, body.status, req.user.branchId, req.user.id);
+    return this.pharmacyInvoiceService.updateStatus(
+      id,
+      body.status,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Delete(':id')
@@ -111,6 +162,10 @@ export class PharmacyInvoiceController {
     @Body() paymentDto: PharmacyPaymentDto,
     @Request() req: any,
   ) {
-    return this.pharmacyInvoiceService.addPayment(id, paymentDto, req.user.branchId);
+    return this.pharmacyInvoiceService.addPayment(
+      id,
+      paymentDto,
+      req.user.branchId,
+    );
   }
-} 
+}

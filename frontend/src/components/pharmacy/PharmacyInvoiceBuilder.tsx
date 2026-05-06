@@ -1,29 +1,45 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FREQUENCY_OPTIONS, DOSE_PATTERN_OPTIONS, inferFrequencyFromDosePattern, inferTimingFromDosePattern } from '@/lib/frequency';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  FREQUENCY_OPTIONS,
+  DOSE_PATTERN_OPTIONS,
+  inferFrequencyFromDosePattern,
+  inferTimingFromDosePattern,
+} from '@/lib/frequency';
 import { Badge } from '@/components/ui/badge';
-import { 
-  X, 
-  Search, 
-  Plus, 
-  Trash2, 
-  Save, 
-  Send, 
+import {
+  X,
+  Search,
+  Plus,
+  Trash2,
+  Save,
+  Send,
   Calculator,
   User,
   Phone,
   MapPin,
   CreditCard,
   Pill,
-  Package
+  Package,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
@@ -109,7 +125,9 @@ export function PharmacyInvoiceBuilder() {
   const [patients, setPatients] = useState<any[]>([]);
   const [doctors, setDoctors] = useState<any[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [searchMode, setSearchMode] = useState<'name' | 'ingredient' | 'all'>('all');
+  const [searchMode, setSearchMode] = useState<'name' | 'ingredient' | 'all'>(
+    'all'
+  );
   const searchBoxRef = useRef<HTMLDivElement>(null);
   const [dropdownMounted, setDropdownMounted] = useState(false);
   const patientBoxRef = useRef<HTMLDivElement>(null);
@@ -141,7 +159,9 @@ export function PharmacyInvoiceBuilder() {
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [printFormat, setPrintFormat] = useState<'TABLE' | 'TEXT'>('TABLE');
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<string | null>(null);
+  const [editingInvoiceNumber, setEditingInvoiceNumber] = useState<
+    string | null
+  >(null);
   const [isEditMode, setIsEditMode] = useState(false);
 
   // Load initial data
@@ -164,25 +184,31 @@ export function PharmacyInvoiceBuilder() {
       }
     };
 
-    window.addEventListener('pharmacy-invoice-edit' as any, handleEditInvoice as EventListener);
+    window.addEventListener(
+      'pharmacy-invoice-edit' as any,
+      handleEditInvoice as EventListener
+    );
     return () => {
-      window.removeEventListener('pharmacy-invoice-edit' as any, handleEditInvoice as EventListener);
+      window.removeEventListener(
+        'pharmacy-invoice-edit' as any,
+        handleEditInvoice as EventListener
+      );
     };
   }, []);
 
   const resetForm = () => {
     setInvoiceData({
-      patientId: "",
-      doctorId: "",
-      prescriptionId: "",
-      paymentMethod: "CASH",
-      billingName: "",
-      billingPhone: "",
-      billingAddress: "",
-      billingCity: "",
-      billingState: "",
-      billingPincode: "",
-      notes: "",
+      patientId: '',
+      doctorId: '',
+      prescriptionId: '',
+      paymentMethod: 'CASH',
+      billingName: '',
+      billingPhone: '',
+      billingAddress: '',
+      billingCity: '',
+      billingState: '',
+      billingPincode: '',
+      notes: '',
     });
     setItems([]);
     setEditingInvoiceId(null);
@@ -193,7 +219,9 @@ export function PharmacyInvoiceBuilder() {
   };
   const loadPatients = async () => {
     try {
-      const response = await apiClient.getPatients({ limit: 100 }) as unknown as { data?: any[] };
+      const response = (await apiClient.getPatients({
+        limit: 100,
+      })) as unknown as { data?: any[] };
       setPatients(response.data || []);
     } catch (error) {
       console.error('Failed to load patients:', error);
@@ -202,10 +230,13 @@ export function PharmacyInvoiceBuilder() {
 
   const loadDoctors = async () => {
     try {
-      const response = await apiClient.getUsers({ role: 'DOCTOR', limit: 100 }) as unknown as { data?: any[]; users?: any[] } | any[];
+      const response = (await apiClient.getUsers({
+        role: 'DOCTOR',
+        limit: 100,
+      })) as unknown as { data?: any[]; users?: any[] } | any[];
       const list = Array.isArray(response)
         ? response
-        : (response?.users || response?.data || []);
+        : response?.users || response?.data || [];
       setDoctors(list || []);
     } catch (error) {
       console.error('Failed to load doctors:', error);
@@ -217,7 +248,7 @@ export function PharmacyInvoiceBuilder() {
     try {
       setLoading(true);
       const invoice = await apiClient.getPharmacyInvoiceById(id);
-      
+
       if (!invoice) {
         alert('Invoice not found');
         resetForm();
@@ -226,7 +257,9 @@ export function PharmacyInvoiceBuilder() {
 
       // Check if invoice can be edited (only DRAFT status)
       if (invoice.status !== 'DRAFT') {
-        alert(`Cannot edit invoice with status: ${invoice.status}. Only DRAFT invoices can be edited.`);
+        alert(
+          `Cannot edit invoice with status: ${invoice.status}. Only DRAFT invoices can be edited.`
+        );
         resetForm();
         return;
       }
@@ -237,7 +270,8 @@ export function PharmacyInvoiceBuilder() {
       setInvoiceData({
         patientId: invoice.patientId || invoice.patient?.id || '',
         doctorId: invoice.doctor?.id || '',
-        prescriptionId: invoiceAny.prescriptionId || invoiceAny.prescription?.id || '',
+        prescriptionId:
+          invoiceAny.prescriptionId || invoiceAny.prescription?.id || '',
         paymentMethod: invoice.paymentMethod || 'CASH',
         billingName: invoice.billingName || invoice.patient?.name || '',
         billingPhone: invoice.billingPhone || invoice.patient?.phone || '',
@@ -253,45 +287,51 @@ export function PharmacyInvoiceBuilder() {
         setPatientSearchQuery(invoice.patient.name);
       }
       if (invoice.doctor) {
-        const doctorName = `${invoice.doctor.firstName || ''} ${invoice.doctor.lastName || ''}`.trim();
+        const doctorName =
+          `${invoice.doctor.firstName || ''} ${invoice.doctor.lastName || ''}`.trim();
         setDoctorSearchQuery(doctorName);
       }
 
       // Map invoice items to form items
-      const mappedItems: InvoiceItem[] = (invoice.items || []).map((item: any) => {
-        const drug = item.drug || item.drugId ? {
-          id: item.drugId || item.drug?.id,
-          name: item.drug?.name || 'Unknown Drug',
-          price: item.unitPrice,
-          manufacturerName: item.drug?.manufacturerName || '',
-          packSizeLabel: item.drug?.packSizeLabel || '',
-          composition1: item.drug?.composition1,
-          composition2: item.drug?.composition2,
-          category: item.drug?.category,
-          dosageForm: item.drug?.dosageForm,
-          strength: item.drug?.strength,
-        } : undefined;
+      const mappedItems: InvoiceItem[] = (invoice.items || []).map(
+        (item: any) => {
+          const drug =
+            item.drug || item.drugId
+              ? {
+                  id: item.drugId || item.drug?.id,
+                  name: item.drug?.name || 'Unknown Drug',
+                  price: item.unitPrice,
+                  manufacturerName: item.drug?.manufacturerName || '',
+                  packSizeLabel: item.drug?.packSizeLabel || '',
+                  composition1: item.drug?.composition1,
+                  composition2: item.drug?.composition2,
+                  category: item.drug?.category,
+                  dosageForm: item.drug?.dosageForm,
+                  strength: item.drug?.strength,
+                }
+              : undefined;
 
-        return {
-          id: item.id,
-          drugId: item.drugId,
-          packageId: item.packageId,
-          itemType: item.itemType || 'DRUG',
-          drug: drug,
-          package: item.package,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent || 0,
-          taxPercent: item.taxPercent || 0,
-          discountAmount: item.discountAmount || 0,
-          taxAmount: item.taxAmount || 0,
-          totalAmount: item.totalAmount || 0,
-          dosage: item.dosage,
-          frequency: item.frequency,
-          duration: item.duration,
-          instructions: item.instructions,
-        };
-      });
+          return {
+            id: item.id,
+            drugId: item.drugId,
+            packageId: item.packageId,
+            itemType: item.itemType || 'DRUG',
+            drug: drug,
+            package: item.package,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountPercent: item.discountPercent || 0,
+            taxPercent: item.taxPercent || 0,
+            discountAmount: item.discountAmount || 0,
+            taxAmount: item.taxAmount || 0,
+            totalAmount: item.totalAmount || 0,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            duration: item.duration,
+            instructions: item.instructions,
+          };
+        }
+      );
 
       setItems(mappedItems);
       setEditingInvoiceId(id);
@@ -302,7 +342,8 @@ export function PharmacyInvoiceBuilder() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error: any) {
       console.error('Failed to load invoice:', error);
-      const message = error?.body?.message || error?.message || 'Failed to load invoice';
+      const message =
+        error?.body?.message || error?.message || 'Failed to load invoice';
       alert(`Error: ${message}`);
       resetForm();
     } finally {
@@ -322,9 +363,12 @@ export function PharmacyInvoiceBuilder() {
       const params: Record<string, any> = {
         q: query.trim(),
         mode: searchMode,
-        limit: Math.min(50, Math.max(1, 10)) // Ensure limit is between 1 and 50
+        limit: Math.min(50, Math.max(1, 10)), // Ensure limit is between 1 and 50
       };
-      const response = await apiClient.get<Drug[]>('/drugs/autocomplete', params);
+      const response = await apiClient.get<Drug[]>(
+        '/drugs/autocomplete',
+        params
+      );
       setSearchResults(response || []);
       setShowSearchResults(true);
     } catch (error) {
@@ -354,7 +398,10 @@ export function PharmacyInvoiceBuilder() {
         return;
       }
       try {
-        const res = await apiClient.get<{ data?: Patient[] }>('/patients', { limit: 10, search: q });
+        const res = await apiClient.get<{ data?: Patient[] }>('/patients', {
+          limit: 10,
+          search: q,
+        });
         setPatientResults(res?.data || []);
         setShowPatientResults(true);
       } catch (err) {
@@ -375,7 +422,11 @@ export function PharmacyInvoiceBuilder() {
         return;
       }
       try {
-        const res = await apiClient.get<{ data?: Doctor[] }>('/users', { limit: 10, role: 'DOCTOR', search: q });
+        const res = await apiClient.get<{ data?: Doctor[] }>('/users', {
+          limit: 10,
+          role: 'DOCTOR',
+          search: q,
+        });
         setDoctorResults(res?.data || []);
         setShowDoctorResults(true);
       } catch (err) {
@@ -443,11 +494,17 @@ export function PharmacyInvoiceBuilder() {
   }, []);
 
   const addDrugToInvoice = (drug: Drug) => {
-    const existingItem = items.find(item => item.drugId === drug.id && item.itemType === 'DRUG');
-    
+    const existingItem = items.find(
+      (item) => item.drugId === drug.id && item.itemType === 'DRUG'
+    );
+
     if (existingItem && existingItem.drugId) {
       // Increase quantity if already exists
-      updateItemQuantity(existingItem.drugId, existingItem.quantity + 1, 'DRUG');
+      updateItemQuantity(
+        existingItem.drugId,
+        existingItem.quantity + 1,
+        'DRUG'
+      );
     } else {
       // Add new item
       const newItem: InvoiceItem = {
@@ -462,7 +519,7 @@ export function PharmacyInvoiceBuilder() {
         taxAmount: 0,
         totalAmount: 0,
       };
-      
+
       calculateItemTotal(newItem);
       setItems([...items, newItem]);
     }
@@ -472,50 +529,75 @@ export function PharmacyInvoiceBuilder() {
     searchInputRef.current?.focus();
   };
 
-  const updateItemQuantity = (itemId: string | undefined, quantity: number, itemType: 'DRUG' | 'PACKAGE' = 'DRUG') => {
+  const updateItemQuantity = (
+    itemId: string | undefined,
+    quantity: number,
+    itemType: 'DRUG' | 'PACKAGE' = 'DRUG'
+  ) => {
     if (!itemId) return;
-    setItems(items.map(item => {
-      if ((itemType === 'DRUG' && item.drugId === itemId) || (itemType === 'PACKAGE' && item.packageId === itemId)) {
-        const updatedItem = { ...item, quantity: Math.max(1, quantity) };
-        calculateItemTotal(updatedItem);
-        return updatedItem;
-      }
-      return item;
-    }));
+    setItems(
+      items.map((item) => {
+        if (
+          (itemType === 'DRUG' && item.drugId === itemId) ||
+          (itemType === 'PACKAGE' && item.packageId === itemId)
+        ) {
+          const updatedItem = { ...item, quantity: Math.max(1, quantity) };
+          calculateItemTotal(updatedItem);
+          return updatedItem;
+        }
+        return item;
+      })
+    );
   };
 
-  const updateItemDiscount = (drugId: string | undefined, discountPercent: number) => {
+  const updateItemDiscount = (
+    drugId: string | undefined,
+    discountPercent: number
+  ) => {
     if (!drugId) return;
-    setItems(items.map(item => {
-      if (item.drugId === drugId) {
-        const updatedItem = { ...item, discountPercent: Math.max(0, Math.min(100, discountPercent)) };
-        calculateItemTotal(updatedItem);
-        return updatedItem;
-      }
-      return item;
-    }));
+    setItems(
+      items.map((item) => {
+        if (item.drugId === drugId) {
+          const updatedItem = {
+            ...item,
+            discountPercent: Math.max(0, Math.min(100, discountPercent)),
+          };
+          calculateItemTotal(updatedItem);
+          return updatedItem;
+        }
+        return item;
+      })
+    );
   };
 
   const updateItemTax = (drugId: string | undefined, taxPercent: number) => {
     if (!drugId) return;
-    setItems(items.map(item => {
-      if (item.drugId === drugId) {
-        const updatedItem = { ...item, taxPercent: Math.max(0, taxPercent) };
-        calculateItemTotal(updatedItem);
-        return updatedItem;
-      }
-      return item;
-    }));
+    setItems(
+      items.map((item) => {
+        if (item.drugId === drugId) {
+          const updatedItem = { ...item, taxPercent: Math.max(0, taxPercent) };
+          calculateItemTotal(updatedItem);
+          return updatedItem;
+        }
+        return item;
+      })
+    );
   };
 
-  const updateItemInstructions = (drugId: string | undefined, field: string, value: string) => {
+  const updateItemInstructions = (
+    drugId: string | undefined,
+    field: string,
+    value: string
+  ) => {
     if (!drugId) return;
-    setItems(items.map(item => {
-      if (item.drugId === drugId) {
-        return { ...item, [field]: value };
-      }
-      return item;
-    }));
+    setItems(
+      items.map((item) => {
+        if (item.drugId === drugId) {
+          return { ...item, [field]: value };
+        }
+        return item;
+      })
+    );
   };
 
   const calculateItemTotal = (item: InvoiceItem) => {
@@ -532,13 +614,19 @@ export function PharmacyInvoiceBuilder() {
 
   const removeItem = (drugId: string | undefined) => {
     if (!drugId) return;
-    setItems(items.filter(item => item.drugId !== drugId));
+    setItems(items.filter((item) => item.drugId !== drugId));
   };
 
   // Calculate invoice totals
   const calculateTotals = () => {
-    const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-    const totalDiscount = items.reduce((sum, item) => sum + item.discountAmount, 0);
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0
+    );
+    const totalDiscount = items.reduce(
+      (sum, item) => sum + item.discountAmount,
+      0
+    );
     const totalTax = items.reduce((sum, item) => sum + item.taxAmount, 0);
     const grandTotal = items.reduce((sum, item) => sum + item.totalAmount, 0);
 
@@ -546,7 +634,7 @@ export function PharmacyInvoiceBuilder() {
   };
 
   const handleSelectPatient = (patient: Patient) => {
-    setInvoiceData(prev => ({
+    setInvoiceData((prev) => ({
       ...prev,
       patientId: patient.id,
       billingName: patient.name || prev.billingName,
@@ -558,8 +646,10 @@ export function PharmacyInvoiceBuilder() {
   };
 
   const handleSelectDoctor = (doctor: Doctor) => {
-    const displayName = doctor.name || `${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
-    setInvoiceData(prev => ({ ...prev, doctorId: doctor.id }));
+    const displayName =
+      doctor.name ||
+      `${doctor.firstName || ''} ${doctor.lastName || ''}`.trim();
+    setInvoiceData((prev) => ({ ...prev, doctorId: doctor.id }));
     setDoctorSearchQuery(displayName);
     setShowDoctorResults(false);
   };
@@ -589,7 +679,7 @@ export function PharmacyInvoiceBuilder() {
         billingPincode: invoiceData.billingPincode || undefined,
         paymentMethod: invoiceData.paymentMethod,
         notes: invoiceData.notes || undefined,
-        items: items.map(item => ({
+        items: items.map((item) => ({
           drugId: item.drugId,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
@@ -600,37 +690,54 @@ export function PharmacyInvoiceBuilder() {
           duration: item.duration || undefined,
           instructions: item.instructions || undefined,
         })),
-        ...(status === 'CONFIRMED' && { status: 'CONFIRMED' }),
       };
 
       let result: any;
-      
+
       if (isEditMode && editingInvoiceId) {
         // Update existing invoice
-        result = await apiClient.updatePharmacyInvoice(editingInvoiceId, invoicePayload);
-        
+        result = await apiClient.updatePharmacyInvoice(
+          editingInvoiceId,
+          invoicePayload
+        );
+
         // If confirmed, update status separately if not already set
-        if (status === 'CONFIRMED' && result?.id && result?.status !== 'CONFIRMED') {
-          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, { status: 'CONFIRMED' });
+        if (
+          status === 'CONFIRMED' &&
+          result?.id &&
+          result?.status !== 'CONFIRMED'
+        ) {
+          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, {
+            status: 'CONFIRMED',
+          });
           result.status = 'CONFIRMED';
         }
-        
-        alert(`Invoice ${result?.invoiceNumber || result?.id || editingInvoiceId} updated ${status === 'CONFIRMED' ? 'and confirmed' : ''} successfully`);
-        
+
+        alert(
+          `Invoice ${result?.invoiceNumber || result?.id || editingInvoiceId} updated ${status === 'CONFIRMED' ? 'and confirmed' : ''} successfully`
+        );
+
         // Dispatch refresh event for invoice list
         window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
       } else {
         // Create new invoice
-        result = await apiClient.post<any>('/pharmacy/invoices', invoicePayload);
+        result = await apiClient.post<any>(
+          '/pharmacy/invoices',
+          invoicePayload
+        );
 
         // If confirmed, update status
         if (status === 'CONFIRMED' && result?.id) {
-          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, { status: 'CONFIRMED' });
+          await apiClient.patch(`/pharmacy/invoices/${result.id}/status`, {
+            status: 'CONFIRMED',
+          });
           openPrintPreview(result);
         }
 
-        alert(`Invoice ${result?.invoiceNumber || result?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`);
-        
+        alert(
+          `Invoice ${result?.invoiceNumber || result?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`
+        );
+
         // Dispatch refresh event for invoice list
         window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
       }
@@ -642,7 +749,8 @@ export function PharmacyInvoiceBuilder() {
       setShowDoctorResults(false);
     } catch (error: any) {
       console.error('Failed to save invoice:', error);
-      const message = error?.body?.message || error?.message || 'Failed to save invoice';
+      const message =
+        error?.body?.message || error?.message || 'Failed to save invoice';
       alert(`Failed to save invoice. ${message}`);
     } finally {
       setLoading(false);
@@ -653,7 +761,9 @@ export function PharmacyInvoiceBuilder() {
 
   const renderPrintHtml = (invoice: any) => {
     const dateStr = new Date().toLocaleString();
-    const itemsRows = items.map((it) => `
+    const itemsRows = items
+      .map(
+        (it) => `
       <tr>
         <td style="padding:6px;border:1px solid #ddd;">${it.drug?.name || ''}</td>
         <td style="padding:6px;border:1px solid #ddd;text-align:center;">${it.quantity}</td>
@@ -662,17 +772,21 @@ export function PharmacyInvoiceBuilder() {
         <td style="padding:6px;border:1px solid #ddd;text-align:right;">${it.taxPercent || 0}%</td>
         <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${it.totalAmount.toFixed(2)}</td>
       </tr>
-    `).join('');
+    `
+      )
+      .join('');
 
     if (printFormat === 'TEXT') {
       const headerLines = [
         'Pharmacy Invoice',
-        `${invoice?.invoiceNumber || ''} • ${dateStr}`
+        `${invoice?.invoiceNumber || ''} • ${dateStr}`,
       ];
       const billToLines = [
         `Bill To: ${invoiceData.billingName}`,
-        ...(invoiceData.billingPhone ? [`Phone: ${invoiceData.billingPhone}`] : []),
-        ...(invoiceData.billingAddress ? [invoiceData.billingAddress] : [])
+        ...(invoiceData.billingPhone
+          ? [`Phone: ${invoiceData.billingPhone}`]
+          : []),
+        ...(invoiceData.billingAddress ? [invoiceData.billingAddress] : []),
       ];
       const itemsLines = items.map((it, idx) => {
         return `${idx + 1}. ${it.drug?.name || ''} | Qty: ${it.quantity} | Unit: ₹${it.unitPrice.toFixed(2)} | Disc: ${it.discountPercent || 0}% | Tax: ${it.taxPercent || 0}% | Amt: ₹${it.totalAmount.toFixed(2)}`;
@@ -785,7 +899,9 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
         alert('Billing phone required to send via WhatsApp');
         return;
       }
-      const cleaned = invoiceData.billingPhone.startsWith('+') ? invoiceData.billingPhone : `+${invoiceData.billingPhone}`;
+      const cleaned = invoiceData.billingPhone.startsWith('+')
+        ? invoiceData.billingPhone
+        : `+${invoiceData.billingPhone}`;
       const text = `Invoice ${new Date().toLocaleDateString()} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
       alert(`This will send via backend: ${cleaned}\n${text}`);
       // Backend endpoint could be added later to send with selected template
@@ -800,14 +916,18 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Pill className="h-5 w-5" />
-            {isEditMode ? `Edit Invoice ${editingInvoiceNumber || editingInvoiceId ? `#${editingInvoiceNumber || editingInvoiceId?.slice(-8)}` : ''}` : 'New Pharmacy Invoice'}
+            {isEditMode
+              ? `Edit Invoice ${editingInvoiceNumber || editingInvoiceId ? `#${editingInvoiceNumber || editingInvoiceId?.slice(-8)}` : ''}`
+              : 'New Pharmacy Invoice'}
           </CardTitle>
           {isEditMode && (
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                if (confirm('Cancel editing? All unsaved changes will be lost.')) {
+                if (
+                  confirm('Cancel editing? All unsaved changes will be lost.')
+                ) {
                   resetForm();
                 }
               }}
@@ -819,7 +939,6 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
         </div>
       </CardHeader>
       <CardContent>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left Column - Invoice Details */}
           <div className="lg:col-span-2 space-y-6">
@@ -842,11 +961,15 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                         placeholder="Search patient by name or phone"
                         value={patientSearchQuery}
                         onChange={(e) => setPatientSearchQuery(e.target.value)}
-                        onFocus={() => patientSearchQuery && setShowPatientResults(true)}
+                        onFocus={() =>
+                          patientSearchQuery && setShowPatientResults(true)
+                        }
                         className="pl-10"
                       />
                       {patientDropdownMounted && patientResults.length > 0 && (
-                        <div className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showPatientResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
+                        <div
+                          className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showPatientResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                        >
                           {patientResults.map((p) => (
                             <div
                               key={p.id}
@@ -855,9 +978,13 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             >
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                  <div className="font-medium text-sm">{p.name}</div>
+                                  <div className="font-medium text-sm">
+                                    {p.name}
+                                  </div>
                                   {p.phone && (
-                                    <div className="text-xs text-gray-500">{p.phone}</div>
+                                    <div className="text-xs text-gray-500">
+                                      {p.phone}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -870,7 +997,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
 
                   <div>
                     <Label htmlFor="doctor">Doctor (Optional)</Label>
-                    <Select value={invoiceData.doctorId} onValueChange={(value: string) => setInvoiceData(prev => ({ ...prev, doctorId: value }))}>
+                    <Select
+                      value={invoiceData.doctorId}
+                      onValueChange={(value: string) =>
+                        setInvoiceData((prev) => ({ ...prev, doctorId: value }))
+                      }
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select doctor" />
                       </SelectTrigger>
@@ -905,13 +1037,22 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                         placeholder="Search drugs by name, manufacturer, or composition..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onFocus={() => searchQuery && setShowSearchResults(true)}
+                        onFocus={() =>
+                          searchQuery && setShowSearchResults(true)
+                        }
                         className="pl-10"
                       />
                     </div>
                     <div className="w-48">
-                      <Label htmlFor="search-mode" className="sr-only">Search Mode</Label>
-                      <Select value={searchMode} onValueChange={(v: string) => setSearchMode(v as 'name' | 'ingredient' | 'all')}>
+                      <Label htmlFor="search-mode" className="sr-only">
+                        Search Mode
+                      </Label>
+                      <Select
+                        value={searchMode}
+                        onValueChange={(v: string) =>
+                          setSearchMode(v as 'name' | 'ingredient' | 'all')
+                        }
+                      >
                         <SelectTrigger id="search-mode">
                           <SelectValue placeholder="Search mode" />
                         </SelectTrigger>
@@ -926,32 +1067,39 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
 
                   {/* Search Results Dropdown */}
                   {dropdownMounted && searchResults.length > 0 && (
-                    <div className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showSearchResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}>
-                       {searchResults.map((drug) => (
-                         <div
-                           key={drug.id}
-                           className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                           onMouseDown={() => addDrugToInvoice(drug)}
-                         >
-                           <div className="flex justify-between items-start">
-                             <div className="flex-1">
-                               <div className="font-medium text-sm">{drug.name}</div>
-                               <div className="text-xs text-gray-500">
-                                 {drug.manufacturerName} • {drug.packSizeLabel}
-                               </div>
-                               {drug.composition1 && (
-                                 <div className="text-xs text-blue-600 mt-1">
-                                   {drug.composition1}
-                                   {drug.composition2 && ` • ${drug.composition2}`}
-                                 </div>
-                               )}
-                             </div>
-                             <div className="text-sm font-medium">₹{drug.price.toFixed(2)}</div>
-                           </div>
-                         </div>
-                       ))}
-                     </div>
-                   )}
+                    <div
+                      className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showSearchResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                    >
+                      {searchResults.map((drug) => (
+                        <div
+                          key={drug.id}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                          onMouseDown={() => addDrugToInvoice(drug)}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="font-medium text-sm">
+                                {drug.name}
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {drug.manufacturerName} • {drug.packSizeLabel}
+                              </div>
+                              {drug.composition1 && (
+                                <div className="text-xs text-blue-600 mt-1">
+                                  {drug.composition1}
+                                  {drug.composition2 &&
+                                    ` • ${drug.composition2}`}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-sm font-medium">
+                              ₹{drug.price.toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -978,7 +1126,8 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                           <div className="flex-1">
                             <h4 className="font-medium">{item.drug?.name}</h4>
                             <p className="text-sm text-gray-500">
-                              {item.drug?.manufacturerName} • {item.drug?.packSizeLabel}
+                              {item.drug?.manufacturerName} •{' '}
+                              {item.drug?.packSizeLabel}
                             </p>
                             {item.drug?.composition1 && (
                               <p className="text-xs text-blue-600 mt-1">
@@ -1003,7 +1152,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                               type="number"
                               min="1"
                               value={item.quantity}
-                              onChange={(e) => updateItemQuantity(item.drugId, parseInt(e.target.value) || 1)}
+                              onChange={(e) =>
+                                updateItemQuantity(
+                                  item.drugId,
+                                  parseInt(e.target.value) || 1
+                                )
+                              }
                               className="h-8"
                             />
                           </div>
@@ -1024,7 +1178,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                               min="0"
                               max="100"
                               value={item.discountPercent}
-                              onChange={(e) => updateItemDiscount(item.drugId, parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateItemDiscount(
+                                  item.drugId,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
                               className="h-8"
                             />
                           </div>
@@ -1034,7 +1193,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                               type="number"
                               min="0"
                               value={item.taxPercent}
-                              onChange={(e) => updateItemTax(item.drugId, parseFloat(e.target.value) || 0)}
+                              onChange={(e) =>
+                                updateItemTax(
+                                  item.drugId,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
                               className="h-8"
                             />
                           </div>
@@ -1046,7 +1210,13 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             <Input
                               placeholder="e.g., 1 tablet"
                               value={item.dosage || ''}
-                              onChange={(e) => updateItemInstructions(item.drugId, 'dosage', e.target.value)}
+                              onChange={(e) =>
+                                updateItemInstructions(
+                                  item.drugId,
+                                  'dosage',
+                                  e.target.value
+                                )
+                              }
                               className="h-8"
                             />
                           </div>
@@ -1055,17 +1225,37 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             <Select
                               value={(item as any).dosePattern || ''}
                               onValueChange={(v: string) => {
-                                const inferred = inferFrequencyFromDosePattern(v);
-                                const inferredTiming = inferTimingFromDosePattern(v);
-                                updateItemInstructions(item.drugId, 'dosePattern', v);
-                                if (inferred) updateItemInstructions(item.drugId, 'frequency', inferred);
-                                if (!item.instructions && inferredTiming) updateItemInstructions(item.drugId, 'instructions', inferredTiming);
+                                const inferred =
+                                  inferFrequencyFromDosePattern(v);
+                                const inferredTiming =
+                                  inferTimingFromDosePattern(v);
+                                updateItemInstructions(
+                                  item.drugId,
+                                  'dosePattern',
+                                  v
+                                );
+                                if (inferred)
+                                  updateItemInstructions(
+                                    item.drugId,
+                                    'frequency',
+                                    inferred
+                                  );
+                                if (!item.instructions && inferredTiming)
+                                  updateItemInstructions(
+                                    item.drugId,
+                                    'instructions',
+                                    inferredTiming
+                                  );
                               }}
                             >
-                              <SelectTrigger className="h-8"><SelectValue placeholder="0-1-0 / q8h / prn" /></SelectTrigger>
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="0-1-0 / q8h / prn" />
+                              </SelectTrigger>
                               <SelectContent>
-                                {DOSE_PATTERN_OPTIONS.map(p => (
-                                  <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
+                                {DOSE_PATTERN_OPTIONS.map((p) => (
+                                  <SelectItem key={p} value={p}>
+                                    {p.toUpperCase()}
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -1074,12 +1264,22 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             <Label className="text-xs">Frequency</Label>
                             <Select
                               value={item.frequency || ''}
-                              onValueChange={(v: string) => updateItemInstructions(item.drugId, 'frequency', v)}
+                              onValueChange={(v: string) =>
+                                updateItemInstructions(
+                                  item.drugId,
+                                  'frequency',
+                                  v
+                                )
+                              }
                             >
-                              <SelectTrigger className="h-8"><SelectValue placeholder="Select" /></SelectTrigger>
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select" />
+                              </SelectTrigger>
                               <SelectContent>
-                                {FREQUENCY_OPTIONS.map(f => (
-                                  <SelectItem key={f} value={f}>{f.replaceAll('_',' ')}</SelectItem>
+                                {FREQUENCY_OPTIONS.map((f) => (
+                                  <SelectItem key={f} value={f}>
+                                    {f.replaceAll('_', ' ')}
+                                  </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -1089,7 +1289,13 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             <Input
                               placeholder="e.g., 7 days"
                               value={item.duration || ''}
-                              onChange={(e) => updateItemInstructions(item.drugId, 'duration', e.target.value)}
+                              onChange={(e) =>
+                                updateItemInstructions(
+                                  item.drugId,
+                                  'duration',
+                                  e.target.value
+                                )
+                              }
                               className="h-8"
                             />
                           </div>
@@ -1107,7 +1313,13 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             <Input
                               placeholder="Additional instructions (e.g., Take after meals)"
                               value={item.instructions || ''}
-                              onChange={(e) => updateItemInstructions(item.drugId, 'instructions', e.target.value)}
+                              onChange={(e) =>
+                                updateItemInstructions(
+                                  item.drugId,
+                                  'instructions',
+                                  e.target.value
+                                )
+                              }
                               className="h-8 mt-1"
                             />
                           </div>
@@ -1136,7 +1348,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   <Input
                     id="billingName"
                     value={invoiceData.billingName}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, billingName: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingName: e.target.value,
+                      }))
+                    }
                   />
                 </div>
 
@@ -1145,7 +1362,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   <Input
                     id="billingPhone"
                     value={invoiceData.billingPhone}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, billingPhone: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingPhone: e.target.value,
+                      }))
+                    }
                   />
                 </div>
 
@@ -1154,7 +1376,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   <Textarea
                     id="billingAddress"
                     value={invoiceData.billingAddress}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, billingAddress: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingAddress: e.target.value,
+                      }))
+                    }
                     rows={2}
                   />
                 </div>
@@ -1165,7 +1392,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                     <Input
                       id="billingCity"
                       value={invoiceData.billingCity}
-                      onChange={(e) => setInvoiceData(prev => ({ ...prev, billingCity: e.target.value }))}
+                      onChange={(e) =>
+                        setInvoiceData((prev) => ({
+                          ...prev,
+                          billingCity: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div>
@@ -1173,7 +1405,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                     <Input
                       id="billingPincode"
                       value={invoiceData.billingPincode}
-                      onChange={(e) => setInvoiceData(prev => ({ ...prev, billingPincode: e.target.value }))}
+                      onChange={(e) =>
+                        setInvoiceData((prev) => ({
+                          ...prev,
+                          billingPincode: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                 </div>
@@ -1183,7 +1420,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   <Input
                     id="billingState"
                     value={invoiceData.billingState}
-                    onChange={(e) => setInvoiceData(prev => ({ ...prev, billingState: e.target.value }))}
+                    onChange={(e) =>
+                      setInvoiceData((prev) => ({
+                        ...prev,
+                        billingState: e.target.value,
+                      }))
+                    }
                   />
                 </div>
               </CardContent>
@@ -1198,9 +1440,14 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Select 
-                  value={invoiceData.paymentMethod} 
-                  onValueChange={(value: string) => setInvoiceData(prev => ({ ...prev, paymentMethod: value }))}
+                <Select
+                  value={invoiceData.paymentMethod}
+                  onValueChange={(value: string) =>
+                    setInvoiceData((prev) => ({
+                      ...prev,
+                      paymentMethod: value,
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -1252,7 +1499,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                 <Textarea
                   placeholder="Additional notes or instructions..."
                   value={invoiceData.notes}
-                  onChange={(e) => setInvoiceData(prev => ({ ...prev, notes: e.target.value }))}
+                  onChange={(e) =>
+                    setInvoiceData((prev) => ({
+                      ...prev,
+                      notes: e.target.value,
+                    }))
+                  }
                   rows={3}
                 />
               </CardContent>
@@ -1262,7 +1514,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Label>Print Format</Label>
-                <Select value={printFormat} onValueChange={(v: string) => setPrintFormat(v as 'TABLE' | 'TEXT')}>
+                <Select
+                  value={printFormat}
+                  onValueChange={(v: string) =>
+                    setPrintFormat(v as 'TABLE' | 'TEXT')
+                  }
+                >
                   <SelectTrigger className="w-40">
                     <SelectValue placeholder="Select format" />
                   </SelectTrigger>
@@ -1272,24 +1529,28 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   </SelectContent>
                 </Select>
               </div>
-              <Button 
-                onClick={() => saveInvoice('DRAFT')} 
-                variant="outline" 
+              <Button
+                onClick={() => saveInvoice('DRAFT')}
+                variant="outline"
                 className="w-full"
                 disabled={loading}
               >
                 <Save className="h-4 w-4 mr-2" />
                 Save as Draft
               </Button>
-              <Button 
-                onClick={() => saveInvoice('CONFIRMED')} 
+              <Button
+                onClick={() => saveInvoice('CONFIRMED')}
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 disabled={loading || items.length === 0}
               >
                 <Send className="h-4 w-4 mr-2" />
                 Confirm & Generate Invoice
               </Button>
-              <Button onClick={() => void sendViaWhatsApp()} variant="outline" className="w-full">
+              <Button
+                onClick={() => void sendViaWhatsApp()}
+                variant="outline"
+                className="w-full"
+              >
                 <Send className="h-4 w-4 mr-2" />
                 Send via WhatsApp
               </Button>
@@ -1299,4 +1560,4 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
       </CardContent>
     </Card>
   );
-} 
+}

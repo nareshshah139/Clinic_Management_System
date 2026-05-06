@@ -10,12 +10,22 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { Roles } from '../../shared/decorators/roles.decorator';
 import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
 import { DrugService } from './drug.service';
-import { CreateDrugDto, UpdateDrugDto, QueryDrugDto, DrugAutocompleteDto } from './dto/drug.dto';
+import {
+  CreateDrugDto,
+  UpdateDrugDto,
+  QueryDrugDto,
+  DrugAutocompleteDto,
+} from './dto/drug.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
 @ApiTags('Drugs')
@@ -30,7 +40,10 @@ export class DrugController {
   @ApiOperation({ summary: 'Create a new drug' })
   @ApiResponse({ status: 201, description: 'Drug created successfully' })
   @ApiResponse({ status: 400, description: 'Bad request' })
-  @ApiResponse({ status: 409, description: 'Drug with barcode/SKU already exists' })
+  @ApiResponse({
+    status: 409,
+    description: 'Drug with barcode/SKU already exists',
+  })
   async create(@Body() createDrugDto: CreateDrugDto, @Request() req: any) {
     return this.drugService.create(createDrugDto, req.user.branchId);
   }
@@ -48,7 +61,10 @@ export class DrugController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:autocomplete')
   @ApiOperation({ summary: 'Autocomplete drugs for search' })
-  @ApiResponse({ status: 200, description: 'Autocomplete results retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Autocomplete results retrieved successfully',
+  })
   async autocomplete(@Query() query: DrugAutocompleteDto, @Request() req: any) {
     return this.drugService.autocomplete(query, req.user.branchId);
   }
@@ -57,7 +73,10 @@ export class DrugController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:categories')
   @ApiOperation({ summary: 'Get all drug categories' })
-  @ApiResponse({ status: 200, description: 'Categories retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Categories retrieved successfully',
+  })
   async getCategories(@Request() req: any) {
     return this.drugService.getCategories(req.user.branchId);
   }
@@ -66,7 +85,10 @@ export class DrugController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:manufacturers')
   @ApiOperation({ summary: 'Get all drug manufacturers' })
-  @ApiResponse({ status: 200, description: 'Manufacturers retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Manufacturers retrieved successfully',
+  })
   async getManufacturers(@Request() req: any) {
     return this.drugService.getManufacturers(req.user.branchId);
   }
@@ -75,7 +97,10 @@ export class DrugController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:dosageForms')
   @ApiOperation({ summary: 'Get all dosage forms' })
-  @ApiResponse({ status: 200, description: 'Dosage forms retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dosage forms retrieved successfully',
+  })
   async getDosageForms(@Request() req: any) {
     return this.drugService.getDosageForms(req.user.branchId);
   }
@@ -84,9 +109,33 @@ export class DrugController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
   @Permissions('pharmacy:drug:statistics')
   @ApiOperation({ summary: 'Get drug statistics and analytics' })
-  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Statistics retrieved successfully',
+  })
   async getStatistics(@Request() req: any) {
     return this.drugService.getStatistics(req.user.branchId);
+  }
+
+  @Get(':id/alternatives')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
+  @Permissions('pharmacy:drug:read')
+  @ApiOperation({
+    summary:
+      'Get in-stock alternative drugs with exact composition, strength, and dosage form matching',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Alternative drugs retrieved successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Drug is missing product master fields required for alternatives',
+  })
+  @ApiResponse({ status: 404, description: 'Drug not found' })
+  async getAlternatives(@Param('id') id: string, @Request() req: any) {
+    return this.drugService.getAlternatives(id, req.user.branchId);
   }
 
   @Get(':id')
@@ -105,7 +154,10 @@ export class DrugController {
   @ApiOperation({ summary: 'Update a drug' })
   @ApiResponse({ status: 200, description: 'Drug updated successfully' })
   @ApiResponse({ status: 404, description: 'Drug not found' })
-  @ApiResponse({ status: 409, description: 'Drug with barcode/SKU already exists' })
+  @ApiResponse({
+    status: 409,
+    description: 'Drug with barcode/SKU already exists',
+  })
   async update(
     @Param('id') id: string,
     @Body() updateDrugDto: UpdateDrugDto,
@@ -123,4 +175,4 @@ export class DrugController {
   async remove(@Param('id') id: string, @Request() req: any) {
     return this.drugService.remove(id, req.user.branchId);
   }
-} 
+}

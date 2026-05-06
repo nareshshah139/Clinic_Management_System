@@ -25,50 +25,50 @@ model IdempotencyRecord {
 }
 
 model User {
-  id                String             @id @default(cuid())
-  firstName         String
-  lastName          String
-  email             String             @unique
-  password          String
-  phone             String?
-  role              UserRole
-  status            UserStatus         @default(ACTIVE)
-  branchId          String
-  employeeId        String?
-  designation       String?
-  department        String?
-  dateOfJoining     DateTime?
-  address           String?
-  city              String?
-  state             String?
-  pincode           String?
-  emergencyContact  String?
-  emergencyPhone    String?
-  permissions       String?
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  statusReason      String?
-  isActive          Boolean            @default(true)
-  metadata          String?
+  id                 String             @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String             @unique
+  password           String
+  phone              String?
+  role               UserRole
+  status             UserStatus         @default(ACTIVE)
+  branchId           String
+  employeeId         String?
+  designation        String?
+  department         String?
+  dateOfJoining      DateTime?
+  address            String?
+  city               String?
+  state              String?
+  pincode            String?
+  emergencyContact   String?
+  emergencyPhone     String?
+  permissions        String?
+  resetToken         String?
+  resetTokenExpiry   DateTime?
+  statusReason       String?
+  isActive           Boolean            @default(true)
+  metadata           String?
   // Google Calendar integration (per-user)
-  googleCalendarId  String?
+  googleCalendarId   String?
   googleRefreshToken String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  appointments      Appointment[]
-  deviceLogs        DeviceLog[]
-  inventoryAudits   InventoryAudit[]
-  patientProfile    Patient?           @relation("PatientPortalUser")
-  purchaseOrders    PurchaseOrder[]
-  reorderRules      ReorderRule[]
-  stockAdjustments  StockAdjustment[]
-  stockMovements    StockMovement[]
-  stockTransactions StockTransaction[]
-  branch            Branch             @relation(fields: [branchId], references: [id])
-  visits            Visit[]
-  pharmacyInvoices  PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
-  createdPackages   PharmacyPackage[]  @relation("PharmacyPackageCreator")
-  whatsappTemplates WhatsAppTemplate[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  appointments       Appointment[]
+  deviceLogs         DeviceLog[]
+  inventoryAudits    InventoryAudit[]
+  patientProfile     Patient?           @relation("PatientPortalUser")
+  purchaseOrders     PurchaseOrder[]
+  reorderRules       ReorderRule[]
+  stockAdjustments   StockAdjustment[]
+  stockMovements     StockMovement[]
+  stockTransactions  StockTransaction[]
+  branch             Branch             @relation(fields: [branchId], references: [id])
+  visits             Visit[]
+  pharmacyInvoices   PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
+  createdPackages    PharmacyPackage[]  @relation("PharmacyPackageCreator")
+  whatsappTemplates  WhatsAppTemplate[]
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -83,38 +83,39 @@ model User {
 }
 
 model Branch {
-  id                String             @id @default(cuid())
-  name              String
-  description       String?
-  address           String
-  city              String?
-  state             String?
-  pincode           String?
-  phone             String?
-  email             String?
-  website           String?
-  gstNumber         String?
-  licenseNumber     String?
-  isActive          Boolean            @default(true)
-  metadata          String?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  appointments      Appointment[]
-  inventoryItems    InventoryItem[]
-  newInvoices       NewInvoice[]
-  patients          Patient[]
-  purchaseOrders    PurchaseOrder[]
-  reorderRules      ReorderRule[]
-  rooms             Room[]
-  services          Service[]
-  stockAdjustments  StockAdjustment[]
-  stockMovements    StockMovement[]
-  suppliers         Supplier[]
-  users             User[]
-  drugs             Drug[]
-  pharmacyInvoices  PharmacyInvoice[]
-  pharmacyPackages  PharmacyPackage[]
-  whatsappTemplates WhatsAppTemplate[]
+  id                       String                    @id @default(cuid())
+  name                     String
+  description              String?
+  address                  String
+  city                     String?
+  state                    String?
+  pincode                  String?
+  phone                    String?
+  email                    String?
+  website                  String?
+  gstNumber                String?
+  licenseNumber            String?
+  isActive                 Boolean                   @default(true)
+  metadata                 String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  appointments             Appointment[]
+  inventoryItems           InventoryItem[]
+  newInvoices              NewInvoice[]
+  patients                 Patient[]
+  purchaseOrders           PurchaseOrder[]
+  reorderRules             ReorderRule[]
+  rooms                    Room[]
+  services                 Service[]
+  stockAdjustments         StockAdjustment[]
+  stockMovements           StockMovement[]
+  suppliers                Supplier[]
+  users                    User[]
+  drugs                    Drug[]
+  pharmacyInvoices         PharmacyInvoice[]
+  pharmacyPackages         PharmacyPackage[]
+  pharmacyPurchaseInvoices PharmacyPurchaseInvoice[]
+  whatsappTemplates        WhatsAppTemplate[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -226,28 +227,28 @@ model Patient {
 }
 
 model Appointment {
-  id          String            @id @default(cuid())
-  patientId   String
-  doctorId    String
-  date        DateTime
-  slot        String
-  status      AppointmentStatus @default(SCHEDULED)
-  visitType   VisitType         @default(OPD)
-  notes       String?
-  source      String?
+  id            String            @id @default(cuid())
+  patientId     String
+  doctorId      String
+  date          DateTime
+  slot          String
+  status        AppointmentStatus @default(SCHEDULED)
+  visitType     VisitType         @default(OPD)
+  notes         String?
+  source        String?
   // Google Calendar event linkage
   googleEventId String?
-  branchId    String
-  roomId      String?
-  tokenNumber Int?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  branch      Branch            @relation(fields: [branchId], references: [id])
-  doctor      User              @relation(fields: [doctorId], references: [id])
-  patient     Patient           @relation(fields: [patientId], references: [id])
-  room        Room?             @relation(fields: [roomId], references: [id])
-  newInvoices NewInvoice[]
-  visit       Visit?
+  branchId      String
+  roomId        String?
+  tokenNumber   Int?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  branch        Branch            @relation(fields: [branchId], references: [id])
+  doctor        User              @relation(fields: [doctorId], references: [id])
+  patient       Patient           @relation(fields: [patientId], references: [id])
+  room          Room?             @relation(fields: [roomId], references: [id])
+  newInvoices   NewInvoice[]
+  visit         Visit?
 
   @@map("appointments")
 }
@@ -298,15 +299,15 @@ enum PhotoPosition {
 
 // Binary attachments stored in the database for visits
 model VisitAttachment {
-  id          String   @id @default(cuid())
-  visitId     String
-  filename    String
-  contentType String
-  sizeBytes   Int
-  data        Bytes
-  createdAt   DateTime @default(now())
-  position    PhotoPosition @default(OTHER)
-  displayOrder Int          @default(0)
+  id           String        @id @default(cuid())
+  visitId      String
+  filename     String
+  contentType  String
+  sizeBytes    Int
+  data         Bytes
+  createdAt    DateTime      @default(now())
+  position     PhotoPosition @default(OTHER)
+  displayOrder Int           @default(0)
 
   visit Visit @relation(fields: [visitId], references: [id])
 
@@ -316,16 +317,16 @@ model VisitAttachment {
 
 // Draft photos linked to patient and date (pre-visit)
 model DraftAttachment {
-  id          String   @id @default(cuid())
-  patientId   String
-  dateStr     String // yyyymmdd for grouping
-  filename    String
-  contentType String
-  sizeBytes   Int
-  data        Bytes
-  createdAt   DateTime @default(now())
-  position    PhotoPosition @default(OTHER)
-  displayOrder Int          @default(0)
+  id           String        @id @default(cuid())
+  patientId    String
+  dateStr      String // yyyymmdd for grouping
+  filename     String
+  contentType  String
+  sizeBytes    Int
+  data         Bytes
+  createdAt    DateTime      @default(now())
+  position     PhotoPosition @default(OTHER)
+  displayOrder Int           @default(0)
 
   patient Patient @relation(fields: [patientId], references: [id])
 
@@ -1192,6 +1193,109 @@ model PharmacyPayment {
   @@map("pharmacy_payments")
 }
 
+model PharmacyPurchaseInvoice {
+  id                     String                        @id @default(cuid())
+  branchId               String
+  createdBy              String?
+  supplierId             String?
+  distributorName        String
+  distributorAddress     String?
+  distributorGstin       String
+  distributorDlNo        String
+  distributorFoodLicense String?
+  invoiceNumber          String
+  invoiceDate            DateTime
+  goodsReceivedDate      DateTime?
+  billType               PharmacyPurchaseBillType
+  dueDate                DateTime?
+  eWayBillNo             String?
+  casesTransport         String?
+  lrNo                   String?
+  salesmanName           String?
+  salesmanContact        String?
+  buyerCode              String?
+  doctorNameOrRegNo      String
+  urcCode                String?
+  handwrittenNotes       String?
+  source                 String                        @default("MANUAL")
+  status                 PharmacyPurchaseInvoiceStatus @default(DRAFT)
+  grossAmount            Float
+  tradeDiscount          Float                         @default(0)
+  specialDiscount        Float                         @default(0)
+  cashDiscount           Float                         @default(0)
+  damageAdjustment       Float                         @default(0)
+  visibilityAmount       Float                         @default(0)
+  creditDebitAdjustment  Float                         @default(0)
+  taxableAmount          Float
+  totalCgst              Float                         @default(0)
+  totalSgst              Float                         @default(0)
+  totalIgst              Float                         @default(0)
+  totalGst               Float
+  tcsAmount              Float                         @default(0)
+  rounding               Float                         @default(0)
+  netPayable             Float
+  unresolvedOcrFlags     Int                           @default(0)
+  reconciliationIssues   String?
+  stockCommittedAt       DateTime?
+  stockCommittedBy       String?
+  stockCommitReference   String?
+  createdAt              DateTime                      @default(now())
+  updatedAt              DateTime                      @updatedAt
+
+  branch Branch                        @relation(fields: [branchId], references: [id])
+  items  PharmacyPurchaseInvoiceItem[]
+
+  @@unique([branchId, distributorGstin, invoiceNumber])
+  @@index([branchId])
+  @@index([distributorGstin])
+  @@index([invoiceDate])
+  @@index([goodsReceivedDate])
+  @@index([status])
+  @@index([stockCommittedAt])
+  @@map("pharmacy_purchase_invoices")
+}
+
+model PharmacyPurchaseInvoiceItem {
+  id                     String   @id @default(cuid())
+  purchaseInvoiceId      String
+  lineNumber             Int
+  serialNumber           Int?
+  productName            String
+  manufacturer           String
+  packSize               String
+  packUnitType           String
+  hsnCode                String
+  batchNumber            String
+  expiryMonth            Int
+  expiryYear             Int
+  quantityPurchased      Float
+  freeQuantity           Float    @default(0)
+  mrp                    Float
+  oldMrp                 Float?
+  discountPercent        Float
+  specialDiscountPercent Float    @default(0)
+  purchaseRate           Float
+  taxableAmount          Float
+  cgstPercent            Float    @default(0)
+  sgstPercent            Float    @default(0)
+  igstPercent            Float    @default(0)
+  gstAmount              Float
+  lineTotal              Float
+  ocrConfidence          Float?
+  ocrFlags               String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  purchaseInvoice PharmacyPurchaseInvoice @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseInvoiceId])
+  @@index([productName])
+  @@index([batchNumber])
+  @@index([expiryYear, expiryMonth])
+  @@index([hsnCode])
+  @@map("pharmacy_purchase_invoice_items")
+}
+
 // Enums for Pharmacy System
 enum PharmacyInvoiceStatus {
   DRAFT
@@ -1217,6 +1321,20 @@ enum PharmacyPaymentStatus {
   FAILED
   REFUNDED
   PARTIALLY_PAID
+}
+
+enum PharmacyPurchaseInvoiceStatus {
+  DRAFT
+  OCR_REVIEW_REQUIRED
+  RECONCILIATION_FAILED
+  REVIEWED
+  STOCK_COMMITTED
+  CANCELLED
+}
+
+enum PharmacyPurchaseBillType {
+  CASH
+  CREDIT
 }
 
 enum UserRole {

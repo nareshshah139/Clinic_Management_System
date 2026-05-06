@@ -1,28 +1,46 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { 
-  Search, 
-  Plus, 
-  Edit, 
-  Trash2, 
+import {
+  Search,
+  Plus,
+  Edit,
+  Trash2,
   Filter,
   Pill,
   Package,
   DollarSign,
   Building,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { getErrorMessage } from '@/lib/utils';
 
 interface Drug {
   id: string;
@@ -55,7 +73,7 @@ export function DrugManagement() {
     page: 1,
     limit: 20,
     total: 0,
-    pages: 0
+    pages: 0,
   });
 
   // Form state for add/edit
@@ -101,9 +119,12 @@ export function DrugManagement() {
         params.manufacturer = selectedManufacturer;
       }
 
-      const response = await apiClient.get<{ data: Drug[]; pagination?: { total?: number; pages?: number } }>('/drugs', params);
+      const response = await apiClient.get<{
+        data: Drug[];
+        pagination?: { total?: number; pages?: number };
+      }>('/drugs', params);
       setDrugs(response.data || []);
-      setPagination(prev => ({
+      setPagination((prev) => ({
         ...prev,
         total: response.pagination?.total || 0,
         pages: response.pagination?.pages || 0,
@@ -134,6 +155,8 @@ export function DrugManagement() {
   };
 
   const handleAddDrug = async () => {
+    if (!validateProductMasterForm()) return;
+
     try {
       const drugData = {
         ...formData,
@@ -146,12 +169,13 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to add drug:', error);
-      alert('Failed to add drug. Please try again.');
+      alert(getErrorMessage(error));
     }
   };
 
   const handleEditDrug = async () => {
     if (!editingDrug) return;
+    if (!validateProductMasterForm()) return;
 
     try {
       const drugData = {
@@ -165,8 +189,33 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to update drug:', error);
-      alert('Failed to update drug. Please try again.');
+      alert(getErrorMessage(error));
     }
+  };
+
+  const validateProductMasterForm = () => {
+    const requiredFields: Array<[keyof typeof formData, string]> = [
+      ['name', 'Drug name'],
+      ['manufacturerName', 'Manufacturer'],
+      ['packSizeLabel', 'Pack size'],
+      ['composition1', 'Primary composition'],
+      ['category', 'Category'],
+      ['dosageForm', 'Dosage form'],
+      ['strength', 'Strength'],
+    ];
+
+    const missing = requiredFields
+      .filter(([field]) => !formData[field]?.trim())
+      .map(([, label]) => label);
+
+    if (missing.length > 0) {
+      alert(
+        `Please fill required product master fields: ${missing.join(', ')}`
+      );
+      return false;
+    }
+
+    return true;
   };
 
   const handleDeleteDrug = async (drugId: string) => {
@@ -220,7 +269,7 @@ export function DrugManagement() {
     setSearchQuery('');
     setSelectedCategory('all');
     setSelectedManufacturer('all');
-    setPagination(prev => ({ ...prev, page: 1 }));
+    setPagination((prev) => ({ ...prev, page: 1 }));
   };
 
   return (
@@ -231,7 +280,10 @@ export function DrugManagement() {
           <h2 className="text-2xl font-bold">Drug Database</h2>
           <p className="text-gray-600">Manage your pharmacy's drug inventory</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)} className="bg-blue-600 hover:bg-blue-700">
+        <Button
+          onClick={() => setShowAddDialog(true)}
+          className="bg-blue-600 hover:bg-blue-700"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug
         </Button>
@@ -244,13 +296,15 @@ export function DrugManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Total Drugs</p>
-                <p className="text-2xl font-bold">{pagination.total.toLocaleString()}</p>
+                <p className="text-2xl font-bold">
+                  {pagination.total.toLocaleString()}
+                </p>
               </div>
               <Pill className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -262,7 +316,7 @@ export function DrugManagement() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -274,13 +328,15 @@ export function DrugManagement() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Active Drugs</p>
-                <p className="text-2xl font-bold">{drugs.filter(d => d.isActive).length}</p>
+                <p className="text-2xl font-bold">
+                  {drugs.filter((d) => d.isActive).length}
+                </p>
               </div>
               <Calendar className="h-8 w-8 text-orange-600" />
             </div>
@@ -304,10 +360,13 @@ export function DrugManagement() {
                 />
               </div>
             </div>
-            
+
             <div>
               <Label>Category</Label>
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <Select
+                value={selectedCategory}
+                onValueChange={setSelectedCategory}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All categories" />
                 </SelectTrigger>
@@ -321,10 +380,13 @@ export function DrugManagement() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div>
               <Label>Manufacturer</Label>
-              <Select value={selectedManufacturer} onValueChange={setSelectedManufacturer}>
+              <Select
+                value={selectedManufacturer}
+                onValueChange={setSelectedManufacturer}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="All manufacturers" />
                 </SelectTrigger>
@@ -338,9 +400,13 @@ export function DrugManagement() {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-end">
-              <Button variant="outline" onClick={clearFilters} className="w-full">
+              <Button
+                variant="outline"
+                onClick={clearFilters}
+                className="w-full"
+              >
                 <Filter className="h-4 w-4 mr-2" />
                 Clear Filters
               </Button>
@@ -373,7 +439,10 @@ export function DrugManagement() {
           ) : (
             <div className="space-y-4">
               {drugs.map((drug) => (
-                <div key={drug.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                <div
+                  key={drug.id}
+                  className="border rounded-lg p-4 hover:bg-gray-50"
+                >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
@@ -388,35 +457,48 @@ export function DrugManagement() {
                           <Badge variant="outline">{drug.category}</Badge>
                         )}
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                         <div>
-                          <p><strong>Manufacturer:</strong> {drug.manufacturerName}</p>
-                          <p><strong>Pack Size:</strong> {drug.packSizeLabel}</p>
+                          <p>
+                            <strong>Manufacturer:</strong>{' '}
+                            {drug.manufacturerName}
+                          </p>
+                          <p>
+                            <strong>Pack Size:</strong> {drug.packSizeLabel}
+                          </p>
                         </div>
                         <div>
                           {drug.composition1 && (
-                            <p><strong>Composition:</strong> {drug.composition1}</p>
+                            <p>
+                              <strong>Composition:</strong> {drug.composition1}
+                            </p>
                           )}
                           {drug.strength && (
-                            <p><strong>Strength:</strong> {drug.strength}</p>
+                            <p>
+                              <strong>Strength:</strong> {drug.strength}
+                            </p>
                           )}
                         </div>
                         <div>
-                          <p><strong>Price:</strong> ₹{drug.price.toFixed(2)}</p>
+                          <p>
+                            <strong>Price:</strong> ₹{drug.price.toFixed(2)}
+                          </p>
                           {drug.dosageForm && (
-                            <p><strong>Form:</strong> {drug.dosageForm}</p>
+                            <p>
+                              <strong>Form:</strong> {drug.dosageForm}
+                            </p>
                           )}
                         </div>
                       </div>
-                      
+
                       {drug.composition2 && (
                         <p className="text-sm text-blue-600 mt-2">
                           <strong>Additional:</strong> {drug.composition2}
                         </p>
                       )}
                     </div>
-                    
+
                     <div className="flex gap-2 ml-4">
                       <Button
                         variant="ghost"
@@ -437,7 +519,7 @@ export function DrugManagement() {
                   </div>
                 </div>
               ))}
-              
+
               {/* Pagination */}
               {pagination.pages > 1 && (
                 <div className="flex justify-center items-center gap-2 mt-6">
@@ -445,20 +527,30 @@ export function DrugManagement() {
                     variant="outline"
                     size="sm"
                     disabled={pagination.page === 1}
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                    onClick={() =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        page: prev.page - 1,
+                      }))
+                    }
                   >
                     Previous
                   </Button>
-                  
+
                   <span className="text-sm text-gray-600">
                     Page {pagination.page} of {pagination.pages}
                   </span>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
                     disabled={pagination.page === pagination.pages}
-                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                    onClick={() =>
+                      setPagination((prev) => ({
+                        ...prev,
+                        page: prev.page + 1,
+                      }))
+                    }
                   >
                     Next
                   </Button>
@@ -470,31 +562,37 @@ export function DrugManagement() {
       </Card>
 
       {/* Add/Edit Drug Dialog */}
-      <Dialog open={showAddDialog || !!editingDrug} onOpenChange={(open: boolean) => {
-        if (!open) {
-          setShowAddDialog(false);
-          setEditingDrug(null);
-          resetForm();
-        }
-      }}>
+      <Dialog
+        open={showAddDialog || !!editingDrug}
+        onOpenChange={(open: boolean) => {
+          if (!open) {
+            setShowAddDialog(false);
+            setEditingDrug(null);
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingDrug ? 'Edit Drug' : 'Add New Drug'}
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="name">Drug Name *</Label>
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, name: e.target.value }))
+                }
                 placeholder="e.g., Paracetamol 500mg Tablet"
+                required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="price">Price (₹) *</Label>
               <Input
@@ -502,109 +600,158 @@ export function DrugManagement() {
                 type="number"
                 step="0.01"
                 value={formData.price}
-                onChange={(e) => setFormData(prev => ({ ...prev, price: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, price: e.target.value }))
+                }
                 placeholder="0.00"
+                min="0"
+                required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="manufacturerName">Manufacturer *</Label>
               <Input
                 id="manufacturerName"
                 value={formData.manufacturerName}
-                onChange={(e) => setFormData(prev => ({ ...prev, manufacturerName: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    manufacturerName: e.target.value,
+                  }))
+                }
                 placeholder="e.g., Sun Pharmaceuticals"
+                required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="packSizeLabel">Pack Size *</Label>
               <Input
                 id="packSizeLabel"
                 value={formData.packSizeLabel}
-                onChange={(e) => setFormData(prev => ({ ...prev, packSizeLabel: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    packSizeLabel: e.target.value,
+                  }))
+                }
                 placeholder="e.g., strip of 10 tablets"
+                required
               />
             </div>
-            
+
             <div>
-              <Label htmlFor="composition1">Primary Composition</Label>
+              <Label htmlFor="composition1">Primary Composition *</Label>
               <Input
                 id="composition1"
                 value={formData.composition1}
-                onChange={(e) => setFormData(prev => ({ ...prev, composition1: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    composition1: e.target.value,
+                  }))
+                }
                 placeholder="e.g., Paracetamol (500mg)"
+                required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="composition2">Secondary Composition</Label>
               <Input
                 id="composition2"
                 value={formData.composition2}
-                onChange={(e) => setFormData(prev => ({ ...prev, composition2: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    composition2: e.target.value,
+                  }))
+                }
                 placeholder="e.g., Caffeine (65mg)"
               />
             </div>
-            
+
             <div>
-              <Label htmlFor="category">Category</Label>
+              <Label htmlFor="category">Category *</Label>
               <Input
                 id="category"
                 value={formData.category}
-                onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, category: e.target.value }))
+                }
                 placeholder="e.g., Analgesics"
+                required
               />
             </div>
-            
+
             <div>
-              <Label htmlFor="dosageForm">Dosage Form</Label>
+              <Label htmlFor="dosageForm">Dosage Form *</Label>
               <Input
                 id="dosageForm"
                 value={formData.dosageForm}
-                onChange={(e) => setFormData(prev => ({ ...prev, dosageForm: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    dosageForm: e.target.value,
+                  }))
+                }
                 placeholder="e.g., Tablet"
+                required
               />
             </div>
-            
+
             <div>
-              <Label htmlFor="strength">Strength</Label>
+              <Label htmlFor="strength">Strength *</Label>
               <Input
                 id="strength"
                 value={formData.strength}
-                onChange={(e) => setFormData(prev => ({ ...prev, strength: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, strength: e.target.value }))
+                }
                 placeholder="e.g., 500mg"
+                required
               />
             </div>
-            
+
             <div>
               <Label htmlFor="barcode">Barcode</Label>
               <Input
                 id="barcode"
                 value={formData.barcode}
-                onChange={(e) => setFormData(prev => ({ ...prev, barcode: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, barcode: e.target.value }))
+                }
                 placeholder="e.g., 1234567890123"
               />
             </div>
           </div>
-          
+
           <div>
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
               value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  description: e.target.value,
+                }))
+              }
               placeholder="Additional description..."
               rows={3}
             />
           </div>
-          
+
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => {
-              setShowAddDialog(false);
-              setEditingDrug(null);
-              resetForm();
-            }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAddDialog(false);
+                setEditingDrug(null);
+                resetForm();
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={editingDrug ? handleEditDrug : handleAddDrug}>
@@ -615,4 +762,4 @@ export function DrugManagement() {
       </Dialog>
     </div>
   );
-} 
+}

@@ -383,6 +383,58 @@ export class ApiClient {
     return this.get<import('./types').PharmacyInvoiceSummary>(`/pharmacy/invoices/${id}`);
   }
 
+  async getPharmacyInvoicePrintData(
+    id: string,
+    params?: { format?: 'A5' | 'THERMAL_80MM'; copyType?: 'ORIGINAL' | 'DUPLICATE' }
+  ) {
+    return this.get(`/pharmacy/invoices/${id}/print-data`, params || {});
+  }
+
+  async getPharmacyPurchaseDistributorAnalytics<T = unknown>(
+    params?: Record<string, unknown>
+  ): Promise<T> {
+    return this.get<T>('/pharmacy/purchase-invoices/analytics/distributors', params || {});
+  }
+
+  async getPharmacyPurchaseInvoices<T = unknown>(
+    params?: Record<string, unknown>
+  ): Promise<T> {
+    return this.get<T>('/pharmacy/purchase-invoices', params || {});
+  }
+
+  async getPharmacyPurchaseInvoiceById<T = unknown>(id: string): Promise<T> {
+    return this.get<T>(`/pharmacy/purchase-invoices/${id}`);
+  }
+
+  async createPharmacyPurchaseInvoiceDraft<T = unknown>(
+    data: Record<string, unknown>
+  ): Promise<T> {
+    return this.post<T>('/pharmacy/purchase-invoices/drafts', data);
+  }
+
+  async suggestPharmacyPurchaseMasterMatches<T = unknown>(
+    data: Record<string, unknown>
+  ): Promise<T> {
+    return this.post<T>('/pharmacy/purchase-invoices/master-matches', data);
+  }
+
+  async confirmPharmacyPurchaseMaster<T = unknown>(
+    data: Record<string, unknown>
+  ): Promise<T> {
+    return this.post<T>('/pharmacy/purchase-invoices/master-confirmations', data);
+  }
+
+  async reviewPharmacyPurchaseInvoice<T = unknown>(
+    id: string,
+    data: Record<string, unknown>
+  ): Promise<T> {
+    return this.patch<T>(`/pharmacy/purchase-invoices/${id}/review`, data);
+  }
+
+  async commitPharmacyPurchaseInvoiceStock<T = unknown>(id: string): Promise<T> {
+    return this.post<T>(`/pharmacy/purchase-invoices/${id}/commit-stock`, {});
+  }
+
   async updatePharmacyInvoice(id: string, data: Record<string, unknown>) {
     return this.patch<import('./types').PharmacyInvoiceSummary>(`/pharmacy/invoices/${id}`, data);
   }

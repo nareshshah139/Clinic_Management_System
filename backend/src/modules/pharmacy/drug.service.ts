@@ -1,6 +1,16 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { CreateDrugDto, UpdateDrugDto, QueryDrugDto, DrugAutocompleteDto } from './dto/drug.dto';
+import {
+  CreateDrugDto,
+  UpdateDrugDto,
+  QueryDrugDto,
+  DrugAutocompleteDto,
+} from './dto/drug.dto';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -9,17 +19,26 @@ export class DrugService {
 
   async create(createDrugDto: CreateDrugDto, branchId: string) {
     try {
+      this.assertProductMasterComplete(createDrugDto);
+
       // Duplicate checks: barcode/SKU, and soft match by name+manufacturer in same branch
       const dup = await this.prisma.drug.findFirst({
         where: {
           branchId,
           OR: [
-            createDrugDto.barcode ? { barcode: createDrugDto.barcode } : undefined,
+            createDrugDto.barcode
+              ? { barcode: createDrugDto.barcode }
+              : undefined,
             createDrugDto.sku ? { sku: createDrugDto.sku } : undefined,
             {
               AND: [
                 { name: { equals: createDrugDto.name, mode: 'insensitive' } },
-                { manufacturerName: { equals: createDrugDto.manufacturerName, mode: 'insensitive' } },
+                {
+                  manufacturerName: {
+                    equals: createDrugDto.manufacturerName,
+                    mode: 'insensitive',
+                  },
+                },
               ],
             },
           ].filter(Boolean) as any,
@@ -28,13 +47,17 @@ export class DrugService {
 
       if (dup) {
         if (createDrugDto.barcode && dup.barcode === createDrugDto.barcode) {
-          throw new ConflictException('A drug with this barcode already exists');
+          throw new ConflictException(
+            'A drug with this barcode already exists',
+          );
         }
         if (createDrugDto.sku && dup.sku === createDrugDto.sku) {
           throw new ConflictException('A drug with this SKU already exists');
         }
         // Same name+manufacturer — treat as duplicate
-        throw new ConflictException('A drug with the same name and manufacturer already exists');
+        throw new ConflictException(
+          'A drug with the same name and manufacturer already exists',
+        );
       }
 
       const drug = await this.prisma.drug.create({
@@ -54,7 +77,10 @@ export class DrugService {
 
       return drug;
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new Error(`Failed to create drug: ${error.message}`);
@@ -119,9 +145,9 @@ export class DrugService {
       if (maxPrice !== undefined) where.price.lte = maxPrice;
     }
 
-    // Build order clause
-    const orderBy: Prisma.DrugOrderByWithRelationInput = {};
-    orderBy[sortBy] = sortOrder;
+    const orderBy = {
+      [this.normalizeDrugSortBy(sortBy)]: sortOrder === 'desc' ? 'desc' : 'asc',
+    } as Prisma.DrugOrderByWithRelationInput;
 
     try {
       const [drugs, total] = await Promise.all([
@@ -243,6 +269,8 @@ export class DrugService {
         throw new NotFoundException('Drug not found');
       }
 
+      this.assertProductMasterComplete(updateDrugDto, existingDrug);
+
       // Check for duplicate barcode or SKU (excluding current drug)
       if (updateDrugDto.barcode || updateDrugDto.sku) {
         const duplicateDrug = await this.prisma.drug.findFirst({
@@ -251,13 +279,15 @@ export class DrugService {
             OR: [
               updateDrugDto.barcode ? { barcode: updateDrugDto.barcode } : {},
               updateDrugDto.sku ? { sku: updateDrugDto.sku } : {},
-            ].filter(condition => Object.keys(condition).length > 0),
+            ].filter((condition) => Object.keys(condition).length > 0),
           },
         });
 
         if (duplicateDrug) {
           if (duplicateDrug.barcode === updateDrugDto.barcode) {
-            throw new ConflictException('A drug with this barcode already exists');
+            throw new ConflictException(
+              'A drug with this barcode already exists',
+            );
           }
           if (duplicateDrug.sku === updateDrugDto.sku) {
             throw new ConflictException('A drug with this SKU already exists');
@@ -280,7 +310,11 @@ export class DrugService {
 
       return drug;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof ConflictException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
       throw new Error(`Failed to update drug: ${error.message}`);
@@ -335,14 +369,20 @@ export class DrugService {
         if (!isNaN(num) && num >= 1 && num <= 50) {
           limit = num;
         }
-      } else if (typeof (query as any).limit === 'number' && (query as any).limit >= 1 && (query as any).limit <= 50) {
+      } else if (
+        typeof (query as any).limit === 'number' &&
+        (query as any).limit >= 1 &&
+        (query as any).limit <= 50
+      ) {
         limit = (query as any).limit;
       }
     }
 
     const rawQ = ((query as any).q as string | undefined) || '';
     const q = rawQ.trim();
-    const mode = (((query as any).mode as string | undefined) || 'all').toLowerCase();
+    const mode = (
+      ((query as any).mode as string | undefined) || 'all'
+    ).toLowerCase();
 
     try {
       const where: Prisma.DrugWhereInput = {
@@ -353,9 +393,7 @@ export class DrugService {
 
       if (q) {
         if (mode === 'name') {
-          where.OR = [
-            { name: { contains: q, mode: 'insensitive' } },
-          ];
+          where.OR = [{ name: { contains: q, mode: 'insensitive' } }];
         } else if (mode === 'ingredient') {
           where.OR = [
             { composition1: { contains: q, mode: 'insensitive' } },
@@ -398,7 +436,13 @@ export class DrugService {
       }
 
       const qLower = q.toLowerCase();
-      const scoreOf = (drug: { name?: string | null; composition1?: string | null; composition2?: string | null; manufacturerName?: string | null; category?: string | null; }) => {
+      const scoreOf = (drug: {
+        name?: string | null;
+        composition1?: string | null;
+        composition2?: string | null;
+        manufacturerName?: string | null;
+        category?: string | null;
+      }) => {
         let score = 0;
         const name = (drug.name || '').toLowerCase();
         const comp1 = (drug.composition1 || '').toLowerCase();
@@ -407,30 +451,38 @@ export class DrugService {
         const cat = (drug.category || '').toLowerCase();
 
         if (mode === 'name') {
-          if (name.startsWith(qLower)) score += 1000; else if (name.includes(qLower)) score += 700;
+          if (name.startsWith(qLower)) score += 1000;
+          else if (name.includes(qLower)) score += 700;
           // small boosts if ingredient also matches
           if (comp1.includes(qLower)) score += 50;
           if (comp2.includes(qLower)) score += 25;
         } else if (mode === 'ingredient') {
-          if (comp1.startsWith(qLower)) score += 1000; else if (comp1.includes(qLower)) score += 700;
-          if (comp2.startsWith(qLower)) score += 800; else if (comp2.includes(qLower)) score += 500;
+          if (comp1.startsWith(qLower)) score += 1000;
+          else if (comp1.includes(qLower)) score += 700;
+          if (comp2.startsWith(qLower)) score += 800;
+          else if (comp2.includes(qLower)) score += 500;
           // small boosts if name also matches
           if (name.includes(qLower)) score += 50;
         } else {
           // all signals
-          if (name.startsWith(qLower)) score += 1000; else if (name.includes(qLower)) score += 700;
-          if (comp1.startsWith(qLower)) score += 500; else if (comp1.includes(qLower)) score += 300;
-          if (comp2.startsWith(qLower)) score += 200; else if (comp2.includes(qLower)) score += 120;
-          if (manu.startsWith(qLower)) score += 90; else if (manu.includes(qLower)) score += 50;
-          if (cat.startsWith(qLower)) score += 40; else if (cat.includes(qLower)) score += 20;
+          if (name.startsWith(qLower)) score += 1000;
+          else if (name.includes(qLower)) score += 700;
+          if (comp1.startsWith(qLower)) score += 500;
+          else if (comp1.includes(qLower)) score += 300;
+          if (comp2.startsWith(qLower)) score += 200;
+          else if (comp2.includes(qLower)) score += 120;
+          if (manu.startsWith(qLower)) score += 90;
+          else if (manu.includes(qLower)) score += 50;
+          if (cat.startsWith(qLower)) score += 40;
+          else if (cat.includes(qLower)) score += 20;
         }
 
         return score;
       };
 
       const ranked = candidates
-        .map(d => ({ d, s: scoreOf(d) }))
-        .filter(x => x.s > 0)
+        .map((d) => ({ d, s: scoreOf(d) }))
+        .filter((x) => x.s > 0)
         .sort((a, b) => {
           if (b.s !== a.s) return b.s - a.s;
           const an = (a.d.name || '').toLowerCase();
@@ -438,7 +490,7 @@ export class DrugService {
           return an.localeCompare(bn);
         })
         .slice(0, limit)
-        .map(x => x.d);
+        .map((x) => x.d);
 
       return ranked;
     } catch (error) {
@@ -464,7 +516,7 @@ export class DrugService {
       });
 
       return categories
-        .map(item => item.category)
+        .map((item) => item.category)
         .filter(Boolean)
         .sort();
     } catch (error) {
@@ -489,7 +541,7 @@ export class DrugService {
       });
 
       return manufacturers
-        .map(item => item.manufacturerName)
+        .map((item) => item.manufacturerName)
         .filter(Boolean)
         .sort();
     } catch (error) {
@@ -515,11 +567,151 @@ export class DrugService {
       });
 
       return dosageForms
-        .map(item => item.dosageForm)
+        .map((item) => item.dosageForm)
         .filter(Boolean)
         .sort();
     } catch (error) {
       throw new Error(`Failed to fetch dosage forms: ${error.message}`);
+    }
+  }
+
+  async getAlternatives(id: string, branchId: string) {
+    try {
+      const source = await this.prisma.drug.findFirst({
+        where: {
+          id,
+          branchId,
+          isActive: true,
+          isDiscontinued: false,
+        },
+        select: {
+          id: true,
+          name: true,
+          composition1: true,
+          strength: true,
+          dosageForm: true,
+        },
+      });
+
+      if (!source) {
+        throw new NotFoundException('Drug not found');
+      }
+
+      const missing = [
+        ['composition1', 'Primary composition'],
+        ['strength', 'Strength'],
+        ['dosageForm', 'Dosage form'],
+      ]
+        .filter(([field]) => {
+          const value = source[field as keyof typeof source];
+          return typeof value !== 'string' || value.trim().length === 0;
+        })
+        .map(([, label]) => label);
+
+      if (missing.length > 0) {
+        throw new BadRequestException(
+          `Cannot suggest alternatives for ${source.name}. Missing: ${missing.join(', ')}.`,
+        );
+      }
+
+      const now = new Date();
+      const alternatives = await this.prisma.drug.findMany({
+        where: {
+          branchId,
+          id: { not: source.id },
+          isActive: true,
+          isDiscontinued: false,
+          composition1: {
+            equals: source.composition1 as string,
+            mode: 'insensitive',
+          },
+          strength: { equals: source.strength as string, mode: 'insensitive' },
+          dosageForm: {
+            equals: source.dosageForm as string,
+            mode: 'insensitive',
+          },
+        },
+        include: {
+          inventoryItems: {
+            where: {
+              branchId,
+              status: 'ACTIVE',
+              currentStock: { gt: 0 },
+            },
+            select: {
+              id: true,
+              currentStock: true,
+              batchNumber: true,
+              expiryDate: true,
+              mrp: true,
+              sellingPrice: true,
+              stockStatus: true,
+            },
+          },
+        },
+        orderBy: {
+          name: 'asc',
+        },
+      });
+
+      return alternatives
+        .map((drug) => {
+          const usableBatches = drug.inventoryItems
+            .filter(
+              (batch) =>
+                batch.stockStatus !== 'EXPIRED' &&
+                (!batch.expiryDate || batch.expiryDate >= now),
+            )
+            .sort((a, b) => {
+              const aExpiry = a.expiryDate
+                ? a.expiryDate.getTime()
+                : Number.MAX_SAFE_INTEGER;
+              const bExpiry = b.expiryDate
+                ? b.expiryDate.getTime()
+                : Number.MAX_SAFE_INTEGER;
+              return aExpiry - bExpiry;
+            });
+          const totalStock = usableBatches.reduce(
+            (sum, batch) => sum + batch.currentStock,
+            0,
+          );
+          const nearestBatch = usableBatches[0];
+
+          return {
+            id: drug.id,
+            name: drug.name,
+            manufacturerName: drug.manufacturerName,
+            composition1: drug.composition1,
+            strength: drug.strength,
+            dosageForm: drug.dosageForm,
+            packSizeLabel: drug.packSizeLabel,
+            price: drug.price,
+            totalStock,
+            nearestExpiry: nearestBatch?.expiryDate || null,
+            nearestBatchNumber: nearestBatch?.batchNumber || null,
+            mrp: nearestBatch?.mrp ?? nearestBatch?.sellingPrice ?? drug.price,
+            batches: usableBatches,
+          };
+        })
+        .filter((drug) => drug.totalStock > 0)
+        .sort((a, b) => {
+          const aExpiry = a.nearestExpiry
+            ? new Date(a.nearestExpiry).getTime()
+            : Number.MAX_SAFE_INTEGER;
+          const bExpiry = b.nearestExpiry
+            ? new Date(b.nearestExpiry).getTime()
+            : Number.MAX_SAFE_INTEGER;
+          if (aExpiry !== bExpiry) return aExpiry - bExpiry;
+          return b.totalStock - a.totalStock;
+        });
+    } catch (error) {
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
+      throw new Error(`Failed to fetch drug alternatives: ${error.message}`);
     }
   }
 
@@ -537,16 +729,18 @@ export class DrugService {
         this.prisma.drug.count({ where: { branchId } }),
         this.prisma.drug.count({ where: { branchId, isActive: true } }),
         this.prisma.drug.count({ where: { branchId, isDiscontinued: true } }),
-        this.prisma.drug.count({ 
-          where: { 
-            branchId, 
+        this.prisma.drug.count({
+          where: {
+            branchId,
             isActive: true,
             inventoryItems: {
               some: {
-                currentStock: { lte: this.prisma.drug.fields.minStockLevel }
-              }
-            }
-          } 
+                branchId,
+                status: 'ACTIVE',
+                stockStatus: { in: ['LOW_STOCK', 'OUT_OF_STOCK'] },
+              },
+            },
+          },
         }),
         this.prisma.drug.groupBy({
           by: ['category'],
@@ -580,11 +774,11 @@ export class DrugService {
         activeDrugs,
         discontinuedDrugs,
         lowStockDrugs,
-        topCategories: topCategories.map(item => ({
+        topCategories: topCategories.map((item) => ({
           category: item.category,
           count: item._count.category,
         })),
-        topManufacturers: topManufacturers.map(item => ({
+        topManufacturers: topManufacturers.map((item) => ({
           manufacturer: item.manufacturerName,
           count: item._count.manufacturerName,
         })),
@@ -594,4 +788,61 @@ export class DrugService {
       throw new Error(`Failed to fetch drug statistics: ${error.message}`);
     }
   }
-} 
+
+  private assertProductMasterComplete(
+    input: Partial<CreateDrugDto & UpdateDrugDto>,
+    existing?: {
+      isActive?: boolean | null;
+      isDiscontinued?: boolean | null;
+      composition1?: string | null;
+      category?: string | null;
+      dosageForm?: string | null;
+      strength?: string | null;
+    },
+  ): void {
+    const candidate = {
+      ...existing,
+      ...input,
+    };
+
+    if (candidate.isActive === false || candidate.isDiscontinued === true) {
+      return;
+    }
+
+    const requiredFields: Array<[keyof typeof candidate, string]> = [
+      ['composition1', 'Generic/Salt or primary composition'],
+      ['category', 'Therapeutic category'],
+      ['dosageForm', 'Dosage form'],
+      ['strength', 'Strength'],
+    ];
+
+    const missing = requiredFields
+      .filter(([field]) => {
+        const value = candidate[field];
+        return typeof value !== 'string' || value.trim().length === 0;
+      })
+      .map(([, label]) => label);
+
+    if (missing.length > 0) {
+      throw new BadRequestException(
+        `Product master incomplete. Required for active pharmacy drugs: ${missing.join(', ')}.`,
+      );
+    }
+  }
+
+  private normalizeDrugSortBy(sortBy?: string): string {
+    const allowed = new Set([
+      'name',
+      'createdAt',
+      'updatedAt',
+      'price',
+      'manufacturerName',
+      'category',
+    ]);
+    if (!sortBy) return 'name';
+    if (!allowed.has(sortBy)) {
+      throw new BadRequestException(`Unsupported sortBy field: ${sortBy}`);
+    }
+    return sortBy;
+  }
+}

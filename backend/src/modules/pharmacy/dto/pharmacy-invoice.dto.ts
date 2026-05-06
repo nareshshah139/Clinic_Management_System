@@ -1,29 +1,51 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsArray, ValidateNested, Min, Max } from 'class-validator';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type, Transform } from 'class-transformer';
-import { PharmacyInvoiceStatus, PharmacyPaymentMethod, PharmacyPaymentStatus } from '@prisma/client';
+import {
+  PharmacyInvoiceStatus,
+  PharmacyPaymentMethod,
+  PharmacyPaymentStatus,
+} from '@prisma/client';
 
 // Enum for invoice item types
 export enum PharmacyInvoiceItemType {
   DRUG = 'DRUG',
-  PACKAGE = 'PACKAGE'
+  PACKAGE = 'PACKAGE',
 }
 
 export class PharmacyInvoiceItemDto {
-  @ApiPropertyOptional({ description: 'Drug ID (required if itemType is DRUG)', example: 'drug-123' })
+  @ApiPropertyOptional({
+    description: 'Drug ID (required if itemType is DRUG)',
+    example: 'drug-123',
+  })
   @IsOptional()
   @IsString()
   drugId?: string;
 
-  @ApiPropertyOptional({ description: 'Package ID (required if itemType is PACKAGE)', example: 'package-123' })
+  @ApiPropertyOptional({
+    description: 'Package ID (required if itemType is PACKAGE)',
+    example: 'package-123',
+  })
   @IsOptional()
   @IsString()
   packageId?: string;
 
-  @ApiPropertyOptional({ 
-    description: 'Item type', 
-    enum: PharmacyInvoiceItemType, 
-    default: PharmacyInvoiceItemType.DRUG 
+  @ApiPropertyOptional({
+    description: 'Item type',
+    enum: PharmacyInvoiceItemType,
+    default: PharmacyInvoiceItemType.DRUG,
   })
   @IsOptional()
   @IsEnum(PharmacyInvoiceItemType)
@@ -53,7 +75,11 @@ export class PharmacyInvoiceItemDto {
   @Min(0)
   unitPrice: number;
 
-  @ApiPropertyOptional({ description: 'Discount percentage', example: 5, default: 0 })
+  @ApiPropertyOptional({
+    description: 'Discount percentage',
+    example: 5,
+    default: 0,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -67,7 +93,11 @@ export class PharmacyInvoiceItemDto {
   @Max(100)
   discountPercent?: number = 0;
 
-  @ApiPropertyOptional({ description: 'Tax percentage', example: 18, default: 0 })
+  @ApiPropertyOptional({
+    description: 'Tax percentage',
+    example: 18,
+    default: 0,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -81,7 +111,10 @@ export class PharmacyInvoiceItemDto {
   @Max(100)
   taxPercent?: number = 0;
 
-  @ApiPropertyOptional({ description: 'Dosage instructions', example: '1 tablet twice a day' })
+  @ApiPropertyOptional({
+    description: 'Dosage instructions',
+    example: '1 tablet twice a day',
+  })
   @IsOptional()
   @IsString()
   dosage?: string;
@@ -96,7 +129,10 @@ export class PharmacyInvoiceItemDto {
   @IsString()
   duration?: string;
 
-  @ApiPropertyOptional({ description: 'Additional instructions', example: 'Take after meals' })
+  @ApiPropertyOptional({
+    description: 'Additional instructions',
+    example: 'Take after meals',
+  })
   @IsOptional()
   @IsString()
   instructions?: string;
@@ -112,7 +148,10 @@ export class CreatePharmacyInvoiceDto {
   @IsString()
   doctorId?: string;
 
-  @ApiPropertyOptional({ description: 'Prescription ID', example: 'prescription-123' })
+  @ApiPropertyOptional({
+    description: 'Prescription ID',
+    example: 'prescription-123',
+  })
   @IsOptional()
   @IsString()
   prescriptionId?: string;
@@ -129,7 +168,10 @@ export class CreatePharmacyInvoiceDto {
   @IsString()
   billingPhone: string;
 
-  @ApiPropertyOptional({ description: 'Billing address', example: '123 Main St' })
+  @ApiPropertyOptional({
+    description: 'Billing address',
+    example: '123 Main St',
+  })
   @IsOptional()
   @IsString()
   billingAddress?: string;
@@ -156,6 +198,7 @@ export class CreatePharmacyInvoiceDto {
 
   @ApiProperty({ description: 'Invoice items', type: [PharmacyInvoiceItemDto] })
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => PharmacyInvoiceItemDto)
   items: PharmacyInvoiceItemDto[];
@@ -172,22 +215,34 @@ export class UpdatePharmacyInvoiceDto {
   @IsString()
   doctorId?: string;
 
-  @ApiPropertyOptional({ description: 'Prescription ID', example: 'prescription-123' })
+  @ApiPropertyOptional({
+    description: 'Prescription ID',
+    example: 'prescription-123',
+  })
   @IsOptional()
   @IsString()
   prescriptionId?: string;
 
-  @ApiPropertyOptional({ description: 'Payment method', enum: PharmacyPaymentMethod })
+  @ApiPropertyOptional({
+    description: 'Payment method',
+    enum: PharmacyPaymentMethod,
+  })
   @IsOptional()
   @IsEnum(PharmacyPaymentMethod)
   paymentMethod?: PharmacyPaymentMethod;
 
-  @ApiPropertyOptional({ description: 'Payment status', enum: PharmacyPaymentStatus })
+  @ApiPropertyOptional({
+    description: 'Payment status',
+    enum: PharmacyPaymentStatus,
+  })
   @IsOptional()
   @IsEnum(PharmacyPaymentStatus)
   paymentStatus?: PharmacyPaymentStatus;
 
-  @ApiPropertyOptional({ description: 'Invoice status', enum: PharmacyInvoiceStatus })
+  @ApiPropertyOptional({
+    description: 'Invoice status',
+    enum: PharmacyInvoiceStatus,
+  })
   @IsOptional()
   @IsEnum(PharmacyInvoiceStatus)
   status?: PharmacyInvoiceStatus;
@@ -197,12 +252,18 @@ export class UpdatePharmacyInvoiceDto {
   @IsString()
   billingName?: string;
 
-  @ApiPropertyOptional({ description: 'Billing phone', example: '+919876543210' })
+  @ApiPropertyOptional({
+    description: 'Billing phone',
+    example: '+919876543210',
+  })
   @IsOptional()
   @IsString()
   billingPhone?: string;
 
-  @ApiPropertyOptional({ description: 'Billing address', example: '123 Main St' })
+  @ApiPropertyOptional({
+    description: 'Billing address',
+    example: '123 Main St',
+  })
   @IsOptional()
   @IsString()
   billingAddress?: string;
@@ -227,53 +288,87 @@ export class UpdatePharmacyInvoiceDto {
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ description: 'Invoice items', type: [PharmacyInvoiceItemDto] })
+  @ApiPropertyOptional({
+    description: 'Invoice items',
+    type: [PharmacyInvoiceItemDto],
+  })
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => PharmacyInvoiceItemDto)
   items?: PharmacyInvoiceItemDto[];
 }
 
+export class UpdatePharmacyInvoiceStatusDto {
+  @ApiProperty({ description: 'Invoice status', enum: PharmacyInvoiceStatus })
+  @IsEnum(PharmacyInvoiceStatus)
+  status: PharmacyInvoiceStatus;
+}
+
 export class QueryPharmacyInvoiceDto {
-  @ApiPropertyOptional({ description: 'Patient ID filter', example: 'patient-123' })
+  @ApiPropertyOptional({
+    description: 'Patient ID filter',
+    example: 'patient-123',
+  })
   @IsOptional()
   @IsString()
   patientId?: string;
 
-  @ApiPropertyOptional({ description: 'Doctor ID filter', example: 'doctor-123' })
+  @ApiPropertyOptional({
+    description: 'Doctor ID filter',
+    example: 'doctor-123',
+  })
   @IsOptional()
   @IsString()
   doctorId?: string;
 
-  @ApiPropertyOptional({ description: 'Invoice status filter', enum: PharmacyInvoiceStatus })
+  @ApiPropertyOptional({
+    description: 'Invoice status filter',
+    enum: PharmacyInvoiceStatus,
+  })
   @IsOptional()
   @IsEnum(PharmacyInvoiceStatus)
   status?: PharmacyInvoiceStatus;
 
-  @ApiPropertyOptional({ description: 'Payment status filter', enum: PharmacyPaymentStatus })
+  @ApiPropertyOptional({
+    description: 'Payment status filter',
+    enum: PharmacyPaymentStatus,
+  })
   @IsOptional()
   @IsEnum(PharmacyPaymentStatus)
   paymentStatus?: PharmacyPaymentStatus;
 
-  @ApiPropertyOptional({ description: 'Payment method filter', enum: PharmacyPaymentMethod })
+  @ApiPropertyOptional({
+    description: 'Payment method filter',
+    enum: PharmacyPaymentMethod,
+  })
   @IsOptional()
   @IsEnum(PharmacyPaymentMethod)
   paymentMethod?: PharmacyPaymentMethod;
 
-  @ApiPropertyOptional({ description: 'Search term (invoice number, patient name)', example: 'INV-001' })
+  @ApiPropertyOptional({
+    description: 'Search term (invoice number, patient name)',
+    example: 'INV-001',
+  })
   @IsOptional()
   @IsString()
   search?: string;
 
-  @ApiPropertyOptional({ description: 'Start date filter (ISO string)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Start date filter (ISO string)',
+    example: '2024-01-01',
+  })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'End date filter (ISO string)', example: '2024-12-31' })
+  @ApiPropertyOptional({
+    description: 'End date filter (ISO string)',
+    example: '2024-12-31',
+  })
   @IsOptional()
-  @IsString()
+  @IsDateString()
   endDate?: string;
 
   @ApiPropertyOptional({ description: 'Minimum amount filter', example: 100 })
@@ -315,7 +410,11 @@ export class QueryPharmacyInvoiceDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiPropertyOptional({ description: 'Items per page', example: 20, default: 20 })
+  @ApiPropertyOptional({
+    description: 'Items per page',
+    example: 20,
+    default: 20,
+  })
   @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -326,16 +425,29 @@ export class QueryPharmacyInvoiceDto {
   })
   @IsNumber()
   @Min(1)
+  @Max(100)
   limit?: number = 20;
 
   @ApiPropertyOptional({ description: 'Sort by field', example: 'invoiceDate' })
   @IsOptional()
-  @IsString()
+  @IsIn([
+    'invoiceDate',
+    'createdAt',
+    'updatedAt',
+    'totalAmount',
+    'invoiceNumber',
+    'status',
+    'paymentStatus',
+  ])
   sortBy?: string = 'invoiceDate';
 
-  @ApiPropertyOptional({ description: 'Sort order', example: 'desc', enum: ['asc', 'desc'] })
+  @ApiPropertyOptional({
+    description: 'Sort order',
+    example: 'desc',
+    enum: ['asc', 'desc'],
+  })
   @IsOptional()
-  @IsString()
+  @IsIn(['asc', 'desc'])
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
 
@@ -356,7 +468,10 @@ export class PharmacyPaymentDto {
   @IsEnum(PharmacyPaymentMethod)
   method: PharmacyPaymentMethod;
 
-  @ApiPropertyOptional({ description: 'Payment reference', example: 'TXN123456789' })
+  @ApiPropertyOptional({
+    description: 'Payment reference',
+    example: 'TXN123456789',
+  })
   @IsOptional()
   @IsString()
   reference?: string;
@@ -367,19 +482,49 @@ export class PharmacyPaymentDto {
   gateway?: string;
 }
 
+export class QueryPharmacyInvoicePrintDto {
+  @ApiPropertyOptional({
+    description: 'Print format',
+    enum: ['A5', 'THERMAL_80MM'],
+    default: 'A5',
+  })
+  @IsOptional()
+  @IsIn(['A5', 'THERMAL_80MM'])
+  format?: 'A5' | 'THERMAL_80MM' = 'A5';
+
+  @ApiPropertyOptional({
+    description: 'Copy type',
+    enum: ['ORIGINAL', 'DUPLICATE'],
+    default: 'ORIGINAL',
+  })
+  @IsOptional()
+  @IsIn(['ORIGINAL', 'DUPLICATE'])
+  copyType?: 'ORIGINAL' | 'DUPLICATE' = 'ORIGINAL';
+}
+
 export class PharmacyInvoiceStatsDto {
-  @ApiPropertyOptional({ description: 'Start date for stats', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Start date for stats',
+    example: '2024-01-01',
+  })
   @IsOptional()
   @IsString()
   startDate?: string;
 
-  @ApiPropertyOptional({ description: 'End date for stats', example: '2024-12-31' })
+  @ApiPropertyOptional({
+    description: 'End date for stats',
+    example: '2024-12-31',
+  })
   @IsOptional()
   @IsString()
   endDate?: string;
 
-  @ApiPropertyOptional({ description: 'Group by period', example: 'month', enum: ['day', 'week', 'month', 'year'] })
+  @ApiPropertyOptional({
+    description: 'Group by period',
+    example: 'month',
+    enum: ['day', 'week', 'month', 'year'],
+  })
   @IsOptional()
   @IsString()
   groupBy?: 'day' | 'week' | 'month' | 'year' = 'month';
-} 
+}

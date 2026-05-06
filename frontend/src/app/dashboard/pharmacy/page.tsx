@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
+import { DistributorAnalytics } from '@/components/pharmacy/DistributorAnalytics';
+import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
@@ -18,7 +20,9 @@ import {
   TrendingUp,
   Package,
   Plus,
-  FileText
+  FileText,
+  BarChart3,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -153,6 +157,24 @@ export default function PharmacyPage() {
                 ]
               },
               {
+                title: "Purchase Intake",
+                items: [
+                  "Capture distributor bill headers and line items",
+                  "Review clean purchase drafts after reconciliation",
+                  "Commit reviewed lines into stock from the commit action",
+                  "Use distributor analytics after review or stock commit"
+                ]
+              },
+              {
+                title: "Distributor Analytics",
+                items: [
+                  "Review distributor purchase value and effective costs",
+                  "Filter by date, GSTIN, product, and HSN",
+                  "Track free stock ratios and discount-drop alerts",
+                  "Use only reviewed purchase invoices for analysis"
+                ]
+              },
+              {
                 title: "Managing Drugs",
                 items: [
                   "Navigate to 'Manage Drugs' to view drug inventory",
@@ -237,18 +259,29 @@ export default function PharmacyPage() {
         <div className="flex justify-end">
           <TabsFontSizeControls />
         </div>
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="billing" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
             Billing & Invoices
+          </TabsTrigger>
+          <TabsTrigger value="purchases" className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Purchase Intake
           </TabsTrigger>
           <TabsTrigger value="packages" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             Treatment Packages
           </TabsTrigger>
+          <TabsTrigger value="analytics" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Distributor Analytics
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="billing" className="space-y-6">
           <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
+        </TabsContent>
+        <TabsContent value="purchases" className="space-y-6">
+          <PurchaseInvoiceWorkbench />
         </TabsContent>
         <TabsContent value="packages" className="space-y-6">
           <Card>
@@ -287,6 +320,9 @@ export default function PharmacyPage() {
             </CardContent>
           </Card>
         </TabsContent>
+        <TabsContent value="analytics" className="space-y-6">
+          <DistributorAnalytics />
+        </TabsContent>
       </Tabs>
     </div>
   );
@@ -300,4 +336,4 @@ function PackagesWithReload() {
     return () => window.removeEventListener('reload-packages', handler);
   }, []);
   return <PackageBrowser reloadKey={reloadKey} />;
-} 
+}
