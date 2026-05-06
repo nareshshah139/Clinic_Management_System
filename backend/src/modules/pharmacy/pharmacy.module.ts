@@ -7,6 +7,8 @@ import { PharmacyInvoiceController } from './pharmacy-invoice.controller';
 import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import { PharmacyPurchaseInvoiceController } from './pharmacy-purchase-invoice.controller';
 import { PharmacyPurchaseInvoiceService } from './pharmacy-purchase-invoice.service';
+import { PharmacyPartnerSalesController } from './pharmacy-partner-sales.controller';
+import { PharmacyPartnerSalesService } from './pharmacy-partner-sales.service';
 import { PharmacyPackageController } from './pharmacy-package.controller';
 import { PharmacyPackageService } from './pharmacy-package.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
@@ -19,6 +21,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     DrugController,
     PharmacyInvoiceController,
     PharmacyPurchaseInvoiceController,
+    PharmacyPartnerSalesController,
     PharmacyPackageController,
   ],
   providers: [
@@ -26,6 +29,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     DrugService,
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
+    PharmacyPartnerSalesService,
     PharmacyPackageService,
   ],
   exports: [
@@ -33,6 +37,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     DrugService,
     PharmacyInvoiceService,
     PharmacyPurchaseInvoiceService,
+    PharmacyPartnerSalesService,
     PharmacyPackageService,
   ],
 })

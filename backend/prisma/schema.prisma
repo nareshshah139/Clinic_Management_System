@@ -67,6 +67,7 @@ model User {
   branch             Branch             @relation(fields: [branchId], references: [id])
   visits             Visit[]
   pharmacyInvoices   PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
+  partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages    PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates  WhatsAppTemplate[]
 
@@ -115,6 +116,8 @@ model Branch {
   pharmacyInvoices         PharmacyInvoice[]
   pharmacyPackages         PharmacyPackage[]
   pharmacyPurchaseInvoices PharmacyPurchaseInvoice[]
+  partnerOrganizations     PartnerOrganization[]
+  partnerDailySales        PartnerDailySale[]
   whatsappTemplates        WhatsAppTemplate[]
 
   // Back-relations
@@ -1296,6 +1299,93 @@ model PharmacyPurchaseInvoiceItem {
   @@map("pharmacy_purchase_invoice_items")
 }
 
+model PartnerOrganization {
+  id            String             @id @default(cuid())
+  branchId      String
+  name          String
+  externalCode  String?
+  contactName   String?
+  phone         String?
+  email         String?
+  partnerUserId String?
+  cutoffHour    Int                @default(22)
+  isActive      Boolean            @default(true)
+  metadata      String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  branch        Branch             @relation(fields: [branchId], references: [id])
+  dailySales    PartnerDailySale[]
+
+  @@unique([branchId, name])
+  @@index([branchId])
+  @@index([branchId, isActive])
+  @@index([branchId, externalCode])
+  @@map("partner_organizations")
+}
+
+model PartnerDailySale {
+  id                      String                 @id @default(cuid())
+  branchId                String
+  partnerOrganizationId   String
+  partnerOrganizationName String
+  partnerUserId           String?
+  partnerUserName         String?
+  date                    DateTime
+  submittedById           String?
+  source                  PartnerDailySaleSource @default(MANUAL)
+  status                  PartnerDailySaleStatus @default(SUBMITTED)
+  missingEntry            Boolean                @default(false)
+  lateEntry               Boolean                @default(false)
+  hasDiscrepancy          Boolean                @default(false)
+  discrepancyFlags        String?
+  stockCommittedAt        DateTime?
+  stockCommittedBy        String?
+  totalQuantity           Int                    @default(0)
+  grossAmount             Float                  @default(0)
+  totalDiscount           Float                  @default(0)
+  netAmount               Float                  @default(0)
+  paymentSummary          String?
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+  branch                  Branch                 @relation(fields: [branchId], references: [id])
+  partnerOrganization     PartnerOrganization    @relation(fields: [partnerOrganizationId], references: [id])
+  submittedBy             User?                  @relation("PartnerDailySaleSubmittedBy", fields: [submittedById], references: [id])
+  items                   PartnerDailySaleItem[]
+
+  @@unique([branchId, partnerOrganizationId, date])
+  @@index([branchId, date])
+  @@index([branchId, partnerOrganizationId, date])
+  @@index([branchId, status])
+  @@index([branchId, date, partnerOrganizationId, status])
+  @@map("partner_daily_sales")
+}
+
+model PartnerDailySaleItem {
+  id                     String                            @id @default(cuid())
+  partnerDailySaleId     String
+  medicineName           String
+  batchNumber            String
+  quantitySold           Int
+  mrp                    Float
+  discountGiven          Float                             @default(0)
+  paymentMode            PaymentMode
+  matchedDrugId          String?
+  matchedInventoryItemId String?
+  committedQuantity      Int                               @default(0)
+  discrepancyFlag        PartnerDailySaleDiscrepancyFlag?
+  discrepancyReason      String?
+  createdAt              DateTime                          @default(now())
+  updatedAt              DateTime                          @updatedAt
+  partnerDailySale       PartnerDailySale                  @relation(fields: [partnerDailySaleId], references: [id], onDelete: Cascade)
+
+  @@index([partnerDailySaleId])
+  @@index([medicineName])
+  @@index([batchNumber])
+  @@index([matchedDrugId])
+  @@index([matchedInventoryItemId])
+  @@map("partner_daily_sale_items")
+}
+
 // Enums for Pharmacy System
 enum PharmacyInvoiceStatus {
   DRAFT
@@ -1335,6 +1425,27 @@ enum PharmacyPurchaseInvoiceStatus {
 enum PharmacyPurchaseBillType {
   CASH
   CREDIT
+}
+
+enum PartnerDailySaleSource {
+  MANUAL
+  CSV
+}
+
+enum PartnerDailySaleStatus {
+  SUBMITTED
+  STOCK_COMMITTED
+  PARTIAL_STOCK_COMMITTED
+  RECONCILIATION_REQUIRED
+  CANCELLED
+}
+
+enum PartnerDailySaleDiscrepancyFlag {
+  MISSING_ENTRY
+  LATE_ENTRY
+  UNMATCHED_BATCH
+  INSUFFICIENT_STOCK
+  PRICE_VARIANCE
 }
 
 enum UserRole {
