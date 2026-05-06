@@ -9,6 +9,10 @@ import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
 import { DistributorAnalytics } from '@/components/pharmacy/DistributorAnalytics';
 import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
+import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
+import { PurchaseLedger } from '@/components/pharmacy/PurchaseLedger';
+import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
+import { ComplianceCenter } from '@/components/pharmacy/ComplianceCenter';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
@@ -23,6 +27,8 @@ import {
   FileText,
   BarChart3,
   ClipboardCheck,
+  Users,
+  ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
@@ -62,7 +68,7 @@ export default function PharmacyPage() {
       try {
         await apiClient.get('/auth/me');
         setIsAuthenticated(true);
-      } catch (_error) {
+      } catch {
         const next = typeof window !== 'undefined'
           ? window.location.pathname + window.location.search
           : '/dashboard/pharmacy';
@@ -131,7 +137,7 @@ export default function PharmacyPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Pharmacy Management</h2>
-          <p className="text-muted-foreground">Create invoices, manage packages, and handle prescriptions</p>
+          <p className="text-muted-foreground">Create invoices, manage stock, and reconcile pharmacy workflows</p>
         </div>
         <div className="flex gap-2">
           <QuickGuide
@@ -163,6 +169,15 @@ export default function PharmacyPage() {
                   "Review clean purchase drafts after reconciliation",
                   "Commit reviewed lines into stock from the commit action",
                   "Use distributor analytics after review or stock commit"
+                ]
+              },
+              {
+                title: "Operational Follow-up",
+                items: [
+                  "Track prescriptions waiting for pharmacy fulfilment",
+                  "Allocate distributor payments against open purchase invoices",
+                  "Submit partner daily sales and commit matched stock",
+                  "Review GST, expiry returns, and stock audit adjustments"
                 ]
               },
               {
@@ -259,29 +274,54 @@ export default function PharmacyPage() {
         <div className="flex justify-end">
           <TabsFontSizeControls />
         </div>
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
           <TabsTrigger value="billing" className="flex items-center gap-2">
             <FileText className="h-4 w-4" />
-            Billing & Invoices
+            Billing
+          </TabsTrigger>
+          <TabsTrigger value="queue" className="flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4" />
+            Rx Queue
           </TabsTrigger>
           <TabsTrigger value="purchases" className="flex items-center gap-2">
             <ClipboardCheck className="h-4 w-4" />
-            Purchase Intake
+            Intake
+          </TabsTrigger>
+          <TabsTrigger value="ledger" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Ledger
+          </TabsTrigger>
+          <TabsTrigger value="partner-sync" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Partner Sync
           </TabsTrigger>
           <TabsTrigger value="packages" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
-            Treatment Packages
+            Packages
           </TabsTrigger>
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
-            Distributor Analytics
+            Analytics
+          </TabsTrigger>
+          <TabsTrigger value="compliance" className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Compliance
           </TabsTrigger>
         </TabsList>
         <TabsContent value="billing" className="space-y-6">
           <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
         </TabsContent>
+        <TabsContent value="queue" className="space-y-6">
+          <PrescriptionDispensingQueue />
+        </TabsContent>
         <TabsContent value="purchases" className="space-y-6">
           <PurchaseInvoiceWorkbench />
+        </TabsContent>
+        <TabsContent value="ledger" className="space-y-6">
+          <PurchaseLedger />
+        </TabsContent>
+        <TabsContent value="partner-sync" className="space-y-6">
+          <PartnerDailySync />
         </TabsContent>
         <TabsContent value="packages" className="space-y-6">
           <Card>
@@ -322,6 +362,9 @@ export default function PharmacyPage() {
         </TabsContent>
         <TabsContent value="analytics" className="space-y-6">
           <DistributorAnalytics />
+        </TabsContent>
+        <TabsContent value="compliance" className="space-y-6">
+          <ComplianceCenter />
         </TabsContent>
       </Tabs>
     </div>

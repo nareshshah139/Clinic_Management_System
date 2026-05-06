@@ -33,6 +33,8 @@ backups/
 DATABASE_BACKUP_SUMMARY.md
 *.sql
 !backend/prisma/migrations/20260503_add_pharmacy_purchase_invoice_drafts/migration.sql
+!backend/prisma/migrations/20260506_add_partner_daily_sales_sync/migration.sql
+!backend/prisma/migrations/20260506_add_pharmacy_purchase_ledger/migration.sql
 *.dump
 backend/src/data/indian_medicine_data.csv
 prod-backup*.list
