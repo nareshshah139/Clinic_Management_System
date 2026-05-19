@@ -5,8 +5,15 @@ import {
   PrescriptionQueueStatus,
   QueryPrescriptionQueueDto,
 } from './dto/pharmacy-prescription-queue.dto';
+import {
+  PharmacyDispenseLineActionDto,
+  PharmacyDispenseTaskStatusDto,
+  UpdateDispenseTaskLineDto,
+  UpdateDispenseTaskStatusDto,
+} from './dto/pharmacy-dispense-task.dto';
 
 type QueueMedication = {
+  lineId?: string;
   drugName: string;
   genericName?: string | null;
   dosage?: string | number | null;
@@ -19,9 +26,21 @@ type QueueMedication = {
   quantityInferred: boolean;
   dispensedQuantity: number;
   coverageStatus: 'unknown' | 'not_started' | 'partial' | 'covered';
+  action?: string;
+  reasonType?: string | null;
+  reasonNote?: string | null;
+  suggestedDrugId?: string | null;
+  suggestedInventoryItemId?: string | null;
+  suggestedDrugName?: string | null;
+  confidence?: number | null;
+  recommendedBatchNumber?: string | null;
+  recommendedExpiryDate?: Date | null;
+  recommendedStorageLocation?: string | null;
+  warnings?: unknown;
 };
 
 type QueueEntry = {
+  dispenseTaskId?: string;
   prescriptionId: string;
   patient: { id: string; name: string; patientCode?: string | null };
   doctor: { id: string; name: string };
@@ -31,6 +50,18 @@ type QueueEntry = {
   medications: QueueMedication[];
   linkedInvoiceIds: string[];
   status: PrescriptionQueueStatus;
+  dispenseStatus?: string;
+  source?: string;
+  assignedToId?: string | null;
+  statusReasonType?: string | null;
+  statusReasonNote?: string | null;
+  startedAt?: Date | null;
+  pausedAt?: Date | null;
+  readyToBillAt?: Date | null;
+  paidAt?: Date | null;
+  dispensedAt?: Date | null;
+  cancelledAt?: Date | null;
+  lastStockCheckAt?: Date | null;
 };
 
 type PrescriptionItem = {
@@ -91,6 +122,81 @@ type InventoryBatch = {
   storageLocation?: string | null;
 };
 
+type StockCheckResult = {
+  drugName: string;
+  matchedDrug: {
+    id: string;
+    name: string;
+    manufacturerName?: string | null;
+  } | null;
+  stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
+  totalNonExpiredStock: number;
+  batches: Array<{
+    id: string;
+    batchNumber?: string | null;
+    currentStock: number;
+    expiryDate?: Date | null;
+    sellingPrice?: number | null;
+    mrp?: number | null;
+    stockStatus: string;
+    storageLocation?: string | null;
+  }>;
+  lowStock: boolean;
+  nearExpiry: boolean;
+  alternatives: unknown[];
+};
+
+type DispenseTaskLine = {
+  id: string;
+  drugName: string;
+  genericName?: string | null;
+  dosage?: string | null;
+  dosageUnit?: string | null;
+  frequency?: string | null;
+  duration?: string | null;
+  durationUnit?: string | null;
+  instructions?: string | null;
+  prescribedQuantity?: number | null;
+  dispensedQuantity: number;
+  suggestedDrugId?: string | null;
+  suggestedInventoryItemId?: string | null;
+  suggestedDrugName?: string | null;
+  confidence?: number | null;
+  stockStatus?: string | null;
+  recommendedBatchNumber?: string | null;
+  recommendedExpiryDate?: Date | null;
+  recommendedStorageLocation?: string | null;
+  action: string;
+  reasonType?: string | null;
+  reasonNote?: string | null;
+  warnings?: unknown;
+};
+
+type DispenseTask = {
+  id: string;
+  branchId: string;
+  prescriptionId?: string | null;
+  patientId: string;
+  patientName: string;
+  patientCode?: string | null;
+  doctorId?: string | null;
+  doctorName?: string | null;
+  status: string;
+  source: string;
+  assignedToId?: string | null;
+  statusReasonType?: string | null;
+  statusReasonNote?: string | null;
+  startedAt?: Date | null;
+  pausedAt?: Date | null;
+  readyToBillAt?: Date | null;
+  paidAt?: Date | null;
+  dispensedAt?: Date | null;
+  cancelledAt?: Date | null;
+  lastStockCheckAt?: Date | null;
+  linkedInvoiceIds?: string | null;
+  lines?: DispenseTaskLine[];
+};
+
 @Injectable()
 export class PharmacyPrescriptionQueueService {
   private readonly expiredAfterHours = 24;
@@ -119,9 +225,14 @@ export class PharmacyPrescriptionQueueService {
       include: this.prescriptionInclude(branchId),
     })) as LoadedPrescription[];
 
-    const entries = prescriptions
-      .map((prescription) => this.toQueueEntry(prescription))
-      .filter((entry) => !query.status || entry.status === query.status);
+    const entriesWithTasks = await Promise.all(
+      prescriptions.map((prescription) =>
+        this.withPersistedTask(this.toQueueEntry(prescription), branchId),
+      ),
+    );
+    const entries = entriesWithTasks.filter(
+      (entry) => !query.status || entry.status === query.status,
+    );
     const start = (page - 1) * limit;
     const data = entries.slice(start, start + limit);
 
@@ -153,7 +264,7 @@ export class PharmacyPrescriptionQueueService {
       throw new NotFoundException('Prescription not found in this branch');
     }
 
-    return this.toQueueEntry(prescription);
+    return this.withPersistedTask(this.toQueueEntry(prescription), branchId);
   }
 
   async pull(prescriptionId: string, branchId: string) {
@@ -170,12 +281,557 @@ export class PharmacyPrescriptionQueueService {
         this.stockCheckMedication(item, branchId),
       ),
     );
+    await this.persistStockCheck(prescriptionId, branchId, items);
 
     return {
       prescriptionId,
       checkedAt: new Date(),
       items,
     };
+  }
+
+  async updateTaskStatus(
+    taskId: string,
+    body: UpdateDispenseTaskStatusDto,
+    branchId: string,
+    userId: string,
+  ) {
+    const delegate = this.taskDelegate();
+    if (!delegate) {
+      throw new NotFoundException('Dispense task storage is not available');
+    }
+
+    const task = (await delegate.findFirst({
+      where: { id: taskId, branchId },
+      include: { lines: true },
+    })) as DispenseTask | null;
+
+    if (!task) {
+      throw new NotFoundException('Dispense task not found in this branch');
+    }
+
+    const now = new Date();
+    await delegate.update({
+      where: { id: taskId },
+      data: {
+        status: body.status,
+        assignedToId: task.assignedToId
+          ? task.assignedToId
+          : body.status === PharmacyDispenseTaskStatusDto.IN_REVIEW
+            ? userId
+            : null,
+        statusReasonType: body.reasonType || task.statusReasonType || null,
+        statusReasonNote: body.reasonNote || task.statusReasonNote || null,
+        ...this.statusTimestampPatch(body.status, now),
+      },
+    });
+
+    if (task.prescriptionId) {
+      return this.findOne(task.prescriptionId, branchId);
+    }
+
+    return this.findTaskById(taskId, branchId);
+  }
+
+  async updateTaskLine(
+    taskId: string,
+    lineId: string,
+    body: UpdateDispenseTaskLineDto,
+    branchId: string,
+    userId: string,
+  ) {
+    const delegate = this.taskDelegate();
+    const lineDelegate = this.taskLineDelegate();
+    if (!delegate || !lineDelegate) {
+      throw new NotFoundException('Dispense task storage is not available');
+    }
+
+    const task = (await delegate.findFirst({
+      where: { id: taskId, branchId },
+      include: { lines: true },
+    })) as DispenseTask | null;
+
+    if (!task) {
+      throw new NotFoundException('Dispense task not found in this branch');
+    }
+
+    if (!task.lines?.some((line) => line.id === lineId)) {
+      throw new NotFoundException('Dispense task line not found');
+    }
+
+    await lineDelegate.update({
+      where: { id: lineId },
+      data: {
+        action: body.action,
+        reasonType: body.reasonType || null,
+        reasonNote: body.reasonNote || null,
+        substituteDrugId: body.substituteDrugId || null,
+        substituteDrugName: body.substituteDrugName || null,
+        editedQuantity: body.editedQuantity ?? null,
+        pharmacistNotes: body.pharmacistNotes || null,
+      },
+    });
+
+    const refreshed = (await delegate.findFirst({
+      where: { id: taskId, branchId },
+      include: { lines: true },
+    })) as DispenseTask;
+    const nextStatus = this.nextStatusAfterLineReview(refreshed);
+    await delegate.update({
+      where: { id: taskId },
+      data: {
+        status: nextStatus,
+        assignedToId: task.assignedToId || userId,
+        exceptionCount: this.taskExceptionCount(refreshed),
+        ...this.statusTimestampPatch(nextStatus, new Date()),
+      },
+    });
+
+    if (task.prescriptionId) {
+      return this.findOne(task.prescriptionId, branchId);
+    }
+
+    return this.findTaskById(taskId, branchId);
+  }
+
+  private async withPersistedTask(
+    entry: QueueEntry,
+    branchId: string,
+  ): Promise<QueueEntry> {
+    const delegate = this.taskDelegate();
+    if (!delegate) return entry;
+
+    const task = await this.ensureTaskForEntry(entry, branchId);
+    return this.mergeTask(entry, task);
+  }
+
+  private async ensureTaskForEntry(
+    entry: QueueEntry,
+    branchId: string,
+  ): Promise<DispenseTask> {
+    const delegate = this.taskDelegate();
+    const lineDelegate = this.taskLineDelegate();
+    const existing = (await delegate.findFirst({
+      where: { branchId, prescriptionId: entry.prescriptionId },
+      include: { lines: true },
+    })) as DispenseTask | null;
+
+    const linkedInvoiceIds = JSON.stringify(entry.linkedInvoiceIds);
+    const derivedStatus = this.taskStatusFromQueue(entry.status);
+
+    if (!existing) {
+      try {
+        return (await delegate.create({
+          data: {
+            branchId,
+            prescriptionId: entry.prescriptionId,
+            patientId: entry.patient.id,
+            patientName: entry.patient.name,
+            patientCode: entry.patient.patientCode || null,
+            doctorId: entry.doctor.id,
+            doctorName: entry.doctor.name,
+            source: 'VISIT',
+            status: derivedStatus,
+            linkedInvoiceIds,
+            exceptionCount: 0,
+            metadata: {
+              prescriptionCreatedAt: entry.createdAt.toISOString(),
+            },
+            lines: {
+              create: entry.medications.map((medication) =>
+                this.taskLineCreateData(medication),
+              ),
+            },
+          },
+          include: { lines: true },
+        })) as DispenseTask;
+      } catch {
+        const raced = (await delegate.findFirst({
+          where: { branchId, prescriptionId: entry.prescriptionId },
+          include: { lines: true },
+        })) as DispenseTask | null;
+        if (raced) return raced;
+        throw new NotFoundException('Unable to create dispense task');
+      }
+    }
+
+    if (lineDelegate) {
+      const existingNames = new Set(
+        (existing.lines || []).map((line) => this.normalizeName(line.drugName)),
+      );
+      const missingLines = entry.medications.filter(
+        (medication) => !existingNames.has(this.normalizeName(medication.drugName)),
+      );
+
+      for (const medication of missingLines) {
+        await lineDelegate.create({
+          data: {
+            taskId: existing.id,
+            ...this.taskLineCreateData(medication),
+          },
+        });
+      }
+    }
+
+    const status = this.syncedTaskStatus(existing.status, entry.status);
+    return (await delegate.update({
+      where: { id: existing.id },
+      data: {
+        patientId: entry.patient.id,
+        patientName: entry.patient.name,
+        patientCode: entry.patient.patientCode || null,
+        doctorId: entry.doctor.id,
+        doctorName: entry.doctor.name,
+        linkedInvoiceIds,
+        status,
+        ...this.statusTimestampPatch(status, new Date()),
+      },
+      include: { lines: true },
+    })) as DispenseTask;
+  }
+
+  private async findTaskById(taskId: string, branchId: string) {
+    const delegate = this.taskDelegate();
+    const task = (await delegate.findFirst({
+      where: { id: taskId, branchId },
+      include: { lines: true },
+    })) as DispenseTask | null;
+
+    if (!task) {
+      throw new NotFoundException('Dispense task not found in this branch');
+    }
+
+    if (task.prescriptionId) {
+      return this.findOne(task.prescriptionId, branchId);
+    }
+
+    return {
+      dispenseTaskId: task.id,
+      prescriptionId: '',
+      patient: {
+        id: task.patientId,
+        name: task.patientName,
+        patientCode: task.patientCode || null,
+      },
+      doctor: {
+        id: task.doctorId || '',
+        name: task.doctorName || 'Counter',
+      },
+      createdAt: new Date(),
+      pendingHours: 0,
+      isOverTwoHours: false,
+      medications: [],
+      linkedInvoiceIds: [],
+      status: this.queueStatusFromTask(task.status, PrescriptionQueueStatus.PENDING),
+      dispenseStatus: task.status,
+      source: task.source,
+      assignedToId: task.assignedToId,
+      statusReasonType: task.statusReasonType,
+      statusReasonNote: task.statusReasonNote,
+    };
+  }
+
+  private mergeTask(entry: QueueEntry, task: DispenseTask): QueueEntry {
+    const linesByName = new Map(
+      (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
+    );
+
+    return {
+      ...entry,
+      dispenseTaskId: task.id,
+      status: this.queueStatusFromTask(task.status, entry.status),
+      dispenseStatus: task.status,
+      source: task.source,
+      assignedToId: task.assignedToId,
+      statusReasonType: task.statusReasonType,
+      statusReasonNote: task.statusReasonNote,
+      startedAt: task.startedAt,
+      pausedAt: task.pausedAt,
+      readyToBillAt: task.readyToBillAt,
+      paidAt: task.paidAt,
+      dispensedAt: task.dispensedAt,
+      cancelledAt: task.cancelledAt,
+      lastStockCheckAt: task.lastStockCheckAt,
+      medications: entry.medications.map((medication) => {
+        const line = linesByName.get(this.normalizeName(medication.drugName));
+        if (!line) return medication;
+        return {
+          ...medication,
+          lineId: line.id,
+          action: this.uiActionFromTask(line.action),
+          reasonType: line.reasonType,
+          reasonNote: line.reasonNote,
+          suggestedDrugId: line.suggestedDrugId,
+          suggestedInventoryItemId: line.suggestedInventoryItemId,
+          suggestedDrugName: line.suggestedDrugName,
+          confidence: line.confidence,
+          recommendedBatchNumber: line.recommendedBatchNumber,
+          recommendedExpiryDate: line.recommendedExpiryDate,
+          recommendedStorageLocation: line.recommendedStorageLocation,
+          warnings: line.warnings,
+        };
+      }),
+    };
+  }
+
+  private async persistStockCheck(
+    prescriptionId: string,
+    branchId: string,
+    items: StockCheckResult[],
+  ) {
+    const delegate = this.taskDelegate();
+    const lineDelegate = this.taskLineDelegate();
+    if (!delegate || !lineDelegate) return;
+
+    const task = (await delegate.findFirst({
+      where: { branchId, prescriptionId },
+      include: { lines: true },
+    })) as DispenseTask | null;
+    if (!task) return;
+
+    const linesByName = new Map(
+      (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
+    );
+
+    for (const item of items) {
+      const line = linesByName.get(this.normalizeName(item.drugName));
+      if (!line) continue;
+      const recommendedBatch = item.batches?.[0] || null;
+      await lineDelegate.update({
+        where: { id: line.id },
+        data: {
+          suggestedDrugId: item.matchedDrug?.id || null,
+          suggestedInventoryItemId: recommendedBatch?.id || null,
+          suggestedDrugName: item.matchedDrug?.name || null,
+          confidence: item.matchedDrug ? 0.9 : 0.2,
+          stockStatus: item.stockStatus,
+          recommendedBatchNumber: recommendedBatch?.batchNumber || null,
+          recommendedExpiryDate: recommendedBatch?.expiryDate || null,
+          recommendedStorageLocation: recommendedBatch?.storageLocation || null,
+          warnings: this.stockWarningPayload(item),
+        },
+      });
+    }
+
+    await delegate.update({
+      where: { id: task.id },
+      data: {
+        lastStockCheckAt: new Date(),
+        exceptionCount: items.filter(
+          (item) =>
+            item.stockStatus !== 'IN_STOCK' || item.lowStock || item.nearExpiry,
+        ).length,
+      },
+    });
+  }
+
+  private taskDelegate() {
+    return (this.prisma as any).pharmacyDispenseTask;
+  }
+
+  private taskLineDelegate() {
+    return (this.prisma as any).pharmacyDispenseTaskLine;
+  }
+
+  private taskLineCreateData(medication: QueueMedication) {
+    return {
+      drugName: medication.drugName,
+      genericName: medication.genericName || null,
+      originalText: JSON.stringify({
+        drugName: medication.drugName,
+        dosage: medication.dosage,
+        dosageUnit: medication.dosageUnit,
+        frequency: medication.frequency,
+        duration: medication.duration,
+        durationUnit: medication.durationUnit,
+        instructions: medication.instructions,
+        prescribedQuantity: medication.prescribedQuantity,
+      }),
+      dosage:
+        medication.dosage === undefined || medication.dosage === null
+          ? null
+          : String(medication.dosage),
+      dosageUnit: medication.dosageUnit || null,
+      frequency: medication.frequency || null,
+      duration:
+        medication.duration === undefined || medication.duration === null
+          ? null
+          : String(medication.duration),
+      durationUnit: medication.durationUnit || null,
+      instructions: medication.instructions || null,
+      prescribedQuantity:
+        medication.prescribedQuantity === null
+          ? null
+          : Math.ceil(medication.prescribedQuantity),
+      dispensedQuantity: Math.ceil(medication.dispensedQuantity || 0),
+      action: PharmacyDispenseLineActionDto.PENDING,
+    };
+  }
+
+  private taskStatusFromQueue(status: PrescriptionQueueStatus): string {
+    if (status === PrescriptionQueueStatus.DISPENSED) {
+      return PharmacyDispenseTaskStatusDto.DISPENSED;
+    }
+    if (status === PrescriptionQueueStatus.PARTIAL) {
+      return PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED;
+    }
+    if (status === PrescriptionQueueStatus.EXPIRED) {
+      return PharmacyDispenseTaskStatusDto.PAUSED;
+    }
+    return PharmacyDispenseTaskStatusDto.QUEUED;
+  }
+
+  private syncedTaskStatus(
+    currentStatus: string,
+    derivedStatus: PrescriptionQueueStatus,
+  ): string {
+    if (
+      [
+        PharmacyDispenseTaskStatusDto.CANCELLED,
+        PharmacyDispenseTaskStatusDto.PAID,
+        PharmacyDispenseTaskStatusDto.DISPENSED,
+      ].includes(currentStatus as PharmacyDispenseTaskStatusDto)
+    ) {
+      return currentStatus;
+    }
+
+    if (derivedStatus === PrescriptionQueueStatus.DISPENSED) {
+      return PharmacyDispenseTaskStatusDto.DISPENSED;
+    }
+
+    if (
+      derivedStatus === PrescriptionQueueStatus.PARTIAL &&
+      currentStatus === PharmacyDispenseTaskStatusDto.QUEUED
+    ) {
+      return PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED;
+    }
+
+    if (
+      derivedStatus === PrescriptionQueueStatus.EXPIRED &&
+      currentStatus === PharmacyDispenseTaskStatusDto.QUEUED
+    ) {
+      return PharmacyDispenseTaskStatusDto.PAUSED;
+    }
+
+    return currentStatus;
+  }
+
+  private queueStatusFromTask(
+    taskStatus: string,
+    fallback: PrescriptionQueueStatus,
+  ): PrescriptionQueueStatus {
+    if (taskStatus === PharmacyDispenseTaskStatusDto.DISPENSED) {
+      return PrescriptionQueueStatus.DISPENSED;
+    }
+    if (taskStatus === PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED) {
+      return PrescriptionQueueStatus.PARTIAL;
+    }
+    if (
+      taskStatus === PharmacyDispenseTaskStatusDto.PAUSED ||
+      taskStatus === PharmacyDispenseTaskStatusDto.CANCELLED
+    ) {
+      return PrescriptionQueueStatus.EXPIRED;
+    }
+    if (
+      taskStatus === PharmacyDispenseTaskStatusDto.READY_TO_BILL ||
+      taskStatus === PharmacyDispenseTaskStatusDto.PAID ||
+      taskStatus === PharmacyDispenseTaskStatusDto.IN_REVIEW
+    ) {
+      return PrescriptionQueueStatus.PENDING;
+    }
+    return fallback;
+  }
+
+  private uiActionFromTask(action: string): string {
+    const map: Record<string, string> = {
+      PENDING: 'pending',
+      ACCEPTED: 'accepted',
+      SUBSTITUTE: 'substitute',
+      EDITED: 'edit',
+      UNAVAILABLE: 'unavailable',
+    };
+    return map[action] || 'pending';
+  }
+
+  private statusTimestampPatch(status: string, timestamp: Date) {
+    if (status === PharmacyDispenseTaskStatusDto.IN_REVIEW) {
+      return { startedAt: timestamp };
+    }
+    if (status === PharmacyDispenseTaskStatusDto.PAUSED) {
+      return { pausedAt: timestamp };
+    }
+    if (status === PharmacyDispenseTaskStatusDto.READY_TO_BILL) {
+      return { readyToBillAt: timestamp };
+    }
+    if (status === PharmacyDispenseTaskStatusDto.PAID) {
+      return { paidAt: timestamp };
+    }
+    if (status === PharmacyDispenseTaskStatusDto.DISPENSED) {
+      return { dispensedAt: timestamp };
+    }
+    if (status === PharmacyDispenseTaskStatusDto.CANCELLED) {
+      return { cancelledAt: timestamp };
+    }
+    return {};
+  }
+
+  private nextStatusAfterLineReview(task: DispenseTask): string {
+    if (
+      [
+        PharmacyDispenseTaskStatusDto.CANCELLED,
+        PharmacyDispenseTaskStatusDto.PAID,
+        PharmacyDispenseTaskStatusDto.DISPENSED,
+      ].includes(task.status as PharmacyDispenseTaskStatusDto)
+    ) {
+      return task.status;
+    }
+
+    const lines = task.lines || [];
+    if (lines.length === 0) {
+      return PharmacyDispenseTaskStatusDto.IN_REVIEW;
+    }
+
+    const reviewed = lines.filter(
+      (line) => line.action !== PharmacyDispenseLineActionDto.PENDING,
+    );
+
+    if (reviewed.length < lines.length) {
+      return PharmacyDispenseTaskStatusDto.IN_REVIEW;
+    }
+
+    if (
+      lines.some(
+        (line) => line.action === PharmacyDispenseLineActionDto.UNAVAILABLE,
+      )
+    ) {
+      return PharmacyDispenseTaskStatusDto.PARTIALLY_FILLED;
+    }
+
+    return PharmacyDispenseTaskStatusDto.READY_TO_BILL;
+  }
+
+  private taskExceptionCount(task: DispenseTask): number {
+    return (task.lines || []).filter((line) => {
+      const warnings = Array.isArray(line.warnings) ? line.warnings : [];
+      return (
+        line.action === PharmacyDispenseLineActionDto.UNAVAILABLE ||
+        (line.stockStatus && line.stockStatus !== 'IN_STOCK') ||
+        warnings.length > 0
+      );
+    }).length;
+  }
+
+  private stockWarningPayload(item: {
+    stockStatus: string;
+    lowStock: boolean;
+    nearExpiry: boolean;
+  }) {
+    const warnings: string[] = [];
+    if (item.stockStatus === 'UNMATCHED') warnings.push('UNMATCHED');
+    if (item.stockStatus === 'OUT_OF_STOCK') warnings.push('OUT_OF_STOCK');
+    if (item.lowStock) warnings.push('LOW_STOCK');
+    if (item.nearExpiry) warnings.push('NEAR_EXPIRY');
+    return warnings;
   }
 
   private prescriptionInclude(branchId: string) {
@@ -325,7 +981,7 @@ export class PharmacyPrescriptionQueueService {
   private async stockCheckMedication(
     medication: QueueMedication,
     branchId: string,
-  ) {
+  ): Promise<StockCheckResult> {
     const matchedDrug = await this.matchDrug(medication.drugName, branchId);
     if (!matchedDrug) {
       return {

@@ -1,36 +1,35 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger, TabsFontSizeControls } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsFontSizeControls, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
-import { DistributorAnalytics } from '@/components/pharmacy/DistributorAnalytics';
-import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
-import { PurchaseLedger } from '@/components/pharmacy/PurchaseLedger';
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
-import { ComplianceCenter } from '@/components/pharmacy/ComplianceCenter';
+import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
-
 import {
-  Receipt,
-  Pill,
-  DollarSign,
-  TrendingUp,
-  Package,
-  Plus,
-  FileText,
-  BarChart3,
+  ArrowRight,
+  CheckCircle2,
   ClipboardCheck,
+  DollarSign,
+  FileText,
+  Package,
+  Pill,
+  Plus,
+  Receipt,
+  RefreshCcw,
+  TrendingUp,
   Users,
-  ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+
+type CounterTab = 'billing' | 'queue' | 'partner-sync' | 'packages';
 
 interface PharmacyDashboardData {
   todaySales?: number;
@@ -46,10 +45,12 @@ interface PharmacyDashboardData {
 
 export default function PharmacyPage() {
   const router = useRouter();
+  const counterWorkbenchRef = useRef<HTMLDivElement | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
+  const [counterTab, setCounterTab] = useState<CounterTab>('billing');
   const [prefill, setPrefill] = useState<{ patientId?: string; prescriptionId?: string; doctorId?: string; visitId?: string } | null>(null);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export default function PharmacyPage() {
     const visitId = params.get('visitId') || undefined;
     if (patientId || prescriptionId || doctorId || visitId) {
       setPrefill({ patientId, prescriptionId, doctorId, visitId });
+      setCounterTab('billing');
     }
   }, []);
 
@@ -131,243 +133,339 @@ export default function PharmacyPage() {
   const lowStockDrugs = dash?.lowStockDrugs ?? 0;
   const packagesCount = dash?.packagesCount ?? 0;
 
+  const focusWorkbench = () => {
+    requestAnimationFrame(() => {
+      counterWorkbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const openCounter = (tab: CounterTab) => {
+    setCounterTab(tab);
+    focusWorkbench();
+  };
+
   return (
-    <div className="flex-1 space-y-6 p-8 pt-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Pharmacy Management</h2>
-          <p className="text-muted-foreground">Create invoices, manage stock, and reconcile pharmacy workflows</p>
-        </div>
-        <div className="flex gap-2">
-          <QuickGuide
-            title="Pharmacy Management Guide"
-            triggerVariant="ghost"
-            sections={[
-              {
-                title: "Creating Invoices",
-                items: [
-                  "Search and select a patient to start an invoice",
-                  "Add drugs either manually or from a prescription",
-                  "Adjust quantities, apply discounts, and set GST",
-                  "Select payment mode and complete the invoice"
-                ]
-              },
-              {
-                title: "Treatment Packages",
-                items: [
-                  "Browse pre-built dermatology treatment packages",
-                  "Apply packages to quickly add multiple items",
-                  "Create custom packages for recurring treatments",
-                  "View package details including drugs and pricing"
-                ]
-              },
-              {
-                title: "Purchase Intake",
-                items: [
-                  "Capture distributor bill headers and line items",
-                  "Review clean purchase drafts after reconciliation",
-                  "Commit reviewed lines into stock from the commit action",
-                  "Use distributor analytics after review or stock commit"
-                ]
-              },
-              {
-                title: "Operational Follow-up",
-                items: [
-                  "Track prescriptions waiting for pharmacy fulfilment",
-                  "Allocate distributor payments against open purchase invoices",
-                  "Submit partner daily sales and commit matched stock",
-                  "Review GST, expiry returns, and stock audit adjustments"
-                ]
-              },
-              {
-                title: "Distributor Analytics",
-                items: [
-                  "Review distributor purchase value and effective costs",
-                  "Filter by date, GSTIN, product, and HSN",
-                  "Track free stock ratios and discount-drop alerts",
-                  "Use only reviewed purchase invoices for analysis"
-                ]
-              },
-              {
-                title: "Managing Drugs",
-                items: [
-                  "Navigate to 'Manage Drugs' to view drug inventory",
-                  "Add new drugs with pricing and stock information",
-                  "Update drug details, pricing, and availability",
-                  "Track drug usage and low stock alerts"
-                ]
-              }
-            ]}
+    <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
+      <div className="mx-auto max-w-[1560px] space-y-2">
+        <section className="rounded-[12px] border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+          <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-semibold tracking-tight">
+                  Pharmacy Desk
+                </h2>
+                <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-100">
+                  Counter mode
+                </span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-slate-300">
+                Queue, review, pick, bill, pay, dispense.
+              </p>
+            </div>
+
+            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricStrip
+                label="Sales"
+                value={`₹${todaySales.toFixed(2)}`}
+                detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
+                icon={<DollarSign className="h-4 w-4" />}
+                intent="green"
+              />
+              <MetricStrip
+                label="Invoices"
+                value={invoicesToday}
+                detail={`${pendingInvoices} pending`}
+                icon={<Receipt className="h-4 w-4" />}
+                intent="blue"
+              />
+              <MetricStrip
+                label="Stock"
+                value={totalDrugs}
+                detail={`${lowStockDrugs} low`}
+                icon={<Pill className="h-4 w-4" />}
+                intent="purple"
+              />
+              <MetricStrip
+                label="Packages"
+                value={packagesCount}
+                detail="bundles"
+                icon={<Package className="h-4 w-4" />}
+                intent="amber"
+              />
+            </div>
+
+            <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
+              <PharmacyGuide />
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
+              >
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                onClick={() => router.push('/dashboard/pharmacy/invoices')}
+              >
+                <Receipt className="h-4 w-4" />
+                Invoices
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+                onClick={() => router.push('/dashboard/pharmacy/drugs')}
+              >
+                <Pill className="h-4 w-4" />
+                Drugs
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-2 grid gap-1.5 lg:grid-cols-3">
+            <QuickAction
+              icon={<ClipboardCheck className="h-4 w-4" />}
+              title="Rx Auto-Fill"
+              detail="Visit prescriptions"
+              onClick={() => openCounter('queue')}
+            />
+            <QuickAction
+              icon={<Receipt className="h-4 w-4" />}
+              title="Billing & GST"
+              detail="Invoice and payment"
+              onClick={() => openCounter('billing')}
+            />
+            <QuickAction
+              icon={<Package className="h-4 w-4" />}
+              title="Inventory Control"
+              detail="Shelf, OCR, FEFO"
+              onClick={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
+            />
+          </div>
+        </section>
+
+        <PharmacyCounterCockpit
+          prefill={prefill}
+          onOpenBilling={() => openCounter('billing')}
+          onOpenQueue={() => openCounter('queue')}
+          onOpenPartnerSync={() => openCounter('partner-sync')}
+          onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
+        />
+
+        <section ref={counterWorkbenchRef} className="scroll-mt-4 space-y-3">
+          <WorkbenchHeader
+            title="Dispense & Billing Workbench"
+            detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
           />
-          <Button variant="outline" onClick={() => router.push('/dashboard/pharmacy/invoices')}>
-            <Receipt className="h-4 w-4 mr-2" />
-            View Invoices
-          </Button>
-          <Button variant="outline" onClick={() => router.push('/dashboard/pharmacy/drugs')}>
-            <Pill className="h-4 w-4 mr-2" />
-            Manage Drugs
-          </Button>
-        </div>
+          <Tabs value={counterTab} onValueChange={(value: string) => setCounterTab(value as CounterTab)} className="space-y-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-[8px] bg-slate-100 p-1 lg:grid-cols-4">
+                <TabsTrigger value="billing" className="min-h-10 gap-2">
+                  <FileText className="h-4 w-4" />
+                  Billing & GST
+                </TabsTrigger>
+                <TabsTrigger value="queue" className="min-h-10 gap-2">
+                  <ClipboardCheck className="h-4 w-4" />
+                  Rx Auto-Fill
+                </TabsTrigger>
+                <TabsTrigger value="partner-sync" className="min-h-10 gap-2">
+                  <Users className="h-4 w-4" />
+                  Partner Sync
+                </TabsTrigger>
+                <TabsTrigger value="packages" className="min-h-10 gap-2">
+                  <Package className="h-4 w-4" />
+                  Packages
+                </TabsTrigger>
+              </TabsList>
+              <TabsFontSizeControls className="shrink-0 justify-end" />
+            </div>
+
+            <TabsContent value="billing" className="space-y-6">
+              <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
+            </TabsContent>
+            <TabsContent value="queue" className="space-y-6">
+              <PrescriptionDispensingQueue />
+            </TabsContent>
+            <TabsContent value="partner-sync" className="space-y-6">
+              <PartnerDailySync />
+            </TabsContent>
+            <TabsContent value="packages" className="space-y-6">
+              <PackagesPanel />
+            </TabsContent>
+          </Tabs>
+        </section>
       </div>
+    </main>
+  );
+}
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Today&#39;s Sales</p>
-                <p className="text-2xl font-bold">₹{todaySales.toFixed(2)}</p>
-                <p className={`text-xs flex items-center ${todayGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  <TrendingUp className="h-3 w-3 mr-1" />
-                  {todayGrowth >= 0 ? '+' : ''}{todayGrowth.toFixed(1)}% vs last month
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
+function PharmacyGuide() {
+  return (
+    <QuickGuide
+      title="Pharmacy Management Guide"
+      triggerVariant="ghost"
+      triggerClassName="text-white hover:bg-white/10 hover:text-white"
+      sections={[
+        {
+          title: 'Prescription & Auto-Fill',
+          items: [
+            'Open prescriptions from Visits or the Rx queue',
+            'Review auto-loaded medicines before billing',
+            'Check stock warnings, alternatives, quantity, discount, and payment',
+            'Finalize only after pharmacist confirmation',
+          ],
+        },
+        {
+          title: 'Billing',
+          items: [
+            'Create GST pharmacy invoices from the Billing & GST tab',
+            'Use payment modes such as cash, UPI, card, or insurance',
+            'Confirmed invoices deduct stock and keep patient records linked',
+          ],
+        },
+        {
+          title: 'Inventory Controls',
+          items: [
+            'Use Inventory > Pharmacy Control for Excel import',
+            'Use Inventory > Pharmacy Control for supplier invoice OCR',
+            'Review FEFO, expiry, reorder, ledger, and cost analytics in Inventory',
+          ],
+        },
+      ]}
+    />
+  );
+}
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Invoices Today</p>
-                <p className="text-2xl font-bold">{invoicesToday}</p>
-                <p className="text-xs text-muted-foreground">{pendingInvoices} pending</p>
-              </div>
-              <Receipt className="h-8 w-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
+function MetricStrip({
+  label,
+  value,
+  detail,
+  icon,
+  intent,
+}: {
+  label: string;
+  value: string | number;
+  detail: string;
+  icon: ReactNode;
+  intent: 'green' | 'blue' | 'purple' | 'amber';
+}) {
+  const colors = {
+    green: 'bg-emerald-50 text-emerald-700',
+    blue: 'bg-blue-50 text-blue-700',
+    purple: 'bg-violet-50 text-violet-700',
+    amber: 'bg-amber-50 text-amber-700',
+  };
 
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Available Drugs</p>
-                <p className="text-2xl font-bold">{totalDrugs}</p>
-                <p className="text-xs text-orange-600">{lowStockDrugs} low stock</p>
-              </div>
-              <Pill className="h-8 w-8 text-purple-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Treatment Packages</p>
-                <p className="text-2xl font-bold">{packagesCount}</p>
-                <p className="text-xs text-green-600">Dermatology focused</p>
-              </div>
-              <Package className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
+  return (
+    <div className="flex items-center justify-between gap-2 rounded-[8px] border border-white/10 bg-white/10 px-2.5 py-1.5">
+      <div className="min-w-0">
+        <p className="text-[11px] text-slate-300">{label}</p>
+        <p className="truncate text-base font-semibold leading-5 text-white">{value}</p>
+        <p className="flex items-center text-[10px] leading-4 text-slate-400">
+          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-emerald-700" />}
+          {detail}
+        </p>
       </div>
-
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="billing" className="space-y-6">
-        <div className="flex justify-end">
-          <TabsFontSizeControls />
-        </div>
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 xl:grid-cols-8">
-          <TabsTrigger value="billing" className="flex items-center gap-2">
-            <FileText className="h-4 w-4" />
-            Billing
-          </TabsTrigger>
-          <TabsTrigger value="queue" className="flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            Rx Queue
-          </TabsTrigger>
-          <TabsTrigger value="purchases" className="flex items-center gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            Intake
-          </TabsTrigger>
-          <TabsTrigger value="ledger" className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Ledger
-          </TabsTrigger>
-          <TabsTrigger value="partner-sync" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Partner Sync
-          </TabsTrigger>
-          <TabsTrigger value="packages" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            Packages
-          </TabsTrigger>
-          <TabsTrigger value="analytics" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger value="compliance" className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4" />
-            Compliance
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="billing" className="space-y-6">
-          <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
-        </TabsContent>
-        <TabsContent value="queue" className="space-y-6">
-          <PrescriptionDispensingQueue />
-        </TabsContent>
-        <TabsContent value="purchases" className="space-y-6">
-          <PurchaseInvoiceWorkbench />
-        </TabsContent>
-        <TabsContent value="ledger" className="space-y-6">
-          <PurchaseLedger />
-        </TabsContent>
-        <TabsContent value="partner-sync" className="space-y-6">
-          <PartnerDailySync />
-        </TabsContent>
-        <TabsContent value="packages" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  <CardTitle className="flex items-center gap-2">Treatment Packages</CardTitle>
-                </div>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" /> Create Package
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                      <DialogTitle>Create Treatment Package</DialogTitle>
-                    </DialogHeader>
-                    <PharmacyPackageCreator onCreated={() => {
-                      const ev = new CustomEvent('reload-packages');
-                      window.dispatchEvent(ev);
-                    }} onCancel={() => {
-                      const modal = document.querySelector('[role="dialog"] button[aria-label="Close"]') as HTMLButtonElement | null;
-                      modal?.click();
-                    }} />
-                  </DialogContent>
-                </Dialog>
-              </div>
-              <CardDescription>
-                Browse and select from pre-built dermatology treatment packages
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <PackagesWithReload />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="analytics" className="space-y-6">
-          <DistributorAnalytics />
-        </TabsContent>
-        <TabsContent value="compliance" className="space-y-6">
-          <ComplianceCenter />
-        </TabsContent>
-      </Tabs>
+      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] ${colors[intent]}`}>
+        {icon}
+      </div>
     </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  title,
+  detail,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center justify-between gap-2 rounded-[8px] border border-white/10 bg-white/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-white/15"
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-white text-slate-950">
+          {icon}
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-white">{title}</p>
+          <p className="truncate text-[11px] text-slate-300">{detail}</p>
+        </div>
+      </div>
+      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
+    </button>
+  );
+}
+
+function WorkbenchHeader({
+  title,
+  detail,
+}: {
+  title: string;
+  detail: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-[8px] border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p className="text-lg font-semibold text-slate-950">{title}</p>
+        <p className="text-sm text-slate-600">{detail}</p>
+      </div>
+      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Review before commit
+      </div>
+    </div>
+  );
+}
+
+function PackagesPanel() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2">Treatment Packages</CardTitle>
+          </div>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" /> Create Package
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl">
+              <DialogHeader>
+                <DialogTitle>Create Treatment Package</DialogTitle>
+              </DialogHeader>
+              <PharmacyPackageCreator onCreated={() => {
+                const ev = new CustomEvent('reload-packages');
+                window.dispatchEvent(ev);
+              }} onCancel={() => {
+                const modal = document.querySelector('[role="dialog"] button[aria-label="Close"]') as HTMLButtonElement | null;
+                modal?.click();
+              }} />
+            </DialogContent>
+          </Dialog>
+        </div>
+        <CardDescription>
+          Browse and select from pre-built dermatology treatment packages
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <PackagesWithReload />
+      </CardContent>
+    </Card>
   );
 }
 

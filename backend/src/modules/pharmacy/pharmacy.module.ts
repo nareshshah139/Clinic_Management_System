@@ -15,6 +15,7 @@ import { PharmacyComplianceController } from './pharmacy-compliance.controller';
 import { PharmacyComplianceService } from './pharmacy-compliance.service';
 import { PharmacyPackageController } from './pharmacy-package.controller';
 import { PharmacyPackageService } from './pharmacy-package.service';
+import { PharmacyDispenseTaskController } from './pharmacy-dispense-task.controller';
 import { PharmacyPrescriptionQueueController } from './pharmacy-prescription-queue.controller';
 import { PharmacyPrescriptionQueueService } from './pharmacy-prescription-queue.service';
 import { PrismaModule } from '../../shared/database/prisma.module';
@@ -31,6 +32,7 @@ import { NumberingModule } from '../../shared/numbering/numbering.module';
     PharmacyPartnerSalesController,
     PharmacyComplianceController,
     PharmacyPackageController,
+    PharmacyDispenseTaskController,
     PharmacyPrescriptionQueueController,
   ],
   providers: [

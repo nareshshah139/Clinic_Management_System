@@ -462,6 +462,23 @@ export class ApiClient {
     return this.post('/inventory/items', data);
   }
 
+  async updateInventoryItem(id: string, data: Record<string, unknown>) {
+    return this.patch(`/inventory/items/${id}`, data);
+  }
+
+  async importInventoryStarterExcel<T = unknown>(file: File): Promise<T> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<T>(
+      '/inventory/items/import',
+      {
+        method: 'POST',
+        body: formData,
+      },
+      { timeoutMs: 120000 }
+    );
+  }
+
   async deleteInventoryItem(id: string) {
     return this.delete(`/inventory/items/${id}`);
   }

@@ -7,9 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   Package,
+  Pill,
   Search,
   Plus,
   AlertTriangle,
@@ -22,13 +24,17 @@ import {
 import { apiClient } from '@/lib/api';
 import type { InventoryItem, ItemCategory } from '@/lib/types';
 import { AddInventoryItemDialog } from '@/components/inventory/AddInventoryItemDialog';
+import { PharmacyInventoryControl } from '@/components/inventory/PharmacyInventoryControl';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
+type InventoryWorkspace = 'stock-list' | 'pharmacy-control';
+
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeWorkspace, setActiveWorkspace] = useState<InventoryWorkspace>('stock-list');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | 'ALL'>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
@@ -37,13 +43,26 @@ export default function InventoryPage() {
   // Edit dialog state
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-  const [editForm, setEditForm] = useState<{ name: string; description: string; sku: string; costPrice: string; sellingPrice: string; reorderLevel: string }>({
+  const [editForm, setEditForm] = useState<{
+    name: string;
+    description: string;
+    sku: string;
+    costPrice: string;
+    sellingPrice: string;
+    reorderLevel: string;
+    batchNumber: string;
+    expiryDate: string;
+    storageLocation: string;
+  }>({
     name: '',
     description: '',
     sku: '',
     costPrice: '',
     sellingPrice: '',
     reorderLevel: '',
+    batchNumber: '',
+    expiryDate: '',
+    storageLocation: '',
   });
   // Stock adjust dialog state
   const [showStockDialog, setShowStockDialog] = useState(false);
@@ -56,6 +75,24 @@ export default function InventoryPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const pageSize = 20;
+
+  useEffect(() => {
+    const tab =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('tab')
+        : null;
+    if (tab === 'pharmacy-control') {
+      setActiveWorkspace('pharmacy-control');
+      return;
+    }
+
+    setActiveWorkspace('stock-list');
+    if (tab === 'low-stock') {
+      setStockFilter('LOW');
+    } else if (tab === 'expiry') {
+      setStockFilter('ALL');
+    }
+  }, []);
 
   const fetchInventoryItems = useCallback(async (page: number = currentPage) => {
     try {
@@ -149,6 +186,9 @@ export default function InventoryPage() {
       costPrice: String(item.costPrice ?? ''),
       sellingPrice: String(item.sellingPrice ?? ''),
       reorderLevel: String(item.reorderLevel ?? ''),
+      batchNumber: item.batchNumber || '',
+      expiryDate: item.expiryDate ? String(item.expiryDate).slice(0, 10) : '',
+      storageLocation: item.storageLocation || '',
     });
     setShowEditDialog(true);
   };
@@ -161,12 +201,48 @@ export default function InventoryPage() {
   };
 
   const handleSaveEdit = async () => {
-    // No-op placeholder; backend update endpoint not wired yet
-    toast({ description: 'Saved changes (no-op). Inventory update not yet implemented.' });
-    setShowEditDialog(false);
-    setEditItem(null);
-    // Optionally refresh list
-    fetchInventoryItems(1);
+    if (!editItem) return;
+
+    const costPrice = Number(editForm.costPrice);
+    const sellingPrice = Number(editForm.sellingPrice);
+    const reorderLevel = Number(editForm.reorderLevel);
+
+    if (!editForm.name.trim()) {
+      toast({ variant: 'destructive', title: 'Name required', description: 'Inventory item name cannot be empty.' });
+      return;
+    }
+    if (!Number.isFinite(costPrice) || costPrice < 0) {
+      toast({ variant: 'destructive', title: 'Invalid cost', description: 'Cost price must be a valid number.' });
+      return;
+    }
+    if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
+      toast({ variant: 'destructive', title: 'Invalid price', description: 'Selling price must be a valid number.' });
+      return;
+    }
+    if (!Number.isFinite(reorderLevel) || reorderLevel < 0) {
+      toast({ variant: 'destructive', title: 'Invalid reorder level', description: 'Reorder level must be a valid number.' });
+      return;
+    }
+
+    try {
+      await apiClient.updateInventoryItem(editItem.id, {
+        name: editForm.name.trim(),
+        description: editForm.description.trim() || undefined,
+        sku: editForm.sku.trim() || undefined,
+        costPrice,
+        sellingPrice,
+        reorderLevel: Math.round(reorderLevel),
+        batchNumber: editForm.batchNumber.trim() || undefined,
+        expiryDate: editForm.expiryDate || undefined,
+        storageLocation: editForm.storageLocation.trim() || undefined,
+      });
+      toast({ description: 'Inventory item updated successfully.' });
+      setShowEditDialog(false);
+      setEditItem(null);
+      await fetchInventoryItems(currentPage);
+    } catch (error: unknown) {
+      toast({ variant: 'destructive', title: 'Update failed', description: getApiErrorMessage(error, 'Failed to update item') });
+    }
   };
 
   const handleApplyStock = async () => {
@@ -207,9 +283,8 @@ export default function InventoryPage() {
       
       // Refresh the inventory list to show updated stock
       await fetchInventoryItems(currentPage);
-    } catch (error: any) {
-      const message = error?.body?.message || error?.message || 'Failed to adjust stock';
-      toast({ variant: 'destructive', title: 'Stock Adjustment Failed', description: message });
+    } catch (error: unknown) {
+      toast({ variant: 'destructive', title: 'Stock Adjustment Failed', description: getApiErrorMessage(error, 'Failed to adjust stock') });
     }
   };
 
@@ -220,9 +295,8 @@ export default function InventoryPage() {
       await apiClient.deleteInventoryItem(item.id);
       toast({ description: 'Item deleted successfully' });
       fetchInventoryItems(1);
-    } catch (error: any) {
-      const message = error?.body?.message || error?.message || 'Failed to delete item';
-      toast({ variant: 'destructive', title: 'Delete failed', description: message });
+    } catch (error: unknown) {
+      toast({ variant: 'destructive', title: 'Delete failed', description: getApiErrorMessage(error, 'Failed to delete item') });
     }
   };
 
@@ -275,6 +349,19 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      <Tabs value={activeWorkspace} onValueChange={(value: string) => setActiveWorkspace(value as InventoryWorkspace)} className="space-y-6">
+        <TabsList className="grid h-auto w-full grid-cols-2 rounded-[8px] border border-slate-200 bg-white p-1 shadow-sm lg:w-[520px]">
+          <TabsTrigger value="stock-list" className="min-h-11 gap-2">
+            <Package className="h-4 w-4" />
+            Stock List
+          </TabsTrigger>
+          <TabsTrigger value="pharmacy-control" className="min-h-11 gap-2">
+            <Pill className="h-4 w-4" />
+            Pharmacy Control
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stock-list" className="space-y-6">
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
@@ -519,6 +606,12 @@ export default function InventoryPage() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="pharmacy-control" className="space-y-6">
+          <PharmacyInventoryControl />
+        </TabsContent>
+      </Tabs>
 
       {/* Edit Item Dialog (no-op) */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
@@ -550,6 +643,18 @@ export default function InventoryPage() {
             <div className="space-y-2">
               <Label htmlFor="inv-reorder">Reorder Level</Label>
               <Input id="inv-reorder" type="number" inputMode="numeric" value={editForm.reorderLevel} onChange={(e) => setEditForm({ ...editForm, reorderLevel: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-batch">Batch Number</Label>
+              <Input id="inv-batch" value={editForm.batchNumber} onChange={(e) => setEditForm({ ...editForm, batchNumber: e.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="inv-expiry">Expiry Date</Label>
+              <Input id="inv-expiry" type="date" value={editForm.expiryDate} onChange={(e) => setEditForm({ ...editForm, expiryDate: e.target.value })} />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="inv-shelf">Shelf / Rack / Bin / Fridge</Label>
+              <Input id="inv-shelf" value={editForm.storageLocation} onChange={(e) => setEditForm({ ...editForm, storageLocation: e.target.value })} placeholder="Rack A / Shelf 2 / Bin 04" />
             </div>
           </div>
           <DialogFooter>
@@ -626,4 +731,12 @@ export default function InventoryPage() {
       />
     </div>
   );
-} 
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as { body?: { message?: string }; message?: string };
+    return candidate.body?.message || candidate.message || fallback;
+  }
+  return fallback;
+}

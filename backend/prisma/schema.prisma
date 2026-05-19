@@ -1197,6 +1197,88 @@ model PharmacyPayment {
   @@map("pharmacy_payments")
 }
 
+model PharmacyDispenseTask {
+  id               String                     @id @default(cuid())
+  branchId         String
+  prescriptionId   String?
+  visitId          String?
+  patientId        String
+  patientName      String
+  patientCode      String?
+  doctorId         String?
+  doctorName       String?
+  source           PharmacyDispenseTaskSource @default(VISIT)
+  status           PharmacyDispenseTaskStatus @default(QUEUED)
+  priority         Int                        @default(0)
+  assignedToId     String?
+  startedAt        DateTime?
+  pausedAt         DateTime?
+  readyToBillAt    DateTime?
+  paidAt           DateTime?
+  dispensedAt      DateTime?
+  cancelledAt      DateTime?
+  statusReasonType String?
+  statusReasonNote String?
+  exceptionCount   Int                        @default(0)
+  lastStockCheckAt DateTime?
+  linkedInvoiceIds String?
+  metadata         Json?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  lines            PharmacyDispenseTaskLine[]
+
+  @@unique([branchId, prescriptionId])
+  @@index([branchId])
+  @@index([branchId, status])
+  @@index([branchId, createdAt])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([assignedToId])
+  @@map("pharmacy_dispense_tasks")
+}
+
+model PharmacyDispenseTaskLine {
+  id                         String                     @id @default(cuid())
+  taskId                     String
+  drugName                   String
+  genericName                String?
+  originalText               String?
+  dosage                     String?
+  dosageUnit                 String?
+  frequency                  String?
+  duration                   String?
+  durationUnit               String?
+  instructions               String?
+  prescribedQuantity         Int?
+  dispensedQuantity          Int                        @default(0)
+  suggestedDrugId            String?
+  suggestedInventoryItemId   String?
+  suggestedDrugName          String?
+  confidence                 Float?
+  stockStatus                String?
+  recommendedBatchNumber     String?
+  recommendedExpiryDate      DateTime?
+  recommendedStorageLocation String?
+  action                     PharmacyDispenseLineAction @default(PENDING)
+  reasonType                 String?
+  reasonNote                 String?
+  substituteDrugId           String?
+  substituteDrugName         String?
+  editedQuantity             Int?
+  pharmacistNotes            String?
+  warnings                   Json?
+  metadata                   Json?
+  createdAt                  DateTime                   @default(now())
+  updatedAt                  DateTime                   @updatedAt
+  task                       PharmacyDispenseTask       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([drugName])
+  @@index([suggestedDrugId])
+  @@index([suggestedInventoryItemId])
+  @@map("pharmacy_dispense_task_lines")
+}
+
 model PharmacyPurchaseInvoice {
   id                     String                        @id @default(cuid())
   branchId               String
@@ -1453,6 +1535,32 @@ enum PharmacyPaymentStatus {
   FAILED
   REFUNDED
   PARTIALLY_PAID
+}
+
+enum PharmacyDispenseTaskStatus {
+  QUEUED
+  IN_REVIEW
+  PARTIALLY_FILLED
+  PAUSED
+  READY_TO_BILL
+  PAID
+  DISPENSED
+  CANCELLED
+}
+
+enum PharmacyDispenseTaskSource {
+  VISIT
+  E_PRESCRIPTION
+  PAPER_OCR
+  WALK_IN
+}
+
+enum PharmacyDispenseLineAction {
+  PENDING
+  ACCEPTED
+  SUBSTITUTE
+  EDITED
+  UNAVAILABLE
 }
 
 enum PharmacyPurchaseInvoiceStatus {

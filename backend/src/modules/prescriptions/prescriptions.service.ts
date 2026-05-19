@@ -1,7 +1,8 @@
 // @ts-nocheck
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
 import { 
   CreatePrescriptionDto, 
   UpdatePrescriptionDto, 
@@ -25,7 +26,11 @@ import {
 
 @Injectable()
 export class PrescriptionsService {
-  constructor(private prisma: PrismaService, private notifications: NotificationsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+    @Optional() private pharmacyQueue?: PharmacyPrescriptionQueueService,
+  ) {}
 
   async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string) {
     const {
@@ -108,6 +113,12 @@ export class PrescriptionsService {
         },
       },
     });
+
+    try {
+      await this.pharmacyQueue?.pull(prescription.id, branchId);
+    } catch {
+      // Prescription creation should not fail if pharmacy queue materialization is delayed.
+    }
 
     return {
       ...prescription,

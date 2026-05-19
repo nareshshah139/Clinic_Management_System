@@ -9,8 +9,12 @@ import {
   Query,
   UseGuards,
   Request,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { InventoryService } from './inventory.service';
+import { InventoryImportService } from './inventory-import.service';
 import {
   CreateInventoryItemDto,
   UpdateInventoryItemDto,
@@ -54,7 +58,10 @@ interface AuthenticatedRequest {
 @Controller('inventory')
 @UseGuards(JwtAuthGuard)
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(
+    private readonly inventoryService: InventoryService,
+    private readonly inventoryImportService: InventoryImportService,
+  ) {}
 
   // Inventory Item Management
   @Post('items')
@@ -65,6 +72,25 @@ export class InventoryController {
     @Request() req: AuthenticatedRequest,
   ) {
     return this.inventoryService.createInventoryItem(createItemDto, req.user.branchId);
+  }
+
+  @Post('items/import')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:create')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  importInventoryStarterExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.inventoryImportService.importStarterExcel(
+      file,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Get('items')

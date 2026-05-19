@@ -412,10 +412,19 @@ export interface InventoryItem {
   barcode?: string;
   category?: ItemCategory;
   manufacturer?: string;
+  supplier?: string;
   currentStock: number;
+  minStockLevel?: number | null;
+  maxStockLevel?: number | null;
   reorderLevel: number;
+  reorderQuantity?: number | null;
   costPrice: number;
   sellingPrice?: number;
+  mrp?: number | null;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
+  storageLocation?: string | null;
+  stockStatus?: string | null;
   updatedAt?: string;
 }
 
