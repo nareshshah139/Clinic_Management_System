@@ -120,6 +120,11 @@ type ChartSpec = {
   data?: Array<Record<string, unknown>>;
 };
 
+type ThreadActionState = {
+  id: string;
+  type: "archive" | "restore";
+} | null;
+
 const chartColors = ["#2563eb", "#059669", "#dc2626", "#9333ea", "#ea580c"];
 
 const hasThreadContent = (thread: AgentSession) =>
@@ -143,6 +148,7 @@ export function AgenticPharmacyDock() {
   const [codexReady, setCodexReady] = useState<boolean | null>(null);
   const [loadingThreads, setLoadingThreads] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [threadAction, setThreadAction] = useState<ThreadActionState>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const initializedRef = useRef(false);
@@ -443,22 +449,32 @@ export function AgenticPharmacyDock() {
     }
   };
 
-  const archiveCurrentThread = async () => {
-    if (!session || isHistoryThread || !currentThreadHasContent) return;
+  const archiveThread = async (threadId: string) => {
+    if (threadAction) return;
+    const target = sessions.find((item) => item.id === threadId);
+    if (target?.status === "ARCHIVED") return;
+    const targetHasContent =
+      threadId === session?.id
+        ? currentThreadHasContent
+        : Boolean(target && hasThreadContent(target));
+    if (!targetHasContent) return;
+    setThreadAction({ id: threadId, type: "archive" });
     try {
       const archived =
-        await apiClient.archivePharmacyAgentSession<AgentSession>(session.id);
+        await apiClient.archivePharmacyAgentSession<AgentSession>(threadId);
       upsertSessionListItem(archived);
       setShowHistory(true);
-      toast({ title: "Thread moved to history" });
+      toast({ title: "Thread archived" });
       const nextSessions = await refreshThreads();
-      const nextActive = nextSessions.find(
-        (item) => item.status !== "ARCHIVED" && item.id !== session.id,
-      );
-      if (nextActive) {
-        await loadSession(nextActive.id);
-      } else {
-        await createThread();
+      if (threadId === session?.id) {
+        const nextActive = nextSessions.find(
+          (item) => item.status !== "ARCHIVED" && item.id !== threadId,
+        );
+        if (nextActive) {
+          await loadSession(nextActive.id);
+        } else {
+          await createThread();
+        }
       }
     } catch (error) {
       toast({
@@ -466,10 +482,14 @@ export function AgenticPharmacyDock() {
         title: "Archive failed",
         description: getErrorMessage(error),
       });
+    } finally {
+      setThreadAction(null);
     }
   };
 
   const restoreThread = async (threadId: string) => {
+    if (threadAction) return;
+    setThreadAction({ id: threadId, type: "restore" });
     try {
       const restored =
         await apiClient.restorePharmacyAgentSession<AgentSession>(threadId);
@@ -483,6 +503,8 @@ export function AgenticPharmacyDock() {
         title: "Restore failed",
         description: getErrorMessage(error),
       });
+    } finally {
+      setThreadAction(null);
     }
   };
 
@@ -525,11 +547,21 @@ export function AgenticPharmacyDock() {
               variant="outline"
               size="sm"
               className="gap-1"
-              onClick={() => void archiveCurrentThread()}
-              disabled={creating || sending || !currentThreadHasContent}
+              onClick={() => void archiveThread(session.id)}
+              disabled={
+                creating ||
+                sending ||
+                !currentThreadHasContent ||
+                Boolean(threadAction)
+              }
             >
-              <Archive className="h-4 w-4" />
-              History
+              {threadAction?.type === "archive" &&
+              threadAction.id === session.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Archive className="h-4 w-4" />
+              )}
+              Archive
             </Button>
           )}
           {isHistoryThread && session && (
@@ -539,9 +571,14 @@ export function AgenticPharmacyDock() {
               size="sm"
               className="gap-1"
               onClick={() => void restoreThread(session.id)}
-              disabled={creating || sending}
+              disabled={creating || sending || Boolean(threadAction)}
             >
-              <RotateCcw className="h-4 w-4" />
+              {threadAction?.type === "restore" &&
+              threadAction.id === session.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RotateCcw className="h-4 w-4" />
+              )}
               Restore
             </Button>
           )}
@@ -570,8 +607,10 @@ export function AgenticPharmacyDock() {
           loading={loadingThreads}
           showHistory={showHistory}
           onSelect={(threadId) => void selectThread(threadId)}
+          onArchive={(threadId) => void archiveThread(threadId)}
           onRestore={(threadId) => void restoreThread(threadId)}
           onToggleHistory={() => setShowHistory((value) => !value)}
+          threadAction={threadAction}
         />
         <div className="flex min-h-0 flex-col">
           <div
@@ -764,8 +803,10 @@ function ThreadRail({
   loading,
   showHistory,
   onSelect,
+  onArchive,
   onRestore,
   onToggleHistory,
+  threadAction,
 }: {
   sessions: AgentSession[];
   historySessions: AgentSession[];
@@ -773,8 +814,10 @@ function ThreadRail({
   loading: boolean;
   showHistory: boolean;
   onSelect: (threadId: string) => void;
+  onArchive: (threadId: string) => void;
   onRestore: (threadId: string) => void;
   onToggleHistory: () => void;
+  threadAction: ThreadActionState;
 }) {
   return (
     <aside className="border-b border-slate-200 bg-slate-50 md:min-h-0 md:border-b-0 md:border-r">
@@ -796,6 +839,8 @@ function ThreadRail({
           sessions={sessions}
           currentSessionId={currentSessionId}
           onSelect={onSelect}
+          onArchive={onArchive}
+          threadAction={threadAction}
         />
         <button
           type="button"
@@ -825,6 +870,7 @@ function ThreadRail({
             currentSessionId={currentSessionId}
             onSelect={onSelect}
             onRestore={onRestore}
+            threadAction={threadAction}
           />
         )}
       </div>
@@ -840,7 +886,9 @@ function ThreadSection({
   sessions,
   currentSessionId,
   onSelect,
+  onArchive,
   onRestore,
+  threadAction,
 }: {
   className?: string;
   icon: ReactNode;
@@ -849,7 +897,9 @@ function ThreadSection({
   sessions: AgentSession[];
   currentSessionId?: string;
   onSelect: (threadId: string) => void;
+  onArchive?: (threadId: string) => void;
   onRestore?: (threadId: string) => void;
+  threadAction: ThreadActionState;
 }) {
   return (
     <div className={className}>
@@ -869,7 +919,9 @@ function ThreadSection({
               session={item}
               selected={item.id === currentSessionId}
               onSelect={() => onSelect(item.id)}
+              onArchive={onArchive ? () => onArchive(item.id) : undefined}
               onRestore={onRestore ? () => onRestore(item.id) : undefined}
+              threadAction={threadAction}
             />
           ))}
         </div>
@@ -882,14 +934,23 @@ function ThreadListItem({
   session,
   selected,
   onSelect,
+  onArchive,
   onRestore,
+  threadAction,
 }: {
   session: AgentSession;
   selected: boolean;
   onSelect: () => void;
+  onArchive?: () => void;
   onRestore?: () => void;
+  threadAction: ThreadActionState;
 }) {
   const isArchived = session.status === "ARCHIVED";
+  const isArchiving =
+    threadAction?.type === "archive" && threadAction.id === session.id;
+  const isRestoring =
+    threadAction?.type === "restore" && threadAction.id === session.id;
+  const actionInProgress = Boolean(threadAction);
   return (
     <div
       className={cn(
@@ -921,6 +982,24 @@ function ThreadListItem({
           {isArchived ? "History" : "Active"}
         </div>
       </button>
+      {!isArchived && onArchive && hasThreadContent(session) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="mt-2 h-7 w-full justify-start px-2 text-xs"
+          onClick={onArchive}
+          disabled={actionInProgress}
+          aria-label={`Archive ${session.title || "Agentic Pharmacy"} thread`}
+        >
+          {isArchiving ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Archive className="h-3.5 w-3.5" />
+          )}
+          Archive
+        </Button>
+      )}
       {isArchived && onRestore && (
         <Button
           type="button"
@@ -928,8 +1007,13 @@ function ThreadListItem({
           size="sm"
           className="mt-2 h-7 w-full justify-start px-2 text-xs"
           onClick={onRestore}
+          disabled={actionInProgress}
         >
-          <RotateCcw className="h-3.5 w-3.5" />
+          {isRestoring ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" />
+          )}
           Restore
         </Button>
       )}
