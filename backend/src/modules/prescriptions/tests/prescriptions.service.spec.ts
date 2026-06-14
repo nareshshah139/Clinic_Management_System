@@ -296,14 +296,17 @@ describe('PrescriptionsService', () => {
       const mockPrescriptions = [
         {
           id: 'prescription-1',
-          prescriptionNumber: 'RX-20241225-001',
-          status: PrescriptionStatus.ACTIVE,
-          patient: mockPatient,
-          visit: mockVisit,
-          doctor: mockDoctor,
-          refills: [],
+          visit: {
+            ...mockVisit,
+            patientId: mockPatient.id,
+            doctorId: mockDoctor.id,
+            patient: mockPatient,
+            doctor: mockDoctor,
+          },
           items: JSON.stringify([{ drugName: 'Paracetamol', dosage: 500 }]),
           metadata: null,
+          pharmacistNotes: 'Dx: Fever',
+          instructions: 'Follow up in 1 week',
         },
       ];
 
@@ -319,6 +322,20 @@ describe('PrescriptionsService', () => {
             ...mockPrescriptions[0],
             items: [{ drugName: 'Paracetamol', dosage: 500 }],
             metadata: null,
+            patient: mockPatient,
+            patientId: mockPatient.id,
+            doctor: {
+              id: mockDoctor.id,
+              firstName: mockDoctor.firstName,
+              lastName: mockDoctor.lastName,
+              name: `${mockDoctor.firstName} ${mockDoctor.lastName}`,
+            },
+            doctorId: mockDoctor.id,
+            diagnosis: 'Fever',
+            notes: 'Dx: Fever',
+            followUpInstructions: 'Follow up in 1 week',
+            status: PrescriptionStatus.ACTIVE,
+            refills: [],
           },
         ],
         pagination: {
@@ -345,9 +362,9 @@ describe('PrescriptionsService', () => {
 
       expect(mockPrisma.prescription.findMany).toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
-          status: PrescriptionStatus.ACTIVE,
           visit: expect.objectContaining({
             patient: expect.objectContaining({ branchId: mockBranchId }),
+            patientId: 'patient-123',
           }),
           createdAt: expect.objectContaining({
             gte: expect.any(Date),
@@ -355,6 +372,18 @@ describe('PrescriptionsService', () => {
           }),
         }),
         orderBy: { createdAt: 'desc' },
+      }));
+    });
+
+    it('should normalize string pagination values from route query params', async () => {
+      mockPrisma.prescription.findMany.mockResolvedValue([]);
+      mockPrisma.prescription.count.mockResolvedValue(0);
+
+      await service.findAllPrescriptions({ page: '1' as any, limit: '60' as any }, mockBranchId);
+
+      expect(mockPrisma.prescription.findMany).toHaveBeenCalledWith(expect.objectContaining({
+        skip: 0,
+        take: 60,
       }));
     });
   });

@@ -439,7 +439,7 @@ describe('AddInventoryItemDialog', () => {
 
       // The form should have MEDICINE as default type
       const typeSelect = screen.getByRole('combobox', { name: /Type/i });
-      expect(typeSelect).toHaveValue('MEDICINE');
+      expect(typeSelect).toHaveTextContent('Medicine');
     });
 
     it('should default unit to PIECES', () => {
@@ -452,7 +452,7 @@ describe('AddInventoryItemDialog', () => {
       );
 
       const unitSelect = screen.getByRole('combobox', { name: /Unit/i });
-      expect(unitSelect).toHaveValue('PIECES');
+      expect(unitSelect).toHaveTextContent('Pieces');
     });
   });
 
@@ -481,10 +481,10 @@ describe('AddInventoryItemDialog', () => {
       fireEvent.change(screen.getByLabelText(/Brand Name/i), {
         target: { value: 'Amoxil' },
       });
-      fireEvent.change(screen.getByLabelText(/Category/i), {
+      fireEvent.change(screen.getByLabelText(/^Category$/i), {
         target: { value: 'Antibiotics' },
       });
-      fireEvent.change(screen.getByLabelText(/Sub-Category/i), {
+      fireEvent.change(screen.getByLabelText(/^Sub-Category$/i), {
         target: { value: 'Penicillin' },
       });
       fireEvent.change(screen.getByLabelText(/Manufacturer/i), {
@@ -759,4 +759,3 @@ describe('AddInventoryItemDialog', () => {
     });
   });
 });
-

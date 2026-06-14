@@ -70,6 +70,12 @@ model User {
   partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages            PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates          WhatsAppTemplate[]
+  pharmacyAgentSessions      PharmacyAgentSession[]
+  pharmacyAgentMessages      PharmacyAgentMessage[]
+  pharmacyAgentAttachments   PharmacyAgentAttachment[]
+  pharmacyAgentRuns          PharmacyAgentRun[]
+  pharmacyAgentProposals     PharmacyAgentProposal[]
+  pharmacyAgentAuditEvents   PharmacyAgentAuditEvent[]
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -120,6 +126,13 @@ model Branch {
   partnerOrganizations     PartnerOrganization[]
   partnerDailySales        PartnerDailySale[]
   whatsappTemplates        WhatsAppTemplate[]
+  pharmacyAgentSessions    PharmacyAgentSession[]
+  pharmacyAgentMessages    PharmacyAgentMessage[]
+  pharmacyAgentAttachments PharmacyAgentAttachment[]
+  pharmacyAgentRuns        PharmacyAgentRun[]
+  pharmacyAgentProposals   PharmacyAgentProposal[]
+  pharmacyAgentActions     PharmacyAgentProposalAction[]
+  pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -1868,4 +1881,199 @@ model NumberSequence {
 
   @@unique([type, branchId, periodKey])
   @@map("number_sequences")
+}
+
+model PharmacyAgentSession {
+  id        String   @id @default(cuid())
+  branchId  String
+  userId    String
+  title     String?
+  status    String   @default("ACTIVE")
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch      Branch                    @relation(fields: [branchId], references: [id])
+  user        User                      @relation(fields: [userId], references: [id])
+  messages    PharmacyAgentMessage[]
+  attachments PharmacyAgentAttachment[]
+  runs        PharmacyAgentRun[]
+  proposals   PharmacyAgentProposal[]
+  auditEvents PharmacyAgentAuditEvent[]
+
+  @@index([branchId])
+  @@index([userId])
+  @@index([branchId, updatedAt])
+  @@map("pharmacy_agent_sessions")
+}
+
+model PharmacyAgentMessage {
+  id            String                   @id @default(cuid())
+  sessionId     String
+  branchId      String
+  userId        String?
+  role          PharmacyAgentMessageRole
+  content       String
+  structured    Json?
+  attachmentIds String?
+  createdAt     DateTime                 @default(now())
+
+  session PharmacyAgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  branch  Branch               @relation(fields: [branchId], references: [id])
+  user    User?                @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([branchId, createdAt])
+  @@map("pharmacy_agent_messages")
+}
+
+model PharmacyAgentAttachment {
+  id            String   @id @default(cuid())
+  sessionId     String
+  branchId      String
+  userId        String
+  fileName      String
+  mimeType      String
+  sizeBytes     Int
+  kind          String
+  status        String   @default("READY")
+  storagePath   String?
+  extractedText String?
+  summary       Json?
+  createdAt     DateTime @default(now())
+
+  session PharmacyAgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  branch  Branch               @relation(fields: [branchId], references: [id])
+  user    User                 @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([branchId, createdAt])
+  @@map("pharmacy_agent_attachments")
+}
+
+model PharmacyAgentRun {
+  id          String                 @id @default(cuid())
+  sessionId   String
+  branchId    String
+  userId      String
+  status      PharmacyAgentRunStatus @default(QUEUED)
+  promptHash  String?
+  output      Json?
+  error       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime               @default(now())
+
+  session    PharmacyAgentSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  branch     Branch                  @relation(fields: [branchId], references: [id])
+  user       User                    @relation(fields: [userId], references: [id])
+  proposals  PharmacyAgentProposal[]
+  auditEvents PharmacyAgentAuditEvent[]
+
+  @@index([sessionId])
+  @@index([branchId, createdAt])
+  @@index([status])
+  @@map("pharmacy_agent_runs")
+}
+
+model PharmacyAgentProposal {
+  id              String                      @id @default(cuid())
+  sessionId       String
+  runId           String?
+  branchId        String
+  userId          String
+  title           String
+  summary         String
+  riskLevel       String                      @default("MEDIUM")
+  status          PharmacyAgentProposalStatus @default(PENDING_REVIEW)
+  appliedBy       String?
+  appliedAt       DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime                    @default(now())
+  updatedAt       DateTime                    @updatedAt
+
+  session     PharmacyAgentSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  run         PharmacyAgentRun?             @relation(fields: [runId], references: [id])
+  branch      Branch                        @relation(fields: [branchId], references: [id])
+  user        User                          @relation(fields: [userId], references: [id])
+  actions     PharmacyAgentProposalAction[]
+  auditEvents PharmacyAgentAuditEvent[]
+
+  @@index([sessionId])
+  @@index([branchId, status])
+  @@index([createdAt])
+  @@map("pharmacy_agent_proposals")
+}
+
+model PharmacyAgentProposalAction {
+  id                 String   @id @default(cuid())
+  proposalId         String
+  branchId           String
+  actionType         String
+  targetType         String
+  targetId           String?
+  permissionRequired String?
+  expectedVersion    DateTime?
+  input              Json
+  preview            Json?
+  status             String   @default("PENDING_REVIEW")
+  result             Json?
+  error              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  proposal PharmacyAgentProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  branch   Branch                @relation(fields: [branchId], references: [id])
+
+  @@index([proposalId])
+  @@index([branchId])
+  @@index([actionType])
+  @@map("pharmacy_agent_proposal_actions")
+}
+
+model PharmacyAgentAuditEvent {
+  id         String   @id @default(cuid())
+  sessionId  String?
+  runId      String?
+  proposalId String?
+  branchId   String
+  userId     String?
+  eventType  String
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  session  PharmacyAgentSession?  @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  run      PharmacyAgentRun?      @relation(fields: [runId], references: [id], onDelete: SetNull)
+  proposal PharmacyAgentProposal? @relation(fields: [proposalId], references: [id], onDelete: SetNull)
+  branch   Branch                 @relation(fields: [branchId], references: [id])
+  user     User?                  @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([proposalId])
+  @@index([branchId, createdAt])
+  @@map("pharmacy_agent_audit_events")
+}
+
+enum PharmacyAgentMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
+}
+
+enum PharmacyAgentRunStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum PharmacyAgentProposalStatus {
+  PENDING_REVIEW
+  APPLIED
+  REJECTED
+  FAILED
+  EXPIRED
 }

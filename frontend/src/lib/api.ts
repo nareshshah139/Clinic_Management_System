@@ -443,6 +443,68 @@ export class ApiClient {
     return this.get<T>('/pharmacy/dashboard');
   }
 
+  async getPharmacyAgentStatus<T = unknown>() {
+    return this.get<T>('/pharmacy/agent/status');
+  }
+
+  async listPharmacyAgentSessions<T = unknown>() {
+    return this.get<T>('/pharmacy/agent/sessions');
+  }
+
+  async createPharmacyAgentSession<T = unknown>(data?: { title?: string }) {
+    return this.post<T>('/pharmacy/agent/sessions', data || {});
+  }
+
+  async getPharmacyAgentSession<T = unknown>(sessionId: string) {
+    return this.get<T>(`/pharmacy/agent/sessions/${sessionId}`);
+  }
+
+  async archivePharmacyAgentSession<T = unknown>(sessionId: string) {
+    return this.post<T>(`/pharmacy/agent/sessions/${sessionId}/archive`, {});
+  }
+
+  async restorePharmacyAgentSession<T = unknown>(sessionId: string) {
+    return this.post<T>(`/pharmacy/agent/sessions/${sessionId}/restore`, {});
+  }
+
+  async uploadPharmacyAgentAttachment<T = unknown>(sessionId: string, file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<T>(
+      `/pharmacy/agent/sessions/${sessionId}/attachments`,
+      {
+        method: 'POST',
+        body: formData,
+      },
+      { timeoutMs: 120000 }
+    );
+  }
+
+  async sendPharmacyAgentMessage<T = unknown>(
+    sessionId: string,
+    data: { message: string; attachmentIds?: string[] }
+  ) {
+    return this.post<T>(`/pharmacy/agent/sessions/${sessionId}/messages`, data, {
+      timeoutMs: 180000,
+    });
+  }
+
+  async listPharmacyAgentProposals<T = unknown>(sessionId: string) {
+    return this.get<T>(`/pharmacy/agent/sessions/${sessionId}/proposals`);
+  }
+
+  async applyPharmacyAgentProposal<T = unknown>(proposalId: string) {
+    return this.post<T>(`/pharmacy/agent/proposals/${proposalId}/apply`, {}, {
+      timeoutMs: 120000,
+    });
+  }
+
+  async rejectPharmacyAgentProposal<T = unknown>(proposalId: string, reason?: string) {
+    return this.post<T>(`/pharmacy/agent/proposals/${proposalId}/reject`, {
+      reason,
+    });
+  }
+
   async processPayment(data: Record<string, unknown>) {
     return this.post('/billing/payments', data);
   }

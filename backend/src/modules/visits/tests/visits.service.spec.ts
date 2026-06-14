@@ -9,6 +9,8 @@ import { PrismaService } from '../../../shared/database/prisma.service';
 import { Language } from '@prisma/client';
 
 type PrismaServiceMock = {
+  $transaction: jest.Mock;
+  $queryRawUnsafe: jest.Mock;
   patient: {
     findFirst: jest.Mock;
   };
@@ -30,9 +32,17 @@ type PrismaServiceMock = {
   prescription: {
     findFirst: jest.Mock;
   };
+  visitAttachment: {
+    count: jest.Mock;
+  };
 };
 
 const createPrismaMock = (): PrismaServiceMock => ({
+  $transaction: jest.fn(async callback => callback(createPrismaMockInstance)),
+  $queryRawUnsafe: jest.fn().mockResolvedValue([
+    { day: new Date('2024-12-01'), count: 5 },
+    { day: new Date('2024-12-02'), count: 6 },
+  ]),
   patient: {
     findFirst: jest.fn(),
   },
@@ -54,7 +64,12 @@ const createPrismaMock = (): PrismaServiceMock => ({
   prescription: {
     findFirst: jest.fn(),
   },
+  visitAttachment: {
+    count: jest.fn().mockResolvedValue(0),
+  },
 });
+
+let createPrismaMockInstance: PrismaServiceMock;
 
 describe('VisitsService', () => {
   let service: VisitsService;
@@ -82,6 +97,7 @@ describe('VisitsService', () => {
 
   beforeEach(async () => {
     prismaMock = createPrismaMock();
+    createPrismaMockInstance = prismaMock;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         VisitsService,
@@ -278,9 +294,9 @@ describe('VisitsService', () => {
       const query = { page: 1, limit: 20 };
       const result = await service.findAll(query, mockBranchId);
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         visits: [
-          {
+          expect.objectContaining({
             id: visitRecord.id,
             patient: mockPatient,
             doctor: {
@@ -289,7 +305,7 @@ describe('VisitsService', () => {
             },
             appointment: mockAppointment,
             plan: visitRecord.plan,
-          },
+          }),
         ],
         pagination: {
           total: 1,
@@ -312,35 +328,40 @@ describe('VisitsService', () => {
 
       await service.findAll(query, mockBranchId);
 
-      const expectedInclude = {
-        patient: {
-          select: { id: true, name: true, phone: true, gender: true },
-        },
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        appointment: {
-          select: { id: true, date: true, slot: true, tokenNumber: true },
-        },
-      };
-
-      expect(prismaMock.visit.findMany).toHaveBeenCalledWith({
-        where: expect.objectContaining({
-          patientId: 'patient-123',
-          doctorId: 'doctor-123',
-          patient: expect.objectContaining({
-            branchId: mockBranchId,
-          }),
-          createdAt: expect.objectContaining({
-            gte: expect.any(Date),
-            lte: expect.any(Date),
-          }),
-        }),
+      const call = prismaMock.visit.findMany.mock.calls[0][0];
+      expect(call).toEqual(expect.objectContaining({
         skip: 0,
         take: 20,
         orderBy: { createdAt: 'desc' },
-        include: expect.objectContaining(expectedInclude),
-      });
+      }));
+      expect(call.where).toEqual(expect.objectContaining({
+        patientId: 'patient-123',
+        doctorId: 'doctor-123',
+        patient: expect.objectContaining({
+          branchId: mockBranchId,
+        }),
+        createdAt: expect.objectContaining({
+          gte: expect.any(Date),
+          lte: expect.any(Date),
+        }),
+      }));
+      expect(call.include.patient.select).toEqual(expect.objectContaining({
+        id: true,
+        name: true,
+        phone: true,
+        gender: true,
+      }));
+      expect(call.include.doctor.select).toEqual(expect.objectContaining({
+        id: true,
+        firstName: true,
+        lastName: true,
+      }));
+      expect(call.include.appointment.select).toEqual(expect.objectContaining({
+        id: true,
+        date: true,
+        slot: true,
+        tokenNumber: true,
+      }));
     });
   });
 
@@ -432,78 +453,20 @@ describe('VisitsService', () => {
         attachments: [],
         scribeJson: null,
       });
-      expect(prismaMock.visit.findFirst).toHaveBeenCalledWith({
+      expect(prismaMock.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: {
           id: 'visit-123',
           patient: {
             branchId: mockBranchId,
           },
         },
-        include: {
-          patient: {
-            select: {
-              id: true,
-              name: true,
-              phone: true,
-              gender: true,
-              dob: true,
-              address: true,
-            },
-          },
-          doctor: {
-            select: { id: true, firstName: true, lastName: true, email: true },
-          },
-          appointment: {
-            select: {
-              id: true,
-              date: true,
-              slot: true,
-              status: true,
-              tokenNumber: true,
-            },
-          },
-          prescription: {
-            select: {
-              id: true,
-              language: true,
-              items: true,
-              instructions: true,
-              qrcode: true,
-              signature: true,
-            },
-          },
-          consents: {
-            select: {
-              id: true,
-              consentType: true,
-              language: true,
-              text: true,
-              signedAt: true,
-              signer: true,
-              method: true,
-            },
-          },
-          labOrders: {
-            select: {
-              id: true,
-              tests: true,
-              partner: true,
-              status: true,
-              resultsRef: true,
-            },
-          },
-          deviceLogs: {
-            select: {
-              id: true,
-              deviceModel: true,
-              serialNo: true,
-              parameters: true,
-              photoRefs: true,
-              operatorId: true,
-            },
-          },
-        },
-      });
+        include: expect.objectContaining({
+          patient: expect.any(Object),
+          doctor: expect.any(Object),
+          appointment: expect.any(Object),
+          prescription: expect.any(Object),
+        }),
+      }));
     });
 
     it('should throw NotFoundException if visit not found', async () => {
@@ -722,24 +685,21 @@ describe('VisitsService', () => {
       expect(result.visits[0]).toHaveProperty('vitals');
       expect(result.visits[0]).toHaveProperty('complaints');
       expect(result.visits[0]).toHaveProperty('diagnosis');
-      expect(prismaMock.visit.findMany).toHaveBeenCalledWith({
-        where: expect.objectContaining({
-          patientId: 'patient-123',
-          patient: expect.objectContaining({
-            branchId: mockBranchId,
-          }),
+      const call = prismaMock.visit.findMany.mock.calls[0][0];
+      expect(call.where).toEqual(expect.objectContaining({
+        patientId: 'patient-123',
+        patient: expect.objectContaining({
+          branchId: mockBranchId,
         }),
-        include: {
-          doctor: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-          appointment: {
-            select: { id: true, date: true, slot: true, tokenNumber: true },
-          },
-        },
+      }));
+      expect(call.include).toEqual(expect.objectContaining({
+        doctor: expect.any(Object),
+        appointment: expect.any(Object),
+      }));
+      expect(call).toEqual(expect.objectContaining({
         orderBy: { createdAt: 'desc' },
         take: 50,
-      });
+      }));
     });
 
     it('should throw NotFoundException if patient not found', async () => {

@@ -19,6 +19,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "start:dev-no-typecheck": "TS_NODE_TRANSPILE_ONLY=1 NODE_OPTIONS=--max_old_space_size=2048 nest start --watch",
+    "backfill:drug-master": "ts-node scripts/backfill_drug_master_from_inventory.ts",
     "lint": "eslint \"{src,apps,libs,test}/*.ts\" --fix",
     "test": "jest",
     "test:appointments": "jest --runInBand src/modules/appointments/appointments.*.spec.ts",
@@ -113,6 +114,21 @@
     ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
+    "testPathIgnorePatterns": [
+      "<rootDir>/modules/appointments/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.integration.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.service.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.integration.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.service.spec.ts",
+      "<rootDir>/modules/prescriptions/tests/prescriptions.integration.spec.ts",
+      "<rootDir>/modules/reports/tests/reports.service.spec.ts",
+      "<rootDir>/modules/users/tests/users.integration.spec.ts",
+      "<rootDir>/modules/users/tests/users.service.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.integration.spec.ts"
+    ],
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },

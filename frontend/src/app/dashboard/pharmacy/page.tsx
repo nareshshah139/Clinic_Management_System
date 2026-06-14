@@ -10,6 +10,7 @@ import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCre
 import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
+import { AgenticPharmacyDock } from '@/components/pharmacy/AgenticPharmacyDock';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
@@ -30,6 +31,12 @@ import {
 import { useRouter } from 'next/navigation';
 
 type CounterTab = 'billing' | 'queue' | 'partner-sync' | 'packages';
+type PharmacyBillingPrefill = {
+  patientId?: string;
+  prescriptionId?: string;
+  doctorId?: string;
+  visitId?: string;
+};
 
 interface PharmacyDashboardData {
   todaySales?: number;
@@ -51,7 +58,7 @@ export default function PharmacyPage() {
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
   const [counterTab, setCounterTab] = useState<CounterTab>('billing');
-  const [prefill, setPrefill] = useState<{ patientId?: string; prescriptionId?: string; doctorId?: string; visitId?: string } | null>(null);
+  const [prefill, setPrefill] = useState<PharmacyBillingPrefill | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -139,7 +146,13 @@ export default function PharmacyPage() {
     });
   };
 
-  const openCounter = (tab: CounterTab) => {
+  const openCounter = (tab: CounterTab, billingPrefill?: PharmacyBillingPrefill) => {
+    if (billingPrefill) {
+      setPrefill((current) => ({
+        ...(current ?? {}),
+        ...billingPrefill,
+      }));
+    }
     setCounterTab(tab);
     focusWorkbench();
   };
@@ -248,9 +261,11 @@ export default function PharmacyPage() {
           </div>
         </section>
 
+        <AgenticPharmacyDock />
+
         <PharmacyCounterCockpit
           prefill={prefill}
-          onOpenBilling={() => openCounter('billing')}
+          onOpenBilling={(billingPrefill) => openCounter('billing', billingPrefill)}
           onOpenQueue={() => openCounter('queue')}
           onOpenPartnerSync={() => openCounter('partner-sync')}
           onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}

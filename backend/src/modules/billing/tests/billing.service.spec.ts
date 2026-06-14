@@ -2,11 +2,37 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { BillingService } from '../billing.service';
 import { PrismaService } from '../../../shared/database/prisma.service';
+import { InvoiceNumbersService } from '../../../shared/numbering/invoice-numbers.service';
 import { InvoiceStatus, PaymentMethod, PaymentStatus } from '../dto/invoice.dto';
 
 describe('BillingService', () => {
   let service: BillingService;
   let prisma: PrismaService;
+
+  const mockInvoiceDelegate = {
+    create: jest.fn(),
+    findMany: jest.fn(),
+    findFirst: jest.fn(),
+    findUnique: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+    aggregate: jest.fn(),
+    groupBy: jest.fn(),
+  };
+
+  const mockPaymentDelegate = {
+    create: jest.fn(),
+    findFirst: jest.fn(),
+    findMany: jest.fn(),
+    update: jest.fn(),
+    count: jest.fn(),
+    aggregate: jest.fn(),
+    groupBy: jest.fn(),
+  };
+
+  const mockRefundDelegate = {
+    create: jest.fn(),
+  };
 
   const mockPrisma = {
     patient: {
@@ -18,28 +44,22 @@ describe('BillingService', () => {
     appointment: {
       findFirst: jest.fn(),
     },
-    invoice: {
-      create: jest.fn(),
-      findMany: jest.fn(),
-      findFirst: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-      count: jest.fn(),
-      aggregate: jest.fn(),
-      groupBy: jest.fn(),
+    service: {
+      create: jest.fn().mockResolvedValue({ id: 'service-123' }),
     },
-    payment: {
-      create: jest.fn(),
-      findFirst: jest.fn(),
-      findMany: jest.fn(),
-      update: jest.fn(),
-      count: jest.fn(),
-      aggregate: jest.fn(),
-      groupBy: jest.fn(),
+    invoiceItem: {
+      deleteMany: jest.fn(),
+      createMany: jest.fn(),
     },
-    refund: {
-      create: jest.fn(),
-    },
+    invoice: mockInvoiceDelegate,
+    newInvoice: mockInvoiceDelegate,
+    payment: mockPaymentDelegate,
+    newPayment: mockPaymentDelegate,
+    refund: mockRefundDelegate,
+  };
+
+  const mockInvoiceNumbersService = {
+    reserve: jest.fn().mockResolvedValue({ sequence: 1, periodKey: '20241225' }),
   };
 
   const mockBranchId = 'branch-123';
@@ -67,6 +87,10 @@ describe('BillingService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: InvoiceNumbersService,
+          useValue: mockInvoiceNumbersService,
         },
       ],
     }).compile();
@@ -138,7 +162,7 @@ describe('BillingService', () => {
       mockPrisma.patient.findFirst.mockResolvedValue(null);
 
       await expect(service.createInvoice(createInvoiceDto, mockBranchId)).rejects.toThrow(
-        new NotFoundException('Patient not found in this branch'),
+        new NotFoundException('Patient not found'),
       );
     });
 
@@ -147,7 +171,7 @@ describe('BillingService', () => {
       mockPrisma.visit.findFirst.mockResolvedValue(null);
 
       await expect(service.createInvoice(createInvoiceDto, mockBranchId)).rejects.toThrow(
-        new NotFoundException('Visit not found in this branch'),
+        new NotFoundException('Visit not found'),
       );
     });
 
@@ -158,7 +182,7 @@ describe('BillingService', () => {
       // Don't mock visit check for this test
 
       await expect(service.createInvoice(invalidDto, mockBranchId)).rejects.toThrow(
-        new BadRequestException('At least one item is required'),
+        new BadRequestException('Invoice must have at least one item'),
       );
     });
   });

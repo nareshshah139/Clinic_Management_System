@@ -113,15 +113,18 @@ export class DrugService {
       ...(includeDiscontinued ? {} : { isDiscontinued: false }),
     };
 
-    // Add search conditions
+    // Add search conditions. Tokenized matching lets "Adapalene Gel 0.1%"
+    // match "Adapalene 0.1% Gel 15g" instead of requiring the full phrase
+    // in the same order.
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { manufacturerName: { contains: search, mode: 'insensitive' } },
-        { composition1: { contains: search, mode: 'insensitive' } },
-        { composition2: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } },
-      ];
+      const tokens = this.normalizeSearchTokens(search);
+      if (tokens.length > 1) {
+        where.AND = tokens.map((token) => ({
+          OR: this.buildDrugSearchClauses(token),
+        }));
+      } else {
+        where.OR = this.buildDrugSearchClauses(search.trim());
+      }
     }
 
     // Add filters
@@ -392,21 +395,35 @@ export class DrugService {
       };
 
       if (q) {
+        const tokens = this.normalizeSearchTokens(q);
         if (mode === 'name') {
-          where.OR = [{ name: { contains: q, mode: 'insensitive' } }];
+          if (tokens.length > 1) {
+            where.AND = tokens.map((token) => ({
+              OR: [{ name: { contains: token, mode: 'insensitive' } }],
+            }));
+          } else {
+            where.OR = [{ name: { contains: q, mode: 'insensitive' } }];
+          }
         } else if (mode === 'ingredient') {
-          where.OR = [
-            { composition1: { contains: q, mode: 'insensitive' } },
-            { composition2: { contains: q, mode: 'insensitive' } },
+          const ingredientClauses = (token: string) => [
+            { composition1: { contains: token, mode: 'insensitive' } },
+            { composition2: { contains: token, mode: 'insensitive' } },
           ];
+          if (tokens.length > 1) {
+            where.AND = tokens.map((token) => ({
+              OR: ingredientClauses(token),
+            }));
+          } else {
+            where.OR = ingredientClauses(q);
+          }
         } else {
-          where.OR = [
-            { name: { contains: q, mode: 'insensitive' } },
-            { manufacturerName: { contains: q, mode: 'insensitive' } },
-            { composition1: { contains: q, mode: 'insensitive' } },
-            { composition2: { contains: q, mode: 'insensitive' } },
-            { category: { contains: q, mode: 'insensitive' } },
-          ];
+          if (tokens.length > 1) {
+            where.AND = tokens.map((token) => ({
+              OR: this.buildDrugSearchClauses(token),
+            }));
+          } else {
+            where.OR = this.buildDrugSearchClauses(q);
+          }
         }
       }
 
@@ -844,5 +861,25 @@ export class DrugService {
       throw new BadRequestException(`Unsupported sortBy field: ${sortBy}`);
     }
     return sortBy;
+  }
+
+  private normalizeSearchTokens(search: string): string[] {
+    const tokens = search
+      .trim()
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+
+    return tokens.length > 0 ? tokens : [search.trim()];
+  }
+
+  private buildDrugSearchClauses(token: string): Prisma.DrugWhereInput[] {
+    return [
+      { name: { contains: token, mode: 'insensitive' } },
+      { manufacturerName: { contains: token, mode: 'insensitive' } },
+      { composition1: { contains: token, mode: 'insensitive' } },
+      { composition2: { contains: token, mode: 'insensitive' } },
+      { category: { contains: token, mode: 'insensitive' } },
+    ];
   }
 }

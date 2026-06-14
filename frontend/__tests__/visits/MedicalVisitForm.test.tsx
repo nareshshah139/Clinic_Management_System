@@ -1,11 +1,16 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { jest } from '@jest/globals';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
 
 // Mock the API client
 jest.mock('@/lib/api', () => ({
   apiClient: {
+    get: jest.fn(),
+    getPatient: jest.fn(),
+    getPatientVisitHistory: jest.fn(),
+    getVisits: jest.fn(),
+    updateVisit: jest.fn(),
+    updateUserProfile: jest.fn(),
     createVisit: jest.fn(),
     completeVisit: jest.fn(),
   },
@@ -22,6 +27,16 @@ describe('MedicalVisitForm', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    (apiClient.get as jest.Mock).mockResolvedValue({});
+    (apiClient.getPatient as jest.Mock).mockResolvedValue({
+      id: 'patient-123',
+      name: 'John Doe',
+      phone: '1234567890',
+    });
+    (apiClient.getPatientVisitHistory as jest.Mock).mockResolvedValue([]);
+    (apiClient.getVisits as jest.Mock).mockResolvedValue({ visits: [] });
+    (apiClient.updateVisit as jest.Mock).mockResolvedValue({ id: 'visit-123' });
+    (apiClient.updateUserProfile as jest.Mock).mockResolvedValue({});
   });
 
   it('renders all form sections correctly', () => {
@@ -338,4 +353,4 @@ describe('MedicalVisitForm', () => {
       );
     });
   });
-}); 
+});

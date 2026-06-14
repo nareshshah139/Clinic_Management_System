@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { InventoryController } from '../inventory.controller';
 import { InventoryService } from '../inventory.service';
+import { InventoryImportService } from '../inventory-import.service';
 import { InventoryItemType, TransactionType, UnitType } from '../dto/inventory.dto';
 
 describe('InventoryController', () => {
@@ -45,6 +46,10 @@ describe('InventoryController', () => {
     getInventoryDashboard: jest.fn(),
   };
 
+  const mockInventoryImportService = {
+    importStarterExcel: jest.fn(),
+  };
+
   const mockUser = {
     id: 'user-123',
     branchId: 'branch-123',
@@ -58,6 +63,10 @@ describe('InventoryController', () => {
         {
           provide: InventoryService,
           useValue: mockInventoryService,
+        },
+        {
+          provide: InventoryImportService,
+          useValue: mockInventoryImportService,
         },
       ],
     }).compile();

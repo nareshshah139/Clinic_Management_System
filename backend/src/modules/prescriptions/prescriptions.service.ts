@@ -147,7 +147,24 @@ export class PrescriptionsService {
       sortOrder = 'desc',
     } = query;
 
-    const skip = (page - 1) * limit;
+    const normalizedPage = this.toPositiveInt(page, 1);
+    const normalizedLimit = Math.min(this.toPositiveInt(limit, 20), 100);
+    const skip = (normalizedPage - 1) * normalizedLimit;
+    const normalizedStatus = typeof status === 'string' ? status.trim() : status;
+    const safeSortBy = ['createdAt', 'updatedAt', 'language'].includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+    const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
+
+    if (normalizedStatus && normalizedStatus !== PrescriptionStatus.ACTIVE) {
+      return {
+        prescriptions: [],
+        pagination: {
+          total: 0,
+          page: normalizedPage,
+          limit: normalizedLimit,
+          pages: 0,
+        },
+      };
+    }
 
     const where: any = {
       visit: {
@@ -159,7 +176,6 @@ export class PrescriptionsService {
     if (patientId) where.visit = { ...(where.visit || {}), patientId };
     if (visitId) where.visitId = visitId;
     if (doctorId) where.visit = { ...(where.visit || {}), doctorId };
-    if (status) where.status = status;
     if (language) where.language = language;
 
     // Date filters
@@ -170,26 +186,15 @@ export class PrescriptionsService {
     }
 
     if (validUntil) {
-      where.validUntil = new Date(validUntil);
+      // The current prescription table does not carry a validity date.
+      // Keep the API tolerant of older callers without adding invalid Prisma filters.
     }
 
     // Search filter
     if (search) {
       where.OR = [
         {
-          prescriptionNumber: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          diagnosis: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          notes: {
+          pharmacistNotes: {
             contains: search,
             mode: 'insensitive',
           },
@@ -198,6 +203,20 @@ export class PrescriptionsService {
           items: {
             contains: search,
             mode: 'insensitive',
+          },
+        },
+        {
+          instructions: {
+            contains: search,
+            mode: 'insensitive',
+          },
+        },
+        {
+          visit: {
+            diagnosis: {
+              contains: search,
+              mode: 'insensitive',
+            },
           },
         },
       ];
@@ -213,80 +232,86 @@ export class PrescriptionsService {
 
     // Expired filter
     if (isExpired !== undefined) {
-      if (isExpired) {
-        where.validUntil = {
-          lt: new Date(),
-        };
-      } else {
-        where.validUntil = {
-          gte: new Date(),
-        };
-      }
+      // Unsupported by the current schema; leave the request non-fatal.
     }
 
     // Refills filter
     if (hasRefills !== undefined) {
-      if (hasRefills) {
-        where.maxRefills = {
-          gt: 0,
-        };
-      } else {
-        where.maxRefills = 0;
-      }
+      // Unsupported by the current schema; leave the request non-fatal.
     }
 
     const [prescriptions, total] = await Promise.all([
       this.prisma.prescription.findMany({
         where,
         include: {
-          patient: {
-            select: { id: true, name: true, phone: true },
-          },
           visit: {
-            select: { 
-              id: true, 
-              createdAt: true,
-              doctor: { select: { id: true, firstName: true, lastName: true } },
-            },
-          },
-          doctor: {
-            select: { id: true, name: true, specialization: true },
-          },
-          refills: {
             select: {
               id: true,
-              status: true,
-              reason: true,
+              patientId: true,
+              doctorId: true,
               createdAt: true,
-            },
-            orderBy: {
-              createdAt: 'desc',
+              diagnosis: true,
+              followUp: true,
+              patient: {
+                select: { id: true, name: true, phone: true },
+              },
+              doctor: {
+                select: { id: true, firstName: true, lastName: true },
+              },
             },
           },
         },
         skip,
-        take: limit,
+        take: normalizedLimit,
         orderBy: {
-          [sortBy]: sortOrder,
+          [safeSortBy]: safeSortOrder,
         },
       }),
       this.prisma.prescription.count({ where }),
     ]);
 
     // Parse JSON fields
-    const parsedPrescriptions = prescriptions.map(prescription => ({
-      ...prescription,
-      items: this.safeParse<any[]>(prescription.items as string, []),
-      metadata: this.safeParse<any>(prescription.metadata as string, null),
-    }));
+    const parsedPrescriptions = prescriptions.map(prescription => {
+      const patient = prescription.visit?.patient
+        ? {
+            id: prescription.visit.patient.id,
+            name: prescription.visit.patient.name,
+            phone: prescription.visit.patient.phone,
+          }
+        : undefined;
+      const doctor = prescription.visit?.doctor
+        ? {
+            id: prescription.visit.doctor.id,
+            firstName: prescription.visit.doctor.firstName,
+            lastName: prescription.visit.doctor.lastName,
+            name: [prescription.visit.doctor.firstName, prescription.visit.doctor.lastName].filter(Boolean).join(' '),
+          }
+        : undefined;
+      const metadata = this.safeParse<any>(prescription.metadata as string, null);
+
+      return {
+        ...prescription,
+        items: this.safeParse<any[]>(prescription.items as string, []),
+        metadata,
+        patient,
+        patientId: patient?.id || prescription.visit?.patientId,
+        doctor,
+        doctorId: doctor?.id || prescription.visit?.doctorId,
+        diagnosis: this.extractPrescriptionDiagnosis(prescription, metadata),
+        notes: prescription.pharmacistNotes,
+        followUpInstructions: prescription.instructions,
+        status: PrescriptionStatus.ACTIVE,
+        refills: [],
+      };
+    });
 
     return {
       prescriptions: parsedPrescriptions,
       pagination: {
         total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
+        page: normalizedPage,
+        limit: normalizedLimit,
+        pages: Math.ceil(total / normalizedLimit),
       },
     };
   }
@@ -2043,6 +2068,23 @@ export class PrescriptionsService {
       await this.prisma.visit.delete({ where: { id: autoVisit.id } }).catch(() => undefined);
       throw err;
     }
+  }
+
+  private toPositiveInt(value: unknown, fallback: number): number {
+    const parsed = typeof value === 'number' ? value : parseInt(String(value ?? ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+  }
+
+  private extractPrescriptionDiagnosis(prescription: any, metadata: any): string {
+    if (typeof metadata?.diagnosis === 'string' && metadata.diagnosis.trim()) {
+      return metadata.diagnosis.trim();
+    }
+    if (typeof prescription.visit?.diagnosis === 'string' && prescription.visit.diagnosis.trim()) {
+      return prescription.visit.diagnosis.trim();
+    }
+    const note = typeof prescription.pharmacistNotes === 'string' ? prescription.pharmacistNotes : '';
+    const match = note.match(/\bDx\s*:\s*(.+)$/i);
+    return match ? match[1].trim() : '';
   }
 
   private safeParse<T>(value: string | null | undefined, fallback: T): T {

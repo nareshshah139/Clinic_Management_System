@@ -27,6 +27,16 @@ jest.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: toastMock }),
 }));
 
+jest.mock('@/components/appointments/DoctorDayCalendar', () => {
+  return function MockDoctorDayCalendar({ onSelectSlot }: { onSelectSlot: (slot: string) => void }) {
+    return (
+      <button type="button" onClick={() => onSelectSlot('10:00-10:30')}>
+        10:00-10:30
+      </button>
+    );
+  };
+});
+
 describe('AppointmentScheduler - conflict handling (toast)', () => {
   afterEach(() => {
     jest.clearAllMocks();

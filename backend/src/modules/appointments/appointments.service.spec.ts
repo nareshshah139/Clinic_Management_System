@@ -11,6 +11,7 @@ describe('AppointmentsService.create', () => {
   const prismaMock: any = {
     patient: { findFirst: jest.fn() },
     user: { findFirst: jest.fn(), findUnique: jest.fn() },
+    branch: { findUnique: jest.fn() },
     room: { findFirst: jest.fn() },
     appointment: {
       findFirst: jest.fn(),
@@ -128,6 +129,7 @@ describe('AppointmentsService.create', () => {
       room: { id: 'room-1', name: 'Room A', type: 'OPD' },
     });
     prismaMock.user.findUnique.mockResolvedValue({ id: 'doctor-1', metadata: '{}' });
+    prismaMock.branch.findUnique.mockResolvedValue({ name: 'Main Branch', phone: '9999999999' });
 
     const dto = buildDto({ roomId: 'room-1' });
     const result = await service.create(dto, branchId);
@@ -137,5 +139,4 @@ describe('AppointmentsService.create', () => {
     expect(notificationsMock.sendEmail).toHaveBeenCalledTimes(1);
   });
 });
-
 

@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -32,8 +33,11 @@ type WhatsAppTemplateComponent = {
 export class AppointmentsService {
   constructor(
     private prisma: PrismaService,
+    @Optional()
     private notifications?: NotificationsService,
+    @Optional()
     private whatsappTemplates?: WhatsAppTemplatesService,
+    @Optional()
     private googleCalendar?: GoogleCalendarService,
   ) {}
 

@@ -109,6 +109,13 @@ type QueueResponse = {
   };
 };
 
+type PharmacyBillingPrefill = {
+  patientId?: string;
+  prescriptionId?: string;
+  doctorId?: string;
+  visitId?: string;
+};
+
 type StockBatch = {
   id: string;
   batchNumber?: string | null;
@@ -170,13 +177,8 @@ export function PharmacyCounterCockpit({
   onOpenPartnerSync,
   onOpenInventoryControl,
 }: {
-  prefill?: {
-    patientId?: string;
-    prescriptionId?: string;
-    doctorId?: string;
-    visitId?: string;
-  } | null;
-  onOpenBilling: () => void;
+  prefill?: PharmacyBillingPrefill | null;
+  onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
   onOpenQueue: () => void;
   onOpenPartnerSync: () => void;
   onOpenInventoryControl: () => void;
@@ -365,6 +367,17 @@ export function PharmacyCounterCockpit({
   const activeLifecycle = activeEntry
     ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, allLinesReviewed)
     : 'Queued';
+  const activeBillingPrefill = useMemo<PharmacyBillingPrefill | undefined>(() => {
+    if (!activeEntry) return undefined;
+    return {
+      patientId: activeEntry.patient.id,
+      doctorId: activeEntry.doctor.id,
+      prescriptionId: activeEntry.prescriptionId,
+    };
+  }, [activeEntry]);
+  const openActiveBilling = useCallback(() => {
+    onOpenBilling(activeBillingPrefill);
+  }, [activeBillingPrefill, onOpenBilling]);
   const commandStats = useMemo(() => {
     const inReview = queue.filter((entry) => entry.dispenseStatus === 'IN_REVIEW').length;
     const ready = queue.filter((entry) => entry.dispenseStatus === 'READY_TO_BILL').length;
@@ -512,7 +525,7 @@ export function PharmacyCounterCockpit({
               <ClipboardCheck className="h-4 w-4" />
               Rx queue
             </Button>
-            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={onOpenBilling}>
+            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling}>
               <Receipt className="h-4 w-4" />
               Bill
             </Button>
@@ -534,7 +547,7 @@ export function PharmacyCounterCockpit({
           loading={loadingQueue}
           onSelect={selectQueueEntry}
           onRefresh={loadQueue}
-          onOpenBilling={onOpenBilling}
+          onOpenBilling={openActiveBilling}
           onOpenInventoryControl={onOpenInventoryControl}
         />
 
@@ -551,7 +564,7 @@ export function PharmacyCounterCockpit({
           setReasonType={setReasonType}
           reasonNote={reasonNote}
           setReasonNote={setReasonNote}
-          onOpenBilling={onOpenBilling}
+          onOpenBilling={openActiveBilling}
           onUpdateStatus={updateTaskStatus}
           savingTask={savingTask}
         />
@@ -562,7 +575,7 @@ export function PharmacyCounterCockpit({
           activeLifecycle={activeLifecycle}
           exceptionCount={exceptionCount}
           allLinesReviewed={allLinesReviewed}
-          onOpenBilling={onOpenBilling}
+          onOpenBilling={openActiveBilling}
           onOpenPartnerSync={onOpenPartnerSync}
           onOpenInventoryControl={onOpenInventoryControl}
         />

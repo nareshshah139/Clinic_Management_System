@@ -1,5 +1,4 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { jest } from '@jest/globals';
 import VisitsPage from '@/app/dashboard/visits/page';
 import { apiClient } from '@/lib/api';
 
@@ -8,6 +7,7 @@ jest.mock('@/lib/api', () => ({
   apiClient: {
     getPatients: jest.fn(),
     get: jest.fn(),
+    getAppointment: jest.fn(),
     createVisit: jest.fn(),
     completeVisit: jest.fn(),
   },
@@ -206,4 +206,4 @@ describe('VisitsPage', () => {
     
     expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
   });
-}); 
+});

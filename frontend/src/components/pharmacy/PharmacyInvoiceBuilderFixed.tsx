@@ -8,6 +8,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -27,16 +33,16 @@ import {
   Plus,
   Trash2,
   Save,
-  Send,
   Calculator,
   User,
-  Phone,
-  MapPin,
   CreditCard,
   Pill,
   Package as PackageIcon,
   FileText,
-  Receipt,
+  Printer,
+  Download,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import {
@@ -51,6 +57,8 @@ interface Drug {
   id: string;
   name: string;
   price: number;
+  sellingPrice?: number | null;
+  mrp?: number | null;
   manufacturerName: string;
   packSizeLabel: string;
   composition1?: string;
@@ -119,6 +127,17 @@ interface InvoiceItem {
   instructions?: string;
 }
 
+type PharmacyInvoicePrintPreview = {
+  invoice: any;
+  items: InvoiceItem[];
+  billingFallback: {
+    billingName: string;
+    billingPhone: string;
+    billingAddress?: string;
+    notes?: string;
+  };
+};
+
 export function PharmacyInvoiceBuilderFixed({
   prefill,
 }: {
@@ -155,11 +174,22 @@ export function PharmacyInvoiceBuilderFixed({
   const [loading, setLoading] = useState(false);
   const [loadingPrescription, setLoadingPrescription] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
+  const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
+  const [printPreviewData, setPrintPreviewData] =
+    useState<PharmacyInvoicePrintPreview | null>(null);
+  const [printPreviewCopyType, setPrintPreviewCopyType] = useState<
+    'ORIGINAL' | 'DUPLICATE'
+  >('ORIGINAL');
+  const [printPreviewZoom, setPrintPreviewZoom] = useState(0.9);
+  const [savingPdf, setSavingPdf] = useState(false);
+  const [savingInvoiceFromPreview, setSavingInvoiceFromPreview] =
+    useState(false);
 
   // Refs for click-outside handling
   const patientSearchRef = useRef<HTMLDivElement>(null);
   const drugSearchRef = useRef<HTMLDivElement>(null);
   const invoiceItemsRef = useRef<InvoiceItem[]>([]);
+  const printPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
   // Invoice state
   const [invoiceData, setInvoiceData] = useState({
@@ -177,6 +207,20 @@ export function PharmacyInvoiceBuilderFixed({
   });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const firstPositiveNumber = (...values: unknown[]) => {
+    for (const value of values) {
+      const numericValue =
+        typeof value === 'number' ? value : Number(value ?? NaN);
+      if (Number.isFinite(numericValue) && numericValue > 0) {
+        return numericValue;
+      }
+    }
+    return 0;
+  };
+
+  const getDrugUnitPrice = (drug?: Partial<Drug> | null) =>
+    firstPositiveNumber(drug?.price, drug?.sellingPrice, drug?.mrp);
 
   useEffect(() => {
     loadInitialData();
@@ -390,7 +434,10 @@ export function PharmacyInvoiceBuilderFixed({
                     packSizeLabel: existingItem?.drug?.packSizeLabel ?? '',
                   },
                 quantity: existingItem?.quantity ?? item.quantity ?? 1,
-                unitPrice: existingItem?.unitPrice ?? drug?.price ?? 0,
+                unitPrice:
+                  existingItem?.unitPrice && existingItem.unitPrice > 0
+                    ? existingItem.unitPrice
+                    : getDrugUnitPrice(drug || existingItem?.drug),
                 discountPercent: existingItem?.discountPercent ?? 0,
                 taxPercent: existingItem?.taxPercent ?? 18,
                 discountAmount: existingItem?.discountAmount ?? 0,
@@ -450,7 +497,11 @@ export function PharmacyInvoiceBuilderFixed({
   // Ensure patient is selected when patients array is loaded
   useEffect(() => {
     const prefillPatientId = prefill?.patientId;
-    if (prefillPatientId && patients.length > 0 && !selectedPatient) {
+    if (
+      prefillPatientId &&
+      patients.length > 0 &&
+      selectedPatient?.id !== prefillPatientId
+    ) {
       void ensurePatientSelected(prefillPatientId);
     }
   }, [prefill?.patientId, patients, selectedPatient, ensurePatientSelected]);
@@ -818,7 +869,7 @@ export function PharmacyInvoiceBuilderFixed({
         itemType: 'DRUG',
         drug,
         quantity: 1,
-        unitPrice: drug.price,
+        unitPrice: getDrugUnitPrice(drug),
         discountPercent: 0,
         taxPercent: 18, // Default GST
         discountAmount: 0,
@@ -891,6 +942,21 @@ export function PharmacyInvoiceBuilderFixed({
     setItems(updatedItems);
   };
 
+  const updateItemUnitPrice = (itemId: string, unitPrice: number) => {
+    const updatedItems = items.map((item) => {
+      if (item.id === itemId) {
+        const updatedItem = {
+          ...item,
+          unitPrice: Math.max(0, unitPrice),
+        };
+        calculateItemTotal(updatedItem);
+        return updatedItem;
+      }
+      return item;
+    });
+    setItems(updatedItems);
+  };
+
   const updateItemDiscount = (itemId: string, discountPercent: number) => {
     const updatedItems = items.map((item) => {
       if (item.id === itemId) {
@@ -919,6 +985,18 @@ export function PharmacyInvoiceBuilderFixed({
       return item;
     });
     setItems(updatedItems);
+  };
+
+  const updateItemPrescriptionField = (
+    itemId: string,
+    field: 'dosage' | 'frequency' | 'duration' | 'instructions',
+    value: string
+  ) => {
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === itemId ? { ...item, [field]: value } : item
+      )
+    );
   };
 
   const removeItem = (itemId: string) => {
@@ -954,60 +1032,62 @@ export function PharmacyInvoiceBuilderFixed({
     return { subtotal, totalDiscount, totalTax, grandTotal };
   };
 
-  const handleCreateInvoice = async () => {
+  const getValidInvoiceItems = () => {
+    if (
+      !invoiceData.patientId ||
+      items.length === 0 ||
+      !invoiceData.billingName ||
+      !invoiceData.billingPhone
+    ) {
+      toast({
+        title: 'Validation Error',
+        description: !invoiceData.patientId
+          ? 'Patient is required'
+          : items.length === 0
+            ? 'At least one item is required'
+            : !invoiceData.billingName
+              ? 'Billing name is required'
+              : 'Billing phone is required',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    // Filter out items with temporary drugIds (not found in DB)
+    const validItems = items.filter((item) => {
+      if (item.itemType === 'PACKAGE') return !!item.packageId;
+      const hasValidDrugId = item.drugId && !item.drugId.startsWith('temp_');
+      return hasValidDrugId;
+    });
+
+    if (validItems.length === 0) {
+      toast({
+        title: 'Validation Error',
+        description:
+          'No valid items to invoice. Please ensure all drugs exist in the database.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (validItems.length < items.length) {
+      const skippedCount = items.length - validItems.length;
+      toast({
+        title: 'Warning',
+        description: `${skippedCount} item(s) skipped because the drug was not found in the database. Please add missing drugs first.`,
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    return validItems;
+  };
+
+  const createAndConfirmInvoice = async (validItems: InvoiceItem[]) => {
     try {
       console.log('🔍 Starting invoice creation...');
       console.log('🔍 Current invoice data:', invoiceData);
       console.log('🔍 Current items:', items);
-
-      if (
-        !invoiceData.patientId ||
-        items.length === 0 ||
-        !invoiceData.billingName ||
-        !invoiceData.billingPhone
-      ) {
-        toast({
-          title: 'Validation Error',
-          description: !invoiceData.patientId
-            ? 'Patient is required'
-            : items.length === 0
-              ? 'At least one item is required'
-              : !invoiceData.billingName
-                ? 'Billing name is required'
-                : 'Billing phone is required',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      // Filter out items with temporary drugIds (not found in DB)
-      const validItems = items.filter((item) => {
-        if (item.itemType === 'PACKAGE') return !!item.packageId;
-        // Check if drugId is valid (not temp)
-        const hasValidDrugId = item.drugId && !item.drugId.startsWith('temp_');
-        return hasValidDrugId;
-      });
-
-      if (validItems.length === 0) {
-        toast({
-          title: 'Validation Error',
-          description:
-            'No valid items to invoice. Please ensure all drugs exist in the database.',
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      if (validItems.length < items.length) {
-        const skippedCount = items.length - validItems.length;
-        toast({
-          title: 'Warning',
-          description: `${skippedCount} item(s) skipped because the drug was not found in the database. Please add missing drugs first.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
       setLoading(true);
 
       const invoiceItems = validItems
@@ -1097,21 +1177,7 @@ export function PharmacyInvoiceBuilderFixed({
         window.dispatchEvent(ev2);
       }
 
-      // Reset form
-      setInvoiceData({
-        patientId: '',
-        doctorId: '',
-        prescriptionId: '',
-        paymentMethod: 'CASH',
-        billingName: '',
-        billingPhone: '',
-        billingAddress: '',
-        billingCity: '',
-        billingState: '',
-        billingPincode: '',
-        notes: '',
-      });
-      setItems([]);
+      return printableInvoice;
     } catch (error: any) {
       const message = getErrorMessage(error);
       const status = error?.status;
@@ -1134,9 +1200,66 @@ export function PharmacyInvoiceBuilderFixed({
     } finally {
       setLoading(false);
     }
+    return null;
   };
 
-  const renderPrintHtml = (invoice: any, itemsData: InvoiceItem[]) => {
+  const buildDraftPreviewInvoice = () => ({
+    id: undefined,
+    invoiceNumber: 'DRAFT',
+    status: 'DRAFT',
+    paymentStatus: 'PENDING',
+    invoiceDate: new Date().toISOString(),
+    subtotal,
+    discountAmount: totalDiscount,
+    taxAmount: totalTax,
+    totalAmount: grandTotal,
+    billingName: invoiceData.billingName,
+    billingPhone: invoiceData.billingPhone,
+    billingAddress: invoiceData.billingAddress,
+    notes: invoiceData.notes,
+  });
+
+  const handleOpenPrintPreview = () => {
+    const validItems = getValidInvoiceItems();
+    if (!validItems) return;
+
+    setPrintPreviewCopyType('ORIGINAL');
+    setPrintPreviewZoom(0.9);
+    setPrintPreviewData({
+      invoice: buildDraftPreviewInvoice(),
+      items: validItems,
+      billingFallback: {
+        billingName: invoiceData.billingName,
+        billingPhone: invoiceData.billingPhone,
+        billingAddress: invoiceData.billingAddress,
+        notes: invoiceData.notes,
+      },
+    });
+    setPrintPreviewOpen(true);
+  };
+
+  const handleConfirmInvoiceFromPreview = async () => {
+    const validItems = getValidInvoiceItems();
+    if (!validItems) return;
+
+    setSavingInvoiceFromPreview(true);
+    try {
+      await createAndConfirmInvoice(validItems);
+    } finally {
+      setSavingInvoiceFromPreview(false);
+    }
+  };
+
+  const renderPrintHtml = (
+    invoice: any,
+    itemsData: InvoiceItem[],
+    options?: {
+      includePrintButton?: boolean;
+      copyType?: 'ORIGINAL' | 'DUPLICATE';
+      billingFallback?: PharmacyInvoicePrintPreview['billingFallback'];
+    }
+  ) => {
+    const includePrintButton = options?.includePrintButton ?? false;
     const escapeHtml = (value: unknown) =>
       String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -1153,6 +1276,8 @@ export function PharmacyInvoiceBuilderFixed({
     const invoiceCore = isStandardPrintData ? invoice.invoice : invoice;
     const branch = isStandardPrintData ? invoice.branch : undefined;
     const patient = isStandardPrintData ? invoice.patient : undefined;
+    const copyType = options?.copyType || invoice?.copyType || 'ORIGINAL';
+    const fallback = options?.billingFallback;
     const dateStr = new Date(
       invoiceCore?.createdAt || invoiceCore?.invoiceDate || Date.now()
     ).toLocaleDateString();
@@ -1166,12 +1291,19 @@ export function PharmacyInvoiceBuilderFixed({
                   .filter(Boolean)
                   .join(', ')
               : '';
+            const directions = [
+              line.dosage ? `Dosage: ${line.dosage}` : '',
+              line.frequency ? `Frequency: ${line.frequency}` : '',
+              line.duration ? `Duration: ${line.duration}` : '',
+              line.instructions ? `Instructions: ${line.instructions}` : '',
+            ].filter(Boolean);
             return `
         <tr>
           <td style="padding:6px;border:1px solid #ddd;">
             ${escapeHtml(line.name)}
             ${line.hsnCode ? `<div class="muted">HSN: ${escapeHtml(line.hsnCode)}</div>` : ''}
             ${batches ? `<div class="muted">Batch: ${escapeHtml(batches)}</div>` : ''}
+            ${directions.length ? `<div class="muted directions">${escapeHtml(directions.join(' • '))}</div>` : ''}
           </td>
           <td style="padding:6px;border:1px solid #ddd;text-align:center;">${line.quantity}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.unitPrice)}</td>
@@ -1188,10 +1320,19 @@ export function PharmacyInvoiceBuilderFixed({
               item.itemType === 'PACKAGE'
                 ? item.package?.name || 'Unknown Package'
                 : item.drug?.name || 'Unknown Drug';
+            const directions = [
+              item.dosage ? `Dosage: ${item.dosage}` : '',
+              item.frequency ? `Frequency: ${item.frequency}` : '',
+              item.duration ? `Duration: ${item.duration}` : '',
+              item.instructions ? `Instructions: ${item.instructions}` : '',
+            ].filter(Boolean);
 
             return `
         <tr>
-          <td style="padding:6px;border:1px solid #ddd;">${escapeHtml(itemName)}</td>
+          <td style="padding:6px;border:1px solid #ddd;">
+            ${escapeHtml(itemName)}
+            ${directions.length ? `<div class="muted directions">${escapeHtml(directions.join(' • '))}</div>` : ''}
+          </td>
           <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.unitPrice)}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">${formatMoney(item.discountPercent || 0)}%</td>
@@ -1233,6 +1374,10 @@ export function PharmacyInvoiceBuilderFixed({
           <title>Invoice ${escapeHtml(invoiceCore?.invoiceNumber || '')}</title>
           ${getGlobalPrintStyleTag()}
           <style>
+            @page {
+              size: A4 portrait;
+              margin: 0;
+            }
             @media print {
               body { margin: 12mm; }
               .no-print { display: none; }
@@ -1242,6 +1387,7 @@ export function PharmacyInvoiceBuilderFixed({
               padding: 20px;
               max-width: 800px;
               margin: 0 auto;
+              background: white;
             }
             h1 { 
               margin-bottom: 8px;
@@ -1255,6 +1401,10 @@ export function PharmacyInvoiceBuilderFixed({
             .muted { 
               color: #666;
               font-size: 14px;
+            }
+            .directions {
+              margin-top: 4px;
+              line-height: 1.35;
             }
             .billing-section {
               margin: 20px 0;
@@ -1319,7 +1469,7 @@ export function PharmacyInvoiceBuilderFixed({
                 ${branch?.gstNumber ? `GSTIN: ${escapeHtml(branch.gstNumber)}<br/>` : ''}
                 ${branch?.drugLicenseNumber ? `DL No: ${escapeHtml(branch.drugLicenseNumber)}<br/>` : ''}
                 <strong>Invoice #:</strong> ${escapeHtml(invoiceCore?.invoiceNumber || '')}<br/>
-                <strong>Copy:</strong> ${escapeHtml(invoice?.copyType || 'ORIGINAL')}<br/>
+                <strong>Copy:</strong> ${escapeHtml(copyType)}<br/>
                 <strong>Date:</strong> ${escapeHtml(dateStr)}
               </div>
             </div>
@@ -1329,12 +1479,16 @@ export function PharmacyInvoiceBuilderFixed({
           <div class="billing-section">
             <strong>Bill To:</strong><br />
             <div style="margin-top: 8px;">
-              ${escapeHtml(patient?.name || invoiceData.billingName)}<br/>
-              ${escapeHtml(patient?.phone || invoiceData.billingPhone)}${patient?.address || invoiceData.billingAddress ? '<br/>' + escapeHtml(patient?.address || invoiceData.billingAddress) : ''}
+              ${escapeHtml(patient?.name || invoiceCore?.billingName || fallback?.billingName || invoiceData.billingName)}<br/>
+              ${escapeHtml(patient?.phone || invoiceCore?.billingPhone || fallback?.billingPhone || invoiceData.billingPhone)}${patient?.address || invoiceCore?.billingAddress || fallback?.billingAddress || invoiceData.billingAddress ? '<br/>' + escapeHtml(patient?.address || invoiceCore?.billingAddress || fallback?.billingAddress || invoiceData.billingAddress) : ''}
             </div>
           </div>
 
-          <button class="print-button no-print" onclick="window.print()">🖨️ Print Invoice</button>
+          ${
+            includePrintButton
+              ? '<button class="print-button no-print" onclick="window.print()">Print Invoice</button>'
+              : ''
+          }
 
           <table>
             <thead>
@@ -1381,11 +1535,11 @@ export function PharmacyInvoiceBuilderFixed({
           }
 
           ${
-            invoiceCore?.notes || invoiceData.notes
+            invoiceCore?.notes || fallback?.notes || invoiceData.notes
               ? `
             <div style="margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 4px;">
               <strong>Notes:</strong><br/>
-              ${escapeHtml(invoiceCore?.notes || invoiceData.notes)}
+              ${escapeHtml(invoiceCore?.notes || fallback?.notes || invoiceData.notes)}
             </div>
           `
               : ''
@@ -1397,32 +1551,164 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   const openPrintPreview = (invoice: any, itemsData: InvoiceItem[]) => {
-    try {
-      const win = window.open('', '_blank');
-      if (!win) {
-        toast({
-          title: 'Print Preview Blocked',
-          description: 'Please allow pop-ups to view the invoice',
-          variant: 'destructive',
-        });
-        return;
-      }
-      const html = renderPrintHtml(invoice, itemsData);
-      win.document.open();
-      win.document.write(html);
-      win.document.close();
-    } catch (e) {
-      console.error('Failed to open print preview', e);
+    const copyType =
+      invoice?.copyType === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL';
+    setPrintPreviewCopyType(copyType);
+    setPrintPreviewZoom(0.9);
+    setPrintPreviewData({
+      invoice,
+      items: itemsData,
+      billingFallback: {
+        billingName: invoiceData.billingName,
+        billingPhone: invoiceData.billingPhone,
+        billingAddress: invoiceData.billingAddress,
+        notes: invoiceData.notes,
+      },
+    });
+    setPrintPreviewOpen(true);
+  };
+
+  const printPreviewHtml = printPreviewData
+    ? renderPrintHtml(printPreviewData.invoice, printPreviewData.items, {
+        includePrintButton: false,
+        copyType: printPreviewCopyType,
+        billingFallback: printPreviewData.billingFallback,
+      })
+    : '';
+
+  const getPrintPreviewInvoiceCore = () => {
+    const invoice = printPreviewData?.invoice;
+    return Array.isArray(invoice?.lines) ? invoice.invoice : invoice;
+  };
+
+  const getPrintPreviewPatient = () => {
+    const invoice = printPreviewData?.invoice;
+    return Array.isArray(invoice?.lines) ? invoice.patient : undefined;
+  };
+
+  const printPreviewInFrame = () => {
+    if (!isPrintPreviewSaved) {
       toast({
-        title: 'Error',
-        description: 'Failed to open print preview',
+        title: 'Confirm invoice first',
+        description: 'Save the invoice from the preview before printing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const frameWindow = printPreviewFrameRef.current?.contentWindow;
+    if (!frameWindow) {
+      toast({
+        title: 'Print failed',
+        description: 'No invoice preview is ready yet.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      frameWindow.focus();
+      frameWindow.print();
+    } catch (error) {
+      console.error('Invoice print failed', error);
+      toast({
+        title: 'Print failed',
+        description: 'Could not open the browser print dialog.',
         variant: 'destructive',
       });
     }
   };
 
+  const downloadPrintPreviewPdf = async () => {
+    if (!isPrintPreviewSaved) {
+      toast({
+        title: 'Confirm invoice first',
+        description: 'Save the invoice from the preview before downloading PDF.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const frameDocument = printPreviewFrameRef.current?.contentDocument;
+    if (!frameDocument?.body) {
+      toast({
+        title: 'PDF failed',
+        description: 'No invoice preview is ready yet.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSavingPdf(true);
+    let wrapper: HTMLDivElement | null = null;
+    try {
+      const invoiceCore = getPrintPreviewInvoiceCore();
+      const invoiceNumber = invoiceCore?.invoiceNumber || 'draft';
+      const source = frameDocument.body.cloneNode(true) as HTMLElement;
+      source.querySelectorAll('.no-print').forEach((element) => {
+        element.remove();
+      });
+
+      const styles = Array.from(frameDocument.querySelectorAll('style'))
+        .map((style) => style.textContent || '')
+        .join('\n');
+      wrapper = document.createElement('div');
+      wrapper.style.position = 'fixed';
+      wrapper.style.left = '-10000px';
+      wrapper.style.top = '0';
+      wrapper.style.width = '210mm';
+
+      const styleElement = document.createElement('style');
+      styleElement.textContent = styles;
+      wrapper.appendChild(styleElement);
+      wrapper.appendChild(source);
+      document.body.appendChild(wrapper);
+
+      const { default: html2pdf } = await import('html2pdf.js');
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: `pharmacy-invoice-${invoiceNumber}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] },
+        })
+        .from(wrapper)
+        .save();
+
+      toast({
+        title: 'PDF ready',
+        description: 'Pharmacy invoice PDF downloaded.',
+      });
+    } catch (error) {
+      console.error('Invoice PDF generation failed', error);
+      toast({
+        title: 'PDF failed',
+        description: 'Could not generate PDF. Use Print / Save as PDF instead.',
+        variant: 'destructive',
+      });
+    } finally {
+      wrapper?.remove();
+      setSavingPdf(false);
+    }
+  };
+
   const { subtotal, totalDiscount, totalTax, grandTotal } =
     calculateInvoiceTotals();
+  const previewInvoiceCore = getPrintPreviewInvoiceCore();
+  const previewPatient = getPrintPreviewPatient();
+  const isPrintPreviewSaved = Boolean(
+    previewInvoiceCore?.id && previewInvoiceCore?.invoiceNumber !== 'DRAFT'
+  );
+  const previewLineCount = Array.isArray(printPreviewData?.invoice?.lines)
+    ? printPreviewData?.invoice.lines.length
+    : printPreviewData?.items.length || 0;
+  const previewTotal = Number(previewInvoiceCore?.totalAmount || 0);
+  const previewTotalLabel = previewTotal.toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   const isPrescriptionItem = (itemId: string) => {
     return prescriptionItems.some((item) => item.id === itemId);
@@ -1454,6 +1740,7 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   return (
+    <>
     <Card>
       {loadingPrescription && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -1504,7 +1791,11 @@ export function PharmacyInvoiceBuilderFixed({
                         placeholder="Search patients by name or phone..."
                         className="pl-8"
                         value={patientSearchQuery}
-                        onChange={(e) => setPatientSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setPatientSearchQuery(e.target.value);
+                          setShowPatientSearchResults(true);
+                        }}
+                        onClick={() => setShowPatientSearchResults(true)}
                         onFocus={() => setShowPatientSearchResults(true)}
                       />
                       {showPatientSearchResults && (
@@ -1609,7 +1900,7 @@ export function PharmacyInvoiceBuilderFixed({
                   </TabsList>
 
                   <TabsContent value="drugs" className="space-y-4">
-                    <div ref={drugSearchRef}>
+                    <div ref={drugSearchRef} className="space-y-2">
                       <Label htmlFor="drugSearch">Search Drugs</Label>
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -1621,68 +1912,106 @@ export function PharmacyInvoiceBuilderFixed({
                           className="pl-8"
                         />
                       </div>
-                    </div>
 
-                    {showDrugSearchResults && searchResults.length > 0 && (
-                      <div className="border rounded-md max-h-60 overflow-y-auto transition-all duration-200 ease-in-out animate-in fade-in-0 slide-in-from-top-1">
-                        {searchResults.map((drug, index) => (
-                          <div
-                            key={drug.id}
-                            className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
-                              index === 0
-                                ? 'bg-green-50 border-l-4 border-l-green-500'
-                                : index < 3
-                                  ? 'bg-blue-50 border-l-4 border-l-blue-500'
-                                  : ''
-                            }`}
-                            onClick={() => addDrugToInvoice(drug)}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center">
-                                  <h4 className="font-medium">
-                                    {highlightMatch(drug.name, drugSearchQuery)}
-                                  </h4>
-                                  {getRelevanceBadge(
-                                    drug,
-                                    drugSearchQuery,
-                                    index
+                      {showDrugSearchResults && searchResults.length > 0 && (
+                        <div className="border rounded-md max-h-60 overflow-y-auto transition-all duration-200 ease-in-out animate-in fade-in-0 slide-in-from-top-1">
+                          {searchResults.map((drug, index) => (
+                            <div
+                              key={drug.id}
+                              role="button"
+                              tabIndex={0}
+                              className={`p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0 ${
+                                index === 0
+                                  ? 'bg-green-50 border-l-4 border-l-green-500'
+                                  : index < 3
+                                    ? 'bg-blue-50 border-l-4 border-l-blue-500'
+                                    : ''
+                              }`}
+                              onClick={() => addDrugToInvoice(drug)}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === 'Enter' ||
+                                  event.key === ' '
+                                ) {
+                                  event.preventDefault();
+                                  addDrugToInvoice(drug);
+                                }
+                              }}
+                            >
+                              <div className="flex justify-between items-start gap-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center">
+                                    <h4 className="font-medium">
+                                      {highlightMatch(
+                                        drug.name,
+                                        drugSearchQuery
+                                      )}
+                                    </h4>
+                                    {getRelevanceBadge(
+                                      drug,
+                                      drugSearchQuery,
+                                      index
+                                    )}
+                                  </div>
+                                  <p className="text-sm text-gray-600">
+                                    {highlightMatch(
+                                      drug.manufacturerName || '',
+                                      drugSearchQuery
+                                    )}{' '}
+                                    • {drug.packSizeLabel}
+                                  </p>
+                                  {drug.composition1 && (
+                                    <p className="text-xs text-gray-500">
+                                      {highlightMatch(
+                                        drug.composition1,
+                                        drugSearchQuery
+                                      )}
+                                    </p>
                                   )}
                                 </div>
-                                <p className="text-sm text-gray-600">
-                                  {highlightMatch(
-                                    drug.manufacturerName || '',
-                                    drugSearchQuery
-                                  )}{' '}
-                                  • {drug.packSizeLabel}
-                                </p>
-                                {drug.composition1 && (
-                                  <p className="text-xs text-gray-500">
-                                    {highlightMatch(
-                                      drug.composition1,
-                                      drugSearchQuery
+                                <div className="flex shrink-0 items-start gap-3 text-right">
+                                  <div>
+                                    <div className="font-semibold">
+                                      ₹{getDrugUnitPrice(drug).toFixed(2)}
+                                    </div>
+                                    {drug.category && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        {highlightMatch(
+                                          drug.category,
+                                          drugSearchQuery
+                                        )}
+                                      </Badge>
                                     )}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <div className="font-semibold">
-                                  ₹{drug.price}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      addDrugToInvoice(drug);
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add
+                                  </Button>
                                 </div>
-                                {drug.category && (
-                                  <Badge variant="outline" className="text-xs">
-                                    {highlightMatch(
-                                      drug.category,
-                                      drugSearchQuery
-                                    )}
-                                  </Badge>
-                                )}
                               </div>
                             </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {showDrugSearchResults &&
+                        drugSearchQuery.trim() &&
+                        searchResults.length === 0 && (
+                          <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                            No matching drugs found in the drug master.
                           </div>
-                        ))}
+                        )}
                       </div>
-                    )}
                   </TabsContent>
 
                   <TabsContent value="packages" className="space-y-4">
@@ -1893,10 +2222,16 @@ export function PharmacyInvoiceBuilderFixed({
                             <Label className="text-xs">Unit Price</Label>
                             <Input
                               type="number"
+                              min="0"
                               step="0.01"
                               value={item.unitPrice}
-                              readOnly
-                              className="h-8 bg-gray-50"
+                              onChange={(e) =>
+                                updateItemUnitPrice(
+                                  item.id,
+                                  parseFloat(e.target.value) || 0
+                                )
+                              }
+                              className="h-8"
                             />
                           </div>
                           <div>
@@ -1967,6 +2302,79 @@ export function PharmacyInvoiceBuilderFixed({
                                 {item.package.instructions}
                               </p>
                             )}
+                          </div>
+                        )}
+
+                        {item.itemType === 'DRUG' && (
+                          <div className="mt-3 rounded border bg-slate-50 p-3">
+                            <div className="mb-2 flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-slate-600" />
+                              <h5 className="text-sm font-medium">
+                                Prescription directions
+                              </h5>
+                            </div>
+                            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                              <div>
+                                <Label className="text-xs">Dosage</Label>
+                                <Input
+                                  value={item.dosage || ''}
+                                  onChange={(event) =>
+                                    updateItemPrescriptionField(
+                                      item.id,
+                                      'dosage',
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="e.g. 1 tablet / thin layer"
+                                  className="h-8"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Frequency</Label>
+                                <Input
+                                  value={item.frequency || ''}
+                                  onChange={(event) =>
+                                    updateItemPrescriptionField(
+                                      item.id,
+                                      'frequency',
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="e.g. twice daily"
+                                  className="h-8"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs">Duration</Label>
+                                <Input
+                                  value={item.duration || ''}
+                                  onChange={(event) =>
+                                    updateItemPrescriptionField(
+                                      item.id,
+                                      'duration',
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="e.g. 7 days"
+                                  className="h-8"
+                                />
+                              </div>
+                            </div>
+                            <div className="mt-3">
+                              <Label className="text-xs">Instructions</Label>
+                              <Textarea
+                                value={item.instructions || ''}
+                                onChange={(event) =>
+                                  updateItemPrescriptionField(
+                                    item.id,
+                                    'instructions',
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="e.g. apply after cleansing; avoid eyes"
+                                className="min-h-16"
+                              />
+                            </div>
                           </div>
                         )}
                       </Card>
@@ -2093,7 +2501,7 @@ export function PharmacyInvoiceBuilderFixed({
             {/* Actions */}
             <div className="space-y-2">
               <Button
-                onClick={handleCreateInvoice}
+                onClick={handleOpenPrintPreview}
                 disabled={
                   loading || !invoiceData.patientId || items.length === 0
                 }
@@ -2107,8 +2515,8 @@ export function PharmacyInvoiceBuilderFixed({
                   </>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Confirm & Print Invoice
+                    <FileText className="h-4 w-4 mr-2" />
+                    Print Preview
                   </>
                 )}
               </Button>
@@ -2120,5 +2528,188 @@ export function PharmacyInvoiceBuilderFixed({
         </div>
       </CardContent>
     </Card>
+
+    <Dialog open={printPreviewOpen} onOpenChange={setPrintPreviewOpen}>
+      <DialogContent className="max-w-[100vw] sm:max-w-[100vw] md:max-w-[100vw] lg:max-w-[100vw] 2xl:max-w-[100vw] w-[100vw] h-[100vh] p-0 overflow-hidden rounded-none border-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Pharmacy Invoice Preview</DialogTitle>
+        </DialogHeader>
+        <div className="flex h-full min-h-0 bg-slate-100">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-white/95 px-4 py-3 text-sm backdrop-blur">
+              <div>
+                <div className="font-semibold text-slate-900">
+                  Pharmacy Invoice Preview
+                </div>
+                <div className="text-xs text-slate-600">
+                  {previewInvoiceCore?.invoiceNumber || 'Invoice'} •{' '}
+                  {previewPatient?.name ||
+                    printPreviewData?.billingFallback.billingName ||
+                    'Patient'}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{previewLineCount} items</Badge>
+                <Badge variant="secondary">₹{previewTotalLabel}</Badge>
+                <Badge variant="outline">{printPreviewCopyType}</Badge>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto p-6">
+              <div
+                className="mx-auto origin-top transition-transform"
+                style={{
+                  width: '840px',
+                  transform: `scale(${printPreviewZoom})`,
+                  transformOrigin: 'top center',
+                }}
+              >
+                <iframe
+                  ref={printPreviewFrameRef}
+                  title="Pharmacy invoice print preview"
+                  srcDoc={printPreviewHtml}
+                  className="h-[1120px] w-full rounded border bg-white shadow-xl"
+                />
+              </div>
+            </div>
+          </div>
+
+          <aside className="h-full w-80 shrink-0 overflow-auto border-l bg-white p-4 sm:w-96">
+            <div className="space-y-5">
+              <div>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Invoice Controls
+                </h3>
+                <p className="mt-1 text-xs text-slate-600">
+                  Confirm the invoice, then print or download the PDF from this
+                  preview.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                className="w-full bg-green-600 text-white hover:bg-green-700"
+                onClick={handleConfirmInvoiceFromPreview}
+                disabled={
+                  isPrintPreviewSaved || loading || savingInvoiceFromPreview
+                }
+              >
+                {savingInvoiceFromPreview || loading ? (
+                  <>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
+                    Confirming...
+                  </>
+                ) : isPrintPreviewSaved ? (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Invoice Confirmed
+                  </>
+                ) : (
+                  <>
+                    <Save className="mr-2 h-4 w-4" />
+                    Confirm Invoice
+                  </>
+                )}
+              </Button>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Copy Type</Label>
+                <Select
+                  value={printPreviewCopyType}
+                  onValueChange={(value: 'ORIGINAL' | 'DUPLICATE') =>
+                    setPrintPreviewCopyType(value)
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ORIGINAL">Original</SelectItem>
+                    <SelectItem value="DUPLICATE">Duplicate</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs">Preview Zoom</Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPrintPreviewZoom((value) => Math.max(0.55, value - 0.1))
+                    }
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </Button>
+                  <div className="flex-1 rounded border px-3 py-2 text-center text-sm">
+                    {Math.round(printPreviewZoom * 100)}%
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setPrintPreviewZoom((value) => Math.min(1.25, value + 0.1))
+                    }
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded border bg-slate-50 p-3 text-xs text-slate-700">
+                <div className="font-medium text-slate-900">Invoice</div>
+                <div className="mt-1">
+                  {previewInvoiceCore?.invoiceNumber || 'Not available'}
+                </div>
+                <div className="mt-2 font-medium text-slate-900">Status</div>
+                <div className="mt-1">
+                  {isPrintPreviewSaved ? 'Confirmed' : 'Draft preview'}
+                </div>
+                <div className="mt-2 font-medium text-slate-900">Patient</div>
+                <div className="mt-1">
+                  {previewPatient?.name ||
+                    printPreviewData?.billingFallback.billingName ||
+                    'Not selected'}
+                </div>
+                <div className="mt-2 font-medium text-slate-900">Total</div>
+                <div className="mt-1">₹{previewTotalLabel}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPrintPreviewOpen(false)}
+                >
+                  Close
+                </Button>
+                <Button
+                  type="button"
+                  onClick={printPreviewInFrame}
+                  disabled={!isPrintPreviewSaved}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  Print
+                </Button>
+                <Button
+                  type="button"
+                  className="col-span-2"
+                  variant="secondary"
+                  onClick={downloadPrintPreviewPdf}
+                  disabled={savingPdf || !isPrintPreviewSaved}
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  {savingPdf ? 'Saving PDF...' : 'Download PDF'}
+                </Button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
