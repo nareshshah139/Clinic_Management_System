@@ -10,7 +10,7 @@
     "npm": ">=9"
   },
   "scripts": {
-    "build": "nest build",
+    "build": "npx prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "sh start.sh",
     "seed": "node dist/scripts/seed-once.js",
