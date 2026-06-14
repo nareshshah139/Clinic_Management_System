@@ -4,7 +4,7 @@
     {
       "name": "backend",
       "rootDir": "backend",
-      "startCommand": "node dist/main.js",
+      "startCommand": "sh start.sh",
       "buildCommand": "npm ci && npx prisma generate && npm run build",
       "healthcheckPath": "/health",
       "envVarGroups": [],
