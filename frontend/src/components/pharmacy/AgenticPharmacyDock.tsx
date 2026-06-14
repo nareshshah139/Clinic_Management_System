@@ -6,6 +6,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -191,10 +193,16 @@ export function AgenticPharmacyDock() {
 
   const scrollToBottom = useCallback(() => {
     requestAnimationFrame(() => {
-      scrollRef.current?.scrollTo({
-        top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
-      });
+      const scrollContainer = scrollRef.current;
+      if (!scrollContainer) return;
+      if (typeof scrollContainer.scrollTo === "function") {
+        scrollContainer.scrollTo({
+          top: scrollContainer.scrollHeight,
+          behavior: "smooth",
+        });
+      } else {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      }
     });
   }, []);
 
@@ -433,6 +441,39 @@ export function AgenticPharmacyDock() {
         title: "Reject failed",
         description: getErrorMessage(error),
       });
+    }
+  };
+
+  const handleChatPaste = useCallback((event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+    const pastedText = event.clipboardData.getData("text");
+    if (!pastedText) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? target.value.length;
+    const end = target.selectionEnd ?? target.value.length;
+    const nextValue =
+      target.value.slice(0, start) + pastedText + target.value.slice(end);
+    const nextCursor = start + pastedText.length;
+
+    setInput(nextValue);
+    requestAnimationFrame(() => {
+      target.setSelectionRange(nextCursor, nextCursor);
+    });
+  }, []);
+
+  const stopChatShortcutPropagation = (
+    event: ReactKeyboardEvent<HTMLTextAreaElement>,
+  ) => {
+    const key = event.key.toLowerCase();
+    const isEditingShortcut =
+      (event.ctrlKey || event.metaKey) &&
+      ["a", "c", "v", "x", "y", "z"].includes(key);
+
+    if (isEditingShortcut) {
+      event.stopPropagation();
     }
   };
 
@@ -735,16 +776,25 @@ export function AgenticPharmacyDock() {
               <Textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
+                onPaste={handleChatPaste}
+                onCopy={(event) => event.stopPropagation()}
+                onCut={(event) => event.stopPropagation()}
+                onKeyDownCapture={stopChatShortcutPropagation}
                 onKeyDown={(event) => {
-                  if (
+                  stopChatShortcutPropagation(event);
+                  const wantsNewLine = event.shiftKey;
+                  const isSendKey =
                     event.key === "Enter" &&
-                    (event.metaKey || event.ctrlKey)
-                  ) {
+                    !event.altKey &&
+                    !wantsNewLine &&
+                    !event.nativeEvent.isComposing;
+
+                  if (isSendKey) {
                     event.preventDefault();
                     void sendMessage();
                   }
                 }}
-                placeholder="Ask Codex about pharmacy operations"
+                placeholder="Ask Codex about pharmacy operations. Enter sends, Shift+Enter adds a line."
                 disabled={isHistoryThread}
                 className="max-h-28 min-h-11 resize-none"
               />
