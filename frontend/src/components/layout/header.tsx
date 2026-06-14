@@ -180,7 +180,7 @@ export function Header() {
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
           description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
-          href: `/dashboard/billing?tab=invoices`,
+          href: `/dashboard/pharmacy?section=billing`,
           variant: 'warning',
         }));
         pushMany(apptItems, 4);
@@ -213,14 +213,14 @@ export function Header() {
           id: `pay-${p.id}`,
           title: `Pending ${formatCurrency(p.amount)} (${p.mode})`,
           description: `Invoice ${p.invoice?.invoiceNo || ''} • ${formatRelative(p.createdAt)}`,
-          href: `/dashboard/billing?tab=payments`,
+          href: `/dashboard/pharmacy?section=billing`,
           variant: 'warning',
         }));
         const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
           description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
-          href: `/dashboard/billing?tab=invoices`,
+          href: `/dashboard/pharmacy?section=billing`,
           variant: 'destructive',
         }));
         pushMany(payItems, 5);
@@ -237,7 +237,7 @@ export function Header() {
             id: 'summary-overdue',
             title: `${counts.overdueInvoices} overdue invoice${counts.overdueInvoices === 1 ? '' : 's'}`,
             description: 'Billing attention needed',
-            href: '/dashboard/billing?tab=invoices',
+            href: '/dashboard/pharmacy?section=billing',
             variant: 'destructive',
           });
         }
@@ -246,7 +246,7 @@ export function Header() {
             id: 'summary-pending',
             title: `${counts.pendingPayments} pending payment${counts.pendingPayments === 1 ? '' : 's'}`,
             description: 'Reconciliation required',
-            href: '/dashboard/billing?tab=payments',
+            href: '/dashboard/pharmacy?section=billing',
             variant: 'warning',
           });
         }

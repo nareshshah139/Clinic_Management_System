@@ -290,7 +290,7 @@ function getTourStepsForPage(pathname: string): TourStep[] {
               <li><strong>Appointments:</strong> Schedule and manage patient appointments</li>
               <li><strong>Patients:</strong> Register and manage patient records</li>
               <li><strong>Rooms:</strong> Check room availability</li>
-              <li><strong>Billing:</strong> Process payments and create invoices</li>
+              <li><strong>Pharmacy Billing:</strong> Process pharmacy invoices and payments</li>
             </ul>
           </div>
         `,
@@ -974,64 +974,38 @@ function getTourStepsForPage(pathname: string): TourStep[] {
     ];
   }
 
-  // Billing page tour
-  if (pathname === '/dashboard/billing') {
+  // Pharmacy page tour
+  if (pathname === '/dashboard/pharmacy') {
     return [
       {
         intro: `
           <div class="space-y-2">
-            <h3 class="text-lg font-semibold">Billing & Payments 💳</h3>
-            <p>Process payments, create invoices, and manage billing records for patients.</p>
+            <h3 class="text-lg font-semibold">Pharmacy Workflows</h3>
+            <p>Use Pharmacy Desk, Pharmacy Counter, and Pharmacy Billing from the main sidebar.</p>
           </div>
         `,
       },
       {
-        element: '[data-tour="create-invoice-btn"]',
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Create Invoice</h4>
-            <p>Click here to generate a new invoice for a patient. You can add consultation fees, procedures, and medications.</p>
+            <h4 class="font-semibold">Pharmacy Desk</h4>
+            <p>Start from the desk for dashboard metrics, Codex assistant, packages, partner sync, invoices, and drug records.</p>
           </div>
         `,
-        position: 'left',
-      },
-      {
-        element: '[data-tour="search-invoices"]',
-        intro: `
-          <div class="space-y-2">
-            <h4 class="font-semibold">Search Invoices</h4>
-            <p>Find existing invoices by patient name or invoice number. Useful for processing delayed payments or printing duplicates.</p>
-          </div>
-        `,
-        position: 'bottom',
-      },
-      {
-        element: '[data-tour="invoices-table"]',
-        intro: `
-          <div class="space-y-2">
-            <h4 class="font-semibold">Invoice List</h4>
-            <p>View all invoices with payment status:</p>
-            <ul class="list-disc pl-5 space-y-1 text-sm">
-              <li><strong class="text-green-600">Paid:</strong> Payment completed</li>
-              <li><strong class="text-yellow-600">Pending:</strong> Payment not yet received</li>
-              <li><strong class="text-red-600">Overdue:</strong> Payment delayed beyond due date</li>
-            </ul>
-          </div>
-        `,
-        position: 'top',
       },
       {
         intro: `
           <div class="space-y-2">
-            <h4 class="font-semibold">Processing Payments</h4>
-            <ol class="list-decimal pl-5 space-y-1 text-sm">
-              <li>Select the invoice to process</li>
-              <li>Verify the amount with the patient</li>
-              <li>Choose payment mode (Cash, Card, UPI, etc.)</li>
-              <li>Record partial payments if needed</li>
-              <li>Print receipt and provide to patient</li>
-            </ol>
-            <p class="text-sm mt-2"><strong>💡 Important:</strong> Always reconcile payments at the end of your shift!</p>
+            <h4 class="font-semibold">Pharmacy Counter</h4>
+            <p>Review prescriptions, check stock, handle substitutions, and send approved work into billing.</p>
+          </div>
+        `,
+      },
+      {
+        intro: `
+          <div class="space-y-2">
+            <h4 class="font-semibold">Pharmacy Billing</h4>
+            <p>Create pharmacy invoices, collect payment, and print or save invoice PDFs.</p>
           </div>
         `,
       },
@@ -1050,7 +1024,9 @@ function getTourStepsForPage(pathname: string): TourStep[] {
             <li>Appointments</li>
             <li>Patients</li>
             <li>Rooms</li>
-            <li>Billing</li>
+            <li>Pharmacy Desk</li>
+            <li>Pharmacy Counter</li>
+            <li>Pharmacy Billing</li>
           </ul>
           <p class="mt-2">Navigate to any of these pages and click the help button to start the tour!</p>
         </div>
@@ -1129,5 +1105,4 @@ export function ReceptionistTour({ autoStart = false }: ReceptionistTourProps) {
     </Button>
   );
 }
-
 

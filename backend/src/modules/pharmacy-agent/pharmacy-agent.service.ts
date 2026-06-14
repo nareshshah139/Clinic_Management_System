@@ -80,6 +80,16 @@ type AttachmentSummary = {
   summary?: unknown;
 };
 
+type CodexStatusResult = {
+  configured: boolean;
+  output: string;
+};
+
+type CodexStatusCacheEntry = {
+  expiresAt: number;
+  value: CodexStatusResult;
+};
+
 const CODEX_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -186,10 +196,12 @@ const ACTION_TARGETS: Record<string, string> = {
 
 const MAX_ACTIVE_AGENT_THREADS = 12;
 const MAX_HISTORY_AGENT_THREADS = 30;
+const DEFAULT_CODEX_STATUS_CACHE_MS = 60_000;
 
 @Injectable()
 export class PharmacyAgentService implements OnModuleInit {
   private readonly logger = new Logger(PharmacyAgentService.name);
+  private codexStatusCache: CodexStatusCacheEntry | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -206,13 +218,28 @@ export class PharmacyAgentService implements OnModuleInit {
   }
 
   async getCodexStatus() {
+    const now = Date.now();
+    if (this.codexStatusCache && this.codexStatusCache.expiresAt > now) {
+      return this.codexStatusCache.value;
+    }
+
     const output = await this.runCodexStatus();
     const loggedIn = output.exitCode === 0 && /logged in/i.test(output.output);
     const usingApiKey = /api key/i.test(output.output);
-    return {
+    const result = {
       configured: loggedIn && !usingApiKey,
       output: output.output.slice(0, 500),
     };
+
+    const ttlMs = this.codexStatusCacheTtlMs();
+    if (ttlMs > 0) {
+      this.codexStatusCache = {
+        expiresAt: Date.now() + ttlMs,
+        value: result,
+      };
+    }
+
+    return result;
   }
 
   async createSession(dto: CreatePharmacyAgentSessionDto, user: AgentUser) {
@@ -1230,6 +1257,12 @@ export class PharmacyAgentService implements OnModuleInit {
     }
   }
 
+  private codexStatusCacheTtlMs() {
+    const configured = Number(process.env.PHARMACY_AGENT_CODEX_STATUS_CACHE_MS);
+    if (Number.isFinite(configured) && configured >= 0) return configured;
+    return DEFAULT_CODEX_STATUS_CACHE_MS;
+  }
+
   private codexEnv() {
     const allowedKeys = [
       'PATH',
@@ -1382,37 +1415,26 @@ export class PharmacyAgentService implements OnModuleInit {
     const input = action.input || {};
     switch (action.actionType) {
       case 'create_drug':
-        return this.drugService.create(input as any, user.branchId);
+        return this.drugService.create(input, user.branchId);
       case 'update_drug':
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
-        return this.drugService.update(
-          action.targetId,
-          input as any,
-          user.branchId,
-        );
+        return this.drugService.update(action.targetId, input, user.branchId);
       case 'create_inventory_item':
-        return this.inventoryService.createInventoryItem(
-          input as any,
-          user.branchId,
-        );
+        return this.inventoryService.createInventoryItem(input, user.branchId);
       case 'update_inventory_item':
         if (!action.targetId)
           throw new BadRequestException('targetId is required');
         return this.inventoryService.updateInventoryItem(
           action.targetId,
-          input as any,
+          input,
           user.branchId,
         );
       case 'adjust_stock':
-        return this.inventoryService.adjustStock(
-          input as any,
-          user.branchId,
-          user.id,
-        );
+        return this.inventoryService.adjustStock(input, user.branchId, user.id);
       case 'create_purchase_invoice_draft':
         return this.purchaseInvoiceService.createDraft(
-          input as any,
+          input,
           user.branchId,
           user.id,
         );
@@ -1421,7 +1443,7 @@ export class PharmacyAgentService implements OnModuleInit {
           throw new BadRequestException('targetId is required');
         return this.purchaseInvoiceService.markReviewed(
           action.targetId,
-          input as any,
+          input,
           user.branchId,
         );
       case 'commit_purchase_invoice_stock':

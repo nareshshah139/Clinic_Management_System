@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ReactNode, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './sidebar';
 import { Header } from './header';
@@ -89,7 +89,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <DashboardUserProvider value={contextValue}>
       <div className="h-screen flex bg-gray-50">
         {/* Sidebar */}
-        <Sidebar />
+        <Suspense fallback={<div className="h-full w-64 shrink-0 border-r border-[var(--border)] bg-[var(--sidebar, var(--card))]" />}>
+          <Sidebar />
+        </Suspense>
 
         {/* Main content */}
         <div className="flex-1 flex flex-col overflow-hidden">

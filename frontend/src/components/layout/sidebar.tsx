@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useMemo } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useDashboardUser } from './dashboard-user-context';
+import type { LucideIcon } from 'lucide-react';
 import {
   Calendar,
+  ClipboardCheck,
   Users,
-  CreditCard,
   Package,
   BarChart3,
   User as UserIcon,
@@ -18,12 +19,22 @@ import {
   MapPin,
   Activity,
   Pill,
-  FilePlus2,
+  Receipt,
   TrendingUp,
   Mic,
 } from 'lucide-react';
 
-const navigation = [
+type PharmacySidebarSection = 'desk' | 'counter' | 'billing';
+
+type NavigationItem = {
+  name: string;
+  href: string;
+  icon: LucideIcon;
+  allowedRoles: string[];
+  pharmacySection?: PharmacySidebarSection;
+};
+
+const navigation: NavigationItem[] = [
   {
     name: 'Dashboard',
     href: '/dashboard',
@@ -61,22 +72,25 @@ const navigation = [
     allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION'],
   },
   {
-    name: 'Billing',
-    href: '/dashboard/billing',
-    icon: CreditCard,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'ACCOUNTANT'],
-  },
-  {
-    name: 'Pharmacy',
-    href: '/dashboard/pharmacy',
+    name: 'Pharmacy Desk',
+    href: '/dashboard/pharmacy?section=desk',
     icon: Pill,
+    pharmacySection: 'desk',
     allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
   },
   {
-    name: 'Prescription Pad',
-    href: '/dashboard/prescriptions',
-    icon: FilePlus2,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR'],
+    name: 'Pharmacy Counter',
+    href: '/dashboard/pharmacy?section=counter',
+    icon: ClipboardCheck,
+    pharmacySection: 'counter',
+    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
+  },
+  {
+    name: 'Pharmacy Billing',
+    href: '/dashboard/pharmacy?section=billing',
+    icon: Receipt,
+    pharmacySection: 'billing',
+    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
   },
   {
     name: 'Inventory',
@@ -110,8 +124,6 @@ const navigation = [
   },
 ];
 
-type NavigationItem = (typeof navigation)[number];
-
 const defaultAllowedRoles = new Set<string>(['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION', 'PHARMACIST', 'ACCOUNTANT']);
 
 const filterNavigationByRole = (items: NavigationItem[], role: string | undefined) => {
@@ -127,12 +139,41 @@ const filterNavigationByRole = (items: NavigationItem[], role: string | undefine
   });
 };
 
+function getActivePharmacySection(
+  pathname: string,
+  searchParams: Pick<URLSearchParams, 'get' | 'has'>,
+): PharmacySidebarSection | null {
+  if (!pathname.startsWith('/dashboard/pharmacy')) return null;
+
+  if (pathname === '/dashboard/pharmacy/invoices') return 'billing';
+
+  const requested = searchParams.get('section') || searchParams.get('tab') || '';
+  if (requested === 'desk' || requested === 'counter' || requested === 'billing') {
+    return requested;
+  }
+
+  if (requested === 'invoices' || requested === 'payments') return 'billing';
+
+  if (
+    searchParams.has('patientId') ||
+    searchParams.has('prescriptionId') ||
+    searchParams.has('doctorId') ||
+    searchParams.has('visitId')
+  ) {
+    return 'billing';
+  }
+
+  return 'desk';
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, logout, loading } = useDashboardUser();
   const role = user?.role;
 
   const navigationItems = useMemo(() => filterNavigationByRole(navigation, role), [role]);
+  const activePharmacySection = getActivePharmacySection(pathname, searchParams);
 
   return (
     <div className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]" data-tour="sidebar">
@@ -149,7 +190,12 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1">
         {navigationItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const itemPath = item.href.split('?')[0];
+          const isActive = item.pharmacySection
+            ? activePharmacySection === item.pharmacySection
+            : itemPath === '/dashboard'
+              ? pathname === itemPath
+              : pathname === itemPath || pathname.startsWith(itemPath + '/');
           return (
             <Link
               key={item.name}
@@ -196,4 +242,4 @@ export function Sidebar() {
       </div>
     </div>
   );
-} 
+}

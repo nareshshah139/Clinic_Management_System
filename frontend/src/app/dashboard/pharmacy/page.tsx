@@ -1,36 +1,46 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsFontSizeControls, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PharmacyInvoiceBuilderFixed } from '@/components/pharmacy/PharmacyInvoiceBuilderFixed';
 import { PackageBrowser } from '@/components/pharmacy/PackageBrowser';
 import { PharmacyPackageCreator } from '@/components/pharmacy/PharmacyPackageCreator';
 import { PrescriptionDispensingQueue } from '@/components/pharmacy/PrescriptionDispensingQueue';
 import { PartnerDailySync } from '@/components/pharmacy/PartnerDailySync';
 import { PharmacyCounterCockpit } from '@/components/pharmacy/PharmacyCounterCockpit';
-import { AgenticPharmacyDock } from '@/components/pharmacy/AgenticPharmacyDock';
 import { apiClient } from '@/lib/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { QuickGuide } from '@/components/common/QuickGuide';
 import {
   ArrowRight,
+  Bot,
   CheckCircle2,
   ClipboardCheck,
   DollarSign,
-  FileText,
+  MessageSquare,
   Package,
   Pill,
   Plus,
   Receipt,
   RefreshCcw,
   TrendingUp,
-  Users,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-type CounterTab = 'billing' | 'queue' | 'partner-sync' | 'packages';
+const AgenticPharmacyDock = dynamic(
+  () =>
+    import('@/components/pharmacy/AgenticPharmacyDock').then(
+      (mod) => mod.AgenticPharmacyDock,
+    ),
+  {
+    ssr: false,
+    loading: () => <AgenticPharmacyDockLoading />,
+  },
+);
+
+type PharmacySideTab = 'desk' | 'counter' | 'billing';
 type PharmacyBillingPrefill = {
   patientId?: string;
   prescriptionId?: string;
@@ -51,26 +61,48 @@ interface PharmacyDashboardData {
 }
 
 export default function PharmacyPage() {
+  return (
+    <Suspense fallback={<PharmacyPageLoading />}>
+      <PharmacyPageContent />
+    </Suspense>
+  );
+}
+
+function PharmacyPageContent() {
   const router = useRouter();
-  const counterWorkbenchRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
+  const pharmacyWorkspaceRef = useRef<HTMLDivElement | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [dash, setDash] = useState<PharmacyDashboardData | null>(null);
   const [dashReloadKey, setDashReloadKey] = useState<number>(0);
-  const [counterTab, setCounterTab] = useState<CounterTab>('billing');
+  const [pharmacyTab, setPharmacyTab] = useState<PharmacySideTab>('desk');
   const [prefill, setPrefill] = useState<PharmacyBillingPrefill | null>(null);
+  const [isAgentDockOpen, setIsAgentDockOpen] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-    const patientId = params.get('patientId') || undefined;
-    const prescriptionId = params.get('prescriptionId') || undefined;
-    const doctorId = params.get('doctorId') || undefined;
-    const visitId = params.get('visitId') || undefined;
+    const requestedTab = searchParams.get('section') || searchParams.get('tab') || '';
+    const patientId = searchParams.get('patientId') || undefined;
+    const prescriptionId = searchParams.get('prescriptionId') || undefined;
+    const doctorId = searchParams.get('doctorId') || undefined;
+    const visitId = searchParams.get('visitId') || undefined;
+    let nextTab: PharmacySideTab = 'desk';
+
+    if (requestedTab === 'desk' || requestedTab === 'counter' || requestedTab === 'billing') {
+      nextTab = requestedTab;
+    } else if (requestedTab === 'invoices' || requestedTab === 'payments') {
+      nextTab = 'billing';
+    }
+
     if (patientId || prescriptionId || doctorId || visitId) {
       setPrefill({ patientId, prescriptionId, doctorId, visitId });
-      setCounterTab('billing');
+      nextTab = 'billing';
+    } else {
+      setPrefill(null);
     }
-  }, []);
+
+    setPharmacyTab(nextTab);
+  }, [searchParams]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -142,179 +174,310 @@ export default function PharmacyPage() {
 
   const focusWorkbench = () => {
     requestAnimationFrame(() => {
-      counterWorkbenchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pharmacyWorkspaceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
 
-  const openCounter = (tab: CounterTab, billingPrefill?: PharmacyBillingPrefill) => {
+  const openPharmacyTab = (tab: PharmacySideTab, billingPrefill?: PharmacyBillingPrefill) => {
     if (billingPrefill) {
       setPrefill((current) => ({
         ...(current ?? {}),
         ...billingPrefill,
       }));
     }
-    setCounterTab(tab);
+    setPharmacyTab(tab);
+    const params = new URLSearchParams();
+    params.set('section', tab);
+    if (billingPrefill?.patientId) params.set('patientId', billingPrefill.patientId);
+    if (billingPrefill?.prescriptionId) params.set('prescriptionId', billingPrefill.prescriptionId);
+    if (billingPrefill?.doctorId) params.set('doctorId', billingPrefill.doctorId);
+    if (billingPrefill?.visitId) params.set('visitId', billingPrefill.visitId);
+    router.push(`/dashboard/pharmacy?${params.toString()}`);
     focusWorkbench();
   };
 
   return (
     <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
-      <div className="mx-auto max-w-[1560px] space-y-2">
-        <section className="rounded-[12px] border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
-          <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-xl font-semibold tracking-tight">
-                  Pharmacy Desk
-                </h2>
-                <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-100">
-                  Counter mode
-                </span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-slate-300">
-                Queue, review, pick, bill, pay, dispense.
-              </p>
-            </div>
-
-            <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-              <MetricStrip
-                label="Sales"
-                value={`₹${todaySales.toFixed(2)}`}
-                detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
-                icon={<DollarSign className="h-4 w-4" />}
-                intent="green"
-              />
-              <MetricStrip
-                label="Invoices"
-                value={invoicesToday}
-                detail={`${pendingInvoices} pending`}
-                icon={<Receipt className="h-4 w-4" />}
-                intent="blue"
-              />
-              <MetricStrip
-                label="Stock"
-                value={totalDrugs}
-                detail={`${lowStockDrugs} low`}
-                icon={<Pill className="h-4 w-4" />}
-                intent="purple"
-              />
-              <MetricStrip
-                label="Packages"
-                value={packagesCount}
-                detail="bundles"
-                icon={<Package className="h-4 w-4" />}
-                intent="amber"
-              />
-            </div>
-
-            <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
-              <PharmacyGuide />
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
-              >
-                <RefreshCcw className="h-4 w-4" />
-                Refresh
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={() => router.push('/dashboard/pharmacy/invoices')}
-              >
-                <Receipt className="h-4 w-4" />
-                Invoices
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
-                onClick={() => router.push('/dashboard/pharmacy/drugs')}
-              >
-                <Pill className="h-4 w-4" />
-                Drugs
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-2 grid gap-1.5 lg:grid-cols-3">
-            <QuickAction
-              icon={<ClipboardCheck className="h-4 w-4" />}
-              title="Rx Auto-Fill"
-              detail="Visit prescriptions"
-              onClick={() => openCounter('queue')}
+      <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
+        <div className="space-y-3">
+          {pharmacyTab === 'desk' ? (
+            <PharmacyDeskPanel
+              todaySales={todaySales}
+              todayGrowth={todayGrowth}
+              invoicesToday={invoicesToday}
+              pendingInvoices={pendingInvoices}
+              totalDrugs={totalDrugs}
+              lowStockDrugs={lowStockDrugs}
+              packagesCount={packagesCount}
+              isAgentDockOpen={isAgentDockOpen}
+              onOpenAgent={() => setIsAgentDockOpen(true)}
+              onOpenCounter={() => openPharmacyTab('counter')}
+              onOpenBilling={() => openPharmacyTab('billing')}
+              onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
+              onOpenInvoices={() => router.push('/dashboard/pharmacy/invoices')}
+              onOpenDrugs={() => router.push('/dashboard/pharmacy/drugs')}
             />
-            <QuickAction
-              icon={<Receipt className="h-4 w-4" />}
-              title="Billing & GST"
-              detail="Invoice and payment"
-              onClick={() => openCounter('billing')}
+          ) : null}
+
+          {pharmacyTab === 'counter' ? (
+            <PharmacyCounterPanel
+              prefill={prefill}
+              onOpenBilling={(billingPrefill) => openPharmacyTab('billing', billingPrefill)}
+              onOpenPartnerSync={() => openPharmacyTab('desk')}
+              onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
             />
-            <QuickAction
-              icon={<Package className="h-4 w-4" />}
-              title="Inventory Control"
-              detail="Shelf, OCR, FEFO"
-              onClick={() => router.push('/dashboard/inventory?tab=pharmacy-control')}
-            />
-          </div>
-        </section>
+          ) : null}
 
-        <AgenticPharmacyDock />
-
-        <PharmacyCounterCockpit
-          prefill={prefill}
-          onOpenBilling={(billingPrefill) => openCounter('billing', billingPrefill)}
-          onOpenQueue={() => openCounter('queue')}
-          onOpenPartnerSync={() => openCounter('partner-sync')}
-          onOpenInventoryControl={() => router.push('/dashboard/inventory?tab=pharmacy-control&section=shelf')}
-        />
-
-        <section ref={counterWorkbenchRef} className="scroll-mt-4 space-y-3">
-          <WorkbenchHeader
-            title="Dispense & Billing Workbench"
-            detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
-          />
-          <Tabs value={counterTab} onValueChange={(value: string) => setCounterTab(value as CounterTab)} className="space-y-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-[8px] bg-slate-100 p-1 lg:grid-cols-4">
-                <TabsTrigger value="billing" className="min-h-10 gap-2">
-                  <FileText className="h-4 w-4" />
-                  Billing & GST
-                </TabsTrigger>
-                <TabsTrigger value="queue" className="min-h-10 gap-2">
-                  <ClipboardCheck className="h-4 w-4" />
-                  Rx Auto-Fill
-                </TabsTrigger>
-                <TabsTrigger value="partner-sync" className="min-h-10 gap-2">
-                  <Users className="h-4 w-4" />
-                  Partner Sync
-                </TabsTrigger>
-                <TabsTrigger value="packages" className="min-h-10 gap-2">
-                  <Package className="h-4 w-4" />
-                  Packages
-                </TabsTrigger>
-              </TabsList>
-              <TabsFontSizeControls className="shrink-0 justify-end" />
-            </div>
-
-            <TabsContent value="billing" className="space-y-6">
-              <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
-            </TabsContent>
-            <TabsContent value="queue" className="space-y-6">
-              <PrescriptionDispensingQueue />
-            </TabsContent>
-            <TabsContent value="partner-sync" className="space-y-6">
-              <PartnerDailySync />
-            </TabsContent>
-            <TabsContent value="packages" className="space-y-6">
-              <PackagesPanel />
-            </TabsContent>
-          </Tabs>
-        </section>
+          {pharmacyTab === 'billing' ? (
+            <PharmacyBillingPanel prefill={prefill} />
+          ) : null}
+        </div>
       </div>
     </main>
+  );
+}
+
+function PharmacyPageLoading() {
+  return (
+    <div className="flex-1 flex items-center justify-center p-8">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Loading pharmacy dashboard...</p>
+      </div>
+    </div>
+  );
+}
+
+function PharmacyDeskPanel({
+  todaySales,
+  todayGrowth,
+  invoicesToday,
+  pendingInvoices,
+  totalDrugs,
+  lowStockDrugs,
+  packagesCount,
+  isAgentDockOpen,
+  onOpenAgent,
+  onOpenCounter,
+  onOpenBilling,
+  onOpenInventoryControl,
+  onOpenInvoices,
+  onOpenDrugs,
+}: {
+  todaySales: number;
+  todayGrowth: number;
+  invoicesToday: number;
+  pendingInvoices: number;
+  totalDrugs: number;
+  lowStockDrugs: number;
+  packagesCount: number;
+  isAgentDockOpen: boolean;
+  onOpenAgent: () => void;
+  onOpenCounter: () => void;
+  onOpenBilling: () => void;
+  onOpenInventoryControl: () => void;
+  onOpenInvoices: () => void;
+  onOpenDrugs: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <section className="rounded-[12px] border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+        <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight">
+                Pharmacy Desk
+              </h2>
+              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-100">
+                Command center
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-slate-300">
+              Queue, review, pick, bill, pay, dispense.
+            </p>
+          </div>
+
+          <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricStrip
+              label="Sales"
+              value={`₹${todaySales.toFixed(2)}`}
+              detail={`${todayGrowth >= 0 ? '+' : ''}${todayGrowth.toFixed(1)}%`}
+              icon={<DollarSign className="h-4 w-4" />}
+              intent="green"
+            />
+            <MetricStrip
+              label="Invoices"
+              value={invoicesToday}
+              detail={`${pendingInvoices} pending`}
+              icon={<Receipt className="h-4 w-4" />}
+              intent="blue"
+            />
+            <MetricStrip
+              label="Stock"
+              value={totalDrugs}
+              detail={`${lowStockDrugs} low`}
+              icon={<Pill className="h-4 w-4" />}
+              intent="purple"
+            />
+            <MetricStrip
+              label="Packages"
+              value={packagesCount}
+              detail="bundles"
+              icon={<Package className="h-4 w-4" />}
+              intent="amber"
+            />
+          </div>
+
+          <div className="flex flex-wrap justify-start gap-1.5 xl:justify-end">
+            <PharmacyGuide />
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Refresh
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              onClick={onOpenInvoices}
+            >
+              <Receipt className="h-4 w-4" />
+              Invoices
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              onClick={onOpenDrugs}
+            >
+              <Pill className="h-4 w-4" />
+              Drugs
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-2 grid gap-1.5 lg:grid-cols-3">
+          <QuickAction
+            icon={<ClipboardCheck className="h-4 w-4" />}
+            title="Pharmacy Counter"
+            detail="Review and pick"
+            onClick={onOpenCounter}
+          />
+          <QuickAction
+            icon={<Receipt className="h-4 w-4" />}
+            title="Pharmacy Billing"
+            detail="Invoice and payment"
+            onClick={onOpenBilling}
+          />
+          <QuickAction
+            icon={<Package className="h-4 w-4" />}
+            title="Inventory Control"
+            detail="Shelf, OCR, FEFO"
+            onClick={onOpenInventoryControl}
+          />
+        </div>
+      </section>
+
+      {isAgentDockOpen ? (
+        <AgenticPharmacyDock />
+      ) : (
+        <AgenticPharmacyLauncher onOpen={onOpenAgent} />
+      )}
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <PartnerDailySync />
+        <PackagesPanel />
+      </div>
+    </div>
+  );
+}
+
+function PharmacyCounterPanel({
+  prefill,
+  onOpenBilling,
+  onOpenPartnerSync,
+  onOpenInventoryControl,
+}: {
+  prefill?: PharmacyBillingPrefill | null;
+  onOpenBilling: (prefill?: PharmacyBillingPrefill) => void;
+  onOpenPartnerSync: () => void;
+  onOpenInventoryControl: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <PharmacyCounterCockpit
+        prefill={prefill}
+        onOpenBilling={onOpenBilling}
+        onOpenQueue={() => undefined}
+        onOpenPartnerSync={onOpenPartnerSync}
+        onOpenInventoryControl={onOpenInventoryControl}
+      />
+
+      <section className="space-y-3">
+        <WorkbenchHeader
+          title="Prescription Queue"
+          detail="Review visit prescriptions and send approved medicines into Pharmacy Billing."
+        />
+        <PrescriptionDispensingQueue />
+      </section>
+    </div>
+  );
+}
+
+function PharmacyBillingPanel({
+  prefill,
+}: {
+  prefill?: PharmacyBillingPrefill | null;
+}) {
+  return (
+    <section className="space-y-3">
+      <WorkbenchHeader
+        title="Pharmacy Billing"
+        detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
+      />
+      <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
+    </section>
+  );
+}
+
+function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
+  return (
+    <section className="rounded-[10px] border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-slate-950 text-white">
+            <Bot className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="truncate text-sm font-semibold text-slate-950">
+              Agentic Pharmacy
+            </h3>
+            <p className="truncate text-xs text-slate-500">
+              Opens when needed.
+            </p>
+          </div>
+        </div>
+        <Button size="sm" className="h-9 shrink-0 gap-2" onClick={onOpen}>
+          <MessageSquare className="h-4 w-4" />
+          Open AI Assistant
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function AgenticPharmacyDockLoading() {
+  return (
+    <section className="rounded-[10px] border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <div className="flex items-center gap-3 text-sm text-slate-600">
+        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
+        Loading Agentic Pharmacy...
+      </div>
+    </section>
   );
 }
 

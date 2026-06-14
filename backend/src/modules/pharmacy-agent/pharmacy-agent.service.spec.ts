@@ -11,6 +11,10 @@ describe('PharmacyAgentService safety helpers', () => {
     {} as any,
   ) as any;
 
+  beforeEach(() => {
+    service.codexStatusCache = null;
+  });
+
   it('redacts sensitive fields recursively before Codex or audit storage', () => {
     expect(
       service.redact({
@@ -94,6 +98,28 @@ describe('PharmacyAgentService safety helpers', () => {
     await expect(service.getCodexStatus()).resolves.toMatchObject({
       configured: true,
     });
+  });
+
+  it('caches the Codex status check briefly', async () => {
+    const previousTtl = process.env.PHARMACY_AGENT_CODEX_STATUS_CACHE_MS;
+    process.env.PHARMACY_AGENT_CODEX_STATUS_CACHE_MS = '60000';
+    service.runCodexStatus = jest.fn().mockResolvedValue({
+      exitCode: 0,
+      output: 'Logged in using ChatGPT',
+    });
+
+    try {
+      await service.getCodexStatus();
+      await service.getCodexStatus();
+    } finally {
+      if (previousTtl === undefined) {
+        delete process.env.PHARMACY_AGENT_CODEX_STATUS_CACHE_MS;
+      } else {
+        process.env.PHARMACY_AGENT_CODEX_STATUS_CACHE_MS = previousTtl;
+      }
+    }
+
+    expect(service.runCodexStatus).toHaveBeenCalledTimes(1);
   });
 
   it('returns the drug catalog with prices and price sorting', async () => {
