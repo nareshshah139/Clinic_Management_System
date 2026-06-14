@@ -207,8 +207,10 @@ export class PharmacyAgentService implements OnModuleInit {
 
   async getCodexStatus() {
     const output = await this.runCodexStatus();
+    const loggedIn = output.exitCode === 0 && /logged in/i.test(output.output);
+    const usingApiKey = /api key/i.test(output.output);
     return {
-      configured: output.exitCode === 0 && /logged in/i.test(output.output),
+      configured: loggedIn && !usingApiKey,
       output: output.output.slice(0, 500),
     };
   }
@@ -1233,6 +1235,7 @@ export class PharmacyAgentService implements OnModuleInit {
       'PATH',
       'HOME',
       'CODEX_HOME',
+      'CODEX_ACCESS_TOKEN',
       'SHELL',
       'LANG',
       'LC_ALL',

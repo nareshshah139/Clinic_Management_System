@@ -41,6 +41,10 @@ JWT_SECRET="replace-with-secure-secret"
 JWT_EXPIRES_IN="1d"
 # Optional – enables /visits/transcribe endpoint
 OPENAI_API_KEY="sk-..."
+# Optional – enables Pharmacy Agent through Codex CLI using ChatGPT/Codex auth.
+# Prefer CODEX_AUTH_JSON_B64 for browser OAuth cache; use CODEX_ACCESS_TOKEN for Codex access tokens.
+CODEX_AUTH_JSON_B64="base64-encoded-codex-auth-json"
+CODEX_ACCESS_TOKEN="codex-access-token-from-chatgpt"
 # Optional – choose the transcription model (defaults to gpt-4o-transcribe)
 OPENAI_TRANSCRIBE_MODEL="gpt-4o-transcribe" # or whisper-1, gpt-4o-mini-transcribe
 # Optional – enable outbound WhatsApp via Meta Cloud

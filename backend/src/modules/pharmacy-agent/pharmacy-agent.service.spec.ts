@@ -74,6 +74,28 @@ describe('PharmacyAgentService safety helpers', () => {
     ]);
   });
 
+  it('does not report Codex online when authenticated with an API key', async () => {
+    service.runCodexStatus = jest.fn().mockResolvedValue({
+      exitCode: 0,
+      output: 'Logged in using an API key - sk-proj-***',
+    });
+
+    await expect(service.getCodexStatus()).resolves.toMatchObject({
+      configured: false,
+    });
+  });
+
+  it('reports Codex online when authenticated with ChatGPT access token auth', async () => {
+    service.runCodexStatus = jest.fn().mockResolvedValue({
+      exitCode: 0,
+      output: 'Logged in using an access token',
+    });
+
+    await expect(service.getCodexStatus()).resolves.toMatchObject({
+      configured: true,
+    });
+  });
+
   it('returns the drug catalog with prices and price sorting', async () => {
     const prisma = {
       drug: {
