@@ -25,6 +25,9 @@ import {
   UpdateDrugDto,
   QueryDrugDto,
   DrugAutocompleteDto,
+  CreateDrugInventoryChangeRequestDto,
+  QueryDrugInventoryChangeRequestDto,
+  ReviewDrugInventoryChangeRequestDto,
 } from './dto/drug.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 
@@ -117,6 +120,86 @@ export class DrugController {
     return this.drugService.getStatistics(req.user.branchId);
   }
 
+  @Get('inventory-change-requests')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
+  @Permissions('pharmacy:drug:inventory-change:read')
+  @ApiOperation({ summary: 'List drug price or stock change approval requests' })
+  @ApiResponse({
+    status: 200,
+    description: 'Inventory change requests retrieved successfully',
+  })
+  async findInventoryChangeRequests(
+    @Query() query: QueryDrugInventoryChangeRequestDto,
+    @Request() req: any,
+  ) {
+    return this.drugService.findInventoryChangeRequests(query, req.user.branchId);
+  }
+
+  @Post('inventory-change-requests')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:drug:inventory-change:create')
+  @ApiOperation({
+    summary: 'Submit one or more drug price or stock edits for doctor approval',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Inventory change requests submitted successfully',
+  })
+  async createInventoryChangeRequests(
+    @Body() dto: CreateDrugInventoryChangeRequestDto,
+    @Request() req: any,
+  ) {
+    return this.drugService.createInventoryChangeRequests(
+      dto,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
+  @Post('inventory-change-requests/:id/approve')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Permissions('pharmacy:drug:inventory-change:approve')
+  @ApiOperation({
+    summary: 'Approve a pending drug price or stock change and commit it',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Inventory change approved and committed',
+  })
+  async approveInventoryChangeRequest(
+    @Param('id') id: string,
+    @Body() dto: ReviewDrugInventoryChangeRequestDto,
+    @Request() req: any,
+  ) {
+    return this.drugService.approveInventoryChangeRequest(
+      id,
+      dto,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
+  @Post('inventory-change-requests/:id/reject')
+  @Roles(UserRole.ADMIN, UserRole.DOCTOR)
+  @Permissions('pharmacy:drug:inventory-change:approve')
+  @ApiOperation({ summary: 'Reject a pending drug inventory change request' })
+  @ApiResponse({
+    status: 200,
+    description: 'Inventory change request rejected',
+  })
+  async rejectInventoryChangeRequest(
+    @Param('id') id: string,
+    @Body() dto: ReviewDrugInventoryChangeRequestDto,
+    @Request() req: any,
+  ) {
+    return this.drugService.rejectInventoryChangeRequest(
+      id,
+      dto,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
   @Get(':id/alternatives')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:read')
@@ -163,7 +246,12 @@ export class DrugController {
     @Body() updateDrugDto: UpdateDrugDto,
     @Request() req: any,
   ) {
-    return this.drugService.update(id, updateDrugDto, req.user.branchId);
+    return this.drugService.update(
+      id,
+      updateDrugDto,
+      req.user.branchId,
+      req.user.role,
+    );
   }
 
   @Delete(':id')

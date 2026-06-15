@@ -76,6 +76,8 @@ model User {
   pharmacyAgentRuns          PharmacyAgentRun[]
   pharmacyAgentProposals     PharmacyAgentProposal[]
   pharmacyAgentAuditEvents   PharmacyAgentAuditEvent[]
+  drugInventoryChangesRequested DrugInventoryChangeRequest[] @relation("DrugInventoryChangeRequestedBy")
+  drugInventoryChangesReviewed  DrugInventoryChangeRequest[] @relation("DrugInventoryChangeReviewedBy")
 
   // Back-relations
   createdPrescriptionTemplates PrescriptionTemplate[]
@@ -133,6 +135,7 @@ model Branch {
   pharmacyAgentProposals   PharmacyAgentProposal[]
   pharmacyAgentActions     PharmacyAgentProposalAction[]
   pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
+  drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   // Back-relations
   prescriptionTemplates    PrescriptionTemplate[]
@@ -880,6 +883,7 @@ model InventoryItem {
   stockMovements       StockMovement[]
   transactions         StockTransaction[]
   drugs                Drug[]
+  drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   @@map("inventory_items")
 }
@@ -1075,6 +1079,7 @@ model Drug {
   invoiceItems   PharmacyInvoiceItem[]
   inventoryItems InventoryItem[]
   packageItems   PharmacyPackageItem[]
+  inventoryChangeRequests DrugInventoryChangeRequest[]
 
   @@index([name])
   @@index([manufacturerName])
@@ -1083,6 +1088,38 @@ model Drug {
   @@index([isActive])
   @@index([isDiscontinued])
   @@map("drugs")
+}
+
+model DrugInventoryChangeRequest {
+  id            String                       @id @default(cuid())
+  branchId      String
+  drugId        String
+  inventoryItemId String?
+  requestedById String
+  reviewedById  String?
+  currentPrice  Float?
+  proposedPrice Float?
+  currentStock  Int?
+  proposedStock Int?
+  reason        String?
+  status        DrugInventoryChangeRequestStatus @default(PENDING)
+  reviewNote    String?
+  reviewedAt    DateTime?
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
+
+  branch      Branch @relation(fields: [branchId], references: [id])
+  drug        Drug   @relation(fields: [drugId], references: [id])
+  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+  requestedBy User   @relation("DrugInventoryChangeRequestedBy", fields: [requestedById], references: [id])
+  reviewedBy  User?  @relation("DrugInventoryChangeReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([branchId, status])
+  @@index([drugId, status])
+  @@index([inventoryItemId, status])
+  @@index([requestedById])
+  @@index([reviewedById])
+  @@map("drug_inventory_change_requests")
 }
 
 // Pharmacy Invoice Model
@@ -1617,6 +1654,12 @@ enum PartnerDailySaleDiscrepancyFlag {
   UNMATCHED_BATCH
   INSUFFICIENT_STOCK
   PRICE_VARIANCE
+}
+
+enum DrugInventoryChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum UserRole {

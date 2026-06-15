@@ -11,6 +11,7 @@ import {
   ClipboardCheck,
   Users,
   Package,
+  PackageCheck,
   BarChart3,
   User as UserIcon,
   Stethoscope,
@@ -97,6 +98,12 @@ const navigation: NavigationItem[] = [
     href: '/dashboard/inventory',
     icon: Package,
     allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST', 'RECEPTION'],
+  },
+  {
+    name: 'Inventory Updates',
+    href: '/dashboard/inventory-updates',
+    icon: PackageCheck,
+    allowedRoles: ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'],
   },
   {
     name: 'Stock Predictions',

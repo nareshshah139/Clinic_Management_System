@@ -1,14 +1,33 @@
 import {
+  ArrayMinSize,
   IsBoolean,
+  IsArray,
+  IsEnum,
   IsIn,
+  IsInt,
   IsNumber,
   IsOptional,
   IsString,
   Max,
   Min,
+  ValidateNested,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+import { DrugInventoryChangeRequestStatus } from '@prisma/client';
+
+const toNumber = ({ value }: { value: unknown }) => {
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : value;
+  }
+  return value;
+};
+
+const toOptionalNumber = ({ value }: { value: unknown }) => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  return toNumber({ value });
+};
 
 export class CreateDrugDto {
   @ApiProperty({
@@ -450,4 +469,119 @@ export class DrugAutocompleteDto {
   })
   @IsOptional()
   limit?: number = 10;
+}
+
+export class DrugInventoryChangeItemDto {
+  @ApiProperty({ description: 'Drug ID', example: 'clx123' })
+  @IsString()
+  drugId: string;
+
+  @ApiPropertyOptional({
+    description: 'Linked inventory item ID to adjust stock against',
+    example: 'inv123',
+  })
+  @IsOptional()
+  @IsString()
+  inventoryItemId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Requested new drug price in rupees',
+    example: 145,
+  })
+  @IsOptional()
+  @Transform(toOptionalNumber)
+  @IsNumber()
+  @Min(0)
+  proposedPrice?: number;
+
+  @ApiPropertyOptional({
+    description: 'Requested total stock on hand for this drug',
+    example: 24,
+  })
+  @IsOptional()
+  @Transform(toOptionalNumber)
+  @IsInt()
+  @Min(0)
+  proposedStock?: number;
+
+  @ApiPropertyOptional({
+    description: 'Reason shown to the reviewing doctor',
+    example: 'Distributor invoice and shelf count reviewed.',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class CreateDrugInventoryChangeRequestDto {
+  @ApiProperty({
+    type: [DrugInventoryChangeItemDto],
+    description: 'One or more drug price or stock edits to submit for approval',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => DrugInventoryChangeItemDto)
+  changes: DrugInventoryChangeItemDto[];
+}
+
+export class QueryDrugInventoryChangeRequestDto {
+  @ApiPropertyOptional({
+    description: 'Filter by approval status',
+    enum: DrugInventoryChangeRequestStatus,
+    default: DrugInventoryChangeRequestStatus.PENDING,
+  })
+  @IsOptional()
+  @IsEnum(DrugInventoryChangeRequestStatus)
+  status?: DrugInventoryChangeRequestStatus =
+    DrugInventoryChangeRequestStatus.PENDING;
+
+  @ApiPropertyOptional({
+    description: 'Search drug name, manufacturer, requester, or reviewer',
+    example: 'azithral',
+  })
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @ApiPropertyOptional({ description: 'Page number', example: 1, default: 1 })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const num = parseInt(value, 10);
+      return Number.isNaN(num) ? undefined : num;
+    }
+    return value;
+  })
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @ApiPropertyOptional({
+    description: 'Items per page',
+    example: 20,
+    default: 20,
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const num = parseInt(value, 10);
+      return Number.isNaN(num) ? undefined : num;
+    }
+    return value;
+  })
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
+}
+
+export class ReviewDrugInventoryChangeRequestDto {
+  @ApiPropertyOptional({
+    description: 'Doctor/admin note recorded on the approval decision',
+    example: 'Approved after checking latest invoice and shelf count.',
+  })
+  @IsOptional()
+  @IsString()
+  reviewNote?: string;
 }

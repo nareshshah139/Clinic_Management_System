@@ -428,6 +428,77 @@ export interface InventoryItem {
   updatedAt?: string;
 }
 
+export type DrugInventoryChangeStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
+export interface DrugInventoryCatalogRow {
+  id: string;
+  name: string;
+  price: number;
+  totalStock?: number;
+  primaryInventoryItemId?: string | null;
+  primaryStockStatus?: string | null;
+  manufacturerName: string;
+  packSizeLabel: string;
+  category?: string | null;
+  dosageForm?: string | null;
+  strength?: string | null;
+  composition1?: string | null;
+  composition2?: string | null;
+  isActive: boolean;
+  isDiscontinued: boolean;
+  updatedAt?: string;
+}
+
+export interface DrugInventoryChangeRequest {
+  id: string;
+  drugId: string;
+  inventoryItemId?: string | null;
+  requestedById: string;
+  reviewedById?: string | null;
+  currentPrice?: number | null;
+  proposedPrice?: number | null;
+  currentStock?: number | null;
+  proposedStock?: number | null;
+  reason?: string | null;
+  status: DrugInventoryChangeStatus;
+  reviewNote?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  drug: DrugInventoryCatalogRow;
+  inventoryItem?: {
+    id: string;
+    name: string;
+    currentStock: number;
+    stockStatus?: string | null;
+    batchNumber?: string | null;
+    expiryDate?: string | null;
+    storageLocation?: string | null;
+  } | null;
+  requestedBy: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  };
+  reviewedBy?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    role: string;
+  } | null;
+}
+
+export interface DrugInventoryChangeRequestResponse {
+  data: DrugInventoryChangeRequest[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
 // Visit summaries used in procedures dashboard
 export interface VisitSummary {
   id: string;

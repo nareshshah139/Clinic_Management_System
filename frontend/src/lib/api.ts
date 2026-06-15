@@ -5,7 +5,14 @@ export interface ApiError extends Error {
   body?: { message?: string } | null;
 }
 
-import type { InventoryItem, RescheduleAppointmentPayload } from './types';
+import type {
+  DrugInventoryCatalogRow,
+  DrugInventoryChangeRequest,
+  DrugInventoryChangeRequestResponse,
+  DrugInventoryChangeStatus,
+  InventoryItem,
+  RescheduleAppointmentPayload,
+} from './types';
 
 export class ApiClient {
   private baseURL: string;
@@ -551,6 +558,50 @@ export class ApiClient {
 
   async getInventoryStatistics() {
     return this.get('/inventory/statistics');
+  }
+
+  async getDrugInventoryCatalog(
+    params?: Record<string, unknown>
+  ): Promise<{ data: DrugInventoryCatalogRow[]; pagination?: { page: number; limit: number; total: number; pages: number } }> {
+    return this.get('/drugs', params);
+  }
+
+  async getDrugInventoryChangeRequests(params?: {
+    status?: DrugInventoryChangeStatus;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<DrugInventoryChangeRequestResponse> {
+    return this.get('/drugs/inventory-change-requests', params);
+  }
+
+  async submitDrugInventoryChanges(
+    changes: Array<{
+      drugId: string;
+      inventoryItemId?: string;
+      proposedPrice?: number;
+      proposedStock?: number;
+      reason?: string;
+    }>
+  ) {
+    return this.post<{ data: DrugInventoryChangeRequest[]; summary: { submitted: number } }>(
+      '/drugs/inventory-change-requests',
+      { changes }
+    );
+  }
+
+  async approveDrugInventoryChangeRequest(id: string, reviewNote?: string) {
+    return this.post<DrugInventoryChangeRequest>(
+      `/drugs/inventory-change-requests/${id}/approve`,
+      { reviewNote }
+    );
+  }
+
+  async rejectDrugInventoryChangeRequest(id: string, reviewNote?: string) {
+    return this.post<DrugInventoryChangeRequest>(
+      `/drugs/inventory-change-requests/${id}/reject`,
+      { reviewNote }
+    );
   }
 
   // Reports

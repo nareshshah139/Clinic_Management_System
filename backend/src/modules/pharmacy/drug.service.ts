@@ -10,8 +10,18 @@ import {
   UpdateDrugDto,
   QueryDrugDto,
   DrugAutocompleteDto,
+  CreateDrugInventoryChangeRequestDto,
+  QueryDrugInventoryChangeRequestDto,
+  ReviewDrugInventoryChangeRequestDto,
 } from './dto/drug.dto';
-import { Prisma } from '@prisma/client';
+import {
+  DrugInventoryChangeRequestStatus,
+  InventoryStatus,
+  Prisma,
+  StockStatus,
+  TransactionType,
+  UserRole,
+} from '@prisma/client';
 
 @Injectable()
 export class DrugService {
@@ -172,13 +182,46 @@ export class DrugService {
                 inventoryItems: true,
               },
             },
+            inventoryItems: {
+              where: {
+                branchId,
+                status: InventoryStatus.ACTIVE,
+              },
+              select: {
+                id: true,
+                currentStock: true,
+                stockStatus: true,
+                reorderLevel: true,
+                minStockLevel: true,
+                expiryDate: true,
+                updatedAt: true,
+              },
+              orderBy: {
+                updatedAt: 'desc',
+              },
+            },
           },
         }),
         this.prisma.drug.count({ where }),
       ]);
 
+      const enrichedDrugs = drugs.map((drug) => {
+        const inventoryItems = drug.inventoryItems || [];
+        const totalStock = inventoryItems.reduce(
+          (sum, item) => sum + Number(item.currentStock || 0),
+          0,
+        );
+        const primaryInventoryItem = inventoryItems[0] || null;
+        return {
+          ...drug,
+          totalStock,
+          primaryInventoryItemId: primaryInventoryItem?.id || null,
+          primaryStockStatus: primaryInventoryItem?.stockStatus || null,
+        };
+      });
+
       return {
-        data: drugs,
+        data: enrichedDrugs,
         pagination: {
           page,
           limit,
@@ -261,7 +304,12 @@ export class DrugService {
     }
   }
 
-  async update(id: string, updateDrugDto: UpdateDrugDto, branchId: string) {
+  async update(
+    id: string,
+    updateDrugDto: UpdateDrugDto,
+    branchId: string,
+    actorRole?: UserRole | string,
+  ) {
     try {
       // Check if drug exists
       const existingDrug = await this.prisma.drug.findFirst({
@@ -270,6 +318,16 @@ export class DrugService {
 
       if (!existingDrug) {
         throw new NotFoundException('Drug not found');
+      }
+
+      if (
+        actorRole === UserRole.PHARMACIST &&
+        updateDrugDto.price !== undefined &&
+        updateDrugDto.price !== existingDrug.price
+      ) {
+        throw new BadRequestException(
+          'Pharmacist price edits must be submitted through Inventory Updates for doctor approval.',
+        );
       }
 
       this.assertProductMasterComplete(updateDrugDto, existingDrug);
@@ -322,6 +380,276 @@ export class DrugService {
       }
       throw new Error(`Failed to update drug: ${error.message}`);
     }
+  }
+
+  async createInventoryChangeRequests(
+    dto: CreateDrugInventoryChangeRequestDto,
+    branchId: string,
+    requestedById: string,
+  ) {
+    const dedupedDrugIds = Array.from(
+      new Set(dto.changes.map((change) => change.drugId)),
+    );
+
+    if (dedupedDrugIds.length !== dto.changes.length) {
+      throw new BadRequestException(
+        'Each drug can appear only once in an inventory change batch.',
+      );
+    }
+
+    const drugs = await this.prisma.drug.findMany({
+      where: {
+        branchId,
+        id: { in: dedupedDrugIds },
+        isActive: true,
+      },
+      include: {
+        inventoryItems: {
+          where: {
+            branchId,
+            status: InventoryStatus.ACTIVE,
+          },
+          select: {
+            id: true,
+            currentStock: true,
+            stockStatus: true,
+            reorderLevel: true,
+            minStockLevel: true,
+            expiryDate: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (drugs.length !== dedupedDrugIds.length) {
+      const foundIds = new Set(drugs.map((drug) => drug.id));
+      const missingIds = dedupedDrugIds.filter((id) => !foundIds.has(id));
+      throw new NotFoundException(
+        `Drug not found or inactive: ${missingIds.join(', ')}`,
+      );
+    }
+
+    const existingPending =
+      await this.prisma.drugInventoryChangeRequest.findMany({
+        where: {
+          branchId,
+          drugId: { in: dedupedDrugIds },
+          status: DrugInventoryChangeRequestStatus.PENDING,
+        },
+        include: {
+          drug: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      });
+
+    if (existingPending.length > 0) {
+      throw new ConflictException(
+        `Pending inventory request already exists for ${existingPending
+          .map((request) => request.drug.name)
+          .join(', ')}.`,
+      );
+    }
+
+    const drugById = new Map(drugs.map((drug) => [drug.id, drug]));
+    const now = new Date();
+
+    const created = await this.prisma.$transaction(
+      dto.changes.map((change) => {
+        const drug = drugById.get(change.drugId);
+        if (!drug) {
+          throw new NotFoundException(`Drug not found: ${change.drugId}`);
+        }
+        const proposedPrice = change.proposedPrice;
+        const proposedStock = change.proposedStock;
+        const hasPriceChange =
+          proposedPrice !== undefined && proposedPrice !== drug.price;
+        const stockSnapshot = this.resolveStockSnapshot(
+          drug.inventoryItems,
+          change.inventoryItemId,
+          drug.name,
+          proposedStock !== undefined,
+        );
+        const hasStockChange =
+          proposedStock !== undefined &&
+          proposedStock !== stockSnapshot.totalStock;
+
+        if (!hasPriceChange && !hasStockChange) {
+          throw new BadRequestException(
+            `No price or stock change requested for ${drug.name}.`,
+          );
+        }
+
+        return this.prisma.drugInventoryChangeRequest.create({
+          data: {
+            branchId,
+            drugId: drug.id,
+            inventoryItemId:
+              proposedStock !== undefined ? stockSnapshot.primaryItemId : null,
+            requestedById,
+            currentPrice: hasPriceChange ? drug.price : null,
+            proposedPrice: hasPriceChange ? proposedPrice : null,
+            currentStock: hasStockChange ? stockSnapshot.totalStock : null,
+            proposedStock: hasStockChange ? proposedStock : null,
+            reason: change.reason?.trim() || null,
+            createdAt: now,
+          },
+          include: this.inventoryChangeRequestInclude(),
+        });
+      }),
+    );
+
+    return {
+      data: created,
+      summary: {
+        submitted: created.length,
+      },
+    };
+  }
+
+  async findInventoryChangeRequests(
+    query: QueryDrugInventoryChangeRequestDto,
+    branchId: string,
+  ) {
+    const { status = DrugInventoryChangeRequestStatus.PENDING, search } =
+      query;
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 20;
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.DrugInventoryChangeRequestWhereInput = {
+      branchId,
+      status,
+    };
+
+    if (search?.trim()) {
+      const term = search.trim();
+      where.OR = [
+        { drug: { name: { contains: term, mode: 'insensitive' } } },
+        {
+          drug: {
+            manufacturerName: { contains: term, mode: 'insensitive' },
+          },
+        },
+        { requestedBy: { firstName: { contains: term, mode: 'insensitive' } } },
+        { requestedBy: { lastName: { contains: term, mode: 'insensitive' } } },
+        { reviewedBy: { firstName: { contains: term, mode: 'insensitive' } } },
+        { reviewedBy: { lastName: { contains: term, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [requests, total] = await Promise.all([
+      this.prisma.drugInventoryChangeRequest.findMany({
+        where,
+        include: this.inventoryChangeRequestInclude(),
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      this.prisma.drugInventoryChangeRequest.count({ where }),
+    ]);
+
+    return {
+      data: requests,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async approveInventoryChangeRequest(
+    id: string,
+    dto: ReviewDrugInventoryChangeRequestDto,
+    branchId: string,
+    reviewedById: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const request = await tx.drugInventoryChangeRequest.findFirst({
+        where: { id, branchId },
+        include: {
+          drug: true,
+          inventoryItem: true,
+        },
+      });
+
+      if (!request) {
+        throw new NotFoundException('Inventory change request not found');
+      }
+
+      if (request.status !== DrugInventoryChangeRequestStatus.PENDING) {
+        throw new ConflictException(
+          'Only pending inventory change requests can be approved.',
+        );
+      }
+
+      if (request.proposedPrice !== null && request.proposedPrice !== undefined) {
+        await tx.drug.update({
+          where: { id: request.drugId },
+          data: { price: request.proposedPrice },
+        });
+      }
+
+      if (request.proposedStock !== null && request.proposedStock !== undefined) {
+        await this.applyApprovedStockChange(
+          tx,
+          request,
+          branchId,
+          reviewedById,
+        );
+      }
+
+      return tx.drugInventoryChangeRequest.update({
+        where: { id },
+        data: {
+          status: DrugInventoryChangeRequestStatus.APPROVED,
+          reviewedById,
+          reviewNote: dto.reviewNote?.trim() || null,
+          reviewedAt: new Date(),
+        },
+        include: this.inventoryChangeRequestInclude(),
+      });
+    });
+  }
+
+  async rejectInventoryChangeRequest(
+    id: string,
+    dto: ReviewDrugInventoryChangeRequestDto,
+    branchId: string,
+    reviewedById: string,
+  ) {
+    const request = await this.prisma.drugInventoryChangeRequest.findFirst({
+      where: { id, branchId },
+    });
+
+    if (!request) {
+      throw new NotFoundException('Inventory change request not found');
+    }
+
+    if (request.status !== DrugInventoryChangeRequestStatus.PENDING) {
+      throw new ConflictException(
+        'Only pending inventory change requests can be rejected.',
+      );
+    }
+
+    return this.prisma.drugInventoryChangeRequest.update({
+      where: { id },
+      data: {
+        status: DrugInventoryChangeRequestStatus.REJECTED,
+        reviewedById,
+        reviewNote: dto.reviewNote?.trim() || null,
+        reviewedAt: new Date(),
+      },
+      include: this.inventoryChangeRequestInclude(),
+    });
   }
 
   async remove(id: string, branchId: string) {
@@ -804,6 +1132,194 @@ export class DrugService {
     } catch (error) {
       throw new Error(`Failed to fetch drug statistics: ${error.message}`);
     }
+  }
+
+  private inventoryChangeRequestInclude() {
+    return {
+      drug: {
+        select: {
+          id: true,
+          name: true,
+          manufacturerName: true,
+          packSizeLabel: true,
+          category: true,
+          dosageForm: true,
+          strength: true,
+          price: true,
+          isActive: true,
+          isDiscontinued: true,
+        },
+      },
+      inventoryItem: {
+        select: {
+          id: true,
+          name: true,
+          currentStock: true,
+          stockStatus: true,
+          batchNumber: true,
+          expiryDate: true,
+          storageLocation: true,
+        },
+      },
+      requestedBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+      reviewedBy: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+        },
+      },
+    } satisfies Prisma.DrugInventoryChangeRequestInclude;
+  }
+
+  private resolveStockSnapshot(
+    inventoryItems: Array<{
+      id: string;
+      currentStock: number;
+      updatedAt?: Date | null;
+    }>,
+    requestedInventoryItemId: string | undefined,
+    drugName: string,
+    isRequired: boolean,
+  ) {
+    const totalStock = inventoryItems.reduce(
+      (sum, item) => sum + Number(item.currentStock || 0),
+      0,
+    );
+    const primaryItem = requestedInventoryItemId
+      ? inventoryItems.find((item) => item.id === requestedInventoryItemId)
+      : inventoryItems[0];
+
+    if (isRequired && !primaryItem) {
+      throw new BadRequestException(
+        `Cannot request a stock change for ${drugName}; no active inventory item is linked to this drug.`,
+      );
+    }
+
+    return {
+      totalStock,
+      primaryItemId: primaryItem?.id || null,
+    };
+  }
+
+  private async applyApprovedStockChange(
+    tx: Prisma.TransactionClient,
+    request: {
+      id: string;
+      drugId: string;
+      inventoryItemId: string | null;
+      proposedStock: number | null;
+      drug: { name: string };
+    },
+    branchId: string,
+    reviewedById: string,
+  ) {
+    if (request.proposedStock === null || request.proposedStock === undefined) {
+      return;
+    }
+
+    const inventoryItems = await tx.inventoryItem.findMany({
+      where: {
+        branchId,
+        status: InventoryStatus.ACTIVE,
+        drugs: {
+          some: { id: request.drugId },
+        },
+      },
+      select: {
+        id: true,
+        currentStock: true,
+        costPrice: true,
+        reorderLevel: true,
+        minStockLevel: true,
+        expiryDate: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    const targetItem = request.inventoryItemId
+      ? inventoryItems.find((item) => item.id === request.inventoryItemId)
+      : inventoryItems[0];
+
+    if (!targetItem) {
+      throw new BadRequestException(
+        `Cannot approve stock change for ${request.drug.name}; no active linked inventory item was found.`,
+      );
+    }
+
+    const currentTotalStock = inventoryItems.reduce(
+      (sum, item) => sum + Number(item.currentStock || 0),
+      0,
+    );
+    const stockDelta = request.proposedStock - currentTotalStock;
+
+    if (stockDelta === 0) {
+      return;
+    }
+
+    const newTargetStock = Number(targetItem.currentStock || 0) + stockDelta;
+    if (newTargetStock < 0) {
+      throw new BadRequestException(
+        `Cannot set total stock for ${request.drug.name} to ${request.proposedStock}; other linked batches already exceed that value.`,
+      );
+    }
+
+    await tx.inventoryItem.update({
+      where: { id: targetItem.id },
+      data: {
+        currentStock: newTargetStock,
+        stockStatus: this.deriveStockStatus({
+          currentStock: newTargetStock,
+          reorderLevel: targetItem.reorderLevel,
+          minStockLevel: targetItem.minStockLevel,
+          expiryDate: targetItem.expiryDate,
+        }),
+      },
+    });
+
+    await tx.stockTransaction.create({
+      data: {
+        itemId: targetItem.id,
+        branchId,
+        userId: reviewedById,
+        type: TransactionType.ADJUSTMENT,
+        quantity: Math.abs(stockDelta),
+        unitPrice: Number(targetItem.costPrice || 0),
+        totalAmount: Math.abs(stockDelta) * Number(targetItem.costPrice || 0),
+        reason: 'Doctor-approved inventory update',
+        notes: `Inventory change request ${request.id}`,
+      },
+    });
+  }
+
+  private deriveStockStatus(input: {
+    currentStock: number;
+    reorderLevel?: number | null;
+    minStockLevel?: number | null;
+    expiryDate?: Date | null;
+  }) {
+    if (input.expiryDate && input.expiryDate < new Date()) {
+      return StockStatus.EXPIRED;
+    }
+    if (input.currentStock <= 0) {
+      return StockStatus.OUT_OF_STOCK;
+    }
+    const lowStockThreshold = input.reorderLevel ?? input.minStockLevel;
+    if (lowStockThreshold && input.currentStock <= lowStockThreshold) {
+      return StockStatus.LOW_STOCK;
+    }
+    return StockStatus.IN_STOCK;
   }
 
   private assertProductMasterComplete(

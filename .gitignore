@@ -37,6 +37,7 @@ DATABASE_BACKUP_SUMMARY.md
 !backend/prisma/migrations/20260506_add_pharmacy_purchase_ledger/migration.sql
 !backend/prisma/migrations/20260510_add_pharmacy_dispense_tasks/migration.sql
 !backend/prisma/migrations/20260519_add_pharmacy_agentic_codex/migration.sql
+!backend/prisma/migrations/20260614_add_drug_inventory_change_requests/migration.sql
 *.dump
 backend/src/data/indian_medicine_data.csv
 prod-backup*.list
