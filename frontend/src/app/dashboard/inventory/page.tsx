@@ -34,7 +34,7 @@ type InventoryWorkspace = 'stock-list' | 'pharmacy-control';
 export default function InventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeWorkspace, setActiveWorkspace] = useState<InventoryWorkspace>('stock-list');
+  const [activeWorkspace, setActiveWorkspace] = useState<InventoryWorkspace>('pharmacy-control');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ItemCategory | 'ALL'>('ALL');
   const [stockFilter, setStockFilter] = useState<'ALL' | 'LOW' | 'OUT'>('ALL');
@@ -81,17 +81,22 @@ export default function InventoryPage() {
       typeof window !== 'undefined'
         ? new URLSearchParams(window.location.search).get('tab')
         : null;
+    if (tab === 'stock-list' || tab === 'low-stock' || tab === 'expiry') {
+      setActiveWorkspace('stock-list');
+      if (tab === 'low-stock') {
+        setStockFilter('LOW');
+      } else if (tab === 'expiry') {
+        setStockFilter('ALL');
+      }
+      return;
+    }
+
     if (tab === 'pharmacy-control') {
       setActiveWorkspace('pharmacy-control');
       return;
     }
 
-    setActiveWorkspace('stock-list');
-    if (tab === 'low-stock') {
-      setStockFilter('LOW');
-    } else if (tab === 'expiry') {
-      setStockFilter('ALL');
-    }
+    setActiveWorkspace('pharmacy-control');
   }, []);
 
   const fetchInventoryItems = useCallback(async (page: number = currentPage) => {
@@ -351,15 +356,19 @@ export default function InventoryPage() {
 
       <Tabs value={activeWorkspace} onValueChange={(value: string) => setActiveWorkspace(value as InventoryWorkspace)} className="space-y-6">
         <TabsList className="grid h-auto w-full grid-cols-2 rounded-[8px] border border-slate-200 bg-white p-1 shadow-sm lg:w-[520px]">
-          <TabsTrigger value="stock-list" className="min-h-11 gap-2">
-            <Package className="h-4 w-4" />
-            Stock List
-          </TabsTrigger>
           <TabsTrigger value="pharmacy-control" className="min-h-11 gap-2">
             <Pill className="h-4 w-4" />
             Pharmacy Control
           </TabsTrigger>
+          <TabsTrigger value="stock-list" className="min-h-11 gap-2">
+            <Package className="h-4 w-4" />
+            Stock List
+          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="pharmacy-control" className="space-y-6">
+          <PharmacyInventoryControl />
+        </TabsContent>
 
         <TabsContent value="stock-list" className="space-y-6">
       {/* Statistics Cards */}
@@ -608,9 +617,6 @@ export default function InventoryPage() {
       </Card>
         </TabsContent>
 
-        <TabsContent value="pharmacy-control" className="space-y-6">
-          <PharmacyInventoryControl />
-        </TabsContent>
       </Tabs>
 
       {/* Edit Item Dialog (no-op) */}

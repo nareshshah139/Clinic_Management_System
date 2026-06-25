@@ -18,7 +18,6 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { PharmacyInventoryStarterImport } from '@/components/pharmacy/PharmacyInventoryStarterImport';
-import { MedicineQuickUpdate } from '@/components/pharmacy/MedicineQuickUpdate';
 import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { DistributorAnalytics } from '@/components/pharmacy/DistributorAnalytics';
 import { PurchaseLedger } from '@/components/pharmacy/PurchaseLedger';
@@ -68,9 +67,8 @@ export function PharmacyInventoryControl() {
       <InventoryControlSummary />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
           <PharmacyInventoryStarterImport compact />
-          <MedicineQuickUpdate />
         </div>
         <div className="grid gap-3">
           <ScenarioCard

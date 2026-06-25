@@ -229,7 +229,12 @@ function PharmacyPageContent() {
           ) : null}
 
           {pharmacyTab === 'billing' ? (
-            <PharmacyBillingPanel prefill={prefill} />
+            <PharmacyBillingPanel
+              prefill={prefill}
+              onLoadPrescription={(billingPrefill) =>
+                openPharmacyTab('billing', billingPrefill)
+              }
+            />
           ) : null}
         </div>
       </div>
@@ -422,7 +427,10 @@ function PharmacyCounterPanel({
           title="Prescription Queue"
           detail="Review visit prescriptions and send approved medicines into Pharmacy Billing."
         />
-        <PrescriptionDispensingQueue />
+        <PrescriptionDispensingQueue
+          onOpenBilling={onOpenBilling}
+          openActionLabel="Bill"
+        />
       </section>
     </div>
   );
@@ -430,14 +438,20 @@ function PharmacyCounterPanel({
 
 function PharmacyBillingPanel({
   prefill,
+  onLoadPrescription,
 }: {
   prefill?: PharmacyBillingPrefill | null;
+  onLoadPrescription: (prefill: PharmacyBillingPrefill) => void;
 }) {
   return (
     <section className="space-y-3">
       <WorkbenchHeader
         title="Pharmacy Billing"
         detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
+      />
+      <PrescriptionDispensingQueue
+        onOpenBilling={onLoadPrescription}
+        openActionLabel="Load"
       />
       <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
     </section>

@@ -40,6 +40,7 @@ type QueueMedication = {
 
 type QueueEntry = {
   prescriptionId: string;
+  visitId?: string | null;
   patient: {
     id: string;
     name: string;
@@ -81,6 +82,18 @@ type StockCheckResponse = {
   items: StockCheckItem[];
 };
 
+type PharmacyBillingPrefill = {
+  patientId?: string;
+  prescriptionId?: string;
+  doctorId?: string;
+  visitId?: string;
+};
+
+type PrescriptionDispensingQueueProps = {
+  onOpenBilling?: (prefill: PharmacyBillingPrefill) => void;
+  openActionLabel?: string;
+};
+
 const statusOptions: Array<{ value: QueueStatus | 'all'; label: string }> = [
   { value: 'all', label: 'All' },
   { value: 'pending', label: 'Pending' },
@@ -89,7 +102,10 @@ const statusOptions: Array<{ value: QueueStatus | 'all'; label: string }> = [
   { value: 'expired', label: 'Expired' },
 ];
 
-export function PrescriptionDispensingQueue() {
+export function PrescriptionDispensingQueue({
+  onOpenBilling,
+  openActionLabel = 'Open',
+}: PrescriptionDispensingQueueProps = {}) {
   const [status, setStatus] = useState<QueueStatus | 'all'>('pending');
   const [page, setPage] = useState(1);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
@@ -317,12 +333,22 @@ export function PrescriptionDispensingQueue() {
                           }
                         />
                       </Button>
-                      <Button asChild size="sm">
-                        <a href={buildDispenseUrl(entry)}>
+                      {onOpenBilling ? (
+                        <Button
+                          size="sm"
+                          onClick={() => onOpenBilling(buildBillingPrefill(entry))}
+                        >
                           <ExternalLink />
-                          Open
-                        </a>
-                      </Button>
+                          {openActionLabel}
+                        </Button>
+                      ) : (
+                        <Button asChild size="sm">
+                          <a href={buildDispenseUrl(entry)}>
+                            <ExternalLink />
+                            {openActionLabel}
+                          </a>
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -466,10 +492,21 @@ function formatDate(value: string) {
 
 function buildDispenseUrl(entry: QueueEntry) {
   const params = new URLSearchParams({
+    section: 'billing',
     patientId: entry.patient.id,
     prescriptionId: entry.prescriptionId,
     doctorId: entry.doctor.id,
   });
+  if (entry.visitId) params.set('visitId', entry.visitId);
 
   return `/dashboard/pharmacy?${params.toString()}`;
+}
+
+function buildBillingPrefill(entry: QueueEntry): PharmacyBillingPrefill {
+  return {
+    patientId: entry.patient.id,
+    prescriptionId: entry.prescriptionId,
+    doctorId: entry.doctor.id,
+    visitId: entry.visitId || undefined,
+  };
 }
