@@ -533,7 +533,7 @@ function VisitsPageInner() {
           setSelectedPatientId((prev) => {
             if (prev) return prev;
             if (urlPatientId && isValidId(urlPatientId)) return urlPatientId;
-            return patientsData[0]?.id ?? '';
+            return ''; // Require an explicit patient selection on the setup screen.
           });
         }
       }
@@ -568,12 +568,12 @@ function VisitsPageInner() {
     void loadData();
   }, [loadData]);
 
-  // Auto-open form when both patient and doctor are selected
+  // Deep links open documentation; selecting a patient in setup keeps history accessible.
   useEffect(() => {
-    if (selectedPatientId && selectedDoctorId && !showForm) {
+    if (urlPatientId && selectedPatientId === urlPatientId && selectedDoctorId) {
       setShowForm(true);
     }
-  }, [selectedPatientId, selectedDoctorId, showForm]);
+  }, [selectedPatientId, selectedDoctorId, urlPatientId]);
 
   // Handle URL parameters for appointment linking
   useEffect(() => {
@@ -699,7 +699,7 @@ function VisitsPageInner() {
     );
   }
  
-  if (patients.length === 0 || doctors.length === 0 || !selectedPatientId || !selectedDoctorId) {
+  if (!patients.some(patient => patient.id) || !doctors.some(doctor => doctor.id)) {
     return (
       <Card>
         <CardHeader>

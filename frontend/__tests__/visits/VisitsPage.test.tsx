@@ -42,7 +42,7 @@ describe('VisitsPage', () => {
     expect(screen.getByText('Loading visit form…')).toBeInTheDocument();
   });
 
-  it('renders MedicalVisitForm when patient and doctor IDs are loaded', async () => {
+  it('shows setup when patient and doctor IDs are loaded', async () => {
     const mockGetPatients = jest.mocked(apiClient.getPatients);
     const mockGet = jest.mocked(apiClient.get);
     
@@ -58,10 +58,11 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByTestId('medical-visit-form')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Search name, phone, or email')).toBeInTheDocument();
     });
     
-    expect(screen.getByText('Medical Visit Form - Patient: patient-123, Doctor: doctor-123')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search name, phone, or email')).toBeInTheDocument();
+    expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
   });
 
   it('shows empty-state when no patients are found', async () => {
@@ -137,7 +138,7 @@ describe('VisitsPage', () => {
     });
   });
 
-  it('uses first available patient and doctor', async () => {
+  it('does not automatically open the first available patient', async () => {
     const mockGetPatients = jest.mocked(apiClient.getPatients);
     const mockGet = jest.mocked(apiClient.get);
     
@@ -159,7 +160,8 @@ describe('VisitsPage', () => {
     render(<VisitsPage />);
     
     await waitFor(() => {
-      expect(screen.getByText('Medical Visit Form - Patient: patient-123, Doctor: doctor-123')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Search name, phone, or email')).toBeInTheDocument();
+      expect(screen.queryByTestId('medical-visit-form')).not.toBeInTheDocument();
     });
   });
 

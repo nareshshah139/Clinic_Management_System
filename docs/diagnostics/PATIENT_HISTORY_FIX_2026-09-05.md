@@ -1,6 +1,6 @@
 # Patient History fix — 5 September 2026
 
-Implemented in the local workspace. Not deployed to Railway. No production database writes, schema changes, migrations, backfills, or record deletions were performed during this fix. Existing unrelated pharmacy/inventory work was left intact.
+Core fix committed as `42d1ade` and deployed successfully to both Railway services. No production database writes, schema changes, migrations, backfills, or record deletions were performed during this fix. Existing unrelated pharmacy/inventory work was left intact.
 
 ## Changes
 
@@ -39,3 +39,9 @@ That command uses mocks and synthetic clinical data; it does not connect to a da
 The original Railway investigation found missing documentation in stored records as well as display omissions. This patch prevents the identified save failures and displays available data; it cannot recreate text never saved to Railway. It deliberately does not synthesize clinical history or infer links for the 47 existing unlinked visits. The original diagnosis report describes the pre-fix state and remains as historical evidence.
 
 Deployment is separate. The existing Railway start script runs `prisma migrate deploy`; before deploying, verify the deployed commit and migration state and deploy only the reviewed changes, excluding unrelated work in this shared checkout.
+
+## Deployment verification and navigation follow-up
+
+Railway startup reported no pending migrations; startup seeding is disabled. Live patient-detail and medical-form History tabs show all 17 records for the audited patient (six visits and 11 appointment-only entries), matching the database. A fingerprint comparison of 1,852 existing appointment, visit and prescription rows found zero changes and zero removals during these checks. No production test records were created.
+
+Live verification also exposed a pre-existing setup navigation issue: selecting default patient/doctor values immediately opened documentation, hiding setup history. The follow-up requires explicit patient selection and Start Visit Documentation, preserves deep links, and allows Back to Setup to remain on setup. Both new navigation regressions fail on the previous implementation and pass with the follow-up. The five relevant frontend suites now pass all 20 tests.

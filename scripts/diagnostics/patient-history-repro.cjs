@@ -6,4 +6,5 @@ execFileSync('npm', ['test', '--workspace=backend', '--', '--runInBand', '--runT
   'src/modules/prescriptions/tests/prescription-clinical-transaction.spec.ts'], { stdio: 'inherit' });
 execFileSync('npm', ['test', '--workspace=frontend', '--', '--runInBand', '--runTestsByPath',
   '__tests__/visits/PatientHistoryVisitCard.test.tsx', '__tests__/visits/patient-history-api.test.ts',
-  '__tests__/visits/usePatientHistory.test.tsx'], { stdio: 'inherit' });
+  '__tests__/visits/usePatientHistory.test.tsx', '__tests__/visits/VisitsPage.test.tsx',
+  '__tests__/visits/VisitsPage.history-navigation.test.tsx'], { stdio: 'inherit' });
