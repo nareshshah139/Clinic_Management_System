@@ -7,6 +7,8 @@ import { Camera, Upload, Image as ImageIcon, Trash2, ChevronLeft, ChevronRight, 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import PatientPhotoArchive from './PatientPhotoArchive';
+import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 
 interface Props {
@@ -25,6 +27,9 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
+  const [photoLoading, setPhotoLoading] = useState(true);
+  const [photoLoadError, setPhotoLoadError] = useState<string | null>(null);
+  const photoLoadGeneration = useRef(0);
   // Patient history and compare data
   const [patientVisits, setPatientVisits] = useState<Array<{ id: string; createdAt?: string; ordinal: number }>>([]);
   const [visitOrdinalMap, setVisitOrdinalMap] = useState<Record<string, number>>({});
@@ -81,67 +86,37 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   };
 
   const load = async () => {
-    // Don't try to load if visitId is temp
-    if (visitId === 'temp') {
-      if (!patientId) { setItems([]); try { onChangeCount?.(0); } catch {} return; }
-      try {
-        const res = await fetch(`${baseUrl}/visits/photos/draft/${patientId}`, { credentials: 'include' });
-        if (res.status === 401) handleUnauthorizedRedirect(res);
-        if (!res.ok) { setItems([]); return; }
-        const data = await res.json();
-        const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || []).map((it: PhotoItem) => ({
-          ...it,
-          url: toAbsolute(it.url),
-        }));
-        setItems(incoming);
-        setActiveIndex(0);
-        try { onChangeCount?.(incoming.length); } catch {}
-      } catch { setItems([]); }
-      return;
-    }
-    
+    const generation = ++photoLoadGeneration.current;
+    setItems([]); setPhotoLoadError(null); setPhotoLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/visits/${visitId}/photos`, {
-        credentials: 'include',
-      });
+      if (visitId === 'temp' && !patientId) return;
+      const url = visitId === 'temp' ? `${baseUrl}/visits/photos/draft/${patientId}` : `${baseUrl}/visits/${visitId}/photos`;
+      const res = await fetch(url, { credentials: 'include' });
       if (res.status === 401) handleUnauthorizedRedirect(res);
-      if (!res.ok) {
-        console.error('Failed to load photos:', res.status);
-        return;
-      }
+      if (!res.ok) throw new Error('Unable to load this visit’s photos. Please retry.');
       const data = await res.json();
-      const incoming: PhotoItem[] = ((data.items as PhotoItem[] | undefined) || (data.attachments || []).map((u: string) => ({ url: u })))
-        .map((it: PhotoItem) => ({ ...it, url: toAbsolute(it.url) }));
-      // Preserve backend ordering; as a safety, sort by displayOrder then time
-      incoming.sort((a, b) => {
-        const ao = typeof a.displayOrder === 'number' ? a.displayOrder : 999;
-        const bo = typeof b.displayOrder === 'number' ? b.displayOrder : 999;
-        if (ao !== bo) return ao - bo;
-        const at = a.uploadedAt ? Date.parse(a.uploadedAt) : 0;
-        const bt = b.uploadedAt ? Date.parse(b.uploadedAt) : 0;
-        if (at === bt) return a.url.localeCompare(b.url);
-        return at - bt;
-      });
-      setItems(incoming);
-      setActiveIndex(0);
-      try { onChangeCount?.(incoming.length); } catch {}
+      if (generation !== photoLoadGeneration.current) return;
+      const incoming: PhotoItem[] = (data.items || (data.attachments || []).map((url: string) => ({ url })))
+        .map((item: PhotoItem) => ({ ...item, url: toAbsolute(item.url) }));
+      incoming.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999) ||
+        (a.uploadedAt ? Date.parse(a.uploadedAt) : 0) - (b.uploadedAt ? Date.parse(b.uploadedAt) : 0) || a.url.localeCompare(b.url));
+      setItems(incoming); setActiveIndex(0);
+      onChangeCount?.(incoming.length);
     } catch (error) {
-      console.error('Error loading photos:', error);
+      if (generation === photoLoadGeneration.current) setPhotoLoadError(error instanceof Error ? error.message : 'Unable to load photos. Please retry.');
+    } finally {
+      if (generation === photoLoadGeneration.current) setPhotoLoading(false);
     }
   };
 
-  useEffect(() => { void load(); }, [visitId, patientId]);
+  useEffect(() => { void load(); return () => { ++photoLoadGeneration.current; }; }, [visitId, patientId]);
 
   // Load patient visit history and compute ordinals, choose default compare visit
   useEffect(() => {
     const loadHistory = async () => {
       if (!patientId) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
       try {
-        const resp = await fetch(`${baseUrl}/visits/patient/${patientId}/history?limit=50`, { credentials: 'include' });
-        if (resp.status === 401) handleUnauthorizedRedirect(resp);
-        if (!resp.ok) { setPatientVisits([]); setVisitOrdinalMap({}); setSelectedCompareVisitId(null); return; }
-        const data = await resp.json();
-        const visits = Array.isArray((data as any)?.visits) ? (data as any).visits as any[] : [];
+        const visits = (await apiClient.getAllPatientVisitHistory(patientId, false)).filter(visit => visit.entryType !== 'appointment');
         // Sort ascending by createdAt for ordinal numbering
         const asc = [...visits].sort((a, b) => {
           const at = a?.createdAt ? Date.parse(a.createdAt as string) : 0;
@@ -641,11 +616,13 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         <input ref={inputRef} type="file" accept="image/*" multiple onChange={onUpload} className="hidden" />
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" onChange={onUpload} className="hidden" />
 
-        {items.length === 0 ? (
+        {photoLoading ? <p role="status">Loading visit photos…</p> : photoLoadError ? <div role="alert" className="space-y-2 text-sm">
+          <p>{photoLoadError}</p><Button type="button" variant="outline" onClick={() => void load()}>Retry visit photos</Button>
+        </div> : items.length === 0 ? (
           <div className="text-center py-12 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
             <ImageIcon className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No photos uploaded yet</h3>
-            <p className="text-sm text-gray-500 mb-6">Upload before/after photos to document treatment progress</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No photos attached to this visit</h3>
+            <p className="text-sm text-gray-500 mb-6">Photos from other visits and unattached uploads are listed below when available.</p>
             <div className="flex justify-center space-x-3">
               <Button onClick={() => inputRef.current?.click()} disabled={uploading}>
                 <Upload className="h-4 w-4 mr-2" />
@@ -784,6 +761,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             </div>
           </div>
         )}
+        {patientId && <PatientPhotoArchive patientId={patientId} currentVisitId={visitId} currentPhotoUrls={items.map(item => item.url)} />}
       </CardContent>
     </Card>
 

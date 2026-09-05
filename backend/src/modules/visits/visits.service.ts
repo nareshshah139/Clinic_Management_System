@@ -1007,6 +1007,21 @@ export class VisitsService {
     return Array.from(results);
   }
 
+  async listAllDraftAttachments(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId }, select: { id: true } });
+    if (!patient) throw new NotFoundException('Patient not found in this branch');
+    const photos = await this.prisma.draftAttachment.findMany({
+      where: { patientId },
+      orderBy: [{ dateStr: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true, dateStr: true, createdAt: true, position: true, displayOrder: true },
+    });
+    const items = photos.map(photo => ({
+      url: `/visits/photos/draft/${patientId}/${photo.dateStr}/${photo.id}`,
+      dateStr: photo.dateStr, uploadedAt: photo.createdAt.toISOString(), position: photo.position, displayOrder: photo.displayOrder,
+    }));
+    return { attachments: items.map(item => item.url), items };
+  }
+
   async listDraftAttachments(patientId: string, dateStr: string) {
     // DB-backed attachments
     const dbItems = await (this.prisma as any).draftAttachment.findMany({

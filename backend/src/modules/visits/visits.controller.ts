@@ -367,7 +367,8 @@ export class VisitsController {
   }
 
   @Get('photos/draft/:patientId')
-  async listDraftPhotos(@Param('patientId') patientId: string) {
+  async listDraftPhotos(@Param('patientId') patientId: string, @Query('allDates') allDates: string, @Request() req: AuthenticatedRequest) {
+    if (allDates === 'true') return this.visitsService.listAllDraftAttachments(patientId, req.user.branchId);
     const { dateStr } = await ensurePatientDraftDir(patientId);
     return this.visitsService.listDraftAttachments(patientId, dateStr);
   }
