@@ -33,15 +33,21 @@ export function ClinicalHistoryDetails({ value }: { value: unknown }): ReactNode
   const normalized = normalizeClinicalValue(value);
   if (!hasClinicalValue(normalized)) return null;
   if (Array.isArray(normalized)) {
-    return <ul className="space-y-3">{normalized.filter(hasClinicalValue).map((item, index) => (
-      <li key={index} className="min-w-0 border-b border-border pb-3 last:border-0 last:pb-0"><ClinicalHistoryDetails value={item} /></li>
+    const items = normalized.filter(hasClinicalValue);
+    if (items.every(item => typeof normalizeClinicalValue(item) !== 'object')) {
+      return <ul className="flex flex-wrap gap-x-3 gap-y-0.5">{items.map((item, index) => (
+        <li key={index} className="min-w-0 whitespace-pre-wrap break-words"><ClinicalHistoryDetails value={item} /></li>
+      ))}</ul>;
+    }
+    return <ul className="space-y-1.5">{normalized.filter(hasClinicalValue).map((item, index) => (
+      <li key={index} className="min-w-0 border-b border-border pb-1.5 last:border-0 last:pb-0"><ClinicalHistoryDetails value={item} /></li>
     ))}</ul>;
   }
   if (normalized && typeof normalized === 'object') {
-    return <dl className="space-y-3">{Object.entries(normalized).filter(([, item]) => hasClinicalValue(item)).map(([key, item]) => {
+    return <dl className="space-y-1.5">{Object.entries(normalized).filter(([, item]) => hasClinicalValue(item)).map(([key, item]) => {
       const structured = typeof normalizeClinicalValue(item) === 'object';
-      return <div key={key} className={structured ? 'min-w-0 space-y-2' : 'min-w-0 grid grid-cols-1 gap-x-5 gap-y-1 sm:grid-cols-[minmax(9rem,1fr)_minmax(0,3fr)]'}>
-        <dt className="break-words font-medium text-muted-foreground">{clinicalLabel(key)}</dt>
+      return <div key={key} className={structured ? 'min-w-0 space-y-1' : 'min-w-0 grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-0.5'}>
+        <dt className="break-words text-xs font-medium leading-5 text-muted-foreground">{clinicalLabel(key)}</dt>
         <dd className="min-w-0 whitespace-pre-wrap break-words text-foreground"><ClinicalHistoryDetails value={item} /></dd>
       </div>;
     })}</dl>;

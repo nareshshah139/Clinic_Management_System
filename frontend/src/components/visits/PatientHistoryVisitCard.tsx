@@ -157,9 +157,9 @@ const DetailSection = ({
   title: string;
   children: ReactNode;
 }) => (
-  <section className="min-w-0 py-4 first:pt-0 last:pb-0">
+  <section className="min-w-0 border-t border-border pt-2">
     <h4 className="text-sm font-semibold text-foreground">{title}</h4>
-    <div className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</div>
+    <div className="mt-1.5 text-sm leading-5 text-muted-foreground">{children}</div>
   </section>
 );
 
@@ -285,22 +285,22 @@ export default function PatientHistoryVisitCard({
         )}
 
         {hasExpandedContent && (
-          <div id={detailsId} hidden={collapsed} className="border-t border-border p-4 sm:p-5">
+          <div id={detailsId} hidden={collapsed} className="border-t border-border p-3">
             {!collapsed && <>
-              <div className="divide-y divide-border">
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-x-6 gap-y-4">
                 {sections.map(section => (
                   <DetailSection key={section.title} title={section.title}>
                     <ClinicalHistoryDetails value={section.value} />
                   </DetailSection>
                 ))}
                 {data.photoPreviews.length > 0 && <DetailSection title="Photos">
-                  <div className="flex flex-wrap gap-3">{data.photoPreviews.map((url, index) => (
+                  <div className="flex flex-wrap gap-2">{data.photoPreviews.map((url, index) => (
                     // eslint-disable-next-line @next/next/no-img-element
                     <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
                   ))}</div>
                 </DetailSection>}
               </div>
-              {footerActions && <div className="mt-4 border-t border-border pt-4">{footerActions}</div>}
+              {footerActions && <div className="mt-3 border-t border-border pt-3">{footerActions}</div>}
             </>}
           </div>
         )}
