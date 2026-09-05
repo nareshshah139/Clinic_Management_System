@@ -651,7 +651,7 @@ export class VisitsService {
         consents: { select: { consentType: true, language: true, text: true, signedAt: true, signer: true, method: true } },
         labOrders: { select: { tests: true, partner: true, status: true, resultsRef: true } },
         deviceLogs: { select: { deviceModel: true, serialNo: true, parameters: true, photoRefs: true, operatorId: true } },
-        prescription: { select: { id: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true, validUntil: true } },
+        prescription: { select: { id: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true } },
       },
     });
 

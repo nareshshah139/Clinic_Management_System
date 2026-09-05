@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ValidationPipe } from '@nestjs/common';
 import { UpdateVisitDto } from '../dto/create-visit.dto';
 import { PatientVisitHistoryQueryDto } from '../dto/query-visit.dto';
@@ -42,7 +43,10 @@ describe('Patient history contracts', () => {
     const second = await service.getPatientVisitHistory({ patientId: 'p', includeAppointments: true, limit: 2, offset: 2 }, 'branch');
     expect(second.visits).toHaveLength(1);
     const detailQuery = db.visit.findMany.mock.calls.find(([q]) => q.include)?.[0];
-    expect(detailQuery.include.prescription.select.validUntil).toBe(true);
+    for (const [relation, modelName] of Object.entries({ prescription: 'Prescription', consents: 'Consent', labOrders: 'LabOrder', deviceLogs: 'DeviceLog' })) {
+      const fields = Prisma.dmmf.datamodel.models.find(model => model.name === modelName)!.fields.map(field => field.name);
+      for (const selected of Object.keys(detailQuery.include[relation].select)) expect(fields).toContain(selected);
+    }
     expect(detailQuery.include.labOrders.select.tests).toBe(true);
     expect(detailQuery.include.consents.select.text).toBe(true);
     expect(detailQuery.include.deviceLogs.select.parameters).toBe(true);
