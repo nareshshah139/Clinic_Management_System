@@ -73,6 +73,7 @@ interface Props {
   userRole?: string;
   onCreated?: (id?: string) => void;
   onClinicalDataChange?: (patch: Record<string, unknown>) => void;
+  onBeforeExport?: () => Promise<string>;
   onPreview?: () => void;
   reviewDate?: string;
   printBgUrl?: string;
@@ -144,7 +145,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
@@ -2433,7 +2434,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   latestClinicalDataRef.current = clinicalData;
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
-  const create = useCallback(async (fromPreview = false) => {
+  const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
     if (!canCreate) {
       const missing: string[] = [];
@@ -2476,7 +2477,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       }
 
       // Ensure we have a visit when not in standalone mode
-      let ensuredVisitId: string | null = visitId;
+      let ensuredVisitId: string | null = exportVisitId || visitId;
       if (!standalone && !ensuredVisitId && ensureVisitId) ensuredVisitId = await ensureVisitId();
       if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
 
@@ -2511,7 +2512,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           procedurePlanned: procedurePlanned || undefined,
         },
       };
-      const existingId = savedPrescriptionId || visitData?.prescription?.id;
+      const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
       const res: any = existingId
         ? await apiClient.patch(`/prescriptions/${existingId}`, payload)
         : standalone
@@ -2542,6 +2543,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       });
 
       // Keep saved clinical details and medication items available for subsequent edits.
+      return res.id as string;
     } catch (e: any) {
       const { title, description, variant } = mapCreateErrorToToast(e);
       toast({
@@ -2554,6 +2556,37 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       setSavingFromPreview(false);
     }
   }, [savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+
+  const exportSaveInFlight = useRef(false);
+  const [savingForExport, setSavingForExport] = useState(false);
+  const saveBeforeExport = useCallback(async () => {
+    if (exportSaveInFlight.current || prescriptionSaveInFlight.current) return null;
+    exportSaveInFlight.current = true;
+    setSavingForExport(true);
+    try {
+      let savedVisitId = visitId;
+      if (!standalone) {
+        if (onBeforeExport) savedVisitId = await onBeforeExport();
+        else {
+          savedVisitId = savedVisitId || await ensureVisitId?.() || null;
+          if (!savedVisitId) throw new Error('Select a visit before exporting.');
+          const saved: any = await apiClient.updateVisit(savedVisitId, clinicalData);
+          if (!saved?.id) throw new Error('The server did not confirm the saved visit.');
+        }
+      }
+      const prescriptionId = validItems.length > 0 ? await create(true, savedVisitId || undefined) : undefined;
+      if ((validItems.length > 0 || standalone) && !prescriptionId) {
+        throw new Error('The prescription could not be saved. Please retry.');
+      }
+      return { prescriptionId, documentId: prescriptionId || savedVisitId };
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Save required before export', description: error?.message || 'Could not save the latest details. Please retry.' });
+      return null;
+    } finally {
+      exportSaveInFlight.current = false;
+      setSavingForExport(false);
+    }
+  }, [visitId, standalone, onBeforeExport, ensureVisitId, clinicalData, validItems.length, create, toast]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
@@ -3130,13 +3163,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
   }, [removePreviewPrintHost]);
 
-  const printPreviewInPlace = useCallback(() => {
+  const printPreviewInPlace = useCallback(async () => {
     const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
     if (!container || !container.querySelector('.pagedjs_page')) {
       toast({ variant: 'destructive', title: 'Print failed', description: 'No paginated preview is ready yet.' });
       return;
     }
 
+    if (!await saveBeforeExport()) return;
     cleanupPreviewPrintMode();
 
     const printHost = createPreviewPrintHost();
@@ -3170,7 +3204,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       });
     });
-  }, [cleanupPreviewPrintMode, createPreviewPrintHost, toast]);
+  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast]);
 
   useEffect(() => {
     return () => {
@@ -5252,7 +5286,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 >
                   {translatingPreview ? 'Preparing…' : 'Print Preview'}
                 </Button>
-                <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview}>
+                <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview || savingForExport}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
                 {!standalone && validItems.length > 0 && (
@@ -5925,7 +5959,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   {(
                     <Button
                       className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
-                      disabled={!canCreate || savingFromPreview}
+                      disabled={!canCreate || savingFromPreview || savingForExport}
                       onClick={() => void create(true)}
                     >
                       {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
@@ -5955,11 +5989,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
-                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                        <span >
+                          <Button variant="secondary" disabled={savingForExport || savingFromPreview} onClick={async () => {
                             try {
-                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
-                              if (!prescId) return;
+                              const saved = await saveBeforeExport();
+                              if (!saved) return;
+                              const prescId = saved.prescriptionId;
                               const phone = (visitData?.patient?.phone || '').replace(/\s+/g, '');
                               if (!phone) {
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
@@ -5990,7 +6025,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               `;
 
                               const { default: html2pdf } = await import('html2pdf.js');
-                              const fileName = `prescription-${prescId}.pdf`;
+                              const fileName = `prescription-${saved.documentId}.pdf`;
                               const pdfBlob: Blob = await html2pdf().set({
                                 margin: 0,
                                 filename: fileName,
@@ -6000,7 +6035,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 pagebreak: { mode: ['css', 'legacy'] },
                               }).from(wrapper).outputPdf('blob');
 
-                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
+                              try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
                               const pdfFile = new File([pdfBlob], fileName, { type: 'application/pdf' });
                               const canShareFile = typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({ files: [pdfFile] });
@@ -6032,19 +6067,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           </Button>
                         </span>
                       </TooltipTrigger>
-                      {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
+                      <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" onClick={printPreviewInPlace}>Print</Button>
+                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview} onClick={printPreviewInPlace}>Print</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className={!hasSavedPrescription ? 'cursor-not-allowed col-span-1' : 'col-span-1'}>
-                          <Button className="w-full" disabled={!hasSavedPrescription} style={!hasSavedPrescription ? { pointerEvents: 'none', opacity: 0.5 } : undefined} onClick={async () => {
+                        <span className="col-span-1">
+                          <Button className="w-full" disabled={savingForExport || savingFromPreview} onClick={async () => {
                             try {
-                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
-                              if (!prescId) return;
+                              const saved = await saveBeforeExport();
+                              if (!saved) return;
+                              const prescId = saved.prescriptionId;
                               const container = document.getElementById('pagedjs-container');
                               if (!container) {
                                 toast({ variant: 'destructive', title: 'PDF failed', description: 'No preview content. Open the preview first.' });
@@ -6072,7 +6108,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               const { default: html2pdf } = await import('html2pdf.js');
                               const pdfBlob: Blob = await html2pdf().set({
                                 margin: 0,
-                                filename: `prescription-${prescId}.pdf`,
+                                filename: `prescription-${saved.documentId}.pdf`,
                                 image: { type: 'jpeg', quality: 0.98 },
                                 html2canvas: { scale: 2, useCORS: true, letterRendering: true },
                                 jsPDF: { unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' },
@@ -6082,22 +6118,22 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');
                               a.href = blobUrl;
-                              a.download = `prescription-${prescId}.pdf`;
+                              a.download = `prescription-${saved.documentId}.pdf`;
                               document.body.appendChild(a);
                               a.click();
                               a.remove();
                               URL.revokeObjectURL(blobUrl);
 
-                              try { await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
+                              try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'PRINT_PREVIEW_PDF' }); } catch {}
                               toast({ title: 'PDF ready', description: 'Prescription PDF downloaded.' });
                             } catch (e) {
                               console.error('PDF generation failed', e);
-                              toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Use Print instead.' });
+                              toast({ variant: 'destructive', title: 'PDF failed', description: 'Could not generate PDF. Your saved details are retained; please retry.' });
                             }
                           }}>Download PDF</Button>
                         </span>
                       </TooltipTrigger>
-                      {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
+                      <TooltipContent><p>Saves the latest visit details before exporting</p></TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
             </div>

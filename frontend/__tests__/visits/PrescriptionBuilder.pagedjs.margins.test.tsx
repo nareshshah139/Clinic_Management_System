@@ -6,6 +6,8 @@ import { jest } from '@jest/globals';
 jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn().mockResolvedValue({}),
+    createPrescription: jest.fn().mockResolvedValue({ id: "saved-rx" }),
+    patch: jest.fn().mockResolvedValue({ id: "saved-rx" }),
     getClinicAssets: jest.fn().mockResolvedValue([]),
     getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
@@ -19,6 +21,11 @@ jest.mock('@/lib/api', () => ({
     previewDrugInteractions: jest.fn().mockResolvedValue({ interactions: [] }),
   },
 }));
+
+const mockPdfOutput = jest.fn().mockResolvedValue(new Blob(['pdf']));
+jest.mock('html2pdf.js', () => ({ __esModule: true, default: () => ({
+  set() { return this; }, from() { return this; }, outputPdf: mockPdfOutput,
+}) }));
 
 // Capture CSS injected for Paged.js via the temp <style> element
 let lastPagedCssText: string | null = null;
@@ -184,6 +191,7 @@ afterEach(() => {
 
 // Import after mocks
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
+import { apiClient } from '@/lib/api';
 
 function pxToMm(px: number): number {
   // Component rounds to 0.1mm: Math.round((px/3.78)*10)/10
@@ -251,14 +259,14 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
   it('prints from a temporary body-level host so dialog positioning does not affect browser print', async () => {
     const printSpy = jest.spyOn(window, 'print').mockImplementation(() => {});
 
-    render(<PrescriptionBuilder patientId="p3" doctorId="d3" /> as any);
+    render(<PrescriptionBuilder patientId="p3" doctorId="d3" onBeforeExport={async () => "v3"} /> as any);
 
     await openPreview();
     await settlePreviewPagination();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Print' }));
 
-    expect(printSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(printSpy).toHaveBeenCalledTimes(1));
     expect(document.body.classList.contains('prescription-preview-printing')).toBe(true);
 
     const printHost = document.getElementById('prescription-print-host');
@@ -286,4 +294,80 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     expect((pageContents[0] as HTMLElement).style.transform).toBe('translate(0px, 0px)');
     expect((pageContents[1] as HTMLElement).style.transform).toBe('translate(0px, 86px)');
   });
+});
+
+
+describe('saving before prescription export', () => {
+  it('waits for the visit save before generating a PDF, including visits without medication', async () => {
+    mockPdfOutput.mockClear();
+    let confirmSave!: (id: string) => void;
+    const onBeforeExport = jest.fn(() => new Promise<string>(resolve => { confirmSave = resolve; }));
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(<PrescriptionBuilder patientId="pdf-patient" visitId="visit" doctorId="doctor" onBeforeExport={onBeforeExport} />);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    expect(onBeforeExport).toHaveBeenCalledTimes(1);
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Download PDF' })).toBeDisabled();
+    await act(async () => confirmSave('visit'));
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    expect(click).toHaveBeenCalledTimes(1);
+    click.mockRestore();
+  });
+
+  it.each(['Download PDF', 'PDF via WhatsApp', 'Print'])('blocks %s when the visit save fails', async (action) => {
+    mockPdfOutput.mockClear();
+    const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+    const onBeforeExport = jest.fn(async () => { throw new Error('Save failed'); });
+    render(<PrescriptionBuilder patientId="failed-patient" visitId="visit" doctorId="doctor" onBeforeExport={onBeforeExport} />);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: action }));
+    await waitFor(() => expect(onBeforeExport).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+    expect(print).not.toHaveBeenCalled();
+    print.mockRestore();
+  });
+});
+
+it('saves medications before PDF output and updates the same prescription on another export', async () => {
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
+  const patchRx = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'saved-rx' });
+  mockPdfOutput.mockClear();
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  localStorage.setItem('rxDraft:med-patient:visit', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', dosage: 10, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' }] }));
+  const onBeforeExport = jest.fn(async () => 'visit');
+  render(<PrescriptionBuilder patientId="med-patient" visitId="visit" doctorId="doctor" onBeforeExport={onBeforeExport} />);
+  await openPreview();
+  await settlePreviewPagination();
+  fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+  await act(async () => {});
+  await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+  expect(apiClient.createPrescription).toHaveBeenCalledWith(expect.objectContaining({ visitId: 'visit', items: expect.arrayContaining([expect.objectContaining({ drugName: 'Synthetic medicine' })]) }));
+  fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+  await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(2));
+  expect(apiClient.patch).toHaveBeenCalledWith('/prescriptions/saved-rx', expect.objectContaining({ visitId: 'visit' }));
+  expect(onBeforeExport).toHaveBeenCalledTimes(2);
+  click.mockRestore();
+  localStorage.removeItem('rxDraft:med-patient:visit');
+  createRx.mockRestore();
+  patchRx.mockRestore();
+});
+
+it('does not export when medication saving fails after the visit save succeeds', async () => {
+  mockPdfOutput.mockClear();
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockRejectedValue(new Error('Prescription save failed'));
+  localStorage.setItem('rxDraft:rx-failure:visit', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosage: 10, dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
+  render(<PrescriptionBuilder patientId="rx-failure" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} />);
+  await openPreview();
+  await settlePreviewPagination();
+  fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+  await waitFor(() => expect(createRx).toHaveBeenCalled());
+  await act(async () => {});
+  expect(mockPdfOutput).not.toHaveBeenCalled();
+  expect(localStorage.getItem('rxDraft:rx-failure:visit')).toContain('Synthetic medicine');
+  createRx.mockRestore();
+  localStorage.removeItem('rxDraft:rx-failure:visit');
 });

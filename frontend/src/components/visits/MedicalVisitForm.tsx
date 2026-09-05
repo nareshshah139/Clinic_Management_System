@@ -1388,7 +1388,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
   }, [photoCount]);
 
-  const save = async (complete = false) => {
+  const save = async (complete = false, requireLatest = false) => {
     if (manualSaveInFlight.current) return;
     if (!patientId || !doctorId) {
       toast({
@@ -1461,7 +1461,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       
       if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
-      if (complete && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing.');
+      if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
         const completePayload: Record<string, unknown> = {};
         if (reviewDate) completePayload.followUpDate = reviewDate;
@@ -1495,7 +1495,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       setLastSavedAt(Date.now());
 
       void loadPatientHistory();
-      return true;
+      return (visit as VisitDetails).id;
     } catch (e) {
       console.error('Save failed:', e);
       setSaveStatus('error');
@@ -2170,6 +2170,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   doctorId={doctorId}
                   visitId={visitId}
                   onClinicalDataChange={receiveClinicalData}
+                  onBeforeExport={async () => {
+                    const savedId = await save(false, true);
+                    if (!savedId) {
+                      throw new Error('The latest visit details could not be saved. Please retry before exporting.');
+                    }
+                    return savedId;
+                  }}
                   onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
                   ensureVisitId={async () => {
                     if (visitId) return visitId;

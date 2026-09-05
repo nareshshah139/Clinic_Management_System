@@ -3,7 +3,8 @@ import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), getPatient: jest.fn(), getPatientVisitHistory: jest.fn(), getAllPatientVisitHistory: jest.fn(), getVisits: jest.fn(), updateVisit: jest.fn(), createVisit: jest.fn(), completeVisit: jest.fn() } }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
-jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange }: any) { return <><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
+let mockExportResult: Promise<string> | undefined;
+jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport }: any) { return <><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
 jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
 jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
@@ -81,4 +82,25 @@ it('keeps the latest vitals-tab edit when the prescription editor holds an older
   fireEvent.change(screen.getAllByPlaceholderText('mmHg')[0], { target: { value: '130' } });
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })); });
   expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ vitals: expect.objectContaining({ systolicBP: 130 }) }), expect.anything());
+});
+
+it('saves the full current form and returns the confirmed visit ID before export', async () => {
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Latest note for PDF' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
+  await expect(mockExportResult).resolves.toBe('v');
+  expect(apiClient.updateVisit).toHaveBeenCalledWith('v', expect.objectContaining({ history: { pastHistory: 'Latest note for PDF' } }), expect.anything());
+});
+
+it('blocks export if newer form edits arrive while saving', async () => {
+  let finish!: (value: any) => void;
+  (apiClient.updateVisit as jest.Mock).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'First note' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Export saved visit' })); });
+  const rejected = expect(mockExportResult).rejects.toThrow('latest visit details');
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'New note during save' } });
+  await act(async () => finish({ id: 'v' }));
+  await rejected;
+  expect(Object.values(localStorage).some(value => String(value).includes('New note during save'))).toBe(true);
 });
