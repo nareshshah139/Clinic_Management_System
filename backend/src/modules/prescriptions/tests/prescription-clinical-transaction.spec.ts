@@ -1,3 +1,4 @@
+import { VisitsService } from '../../visits/visits.service';
 import { PrescriptionsService } from '../prescriptions.service';
 import { ValidationPipe } from '@nestjs/common';
 import { CreatePrescriptionDto, UpdatePrescriptionDto } from '../dto/prescription.dto';
@@ -51,4 +52,24 @@ describe('Prescription clinical transaction', () => {
     expect(state().prescriptions[0]).not.toHaveProperty('validUntil');
   });
 
+});
+
+describe('Saved clinical details in history', () => {
+  it('returns the complete validated prescription snapshot through the history service', async () => {
+    const { db, state } = database();
+    const full = { ...payload, followUpInstructions: 'Full guidance', clinicalData: {
+      ...payload.clinicalData,
+      complaints: [{ complaint: 'First complaint' }, { complaint: 'Second complaint' }],
+      history: { pastHistory: 'Detailed past history', medicationHistory: 'Prior medicines', menstrualHistory: 'Recorded detail', triggers: 'New trigger', priorTreatments: 'Prior treatment' },
+      examination: { generalAppearance: 'Observed finding', dermatology: { skinType: 'III', morphology: ['Finding'] } },
+      treatmentPlan: { investigations: ['Investigation'], finalNotes: 'Final detail', followUpDate: '2026-10-01', dermatology: { medicationPlan: [{ drugName: 'Draft medicine' }] } },
+      scribeJson: { customSections: [{ title: 'Additional note', content: 'Full custom detail' }] },
+    } };
+    const input = await new ValidationPipe({ transform: true, whitelist: true }).transform(full, { type: 'body', metatype: CreatePrescriptionDto });
+    await new PrescriptionsService(db, {} as any).createPrescription(input, 'branch');
+    db.visit.findMany = jest.fn(async () => [{ ...state().visit, createdAt: new Date('2026-09-05'), prescription: state().prescriptions[0] }]);
+    db.visitAttachment = { findMany: jest.fn().mockResolvedValue([]) };
+    const history = await new VisitsService(db).getPatientVisitHistory({ patientId: 'p' }, 'branch');
+    expect(history.visits[0]).toMatchObject({ history: full.clinicalData.history, complaints: full.clinicalData.complaints, exam: full.clinicalData.examination, plan: full.clinicalData.treatmentPlan, scribeJson: full.clinicalData.scribeJson, prescriptionMeta: { followUpInstructions: 'Full guidance' } });
+  });
 });

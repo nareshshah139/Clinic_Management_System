@@ -647,7 +647,7 @@ export class VisitsService {
       where: { id: { in: page.filter(e => e.kind === 'visit').map(e => e.id) }, patientId, patient: { branchId } },
       include: {
         doctor: { select: { id: true, firstName: true, lastName: true } },
-        appointment: { select: { id: true, date: true, slot: true, tokenNumber: true, status: true, visitType: true } },
+        appointment: { select: { id: true, date: true, slot: true, tokenNumber: true, status: true, visitType: true, notes: true } },
         prescription: { select: { id: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true } },
       },
     });
@@ -702,10 +702,12 @@ export class VisitsService {
         return {
           ...visit,
           entryType: 'visit',
+          appointmentNotes: visit.appointment?.notes,
           encounterDate: visit.appointment?.date || visit.createdAt,
           status: visit.appointment?.status,
           visitType: visit.appointment?.visitType,
           history: this.safeParse<any>(visit.history, visit.history),
+          scribeJson: this.safeParse<any>(visit.scribeJson, visit.scribeJson),
           exam: this.safeParse<any>(visit.exam, visit.exam),
           plan: this.safeParse<any>(visit.plan, visit.plan),
           vitals: this.safeParse<any>(visit.vitals as string, null),

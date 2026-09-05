@@ -48,6 +48,7 @@ import {
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
+import { HistoryVisibilityControl } from './HistoryVisibilityControl';
 import { usePatientHistory } from './usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
@@ -100,6 +101,9 @@ type CompositeLabValue = Record<string, SimpleLabValue>;
 type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 
 type MedicalVisitDraftState = {
+  prescriptionClinical?: Record<string, unknown>;
+  labSelections?: string[];
+  labResults?: LabResultsMap;
   vitals: VitalsState;
   painScore: string;
   skinConcerns: string[];
@@ -332,10 +336,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Patient history
   const timeline = usePatientHistory(patientId);
   const prescriptionClinicalRef = useRef<Record<string, unknown>>({});
+  const [prescriptionClinical, setPrescriptionClinical] = useState<Record<string, unknown>>({});
   const receiveClinicalData = useCallback((patch: Record<string, unknown>) => {
-    prescriptionClinicalRef.current = patch || {};
+    const next = patch || {};
+    if (JSON.stringify(next) === JSON.stringify(prescriptionClinicalRef.current)) return;
+    prescriptionClinicalRef.current = next;
+    setPrescriptionClinical(next);
   }, []);
-  useEffect(() => { prescriptionClinicalRef.current = {}; }, [patientId]);
+  useEffect(() => { prescriptionClinicalRef.current = {}; setPrescriptionClinical({}); }, [patientId]);
   const [patientHistory, setPatientHistory] = useState<VisitSummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -500,6 +508,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, []);
 
   const serializeDraft = useCallback((): MedicalVisitDraftState => ({
+    prescriptionClinical,
+    labSelections,
+    labResults,
     vitals,
     painScore,
     skinConcerns: Array.from(skinConcerns),
@@ -528,6 +539,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     completedSections: Array.from(completedSections),
     visitStatus,
   }), [
+    prescriptionClinical,
+    labSelections,
+    labResults,
     activeTab,
     assessment,
     complaints,
@@ -558,6 +572,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   ]);
 
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
+    if (draft.prescriptionClinical) receiveClinicalData(draft.prescriptionClinical);
+    if (draft.labSelections) setLabSelections(draft.labSelections);
+    if (draft.labResults) setLabResults(draft.labResults);
     setVitals(draft.vitals || { ...INITIAL_VITALS });
     setPainScore(draft.painScore || '');
     setSkinConcerns(new Set(draft.skinConcerns || []));
@@ -585,7 +602,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     setActiveTab(draft.activeTab || 'overview');
     setCompletedSections(new Set(draft.completedSections || []));
     setVisitStatus(draft.visitStatus || 'draft');
-  }, []);
+  }, [receiveClinicalData]);
 
   const persistDraftToStorage = useCallback(
     (force = false, draftOverride?: MedicalVisitDraftState) => {
@@ -726,10 +743,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     return mergeClinicalPatch(compactClinicalPatch(payload), prescriptionClinicalRef.current);
-  }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+
+  const latestPayload = useRef(buildPayload);
+  latestPayload.current = buildPayload;
+  const manualSaveInFlight = useRef(false);
+  const autoSaveRunner = useRef<() => Promise<void>>(async () => {});
+  const latestDraftWriter = useRef(persistDraftToStorage);
+  latestDraftWriter.current = persistDraftToStorage;
 
   const runAutoSave = useCallback(async () => {
-    if (!visitId || !hasUnsavedChangesRef.current) {
+    if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current) {
       return;
     }
 
@@ -741,6 +765,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     const payload = buildPayload();
     autoSavePromiseRef.current = (async () => {
+      let retryAllowed = true;
       try {
         setSaveStatus((prev) => (prev === 'saving' ? 'saving' : 'autosaving'));
         // Reuse same idempotency key for retries of the same payload
@@ -751,6 +776,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           lastIdempotencyKeyRef.current = idemKey;
         }
         await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
+        if (JSON.stringify(payload) !== JSON.stringify(latestPayload.current())) {
+          hasUnsavedChangesRef.current = true;
+          setSaveStatus('unsaved');
+          return;
+        }
         hasUnsavedChangesRef.current = false;
         autoSaveFailureNotifiedRef.current = false;
         justSavedRef.current = true;
@@ -765,6 +795,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         setSaveStatus('error');
         // If unauthorized, prompt sign-in and do not retry
         if ((error as any)?.status === 401) {
+          retryAllowed = false;
           toast({
             variant: 'destructive',
             title: 'Not signed in',
@@ -780,14 +811,22 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           clearAutoSaveTimer();
           autoSaveTimerRef.current = window.setTimeout(() => {
             autoSaveTimerRef.current = null;
-            void runAutoSave();
+            void autoSaveRunner.current();
           }, AUTO_SAVE_RETRY_MS);
         }
       } finally {
         autoSavePromiseRef.current = null;
+        if (retryAllowed && hasUnsavedChangesRef.current && !autoSaveTimerRef.current && !manualSaveInFlight.current) {
+          autoSaveTimerRef.current = window.setTimeout(() => {
+            autoSaveTimerRef.current = null;
+            void autoSaveRunner.current();
+          }, AUTO_SAVE_INTERVAL_MS);
+        }
       }
     })();
   }, [buildPayload, clearAutoSaveTimer, persistDraftToStorage, toast, visitId]);
+
+  autoSaveRunner.current = runAutoSave;
 
   const scheduleAutoSave = useCallback(
     (delay = AUTO_SAVE_INTERVAL_MS) => {
@@ -802,14 +841,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         autoSaveTimerRef.current = window.setTimeout(() => {
           autoSaveTimerRef.current = null;
           justSavedRef.current = false;
-          void runAutoSave();
+          void autoSaveRunner.current();
         }, delay);
         return;
       }
       clearAutoSaveTimer();
       autoSaveTimerRef.current = window.setTimeout(() => {
         autoSaveTimerRef.current = null;
-        void runAutoSave();
+        void autoSaveRunner.current();
       }, delay);
     },
     [clearAutoSaveTimer, runAutoSave]
@@ -893,8 +932,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (!appointmentId || visitId) return;
       try {
         const res: any = await apiClient.getVisits({ appointmentId });
-        const list = (res?.visits || res?.data || []) as Array<{ id?: string }>;
-        const existingId = Array.isArray(list) && list.length > 0 ? list[0]?.id : undefined;
+        const list = (res?.visits || res?.data || []) as any[];
+        const existingId = list.find(v => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId))?.id;
         if (existingId && typeof existingId === 'string') {
           setVisitId(existingId);
           // Ensure the draft record reflects the resolved visitId
@@ -986,10 +1025,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       return;
     }
 
-    if (justSavedRef.current) {
-      justSavedRef.current = false;
-      return;
-    }
+    if (justSavedRef.current) justSavedRef.current = false;
 
     // Skip if the draft state is logically unchanged to avoid re-render loops
     try {
@@ -1321,6 +1357,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, [photoCount]);
 
   const save = async (complete = false) => {
+    if (manualSaveInFlight.current) return;
     if (!patientId || !doctorId) {
       toast({
         variant: 'destructive',
@@ -1349,7 +1386,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       }
     }
     try {
+      manualSaveInFlight.current = true;
+      clearAutoSaveTimer();
       setSaving(true);
+      await autoSavePromiseRef.current;
+      latestDraftWriter.current();
       setSaveStatus('saving');
       const payload = buildPayload();
       
@@ -1368,8 +1409,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           if (status === 409 && appointmentId) {
             try {
               const res: any = await apiClient.getVisits({ appointmentId });
-              const list = (res?.visits || res?.data || []) as Array<{ id?: string }>;
-              const existingId = Array.isArray(list) && list.length > 0 ? list[0]?.id : undefined;
+              const list = (res?.visits || res?.data || []) as any[];
+              const existingId = list.find(v => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId))?.id;
               if (existingId && typeof existingId === 'string') {
                 setVisitId(existingId);
                 const patchKey = buildIdempotencyKey('PATCH', existingId, payload as any);
@@ -1386,6 +1427,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         }
       }
       
+      if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
+      const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
+      if (complete && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing.');
       if (complete) {
         const completePayload: Record<string, unknown> = {};
         if (reviewDate) completePayload.followUpDate = reviewDate;
@@ -1402,23 +1446,24 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         hasUnsavedChangesRef.current = false;
       } else {
         setVisitStatus('in-progress');
-        hasUnsavedChangesRef.current = false;
+        hasUnsavedChangesRef.current = newerChanges;
         justSavedRef.current = true;
         clearAutoSaveTimer();
-        persistDraftToStorage(true);
+        latestDraftWriter.current(!newerChanges);
       }
       
       toast({
         variant: 'success',
-        title: complete ? 'Visit completed' : 'Visit saved',
+        title: complete ? 'Visit completed' : newerChanges ? 'Earlier changes saved' : 'Visit saved',
         description: complete
           ? 'All documentation has been marked complete.'
-          : 'Your draft was saved safely.',
+          : newerChanges ? 'New edits are still waiting to save.' : 'Your draft was saved safely.',
       });
-      setSaveStatus('saved');
+      setSaveStatus(newerChanges ? 'unsaved' : 'saved');
       setLastSavedAt(Date.now());
 
       void loadPatientHistory();
+      return true;
     } catch (e) {
       console.error('Save failed:', e);
       setSaveStatus('error');
@@ -1427,8 +1472,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         title: 'Unable to save visit',
         description: getErrorMessage(e) || 'Please try again.',
       });
+      return false;
     } finally {
+      manualSaveInFlight.current = false;
       setSaving(false);
+      if (hasUnsavedChangesRef.current) scheduleAutoSave();
     }
   };
 
@@ -2046,7 +2094,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                           </label>
                           <span className="text-[10px] text-gray-400">Accepts JPG, PNG, or PDF</span>
                         </div>
-                        <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { await save(false); markSectionComplete('labs'); }}>
+                        <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { if (await save(false)) markSectionComplete('labs'); }}>
                           {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
                         </Button>
                       </div>
@@ -2065,25 +2113,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   onChangeCount={(c) => { setPhotoCount(c); }}
                   onVisitNeeded={async () => {
                     if (!visitId) {
-                      const minimalPayload: Record<string, unknown> = {
-                        patientId,
-                        doctorId,
-                        appointmentId,
-                        visitNumber: currentVisitNumber,
-                        status: 'in-progress',
-                        complaints: [{ complaint: 'Photo documentation visit' }], // Minimal required complaint
-                        vitals: {},
-                        examination: {},
-                        diagnosis: [],
-                        treatmentPlan: {},
-                        photos: [],
-                        metadata: {
-                          capturedBy: userRole,
-                          sections: ['photos'],
-                          progress: 10, // Minimal progress
-                          createdForPhotos: true, // Flag to indicate this was created for photos
-                        }
-                      };
+                      const minimalPayload = buildPayload();
                       const newVisit = await apiClient.createVisit(minimalPayload);
                       const newVisitId = (newVisit as VisitDetails).id;
                       setVisitId(newVisitId);
@@ -2405,6 +2435,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 </Button>
               </div>
 
+              <HistoryVisibilityControl hiddenCount={timeline.hiddenCount} showEmpty={timeline.showEmpty} onChange={timeline.setShowEmpty} />
               {timeline.error ? (<p role="alert" className="text-red-700">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
                 <div className="text-center py-8 text-gray-500">
                   <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
@@ -2413,8 +2444,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               ) : timeline.entries.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <History className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No previous visits found</p>
-                  <p className="text-sm">No appointments or visits are recorded.</p>
+                  <p>No documented history to show.</p>
                 </div>
               ) : (
                 <div className="space-y-4">

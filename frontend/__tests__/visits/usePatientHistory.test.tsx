@@ -30,3 +30,15 @@ it('refreshes after a saved visit or prescription', async () => {
   act(() => window.dispatchEvent(new Event(PATIENT_HISTORY_CHANGED)));
   await waitFor(() => expect(result.current.entries).toEqual([{ id: 'saved' }]));
 });
+it('hides only empty entries and lets the user reveal them without refetching or deleting', async () => {
+  const empty = { id: 'empty', entryType: 'visit', complaints: [{ complaint: 'General consultation' }] };
+  const saved = { id: 'saved', entryType: 'visit', history: { pastHistory: 'Saved detail' } };
+  load.mockResolvedValue([empty, saved]);
+  const { result } = renderHook(() => usePatientHistory('p'));
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(result.current.entries).toEqual([saved]);
+  expect(result.current.hiddenCount).toBe(1);
+  act(() => result.current.setShowEmpty(true));
+  expect(result.current.entries).toEqual([empty, saved]);
+  expect(load).toHaveBeenCalledTimes(1);
+});

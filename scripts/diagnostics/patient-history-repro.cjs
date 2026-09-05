@@ -7,4 +7,5 @@ execFileSync('npm', ['test', '--workspace=backend', '--', '--runInBand', '--runT
 execFileSync('npm', ['test', '--workspace=frontend', '--', '--runInBand', '--runTestsByPath',
   '__tests__/visits/PatientHistoryVisitCard.test.tsx', '__tests__/visits/patient-history-api.test.ts',
   '__tests__/visits/usePatientHistory.test.tsx', '__tests__/visits/VisitsPage.test.tsx',
-  '__tests__/visits/VisitsPage.history-navigation.test.tsx'], { stdio: 'inherit' });
+  '__tests__/visits/VisitsPage.history-navigation.test.tsx', '__tests__/visits/history-visibility.test.ts',
+  '__tests__/visits/MedicalVisitForm.saving.test.tsx'], { stdio: 'inherit' });

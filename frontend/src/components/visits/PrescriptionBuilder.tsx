@@ -561,6 +561,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
+  const prescriptionSaveInFlight = useRef(false);
   const skipPostSaveCleanupRef = useRef(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [autoPreview, setAutoPreview] = useState(false);
@@ -2423,7 +2424,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }), [validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
-  const create = useCallback(async () => {
+  const create = useCallback(async (fromPreview = false) => {
+    if (prescriptionSaveInFlight.current) return;
     if (!canCreate) {
       const missing: string[] = [];
       if (!patientId) missing.push('patient');
@@ -2440,6 +2442,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       });
       return;
     }
+    prescriptionSaveInFlight.current = true;
+    setSavingFromPreview(true);
     try {
       // Prefer IDs from loaded visit if available
       const visitPatientId: string | undefined = (visitData && typeof visitData === 'object')
@@ -2504,14 +2508,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         : standalone
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
-      createdPrescriptionIdRef.current = res?.id || null;
+      if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
+      createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
       onCreated?.(res?.id);
 
       const skipCleanup = skipPostSaveCleanupRef.current;
       skipPostSaveCleanupRef.current = false;
 
-      if (!skipCleanup && !standalone) {
+      if (!skipCleanup && !standalone && !fromPreview) {
         setConfirmPharmacy({
           open: true,
           prescriptionId: res?.id || '',
@@ -2535,6 +2540,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         title,
         description,
       });
+    } finally {
+      prescriptionSaveInFlight.current = false;
+      setSavingFromPreview(false);
     }
   }, [savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
@@ -5226,7 +5234,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 >
                   {translatingPreview ? 'Preparing…' : 'Print Preview'}
                 </Button>
-                <Button onClick={create} disabled={!canCreate}>
+                <Button onClick={() => void create()} disabled={!canCreate || savingFromPreview}>
                   {(visitId || standalone || ensureVisitId) ? 'Create Prescription' : 'Save visit first'}
                 </Button>
                 {!standalone && validItems.length > 0 && (
@@ -5900,59 +5908,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Button
                       className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
                       disabled={!canCreate || savingFromPreview}
-                      onClick={async () => {
-                        setSavingFromPreview(true);
-                        try {
-                          const effectivePatientId = (visitData as any)?.patientId || (visitData as any)?.patient?.id || patientId;
-                          const effectiveDoctorId = (visitData as any)?.doctorId || (visitData as any)?.doctor?.id || doctorId;
-                          let effectiveVisitId = visitId;
-                          if (!standalone && !effectiveVisitId && ensureVisitId) {
-                            try { effectiveVisitId = await ensureVisitId(); } catch {}
-                          }
-                          const payload: Record<string, unknown> = {
-                            clinicalData,
-                            patientId: effectivePatientId,
-                            visitId: standalone ? undefined : (effectiveVisitId || visitId || undefined),
-                            doctorId: effectiveDoctorId,
-                            items: prescriptionItemsPayload,
-                            diagnosis: diagnosis || undefined,
-                            language,
-                            validUntil: reviewDate || undefined,
-                            followUpInstructions: followUpInstructions || undefined,
-                          };
-                          const existingId = savedPrescriptionId || visitData?.prescription?.id;
-                          const res: any = existingId
-                            ? await apiClient.patch(`/prescriptions/${existingId}`, payload)
-                            : standalone
-                            ? await apiClient.createQuickPrescription(payload)
-                            : await apiClient.createPrescription(payload);
-                          const newId = res?.id;
-                          if (newId) {
-                            createdPrescriptionIdRef.current = newId;
-                            setSavedPrescriptionId(newId);
-                            onCreated?.(newId);
-                            toast({ variant: 'success', title: 'Prescription saved', description: 'You can now download or share the PDF.' });
-                          } else {
-                            toast({ variant: 'destructive', title: 'Save issue', description: 'Prescription created but ID missing. Close preview and try again.' });
-                          }
-                        } catch (err: any) {
-                          const msg = err?.message || err?.statusText || 'Unknown error';
-                          const is409 = err?.status === 409 || msg.toLowerCase().includes('already exists');
-                          if (is409) {
-                            const existingId = (visitData as any)?.prescriptionId || createdPrescriptionIdRef.current;
-                            if (existingId) {
-                              setSavedPrescriptionId(existingId);
-                              toast({ title: 'Already saved', description: 'This prescription was already saved. You can share or download it now.' });
-                            } else {
-                              toast({ variant: 'destructive', title: 'Already exists', description: 'A prescription already exists for this visit. Close preview to view it.' });
-                            }
-                          } else {
-                            toast({ variant: 'destructive', title: 'Save failed', description: msg });
-                          }
-                        } finally {
-                          setSavingFromPreview(false);
-                        }
-                      }}
+                      onClick={() => void create(true)}
                     >
                       {savingFromPreview ? 'Saving…' : canCreate ? 'Save Prescription' : 'Add medications to save'}
                     </Button>
