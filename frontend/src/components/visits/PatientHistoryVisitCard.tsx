@@ -4,6 +4,7 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ClinicalHistoryDetails, hasClinicalValue } from './ClinicalHistoryDetails';
 import { encounterDay } from '@/lib/patient-history';
 import { cn } from '@/lib/utils';
 import {
@@ -73,29 +74,6 @@ const humanizeKey = (value: string) =>
     .replace(/[_-]+/g, ' ')
     .trim()
     .replace(/^./, (char) => char.toUpperCase());
-
-const stringifyValue = (value: unknown): string | undefined => {
-  if (value == null || value === '') return undefined;
-  if (typeof value === 'string') return value.trim() || undefined;
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) {
-    const joined = value
-      .map((entry) => stringifyValue(entry))
-      .filter((entry): entry is string => Boolean(entry))
-      .join(', ');
-    return joined || undefined;
-  }
-  if (typeof value === 'object') {
-    const parts = Object.entries(value as Record<string, unknown>)
-      .map(([key, entry]) => {
-        const text = stringifyValue(entry);
-        return text ? `${key.includes('(') ? key : humanizeKey(key)}: ${text}` : undefined;
-      })
-      .filter((entry): entry is string => Boolean(entry));
-    return parts.join('; ') || undefined;
-  }
-  return undefined;
-};
 
 const extractTextFromUnknown = (value: unknown, keys: string[]): string | undefined => {
   const normalized = normalizeStructuredValue(value);
@@ -214,13 +192,16 @@ export default function PatientHistoryVisitCard({
     ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
     ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
     ['Treatment plan', normalizeStructuredValue(visit.plan) || raw.planSummary],
-    ['Vitals', labeledVitals],
-    ['Prescription Items', raw.prescriptionItems],
-    ['Prescription instructions', raw.prescriptionMeta],
+    ['Vitals', labeledVitals || normalizeStructuredValue(visit.vitals)],
+    ['Prescription Items', hasClinicalValue(raw.prescriptionItems) ? raw.prescriptionItems : normalizeStructuredValue(raw.prescription?.items)],
+    ['Prescription instructions', { ...raw.prescriptionMeta, ...(raw.prescription?.instructions ? { followUpInstructions: raw.prescription.instructions } : {}), ...(raw.prescription?.pharmacistNotes ? { pharmacistNotes: raw.prescription.pharmacistNotes } : {}), ...(raw.prescription?.validUntil ? { validUntil: formatMaybeDate(String(raw.prescription.validUntil)) } : {}) }],
     ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
     ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
-    ['Appointment notes', raw.appointmentNotes],
-  ].map(([title, value]) => ({ title: String(title), text: stringifyValue(value) })).filter(section => section.text);
+    ['Lab orders', raw.labOrders],
+    ['Procedure device records', raw.deviceLogs],
+    ['Consents', raw.consents],
+    ['Appointment notes', raw.appointmentNotes || raw.appointment?.notes],
+  ].map(([title, value]) => ({ title: String(title), value })).filter(section => hasClinicalValue(section.value));
   const hasExpandedContent = sections.length > 0 || data.photoPreviews.length > 0 || footerActions;
 
   return (
@@ -330,13 +311,13 @@ export default function PatientHistoryVisitCard({
               <div className="divide-y divide-border">
                 {sections.map(section => (
                   <DetailSection key={section.title} title={section.title}>
-                    <p className="max-w-prose whitespace-pre-wrap break-words">{section.text}</p>
+                    <ClinicalHistoryDetails value={section.value} />
                   </DetailSection>
                 ))}
                 {data.photoPreviews.length > 0 && <DetailSection title="Photos">
                   <div className="flex flex-wrap gap-3">{data.photoPreviews.map((url, index) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={index} src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" />
+                    <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`Open visit photo ${index + 1}`} className="rounded-md focus-visible:outline-2 focus-visible:outline-ring"><img src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" /></a>
                   ))}</div>
                 </DetailSection>}
               </div>

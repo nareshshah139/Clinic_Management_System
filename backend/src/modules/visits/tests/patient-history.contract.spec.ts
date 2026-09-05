@@ -41,6 +41,11 @@ describe('Patient history contracts', () => {
     expect(first.pagination).toEqual({ total: 3, offset: 0, limit: 2, hasMore: true });
     const second = await service.getPatientVisitHistory({ patientId: 'p', includeAppointments: true, limit: 2, offset: 2 }, 'branch');
     expect(second.visits).toHaveLength(1);
+    const detailQuery = db.visit.findMany.mock.calls.find(([q]) => q.include)?.[0];
+    expect(detailQuery.include.prescription.select.validUntil).toBe(true);
+    expect(detailQuery.include.labOrders.select.tests).toBe(true);
+    expect(detailQuery.include.consents.select.text).toBe(true);
+    expect(detailQuery.include.deviceLogs.select.parameters).toBe(true);
     expect(second.visits[0]).toMatchObject({ id: 'v1', encounterDate: dates('01'), history: { triggers: 'Trigger' }, plan: { finalNotes: 'Keep final' }, prescriptionItems: [{ dosePattern: '1-0-1' }], prescriptionMeta: { followUpInstructions: 'Return in a week' } });
     expect(second.pagination.hasMore).toBe(false);
     expect(db.visit.findMany.mock.calls[0][0].where.patient).toEqual({ branchId: 'branch' });

@@ -15,7 +15,7 @@ export function isEmptyHistoryEntry(entry: Record<string, any>, now = new Date()
   const day = encounterDay(entry);
   const today = encounterDay({ createdAt: now });
   if (!day || !today || day >= today) return false;
-  if (['complaints', 'history', 'exam', 'plan', 'diagnosis', 'vitals', 'scribeJson', 'followUp', 'appointmentNotes', 'prescription', 'prescriptionItems', 'attachments', 'photoPreviewUrls'].some(key => meaningful(entry[key]))) return false;
+  if (['labOrders', 'deviceLogs', 'consents', 'complaints', 'history', 'exam', 'plan', 'diagnosis', 'vitals', 'scribeJson', 'followUp', 'appointmentNotes', 'prescription', 'prescriptionItems', 'attachments', 'photoPreviewUrls'].some(key => meaningful(entry[key]))) return false;
   if (Number(entry.photos) > 0 || meaningful(entry.appointment?.notes)) return false;
   return true;
 }

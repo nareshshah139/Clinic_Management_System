@@ -293,6 +293,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [pastHistory, setPastHistory] = useState<string>('');
   const [medicationHistory, setMedicationHistory] = useState<string>('');
   const [menstrualHistory, setMenstrualHistory] = useState<string>('');
+  const [familyHistoryTouched, setFamilyHistoryTouched] = useState<string[]>([]);
   const [familyHistoryDM, setFamilyHistoryDM] = useState<boolean>(false);
   const [familyHistoryHTN, setFamilyHistoryHTN] = useState<boolean>(false);
   const [familyHistoryThyroid, setFamilyHistoryThyroid] = useState<boolean>(false);
@@ -302,6 +303,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [templatesReady, setTemplatesReady] = useState(false);
   const [showTemplatesBar, setShowTemplatesBar] = useState(false);
   const [hydrated, setHydrated] = useState(false);
+  const restoredClinicalDraftRef = useRef(false);
+  const latestClinicalDataRef = useRef<unknown>(undefined);
 
   // Stabilize callback props to prevent infinite loops
   const onChangeChiefComplaintsRef = useRef(onChangeChiefComplaints);
@@ -1151,8 +1154,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
+        const initialClinicalData = JSON.stringify(latestClinicalDataRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
         setVisitData(res || null);
+        if (res?.prescription?.id) setSavedPrescriptionId(res.prescription.id);
+        if (restoredClinicalDraftRef.current || initialClinicalData !== JSON.stringify(latestClinicalDataRef.current)) return;
         if (res?.prescription?.id) {
           setSavedPrescriptionId(res.prescription.id);
           const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
@@ -1200,6 +1206,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           if (examObj) {
             if (!exObjective && typeof examObj.generalAppearance === 'string') setExObjective(examObj.generalAppearance);
             const derm = examObj.dermatology || {};
+            if (exDermDx.size === 0 && Array.isArray(derm.diagnoses)) setExDermDx(new Set(derm.diagnoses));
             if (!exSkinType && typeof derm.skinType === 'string') setExSkinType(derm.skinType);
             if (exMorphology.size === 0 && Array.isArray(derm.morphology)) setExMorphology(new Set(derm.morphology));
             if (exDistribution.size === 0 && Array.isArray(derm.distribution)) setExDistribution(new Set(derm.distribution));
@@ -2374,7 +2381,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         })), [validItems]);
 
   const clinicalData = useMemo(() => compactClinicalPatch({
-          scribeJson: { customSections: customSections.filter(section => section.content.trim()), procedureMetrics },
+          scribeJson: { customSections: customSections.filter(section => section.title.trim() || section.content.trim()), procedureMetrics },
           vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
             ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
             ...(vitalsBpDia !== '' ? { diastolicBP: Number(vitalsBpDia) } : {}),
@@ -2390,13 +2397,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             triggers: exTriggers || undefined,
             priorTreatments: exPriorTx || undefined,
             familyHistory: {
-              dm: familyHistoryDM || undefined,
-              htn: familyHistoryHTN || undefined,
-              thyroid: familyHistoryThyroid || undefined,
+              dm: familyHistoryDM || familyHistoryTouched.includes('dm') ? familyHistoryDM : undefined,
+              htn: familyHistoryHTN || familyHistoryTouched.includes('htn') ? familyHistoryHTN : undefined,
+              thyroid: familyHistoryThyroid || familyHistoryTouched.includes('thyroid') ? familyHistoryThyroid : undefined,
               others: familyHistoryOthers || undefined,
             },
           },
-          diagnosis: diagnosis ? [{ diagnosis }] : undefined,
+          diagnosis: Array.from(new Set([diagnosis, ...Array.from(exDermDx).filter(dx => !diagnosis.split(', ').includes(dx))].filter(Boolean))).map(diagnosis => ({ diagnosis })),
           treatmentPlan: {
             investigations: (investigations && investigations.length) ? investigations : undefined,
             procedurePlanned: procedurePlanned || undefined,
@@ -2413,6 +2420,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           examination: {
             ...(exObjective ? { generalAppearance: exObjective } : {}),
             dermatology: {
+              diagnoses: Array.from(exDermDx),
               skinType: exSkinType || undefined,
               morphology: Array.from(exMorphology),
               distribution: Array.from(exDistribution),
@@ -2421,7 +2429,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               skinConcerns: Array.from(skinConcerns),
             }
           },
-        }), [validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+        }), [exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+  latestClinicalDataRef.current = clinicalData;
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   const create = useCallback(async (fromPreview = false) => {
@@ -2492,9 +2501,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             priorTreatments: exPriorTx || undefined,
           },
           familyHistory: {
-            dm: familyHistoryDM || undefined,
-            htn: familyHistoryHTN || undefined,
-            thyroid: familyHistoryThyroid || undefined,
+            dm: familyHistoryDM || familyHistoryTouched.includes('dm') ? familyHistoryDM : undefined,
+            htn: familyHistoryHTN || familyHistoryTouched.includes('htn') ? familyHistoryHTN : undefined,
+            thyroid: familyHistoryThyroid || familyHistoryTouched.includes('thyroid') ? familyHistoryThyroid : undefined,
             others: familyHistoryOthers || undefined,
           },
           investigations: investigations && investigations.length ? investigations : undefined,
@@ -3911,6 +3920,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         familyHistoryThyroid,
         familyHistoryOthers,
         customSections,
+        procedureMetrics,
+        exDermDx: Array.from(exDermDx),
+        familyHistoryTouched,
+        language,
         // Customization settings
         overrideTopMarginPx,
         overrideBottomMarginPx,
@@ -3925,7 +3938,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -3938,6 +3951,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       const raw = localStorage.getItem(draftKey);
       if (raw) {
         const data = JSON.parse(raw);
+        restoredClinicalDraftRef.current = true;
         if (Array.isArray(data?.items)) setItems(data.items);
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
@@ -3986,6 +4000,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         if (typeof data?.familyHistoryThyroid === 'boolean') setFamilyHistoryThyroid(data.familyHistoryThyroid);
         if (typeof data?.familyHistoryOthers === 'string') setFamilyHistoryOthers(data.familyHistoryOthers);
         if (Array.isArray(data?.customSections)) setCustomSections(data.customSections);
+        if (data?.procedureMetrics) setProcedureMetrics(data.procedureMetrics);
+        if (Array.isArray(data?.exDermDx)) setExDermDx(new Set(data.exDermDx));
+        if (Array.isArray(data?.familyHistoryTouched)) setFamilyHistoryTouched(data.familyHistoryTouched);
+        if (data?.language) setLanguage(data.language);
         // Restore customization settings
         if (typeof data?.overrideTopMarginPx === 'number') setOverrideTopMarginPx(data.overrideTopMarginPx);
         if (typeof data?.overrideBottomMarginPx === 'number') setOverrideBottomMarginPx(data.overrideBottomMarginPx);
@@ -4413,9 +4431,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                     <div className="flex flex-wrap gap-2 text-xs mt-1">
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => setFamilyHistoryDM(e.target.checked)} /> DM</label>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => setFamilyHistoryHTN(e.target.checked)} /> HTN</label>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => setFamilyHistoryThyroid(e.target.checked)} /> Thyroid</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => { setFamilyHistoryDM(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'dm']))); }} /> DM</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> HTN</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => { setFamilyHistoryThyroid(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'thyroid']))); }} /> Thyroid</label>
                     </div>
                     <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
                   </div>

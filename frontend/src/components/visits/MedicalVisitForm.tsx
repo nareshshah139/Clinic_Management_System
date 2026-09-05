@@ -339,6 +339,18 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const receiveClinicalData = useCallback((patch: Record<string, unknown>) => {
     const next = patch || {};
     if (JSON.stringify(next) === JSON.stringify(prescriptionClinicalRef.current)) return;
+    // Both tabs edit vitals. Apply only changed editor fields to the shared values,
+    // so an unrelated editor change cannot restore an older blood-pressure reading.
+    const previousVitals = (prescriptionClinicalRef.current.vitals || {}) as Record<string, unknown>;
+    const nextVitals = (next.vitals || {}) as Record<string, unknown>;
+    const vitalKeys: Record<string, keyof VitalsState> = { systolicBP: 'bpS', diastolicBP: 'bpD', heartRate: 'hr', temperature: 'temp', weight: 'weight', height: 'height', oxygenSaturation: 'spo2', respiratoryRate: 'rr' };
+    const changes: Partial<VitalsState> = {};
+    for (const [key, value] of Object.entries(nextVitals)) {
+      if (vitalKeys[key] && value != null && value !== previousVitals[key]) {
+        changes[vitalKeys[key]] = String(key === 'temperature' ? Number(value) * 9 / 5 + 32 : value);
+      }
+    }
+    if (Object.keys(changes).length) setVitals(current => ({ ...current, ...changes }));
     prescriptionClinicalRef.current = next;
     setPrescriptionClinical(next);
   }, []);
@@ -473,6 +485,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   );
 
   const isInitialLoadRef = useRef(true);
+  const restoredDraftRef = useRef(false);
   const hasUnsavedChangesRef = useRef(false);
   const autoSaveTimerRef = useRef<number | null>(null);
   const autoSavePromiseRef = useRef<Promise<void> | null>(null);
@@ -570,7 +583,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     acneSeverity,
   ]);
 
+  const latestDraftStateRef = useRef(serializeDraft());
+  latestDraftStateRef.current = serializeDraft();
+
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
+    restoredDraftRef.current = true;
     if (draft.prescriptionClinical) receiveClinicalData(draft.prescriptionClinical);
     if (draft.labSelections) setLabSelections(draft.labSelections);
     if (draft.labResults) setLabResults(draft.labResults);
@@ -684,6 +701,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       visitNumber: currentVisitNumber,
       status: visitStatus,
       complaints: complaintValues.map((complaint) => ({ complaint })),
+      history: { subjective: subjective || undefined },
+      scribeJson: { assessment: assessment || undefined },
       examination: {
         ...(objective ? { generalAppearance: objective } : {}),
         dermatology: {
@@ -741,8 +760,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       (payload.treatmentPlan as Record<string, unknown>).followUpDate = reviewDate;
     }
 
-    return mergeClinicalPatch(compactClinicalPatch(payload), prescriptionClinicalRef.current);
-  }, [prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+    const compact = compactClinicalPatch(payload);
+    const merged = mergeClinicalPatch(compact, prescriptionClinicalRef.current);
+    if (compact.vitals) merged.vitals = { ...merged.vitals, ...compact.vitals };
+    return merged;
+  }, [triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -950,7 +972,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const load = async () => {
       if (!visitId) return;
       try {
+        const initialState = JSON.stringify(latestDraftStateRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
+        if (restoredDraftRef.current || initialState !== JSON.stringify(latestDraftStateRef.current)) return;
         // Prefill complaints, vitals, exam, diagnosis, plan when empty
         try {
           const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
@@ -975,6 +999,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           }
         } catch {}
         try {
+          const savedHistory = typeof res?.history === 'string' ? JSON.parse(res.history) : res?.history;
+          if (savedHistory?.subjective && !subjective) setSubjective(savedHistory.subjective);
+          const savedScribe = typeof res?.scribeJson === 'string' ? JSON.parse(res.scribeJson) : res?.scribeJson;
+          if (savedScribe?.assessment && !assessment) setAssessment(savedScribe.assessment);
           const exam = typeof res?.exam === 'object' ? res.exam : (res?.exam ? JSON.parse(res.exam) : undefined);
           if (exam?.generalAppearance && !objective) setObjective(String(exam.generalAppearance));
           const derm = exam?.dermatology || {};
@@ -982,7 +1010,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           if (Array.isArray(derm?.morphology) && morphology.size === 0) setMorphology(new Set(derm.morphology));
           if (Array.isArray(derm?.distribution) && distribution.size === 0) setDistribution(new Set(derm.distribution));
           if (derm?.acneSeverity && !acneSeverity) setAcneSeverity(String(derm.acneSeverity));
-          if (derm?.itchScore && !itchScore) setItchScore(String(derm.itchScore));
+          if (derm?.itchScore != null && !itchScore) setItchScore(String(derm.itchScore));
+          if (derm?.painScore != null && !painScore) setPainScore(String(derm.painScore));
+          if (derm?.triggers && !triggers) setTriggers(String(derm.triggers));
+          if (derm?.priorTreatments && !priorTx) setPriorTx(String(derm.priorTreatments));
           if (Array.isArray(derm?.skinConcerns) && skinConcerns.size === 0) setSkinConcerns(new Set(derm.skinConcerns));
         } catch {}
         try {
@@ -990,13 +1021,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           if (Array.isArray(diagArr) && dermDx.size === 0 && !assessment) {
             const vals = diagArr.map((d: any) => d?.diagnosis).filter(Boolean);
             setDermDx(new Set(vals));
-            if (vals[0]) setAssessment(String(vals[0]));
+            if (vals[0]) setAssessment(current => current || String(vals[0]));
           }
         } catch {}
         try {
           const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
           if (planObj?.notes && !plan) setPlan(String(planObj.notes));
           const derm = planObj?.dermatology || {};
+          if (planObj?.followUpDate && !reviewDate) setReviewDate(String(planObj.followUpDate).slice(0, 10));
+          if (derm?.labResults && !Object.keys(labResults).length) setLabResults(derm.labResults);
           if (Array.isArray(derm?.investigations) && labSelections.length === 0) setLabSelections(derm.investigations);
           if (derm?.procedures && Array.isArray(derm.procedures) && derm.procedures.length && !procType) {
             const p = derm.procedures[0];
@@ -1922,7 +1955,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={async () => { await save(false); markSectionComplete('vitals'); setBuilderRefreshKey((k) => k + 1); }}>
+                  <Button onClick={async () => { const saved = await save(false); if (saved) markSectionComplete('vitals'); setBuilderRefreshKey((k) => k + 1); }}>
                     Mark Vitals Complete
                   </Button>
                 </div>

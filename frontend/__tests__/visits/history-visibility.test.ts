@@ -33,6 +33,7 @@ it.each([
   { complaints: 'A brief complaint' },
   { complaints: { complaint: 'Legacy complaint' } },
   { history: { fever: false } },
+  { labOrders: [{ tests: ['CBC'] }] }, { deviceLogs: [{ deviceModel: 'Recorded device' }] }, { consents: [{ text: 'Signed consent' }] },
   { appointmentNotes: 'A saved note' }, { history: { pastHistory: 'Recorded history' } },
   { complaints: [{ complaint: 'Rash' }] }, { complaints: [{ complaint: 'General consultation', notes: 'Specific observation' }] },
   { plan: { dermatology: { labResults: { CBC: { value: '12' } } } } }, { exam: { dermatology: { itchScore: 0 } } },
