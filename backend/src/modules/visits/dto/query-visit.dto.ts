@@ -1,5 +1,6 @@
 import {
   IsOptional,
+  IsBoolean,
   IsString,
   IsUUID,
   IsDateString,
@@ -7,7 +8,7 @@ import {
   Min,
   Max,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class QueryVisitsDto {
   @IsOptional()
@@ -68,9 +69,17 @@ export class QueryVisitsDto {
   sortOrder?: 'asc' | 'desc' = 'desc';
 }
 
-export class PatientVisitHistoryDto {
-  @IsString()
-  patientId: string;
+export class PatientVisitHistoryQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  offset?: number = 0;
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  includeAppointments?: boolean = false;
 
   @IsOptional()
   @IsDateString()
@@ -86,6 +95,11 @@ export class PatientVisitHistoryDto {
   @Min(1)
   @Max(100)
   limit?: number = 50;
+}
+
+export class PatientVisitHistoryDto extends PatientVisitHistoryQueryDto {
+  @IsString()
+  patientId: string;
 }
 
 export class DoctorVisitsDto {

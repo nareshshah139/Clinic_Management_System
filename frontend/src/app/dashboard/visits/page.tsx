@@ -248,6 +248,7 @@ import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -298,8 +299,7 @@ const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
-  const [history, setHistory] = useState<VisitTimelineEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { entries: history, loading, error: historyError, refresh } = usePatientHistory(patientId);
   const [viewingPrescription, setViewingPrescription] = useState<{
     visitId: string;
     prescriptionId: string;
@@ -308,33 +308,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   const [prescriptionLoading, setPrescriptionLoading] = useState(false);
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchPatientHistory = async () => {
-      if (!patientId) return;
-      
-      try {
-        setLoading(true);
-        const response = await apiClient.getPatientVisitHistory<PatientVisitHistoryResponse>(patientId, { limit: 10 });
-        const visits = normalizePatientVisits(response);
-        // Ensure consistent newest-first ordering by createdAt
-        const sorted = Array.isArray(visits)
-          ? [...visits].sort((a, b) => {
-              const at = a && (a as any).createdAt ? Date.parse(String((a as any).createdAt)) : 0;
-              const bt = b && (b as any).createdAt ? Date.parse(String((b as any).createdAt)) : 0;
-              return bt - at;
-            })
-          : [];
-        setHistory(sorted);
-      } catch (error) {
-        console.error('Failed to load patient visit history', error);
-        setHistory([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchPatientHistory();
-  }, [patientId]);
+  if (historyError) return <div role="alert" className="p-4 text-red-700">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
 
   if (loading) {
     return (
@@ -366,8 +340,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-900">Patient Visit History</h3>
-        <Badge variant="secondary">{history.length} Visits</Badge>
+        <h3 className="text-lg font-medium text-gray-900">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
+        <Badge variant="secondary">{history.length} Records</Badge>
       </div>
       
       <div className="relative">
@@ -401,7 +375,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 <div className="flex-1 min-w-0">
                   <PatientHistoryVisitCard
                     visit={visit as unknown as Record<string, unknown>}
-                    visitLabel={index === 0 ? 'Most recent visit' : undefined}
+                    visitLabel={visit.entryType === 'appointment' ? 'Appointment' : index === 0 ? 'Most recent record' : undefined}
                     highlight={index === 0}
                     onResume={
                       visit.id

@@ -47,6 +47,9 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
+import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
+import { usePatientHistory } from './usePatientHistory';
+import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
@@ -296,7 +299,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const loadPrev = async () => {
       try {
         if (!patientId) return;
-        const resp = await apiClient.getPatientVisitHistory<any>(patientId, { limit: 2 });
+        const resp = await apiClient.getAllPatientVisitHistory<any>(patientId);
         const list = Array.isArray(resp)
           ? resp
           : Array.isArray((resp as any)?.visits)
@@ -304,8 +307,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             : Array.isArray((resp as any)?.data)
               ? (resp as any).data
               : [];
-        // Assuming newest-first; previous is index 1
-        const prev = list[1];
+        // When resuming an older visit, compare with its predecessor, not a future visit.
+        const currentIndex = list.findIndex((entry: any) => entry.id === visitId);
+        const prev = list[currentIndex < 0 ? 0 : currentIndex + 1];
         let prevPlan: any = undefined;
         if (prev && prev.plan) {
           if (typeof prev.plan === 'string') {
@@ -323,9 +327,15 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     };
     loadPrev();
     return () => { isActive = false; };
-  }, [patientId]);
+  }, [patientId, visitId]);
   
   // Patient history
+  const timeline = usePatientHistory(patientId);
+  const prescriptionClinicalRef = useRef<Record<string, unknown>>({});
+  const receiveClinicalData = useCallback((patch: Record<string, unknown>) => {
+    prescriptionClinicalRef.current = patch || {};
+  }, []);
+  useEffect(() => { prescriptionClinicalRef.current = {}; }, [patientId]);
   const [patientHistory, setPatientHistory] = useState<VisitSummary[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
@@ -673,7 +683,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         }
       },
       diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : assessment ? [assessment] : [])
-        .map((dx) => ({ diagnosis: dx, icd10Code: 'R69', type: 'Primary' })),
+        .map((dx) => ({ diagnosis: dx })),
       treatmentPlan: {
         ...(plan ? { notes: plan } : {}),
         dermatology: {
@@ -712,10 +722,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     };
 
     if (reviewDate) {
-      payload.followUp = { date: reviewDate };
+      (payload.treatmentPlan as Record<string, unknown>).followUpDate = reviewDate;
     }
 
-    return payload;
+    return mergeClinicalPatch(compactClinicalPatch(payload), prescriptionClinicalRef.current);
   }, [assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const runAutoSave = useCallback(async () => {
@@ -1180,11 +1190,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
     try {
       setLoadingHistory(true);
-      const response = await apiClient.getPatientVisitHistory<VisitSummary[] | { visits?: VisitSummary[]; data?: VisitSummary[] }>(patientId);
-      const responseDataArray = Array.isArray(response) ? response : response?.visits || response?.data || [];
+      const response = await apiClient.getAllPatientVisitHistory<VisitSummary>(patientId);
+      const responseDataArray = response;
       const historyEntries = (responseDataArray as VisitSummary[]).slice().sort((a, b) => {
-        const at = (a as any)?.createdAt ? Date.parse(String((a as any).createdAt)) : 0;
-        const bt = (b as any)?.createdAt ? Date.parse(String((b as any).createdAt)) : 0;
+        const at = encounterTime(a);
+        const bt = encounterTime(b);
         return bt - at;
       });
       setPatientHistory(historyEntries);
@@ -1202,7 +1212,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             setCurrentVisitNumber(fromScribe);
           } else {
             const idx = historyEntries.findIndex((v: any) => v && v.id === visitId);
-            setCurrentVisitNumber(idx >= 0 ? idx + 1 : historyEntries.length + 1);
+            setCurrentVisitNumber(idx >= 0 ? historyEntries.length - idx : historyEntries.length + 1);
           }
         }
       }
@@ -1539,7 +1549,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Recent Visits</div>
                   {recentVisits.slice(0, 2).map((visit, index) => {
-                    const timestamp = visit.createdAt || (visit as any).date;
+                    const timestamp = `${encounterDay(visit)}T12:00:00`;
                     const displayDate = timestamp ? new Date(timestamp).toLocaleDateString() : 'Unknown date';
                     const diagnoses = Array.isArray(visit.diagnosis)
                       ? visit.diagnosis
@@ -2097,6 +2107,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   doctorId={doctorId}
                   visitId={visitId}
+                  onClinicalDataChange={receiveClinicalData}
                   onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
                   ensureVisitId={async () => {
                     if (visitId) return visitId;
@@ -2109,24 +2120,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       });
                       throw new Error('Missing IDs');
                     }
-                    const minimalPayload: any = {
-                      patientId,
-                      doctorId,
-                      visitType: 'consultation',
-                      status: 'in-progress',
-                      complaints: [{ complaint: 'Consultation' }],
-                      diagnosis: [],
-                      plan: {},
-                      treatmentPlan: {},
-                      photos: [],
-                      metadata: {
-                        capturedBy: userRole,
-                        sections: ['prescription'],
-                        progress: 10,
-                        createdForPrescription: true,
-                      }
-                    };
-                    const newVisit = await apiClient.createVisit(minimalPayload);
+                    const minimalPayload = buildPayload();
+                    let newVisit: any;
+                    try {
+                      newVisit = await apiClient.createVisit(minimalPayload);
+                    } catch (error: any) {
+                      if (error?.status !== 409 || !appointmentId) throw error;
+                      const response: any = await apiClient.getVisits({ appointmentId });
+                      newVisit = (response.visits || response.data || []).find((v: any) => v.appointmentId === appointmentId || v.appointment?.id === appointmentId);
+                      if (!newVisit?.id) throw error;
+                    }
                     const newVisitId = (newVisit as VisitDetails).id;
                     setVisitId(newVisitId);
                     return newVisitId;
@@ -2397,30 +2400,30 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             <TabsContent value="history" className="space-y-4" forceMount>
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Patient Visit History</h3>
-                <Button variant="outline" onClick={loadPatientHistory} disabled={loadingHistory}>
-                  {loadingHistory ? 'Loading...' : 'Refresh'}
+                <Button variant="outline" onClick={() => void timeline.refresh()} disabled={timeline.loading}>
+                  {timeline.loading ? 'Loading...' : 'Refresh'}
                 </Button>
               </div>
 
-              {loadingHistory ? (
+              {timeline.error ? (<p role="alert" className="text-red-700">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
                 <div className="text-center py-8 text-gray-500">
                   <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
                   <p>Loading patient history...</p>
                 </div>
-              ) : patientHistory.length === 0 ? (
+              ) : timeline.entries.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <History className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>No previous visits found</p>
-                  <p className="text-sm">This will be the patient&apos;s first visit</p>
+                  <p className="text-sm">No appointments or visits are recorded.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* Timeline */}
                   <div className="relative">
-                    {patientHistory.map((visit, index) => (
+                    {timeline.entries.map((visit, index) => (
                       <div key={visit.id} className="relative flex items-start space-x-3 pb-4">
                         {/* Timeline line */}
-                        {index !== patientHistory.length - 1 && (
+                        {index !== timeline.entries.length - 1 && (
                           <div className="absolute left-4 top-8 w-0.5 h-full bg-gray-200" />
                         )}
                         
@@ -2437,7 +2440,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         <div className="flex-1 min-w-0">
                           <PatientHistoryVisitCard
                             visit={visit as unknown as Record<string, unknown>}
-                            visitLabel={`Visit #${patientHistory.length - index}`}
+                            visitLabel={visit.entryType === 'appointment' ? 'Appointment' : 'Visit'}
                             onResume={() => {
                               window.location.href = `/dashboard/visits?visitId=${encodeURIComponent(visit.id)}&patientId=${encodeURIComponent(patientId)}`;
                             }}

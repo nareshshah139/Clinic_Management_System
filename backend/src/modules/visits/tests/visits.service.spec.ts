@@ -33,6 +33,7 @@ type PrismaServiceMock = {
     findFirst: jest.Mock;
   };
   visitAttachment: {
+    findMany: jest.Mock;
     count: jest.Mock;
   };
 };
@@ -65,6 +66,7 @@ const createPrismaMock = (): PrismaServiceMock => ({
     findFirst: jest.fn(),
   },
   visitAttachment: {
+    findMany: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
   },
 });
@@ -692,14 +694,12 @@ describe('VisitsService', () => {
           branchId: mockBranchId,
         }),
       }));
-      expect(call.include).toEqual(expect.objectContaining({
+      const detailCall = prismaMock.visit.findMany.mock.calls[1][0];
+      expect(detailCall.include).toEqual(expect.objectContaining({
         doctor: expect.any(Object),
         appointment: expect.any(Object),
       }));
-      expect(call).toEqual(expect.objectContaining({
-        orderBy: { createdAt: 'desc' },
-        take: 50,
-      }));
+      expect(result.pagination).toEqual({ total: 1, offset: 0, limit: 50, hasMore: false });
     });
 
     it('should throw NotFoundException if patient not found', async () => {

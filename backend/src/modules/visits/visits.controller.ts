@@ -27,6 +27,7 @@ import {
 import {
   QueryVisitsDto,
   PatientVisitHistoryDto,
+  PatientVisitHistoryQueryDto,
   DoctorVisitsDto,
 } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
@@ -423,7 +424,7 @@ export class VisitsController {
   @Get('patient/:patientId/history')
   getPatientVisitHistory(
     @Param('patientId') patientId: string,
-    @Query() query: Omit<PatientVisitHistoryDto, 'patientId'>,
+    @Query() query: PatientVisitHistoryQueryDto,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.visitsService.getPatientVisitHistory(

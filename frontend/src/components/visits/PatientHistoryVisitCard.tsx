@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { encounterDay } from '@/lib/patient-history';
 import { cn } from '@/lib/utils';
 import {
   Calendar,
@@ -39,47 +40,6 @@ type PatientHistoryVisitCardProps = {
   resumeLabel?: string;
   footerActions?: ReactNode;
   className?: string;
-};
-
-type VisitMedication = string | Record<string, unknown>;
-
-type VisitDerivedData = {
-  dateLabel: string;
-  doctorName?: string;
-  chiefComplaint?: string;
-  primaryDiagnosis?: string;
-  visitTypeLabel?: string;
-  statusLabel?: string;
-  statusVariant: 'default' | 'secondary' | 'outline';
-  visitTypeVariant: 'default' | 'destructive';
-  photoCount: number;
-  photoPreviews: string[];
-  drugNames: string[];
-  medicationEntries: VisitMedication[];
-  rxItems: Array<Record<string, unknown>>;
-  hasPrescription: boolean;
-  notes?: string;
-  investigations: string[];
-  procedurePlannedText?: string;
-  followUpText?: string;
-  counselingText?: string;
-  validUntilIso?: string;
-  pastHistoryText?: string;
-  medicationHistoryText?: string;
-  menstrualHistoryText?: string;
-  familyHistoryText?: string;
-  generalAppearanceText?: string;
-  dermatologyText?: string;
-  vitals: {
-    bpS?: string | number;
-    bpD?: string | number;
-    hrVal?: string | number;
-    tempVal?: string | number;
-    spo2Val?: string | number;
-    rrVal?: string | number;
-    heightCm?: string | number;
-    weightKg?: string | number;
-  };
 };
 
 const normalizeStructuredValue = (value: unknown): unknown => {
@@ -129,7 +89,7 @@ const stringifyValue = (value: unknown): string | undefined => {
     const parts = Object.entries(value as Record<string, unknown>)
       .map(([key, entry]) => {
         const text = stringifyValue(entry);
-        return text ? `${humanizeKey(key)}: ${text}` : undefined;
+        return text ? `${key.includes('(') ? key : humanizeKey(key)}: ${text}` : undefined;
       })
       .filter((entry): entry is string => Boolean(entry));
     return parts.join('; ') || undefined;
@@ -192,123 +152,27 @@ const formatMaybeDate = (value: string) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 };
 
-const deriveVisitData = (visit: PatientHistoryVisit): VisitDerivedData => {
-  const rawVisit = visit as Record<string, unknown>;
-  const scribeData = parseJsonObject<Record<string, unknown>>(visit.scribeJson) ?? {};
-  const planSummary =
-    parseJsonObject<Record<string, unknown>>(rawVisit.planSummary) ?? {};
-  const historySummary =
-    parseJsonObject<Record<string, unknown>>(rawVisit.historySummary) ?? {};
-  const examSummary =
-    parseJsonObject<Record<string, unknown>>(rawVisit.examSummary) ?? {};
-  const treatment = parseJsonObject<Record<string, unknown>>(visit.plan) ?? {};
-  const vitals = parseJsonObject<Record<string, unknown>>(visit.vitals) ?? {};
-
-  const visitDate =
-    visit.createdAt != null ? new Date(String(visit.createdAt)) : null;
-  const isValidVisitDate = visitDate && !Number.isNaN(visitDate.getTime());
-  const dateLabel = isValidVisitDate
-    ? visitDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : 'Unknown date';
-
-  const statusRaw = typeof visit.status === 'string' ? visit.status.trim() : '';
-  const normalizedStatus = statusRaw.toLowerCase();
-
-  const photoPreviews = Array.isArray(rawVisit.photoPreviewUrls)
-    ? (rawVisit.photoPreviewUrls as string[]).map(normalizeAssetUrl)
-    : [];
-  const photoCount = Number(rawVisit.photos ?? 0) || photoPreviews.length;
-  const drugNames = Array.isArray(rawVisit.prescriptionDrugNames)
-    ? (rawVisit.prescriptionDrugNames as string[])
-    : [];
-  const rxItems = Array.isArray(rawVisit.prescriptionItems)
-    ? (rawVisit.prescriptionItems as Array<Record<string, unknown>>)
-    : [];
-  const medicationEntries = Array.isArray(treatment.medications)
-    ? (treatment.medications as VisitMedication[])
-    : [];
-
+const deriveVisitData = (visit: PatientHistoryVisit) => {
+  const raw = visit as Record<string, any>;
+  const scribe = parseJsonObject<Record<string, unknown>>(visit.scribeJson) || {};
+  const day = encounterDay(raw);
+  const visitTypeLabel = extractTextFromUnknown(scribe.visitType, []) || visit.visitType || undefined;
+  const photoPreviews = Array.isArray(raw.photoPreviewUrls) ? raw.photoPreviewUrls.map(normalizeAssetUrl) : [];
+  const rxItems = Array.isArray(raw.prescriptionItems) ? raw.prescriptionItems : [];
+  const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
-    dateLabel,
-    doctorName: visit.doctor
-      ? `${visit.doctor.firstName ?? ''} ${visit.doctor.lastName ?? ''}`.trim() || undefined
-      : undefined,
-    chiefComplaint:
-      extractTextList(visit.complaints, ['complaint', 'text', 'name'])[0] ??
-      undefined,
-    primaryDiagnosis:
-      extractTextList(visit.diagnosis, ['diagnosis', 'condition', 'name'])[0] ??
-      undefined,
-    visitTypeLabel:
-      extractTextFromUnknown(scribeData.visitType, []) ??
-      (typeof visit.visitType === 'string' ? visit.visitType : undefined) ??
-      undefined,
-    statusLabel: statusRaw
-      ? humanizeKey(statusRaw.toLowerCase()).replace(/^./, (char) => char.toUpperCase())
-      : undefined,
-    statusVariant:
-      normalizedStatus === 'completed'
-        ? 'default'
-        : normalizedStatus === 'in-progress'
-          ? 'secondary'
-          : 'outline',
-    visitTypeVariant:
-      (
-        extractTextFromUnknown(scribeData.visitType, []) ??
-        (typeof visit.visitType === 'string' ? visit.visitType : '')
-      )
-        .toLowerCase()
-        .includes('procedure')
-        ? 'destructive'
-        : 'default',
-    photoCount,
-    photoPreviews,
-    drugNames,
-    medicationEntries,
+    dateLabel: day ? new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'Unknown date',
+    doctorName: visit.doctor ? `${visit.doctor.firstName || ''} ${visit.doctor.lastName || ''}`.trim() : undefined,
+    chiefComplaint: extractTextList(visit.complaints, ['complaint', 'text', 'name']).join('; '),
+    primaryDiagnosis: extractTextList(visit.diagnosis, ['diagnosis', 'condition', 'name']).join('; '),
+    visitTypeLabel,
+    visitTypeVariant: visitTypeLabel?.toLowerCase().includes('procedure') ? 'destructive' as const : 'default' as const,
+    statusLabel: status ? humanizeKey(status) : undefined,
+    statusVariant: status === 'completed' ? 'default' as const : status === 'in-progress' ? 'secondary' as const : 'outline' as const,
+    photoCount: Number(raw.photos || 0) || photoPreviews.length,
+    photoPreviews: photoPreviews as string[],
     rxItems,
     hasPrescription: Boolean(visit.prescription?.id) || rxItems.length > 0,
-    notes: extractTextFromUnknown(scribeData.notes, []) ?? undefined,
-    investigations: Array.isArray(planSummary.investigations)
-      ? planSummary.investigations
-          .map((entry) => stringifyValue(entry))
-          .filter((entry): entry is string => Boolean(entry))
-      : [],
-    procedurePlannedText: stringifyValue(planSummary.procedurePlanned),
-    followUpText:
-      stringifyValue(planSummary.followUpInstructions) ??
-      (visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined),
-    counselingText: stringifyValue(planSummary.counseling),
-    validUntilIso:
-      typeof rawVisit.prescriptionMeta === 'object' &&
-      rawVisit.prescriptionMeta !== null &&
-      'validUntil' in (rawVisit.prescriptionMeta as Record<string, unknown>)
-        ? stringifyValue((rawVisit.prescriptionMeta as Record<string, unknown>).validUntil)
-        : undefined,
-    pastHistoryText: stringifyValue(historySummary.pastHistory),
-    medicationHistoryText: stringifyValue(historySummary.medicationHistory),
-    menstrualHistoryText: stringifyValue(historySummary.menstrualHistory),
-    familyHistoryText: stringifyValue(historySummary.familyHistory),
-    generalAppearanceText: stringifyValue(examSummary.generalAppearance),
-    dermatologyText: stringifyValue(examSummary.dermatology),
-    vitals: {
-      bpS: (vitals.bpS ?? vitals.bpSys ?? vitals.systolicBP) as string | number | undefined,
-      bpD: (vitals.bpD ?? vitals.bpDia ?? vitals.diastolicBP) as string | number | undefined,
-      hrVal: (vitals.hr ?? vitals.heartRate ?? vitals.pulse ?? vitals.pr) as
-        | string
-        | number
-        | undefined,
-      tempVal: (vitals.temp ?? vitals.temperature) as string | number | undefined,
-      spo2Val: vitals.spo2 as string | number | undefined,
-      rrVal: (vitals.rr ?? vitals.respiratoryRate) as string | number | undefined,
-      heightCm: (vitals.height ?? vitals.heightCm) as string | number | undefined,
-      weightKg: vitals.weight as string | number | undefined,
-    },
   };
 };
 
@@ -338,43 +202,26 @@ export default function PatientHistoryVisitCard({
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
-  const hasVitals =
-    data.vitals.bpS ||
-    data.vitals.bpD ||
-    data.vitals.hrVal ||
-    data.vitals.tempVal ||
-    data.vitals.spo2Val ||
-    data.vitals.rrVal ||
-    data.vitals.heightCm ||
-    data.vitals.weightKg;
-
-  const hasPrescriptionSummary =
-    data.investigations.length > 0 ||
-    data.procedurePlannedText ||
-    data.followUpText ||
-    data.counselingText ||
-    data.validUntilIso;
-
-  const hasHistorySummary =
-    data.pastHistoryText ||
-    data.medicationHistoryText ||
-    data.menstrualHistoryText ||
-    data.familyHistoryText;
-
-  const hasExaminationSummary =
-    data.generalAppearanceText || data.dermatologyText;
-
-  const hasExpandedContent =
-    hasVitals ||
-    data.medicationEntries.length > 0 ||
-    data.notes ||
-    data.drugNames.length > 0 ||
-    data.rxItems.length > 0 ||
-    hasPrescriptionSummary ||
-    hasHistorySummary ||
-    hasExaminationSummary ||
-    data.photoPreviews.length > 0 ||
-    footerActions;
+  const raw = visit as Record<string, any>;
+  const appointmentOnly = raw.entryType === 'appointment';
+  const fullVitals = parseJsonObject<Record<string, unknown>>(visit.vitals);
+  const labeledVitals = fullVitals ? Object.fromEntries(Object.entries(fullVitals).map(([key, value]) => [
+    ({ temperature: 'Temperature (°C)', temp: 'Temperature (°F)', oxygenSaturation: 'SpO₂ (%)', spo2: 'SpO₂ (%)' } as Record<string, string>)[key] || key, value,
+  ])) : undefined;
+  const sections = [
+    ['Complaint details', normalizeStructuredValue(visit.complaints)],
+    ['Diagnosis details', normalizeStructuredValue(visit.diagnosis)],
+    ['History', normalizeStructuredValue(raw.history) || raw.historySummary],
+    ['Examination', normalizeStructuredValue(raw.exam) || raw.examSummary],
+    ['Treatment plan', normalizeStructuredValue(visit.plan) || raw.planSummary],
+    ['Vitals', labeledVitals],
+    ['Prescription Items', raw.prescriptionItems],
+    ['Prescription instructions', raw.prescriptionMeta],
+    ['Follow-up date', visit.followUp ? formatMaybeDate(String(visit.followUp)) : undefined],
+    ['Visit notes', normalizeStructuredValue(visit.scribeJson)],
+    ['Appointment notes', raw.appointmentNotes],
+  ].map(([title, value]) => ({ title: String(title), text: stringifyValue(value) })).filter(section => section.text);
+  const hasExpandedContent = sections.length > 0 || data.photoPreviews.length > 0 || footerActions;
 
   return (
     <Card
@@ -417,6 +264,7 @@ export default function PatientHistoryVisitCard({
               )}
             </div>
 
+            {appointmentOnly && <p className="text-sm text-gray-600">Appointment only — no visit documentation recorded.</p>}
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-lg border border-gray-200 bg-white/80 p-3">
                 <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
@@ -451,7 +299,7 @@ export default function PatientHistoryVisitCard({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {onResume && (
+            {onResume && !appointmentOnly && (
               <Button type="button" size="sm" variant="outline" onClick={onResume}>
                 {resumeLabel}
               </Button>
@@ -478,292 +326,18 @@ export default function PatientHistoryVisitCard({
 
         {!collapsed && hasExpandedContent && (
           <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
-            {hasVitals && (
-              <DetailSection title="Vitals">
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                  {(data.vitals.bpS || data.vitals.bpD) && (
-                    <div>
-                      <span className="text-gray-500">BP:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.bpS ?? '?'} / {data.vitals.bpD ?? '?'}
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.hrVal !== undefined && (
-                    <div>
-                      <span className="text-gray-500">Pulse:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.hrVal} bpm
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.tempVal !== undefined && (
-                    <div>
-                      <span className="text-gray-500">Temp:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.tempVal} °F
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.spo2Val !== undefined && (
-                    <div>
-                      <span className="text-gray-500">SpO₂:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.spo2Val} %
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.rrVal !== undefined && (
-                    <div>
-                      <span className="text-gray-500">RR:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.rrVal} /min
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.heightCm !== undefined && (
-                    <div>
-                      <span className="text-gray-500">Height:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.heightCm} cm
-                      </span>
-                    </div>
-                  )}
-                  {data.vitals.weightKg !== undefined && (
-                    <div>
-                      <span className="text-gray-500">Weight:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.vitals.weightKg} kg
-                      </span>
-                    </div>
-                  )}
-                </div>
+            {sections.map(section => (
+              <DetailSection key={section.title} title={section.title}>
+                <p className="whitespace-pre-wrap break-words">{section.text}</p>
               </DetailSection>
-            )}
-
-            {data.medicationEntries.length > 0 && (
-              <DetailSection title="Treatment">
-                <div className="space-y-2">
-                  {data.medicationEntries.map((medication, index) => {
-                    const label =
-                      typeof medication === 'string'
-                        ? medication
-                        : [
-                            stringifyValue(medication.name),
-                            stringifyValue(medication.dosage),
-                            stringifyValue(medication.duration),
-                          ]
-                            .filter((entry): entry is string => Boolean(entry))
-                            .join(' • ');
-                    return (
-                      <div
-                        key={`${visit.id ?? 'visit'}-med-${index}`}
-                        className="rounded border border-gray-200 bg-white p-2 text-sm text-gray-800"
-                      >
-                        {label || `Medication ${index + 1}`}
-                      </div>
-                    );
-                  })}
-                </div>
-              </DetailSection>
-            )}
-
-            {data.notes && (
-              <DetailSection title="Notes">
-                <p className="whitespace-pre-line">{data.notes}</p>
-              </DetailSection>
-            )}
-
-            {data.drugNames.length > 0 && (
-              <DetailSection title="Drugs">
-                <div className="flex flex-wrap gap-2">
-                  {data.drugNames.map((drug, index) => (
-                    <Badge
-                      key={`${visit.id ?? 'visit'}-drug-${index}`}
-                      variant="outline"
-                    >
-                      {drug}
-                    </Badge>
-                  ))}
-                </div>
-              </DetailSection>
-            )}
-
-            {data.rxItems.length > 0 && (
-              <DetailSection title="Prescription Items">
-                <div className="space-y-2">
-                  {data.rxItems.map((item, index) => {
-                    const line: string[] = [];
-                    const dosage = stringifyValue(item.dosage);
-                    const dosageUnit = stringifyValue(item.dosageUnit);
-                    const frequency = stringifyValue(item.frequency)?.replaceAll('_', ' ');
-                    const duration = stringifyValue(item.duration);
-                    const durationUnit = stringifyValue(item.durationUnit);
-                    const route = stringifyValue(item.route);
-                    const timing = stringifyValue(item.timing);
-                    const instructions = stringifyValue(item.instructions);
-                    const quantity = stringifyValue(item.quantity);
-
-                    if (dosage) line.push(dosage + (dosageUnit ? ` ${dosageUnit}` : ''));
-                    if (frequency) line.push(frequency);
-                    if (duration) line.push(`${duration}${durationUnit ? ` ${durationUnit}` : ''}`);
-                    if (route) line.push(route);
-                    if (timing) line.push(timing);
-                    if (quantity) line.push(`Qty: ${quantity}`);
-
-                    return (
-                      <div
-                        key={`${visit.id ?? 'visit'}-rx-${index}`}
-                        className="rounded border border-gray-200 bg-white p-3"
-                      >
-                        <div className="font-medium text-gray-900">
-                          {stringifyValue(item.drugName) || `Item ${index + 1}`}
-                        </div>
-                        {line.length > 0 && (
-                          <div className="mt-1 text-gray-700">{line.join(' • ')}</div>
-                        )}
-                        {instructions && (
-                          <div className="mt-1 text-gray-700">
-                            Instructions: {instructions}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </DetailSection>
-            )}
-
-            {hasPrescriptionSummary && (
-              <DetailSection title="Prescription Summary">
-                <div className="space-y-1">
-                  {data.investigations.length > 0 && (
-                    <div>
-                      <span className="text-gray-500">Investigations:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.investigations.join(', ')}
-                      </span>
-                    </div>
-                  )}
-                  {data.procedurePlannedText && (
-                    <div>
-                      <span className="text-gray-500">Procedure Planned:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.procedurePlannedText}
-                      </span>
-                    </div>
-                  )}
-                  {data.followUpText && (
-                    <div>
-                      <span className="text-gray-500">Follow-up:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.followUpText}
-                      </span>
-                    </div>
-                  )}
-                  {data.validUntilIso && (
-                    <div>
-                      <span className="text-gray-500">Valid Until:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {formatMaybeDate(data.validUntilIso)}
-                      </span>
-                    </div>
-                  )}
-                  {data.counselingText && (
-                    <div>
-                      <span className="text-gray-500">Counseling:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.counselingText}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </DetailSection>
-            )}
-
-            {hasHistorySummary && (
-              <DetailSection title="History">
-                <div className="space-y-1">
-                  {data.pastHistoryText && (
-                    <div>
-                      <span className="text-gray-500">Past:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.pastHistoryText}
-                      </span>
-                    </div>
-                  )}
-                  {data.medicationHistoryText && (
-                    <div>
-                      <span className="text-gray-500">Medications:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.medicationHistoryText}
-                      </span>
-                    </div>
-                  )}
-                  {data.menstrualHistoryText && (
-                    <div>
-                      <span className="text-gray-500">Menstrual:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.menstrualHistoryText}
-                      </span>
-                    </div>
-                  )}
-                  {data.familyHistoryText && (
-                    <div>
-                      <span className="text-gray-500">Family:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.familyHistoryText}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </DetailSection>
-            )}
-
-            {hasExaminationSummary && (
-              <DetailSection title="Examination">
-                <div className="space-y-1">
-                  {data.generalAppearanceText && (
-                    <div>
-                      <span className="text-gray-500">General:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.generalAppearanceText}
-                      </span>
-                    </div>
-                  )}
-                  {data.dermatologyText && (
-                    <div>
-                      <span className="text-gray-500">Dermatology:</span>{' '}
-                      <span className="font-medium text-gray-900">
-                        {data.dermatologyText}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </DetailSection>
-            )}
-
-            {data.photoPreviews.length > 0 && (
-              <DetailSection title="Photos">
-                <div className="flex gap-2 overflow-x-auto">
-                  {data.photoPreviews.map((photoUrl, index) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={`${visit.id ?? 'visit'}-photo-${index}`}
-                      src={photoUrl}
-                      alt="Visit photo preview"
-                      className="h-16 w-24 rounded border object-cover"
-                    />
-                  ))}
-                </div>
-              </DetailSection>
-            )}
-
-            {footerActions && (
-              <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 pt-4">
-                {footerActions}
-              </div>
-            )}
+            ))}
+            {data.photoPreviews.length > 0 && <DetailSection title="Photos">
+              <div className="flex gap-2 overflow-x-auto">{data.photoPreviews.map((url, index) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={index} src={url} alt="Visit photo preview" className="h-16 w-24 rounded border object-cover" />
+              ))}</div>
+            </DetailSection>}
+            {footerActions}
           </div>
         )}
       </CardContent>

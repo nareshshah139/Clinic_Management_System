@@ -1,3 +1,4 @@
+import { UpdateVisitDto } from '../../visits/dto/create-visit.dto';
 import {
   IsString,
   IsOptional,
@@ -72,6 +73,14 @@ export enum RefillStatus {
 }
 
 export class PrescriptionItemDto {
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
+  dosePattern?: string;
+
   @IsString()
   drugName: string;
 
@@ -194,6 +203,11 @@ export class PrescriptionItemDto {
 }
 
 export class CreatePrescriptionDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateVisitDto)
+  clinicalData?: UpdateVisitDto;
+
   @IsString()
   patientId: string;
 
@@ -244,6 +258,11 @@ export class CreatePrescriptionDto {
 }
 
 export class UpdatePrescriptionDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateVisitDto)
+  clinicalData?: UpdateVisitDto;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -436,6 +455,11 @@ export class PrescriptionTemplateDto {
 }
 
 export class CreatePrescriptionPadDto {
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => UpdateVisitDto)
+  clinicalData?: UpdateVisitDto;
+
   @IsString()
   patientId: string;
 

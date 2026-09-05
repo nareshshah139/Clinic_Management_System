@@ -1,5 +1,7 @@
 'use client';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { encounterTime } from '@/lib/patient-history';
+import { compactClinicalPatch } from '@/lib/clinical-patch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +72,7 @@ interface Props {
   doctorId: string;
   userRole?: string;
   onCreated?: (id?: string) => void;
+  onClinicalDataChange?: (patch: Record<string, unknown>) => void;
   onPreview?: () => void;
   reviewDate?: string;
   printBgUrl?: string;
@@ -141,7 +144,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
@@ -308,7 +311,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   
   // Bubble chief complaint changes up so parent (visit form) stays in sync
   useEffect(() => {
-    onChangeChiefComplaintsRef.current?.(chiefComplaints);
+    if (chiefComplaints.trim()) onChangeChiefComplaintsRef.current?.(chiefComplaints);
   }, [chiefComplaints]);
 
   const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
@@ -1024,7 +1027,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     return parts.join(' / ');
   }, [patientAgeYears, patientGender]);
   const todayStr = useMemo(() => new Date().toLocaleDateString(), []);
-  const hasSavedPrescription = !!(visitData?.prescriptionId || savedPrescriptionId);
+  const hasSavedPrescription = !!(visitData?.prescription?.id || visitData?.prescriptionId || savedPrescriptionId);
 
   const historyLine = useMemo(() => {
     const parts: string[] = [];
@@ -1149,6 +1152,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         setLoadingVisit(true);
         const res: any = await apiClient.get(`/visits/${visitId}`);
         setVisitData(res || null);
+        if (res?.prescription?.id) {
+          setSavedPrescriptionId(res.prescription.id);
+          const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
+          if (Array.isArray(savedItems) && !items.some(item => item.drugName.trim())) {
+            setItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+          }
+          if (!followUpInstructions && res.prescription.instructions) setFollowUpInstructions(res.prescription.instructions);
+        }
+        const scribe = typeof res?.scribeJson === 'string' ? JSON.parse(res.scribeJson) : res?.scribeJson;
+        if (Array.isArray(scribe?.customSections) && !customSections.length) setCustomSections(scribe.customSections);
+        if (scribe?.procedureMetrics && !Object.keys(procedureMetrics).length) setProcedureMetrics(scribe.procedureMetrics);
         // Seed fields from visit if empty
         try {
           const diagArr = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
@@ -1196,7 +1210,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         try {
           // Plan and dermatology sub-plan
           const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
-          const dermaPlan = planObj?.dermatology || {};
+          const dermaPlan = { ...(planObj?.dermatology || {}), ...(planObj || {}) };
+          if (!followUpInstructions && (dermaPlan.followUpInstructions || dermaPlan.followUp)) setFollowUpInstructions(String(dermaPlan.followUpInstructions || dermaPlan.followUp));
           const follow = dermaPlan?.followUpDays;
           if (!followUpInstructions && follow) setFollowUpInstructions(`Follow up in ${follow} days`);
           if (Array.isArray(dermaPlan.investigations) && investigations.length === 0) {
@@ -1206,6 +1221,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             if (customInvs.length > 0) {
               setCustomInvestigationOptions(customInvs);
             }
+          }
+          if (!res?.prescription?.id && !items.some(item => item.drugName.trim()) && Array.isArray(dermaPlan.medicationPlan)) {
+            setItems(dermaPlan.medicationPlan.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!procedures && Array.isArray(dermaPlan.procedures) && dermaPlan.procedures.length > 0) {
             const procLine = dermaPlan.procedures.map((p: any) => p?.type).filter(Boolean).join(', ');
@@ -1693,14 +1711,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     }
     setLoadingPrevMeds(true);
     try {
-      const res = await apiClient.getPatientVisitHistory<any>(patientId, { limit: 5 });
+      const res = await apiClient.getAllPatientVisitHistory<any>(patientId);
       const visits = normalizeHistoryResponse(res)
         .sort((a, b) => {
-          const at = a?.createdAt ? Date.parse(String(a.createdAt)) : 0;
-          const bt = b?.createdAt ? Date.parse(String(b.createdAt)) : 0;
+          const at = encounterTime(a);
+          const bt = encounterTime(b);
           return bt - at; // newest first
         });
-      const prevWithRx = visits.find((v) => v && v.id !== visitId && Array.isArray((v as any).prescriptionItems) && (v as any).prescriptionItems.length > 0);
+      const currentIndex = visits.findIndex((v) => v.id === visitId);
+      const previousVisits = currentIndex < 0 ? visits : visits.slice(currentIndex + 1);
+      const prevWithRx = previousVisits.find((v) => v && v.id !== visitId && Array.isArray((v as any).prescriptionItems) && (v as any).prescriptionItems.length > 0);
       const rawItems: any[] = prevWithRx ? (prevWithRx as any).prescriptionItems : [];
       const mapped = rawItems
         .map(mapPrevRxItem)
@@ -2322,6 +2342,87 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     { label: '4w', duration: 4, unit: 'WEEKS' },
   ];
 
+  const prescriptionItemsPayload = useMemo(() => validItems.map(it => ({
+          drugName: it.drugName,
+          genericName: it.genericName || undefined,
+          brandName: it.brandName || undefined,
+          dosage: Number(it.dosage),
+          dosageUnit: it.dosageUnit,
+          frequency: it.frequency,
+          dosePattern: it.dosePattern || undefined,
+          notes: it.notes || undefined,
+          duration: Number(it.duration),
+          durationUnit: it.durationUnit,
+          instructions: it.instructions || undefined,
+          route: it.route || undefined,
+          timing: it.timing || undefined,
+          quantity: it.quantity ? Number(it.quantity) : undefined,
+          isGeneric: it.isGeneric ?? true,
+          applicationSite: it.applicationSite || undefined,
+          applicationAmount: it.applicationAmount || undefined,
+          dayPart: it.dayPart || undefined,
+          leaveOn: typeof it.leaveOn === 'boolean' ? it.leaveOn : undefined,
+          washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
+          taperSchedule: it.taperSchedule || undefined,
+          weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
+          calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
+          pregnancyWarning: typeof it.pregnancyWarning === 'boolean' ? it.pregnancyWarning : undefined,
+          photosensitivityWarning: typeof it.photosensitivityWarning === 'boolean' ? it.photosensitivityWarning : undefined,
+          foodInstructions: it.foodInstructions || undefined,
+          pulseRegimen: it.pulseRegimen || undefined,
+        })), [validItems]);
+
+  const clinicalData = useMemo(() => compactClinicalPatch({
+          scribeJson: { customSections: customSections.filter(section => section.content.trim()), procedureMetrics },
+          vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
+            ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
+            ...(vitalsBpDia !== '' ? { diastolicBP: Number(vitalsBpDia) } : {}),
+            ...(vitalsPulse !== '' ? { heartRate: Number(vitalsPulse) } : {}),
+            ...(vitalsWeightKg !== '' ? { weight: Number(vitalsWeightKg) } : {}),
+            ...(vitalsHeightCm !== '' ? { height: Number(vitalsHeightCm) } : {}),
+          } : undefined,
+          complaints: chiefComplaints ? [{ complaint: chiefComplaints }] : undefined,
+          history: {
+            pastHistory: pastHistory || undefined,
+            medicationHistory: medicationHistory || undefined,
+            menstrualHistory: menstrualHistory || undefined,
+            triggers: exTriggers || undefined,
+            priorTreatments: exPriorTx || undefined,
+            familyHistory: {
+              dm: familyHistoryDM || undefined,
+              htn: familyHistoryHTN || undefined,
+              thyroid: familyHistoryThyroid || undefined,
+              others: familyHistoryOthers || undefined,
+            },
+          },
+          diagnosis: diagnosis ? [{ diagnosis }] : undefined,
+          treatmentPlan: {
+            investigations: (investigations && investigations.length) ? investigations : undefined,
+            procedurePlanned: procedurePlanned || undefined,
+            followUpInstructions: followUpInstructions || undefined,
+            followUpDate: reviewDate || undefined,
+            dermatology: {
+              procedures: procedures?.trim()?.length ? [{ type: procedures.trim() }] : undefined,
+              medicationPlan: validItems.length ? validItems : undefined,
+            },
+          },
+          dermatology: {
+            skinConcerns: Array.from(skinConcerns),
+          },
+          examination: {
+            ...(exObjective ? { generalAppearance: exObjective } : {}),
+            dermatology: {
+              skinType: exSkinType || undefined,
+              morphology: Array.from(exMorphology),
+              distribution: Array.from(exDistribution),
+              acneSeverity: exAcneSeverity || undefined,
+              itchScore: exItchScore ? Number(exItchScore) : undefined,
+              skinConcerns: Array.from(skinConcerns),
+            }
+          },
+        }), [validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+  useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
+
   const create = useCallback(async () => {
     if (!canCreate) {
       const missing: string[] = [];
@@ -2363,105 +2464,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
       // Ensure we have a visit when not in standalone mode
       let ensuredVisitId: string | null = visitId;
-      if (!standalone && !ensuredVisitId && ensureVisitId) {
-        try {
-          ensuredVisitId = await ensureVisitId();
-        } catch (e) {
-          // If visit creation fails, continue as best-effort without blocking prescription if standalone allowed
-          console.warn('[PrescriptionBuilder] Failed to ensure visitId', e);
-          toast({
-            variant: 'warning',
-            title: 'Visit not linked',
-            description: 'Unable to create or resume the visit. The prescription will save without linking unless you retry.',
-          });
-        }
-      }
-
-      // Persist all builder fields to Visit for future autocomplete (DB-backed)
-      if (ensuredVisitId) {
-        const visitUpdatePayload: Record<string, unknown> = {
-          vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
-            ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
-            ...(vitalsBpDia !== '' ? { diastolicBP: Number(vitalsBpDia) } : {}),
-            ...(vitalsPulse !== '' ? { heartRate: Number(vitalsPulse) } : {}),
-            ...(vitalsWeightKg !== '' ? { weight: Number(vitalsWeightKg) } : {}),
-            ...(vitalsHeightCm !== '' ? { height: Number(vitalsHeightCm) } : {}),
-          } : undefined,
-          complaints: chiefComplaints ? [{ complaint: chiefComplaints }] : undefined,
-          history: {
-            pastHistory: pastHistory || undefined,
-            medicationHistory: medicationHistory || undefined,
-            menstrualHistory: menstrualHistory || undefined,
-            triggers: exTriggers || undefined,
-            priorTreatments: exPriorTx || undefined,
-            familyHistory: {
-              dm: familyHistoryDM || undefined,
-              htn: familyHistoryHTN || undefined,
-              thyroid: familyHistoryThyroid || undefined,
-              others: familyHistoryOthers || undefined,
-            },
-          },
-          diagnosis: diagnosis || undefined,
-          treatmentPlan: {
-            investigations: (investigations && investigations.length) ? investigations : undefined,
-            procedurePlanned: procedurePlanned || undefined,
-            followUp: followUpInstructions || undefined,
-            dermatology: procedures?.trim()?.length ? { procedures: [{ type: procedures.trim() }] } : undefined,
-          },
-          dermatology: {
-            skinConcerns: Array.from(skinConcerns),
-          },
-          examination: {
-            ...(exObjective ? { generalAppearance: exObjective } : {}),
-            dermatology: {
-              skinType: exSkinType || undefined,
-              morphology: Array.from(exMorphology),
-              distribution: Array.from(exDistribution),
-              acneSeverity: exAcneSeverity || undefined,
-              itchScore: exItchScore ? Number(exItchScore) : undefined,
-              skinConcerns: Array.from(skinConcerns),
-            }
-          },
-        };
-        try {
-          await apiClient.updateVisit(ensuredVisitId, visitUpdatePayload);
-        } catch (e) {
-          // Non-blocking: continue to create prescription even if visit update fails
-          console.warn('[PrescriptionBuilder] Failed to persist visit fields', e);
-        }
-      }
+      if (!standalone && !ensuredVisitId && ensureVisitId) ensuredVisitId = await ensureVisitId();
+      if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
 
       const payload = {
+        clinicalData,
         patientId: effectivePatientId,
         visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
         doctorId: effectiveDoctorId,
-        items: validItems.map(it => ({
-          drugName: it.drugName,
-          genericName: it.genericName || undefined,
-          brandName: it.brandName || undefined,
-          dosage: Number(it.dosage),
-          dosageUnit: it.dosageUnit,
-          frequency: it.frequency,
-          duration: Number(it.duration),
-          durationUnit: it.durationUnit,
-          instructions: it.instructions || undefined,
-          route: it.route || undefined,
-          timing: it.timing || undefined,
-          quantity: it.quantity ? Number(it.quantity) : undefined,
-          isGeneric: it.isGeneric ?? true,
-          applicationSite: it.applicationSite || undefined,
-          applicationAmount: it.applicationAmount || undefined,
-          dayPart: it.dayPart || undefined,
-          leaveOn: typeof it.leaveOn === 'boolean' ? it.leaveOn : undefined,
-          washOffAfterMinutes: it.washOffAfterMinutes !== '' ? Number(it.washOffAfterMinutes) : undefined,
-          taperSchedule: it.taperSchedule || undefined,
-          weightMgPerKgPerDay: it.weightMgPerKgPerDay !== '' ? Number(it.weightMgPerKgPerDay) : undefined,
-          calculatedDailyDoseMg: it.calculatedDailyDoseMg !== '' ? Number(it.calculatedDailyDoseMg) : undefined,
-          pregnancyWarning: typeof it.pregnancyWarning === 'boolean' ? it.pregnancyWarning : undefined,
-          photosensitivityWarning: typeof it.photosensitivityWarning === 'boolean' ? it.photosensitivityWarning : undefined,
-          foodInstructions: it.foodInstructions || undefined,
-          pulseRegimen: it.pulseRegimen || undefined,
-        })),
+        items: prescriptionItemsPayload,
         diagnosis: diagnosis || undefined,
         language,
         validUntil: reviewDate || undefined,
@@ -2487,7 +2498,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           procedurePlanned: procedurePlanned || undefined,
         },
       };
-      const res: any = standalone
+      const existingId = savedPrescriptionId || visitData?.prescription?.id;
+      const res: any = existingId
+        ? await apiClient.patch(`/prescriptions/${existingId}`, payload)
+        : standalone
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
       createdPrescriptionIdRef.current = res?.id || null;
@@ -2509,15 +2523,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
       toast({
         variant: 'success',
-        title: 'Prescription created',
+        title: existingId ? 'Prescription updated' : 'Prescription created',
         description: `${validItems.length} medications recorded for the patient.`,
       });
 
-      if (!skipCleanup) {
-        setItems([]);
-        setDiagnosis('');
-        setFollowUpInstructions('');
-      }
+      // Keep saved clinical details and medication items available for subsequent edits.
     } catch (e: any) {
       const { title, description, variant } = mapCreateErrorToToast(e);
       toast({
@@ -2526,7 +2536,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description,
       });
     }
-  }, [canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
@@ -5886,7 +5896,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </label>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
-                  {!hasSavedPrescription && (
+                  {(
                     <Button
                       className="col-span-2 bg-green-600 hover:bg-green-700 text-white"
                       disabled={!canCreate || savingFromPreview}
@@ -5900,29 +5910,20 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             try { effectiveVisitId = await ensureVisitId(); } catch {}
                           }
                           const payload: Record<string, unknown> = {
+                            clinicalData,
                             patientId: effectivePatientId,
                             visitId: standalone ? undefined : (effectiveVisitId || visitId || undefined),
                             doctorId: effectiveDoctorId,
-                            items: validItems.map(it => ({
-                              drugName: it.drugName,
-                              genericName: it.genericName || undefined,
-                              dosage: Number(it.dosage),
-                              dosageUnit: it.dosageUnit,
-                              frequency: it.frequency,
-                              duration: Number(it.duration),
-                              durationUnit: it.durationUnit,
-                              instructions: it.instructions || undefined,
-                              route: it.route || undefined,
-                              timing: it.timing || undefined,
-                              quantity: it.quantity ? Number(it.quantity) : undefined,
-                              isGeneric: it.isGeneric ?? true,
-                            })),
+                            items: prescriptionItemsPayload,
                             diagnosis: diagnosis || undefined,
                             language,
                             validUntil: reviewDate || undefined,
                             followUpInstructions: followUpInstructions || undefined,
                           };
-                          const res: any = standalone
+                          const existingId = savedPrescriptionId || visitData?.prescription?.id;
+                          const res: any = existingId
+                            ? await apiClient.patch(`/prescriptions/${existingId}`, payload)
+                            : standalone
                             ? await apiClient.createQuickPrescription(payload)
                             : await apiClient.createPrescription(payload);
                           const newId = res?.id;

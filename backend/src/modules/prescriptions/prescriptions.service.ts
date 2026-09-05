@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { mergeClinicalData } from '../visits/clinical-data';
+import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -59,8 +61,9 @@ export class PrescriptionsService {
         patient: { branchId },
       },
     });
-    if (!visit) {
-      throw new NotFoundException('Visit not found in this branch');
+    if (!visit) throw new NotFoundException('Visit not found in this branch');
+    if (visit.patientId !== patientId || visit.doctorId !== doctorId) {
+      throw new NotFoundException('Visit does not match the selected patient and doctor');
     }
 
     // Validate doctor belongs to same branch as visit
@@ -92,7 +95,23 @@ export class PrescriptionsService {
     const interactions = await this.checkDrugInteractions(items);
 
     // Create prescription aligned to current Prisma schema
-    const prescription = await this.prisma.prescription.create({
+    const prescription = await this.prisma.$transaction(async tx => {
+      const metadata = createPrescriptionDto.metadata || {};
+      const patch = mergeClinicalData({
+        ...(diagnosis ? { diagnosis: [{ diagnosis }] } : {}),
+        ...(metadata.histories || metadata.familyHistory ? { history: {
+          ...metadata.histories, ...(metadata.familyHistory ? { familyHistory: metadata.familyHistory } : {}),
+        } } : {}),
+        treatmentPlan: {
+          ...(followUpInstructions ? { followUpInstructions } : {}),
+          ...(createPrescriptionDto.validUntil ? { followUpDate: createPrescriptionDto.validUntil } : {}),
+          ...(metadata.investigations ? { investigations: metadata.investigations } : {}),
+          ...(metadata.procedurePlanned ? { procedurePlanned: metadata.procedurePlanned } : {}),
+          ...(metadata.procedures ? { dermatology: { procedures: [{ type: metadata.procedures }] } } : {}),
+        },
+      }, createPrescriptionDto.clinicalData);
+      await new VisitsService(tx as any).update(visitId, patch, branchId);
+      return tx.prescription.create({
       data: {
         visitId,
         language: language as unknown as any,
@@ -112,6 +131,7 @@ export class PrescriptionsService {
           },
         },
       },
+    });
     });
 
     try {
@@ -395,67 +415,30 @@ export class PrescriptionsService {
       throw new BadRequestException('Cannot update cancelled prescription');
     }
 
-    // Prepare update data
+    // Only write columns in the existing production schema. Clinical documents live on Visit.
     const updateData: any = {};
-
-    if (updatePrescriptionDto.items) {
+    if (updatePrescriptionDto.items !== undefined) {
+      if (!updatePrescriptionDto.items.length) throw new BadRequestException('At least one prescription item is required');
       updateData.items = JSON.stringify(updatePrescriptionDto.items);
-      // Recalculate validity period if items changed
-      updateData.validUntil = this.calculateValidityPeriod(updatePrescriptionDto.items);
     }
-
-    if (updatePrescriptionDto.diagnosis !== undefined) {
-      updateData.diagnosis = updatePrescriptionDto.diagnosis;
-    }
-
-    if (updatePrescriptionDto.notes !== undefined) {
-      updateData.notes = updatePrescriptionDto.notes;
-    }
-
-    if (updatePrescriptionDto.language !== undefined) {
-      updateData.language = updatePrescriptionDto.language;
-    }
-
-    if (updatePrescriptionDto.validUntil !== undefined) {
-      updateData.validUntil = updatePrescriptionDto.validUntil ? new Date(updatePrescriptionDto.validUntil) : null;
-    }
-
-    if (updatePrescriptionDto.maxRefills !== undefined) {
-      updateData.maxRefills = updatePrescriptionDto.maxRefills;
-    }
-
-    if (updatePrescriptionDto.followUpInstructions !== undefined) {
-      updateData.followUpInstructions = updatePrescriptionDto.followUpInstructions;
-    }
-
-    if (updatePrescriptionDto.status !== undefined) {
-      updateData.status = updatePrescriptionDto.status;
-    }
-
-    if (updatePrescriptionDto.metadata !== undefined) {
-      updateData.metadata = updatePrescriptionDto.metadata ? JSON.stringify(updatePrescriptionDto.metadata) : null;
-    }
-
-    const updatedPrescription = await this.prisma.prescription.update({
-      where: { id },
-      data: updateData,
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
+    if (updatePrescriptionDto.language !== undefined) updateData.language = updatePrescriptionDto.language;
+    if (updatePrescriptionDto.notes !== undefined) updateData.pharmacistNotes = updatePrescriptionDto.notes;
+    if (updatePrescriptionDto.followUpInstructions !== undefined) updateData.instructions = updatePrescriptionDto.followUpInstructions;
+    const updatedPrescription = await this.prisma.$transaction(async tx => {
+      const patch = mergeClinicalData({
+        ...(updatePrescriptionDto.diagnosis ? { diagnosis: [{ diagnosis: updatePrescriptionDto.diagnosis }] } : {}),
+        treatmentPlan: {
+          ...(updatePrescriptionDto.validUntil ? { followUpDate: updatePrescriptionDto.validUntil } : {}),
+          ...(updatePrescriptionDto.followUpInstructions !== undefined ? { followUpInstructions: updatePrescriptionDto.followUpInstructions } : {}),
         },
-        visit: {
-          select: { id: true, createdAt: true },
-        },
-        doctor: {
-          select: { id: true, name: true, specialization: true },
-        },
-      },
+      }, updatePrescriptionDto.clinicalData);
+      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId);
+      return tx.prescription.update({
+        where: { id }, data: updateData,
+        include: { visit: { include: { patient: { select: { id: true, name: true, phone: true } }, doctor: { select: { id: true, firstName: true, lastName: true } } } } },
+      });
     });
-
-    return {
-      ...updatedPrescription,
-      items: this.safeParse<any[]>(updatedPrescription.items as unknown as string, []),
-    } as any;
+    return { ...updatedPrescription, items: this.safeParse<any[]>(updatedPrescription.items, []) };
   }
 
   async cancelPrescription(id: string, branchId: string, reason?: string) {
@@ -2039,6 +2022,7 @@ export class PrescriptionsService {
     try {
       const prescription = await this.createPrescription(
         {
+          clinicalData: payload.clinicalData,
           patientId,
           visitId: autoVisit.id,
           doctorId,

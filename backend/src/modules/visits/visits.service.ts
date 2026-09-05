@@ -1,3 +1,4 @@
+import { mergeClinicalData, mergeClinicalEntries } from './clinical-data';
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
@@ -98,6 +99,7 @@ export class VisitsService {
           patientId,
           doctorId,
           appointmentId,
+          followUp: treatmentPlan?.followUpDate ? new Date(treatmentPlan.followUpDate) : null,
           vitals: vitals ? JSON.stringify(vitals) : null,
           complaints: JSON.stringify(complaints),
           history: history ? JSON.stringify(history) : null,
@@ -390,10 +392,10 @@ export class VisitsService {
       ...visit,
       vitals: this.safeParse<any>(visit.vitals as string, null),
       complaints: this.safeParse<any[]>(visit.complaints as string, []),
-      history: this.safeParse<any>(visit.history as string, null),
-      exam: this.safeParse<any>(visit.exam as string, null),
+      history: this.safeParse<any>(visit.history as string, visit.history),
+      exam: this.safeParse<any>(visit.exam as string, visit.exam),
       diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
-      plan: this.safeParse<any>(visit.plan as string, null),
+      plan: this.safeParse<any>(visit.plan as string, visit.plan),
       attachments: this.safeParse<string[]>(visit.attachments as string, []),
       scribeJson: this.safeParse<any>(visit.scribeJson as string, null),
       doctor: visit.doctor
@@ -422,30 +424,29 @@ export class VisitsService {
     const updateData: any = {};
 
     if (updateVisitDto.vitals !== undefined) {
-      updateData.vitals = updateVisitDto.vitals ? JSON.stringify(updateVisitDto.vitals) : null;
+      updateData.vitals = updateVisitDto.vitals ? JSON.stringify(mergeClinicalData(visit.vitals, updateVisitDto.vitals)) : null;
     }
 
     if (updateVisitDto.complaints !== undefined) {
-      updateData.complaints = JSON.stringify(updateVisitDto.complaints || []);
+      updateData.complaints = JSON.stringify(mergeClinicalEntries(visit.complaints, updateVisitDto.complaints || [], 'complaint'));
     }
 
     if (updateVisitDto.history !== undefined) {
-      updateData.history = updateVisitDto.history ? JSON.stringify(updateVisitDto.history) : null;
+      updateData.history = updateVisitDto.history ? JSON.stringify(mergeClinicalData(visit.history, updateVisitDto.history)) : null;
     }
 
     if (updateVisitDto.examination !== undefined) {
-      updateData.exam = updateVisitDto.examination ? JSON.stringify(updateVisitDto.examination) : null;
+      updateData.exam = updateVisitDto.examination ? JSON.stringify(mergeClinicalData(visit.exam, updateVisitDto.examination)) : null;
     }
 
     if (updateVisitDto.diagnosis !== undefined) {
-      updateData.diagnosis = JSON.stringify(updateVisitDto.diagnosis || []);
+      updateData.diagnosis = JSON.stringify(mergeClinicalEntries(visit.diagnosis, updateVisitDto.diagnosis || [], 'diagnosis'));
     }
 
     if (updateVisitDto.treatmentPlan || updateVisitDto.notes !== undefined) {
       const currentPlan = visit.plan || {};
       const updatedPlan = {
-        ...currentPlan,
-        ...(updateVisitDto.treatmentPlan ? { ...updateVisitDto.treatmentPlan } : {}),
+        ...mergeClinicalData(currentPlan, updateVisitDto.treatmentPlan || {}),
         ...(updateVisitDto.notes !== undefined ? { notes: updateVisitDto.notes } : {}),
       };
       updateData.plan = JSON.stringify(updatedPlan);
@@ -456,7 +457,11 @@ export class VisitsService {
     }
 
     if (updateVisitDto.scribeJson !== undefined) {
-      updateData.scribeJson = updateVisitDto.scribeJson ? JSON.stringify(updateVisitDto.scribeJson) : null;
+      updateData.scribeJson = updateVisitDto.scribeJson ? JSON.stringify(mergeClinicalData(visit.scribeJson, updateVisitDto.scribeJson)) : null;
+    }
+
+    if (updateVisitDto.treatmentPlan?.followUpDate !== undefined) {
+      updateData.followUp = updateVisitDto.treatmentPlan.followUpDate ? new Date(updateVisitDto.treatmentPlan.followUpDate) : null;
     }
 
     const updatedVisit = await this.prisma.visit.update({
@@ -503,7 +508,7 @@ export class VisitsService {
     if (completeVisitDto.finalNotes || completeVisitDto.followUpInstructions) {
       const currentPlan = visit.plan || {};
       const updatedPlan = {
-        ...currentPlan,
+        ...mergeClinicalData(currentPlan, {}),
         ...(completeVisitDto.finalNotes ? { finalNotes: completeVisitDto.finalNotes } : {}),
         ...(completeVisitDto.followUpInstructions ? { followUpInstructions: completeVisitDto.followUpInstructions } : {}),
       };
@@ -614,47 +619,37 @@ export class VisitsService {
   }
 
   async getPatientVisitHistory(query: PatientVisitHistoryDto, branchId: string) {
-    const { patientId, startDate, endDate, limit = 50 } = query;
-    const take = typeof limit === 'string' ? parseInt(limit, 10) || 50 : (Number.isFinite(limit as any) ? (limit as number) : 50);
+    const { patientId, startDate, endDate, includeAppointments = false } = query;
+    const take = Math.min(100, Math.max(1, Number(query.limit) || 50));
+    const offset = Math.max(0, Number(query.offset) || 0);
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found in this branch');
 
-    // Validate patient exists and belongs to branch
-    const patient = await this.prisma.patient.findFirst({
-      where: { id: patientId, branchId },
+    // Page encounter identities first: appointment date is the clinical day; createdAt is audit time.
+    // No clinical documents are loaded for records outside this page.
+    const identities = await this.prisma.visit.findMany({
+      where: { patientId, patient: { branchId } },
+      select: { id: true, createdAt: true, appointment: { select: { date: true } } },
     });
-    if (!patient) {
-      throw new NotFoundException('Patient not found in this branch');
-    }
-
-    const where: any = {
-      patientId,
-      patient: {
-        branchId,
-      },
-    };
-
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
-
+    const appointments = includeAppointments ? await this.prisma.appointment.findMany({
+      where: { patientId, branchId, visit: { is: null } },
+      include: { doctor: { select: { id: true, firstName: true, lastName: true } } },
+    }) : [];
+    const entries = [
+      ...identities.map(v => ({ id: v.id, kind: 'visit', date: v.appointment?.date || v.createdAt, createdAt: v.createdAt })),
+      ...appointments.map(a => ({ id: a.id, kind: 'appointment', date: a.date, createdAt: a.createdAt })),
+    ].filter(e => (!startDate || new Date(e.date) >= new Date(startDate)) &&
+      (!endDate || new Date(e.date) <= new Date(endDate.length === 10 ? `${endDate}T23:59:59.999Z` : endDate)))
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id));
+    const page = entries.slice(offset, offset + take);
     const visits = await this.prisma.visit.findMany({
-      where,
+      where: { id: { in: page.filter(e => e.kind === 'visit').map(e => e.id) }, patientId, patient: { branchId } },
       include: {
-        doctor: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        appointment: {
-          select: { id: true, date: true, slot: true, tokenNumber: true },
-        },
-        prescription: {
-          select: { id: true, createdAt: true, items: true },
-        },
+        doctor: { select: { id: true, firstName: true, lastName: true } },
+        appointment: { select: { id: true, date: true, slot: true, tokenNumber: true, status: true, visitType: true } },
+        prescription: { select: { id: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true } },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take,
     });
 
     // Compute photo counts for each visit: DB-backed attachments + legacy JSON attachments
@@ -662,7 +657,6 @@ export class VisitsService {
     let dbAttachmentCounts: Record<string, number> = {};
     let dbAttachmentPreviews: Record<string, { id: string; createdAt: string; position?: string; displayOrder?: number }[]> = {};
     if (visitIds.length > 0) {
-      try {
         const dbItems = await (this.prisma as any).visitAttachment.findMany({
           where: { visitId: { in: visitIds } },
           select: { id: true, visitId: true, createdAt: true, position: true, displayOrder: true },
@@ -680,7 +674,6 @@ export class VisitsService {
           arr.push({ id: row.id as string, createdAt: (row.createdAt as Date).toISOString(), position: row.position, displayOrder: row.displayOrder });
           return acc;
         }, {} as Record<string, any[]>);
-      } catch {}
     }
 
     return {
@@ -689,7 +682,12 @@ export class VisitsService {
         name: patient.name,
         phone: patient.phone,
       },
-      visits: visits.map(visit => {
+      visits: page.map(entry => {
+        if (entry.kind === 'appointment') {
+          const appointment = appointments.find(a => a.id === entry.id)!;
+          return { id: `appointment:${appointment.id}`, entryType: 'appointment', encounterDate: appointment.date, createdAt: appointment.createdAt, appointment, doctor: appointment.doctor, status: appointment.status, visitType: appointment.visitType, complaints: [], diagnosis: [], appointmentNotes: appointment.notes };
+        }
+        const visit = visits.find(v => v.id === entry.id)!;
         // Sanitize legacy filesystem attachments to avoid returning non-existent files on Railway
         const legacyRaw = this.safeParse<string[]>(visit.attachments as any, []);
         const legacySanitized = this.sanitizeAttachmentPaths(legacyRaw);
@@ -703,6 +701,13 @@ export class VisitsService {
 
         return {
           ...visit,
+          entryType: 'visit',
+          encounterDate: visit.appointment?.date || visit.createdAt,
+          status: visit.appointment?.status,
+          visitType: visit.appointment?.visitType,
+          history: this.safeParse<any>(visit.history, visit.history),
+          exam: this.safeParse<any>(visit.exam, visit.exam),
+          plan: this.safeParse<any>(visit.plan, visit.plan),
           vitals: this.safeParse<any>(visit.vitals as string, null),
           complaints: this.safeParse<any[]>(visit.complaints as string, []),
           diagnosis: this.safeParse<any[]>(visit.diagnosis as string, []),
@@ -715,6 +720,7 @@ export class VisitsService {
               const items = this.safeParse<any[]>(visit.prescription?.items as any, []);
               if (!Array.isArray(items)) return [];
               return items.map((it: any) => ({
+                ...it,
                 drugName: it?.drugName ?? it?.name ?? undefined,
                 dosage: it?.dosage ?? undefined,
                 dosageUnit: it?.dosageUnit ?? undefined,
@@ -744,7 +750,7 @@ export class VisitsService {
           // Summaries from visit JSON plan/history/exam used by builder
           planSummary: (() => {
             const plan = this.safeParse<any>(visit.plan as any, null);
-            const derm = plan?.dermatology || plan || {};
+            const derm = { ...(plan?.dermatology || {}), ...(plan || {}) };
             const summary: any = {};
             if (Array.isArray(derm?.investigations) && derm.investigations.length) summary.investigations = derm.investigations;
             if (derm?.procedurePlanned) summary.procedurePlanned = derm.procedurePlanned;
@@ -762,6 +768,8 @@ export class VisitsService {
             if (hist.medicationHistory) out.medicationHistory = hist.medicationHistory;
             if (hist.menstrualHistory) out.menstrualHistory = hist.menstrualHistory;
             if (hist.familyHistory) out.familyHistory = hist.familyHistory;
+            if (hist.triggers) out.triggers = hist.triggers;
+            if (hist.priorTreatments) out.priorTreatments = hist.priorTreatments;
             return out;
           })(),
           examSummary: (() => {
@@ -796,6 +804,7 @@ export class VisitsService {
             : null,
         };
       }),
+      pagination: { total: entries.length, offset, limit: take, hasMore: offset + take < entries.length },
     };
   }
 
@@ -1237,7 +1246,8 @@ export class VisitsService {
   }
 
   private safeParse<T>(value: string | null | undefined, fallback: T): T {
-    if (!value || typeof value !== 'string') return fallback;
+    if (value == null || value === '') return fallback;
+    if (typeof value !== 'string') return value as T;
     try {
       return JSON.parse(value) as T;
     } catch {

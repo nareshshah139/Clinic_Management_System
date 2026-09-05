@@ -1,5 +1,6 @@
 'use client';
 
+import { encounterTime, PATIENT_HISTORY_CHANGED } from '@/lib/patient-history';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -26,6 +27,8 @@ interface NextAppointmentResponse {
 interface VisitEntryMinimal {
   id?: string;
   createdAt?: string | Date;
+  encounterDate?: string | Date;
+  appointment?: { date?: string | Date } | null;
   followUp?: string | Date | null;
   prescription?: { id?: string } | null;
 }
@@ -84,13 +87,16 @@ export default function PatientProgressTracker({ patientId, compact = false, var
       }
     };
     void load();
+    const refresh = () => { void load(); };
+    window.addEventListener(PATIENT_HISTORY_CHANGED, refresh);
     return () => {
+      window.removeEventListener(PATIENT_HISTORY_CHANGED, refresh);
       cancelled = true;
     };
   }, [patientId]);
 
   const now = useMemo(() => new Date(), []);
-  const latestVisitDate = useMemo(() => (latestVisit?.createdAt ? new Date(latestVisit.createdAt) : null), [latestVisit]);
+  const latestVisitDate = useMemo(() => (latestVisit ? new Date(encounterTime(latestVisit)) : null), [latestVisit]);
   const hasActiveVisit = useMemo(() => {
     if (!latestVisitDate) return false;
     // Consider visit "active" if created within the last 24 hours and no prescription yet

@@ -1,3 +1,4 @@
+import { PATIENT_HISTORY_CHANGED } from './patient-history';
 const API_BASE_URL = '/api';
 
 export interface ApiError extends Error {
@@ -174,6 +175,9 @@ export class ApiClient {
         throw apiErr;
       }
 
+      if (method !== 'GET' && /^\/(visits|prescriptions|appointments)(\/|$)/.test(endpoint) && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event(PATIENT_HISTORY_CHANGED));
+      }
       if (response.status === 204) {
         return undefined as T;
       }
@@ -365,8 +369,21 @@ export class ApiClient {
     return this.post(`/visits/${id}/complete`, data, opts);
   }
 
-  async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number }): Promise<T> {
+  async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number; includeAppointments?: boolean; startDate?: string; endDate?: string }): Promise<T> {
     return this.get<T>(`/visits/patient/${patientId}/history`, params || {});
+  }
+
+  async getAllPatientVisitHistory<T = Record<string, any>>(patientId: string, includeAppointments = false): Promise<T[]> {
+    const result: T[] = [];
+    let offset = 0;
+    for (;;) {
+      const page = await this.getPatientVisitHistory<{ visits: T[]; pagination?: { hasMore: boolean } }>(patientId, { limit: 100, offset, includeAppointments });
+      const entries = Array.isArray(page) ? page : page.visits || [];
+      result.push(...entries);
+      if (!page.pagination?.hasMore) return result;
+      if (!entries.length) throw new Error('History pagination returned an empty page. Please refresh.');
+      offset += entries.length;
+    }
   }
 
   // Billing

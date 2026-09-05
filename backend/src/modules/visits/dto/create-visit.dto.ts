@@ -1,5 +1,7 @@
 import {
   IsString,
+  registerDecorator,
+  ValidationOptions,
   IsOptional,
   IsUUID,
   IsObject,
@@ -13,6 +15,16 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { Language } from '@prisma/client';
+
+function IsClinicalHistory(options?: ValidationOptions) {
+  return (object: object, propertyName: string) => registerDecorator({
+    name: 'isClinicalHistory', target: object.constructor, propertyName, options,
+    validator: {
+      validate: (value: unknown) => typeof value === 'string' || (!!value && typeof value === 'object' && !Array.isArray(value)),
+      defaultMessage: () => 'history must be text or a structured history object',
+    },
+  });
+}
 
 // Runtime enum for validator to avoid undefined at runtime
 export enum LanguageEnum {
@@ -92,6 +104,10 @@ export class ComplaintDto {
 
 export class ExaminationDto {
   @IsOptional()
+  @IsObject()
+  dermatology?: Record<string, any>;
+
+  @IsOptional()
   @IsString()
   generalAppearance?: string;
 
@@ -138,6 +154,22 @@ export class DiagnosisDto {
 }
 
 export class TreatmentPlanDto {
+  @IsOptional()
+  @IsArray()
+  investigations?: unknown[];
+
+  @IsOptional()
+  @IsString()
+  procedurePlanned?: string;
+
+  @IsOptional()
+  @IsString()
+  followUp?: string;
+
+  @IsOptional()
+  @IsString()
+  finalNotes?: string;
+
   @IsOptional()
   @IsString()
   medications?: string;
@@ -191,8 +223,8 @@ export class CreateVisitDto {
   complaints: ComplaintDto[];
 
   @IsOptional()
-  @IsString()
-  history?: string; // Medical history
+  @IsClinicalHistory()
+  history?: string | Record<string, any>; // Medical history
 
   @IsOptional()
   @ValidateNested()
@@ -241,8 +273,8 @@ export class UpdateVisitDto {
   complaints?: ComplaintDto[];
 
   @IsOptional()
-  @IsString()
-  history?: string;
+  @IsClinicalHistory()
+  history?: string | Record<string, any>;
 
   @IsOptional()
   @ValidateNested()

@@ -10,10 +10,12 @@ describe('PrescriptionsService', () => {
   let prisma: PrismaService;
 
   const mockPrisma = {
+    $transaction: jest.fn(),
     patient: {
       findFirst: jest.fn(),
     },
     visit: {
+      update: jest.fn(),
       create: jest.fn(),
       delete: jest.fn(),
       findFirst: jest.fn(),
@@ -56,6 +58,8 @@ describe('PrescriptionsService', () => {
   };
   const mockVisit = {
     id: 'visit-123',
+    patientId: 'patient-123',
+    doctorId: 'doctor-123',
     createdAt: new Date(),
     doctor: { id: 'doctor-123', name: 'Dr. Smith' },
   };
@@ -69,6 +73,10 @@ describe('PrescriptionsService', () => {
   };
 
   beforeEach(async () => {
+    mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
+    mockPrisma.visit.findFirst.mockResolvedValue(mockVisit);
+    mockPrisma.visit.update.mockImplementation(async ({ data }) => ({ ...mockVisit, ...data }));
+    mockPrisma.prescription.findFirst.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PrescriptionsService,
@@ -463,7 +471,7 @@ describe('PrescriptionsService', () => {
       expect(mockPrisma.prescription.update).toHaveBeenCalledWith({
         where: { id: 'prescription-123' },
         data: expect.objectContaining({
-          notes: updateDto.notes,
+          pharmacistNotes: updateDto.notes,
         }),
         include: expect.any(Object),
       });

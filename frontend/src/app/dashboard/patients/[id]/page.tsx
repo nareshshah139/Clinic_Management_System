@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { calculateAge, formatAge } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
+import { usePatientHistory } from '@/components/visits/usePatientHistory';
+import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { Calendar, Users, ArrowLeft } from 'lucide-react';
@@ -30,7 +32,7 @@ export default function PatientDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
-  const [visits, setVisits] = useState<VisitEntry[]>([]);
+  const { entries: visits, loading: historyLoading, error: historyError, refresh } = usePatientHistory(id);
   const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -41,14 +43,8 @@ export default function PatientDetailsPage() {
       try {
         setLoading(true);
         setError(null);
-        const [p, h] = await Promise.all([
-          apiClient.getPatient(id),
-          apiClient.getPatientVisitHistory<VisitEntry[] | { visits?: VisitEntry[]; data?: VisitEntry[] }>(id, { limit: 10 }),
-        ]);
-
+        const p = await apiClient.getPatient(id);
         setPatient(p as any);
-        const arr = Array.isArray(h) ? h : (h?.visits || h?.data || []);
-        setVisits(arr as VisitEntry[]);
       } catch (e: any) {
         setError(e?.message || 'Failed to load patient');
       } finally {
@@ -68,8 +64,8 @@ export default function PatientDetailsPage() {
 
   const sortedVisits = useMemo(() => {
     return [...visits].sort((a, b) => {
-      const da = a.createdAt ? new Date(String(a.createdAt)).getTime() : 0;
-      const db = b.createdAt ? new Date(String(b.createdAt)).getTime() : 0;
+      const da = encounterTime(a);
+      const db = encounterTime(b);
       return db - da;
     });
   }, [visits]);
@@ -85,19 +81,16 @@ export default function PatientDetailsPage() {
 
   const filteredVisits = useMemo(() => {
     return sortedVisits.filter((v) => {
-      const created = v.createdAt ? new Date(String(v.createdAt)) : null;
+      const created = encounterDay(v);
       if (doctorFilter !== 'ALL') {
         const label = `${v.doctor?.firstName ?? ''} ${v.doctor?.lastName ?? ''}`.trim();
         if (label !== doctorFilter) return false;
       }
       if (fromDate && created) {
-        const from = new Date(fromDate);
-        if (created < from) return false;
+        if (created < fromDate) return false;
       }
       if (toDate && created) {
-        const to = new Date(toDate);
-        to.setHours(23, 59, 59, 999);
-        if (created > to) return false;
+        if (created > toDate) return false;
       }
       return true;
     });
@@ -106,7 +99,7 @@ export default function PatientDetailsPage() {
   const groupedByDate = useMemo(() => {
     const groups: Array<{ dateLabel: string; entries: VisitEntry[] }> = [];
     for (const v of filteredVisits) {
-      const d = v.createdAt ? new Date(String(v.createdAt)) : null;
+      const d = new Date(`${encounterDay(v)}T12:00:00`);
       const key = d ? d.toLocaleDateString() : 'Unknown date';
       const last = groups[groups.length - 1];
       if (last && last.dateLabel === key) {
@@ -118,8 +111,8 @@ export default function PatientDetailsPage() {
     return groups;
   }, [filteredVisits]);
 
-  const lastVisit = sortedVisits[0];
-  const lastVisitDate = lastVisit?.createdAt ? new Date(String(lastVisit.createdAt)) : null;
+  const lastVisit = sortedVisits.find(v => v.entryType !== 'appointment');
+  const lastVisitDate = lastVisit ? new Date(`${encounterDay(lastVisit)}T12:00:00`) : null;
 
   const nextAppointmentLabel = (() => {
     const upcoming = patient?.nextAppointment as any;
@@ -157,7 +150,7 @@ export default function PatientDetailsPage() {
         key={v.id || `${String(v.createdAt)}`}
         visit={v}
         visitLabel={
-          [getChiefComplaint(v), getPrimaryDiagnosis(v)].filter(Boolean).length === 0
+          v.entryType === 'appointment' ? 'Appointment' : [getChiefComplaint(v), getPrimaryDiagnosis(v)].filter(Boolean).length === 0
             ? 'Visit record'
             : undefined
         }
@@ -284,10 +277,12 @@ export default function PatientDetailsPage() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Visit History</CardTitle>
+              <CardTitle>Patient History</CardTitle><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
+              {historyLoading && <p>Loading history…</p>}
+              {historyError && <p role="alert">Unable to load history. {historyError}</p>}
             </CardHeader>
             <CardContent>
-              {visits.length === 0 ? (
+              {historyLoading || historyError ? null : visits.length === 0 ? (
                 <div className="text-sm text-gray-500">None</div>
               ) : (
                 <div className="space-y-4">
@@ -317,7 +312,7 @@ export default function PatientDetailsPage() {
                   </div>
 
                   {groupedByDate.length === 0 ? (
-                    <div className="text-sm text-gray-500">No visits match the current filters.</div>
+                    <div className="text-sm text-gray-500">No records match the current filters.</div>
                   ) : (
                     <div className="space-y-3">
                       {groupedByDate.map((group) => {
@@ -333,7 +328,7 @@ export default function PatientDetailsPage() {
                               <div className="flex items-center gap-3">
                                 <Calendar className="h-4 w-4 text-gray-500" />
                                 <span className="font-medium text-gray-900">{group.dateLabel}</span>
-                                <Badge variant="secondary">{group.entries.length} visit{group.entries.length > 1 ? 's' : ''}</Badge>
+                                <Badge variant="secondary">{group.entries.length} record{group.entries.length > 1 ? 's' : ''}</Badge>
                               </div>
                               <span className="text-sm text-gray-600">{collapsed ? 'Show' : 'Hide'}</span>
                             </button>
