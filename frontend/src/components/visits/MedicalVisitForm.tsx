@@ -48,7 +48,6 @@ import {
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
-import { HistoryVisibilityControl } from './HistoryVisibilityControl';
 import { usePatientHistory } from './usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
@@ -2435,7 +2434,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                 </Button>
               </div>
 
-              <HistoryVisibilityControl hiddenCount={timeline.hiddenCount} showEmpty={timeline.showEmpty} onChange={timeline.setShowEmpty} />
               {timeline.error ? (<p role="alert" className="text-red-700">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
                 <div className="text-center py-8 text-gray-500">
                   <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />

@@ -248,7 +248,6 @@ import dynamic from 'next/dynamic';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
-import { HistoryVisibilityControl } from '@/components/visits/HistoryVisibilityControl';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import { apiClient } from '@/lib/api';
@@ -300,7 +299,7 @@ const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
 
 // Patient History Timeline Component
 function PatientHistoryTimeline({ patientId }: { patientId: string }) {
-  const { entries: history, loading, error: historyError, refresh, hiddenCount, showEmpty, setShowEmpty } = usePatientHistory(patientId);
+  const { entries: history, loading, error: historyError, refresh } = usePatientHistory(patientId);
   const [viewingPrescription, setViewingPrescription] = useState<{
     visitId: string;
     prescriptionId: string;
@@ -334,7 +333,6 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
       <div className="text-center py-8 text-gray-500">
         <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
         <p>No documented history to show</p>
-        <HistoryVisibilityControl hiddenCount={hiddenCount} showEmpty={showEmpty} onChange={setShowEmpty} />
       </div>
     );
   }
@@ -342,7 +340,6 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <HistoryVisibilityControl hiddenCount={hiddenCount} showEmpty={showEmpty} onChange={setShowEmpty} />
         <h3 className="text-lg font-medium text-gray-900">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
         <Badge variant="secondary">{history.length} Records</Badge>
       </div>

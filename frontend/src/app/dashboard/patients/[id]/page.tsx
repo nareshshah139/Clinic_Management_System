@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { calculateAge, formatAge } from '@/lib/utils';
 import PatientProgressTracker from '@/components/patients/PatientProgressTracker';
-import { HistoryVisibilityControl } from '@/components/visits/HistoryVisibilityControl';
 import { usePatientHistory } from '@/components/visits/usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
@@ -33,7 +32,7 @@ export default function PatientDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Record<string, any> | null>(null);
-  const { entries: visits, loading: historyLoading, error: historyError, refresh, hiddenCount, showEmpty, setShowEmpty } = usePatientHistory(id);
+  const { entries: visits, loading: historyLoading, error: historyError, refresh } = usePatientHistory(id);
   const [doctorFilter, setDoctorFilter] = useState<string>('ALL');
   const [fromDate, setFromDate] = useState<string>('');
   const [toDate, setToDate] = useState<string>('');
@@ -278,7 +277,6 @@ export default function PatientDetailsPage() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader>
-              <HistoryVisibilityControl hiddenCount={hiddenCount} showEmpty={showEmpty} onChange={setShowEmpty} />
               <CardTitle>Patient History</CardTitle><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
               {historyLoading && <p>Loading history…</p>}
               {historyError && <p role="alert">Unable to load history. {historyError}</p>}

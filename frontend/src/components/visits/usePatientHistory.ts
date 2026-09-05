@@ -8,7 +8,6 @@ export function usePatientHistory(patientId: string, includeAppointments = true)
   const [entries, setEntries] = useState<Record<string, any>[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showEmpty, setShowEmpty] = useState(false);
   const generation = useRef(0);
   const refresh = useCallback(async () => {
     const current = ++generation.current;
@@ -36,6 +35,5 @@ export function usePatientHistory(patientId: string, includeAppointments = true)
       window.removeEventListener('focus', reload);
     };
   }, [refresh]);
-  const hiddenCount = entries.filter(entry => isEmptyHistoryEntry(entry)).length;
-  return { entries: showEmpty ? entries : entries.filter(entry => !isEmptyHistoryEntry(entry)), loading, error, refresh, hiddenCount, showEmpty, setShowEmpty };
+  return { entries: entries.filter(entry => !isEmptyHistoryEntry(entry)), loading, error, refresh };
 }
