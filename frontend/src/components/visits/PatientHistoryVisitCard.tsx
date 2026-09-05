@@ -11,10 +11,7 @@ import {
   Calendar,
   Camera,
   ChevronDown,
-  FileText,
   Pill,
-  Stethoscope,
-  User,
 } from 'lucide-react';
 
 type PatientHistoryVisit = Record<string, unknown> & {
@@ -213,49 +210,31 @@ export default function PatientHistoryVisitCard({
       )}
     >
       <CardContent className="p-0">
-        <div className="space-y-5 p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0 space-y-2">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
-                  <Calendar aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  {data.dateLabel}
-                </h3>
-                {visitLabel && <span className="text-sm text-muted-foreground">{visitLabel}</span>}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex min-w-0 items-center gap-1.5 break-words">
-                  <User aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
-                  <span className="sr-only">Doctor: </span>
-                  {data.doctorName || 'Not recorded'}
-                </span>
-                {data.visitTypeLabel && <span className="min-w-0 break-words">{data.visitTypeLabel}</span>}
-              </div>
+        <div className="space-y-2.5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                <Calendar aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                {data.dateLabel}
+              </h3>
+              {visitLabel && <span className="text-xs text-muted-foreground">{visitLabel}</span>}
+              <span className="break-words text-xs text-muted-foreground"><span className="sr-only">Doctor: </span>{data.doctorName || 'Not recorded'}</span>
+              {data.visitTypeLabel && <span className="break-words text-xs text-muted-foreground">{data.visitTypeLabel}</span>}
             </div>
-            {data.statusLabel && (
-              <Badge variant={data.statusVariant} className="max-w-full whitespace-normal break-words">
-                {data.statusLabel}
-              </Badge>
-            )}
+            {data.statusLabel && <Badge variant={data.statusVariant} className="max-w-full whitespace-normal break-words">{data.statusLabel}</Badge>}
           </div>
 
-          {appointmentOnly && <p className="text-sm leading-relaxed text-muted-foreground">Appointment only — no visit documentation recorded.</p>}
-          <dl className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2 sm:gap-6">
-            <div className="min-w-0">
-              <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <FileText aria-hidden="true" className="h-3.5 w-3.5" />
-                Chief Complaint
-              </dt>
-              <dd className={cn('mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
+          {appointmentOnly && <p className="text-xs leading-relaxed text-muted-foreground">Appointment only — no visit documentation recorded.</p>}
+          <dl className="space-y-1 text-sm leading-snug">
+            <div className="flex min-w-0 gap-2">
+              <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Chief Complaint</dt>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
                 {data.chiefComplaint || 'Not recorded'}
               </dd>
             </div>
-            <div className="min-w-0">
-              <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Stethoscope aria-hidden="true" className="h-3.5 w-3.5" />
-                Diagnosis
-              </dt>
-              <dd className={cn('mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+            <div className="flex min-w-0 gap-2">
+              <dt className="w-28 shrink-0 text-xs leading-5 text-muted-foreground">Diagnosis</dt>
+              <dd className={cn('min-w-0 whitespace-pre-wrap break-words', collapsed && 'line-clamp-2', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
                 {data.primaryDiagnosis || 'Not recorded'}
               </dd>
             </div>
@@ -263,7 +242,7 @@ export default function PatientHistoryVisitCard({
         </div>
 
         {(data.photoCount > 0 || data.hasPrescription || (onResume && !appointmentOnly) || hasExpandedContent) && (
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-muted/30 px-4 py-2 sm:px-5">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border bg-muted/30 px-3 py-1">
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
               {data.photoCount > 0 && (
                 <span className="inline-flex items-center gap-1.5">
@@ -280,7 +259,7 @@ export default function PatientHistoryVisitCard({
             </div>
             <div className="ml-auto flex flex-wrap items-center gap-2">
               {onResume && !appointmentOnly && (
-                <Button type="button" size="sm" variant="outline" className="min-h-10" onClick={onResume}>
+                <Button type="button" size="sm" variant="outline" className="h-8 min-h-8 px-2 text-xs" onClick={onResume}>
                   {resumeLabel}
                 </Button>
               )}
@@ -289,7 +268,7 @@ export default function PatientHistoryVisitCard({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  className="min-h-10"
+                  className="h-8 min-h-8 px-2 text-xs"
                   aria-expanded={!collapsed}
                   aria-controls={detailsId}
                   onClick={() => setCollapsed((current) => !current)}
