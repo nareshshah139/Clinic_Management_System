@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -166,7 +166,6 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
     chiefComplaint: extractTextList(visit.complaints, ['complaint', 'text', 'name']).join('; '),
     primaryDiagnosis: extractTextList(visit.diagnosis, ['diagnosis', 'condition', 'name']).join('; '),
     visitTypeLabel,
-    visitTypeVariant: visitTypeLabel?.toLowerCase().includes('procedure') ? 'destructive' as const : 'default' as const,
     statusLabel: status ? humanizeKey(status) : undefined,
     statusVariant: status === 'completed' ? 'default' as const : status === 'in-progress' ? 'secondary' as const : 'outline' as const,
     photoCount: Number(raw.photos || 0) || photoPreviews.length,
@@ -183,10 +182,10 @@ const DetailSection = ({
   title: string;
   children: ReactNode;
 }) => (
-  <div className="rounded-lg border border-gray-200 bg-gray-50/70 p-4">
-    <div className="text-sm font-medium text-gray-900">{title}</div>
-    <div className="mt-2 text-sm text-gray-700">{children}</div>
-  </div>
+  <section className="min-w-0 py-4 first:pt-0 last:pb-0">
+    <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+    <div className="mt-2 text-sm leading-relaxed text-muted-foreground">{children}</div>
+  </section>
 );
 
 export default function PatientHistoryVisitCard({
@@ -199,6 +198,7 @@ export default function PatientHistoryVisitCard({
   footerActions,
   className,
 }: PatientHistoryVisitCardProps) {
+  const detailsId = useId();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const data = useMemo(() => deriveVisitData(visit), [visit]);
 
@@ -226,118 +226,122 @@ export default function PatientHistoryVisitCard({
   return (
     <Card
       className={cn(
-        'overflow-hidden border-gray-200 shadow-sm',
-        highlight && 'border-blue-200 bg-blue-50/40',
+        'gap-0 overflow-hidden border-border py-0 shadow-none',
+        highlight && 'border-blue-300 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20',
         className
       )}
     >
-      <CardContent className="p-4 md:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {visitLabel && (
-                <span className="text-sm font-semibold text-gray-900">
-                  {visitLabel}
-                </span>
-              )}
-              <Badge variant="secondary" className="gap-1">
-                <Calendar className="h-3 w-3" />
-                {data.dateLabel}
-              </Badge>
-              {data.visitTypeLabel && (
-                <Badge variant={data.visitTypeVariant}>{data.visitTypeLabel}</Badge>
-              )}
-              {data.statusLabel && (
-                <Badge variant={data.statusVariant}>{data.statusLabel}</Badge>
-              )}
-              {data.photoCount > 0 && (
-                <Badge variant="outline" className="gap-1">
-                  <Camera className="h-3 w-3" />
-                  {data.photoCount} Photos
-                </Badge>
-              )}
-              {data.hasPrescription && (
-                <Badge variant="outline" className="gap-1">
-                  <Pill className="h-3 w-3" />
-                  {data.rxItems.length > 0 ? `${data.rxItems.length} Rx Items` : 'Prescription'}
-                </Badge>
-              )}
-            </div>
-
-            {appointmentOnly && <p className="text-sm text-gray-600">Appointment only — no visit documentation recorded.</p>}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-gray-200 bg-white/80 p-3">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                  <User className="h-3.5 w-3.5" />
-                  Doctor
-                </div>
-                <p className="mt-1 text-sm font-medium text-gray-900">
+      <CardContent className="p-0">
+        <div className="space-y-5 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h3 className="flex items-center gap-2 text-base font-semibold tracking-tight text-foreground">
+                  <Calendar aria-hidden="true" className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  {data.dateLabel}
+                </h3>
+                {visitLabel && <span className="text-sm text-muted-foreground">{visitLabel}</span>}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                <span className="inline-flex min-w-0 items-center gap-1.5 break-words">
+                  <User aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  <span className="sr-only">Doctor: </span>
                   {data.doctorName || 'Not recorded'}
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white/80 p-3">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                  <FileText className="h-3.5 w-3.5" />
-                  Chief Complaint
-                </div>
-                <p className="mt-1 text-sm font-medium text-gray-900">
-                  {data.chiefComplaint || 'Not recorded'}
-                </p>
-              </div>
-
-              <div className="rounded-lg border border-gray-200 bg-white/80 p-3">
-                <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                  <Stethoscope className="h-3.5 w-3.5" />
-                  Diagnosis
-                </div>
-                <p className="mt-1 text-sm font-medium text-gray-900">
-                  {data.primaryDiagnosis || 'Not recorded'}
-                </p>
+                </span>
+                {data.visitTypeLabel && <span className="min-w-0 break-words">{data.visitTypeLabel}</span>}
               </div>
             </div>
+            {data.statusLabel && (
+              <Badge variant={data.statusVariant} className="max-w-full whitespace-normal break-words">
+                {data.statusLabel}
+              </Badge>
+            )}
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {onResume && !appointmentOnly && (
-              <Button type="button" size="sm" variant="outline" onClick={onResume}>
-                {resumeLabel}
-              </Button>
-            )}
-            {hasExpandedContent && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                aria-expanded={!collapsed}
-                onClick={() => setCollapsed((current) => !current)}
-              >
-                {collapsed ? 'Show details' : 'Hide details'}
-                <ChevronDown
-                  className={cn(
-                    'h-4 w-4 transition-transform',
-                    !collapsed && 'rotate-180'
-                  )}
-                />
-              </Button>
-            )}
-          </div>
+          {appointmentOnly && <p className="text-sm leading-relaxed text-muted-foreground">Appointment only — no visit documentation recorded.</p>}
+          <dl className="grid grid-cols-1 gap-4 border-t border-border pt-4 sm:grid-cols-2 sm:gap-6">
+            <div className="min-w-0">
+              <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <FileText aria-hidden="true" className="h-3.5 w-3.5" />
+                Chief Complaint
+              </dt>
+              <dd className={cn('mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed', data.chiefComplaint ? 'text-foreground' : 'text-muted-foreground')}>
+                {data.chiefComplaint || 'Not recorded'}
+              </dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Stethoscope aria-hidden="true" className="h-3.5 w-3.5" />
+                Diagnosis
+              </dt>
+              <dd className={cn('mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed', data.primaryDiagnosis ? 'font-medium text-foreground' : 'text-muted-foreground')}>
+                {data.primaryDiagnosis || 'Not recorded'}
+              </dd>
+            </div>
+          </dl>
         </div>
 
-        {!collapsed && hasExpandedContent && (
-          <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
-            {sections.map(section => (
-              <DetailSection key={section.title} title={section.title}>
-                <p className="whitespace-pre-wrap break-words">{section.text}</p>
-              </DetailSection>
-            ))}
-            {data.photoPreviews.length > 0 && <DetailSection title="Photos">
-              <div className="flex gap-2 overflow-x-auto">{data.photoPreviews.map((url, index) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={index} src={url} alt="Visit photo preview" className="h-16 w-24 rounded border object-cover" />
-              ))}</div>
-            </DetailSection>}
-            {footerActions}
+        {(data.photoCount > 0 || data.hasPrescription || (onResume && !appointmentOnly) || hasExpandedContent) && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-border bg-muted/30 px-4 py-2 sm:px-5">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+              {data.photoCount > 0 && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Camera aria-hidden="true" className="h-3.5 w-3.5" />
+                  {data.photoCount} Photos
+                </span>
+              )}
+              {data.hasPrescription && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Pill aria-hidden="true" className="h-3.5 w-3.5" />
+                  {data.rxItems.length > 0 ? `${data.rxItems.length} Rx Items` : 'Prescription'}
+                </span>
+              )}
+            </div>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {onResume && !appointmentOnly && (
+                <Button type="button" size="sm" variant="outline" className="min-h-10" onClick={onResume}>
+                  {resumeLabel}
+                </Button>
+              )}
+              {hasExpandedContent && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="min-h-10"
+                  aria-expanded={!collapsed}
+                  aria-controls={detailsId}
+                  onClick={() => setCollapsed((current) => !current)}
+                >
+                  {collapsed ? 'Show details' : 'Hide details'}
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', !collapsed && 'rotate-180')}
+                  />
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {hasExpandedContent && (
+          <div id={detailsId} hidden={collapsed} className="border-t border-border p-4 sm:p-5">
+            {!collapsed && <>
+              <div className="divide-y divide-border">
+                {sections.map(section => (
+                  <DetailSection key={section.title} title={section.title}>
+                    <p className="max-w-prose whitespace-pre-wrap break-words">{section.text}</p>
+                  </DetailSection>
+                ))}
+                {data.photoPreviews.length > 0 && <DetailSection title="Photos">
+                  <div className="flex flex-wrap gap-3">{data.photoPreviews.map((url, index) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={index} src={url} alt={`Visit photo preview ${index + 1}`} loading="lazy" width={120} height={80} className="h-20 w-30 rounded-md border border-border object-cover" />
+                  ))}</div>
+                </DetailSection>}
+              </div>
+              {footerActions && <div className="mt-4 border-t border-border pt-4">{footerActions}</div>}
+            </>}
           </div>
         )}
       </CardContent>
