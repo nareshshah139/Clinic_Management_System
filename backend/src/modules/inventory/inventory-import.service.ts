@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -54,6 +55,7 @@ interface InventoryStarterImportOutcome {
 
 @Injectable()
 export class InventoryImportService {
+  private readonly logger = new Logger(InventoryImportService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   async importStarterExcel(
@@ -85,6 +87,7 @@ export class InventoryImportService {
     }
 
     const result = {
+      importId: randomUUID(),
       totalRows: nonEmptyRows.length,
       created: 0,
       updated: 0,
@@ -93,12 +96,44 @@ export class InventoryImportService {
       stockAdjusted: 0,
       errors: [] as Array<{ row: number; message: string }>,
     };
+    const startedAt = Date.now();
+    this.logger.log({
+      event: 'inventory_import_started',
+      importId: result.importId,
+      totalRows: result.totalRows,
+    });
+    const duplicateRows = this.findDuplicateImportRows(nonEmptyRows);
 
     for (const [index, sourceRow] of nonEmptyRows.entries()) {
-      const rowNumber = index + 2;
+      // SheetJS preserves the original zero-based worksheet row, including gaps.
+      const rowNumber =
+        typeof sourceRow.__rowNum__ === 'number'
+          ? sourceRow.__rowNum__ + 1
+          : index + 2;
       try {
+        const duplicates = duplicateRows.get(rowNumber);
+        if (duplicates) {
+          result.skipped += 1;
+          result.errors.push({
+            row: rowNumber,
+            message: `Duplicate medicine/code and batch in rows ${duplicates.join(', ')}. Keep one correct opening-stock row and import it again.`,
+          });
+          this.logger.warn({
+            event: 'inventory_import_row_failed',
+            importId: result.importId,
+            row: rowNumber,
+            code: 'DUPLICATE_ROW',
+          });
+          continue;
+        }
         const parsed = this.mapImportRow(sourceRow);
         if (!parsed) {
+          this.logger.warn({
+            event: 'inventory_import_row_failed',
+            importId: result.importId,
+            row: rowNumber,
+            code: 'MISSING_NAME',
+          });
           result.skipped += 1;
           result.errors.push({
             row: rowNumber,
@@ -114,14 +149,39 @@ export class InventoryImportService {
         if (outcome.drugCreated) result.drugsCreated += 1;
         if (outcome.stockAdjusted) result.stockAdjusted += 1;
       } catch (error) {
+        // Never log workbook values or raw Prisma errors (which include row data).
+        const code =
+          typeof error?.code === 'string' && /^P\d{4}$/.test(error.code)
+            ? error.code
+            : 'ROW_FAILED';
+        this.logger.warn({
+          event: 'inventory_import_row_failed',
+          importId: result.importId,
+          row: rowNumber,
+          code,
+        });
         result.skipped += 1;
         result.errors.push({
           row: rowNumber,
-          message: error.message || 'Import failed for this row',
+          message:
+            code === 'P2028' || code === 'P2024'
+              ? `Database could not finish saving this row (${code}). Contact support with the import reference.`
+              : code === 'P2002'
+                ? 'A medicine with this SKU or barcode already exists. Check for duplicate codes.'
+                : `Could not save this row (${code}). Contact support with the import reference.`,
         });
       }
     }
 
+    this.logger.log({
+      event: 'inventory_import_completed',
+      importId: result.importId,
+      totalRows: result.totalRows,
+      created: result.created,
+      updated: result.updated,
+      skipped: result.skipped,
+      durationMs: Date.now() - startedAt,
+    });
     return result;
   }
 
@@ -133,15 +193,102 @@ export class InventoryImportService {
         throw new Error('Workbook does not contain any sheets');
       }
 
-      return XLSX.utils.sheet_to_json<Record<string, unknown>>(
-        workbook.Sheets[firstSheetName],
-        { defval: '', raw: false },
+      const sheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: '',
+        raw: false,
+      });
+      // This stock export leaves the first (medicine name) header empty.
+      // Recognize its specific layout rather than guessing for arbitrary files.
+      const headers =
+        XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+          header: 1,
+          range: sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s.r : 0,
+          defval: '',
+          raw: false,
+        })[0] || [];
+      const normalizedHeaders = headers.map((header) =>
+        this.normalizeImportKey(String(header)),
       );
+      const isLooseStockExport =
+        normalizedHeaders[0] === '' &&
+        ['manufacturername', 'currentstockloose', 'averagemrp'].every(
+          (header) => normalizedHeaders.includes(header),
+        ) &&
+        !['drugname', 'medicinename', 'itemname', 'productname', 'name'].some(
+          (header) => normalizedHeaders.includes(header),
+        );
+      if (isLooseStockExport) {
+        for (const row of rows) row['Drug name'] = row[''] ?? row.__EMPTY;
+        const combined: Record<string, unknown>[] = [];
+        let previous: Record<string, unknown> | undefined;
+        for (const row of rows) {
+          const populated = Object.entries(row).filter(([, value]) =>
+            String(value ?? '').trim(),
+          );
+          const compositionOnly =
+            populated.length > 0 &&
+            populated.every(
+              ([key]) => this.normalizeImportKey(key) === 'composition',
+            );
+          if (compositionOnly && previous) {
+            for (const [key, value] of populated) {
+              previous[key] = [previous[key], value].filter(Boolean).join('\n');
+            }
+          } else {
+            combined.push(row);
+            if (String(row['Drug name'] ?? '').trim()) previous = row;
+            else if (populated.length > 0) previous = undefined;
+          }
+        }
+        return combined;
+      }
+      return rows;
     } catch (error) {
       throw new BadRequestException(
         `Could not read Excel file: ${error.message}`,
       );
     }
+  }
+
+  private findDuplicateImportRows(rows: Record<string, unknown>[]) {
+    const identities = new Map<string, number[]>();
+    rows.forEach((source, index) => {
+      const row = this.normalizeImportRow(source);
+      const name = this.readImportString(row, [
+        'drugname',
+        'medicinename',
+        'itemname',
+        'productname',
+        'name',
+      ]);
+      if (!name) return;
+      const batch =
+        this.readImportString(row, [
+          'batchnumber',
+          'batch',
+          'lotnumber',
+        ])?.toLowerCase() || '';
+      const rowNumber =
+        typeof source.__rowNum__ === 'number'
+          ? source.__rowNum__ + 1
+          : index + 2;
+      const keys = [
+        ['name', name.toLowerCase()],
+        ['sku', this.readImportString(row, ['sku', 'itemcode', 'productcode'])],
+        ['barcode', this.readImportString(row, ['barcode', 'ean', 'upc'])],
+      ];
+      for (const [kind, value] of keys) {
+        if (!value) continue;
+        const key = JSON.stringify([kind, value, batch]);
+        identities.set(key, [...(identities.get(key) || []), rowNumber]);
+      }
+    });
+    const duplicates = new Map<number, number[]>();
+    for (const group of identities.values()) {
+      if (group.length > 1) for (const row of group) duplicates.set(row, group);
+    }
+    return duplicates;
   }
 
   private mapImportRow(
@@ -183,13 +330,14 @@ export class InventoryImportService {
     const category =
       this.readImportString(row, [
         'category',
+        'itemcategory',
         'therapeuticcategory',
         'drugcategory',
       ]) ||
       this.inferCategory(name) ||
       'Uncategorised';
     const dosageForm =
-      this.readImportString(row, ['dosageform', 'form']) ||
+      this.readImportString(row, ['dosageform', 'dossageform', 'form']) ||
       this.inferDosageForm(`${name} ${packSizeLabel}`) ||
       'Other';
     const strength =
@@ -214,6 +362,7 @@ export class InventoryImportService {
     ]);
     const mrpValue = this.readImportNumber(row, [
       'mrp',
+      'averagemrp',
       'maximumretailprice',
     ]);
     const costPriceValue = this.readImportNumber(row, [
@@ -232,6 +381,7 @@ export class InventoryImportService {
     );
     const currentStockValue = this.readImportNumber(row, [
       'currentstock',
+      'currentstockloose',
       'stock',
       'quantity',
       'qty',
@@ -280,13 +430,14 @@ export class InventoryImportService {
         'batch',
         'lotnumber',
       ]),
-      expiryDate: this.readImportDate(row, [
-        'expirydate',
-        'expiry',
-        'expdate',
-      ]),
+      expiryDate: this.readImportDate(row, ['expirydate', 'expiry', 'expdate']),
       hsnCode: this.readImportString(row, ['hsncode', 'hsn']),
-      gstRate: this.readImportNumber(row, ['gstrate', 'gst', 'gstpercent']),
+      gstRate: this.readImportNumber(row, [
+        'gstrate',
+        'gst',
+        'gstpercent',
+        'itemgst',
+      ]),
       storageLocation: this.readImportString(row, [
         'storagelocation',
         'location',
@@ -582,6 +733,19 @@ export class InventoryImportService {
       if (value instanceof Date && !Number.isNaN(value.getTime())) {
         return value.toISOString();
       }
+      // Month-only expiry strings must not become month/day in the year 2001.
+      const monthYear = String(value)
+        .trim()
+        .match(/^(0?[1-9]|1[0-2])[\/-](\d{2}|\d{4})$/);
+      if (monthYear) {
+        const year =
+          monthYear[2].length === 2
+            ? 2000 + Number(monthYear[2])
+            : Number(monthYear[2]);
+        return new Date(
+          Date.UTC(year, Number(monthYear[1]), 1) - 1,
+        ).toISOString();
+      }
       const numeric = typeof value === 'number' ? value : Number(value);
       if (Number.isFinite(numeric) && numeric > 25000) {
         const parsed = XLSX.SSF.parse_date_code(numeric);
@@ -604,7 +768,9 @@ export class InventoryImportService {
     if (typeof value === 'number') {
       return Number.isFinite(value) ? value : undefined;
     }
-    const cleaned = String(value).replace(/,/g, '').replace(/[^\d.-]/g, '');
+    const cleaned = String(value)
+      .replace(/,/g, '')
+      .replace(/[^\d.-]/g, '');
     if (!cleaned || cleaned === '-' || cleaned === '.') return undefined;
     const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : undefined;
@@ -710,9 +876,7 @@ export class InventoryImportService {
   }
 
   private parseStrength(value: string): string | undefined {
-    const match = value.match(
-      /(\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|ml|iu|%))/i,
-    );
+    const match = value.match(/(\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|ml|iu|%))/i);
     return match ? match[1].replace(/\s+/g, ' ').trim() : undefined;
   }
 
@@ -784,6 +948,9 @@ export class InventoryImportService {
         where: {
           branchId,
           OR: codeConditions,
+          ...(row.batchNumber
+            ? { batchNumber: { equals: row.batchNumber, mode: 'insensitive' } }
+            : {}),
         },
       });
       if (byCode) return byCode;
