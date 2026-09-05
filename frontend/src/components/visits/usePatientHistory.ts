@@ -36,6 +36,6 @@ export function usePatientHistory(patientId: string, includeAppointments = true)
       window.removeEventListener('focus', reload);
     };
   }, [refresh]);
-  const hiddenCount = entries.filter(isEmptyHistoryEntry).length;
+  const hiddenCount = entries.filter(entry => isEmptyHistoryEntry(entry)).length;
   return { entries: showEmpty ? entries : entries.filter(entry => !isEmptyHistoryEntry(entry)), loading, error, refresh, hiddenCount, showEmpty, setShowEmpty };
 }
