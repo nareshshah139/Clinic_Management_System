@@ -379,14 +379,14 @@ it('does not export when medication saving fails after the visit save succeeds',
   localStorage.removeItem('rxDraft:rx-failure:visit');
 });
 
-it('saves and exports a draft without inventing a numeric dosage or altering custom timing', async () => {
+it.each(['', null, undefined, 0, '0'])('restores an unentered legacy dosage (%s) as optional and exports without changing the instructions', async (dosage) => {
   mockPdfOutput.mockClear();
   const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   localStorage.setItem('rxDraft:legacy-draft:visit', JSON.stringify({
     items: [{
       drugName: 'Legacy medicine',
-      dosage: '',
+      dosage,
       frequency: 'TWICE_DAILY',
       dosePattern: '1-0-1',
       timing: 'After evening snack',
@@ -397,6 +397,7 @@ it('saves and exports a draft without inventing a numeric dosage or altering cus
   }));
 
   render(<PrescriptionBuilder patientId="legacy-draft" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} />);
+  expect(await screen.findByRole('spinbutton', { name: 'Numeric dosage for Legacy medicine' })).toHaveValue(null);
   await openPreview();
   await settlePreviewPagination();
   fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
@@ -409,12 +410,46 @@ it('saves and exports a draft without inventing a numeric dosage or altering cus
     }),
   ));
   await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+  await act(async () => { jest.advanceTimersByTime(650); });
+  const draft = JSON.parse(localStorage.getItem('rxDraft:legacy-draft:visit') || '{}');
+  expect(draft.dosageSchemaVersion).toBe(1);
+  expect(draft.items[0].dosage).toBe('');
   click.mockRestore();
   createRx.mockRestore();
   localStorage.removeItem('rxDraft:legacy-draft:visit');
 });
 
-it('shows server validation messages, lets the doctor clear a legacy zero dosage, and saves on retry', async () => {
+it('reopens a saved prescription with optional dosage and preserves a recorded positive dose on update', async () => {
+  const get = jest.spyOn(apiClient, 'get').mockImplementation(async (endpoint) => endpoint === '/visits/saved-dose' ? {
+    prescription: { id: 'existing-rx', items: [
+      { drugName: 'No numeric dose', dosage: 0, dosageUnit: 'MG', frequency: 'TWICE_DAILY', dosePattern: '1-0-1', duration: 7, durationUnit: 'DAYS', instructions: 'Original instruction' },
+      { drugName: 'Recorded numeric dose', dosage: 2.5, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' },
+    ] },
+  } : {});
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'existing-rx' });
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  try {
+    render(<PrescriptionBuilder patientId="stored-patient" visitId="saved-dose" doctorId="doctor" onBeforeExport={async () => 'saved-dose'} />);
+    expect(await screen.findByRole('spinbutton', { name: 'Numeric dosage for No numeric dose' })).toHaveValue(null);
+    expect(screen.getByRole('spinbutton', { name: 'Numeric dosage for Recorded numeric dose' })).toHaveValue(2.5);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    expect(patch).toHaveBeenCalledWith('/prescriptions/existing-rx', expect.objectContaining({ items: [
+      expect.objectContaining({ drugName: 'No numeric dose', dosage: undefined, instructions: 'Original instruction', dosePattern: '1-0-1' }),
+      expect.objectContaining({ drugName: 'Recorded numeric dose', dosage: 2.5, dosageUnit: 'MG' }),
+    ] }));
+  } finally {
+    get.mockRestore();
+    patch.mockRestore();
+    click.mockRestore();
+    localStorage.removeItem('rxDraft:stored-patient:saved-dose');
+  }
+});
+
+it('retains an explicitly entered zero in a current draft, shows validation, and saves after correction', async () => {
   const messages = ['items.0.dosage must not be less than 0.01'];
   const failure = Object.assign(new Error(messages.join(', ')), { status: 400, body: { message: messages } });
   const createRx = jest.spyOn(apiClient, 'createPrescription')
@@ -422,7 +457,7 @@ it('shows server validation messages, lets the doctor clear a legacy zero dosage
     .mockResolvedValueOnce({ id: 'retried-rx' } as any);
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   mockPdfOutput.mockClear();
-  localStorage.setItem('rxDraft:validation-patient:visit', JSON.stringify({ items: [{
+  localStorage.setItem('rxDraft:validation-patient:visit', JSON.stringify({ dosageSchemaVersion: 1, items: [{
     drugName: 'Synthetic medicine', dosage: 0, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS',
   }] }));
   try {

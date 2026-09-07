@@ -34,6 +34,14 @@ type Frequency = string;
 
 type DurationUnit = string;
 
+// Older saves converted an unentered dosage to zero via Number(''). Only use
+// this at stored-data boundaries; a new explicit zero must still be validated.
+function restoreLegacyDosage<T>(dosage: T): T | '' {
+  return dosage == null || dosage === 0 ||
+    (typeof dosage === 'string' && (dosage.trim() === '' || Number(dosage) === 0))
+    ? '' : dosage;
+}
+
 // Use centralized options from lib/frequency
 
 interface PrescriptionItemForm {
@@ -271,7 +279,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       const newRow: PrescriptionItemForm = {
         drugName: created?.name || '',
         genericName: '',
-        dosage: 1,
+        dosage: '',
         dosageUnit: 'TABLET',
         frequency: 'ONCE_DAILY',
         duration: 5,
@@ -1647,7 +1655,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       duration: numberOrBlank(raw?.duration),
       durationUnit,
       instructions: raw?.instructions ? String(raw.instructions) : '',
-      dosage: numberOrBlank(raw?.dosage),
+      dosage: numberOrBlank(restoreLegacyDosage(raw?.dosage)),
       dosageUnit,
       quantity: numberOrBlank(raw?.quantity),
       route: raw?.route ? String(raw.route) : '',
@@ -2125,7 +2133,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     const base: Partial<PrescriptionItemForm> = {
       drugName: drug.name,
       genericName: drug.genericName,
-      dosage: 1,
+      dosage: '',
       dosageUnit: inferDosageUnitFromDosageForm(drug.dosageForm),
       frequency: 'ONCE_DAILY',
       duration: 5,
@@ -2601,7 +2609,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         drugName: x.drugName,
         genericName: x.genericName,
         brandName: x.brandName,
-        dosage: x.dosage,
+        dosage: restoreLegacyDosage(x.dosage),
         dosageUnit: x.dosageUnit || 'TABLET',
         frequency: x.frequency || 'ONCE_DAILY',
         duration: x.duration,
@@ -3005,7 +3013,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               drugName: it.drugName,
               genericName: it.genericName,
               brandName: it.brandName,
-              dosage: Number(it.dosage),
+              dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
               dosageUnit: it.dosageUnit,
               frequency: it.frequency,
               duration: Number(it.duration),
@@ -3926,6 +3934,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const saveDraftNow = useCallback(() => {
     try {
       const data = {
+        dosageSchemaVersion: 1,
         items,
         followUpInstructions,
         chiefComplaints,
@@ -3989,7 +3998,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       if (raw) {
         const data = JSON.parse(raw);
         restoredClinicalDraftRef.current = true;
-        if (Array.isArray(data?.items)) setItems(data.items);
+        if (Array.isArray(data?.items)) {
+          setItems(data.dosageSchemaVersion === 1 ? data.items : data.items.map((item: PrescriptionItemForm) => ({
+            ...item,
+            dosage: restoreLegacyDosage(item.dosage),
+          })));
+        }
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
         if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
@@ -6451,7 +6465,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     description: '',
                     items: newTplItems.filter(it => (it.drugName || '').trim()).map(it => ({
                       drugName: it.drugName,
-                      dosage: it.dosage === '' ? undefined : Number(it.dosage),
+                      dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
                       dosageUnit: it.dosageUnit || 'TABLET',
                       frequency: it.frequency || 'ONCE_DAILY',
                       duration: it.duration === '' ? undefined : Number(it.duration),
