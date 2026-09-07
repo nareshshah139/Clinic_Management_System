@@ -209,8 +209,13 @@ export function isSlotInPast(slotTime: string, targetDate: string): boolean {
 
 // Error handling utilities
 export function getErrorMessage(error: any): string {
-  if (error?.body?.message) return error.body.message;
-  if (error?.message) return error.message;
+  const messageText = (value: unknown): string => {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) return value.map(messageText).filter(Boolean).join('; ');
+    return '';
+  };
+  const message = messageText(error?.body?.message) || messageText(error?.message);
+  if (message) return message;
   if (typeof error === 'string') return error;
   return 'An unexpected error occurred';
 }

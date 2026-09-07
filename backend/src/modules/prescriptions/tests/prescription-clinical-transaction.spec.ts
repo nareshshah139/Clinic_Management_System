@@ -18,6 +18,24 @@ function database(fail = false) {
 const payload = { patientId: 'p', doctorId: 'd', visitId: 'v', items: [{ drugName: 'Synthetic', dosage: 1, dosageUnit: 'TABLET', frequency: 'DAILY', duration: 1, durationUnit: 'DAYS' }], clinicalData: { history: { triggers: 'New trigger' }, examination: { dermatology: { skinType: 'III' } }, diagnosis: [{ diagnosis: 'Recorded diagnosis' }], treatmentPlan: { investigations: ['Investigation'], followUpDate: '2026-10-01' } } };
 
 describe('Prescription clinical transaction', () => {
+  it('saves a manually entered medicine with a dose pattern and no numeric dosage', async () => {
+    const { dosage, ...item } = payload.items[0];
+    const input = await new ValidationPipe({ transform: true, whitelist: true }).transform({
+      ...payload, items: [{ ...item, dosePattern: '1-0-1', instructions: 'Recorded instructions' }],
+    }, { type: 'body', metatype: CreatePrescriptionDto });
+    const { db, state } = database();
+    await new PrescriptionsService(db, {} as any).createPrescription(input, 'branch');
+    const saved = JSON.parse(state().prescriptions[0].items)[0];
+    expect(saved).toMatchObject({ dosePattern: '1-0-1', instructions: 'Recorded instructions' });
+    expect(saved).not.toHaveProperty('dosage');
+    const update = await new ValidationPipe({ transform: true, whitelist: true }).transform({ items: [saved] }, { type: 'body', metatype: UpdatePrescriptionDto });
+    expect(update.items[0].dosage).toBeUndefined();
+  });
+  it.each([0, -1, 'invalid'])('still rejects an explicit invalid dosage: %s', async dosage => {
+    await expect(new ValidationPipe({ transform: true, whitelist: true }).transform({
+      ...payload, items: [{ ...payload.items[0], dosage }],
+    }, { type: 'body', metatype: CreatePrescriptionDto })).rejects.toThrow();
+  });
   it('validates and commits prescription plus clinical details without dropping prior fields', async () => {
     const input = await new ValidationPipe({ transform: true, whitelist: true }).transform(payload, { type: 'body', metatype: CreatePrescriptionDto });
     const { db, state } = database();

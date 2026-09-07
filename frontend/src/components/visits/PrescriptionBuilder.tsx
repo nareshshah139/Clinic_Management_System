@@ -1616,6 +1616,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   };
 
   const numberOrBlank = (val: any): number | '' => {
+    if (val === '' || val == null) return '';
     const n = Number(val);
     return Number.isFinite(n) ? n : '';
   };
@@ -2355,7 +2356,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           drugName: it.drugName,
           genericName: it.genericName || undefined,
           brandName: it.brandName || undefined,
-          dosage: Number(it.dosage),
+          dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
           dosageUnit: it.dosageUnit,
           frequency: it.frequency,
           dosePattern: it.dosePattern || undefined,
@@ -2575,12 +2576,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       }
       const prescriptionId = validItems.length > 0 ? await create(true, savedVisitId || undefined) : undefined;
-      if ((validItems.length > 0 || standalone) && !prescriptionId) {
+      // create() already displays the specific save error; keep it visible.
+      if (validItems.length > 0 && !prescriptionId) return null;
+      if (standalone && !prescriptionId) {
         throw new Error('The prescription could not be saved. Please retry.');
       }
       return { prescriptionId, documentId: prescriptionId || savedVisitId };
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Save required before export', description: error?.message || 'Could not save the latest details. Please retry.' });
+      toast({ variant: 'destructive', title: 'Save required before export', description: getErrorMessage(error) });
       return null;
     } finally {
       exportSaveInFlight.current = false;
@@ -3986,14 +3989,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       if (raw) {
         const data = JSON.parse(raw);
         restoredClinicalDraftRef.current = true;
-        if (Array.isArray(data?.items)) {
-          const restoredItems = data.items
-            .map((item: any) => mapPrevRxItem(item))
-            .filter(Boolean) as PrescriptionItemForm[];
-          const nextItems = [...restoredItems];
-          if (!hasTrailingBlank(nextItems)) nextItems.push(createBlankItem());
-          setItems(nextItems);
-        }
+        if (Array.isArray(data?.items)) setItems(data.items);
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
         if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
@@ -4953,6 +4949,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
                               </span>
                             </div>
+                            {it.drugName.trim() && (
+                              <div className="mt-2 flex items-center gap-2">
+                                <Input
+                                  type="number"
+                                  min={0.01}
+                                  step="any"
+                                  aria-label={`Numeric dosage for ${it.drugName}`}
+                                  placeholder="Dosage (optional)"
+                                  value={it.dosage ?? ''}
+                                  onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })}
+                                />
+                                <Select value={it.dosageUnit} onValueChange={(value: DosageUnit) => updateItem(idx, { dosageUnit: value })}>
+                                  <SelectTrigger aria-label={`Dosage unit for ${it.drugName}`}><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {(['MG', 'ML', 'MCG', 'IU', 'TABLET', 'CAPSULE', 'DROP', 'SPRAY', 'PATCH', 'INJECTION'] as const).map(unit => (
+                                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="grid grid-cols-2 gap-1">

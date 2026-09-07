@@ -92,9 +92,12 @@ export class PrescriptionItemDto {
   @IsString()
   brandName?: string;
 
+  // The prescription editor supports a dose pattern/instructions without a
+  // separate numeric dosage. Validate a numeric dose when one is supplied.
+  @IsOptional()
   @IsNumber()
   @Min(0.01)
-  dosage: number;
+  dosage?: number;
 
   @IsEnum(DosageUnit)
   dosageUnit: DosageUnit;

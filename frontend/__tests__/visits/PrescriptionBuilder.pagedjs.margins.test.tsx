@@ -2,6 +2,13 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { jest } from '@jest/globals';
 
+import * as toastHook from '@/hooks/use-toast';
+
+function ToastMessage() {
+  const { toasts } = toastHook.useToast();
+  return <output data-testid="toast-message">{String(toasts[0]?.description || '')}</output>;
+}
+
 // Mock API client methods used by PrescriptionBuilder
 jest.mock('@/lib/api', () => ({
   apiClient: {
@@ -372,17 +379,20 @@ it('does not export when medication saving fails after the visit save succeeds',
   localStorage.removeItem('rxDraft:rx-failure:visit');
 });
 
-it('normalizes legacy draft medication values before export', async () => {
+it('saves and exports a draft without inventing a numeric dosage or altering custom timing', async () => {
   mockPdfOutput.mockClear();
   const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
   const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   localStorage.setItem('rxDraft:legacy-draft:visit', JSON.stringify({
     items: [{
       drugName: 'Legacy medicine',
-      frequency: { label: 'ONCE_DAILY' },
+      dosage: '',
+      frequency: 'TWICE_DAILY',
+      dosePattern: '1-0-1',
+      timing: 'After evening snack',
       duration: 7,
-      durationUnit: { label: 'DAYS' },
-      dosageUnit: { label: 'MG' },
+      durationUnit: 'DAYS',
+      dosageUnit: 'MG',
     }],
   }));
 
@@ -394,11 +404,47 @@ it('normalizes legacy draft medication values before export', async () => {
   await waitFor(() => expect(apiClient.createPrescription).toHaveBeenCalledWith(
     expect.objectContaining({
       items: expect.arrayContaining([
-        expect.objectContaining({ frequency: 'ONCE_DAILY', durationUnit: 'DAYS', dosageUnit: 'TABLET' }),
+        expect.objectContaining({ frequency: 'TWICE_DAILY', dosePattern: '1-0-1', timing: 'After evening snack', dosage: undefined }),
       ]),
     }),
   ));
+  await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
   click.mockRestore();
   createRx.mockRestore();
   localStorage.removeItem('rxDraft:legacy-draft:visit');
+});
+
+it('shows server validation messages, lets the doctor clear a legacy zero dosage, and saves on retry', async () => {
+  const messages = ['items.0.dosage must not be less than 0.01'];
+  const failure = Object.assign(new Error(messages.join(', ')), { status: 400, body: { message: messages } });
+  const createRx = jest.spyOn(apiClient, 'createPrescription')
+    .mockRejectedValueOnce(failure)
+    .mockResolvedValueOnce({ id: 'retried-rx' } as any);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  localStorage.setItem('rxDraft:validation-patient:visit', JSON.stringify({ items: [{
+    drugName: 'Synthetic medicine', dosage: 0, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS',
+  }] }));
+  try {
+    render(<><ToastMessage /><PrescriptionBuilder patientId="validation-patient" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} /></>);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(screen.getByTestId('toast-message')).toHaveTextContent(messages[0]));
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+    expect(localStorage.getItem('rxDraft:validation-patient:visit')).toContain('Synthetic medicine');
+    fireEvent.click(screen.getByText('Close', { selector: 'button' }));
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Numeric dosage for Synthetic medicine' }), { target: { value: '' } });
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+    expect(click).toHaveBeenCalledTimes(1);
+    expect(createRx).toHaveBeenCalledTimes(2);
+    expect(createRx).toHaveBeenLastCalledWith(expect.objectContaining({ items: [expect.objectContaining({ dosage: undefined, duration: 7 })] }));
+  } finally {
+    createRx.mockRestore();
+    click.mockRestore();
+    localStorage.removeItem('rxDraft:validation-patient:visit');
+  }
 });
