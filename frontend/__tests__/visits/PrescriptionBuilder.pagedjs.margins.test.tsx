@@ -371,3 +371,34 @@ it('does not export when medication saving fails after the visit save succeeds',
   createRx.mockRestore();
   localStorage.removeItem('rxDraft:rx-failure:visit');
 });
+
+it('normalizes legacy draft medication values before export', async () => {
+  mockPdfOutput.mockClear();
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  localStorage.setItem('rxDraft:legacy-draft:visit', JSON.stringify({
+    items: [{
+      drugName: 'Legacy medicine',
+      frequency: { label: 'ONCE_DAILY' },
+      duration: 7,
+      durationUnit: { label: 'DAYS' },
+      dosageUnit: { label: 'MG' },
+    }],
+  }));
+
+  render(<PrescriptionBuilder patientId="legacy-draft" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} />);
+  await openPreview();
+  await settlePreviewPagination();
+  fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+
+  await waitFor(() => expect(apiClient.createPrescription).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: expect.arrayContaining([
+        expect.objectContaining({ frequency: 'ONCE_DAILY', durationUnit: 'DAYS', dosageUnit: 'TABLET' }),
+      ]),
+    }),
+  ));
+  click.mockRestore();
+  createRx.mockRestore();
+  localStorage.removeItem('rxDraft:legacy-draft:visit');
+});

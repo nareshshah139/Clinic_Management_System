@@ -3986,7 +3986,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       if (raw) {
         const data = JSON.parse(raw);
         restoredClinicalDraftRef.current = true;
-        if (Array.isArray(data?.items)) setItems(data.items);
+        if (Array.isArray(data?.items)) {
+          const restoredItems = data.items
+            .map((item: any) => mapPrevRxItem(item))
+            .filter(Boolean) as PrescriptionItemForm[];
+          const nextItems = [...restoredItems];
+          if (!hasTrailingBlank(nextItems)) nextItems.push(createBlankItem());
+          setItems(nextItems);
+        }
         if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
         if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
