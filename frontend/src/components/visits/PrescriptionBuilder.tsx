@@ -4970,7 +4970,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                   min={0.01}
                                   step="any"
                                   aria-label={`Numeric dosage for ${it.drugName}`}
-                                  placeholder="Dosage (optional)"
                                   value={it.dosage ?? ''}
                                   onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })}
                                 />
@@ -5732,7 +5731,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                           {validItems.map((it: any, idx: number) => (
                             <div key={`rx-${idx}`} className="rx-row" style={{ padding: '3px 0' }}>
                               <span style={{ fontWeight: 500 }}>{idx + 1}. {it.drugName}</span>
-                              {it.dosage && ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}`} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
+                              {it.dosage ? ` ${it.dosage}${it.dosageUnit ? ' ' + it.dosageUnit.toLowerCase() : ''}` : ''} — {it.frequency.replaceAll('_',' ').toLowerCase()} × {it.duration}{' '}{it.durationUnit.toLowerCase()}
                               {it.instructions && <span> — {tt(`items.${idx}.instructions`, it.instructions)}</span>}
                             </div>
                           ))}
