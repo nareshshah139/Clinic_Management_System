@@ -48,6 +48,9 @@ describe('PrescriptionsService', () => {
     drug: {
       findMany: jest.fn(),
     },
+    prescriptionPrintEvent: {
+      create: jest.fn(),
+    },
   }; 
 
   const mockBranchId = 'branch-123';
@@ -813,6 +816,34 @@ describe('PrescriptionsService', () => {
       await expect(service.createPrescriptionTemplate(templateDto as any, mockBranchId, 'doctor-123')).rejects.toThrow(
         new ConflictException('A template with this name already exists'),
       );
+    });
+  });
+
+  describe('generatePrescriptionPdf', () => {
+    it('renders a non-empty PDF and records the download event', async () => {
+      mockPrisma.prescription.findFirst.mockResolvedValue({
+        id: 'prescription-123',
+        prescriptionNumber: 'RX-001',
+        items: JSON.stringify([
+          { drugName: 'Paracetamol', dosage: 500, dosageUnit: 'MG', frequency: 'TWICE_DAILY', duration: 7, durationUnit: 'DAYS' },
+        ]),
+        visit: {
+          id: 'visit-123',
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          patient: { id: 'patient-123', name: 'John Doe' },
+          doctor: { firstName: 'Dr.', lastName: 'Smith' },
+        },
+      });
+      mockPrisma.prescriptionPrintEvent.create.mockResolvedValue({ id: 'print-event-1' });
+
+      const result = await service.generatePrescriptionPdf('prescription-123', mockBranchId, {});
+
+      expect(result.fileName).toBe('prescription-prescription-123.pdf');
+      expect(result.fileSize).toBeGreaterThan(0);
+      expect(Buffer.from(result.fileUrl.split(',')[1], 'base64').subarray(0, 4).toString()).toBe('%PDF');
+      expect(mockPrisma.prescriptionPrintEvent.create).toHaveBeenCalledWith({
+        data: { prescriptionId: 'prescription-123', eventType: 'PDF_DOWNLOAD', channel: 'SERVER', count: 1 },
+      });
     });
   });
 });

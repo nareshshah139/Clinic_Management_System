@@ -26,6 +26,12 @@ export class ApiClient {
   }
 
   // Lightweight deterministic hash for idempotency keys
+  private newOperationKey(): string {
+    // getRandomValues also works on local HTTP deployments where randomUUID
+    // (a secure-context API) may not be exposed.
+    return Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
   private djb2Hash(input: string): string {
     let hash = 5381;
     for (let i = 0; i < input.length; i++) {
@@ -66,7 +72,7 @@ export class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    extra?: { timeoutMs?: number }
+    extra?: { timeoutMs?: number; retryUnsafe?: boolean }
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const baseHeaders: Record<string, string> = {
@@ -80,7 +86,10 @@ export class ApiClient {
 
     const method = ((options.method || 'GET') as string).toUpperCase();
     const isSafeMethod = method === 'GET' || method === 'HEAD';
-    const maxRetries = isSafeMethod ? 2 : 0; // only retry safe/idempotent reads by default
+    // Save mutations opt into retries by supplying an idempotency key. If the
+    // response is lost after the server commits, the retry returns the cached
+    // response instead of applying the mutation twice.
+    const maxRetries = isSafeMethod || extra?.retryUnsafe ? 2 : 0;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
@@ -100,6 +109,11 @@ export class ApiClient {
         });
       } catch (err: any) {
         if (err?.name === 'AbortError') {
+          if (attempt < maxRetries) {
+            const backoffMs = Math.min(3000, 500 * Math.pow(2, attempt));
+            await new Promise((r) => setTimeout(r, backoffMs));
+            continue;
+          }
           const apiErr: ApiError = new Error('Request timed out');
           apiErr.status = 408;
           apiErr.body = { message: 'Request timed out' };
@@ -117,8 +131,11 @@ export class ApiClient {
       }
 
       if (!response.ok) {
-        // Handle 429 with backoff for safe methods
-        if (response.status === 429 && attempt < maxRetries) {
+        // Retry only transient failures. Validation, auth, and permission
+        // errors are deterministic and should be surfaced immediately.
+        const transient = response.status === 408 || response.status === 425 ||
+          response.status === 429 || response.status >= 500;
+        if (transient && attempt < maxRetries) {
           const retryAfter = response.headers.get('Retry-After');
           let delayMs = 0;
           if (retryAfter) {
@@ -229,7 +246,7 @@ export class ApiClient {
         body: data ? JSON.stringify(data) : undefined,
         headers,
       },
-      { timeoutMs: opts?.timeoutMs }
+      { timeoutMs: opts?.timeoutMs, retryUnsafe: Boolean(opts?.idempotencyKey) }
     );
   }
 
@@ -240,7 +257,7 @@ export class ApiClient {
       method: 'PATCH',
       body: JSON.stringify(data),
       headers,
-    });
+    }, { retryUnsafe: Boolean(opts?.idempotencyKey) });
   }
 
   async delete<T>(endpoint: string): Promise<T> {
@@ -697,6 +714,34 @@ export class ApiClient {
     return this.post('/prescriptions', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
   }
 
+  /** Persist a new prescription and immediately render its server-side PDF. */
+  async createPrescriptionAndPdf(
+    data: Record<string, unknown>,
+    opts?: {
+      idempotencyKey?: string;
+      timeoutMs?: number;
+      pdf?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean };
+    },
+  ) {
+    const prescription = await this.createPrescription(data, {
+      idempotencyKey: opts?.idempotencyKey,
+      timeoutMs: opts?.timeoutMs,
+    }) as { id?: string };
+    if (!prescription?.id) {
+      throw new Error('The server did not return a prescription ID, so the PDF could not be generated.');
+    }
+
+    const pdf = await this.generatePrescriptionPdf(prescription.id, opts?.pdf);
+    let bytes = '';
+    try {
+      if (pdf?.fileUrl?.startsWith('data:application/pdf;base64,')) bytes = atob(pdf.fileUrl.split(',')[1]);
+    } catch { /* Invalid base64 is handled by the validation below. */ }
+    if (!bytes.startsWith('%PDF-') || bytes.length !== pdf.fileSize || !pdf.fileName?.endsWith('.pdf')) {
+      throw new Error('The server returned an invalid or empty prescription PDF.');
+    }
+    return { prescription, pdf };
+  }
+
   async createQuickPrescription(
     data: Record<string, unknown>,
     opts?: { idempotencyKey?: string; timeoutMs?: number }
@@ -704,6 +749,17 @@ export class ApiClient {
     const base = JSON.stringify(data || {});
     const autoKey = `cms:POST:prescriptions:pad:${this.djb2Hash(base)}`;
     return this.post('/prescriptions/pad', data, { idempotencyKey: opts?.idempotencyKey || autoKey, timeoutMs: opts?.timeoutMs });
+  }
+
+  async updatePrescription(
+    id: string,
+    data: Record<string, unknown>,
+    opts?: { idempotencyKey?: string }
+  ) {
+    // A new save must not replay an earlier A -> B -> A edit. Transport retries
+    // retain this key because patch() constructs the request only once.
+    const autoKey = `cms:PATCH:prescriptions:update:${id}:${this.newOperationKey()}`;
+    return this.patch(`/prescriptions/${id}`, data, { idempotencyKey: opts?.idempotencyKey || autoKey });
   }
 
   async getPrescription<T = unknown>(id: string): Promise<T> {
@@ -723,7 +779,12 @@ export class ApiClient {
   }
 
   async createPrescriptionTemplate(data: Record<string, unknown>, opts?: { idempotencyKey?: string; timeoutMs?: number }) {
-    return this.post('/prescriptions/templates', data, opts);
+    const base = JSON.stringify(data || {});
+    const autoKey = `cms:POST:prescriptions:template:${this.djb2Hash(base)}`;
+    return this.post('/prescriptions/templates', data, {
+      idempotencyKey: opts?.idempotencyKey || autoKey,
+      timeoutMs: opts?.timeoutMs,
+    });
   }
 
   async deletePrescriptionTemplate(templateId: string) {
@@ -787,7 +848,13 @@ export class ApiClient {
 
   // PDF Generation & Share
   async generatePrescriptionPdf(id: string, data?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean }) {
-    return this.post<{ fileUrl: string; fileName: string; fileSize: number }>(`/prescriptions/${id}/pdf`, data || {});
+    // Generate from the current saved state, not a permanently cached PDF.
+    const autoKey = `cms:POST:prescriptions:pdf:${id}:${this.newOperationKey()}`;
+    return this.post<{ fileUrl: string; fileName: string; fileSize: number }>(
+      `/prescriptions/${id}/pdf`,
+      data || {},
+      { idempotencyKey: autoKey },
+    );
   }
 
   async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean }) {

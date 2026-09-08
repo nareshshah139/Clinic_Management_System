@@ -9,6 +9,8 @@
     "shared-types"
   ],
   "scripts": {
+    "test:prescription-pipeline": "npm test --workspace=backend -- --runInBand prescription-pdf.pipeline.spec.ts",
+    "test:prescription-browser": "node scripts/diagnostics/run-prescription-browser.cjs",
     "dev": "concurrently \"npm run dev --workspace=frontend\" \"npm run start:dev --workspace=backend\" \"npm run build --workspace=shared-types -- --watch\"",
     "build": "npm run build --workspace=shared-types && npm run build --workspace=frontend && npm run build --workspace=backend",
     "start": "concurrently \"npm run start --workspace=frontend\" \"npm run start:prod --workspace=backend\"",
@@ -20,9 +22,17 @@
     "dev:be:minimal": "MINIMAL_BOOT=true npm run start:dev --workspace=backend"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "puppeteer-core": "24.31.0"
   },
-  "keywords": ["clinic", "management", "dermatology", "opd", "hyderabad", "india"],
+  "keywords": [
+    "clinic",
+    "management",
+    "dermatology",
+    "opd",
+    "hyderabad",
+    "india"
+  ],
   "author": "Clinic Ops",
   "license": "MIT"
 }

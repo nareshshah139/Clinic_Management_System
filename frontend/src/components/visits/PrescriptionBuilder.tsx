@@ -2523,7 +2523,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       };
       const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
       const res: any = existingId
-        ? await apiClient.patch(`/prescriptions/${existingId}`, payload)
+        ? await apiClient.updatePrescription(existingId, payload)
         : standalone
         ? await apiClient.createQuickPrescription({ ...payload, reason: standaloneReason })
         : await apiClient.createPrescription(payload);
@@ -6062,16 +6062,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 ${container.innerHTML}
                               `;
 
-                              const { default: html2pdf } = await import('html2pdf.js');
                               const fileName = `prescription-${saved.documentId}.pdf`;
-                              const pdfBlob: Blob = await html2pdf().set({
-                                margin: 0,
-                                filename: fileName,
-                                image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-                                jsPDF: { unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' },
-                                pagebreak: { mode: ['css', 'legacy'] },
-                              }).from(wrapper).outputPdf('blob');
+                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
+                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
@@ -6143,15 +6136,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 ${container.innerHTML}
                               `;
 
-                              const { default: html2pdf } = await import('html2pdf.js');
-                              const pdfBlob: Blob = await html2pdf().set({
-                                margin: 0,
-                                filename: `prescription-${saved.documentId}.pdf`,
-                                image: { type: 'jpeg', quality: 0.98 },
-                                html2canvas: { scale: 2, useCORS: true, letterRendering: true },
-                                jsPDF: { unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' },
-                                pagebreak: { mode: ['css', 'legacy'] },
-                              }).from(wrapper).outputPdf('blob');
+                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
+                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
 
                               const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');

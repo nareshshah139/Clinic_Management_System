@@ -15,6 +15,7 @@ jest.mock('@/lib/api', () => ({
     get: jest.fn().mockResolvedValue({}),
     createPrescription: jest.fn().mockResolvedValue({ id: "saved-rx" }),
     patch: jest.fn().mockResolvedValue({ id: "saved-rx" }),
+    updatePrescription: jest.fn<() => Promise<{ id: string }>>().mockResolvedValue({ id: "saved-rx" }),
     getClinicAssets: jest.fn().mockResolvedValue([]),
     getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
@@ -29,10 +30,8 @@ jest.mock('@/lib/api', () => ({
   },
 }));
 
-const mockPdfOutput = jest.fn().mockResolvedValue(new Blob(['pdf']));
-jest.mock('html2pdf.js', () => ({ __esModule: true, default: () => ({
-  set() { return this; }, from() { return this; }, outputPdf: mockPdfOutput,
-}) }));
+const mockPdfOutput = jest.fn<(...args: unknown[]) => Promise<Blob>>().mockResolvedValue(new Blob(['pdf']));
+jest.mock('@/lib/pdf-export', () => ({ renderPrescriptionPages: (...args: unknown[]) => mockPdfOutput(...args) }));
 
 // Capture CSS injected for Paged.js via the temp <style> element
 let lastPagedCssText: string | null = null;
@@ -355,7 +354,7 @@ it('saves medications before PDF output and updates the same prescription on ano
   expect(apiClient.createPrescription).toHaveBeenCalledWith(expect.objectContaining({ visitId: 'visit', items: expect.arrayContaining([expect.objectContaining({ drugName: 'Synthetic medicine' })]) }));
   fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
   await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(2));
-  expect(apiClient.patch).toHaveBeenCalledWith('/prescriptions/saved-rx', expect.objectContaining({ visitId: 'visit' }));
+  expect(apiClient.patch).toHaveBeenCalledWith('/prescriptions/saved-rx', expect.objectContaining({ visitId: 'visit' }), expect.objectContaining({ idempotencyKey: expect.any(String) }));
   expect(onBeforeExport).toHaveBeenCalledTimes(2);
   click.mockRestore();
   localStorage.removeItem('rxDraft:med-patient:visit');
@@ -440,7 +439,7 @@ it('reopens a saved prescription with optional dosage and preserves a recorded p
     expect(patch).toHaveBeenCalledWith('/prescriptions/existing-rx', expect.objectContaining({ items: [
       expect.objectContaining({ drugName: 'No numeric dose', dosage: undefined, instructions: 'Original instruction', dosePattern: '1-0-1' }),
       expect.objectContaining({ drugName: 'Recorded numeric dose', dosage: 2.5, dosageUnit: 'MG' }),
-    ] }));
+    ] }), expect.objectContaining({ idempotencyKey: expect.any(String) }));
   } finally {
     get.mockRestore();
     patch.mockRestore();
