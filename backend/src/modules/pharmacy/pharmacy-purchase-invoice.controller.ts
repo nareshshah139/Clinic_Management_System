@@ -86,6 +86,14 @@ export class PharmacyPurchaseInvoiceController {
     );
   }
 
+  @Patch('drafts/:id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:purchase-invoice:create')
+  @ApiOperation({ summary: 'Correct an unreviewed purchase invoice draft' })
+  updateDraft(@Param('id') id: string, @Body() dto: CreatePharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId);
+  }
+
   @Post('ocr/extract')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
   @Permissions('pharmacy:purchase-invoice:create')

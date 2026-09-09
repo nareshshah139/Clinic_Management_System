@@ -18,6 +18,7 @@ import type {
 export class ApiClient {
   private baseURL: string;
   private token: string | null = null;
+  private purchaseSaveAttempt?: { payload: string; key: string };
 
   constructor(baseURL: string = API_BASE_URL) {
     this.baseURL = baseURL;
@@ -450,7 +451,18 @@ export class ApiClient {
   async createPharmacyPurchaseInvoiceDraft<T = unknown>(
     data: Record<string, unknown>
   ): Promise<T> {
-    return this.post<T>('/pharmacy/purchase-invoices/drafts', data);
+    const payload = JSON.stringify(data);
+    if (this.purchaseSaveAttempt?.payload !== payload) {
+      this.purchaseSaveAttempt = { payload, key: `purchase-${this.newOperationKey()}` };
+    }
+    const attempt = this.purchaseSaveAttempt;
+    const saved = await this.post<T>('/pharmacy/purchase-invoices/drafts', data, { idempotencyKey: attempt.key });
+    if (this.purchaseSaveAttempt === attempt) this.purchaseSaveAttempt = undefined;
+    return saved;
+  }
+
+  async updatePharmacyPurchaseInvoiceDraft<T = unknown>(id: string, data: Record<string, unknown>): Promise<T> {
+    return this.patch<T>(`/pharmacy/purchase-invoices/drafts/${id}`, data);
   }
 
   async suggestPharmacyPurchaseMasterMatches<T = unknown>(

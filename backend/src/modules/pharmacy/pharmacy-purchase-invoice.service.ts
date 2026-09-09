@@ -7,6 +7,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { fileTypeFromBuffer } from 'file-type';
+import { extractWithCodexOAuth, purchaseOcrCodexConfig } from '../../shared/codex/codex-oauth';
 import sharp from 'sharp';
 import type { Express } from 'express';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -78,35 +79,30 @@ export class PharmacyPurchaseInvoiceService {
     file: Express.Multer.File,
     branchId: string,
   ) {
+    const result = await this.extractDocumentDraft(file, branchId);
+    return {
+      ...result,
+      masterMatches: await this.suggestMasterMatches(result.draft.items, branchId),
+    };
+  }
+
+  // Real OCR without database access; matching and writes remain separate steps.
+  async extractDocumentDraft(file: Express.Multer.File, branchId: string) {
     if (!file || !file.buffer || file.size <= 0) {
       throw new BadRequestException('No invoice file provided');
     }
-
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      this.logger.warn(
-        'purchase-invoices/ocr/extract skipped: OPENAI_API_KEY is not configured',
-      );
-      throw new ServiceUnavailableException(
-        'Invoice OCR is unavailable. Contact an administrator to configure OPENAI_API_KEY.',
-      );
-    }
-
     const document = await this.buildOcrImageDataUrls(file);
-    const model = process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini';
-    const raw = await this.extractPurchaseInvoiceJson(
-      document.imageDataUrls,
-      apiKey,
-      model,
-    );
+    const { model, reasoningEffort } = purchaseOcrCodexConfig();
+    const raw = await this.extractPurchaseInvoiceJson(document.imageDataUrls);
     const draft = this.normalizeExtractedPurchaseDraft(raw, document.flags);
 
     return {
       draft,
-      masterMatches: await this.suggestMasterMatches(draft.items, branchId),
       extraction: {
         source: PharmacyPurchaseInvoiceSourceDto.OCR,
         model,
+        reasoningEffort,
+        provider: 'codex-oauth',
         branchId,
         fileName: file.originalname || 'purchase-invoice',
         pageCount: document.pageCount,
@@ -253,65 +249,9 @@ export class PharmacyPurchaseInvoiceService {
     userId?: string,
   ) {
     const prismaAny = this.prisma as any;
-    this.validateHeader(dto);
-
-    const validation = this.validatePurchaseInvoice(dto);
-
     try {
       const created = await prismaAny.pharmacyPurchaseInvoice.create({
-        data: {
-          branchId,
-          createdBy: userId,
-          distributorName: dto.distributorName.trim(),
-          distributorAddress: this.emptyToUndefined(dto.distributorAddress),
-          distributorGstin: dto.distributorGstin.trim().toUpperCase(),
-          distributorDlNo: dto.distributorDlNo.trim(),
-          distributorFoodLicense: this.emptyToUndefined(
-            dto.distributorFoodLicense,
-          ),
-          invoiceNumber: dto.invoiceNumber.trim(),
-          invoiceDate: new Date(dto.invoiceDate),
-          goodsReceivedDate: dto.goodsReceivedDate
-            ? new Date(dto.goodsReceivedDate)
-            : undefined,
-          billType: dto.billType,
-          dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-          eWayBillNo: this.emptyToUndefined(dto.eWayBillNo),
-          casesTransport: this.emptyToUndefined(dto.casesTransport),
-          lrNo: this.emptyToUndefined(dto.lrNo),
-          salesmanName: this.emptyToUndefined(dto.salesmanName),
-          salesmanContact: this.emptyToUndefined(dto.salesmanContact),
-          buyerCode: this.emptyToUndefined(dto.buyerCode),
-          doctorNameOrRegNo: dto.doctorNameOrRegNo.trim(),
-          urcCode: this.emptyToUndefined(dto.urcCode),
-          handwrittenNotes: this.emptyToUndefined(dto.handwrittenNotes),
-          source: dto.source || 'MANUAL',
-          status: validation.status,
-          grossAmount: this.money(dto.grossAmount),
-          tradeDiscount: this.money(dto.tradeDiscount),
-          specialDiscount: this.money(dto.specialDiscount),
-          cashDiscount: this.money(dto.cashDiscount),
-          damageAdjustment: this.money(dto.damageAdjustment),
-          visibilityAmount: this.money(dto.visibilityAmount),
-          creditDebitAdjustment: this.money(dto.creditDebitAdjustment),
-          taxableAmount: this.money(dto.taxableAmount),
-          totalCgst: this.money(dto.totalCgst),
-          totalSgst: this.money(dto.totalSgst),
-          totalIgst: this.money(dto.totalIgst),
-          totalGst: this.money(dto.totalGst),
-          tcsAmount: this.money(dto.tcsAmount),
-          rounding: this.money(dto.rounding),
-          netPayable: this.money(dto.netPayable),
-          unresolvedOcrFlags: validation.unresolvedOcrFlags,
-          reconciliationIssues: this.stringifyIssues(
-            validation.reconciliationIssues,
-          ),
-          items: {
-            create: dto.items.map((item, index) =>
-              this.toPurchaseInvoiceItemCreate(item, index + 1),
-            ),
-          },
-        },
+        data: this.draftData(dto, branchId, userId),
         include: {
           items: {
             orderBy: { lineNumber: 'asc' },
@@ -325,6 +265,89 @@ export class PharmacyPurchaseInvoiceService {
         throw new ConflictException(
           'Purchase invoice already exists for this distributor GSTIN and invoice number',
         );
+      }
+      throw error;
+    }
+  }
+
+  private draftData(dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, userId?: string) {
+    this.validateHeader(dto);
+    const validation = this.validatePurchaseInvoice(dto);
+    return {
+      branchId,
+      createdBy: userId,
+      distributorName: dto.distributorName.trim(),
+      distributorAddress: (this.emptyToUndefined(dto.distributorAddress) ?? null),
+      distributorGstin: dto.distributorGstin.trim().toUpperCase(),
+      distributorDlNo: dto.distributorDlNo.trim(),
+      distributorFoodLicense: (this.emptyToUndefined(dto.distributorFoodLicense) ?? null),
+      invoiceNumber: dto.invoiceNumber.trim(),
+      invoiceDate: new Date(dto.invoiceDate),
+      goodsReceivedDate: dto.goodsReceivedDate
+        ? new Date(dto.goodsReceivedDate)
+        : null,
+      billType: dto.billType,
+      dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
+      eWayBillNo: (this.emptyToUndefined(dto.eWayBillNo) ?? null),
+      casesTransport: (this.emptyToUndefined(dto.casesTransport) ?? null),
+      lrNo: (this.emptyToUndefined(dto.lrNo) ?? null),
+      salesmanName: (this.emptyToUndefined(dto.salesmanName) ?? null),
+      salesmanContact: (this.emptyToUndefined(dto.salesmanContact) ?? null),
+      buyerCode: (this.emptyToUndefined(dto.buyerCode) ?? null),
+      doctorNameOrRegNo: dto.doctorNameOrRegNo.trim(),
+      urcCode: (this.emptyToUndefined(dto.urcCode) ?? null),
+      handwrittenNotes: (this.emptyToUndefined(dto.handwrittenNotes) ?? null),
+      source: dto.source || 'MANUAL',
+      status: validation.status,
+      grossAmount: this.money(dto.grossAmount),
+      tradeDiscount: this.money(dto.tradeDiscount),
+      specialDiscount: this.money(dto.specialDiscount),
+      cashDiscount: this.money(dto.cashDiscount),
+      damageAdjustment: this.money(dto.damageAdjustment),
+      visibilityAmount: this.money(dto.visibilityAmount),
+      creditDebitAdjustment: this.money(dto.creditDebitAdjustment),
+      taxableAmount: this.money(dto.taxableAmount),
+      totalCgst: this.money(dto.totalCgst),
+      totalSgst: this.money(dto.totalSgst),
+      totalIgst: this.money(dto.totalIgst),
+      totalGst: this.money(dto.totalGst),
+      tcsAmount: this.money(dto.tcsAmount),
+      rounding: this.money(dto.rounding),
+      netPayable: this.money(dto.netPayable),
+      unresolvedOcrFlags: validation.unresolvedOcrFlags,
+      reconciliationIssues: this.stringifyIssues(
+        validation.reconciliationIssues,
+      ),
+      items: {
+        create: dto.items.map((item, index) =>
+          this.toPurchaseInvoiceItemCreate(item, index + 1),
+        ),
+      },
+    };
+  }
+
+  async updateDraft(id: string, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string) {
+    const { createdBy, ...data } = this.draftData(dto, branchId);
+    try {
+      return await this.prisma.$transaction(async (tx: any) => {
+        // Take a row lock before replacing lines; reviewed/committed bills are immutable here.
+        const locked = await tx.pharmacyPurchaseInvoice.updateMany({
+          where: { id, branchId, status: { in: ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'] } },
+          data: { updatedAt: new Date() },
+        });
+        if (locked.count !== 1) {
+          throw new ConflictException('This invoice is no longer an editable draft. Refresh the purchase invoices.');
+        }
+        const updated = await tx.pharmacyPurchaseInvoice.update({
+          where: { id },
+          data: { ...data, reconciliationIssues: data.reconciliationIssues ?? null, items: { deleteMany: {}, create: data.items.create } },
+          include: { items: { orderBy: { lineNumber: 'asc' } } },
+        });
+        return this.formatPurchaseInvoice(updated);
+      });
+    } catch (error: any) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException('Purchase invoice already exists for this distributor GSTIN and invoice number');
       }
       throw error;
     }
@@ -535,7 +558,7 @@ export class PharmacyPurchaseInvoiceService {
     }
 
     const updated = await prismaAny.pharmacyPurchaseInvoice.update({
-      where: { id },
+      where: { id, branchId, status: invoice.status, updatedAt: invoice.updatedAt },
       data: {
         goodsReceivedDate,
         handwrittenNotes:
@@ -1570,8 +1593,6 @@ export class PharmacyPurchaseInvoiceService {
 
   private async extractPurchaseInvoiceJson(
     imageDataUrls: string[],
-    apiKey: string,
-    model: string,
   ): Promise<Record<string, any>> {
     const system =
       'You extract Indian pharmacy distributor purchase invoices for stock intake. ' +
@@ -1582,50 +1603,14 @@ export class PharmacyPurchaseInvoiceService {
       'Each item must use: serialNumber, productName, manufacturer, packSize, packUnitType, hsnCode, batchNumber, expiryMonth, expiryYear, quantityPurchased, freeQuantity, mrp, oldMrp, discountPercent, specialDiscountPercent, purchaseRate, taxableAmount, cgstPercent, sgstPercent, igstPercent, gstAmount, lineTotal, ocrConfidence, ocrFlags. ' +
       'Add ocrFlags for missing, uncertain, handwritten, cropped, or low-confidence fields. If no purchase invoice is visible, return {"draft":{"ocrFlags":["not_a_purchase_invoice"],"items":[]}}.';
 
-    const content: Array<Record<string, any>> = [
-      {
-        type: 'text',
-        text:
-          'Extract the purchase invoice into the exact JSON schema. Keep every product row separate. Do not invent values.',
-      },
-      ...imageDataUrls.map((url) => ({
-        type: 'image_url',
-        image_url: { url },
-      })),
-    ];
-
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content },
-        ],
-      }),
-    });
-
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => '');
-      this.logger.error(
-        `purchase-invoices/ocr/extract OpenAI error: ${resp.status} ${errText}`,
-      );
-      throw new ServiceUnavailableException(
-        'Failed to extract purchase invoice from the uploaded document',
-      );
-    }
-
-    const data = (await resp.json()) as any;
-    const contentText = data?.choices?.[0]?.message?.content || '{}';
+    const contentText = await extractWithCodexOAuth(system, imageDataUrls);
     try {
       const parsed = this.parseJsonObject(contentText);
-      return parsed?.draft ?? parsed?.purchaseInvoice ?? parsed?.invoice ?? parsed ?? {};
+      const draft = parsed?.draft;
+      if (!draft || typeof draft !== 'object' || !Array.isArray(draft.items)) {
+        throw new Error('Missing invoice draft or items');
+      }
+      return draft;
     } catch (error: any) {
       this.logger.error(
         `purchase-invoices/ocr/extract: failed to parse JSON response: ${error?.message || error}`,
@@ -1999,11 +1984,6 @@ export class PharmacyPurchaseInvoiceService {
       ? this.parseDate(dto.dueDate, 'dueDate')
       : undefined;
 
-    if (dto.billType === PharmacyPurchaseBillTypeDto.CREDIT && !dueDate) {
-      throw new BadRequestException(
-        'Due date is required for credit purchase bills',
-      );
-    }
     if (goodsReceivedDate && goodsReceivedDate < invoiceDate) {
       throw new BadRequestException(
         'Goods received date cannot be before invoice date',
@@ -2023,6 +2003,14 @@ export class PharmacyPurchaseInvoiceService {
     dto: CreatePharmacyPurchaseInvoiceDto,
   ): PurchaseValidationResult {
     const issues: string[] = [];
+    for (const field of ['distributorDlNo', 'doctorNameOrRegNo'] as const) {
+      if (!dto[field]?.trim()) issues.push(`${field} is required before review`);
+    }
+    if (dto.billType === PharmacyPurchaseBillTypeDto.CREDIT && !dto.dueDate) {
+      issues.push('Due date is required for credit purchase bills before review');
+    }
+    // Retain the actual header flags with review issues so they can be reopened and corrected.
+    issues.push(...(dto.ocrFlags || []).filter(Boolean).map((flag) => `OCR: ${flag}`));
     let unresolvedOcrFlags = this.countOcrFlags(dto.ocrFlags);
     let lineTaxableSum = 0;
     let lineGstSum = 0;
@@ -2112,6 +2100,9 @@ export class PharmacyPurchaseInvoiceService {
     lineLabel: string,
   ): string[] {
     const issues: string[] = [];
+    for (const field of ['productName', 'manufacturer', 'packSize', 'packUnitType', 'hsnCode', 'batchNumber'] as const) {
+      if (!item[field]?.trim()) issues.push(`${lineLabel}: ${field} is required before review`);
+    }
     const quantityPurchased = this.money(item.quantityPurchased);
     const freeQuantity = this.money(item.freeQuantity);
     if (quantityPurchased + freeQuantity <= 0) {
@@ -2192,6 +2183,7 @@ export class PharmacyPurchaseInvoiceService {
   private formatPurchaseInvoice(invoice: any) {
     return {
       ...invoice,
+      ocrFlags: this.parseIssues(invoice.reconciliationIssues).filter((issue) => issue.startsWith('OCR: ')).map((issue) => issue.slice(5)),
       reconciliationIssues: this.parseIssues(invoice.reconciliationIssues),
       items: Array.isArray(invoice.items)
         ? invoice.items.map((item: any) => ({

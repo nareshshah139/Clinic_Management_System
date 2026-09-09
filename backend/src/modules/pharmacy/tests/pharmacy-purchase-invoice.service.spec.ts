@@ -120,6 +120,44 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.items).toHaveLength(1);
   });
 
+  it('saves incomplete descriptions as review issues and preserves header OCR flags', async () => {
+    const dto = validDto();
+    dto.distributorDlNo = '';
+    dto.doctorNameOrRegNo = '';
+    dto.items[0].manufacturer = '';
+    dto.ocrFlags = ['check_supplier'];
+    prisma.pharmacyPurchaseInvoice.create.mockImplementation(({ data }: any) => ({ id: 'purchase-1', ...data, items: [] }));
+    const saved = await service.createDraft(dto, branchId, userId);
+    expect(saved.ocrFlags).toEqual(['check_supplier']);
+    expect(saved.status).toBe('OCR_REVIEW_REQUIRED');
+    expect(saved.reconciliationIssues).toEqual(expect.arrayContaining([
+      'distributorDlNo is required before review', 'Line 1: manufacturer is required before review',
+    ]));
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(saved);
+    await expect(service.markReviewed(saved.id, {}, branchId)).rejects.toThrow();
+  });
+
+  it('replaces draft lines atomically and clears corrected review issues', async () => {
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ id: 'purchase-1', ...data, items: data.items.create }));
+    const saved = await service.updateDraft('purchase-1', validDto(), branchId);
+    expect(saved.status).toBe('DRAFT');
+    expect(saved.reconciliationIssues).toEqual([]);
+    expect(prisma.pharmacyPurchaseInvoice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: 'purchase-1', branchId, status: { in: ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'] } },
+    }));
+    expect(prisma.pharmacyPurchaseInvoice.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      reconciliationIssues: null, dueDate: null, items: { deleteMany: {}, create: expect.any(Array) },
+    }) }));
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to overwrite reviewed, committed, or another branch invoices', async () => {
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 0 });
+    await expect(service.updateDraft('purchase-1', validDto(), branchId)).rejects.toThrow(ConflictException);
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
+  });
+
   it('marks OCR drafts as review-required when flags or low confidence exist', async () => {
     const dto = validDto();
     dto.source = PharmacyPurchaseInvoiceSourceDto.OCR;
@@ -142,104 +180,6 @@ describe('PharmacyPurchaseInvoiceService', () => {
     );
   });
 
-  it('extracts an OCR draft from an uploaded invoice without writing to the database', async () => {
-    const previousApiKey = process.env.OPENAI_API_KEY;
-    process.env.OPENAI_API_KEY = 'test-key';
-    const previousFetch = global.fetch;
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                draft: {
-                  distributorName: 'Apex Distributors',
-                  distributorGstin: '36ABCDE1234F1Z5',
-                  distributorDlNo: 'TS/HYD/20B/12345',
-                  invoiceNumber: 'APX-001',
-                  invoiceDate: '01/03/2026',
-                  billType: 'cash',
-                  doctorNameOrRegNo: 'Dr. Shravya / TS-MC-12345',
-                  taxableAmount: 100,
-                  totalCgst: 6,
-                  totalSgst: 6,
-                  totalGst: 12,
-                  netPayable: 112,
-                  items: [
-                    {
-                      productName: 'Azithral 500 Tablet',
-                      manufacturer: 'Alembic Pharmaceuticals',
-                      packSize: 'Strip of 3',
-                      packUnitType: 'Tablet',
-                      hsnCode: '3004',
-                      batchNumber: 'AZT2401',
-                      expiry: '12/27',
-                      quantityPurchased: 1,
-                      freeQuantity: 0,
-                      mrp: 120,
-                      purchaseRate: 100,
-                      taxableAmount: 100,
-                      gstPercent: 12,
-                      gstAmount: 12,
-                      lineTotal: 112,
-                      ocrConfidence: 0.86,
-                    },
-                  ],
-                },
-              }),
-            },
-          },
-        ],
-      }),
-    });
-    (global as any).fetch = fetchMock;
-
-    try {
-      const tinyPng = Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/lFh1WQAAAABJRU5ErkJggg==',
-        'base64',
-      );
-      const result = await service.extractDraftFromDocument(
-        {
-          buffer: tinyPng,
-          size: tinyPng.length,
-          mimetype: 'image/png',
-          originalname: 'apex-invoice.png',
-        } as any,
-        branchId,
-      );
-
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/chat/completions',
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(prisma.pharmacyPurchaseInvoice.create).not.toHaveBeenCalled();
-      expect(result.draft).toMatchObject({
-        source: PharmacyPurchaseInvoiceSourceDto.OCR,
-        distributorName: 'Apex Distributors',
-        invoiceNumber: 'APX-001',
-        invoiceDate: '2026-03-01',
-      });
-      expect(result.draft.items[0]).toMatchObject({
-        productName: 'Azithral 500 Tablet',
-        expiryMonth: 12,
-        expiryYear: 2027,
-        cgstPercent: 6,
-        sgstPercent: 6,
-        ocrConfidence: 0.86,
-      });
-      expect(result.draft.items[0].ocrFlags).toContain('low_confidence_line');
-    } finally {
-      if (previousApiKey === undefined) {
-        delete process.env.OPENAI_API_KEY;
-      } else {
-        process.env.OPENAI_API_KEY = previousApiKey;
-      }
-      global.fetch = previousFetch;
-    }
-  });
-
   it('flags reconciliation mismatches before review', async () => {
     const dto = validDto();
     dto.netPayable = 1300;
@@ -254,13 +194,14 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.reconciliationIssues.join(' ')).toContain('net payable');
   });
 
-  it('rejects credit bills without due date', async () => {
+  it('saves credit bills without due date for correction and blocks review', async () => {
     const dto = validDto();
     dto.billType = PharmacyPurchaseBillTypeDto.CREDIT;
-
-    await expect(service.createDraft(dto, branchId, userId)).rejects.toThrow(
-      BadRequestException,
-    );
+    prisma.pharmacyPurchaseInvoice.create.mockImplementation(({ data }: any) => ({ id: 'purchase-1', ...data, items: [] }));
+    const saved = await service.createDraft(dto, branchId, userId);
+    expect(saved.reconciliationIssues).toContain('Due date is required for credit purchase bills before review');
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(saved);
+    await expect(service.markReviewed(saved.id, {}, branchId)).rejects.toThrow(BadRequestException);
   });
 
   it('converts duplicate distributor invoice keys into conflict errors', async () => {

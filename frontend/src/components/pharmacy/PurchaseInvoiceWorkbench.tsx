@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -16,6 +16,7 @@ import {
   Truck,
   Upload,
 } from 'lucide-react';
+import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -150,6 +151,7 @@ type PurchaseInvoice = {
   taxableAmount: number;
   totalGst: number;
   netPayable: number;
+  ocrFlags?: string[];
   unresolvedOcrFlags?: number;
   reconciliationIssues?: string[];
   handwrittenNotes?: string | null;
@@ -479,10 +481,8 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
   const requiredHeader: Array<[keyof HeaderForm, string]> = [
     ['distributorName', 'Distributor name'],
     ['distributorGstin', 'Distributor GSTIN'],
-    ['distributorDlNo', 'Distributor DL number'],
     ['invoiceNumber', 'Invoice number'],
     ['invoiceDate', 'Invoice date'],
-    ['doctorNameOrRegNo', 'Doctor name or registration number'],
   ];
 
   for (const [key, label] of requiredHeader) {
@@ -492,9 +492,6 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
   const gstin = header.distributorGstin.trim().toUpperCase();
   if (gstin && !GSTIN_PATTERN.test(gstin)) {
     errors.push('Distributor GSTIN must be a valid 15-character GSTIN');
-  }
-  if (header.billType === 'CREDIT' && !header.dueDate.trim()) {
-    errors.push('Due date is required for credit purchase bills');
   }
 
   const invoiceDate = parseDateInput(header.invoiceDate);
@@ -525,11 +522,6 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     const prefix = `Line ${index + 1}`;
     const requiredLine: Array<[keyof LineForm, string]> = [
       ['productName', 'product'],
-      ['manufacturer', 'manufacturer'],
-      ['packSize', 'pack size'],
-      ['packUnitType', 'pack unit type'],
-      ['hsnCode', 'HSN code'],
-      ['batchNumber', 'batch number'],
     ];
     for (const [key, label] of requiredLine) {
       if (!line[key].trim()) errors.push(`${prefix}: ${label} is required`);
@@ -540,6 +532,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     if (!Number.isInteger(purchased) || !Number.isInteger(free)) {
       errors.push(`${prefix}: purchase and free quantities must be whole numbers`);
     }
+    if (purchased < 0 || free < 0) errors.push(`${prefix}: quantities cannot be negative`);
     if (purchased + free <= 0) {
       errors.push(`${prefix}: purchased plus free quantity must be greater than zero`);
     }
@@ -553,7 +546,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
       expiryMonth < 1 ||
       expiryMonth > 12 ||
       !Number.isInteger(expiryYear) ||
-      expiryYear < 2020
+      expiryYear < 2020 || expiryYear > 2100
     ) {
       errors.push(`${prefix}: expiry month/year is invalid`);
     }
@@ -744,8 +737,19 @@ function statusLabel(status?: string) {
 }
 
 export function PurchaseInvoiceWorkbench() {
+  const { user } = useDashboardUser();
+  const recoveryKey = user ? `purchase-intake:${user.branchId}:${user.id}` : null;
+  return <PurchaseInvoiceEditor key={recoveryKey || 'anonymous'} recoveryKey={recoveryKey} />;
+}
+
+function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) {
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [header, setHeader] = useState<HeaderForm>(() => defaultHeader());
   const [lines, setLines] = useState<LineForm[]>(() => [emptyLine(1)]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const saveLock = useRef(false);
+  const [headerFlags, setHeaderFlags] = useState('');
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrSummary, setOcrSummary] = useState<OcrExtractionResponse['extraction'] | null>(null);
   const [masterMatches, setMasterMatches] = useState<MasterMatch[]>([]);
@@ -763,6 +767,34 @@ export function PurchaseInvoiceWorkbench() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!recoveryKey) return;
+    try {
+      const raw = sessionStorage.getItem(recoveryKey);
+      const saved = raw ? JSON.parse(raw) : null;
+      if (saved?.version === 1 && saved.header && Array.isArray(saved.lines)) {
+        setHeader(saved.header);
+        setLines(saved.lines);
+        setEditingId(saved.editingId || null);
+        setHeaderFlags(saved.headerFlags || '');
+        setOcrSummary(saved.ocrSummary || null);
+        setNotice('Restored your unfinished purchase draft from this tab. Save Draft stores it on the server.');
+      }
+    } catch {
+      setRecoveryError('Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.');
+    }
+    setRecoveryReady(true);
+  }, [recoveryKey]);
+
+  useEffect(() => {
+    if (!recoveryKey || !recoveryReady) return;
+    try {
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ version: 1, header, lines, editingId, headerFlags, ocrSummary }));
+    } catch {
+      setRecoveryError('Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.');
+    }
+  }, [recoveryKey, recoveryReady, header, lines, editingId, headerFlags, ocrSummary]);
 
   const totals = useMemo(() => calculateTotals(header, lines), [header, lines]);
   const warnings = useMemo(() => draftWarnings(lines), [lines]);
@@ -827,6 +859,8 @@ export function PurchaseInvoiceWorkbench() {
   };
 
   const resetDraft = () => {
+    setEditingId(null);
+    setHeaderFlags('');
     setHeader(defaultHeader());
     setLines([emptyLine(1)]);
     setOcrFile(null);
@@ -846,6 +880,8 @@ export function PurchaseInvoiceWorkbench() {
     matches?: MasterMatchResponse,
   ) => {
     const defaults = defaultHeader();
+    setEditingId(null);
+    setHeaderFlags((draft.ocrFlags || extraction?.flags || []).join(', '));
     setHeader({
       ...defaults,
       distributorName: formString(draft.distributorName),
@@ -870,7 +906,7 @@ export function PurchaseInvoiceWorkbench() {
       doctorNameOrRegNo: formString(draft.doctorNameOrRegNo),
       urcCode: formString(draft.urcCode),
       handwrittenNotes: formString(draft.handwrittenNotes),
-      source: 'OCR',
+      source: draft.source === 'MANUAL' ? 'MANUAL' : 'OCR',
       tradeDiscount: formString(draft.tradeDiscount, defaults.tradeDiscount),
       specialDiscount: formString(
         draft.specialDiscount,
@@ -1081,24 +1117,28 @@ export function PurchaseInvoiceWorkbench() {
   };
 
   const saveDraft = async () => {
+    if (saveLock.current || extracting) return;
     setNotice(null);
     setError(null);
     const errors = validateDraft(header, lines);
     setValidationErrors(errors);
     if (errors.length > 0) return;
 
+    saveLock.current = true;
     setSaving(true);
     try {
-      const created =
-        await apiClient.createPharmacyPurchaseInvoiceDraft<PurchaseInvoice>(
-          buildDraftPayload(header, lines),
-        );
+      const payload = { ...buildDraftPayload(header, lines), ocrFlags: splitFlags(headerFlags) };
+      const created = editingId
+        ? await apiClient.updatePharmacyPurchaseInvoiceDraft<PurchaseInvoice>(editingId, payload)
+        : await apiClient.createPharmacyPurchaseInvoiceDraft<PurchaseInvoice>(payload);
+      setEditingId(created.id);
+      setRecent((current) => [created, ...current.filter((row) => row.id !== created.id)].slice(0, 8));
       setActiveInvoice(created);
       setNotice(`Purchase invoice ${created.invoiceNumber} saved as ${statusLabel(created.status)}.`);
-      await loadRecent();
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   };
@@ -1155,6 +1195,19 @@ export function PurchaseInvoiceWorkbench() {
     }
   };
 
+  const editSavedDraft = (invoice: PurchaseInvoice) => {
+    applyExtractedDraft({
+      ...invoice,
+      invoiceDate: dateInputFromIso(invoice.invoiceDate),
+      goodsReceivedDate: dateInputFromIso(invoice.goodsReceivedDate),
+      dueDate: dateInputFromIso(invoice.dueDate),
+      ocrFlags: invoice.ocrFlags || [],
+    } as ExtractedPurchaseDraft);
+    setEditingId(invoice.id);
+    setActiveInvoice(invoice);
+    setNotice(`Editing saved purchase invoice ${invoice.invoiceNumber}.`);
+  };
+
   const activeIssues = activeInvoice?.reconciliationIssues || [];
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
   const canReview =
@@ -1175,10 +1228,10 @@ export function PurchaseInvoiceWorkbench() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={resetDraft} disabled={saving}>
+          <Button variant="outline" onClick={resetDraft} disabled={saving || extracting}>
             Clear
           </Button>
-          <Button onClick={saveDraft} disabled={saving}>
+          <Button onClick={saveDraft} disabled={saving || extracting}>
             {saving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -1189,6 +1242,9 @@ export function PurchaseInvoiceWorkbench() {
         </div>
       </div>
 
+      {recoveryError && <Alert><AlertDescription>{recoveryError}</AlertDescription></Alert>}
+      {validationErrors.length > 0 && <Alert variant="destructive"><AlertTitle>Draft needs corrections</AlertTitle><AlertDescription>{validationErrors.join('; ')}</AlertDescription></Alert>}
+      {headerFlags && <div className="space-y-2"><Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} /><p className="text-sm text-muted-foreground">Remove a flag after checking and correcting that field against the invoice.</p></div>}
       {notice && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
@@ -2088,6 +2144,9 @@ export function PurchaseInvoiceWorkbench() {
               <CardDescription>Selected purchase invoice</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {activeInvoice && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && (
+                <Button variant="outline" disabled={saving || extracting} onClick={() => editSavedDraft(activeInvoice)}>Edit saved draft</Button>
+              )}
               {!activeInvoice ? (
                 <p className="text-sm text-muted-foreground">Select or save a purchase invoice</p>
               ) : (

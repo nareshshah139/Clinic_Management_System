@@ -3,10 +3,15 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PurchaseInvoiceWorkbench } from '@/components/pharmacy/PurchaseInvoiceWorkbench';
 import { apiClient } from '@/lib/api';
 
+jest.mock('@/components/layout/dashboard-user-context', () => ({
+  useDashboardUser: () => ({ user: { id: 'user-1', branchId: 'branch-1' } }),
+}));
+
 jest.mock('@/lib/api', () => ({
   apiClient: {
     getPharmacyPurchaseInvoices: jest.fn(),
     createPharmacyPurchaseInvoiceDraft: jest.fn(),
+    updatePharmacyPurchaseInvoiceDraft: jest.fn(),
     suggestPharmacyPurchaseMasterMatches: jest.fn(),
     confirmPharmacyPurchaseMaster: jest.fn(),
     reviewPharmacyPurchaseInvoice: jest.fn(),
@@ -56,6 +61,7 @@ const draftInvoice = {
 describe('PurchaseInvoiceWorkbench', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [] });
     window.confirm = jest.fn(() => true);
     (global as any).fetch = jest.fn();
@@ -298,6 +304,61 @@ describe('PurchaseInvoiceWorkbench', () => {
         ],
       }),
     );
+  });
+
+  it('saves OCR with missing descriptive fields and updates the same draft on a second save', async () => {
+    api.createPharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      json: async () => ({ draft: {
+        ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02',
+        source: 'OCR', doctorNameOrRegNo: '', distributorDlNo: '',
+        items: [{ ...draftInvoice.items[0], manufacturer: '', hsnCode: '', packUnitType: 'Tablet' }],
+      }, extraction: { flags: ['check_supplier'] } }),
+    });
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), {
+      target: { files: [new File(['image'], 'invoice.png', { type: 'image/png' })] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Extract Draft' }));
+    await screen.findByDisplayValue('APX-001');
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1));
+    await screen.findByText(/saved as DRAFT/i);
+    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Corrected manufacturer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith(
+      'pinv-1', expect.objectContaining({ items: [expect.objectContaining({ manufacturer: 'Corrected manufacturer' })] }),
+    ));
+    expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopens a saved draft with header flags and retains edits after a failed update', async () => {
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [{ ...draftInvoice, ocrFlags: ['check_supplier'] }] });
+    api.updatePharmacyPurchaseInvoiceDraft.mockRejectedValueOnce(new Error('Connection interrupted'));
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit saved draft' }));
+    expect(screen.getByLabelText('Invoice OCR Flags')).toHaveValue('check_supplier');
+    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Corrected manufacturer' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await screen.findByText('Connection interrupted');
+    expect(screen.getByLabelText('Manufacturer')).toHaveValue('Corrected manufacturer');
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValueOnce(draftInvoice);
+    fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    await screen.findByText(/saved as DRAFT/i);
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers unfinished OCR edits after remount without claiming a server save', async () => {
+    const view = render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Unsaved supplier' } });
+    view.unmount();
+    render(<PurchaseInvoiceWorkbench />);
+    expect(await screen.findByDisplayValue('Unsaved supplier')).toBeInTheDocument();
+    expect(screen.getByText(/Restored your unfinished purchase draft/)).toBeInTheDocument();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
   it('reviews a clean draft and commits reviewed stock explicitly', async () => {

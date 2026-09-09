@@ -37,6 +37,22 @@ describe('ApiClient idempotent save retries', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the purchase create key across a failed save and manual retry', async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'Unable to save' }, 400));
+    const client = new ApiClient();
+    const payload = { invoiceNumber: 'OCR-1' };
+    await expect(client.createPharmacyPurchaseInvoiceDraft(payload)).rejects.toThrow();
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'purchase-1' }));
+    await client.createPharmacyPurchaseInvoiceDraft(payload);
+    const first = fetchMock.mock.calls[0][1].headers['Idempotency-Key'];
+    expect(first).toMatch(/^purchase-/);
+    expect(fetchMock.mock.calls[1][1].headers['Idempotency-Key']).toBe(first);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'purchase-2' }));
+    await client.createPharmacyPurchaseInvoiceDraft({ invoiceNumber: 'OCR-2' });
+    expect(fetchMock.mock.calls[2][1].headers['Idempotency-Key']).not.toBe(first);
+  });
+
   it('generates an idempotency key for prescription updates', async () => {
     const fetchMock = global.fetch as jest.Mock;
     fetchMock.mockResolvedValue(jsonResponse({ id: 'rx-1' }));
