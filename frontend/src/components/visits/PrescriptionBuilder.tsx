@@ -4901,7 +4901,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
-                        <th className="px-3 py-2 text-left font-medium">Dosage</th>
                         <th className="px-3 py-2 text-left font-medium">Frequency (0-1-0)</th>
                         <th className="px-3 py-2 text-left font-medium">When</th>
                         <th className="px-3 py-2 text-left font-medium">Duration</th>
@@ -4912,7 +4911,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <tbody>
                       {items.length === 0 && (
                         <tr>
-                          <td colSpan={7} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
+                          <td colSpan={6} className="px-3 py-3 text-center text-gray-500">No items added yet</td>
                         </tr>
                       )}
                       {items.map((it, idx) => (
@@ -4967,30 +4966,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             </div>
                           </td>
                           <td className="px-3 py-2 align-top">
-                            {it.drugName.trim() && (
-                              <div className="flex items-center gap-1">
-                                <Input
-                                  type="number"
-                                  className="w-20 shrink-0"
-                                  min={0.01}
-                                  step="any"
-                                  aria-label={`Numeric dosage for ${it.drugName}`}
-                                  value={it.dosage ?? ''}
-                                  onChange={(e) => updateItem(idx, { dosage: e.target.value === '' ? '' : Number(e.target.value) })}
-                                />
-                                <Select value={it.dosageUnit} onValueChange={(value: DosageUnit) => updateItem(idx, { dosageUnit: value })}>
-                                  <SelectTrigger className="w-28 shrink-0" aria-label={`Dosage unit for ${it.drugName}`}><SelectValue /></SelectTrigger>
-                                  <SelectContent>
-                                    {(['MG', 'ML', 'MCG', 'IU', 'TABLET', 'CAPSULE', 'DROP', 'SPRAY', 'PATCH', 'INJECTION'] as const).map(unit => (
-                                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
+                            <div className="min-w-[100px]">
                               <Select value={it.dosePattern || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
@@ -5008,21 +4984,6 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 <SelectContent>
                                   {dosePatternOptions.map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
-                                  ))}
-                                  <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <Select value={it.frequency} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: Frequency) => {
-                                if (v === '__CUSTOM__') { openCustomDialog('frequency', idx); return; }
-                                const patch: Partial<PrescriptionItemForm> = { frequency: v };
-                                const allowed = getTimingOptionsForFrequency(v);
-                                if (it.timing && !allowed.includes(it.timing)) patch.timing = '';
-                                updateItem(idx, patch);
-                              }}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {frequencyOptions.map(f => (
-                                    <SelectItem key={f} value={f}>{formatFrequency(f)}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
