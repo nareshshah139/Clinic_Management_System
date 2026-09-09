@@ -464,6 +464,12 @@ export class VisitsService {
       updateData.followUp = updateVisitDto.treatmentPlan.followUpDate ? new Date(updateVisitDto.treatmentPlan.followUpDate) : null;
     }
 
+    // Validation can strip an optional-only payload. Returning the current
+    // record is safer than issuing an empty Prisma update that fails vaguely.
+    if (Object.keys(updateData).length === 0) {
+      return this.findOne(id, branchId);
+    }
+
     const updatedVisit = await this.prisma.visit.update({
       where: { id },
       data: updateData,

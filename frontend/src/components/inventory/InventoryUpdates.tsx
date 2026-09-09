@@ -39,6 +39,7 @@ import type {
 } from '@/lib/types';
 
 type DraftEdit = {
+  drug: DrugInventoryCatalogRow;
   proposedPrice?: string;
   proposedStock?: string;
   reason: string;
@@ -87,10 +88,9 @@ export function InventoryUpdates() {
   }, [pendingRequests]);
 
   const draftChanges = useMemo(() => {
-    return drugs
-      .map((drug) => {
-        const draft = drafts[drug.id];
-        if (!draft) return null;
+    return Object.values(drafts)
+      .map((draft) => {
+        const { drug } = draft;
         const priceValue = draft.proposedPrice?.trim();
         const stockValue = draft.proposedStock?.trim();
         const proposedPrice =
@@ -130,7 +130,7 @@ export function InventoryUpdates() {
       proposedStock?: number;
       reason: string;
     }>;
-  }, [drafts, drugs]);
+  }, [drafts]);
 
   const fetchCatalog = useCallback(async () => {
     try {
@@ -219,6 +219,7 @@ export function InventoryUpdates() {
     setDrafts((current) => {
       const next = { ...current };
       const draft = normalizeDraft(drug, {
+        drug,
         proposedPrice,
         proposedStock: next[drug.id]?.proposedStock,
         reason: next[drug.id]?.reason || '',
@@ -236,6 +237,7 @@ export function InventoryUpdates() {
     setDrafts((current) => {
       const next = { ...current };
       const draft = normalizeDraft(drug, {
+        drug,
         proposedPrice: next[drug.id]?.proposedPrice,
         proposedStock,
         reason: next[drug.id]?.reason || '',
@@ -253,6 +255,7 @@ export function InventoryUpdates() {
     setDrafts((current) => {
       const next = { ...current };
       const draft = normalizeDraft(drug, {
+        drug,
         proposedPrice: next[drug.id]?.proposedPrice,
         proposedStock: next[drug.id]?.proposedStock,
         reason,
@@ -275,6 +278,22 @@ export function InventoryUpdates() {
   };
 
   const submitDrafts = async () => {
+    const invalidDraft = Object.values(drafts).some((draft) => {
+      const price = draft.proposedPrice?.trim();
+      const stock = draft.proposedStock?.trim();
+      return (
+        (Boolean(price) && (!Number.isFinite(Number(price)) || Number(price) < 0)) ||
+        (Boolean(stock) && (!Number.isInteger(Number(stock)) || Number(stock) < 0))
+      );
+    });
+    if (invalidDraft) {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid inventory edits',
+        description: 'Prices must be non-negative numbers and stock must be a non-negative whole number. Correct your edits before submitting.',
+      });
+      return;
+    }
     if (draftChanges.length === 0) {
       toast({
         variant: 'destructive',
@@ -316,7 +335,13 @@ export function InventoryUpdates() {
           response.summary.submitted === 1 ? '' : 's'
         } sent to the doctor queue.`,
       });
-      setDrafts({});
+      setDrafts((current) => {
+        const next = { ...current };
+        for (const { drug } of draftChanges) {
+          if (next[drug.id] === drafts[drug.id]) delete next[drug.id];
+        }
+        return next;
+      });
       await refreshAll();
     } catch (error) {
       toast({

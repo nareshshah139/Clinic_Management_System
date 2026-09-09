@@ -8,6 +8,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { spawn } from 'child_process';
+import { codexOAuthEnv } from '../../shared/codex/codex-oauth';
 import { createHash, randomUUID } from 'crypto';
 import type { Express } from 'express';
 import * as fs from 'fs/promises';
@@ -1144,6 +1145,7 @@ export class PharmacyAgentService implements OnModuleInit {
       outputPath,
       '-C',
       this.repoRoot(),
+      ...(process.env.PHARMACY_AGENT_CODEX_MODEL ? ['-m', process.env.PHARMACY_AGENT_CODEX_MODEL] : []),
       ...input.imagePaths.flatMap((imagePath) => ['-i', imagePath]),
       '-',
     ];
@@ -1264,24 +1266,7 @@ export class PharmacyAgentService implements OnModuleInit {
   }
 
   private codexEnv() {
-    const allowedKeys = [
-      'PATH',
-      'HOME',
-      'CODEX_HOME',
-      'CODEX_ACCESS_TOKEN',
-      'SHELL',
-      'LANG',
-      'LC_ALL',
-      'TERM',
-      'TMPDIR',
-      'NODE_EXTRA_CA_CERTS',
-    ];
-    const env: Record<string, string> = {};
-    for (const key of allowedKeys) {
-      const value = process.env[key];
-      if (value) env[key] = value;
-    }
-    return env;
+    return codexOAuthEnv();
   }
 
   private async stageProposals(input: {

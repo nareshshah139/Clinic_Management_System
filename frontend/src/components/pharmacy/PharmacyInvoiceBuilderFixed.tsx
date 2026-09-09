@@ -138,6 +138,8 @@ type PharmacyInvoicePrintPreview = {
   };
 };
 
+type PharmacyInvoiceCopyType = 'ORIGINAL' | 'DUPLICATE';
+
 export function PharmacyInvoiceBuilderFixed({
   prefill,
 }: {
@@ -177,9 +179,8 @@ export function PharmacyInvoiceBuilderFixed({
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [printPreviewData, setPrintPreviewData] =
     useState<PharmacyInvoicePrintPreview | null>(null);
-  const [printPreviewCopyType, setPrintPreviewCopyType] = useState<
-    'ORIGINAL' | 'DUPLICATE'
-  >('ORIGINAL');
+  const [printPreviewCopyType, setPrintPreviewCopyType] =
+    useState<PharmacyInvoiceCopyType>('ORIGINAL');
   const [printPreviewZoom, setPrintPreviewZoom] = useState(0.9);
   const [savingPdf, setSavingPdf] = useState(false);
   const [savingInvoiceFromPreview, setSavingInvoiceFromPreview] =
@@ -1083,7 +1084,10 @@ export function PharmacyInvoiceBuilderFixed({
     return validItems;
   };
 
-  const createAndConfirmInvoice = async (validItems: InvoiceItem[]) => {
+  const createAndConfirmInvoice = async (
+    validItems: InvoiceItem[],
+    copyType: PharmacyInvoiceCopyType = printPreviewCopyType
+  ) => {
     try {
       console.log('🔍 Starting invoice creation...');
       console.log('🔍 Current invoice data:', invoiceData);
@@ -1144,7 +1148,7 @@ export function PharmacyInvoiceBuilderFixed({
         if (createdInvoice?.id) {
           printableInvoice = await apiClient.getPharmacyInvoicePrintData(
             createdInvoice.id,
-            { format: 'A5', copyType: 'ORIGINAL' }
+            { format: 'A5', copyType }
           );
         }
       } catch (e) {
@@ -1166,7 +1170,7 @@ export function PharmacyInvoiceBuilderFixed({
 
       // Open print preview using saved invoice data
       if (printableInvoice) {
-        openPrintPreview(printableInvoice, validItems);
+        openPrintPreview(printableInvoice, validItems, copyType);
       }
 
       // Notify dashboard to refresh stats
@@ -1244,10 +1248,37 @@ export function PharmacyInvoiceBuilderFixed({
 
     setSavingInvoiceFromPreview(true);
     try {
-      await createAndConfirmInvoice(validItems);
+      await createAndConfirmInvoice(validItems, printPreviewCopyType);
     } finally {
       setSavingInvoiceFromPreview(false);
     }
+  };
+
+  const buildPrintPreviewPayload = (
+    invoice: any,
+    itemsData: InvoiceItem[]
+  ): PharmacyInvoicePrintPreview => ({
+    invoice,
+    items: itemsData,
+    billingFallback: {
+      billingName: invoiceData.billingName,
+      billingPhone: invoiceData.billingPhone,
+      billingAddress: invoiceData.billingAddress,
+      notes: invoiceData.notes,
+    },
+  });
+
+  const getInvoiceCoreFromPrintData = (invoice: any) =>
+    Array.isArray(invoice?.lines) ? invoice.invoice : invoice;
+
+  const hasSavedInvoiceIdentity = (invoice: any) => {
+    const invoiceCore = getInvoiceCoreFromPrintData(invoice);
+    const invoiceNumber = String(invoiceCore?.invoiceNumber || '').trim();
+    return Boolean(
+      invoiceCore?.id &&
+        invoiceNumber &&
+        invoiceNumber.toUpperCase() !== 'DRAFT'
+    );
   };
 
   const renderPrintHtml = (
@@ -1273,7 +1304,7 @@ export function PharmacyInvoiceBuilderFixed({
         maximumFractionDigits: 2,
       });
     const isStandardPrintData = Array.isArray(invoice?.lines);
-    const invoiceCore = isStandardPrintData ? invoice.invoice : invoice;
+    const invoiceCore = getInvoiceCoreFromPrintData(invoice);
     const branch = isStandardPrintData ? invoice.branch : undefined;
     const patient = isStandardPrintData ? invoice.patient : undefined;
     const copyType = options?.copyType || invoice?.copyType || 'ORIGINAL';
@@ -1291,19 +1322,12 @@ export function PharmacyInvoiceBuilderFixed({
                   .filter(Boolean)
                   .join(', ')
               : '';
-            const directions = [
-              line.dosage ? `Dosage: ${line.dosage}` : '',
-              line.frequency ? `Frequency: ${line.frequency}` : '',
-              line.duration ? `Duration: ${line.duration}` : '',
-              line.instructions ? `Instructions: ${line.instructions}` : '',
-            ].filter(Boolean);
             return `
         <tr>
           <td style="padding:6px;border:1px solid #ddd;">
             ${escapeHtml(line.name)}
             ${line.hsnCode ? `<div class="muted">HSN: ${escapeHtml(line.hsnCode)}</div>` : ''}
             ${batches ? `<div class="muted">Batch: ${escapeHtml(batches)}</div>` : ''}
-            ${directions.length ? `<div class="muted directions">${escapeHtml(directions.join(' • '))}</div>` : ''}
           </td>
           <td style="padding:6px;border:1px solid #ddd;text-align:center;">${line.quantity}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(line.unitPrice)}</td>
@@ -1320,18 +1344,11 @@ export function PharmacyInvoiceBuilderFixed({
               item.itemType === 'PACKAGE'
                 ? item.package?.name || 'Unknown Package'
                 : item.drug?.name || 'Unknown Drug';
-            const directions = [
-              item.dosage ? `Dosage: ${item.dosage}` : '',
-              item.frequency ? `Frequency: ${item.frequency}` : '',
-              item.duration ? `Duration: ${item.duration}` : '',
-              item.instructions ? `Instructions: ${item.instructions}` : '',
-            ].filter(Boolean);
 
             return `
         <tr>
           <td style="padding:6px;border:1px solid #ddd;">
             ${escapeHtml(itemName)}
-            ${directions.length ? `<div class="muted directions">${escapeHtml(directions.join(' • '))}</div>` : ''}
           </td>
           <td style="padding:6px;border:1px solid #ddd;text-align:center;">${item.quantity}</td>
           <td style="padding:6px;border:1px solid #ddd;text-align:right;">₹${formatMoney(item.unitPrice)}</td>
@@ -1401,10 +1418,6 @@ export function PharmacyInvoiceBuilderFixed({
             .muted { 
               color: #666;
               font-size: 14px;
-            }
-            .directions {
-              margin-top: 4px;
-              line-height: 1.35;
             }
             .billing-section {
               margin: 20px 0;
@@ -1550,21 +1563,17 @@ export function PharmacyInvoiceBuilderFixed({
     `;
   };
 
-  const openPrintPreview = (invoice: any, itemsData: InvoiceItem[]) => {
+  const openPrintPreview = (
+    invoice: any,
+    itemsData: InvoiceItem[],
+    copyTypeOverride?: PharmacyInvoiceCopyType
+  ) => {
     const copyType =
-      invoice?.copyType === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL';
+      copyTypeOverride ||
+      (invoice?.copyType === 'DUPLICATE' ? 'DUPLICATE' : 'ORIGINAL');
     setPrintPreviewCopyType(copyType);
     setPrintPreviewZoom(0.9);
-    setPrintPreviewData({
-      invoice,
-      items: itemsData,
-      billingFallback: {
-        billingName: invoiceData.billingName,
-        billingPhone: invoiceData.billingPhone,
-        billingAddress: invoiceData.billingAddress,
-        notes: invoiceData.notes,
-      },
-    });
+    setPrintPreviewData(buildPrintPreviewPayload(invoice, itemsData));
     setPrintPreviewOpen(true);
   };
 
@@ -1578,7 +1587,7 @@ export function PharmacyInvoiceBuilderFixed({
 
   const getPrintPreviewInvoiceCore = () => {
     const invoice = printPreviewData?.invoice;
-    return Array.isArray(invoice?.lines) ? invoice.invoice : invoice;
+    return getInvoiceCoreFromPrintData(invoice);
   };
 
   const getPrintPreviewPatient = () => {
@@ -1586,18 +1595,89 @@ export function PharmacyInvoiceBuilderFixed({
     return Array.isArray(invoice?.lines) ? invoice.patient : undefined;
   };
 
-  const printPreviewInFrame = () => {
-    if (!isPrintPreviewSaved) {
-      toast({
-        title: 'Confirm invoice first',
-        description: 'Save the invoice from the preview before printing.',
-        variant: 'destructive',
-      });
-      return;
+  const printHtmlInHiddenFrame = async (html: string) => {
+    if (!html.trim()) {
+      throw new Error('No invoice preview is ready yet.');
     }
 
-    const frameWindow = printPreviewFrameRef.current?.contentWindow;
-    if (!frameWindow) {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.position = 'fixed';
+    frame.style.left = '-10000px';
+    frame.style.top = '0';
+    frame.style.width = '210mm';
+    frame.style.height = '297mm';
+    frame.style.border = '0';
+    frame.style.opacity = '0';
+    frame.style.pointerEvents = 'none';
+
+    document.body.appendChild(frame);
+
+    try {
+      const frameDocument = frame.contentDocument;
+      if (!frameDocument) {
+        throw new Error('Print frame is unavailable.');
+      }
+
+      const ready = new Promise<void>((resolve) => {
+        let resolved = false;
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        };
+        frame.onload = done;
+        window.setTimeout(done, 300);
+      });
+
+      frameDocument.open();
+      frameDocument.write(html);
+      frameDocument.close();
+      await ready;
+
+      const frameWindow = frame.contentWindow;
+      if (!frameWindow) {
+        throw new Error('Print frame window is unavailable.');
+      }
+
+      frameWindow.focus();
+      frameWindow.print();
+    } finally {
+      window.setTimeout(() => frame.remove(), 1000);
+    }
+  };
+
+  const printPreviewInFrame = async () => {
+    let invoiceForPrint = printPreviewData?.invoice;
+    let itemsForPrint = printPreviewData?.items || [];
+    let billingFallback = printPreviewData?.billingFallback;
+    const copyType = printPreviewCopyType;
+
+    if (!hasSavedInvoiceIdentity(invoiceForPrint)) {
+      const validItems = getValidInvoiceItems();
+      if (!validItems) return;
+
+      setSavingInvoiceFromPreview(true);
+      try {
+        const printableInvoice = await createAndConfirmInvoice(
+          validItems,
+          copyType
+        );
+        if (!printableInvoice) return;
+        invoiceForPrint = printableInvoice;
+        itemsForPrint = validItems;
+        billingFallback = {
+          billingName: invoiceData.billingName,
+          billingPhone: invoiceData.billingPhone,
+          billingAddress: invoiceData.billingAddress,
+          notes: invoiceData.notes,
+        };
+      } finally {
+        setSavingInvoiceFromPreview(false);
+      }
+    }
+
+    if (!invoiceForPrint || !itemsForPrint.length) {
       toast({
         title: 'Print failed',
         description: 'No invoice preview is ready yet.',
@@ -1607,8 +1687,12 @@ export function PharmacyInvoiceBuilderFixed({
     }
 
     try {
-      frameWindow.focus();
-      frameWindow.print();
+      const html = renderPrintHtml(invoiceForPrint, itemsForPrint, {
+        includePrintButton: false,
+        copyType,
+        billingFallback,
+      });
+      await printHtmlInHiddenFrame(html);
     } catch (error) {
       console.error('Invoice print failed', error);
       toast({
@@ -1698,9 +1782,7 @@ export function PharmacyInvoiceBuilderFixed({
     calculateInvoiceTotals();
   const previewInvoiceCore = getPrintPreviewInvoiceCore();
   const previewPatient = getPrintPreviewPatient();
-  const isPrintPreviewSaved = Boolean(
-    previewInvoiceCore?.id && previewInvoiceCore?.invoiceNumber !== 'DRAFT'
-  );
+  const isPrintPreviewSaved = hasSavedInvoiceIdentity(printPreviewData?.invoice);
   const previewLineCount = Array.isArray(printPreviewData?.invoice?.lines)
     ? printPreviewData?.invoice.lines.length
     : printPreviewData?.items.length || 0;
@@ -2581,8 +2663,7 @@ export function PharmacyInvoiceBuilderFixed({
                   Invoice Controls
                 </h3>
                 <p className="mt-1 text-xs text-slate-600">
-                  Confirm the invoice, then print or download the PDF from this
-                  preview.
+                  Draft previews are confirmed before printing or PDF export.
                 </p>
               </div>
 
@@ -2689,10 +2770,21 @@ export function PharmacyInvoiceBuilderFixed({
                 <Button
                   type="button"
                   onClick={printPreviewInFrame}
-                  disabled={!isPrintPreviewSaved}
+                  disabled={
+                    !printPreviewData || loading || savingInvoiceFromPreview
+                  }
                 >
-                  <Printer className="mr-2 h-4 w-4" />
-                  Print
+                  {savingInvoiceFromPreview || loading ? (
+                    <>
+                      <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-current" />
+                      Confirming...
+                    </>
+                  ) : (
+                    <>
+                      <Printer className="mr-2 h-4 w-4" />
+                      {isPrintPreviewSaved ? 'Print' : 'Confirm & Print'}
+                    </>
+                  )}
                 </Button>
                 <Button
                   type="button"

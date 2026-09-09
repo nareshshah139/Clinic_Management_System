@@ -481,6 +481,28 @@ describe('VisitsService', () => {
   });
 
   describe('update', () => {
+    it('returns the current visit instead of failing on an empty update payload', async () => {
+      const mockVisit = {
+        id: 'visit-123',
+        vitals: null,
+        complaints: JSON.stringify([]),
+        history: null,
+        exam: null,
+        diagnosis: null,
+        plan: null,
+        scribeJson: null,
+        patient: mockPatient,
+        doctor: mockDoctor,
+        appointment: mockAppointment,
+      };
+      prismaMock.visit.findFirst.mockResolvedValue(mockVisit);
+
+      const result = await service.update('visit-123', {}, mockBranchId);
+
+      expect(result).toMatchObject({ id: 'visit-123' });
+      expect(prismaMock.visit.update).not.toHaveBeenCalled();
+    });
+
     it('should update visit successfully', async () => {
       const mockVisit = {
         id: 'visit-123',
