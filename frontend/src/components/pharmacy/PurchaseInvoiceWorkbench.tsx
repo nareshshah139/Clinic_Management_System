@@ -17,6 +17,8 @@ import {
   Upload,
 } from 'lucide-react';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
+import { preserveInvoiceTotals, reportedAmountErrors, reportedHeaderAmounts, reportedLineAmounts } from '@/lib/purchase-invoice-totals';
+import { usePurchasePermissions } from '@/hooks/usePurchasePermissions';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -137,6 +139,11 @@ type CommittedItem = {
   expiryDate: string;
 };
 
+type OriginalDocument = {
+  id: string; fileName: string; mimeType: string; sizeBytes: number;
+  purchaseInvoiceId?: string | null;
+};
+
 type PurchaseInvoice = {
   id: string;
   distributorName: string;
@@ -158,6 +165,7 @@ type PurchaseInvoice = {
   stockCommitReference?: string | null;
   items?: PurchaseInvoiceItem[];
   committedItems?: CommittedItem[];
+  documents?: OriginalDocument[];
 };
 
 type PurchaseListResponse = {
@@ -198,11 +206,18 @@ type ExtractedPurchaseDraft = Partial<HeaderForm> &
   Partial<{
     ocrFlags: string[];
     items: ExtractedPurchaseLine[];
+    sourceDocumentId: string;
   }>;
 
 type OcrExtractionResponse = {
+  sourceDocument?: OriginalDocument;
   draft?: ExtractedPurchaseDraft;
   masterMatches?: MasterMatchResponse;
+  invoice?: PurchaseInvoice | null;
+  automation?: {
+    status: 'NOT_SAVED' | 'SAVED_FOR_REVIEW' | 'STOCK_COMMITTED' | 'DUPLICATE';
+    issues: string[];
+  };
   extraction?: {
     fileName?: string;
     pageCount?: number;
@@ -651,7 +666,7 @@ function buildDraftPayload(header: HeaderForm, lines: LineForm[]) {
         gstAmount: amounts.gst,
         lineTotal: amounts.total,
         ocrConfidence: line.ocrConfidence.trim()
-          ? money(numeric(line.ocrConfidence))
+          ? numeric(line.ocrConfidence)
           : undefined,
         ocrFlags: splitFlags(line.ocrFlags),
       };
@@ -743,12 +758,27 @@ export function PurchaseInvoiceWorkbench() {
 }
 
 function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) {
+  const { user } = useDashboardUser();
+  const { permissions: access, loading: permissionsLoading, error: permissionsError } = usePurchasePermissions(user?.id);
+  const [suppliers, setSuppliers] = useState<Array<{id: string; name: string; gstNumber: string | null}>>([]);
+  useEffect(() => {
+    if (!access.create) { setSuppliers([]); return; }
+    let active = true;
+    apiClient.get<Array<{id: string; name: string; gstNumber: string | null}>>('/pharmacy/purchase-invoices/suppliers')
+      .then(rows => { if (active) setSuppliers(rows); }).catch(() => { /* Manual entry remains available. */ });
+    return () => { active = false; };
+  }, [access.create]);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [header, setHeader] = useState<HeaderForm>(() => defaultHeader());
   const [lines, setLines] = useState<LineForm[]>(() => [emptyLine(1)]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [originalAmounts, setOriginalAmounts] = useState<Record<string, unknown> | null>(null);
+  const [sourceDocument, setSourceDocument] = useState<OriginalDocument | null>(null);
+  const [unlinkedUploads, setUnlinkedUploads] = useState<OriginalDocument[]>([]);
+  const [uploadListError, setUploadListError] = useState<string | null>(null);
   const saveLock = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [headerFlags, setHeaderFlags] = useState('');
   const [ocrFile, setOcrFile] = useState<File | null>(null);
   const [ocrSummary, setOcrSummary] = useState<OcrExtractionResponse['extraction'] | null>(null);
@@ -764,6 +794,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [saving, setSaving] = useState(false);
   const [reviewing, setReviewing] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [importReceivedDate, setImportReceivedDate] = useState(todayInput());
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -777,6 +809,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         setHeader(saved.header);
         setLines(saved.lines);
         setEditingId(saved.editingId || null);
+        setOriginalAmounts(saved.originalAmounts || null);
+        setSourceDocument(saved.sourceDocument || null);
         setHeaderFlags(saved.headerFlags || '');
         setOcrSummary(saved.ocrSummary || null);
         setNotice('Restored your unfinished purchase draft from this tab. Save Draft stores it on the server.');
@@ -790,16 +824,27 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   useEffect(() => {
     if (!recoveryKey || !recoveryReady) return;
     try {
-      sessionStorage.setItem(recoveryKey, JSON.stringify({ version: 1, header, lines, editingId, headerFlags, ocrSummary }));
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ version: 1, header, lines, editingId, headerFlags, ocrSummary, originalAmounts, sourceDocument }));
     } catch {
       setRecoveryError('Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.');
     }
-  }, [recoveryKey, recoveryReady, header, lines, editingId, headerFlags, ocrSummary]);
+  }, [recoveryKey, recoveryReady, header, lines, editingId, headerFlags, ocrSummary, originalAmounts, sourceDocument]);
 
   const totals = useMemo(() => calculateTotals(header, lines), [header, lines]);
   const warnings = useMemo(() => draftWarnings(lines), [lines]);
+  const loadUnlinkedUploads = useCallback(async () => {
+    if (!access.read) return;
+    try {
+      const documents = await apiClient.getUnlinkedPurchaseDocuments<OriginalDocument[]>();
+      setUnlinkedUploads(Array.isArray(documents) ? documents : []);
+      setUploadListError(null);
+    } catch (err) { setUploadListError(getErrorMessage(err)); }
+  }, [access.read]);
+
+  useEffect(() => { void loadUnlinkedUploads(); }, [loadUnlinkedUploads]);
 
   const loadRecent = useCallback(async () => {
+    if (!access.read) return;
     setLoadingList(true);
     setError(null);
     try {
@@ -819,7 +864,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  }, [access.read]);
 
   useEffect(() => {
     void loadRecent();
@@ -850,6 +895,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const removeLine = (localId: string) => {
+    if (lines.length <= 1) return;
+    const removedIndex = lines.findIndex((line) => line.localId === localId);
+    setOriginalAmounts((current) => current && Array.isArray(current.items)
+      ? { ...current, itemsChanged: true, items: current.items.filter((_, index) => index !== removedIndex) }
+      : current);
     setLines((current) => {
       if (current.length <= 1) return current;
       return current
@@ -858,12 +908,24 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     });
   };
 
+  const updateReportedAmount = (key: string, value: string, lineIndex?: number) => {
+    setOriginalAmounts((current) => {
+      if (!current) return current;
+      if (lineIndex === undefined) return { ...current, [key]: value };
+      if (!Array.isArray(current.items)) return current;
+      return { ...current, items: current.items.map((item, index) => index === lineIndex ? { ...item, [key]: value } : item) };
+    });
+  };
+
   const resetDraft = () => {
     setEditingId(null);
+    setOriginalAmounts(null);
+    setSourceDocument(null);
     setHeaderFlags('');
     setHeader(defaultHeader());
     setLines([emptyLine(1)]);
     setOcrFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
     setOcrSummary(null);
     setMasterMatches([]);
     setMasterConfirming(null);
@@ -880,6 +942,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     matches?: MasterMatchResponse,
   ) => {
     const defaults = defaultHeader();
+    setOriginalAmounts(draft as Record<string, unknown>);
     setEditingId(null);
     setHeaderFlags((draft.ocrFlags || extraction?.flags || []).join(', '));
     setHeader({
@@ -982,6 +1045,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const refreshMasterMatches = async () => {
+    if (!access.create) return;
     setMasterRefreshing(true);
     setError(null);
     try {
@@ -1004,6 +1068,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     action: 'MATCH_EXISTING' | 'CREATE_NEW',
     candidate?: MasterCandidate,
   ) => {
+    if (!access.create) return;
     const line = lines[match.lineIndex];
     if (!line) {
       setError('The purchase line was removed. Refresh drug master suggestions.');
@@ -1048,7 +1113,53 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     }
   };
 
-  const extractFromInvoiceFile = async () => {
+  const applyAutomationResult = (data: Pick<OcrExtractionResponse, 'invoice' | 'automation'>) => {
+    const invoice = data.invoice;
+    if (invoice) {
+      editSavedDraft(invoice);
+      setUnlinkedUploads((current) => current.filter((document) => !invoice.documents?.some((linked) => linked.id === document.id)));
+      setRecent((current) => [invoice, ...current.filter((row) => row.id !== invoice.id)].slice(0, 8));
+    } else {
+      setActiveInvoice(null);
+    }
+    const outcome = data.automation;
+    if (outcome?.status === 'STOCK_COMMITTED') {
+      setNotice(`Invoice ${invoice?.invoiceNumber} saved and stock added automatically.`);
+      window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'));
+    } else if (outcome?.status === 'DUPLICATE') {
+      setNotice(`Invoice ${invoice?.invoiceNumber} is already saved. Opened the existing invoice; its values and stock were not changed.`);
+    } else if (outcome?.status === 'SAVED_FOR_REVIEW') {
+      setNotice(`Invoice ${invoice?.invoiceNumber} saved for correction. Stock has not been added.`);
+      if (outcome.issues.length) setError(outcome.issues.join(' '));
+    } else {
+      setNotice(null);
+      setError(`Invoice was not saved. ${outcome?.issues.join(' ') || 'Save the extracted draft after checking the required fields.'}`);
+    }
+  };
+
+  const processSavedInvoice = async () => {
+    if (!access.automate || !activeInvoice || processing) return;
+    setProcessing(true);
+    setError(null);
+    setNotice(null);
+    try {
+      let invoiceId = activeInvoice.id;
+      if (editingId === activeInvoice.id && !['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status)) {
+        const saved = await saveDraft();
+        if (!saved) return;
+        invoiceId = saved.id;
+      }
+      const result = await apiClient.processPharmacyPurchaseInvoice<OcrExtractionResponse>(invoiceId);
+      applyAutomationResult(result);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const extractFromInvoiceFile = async (automate = false) => {
+    if (!access.create || (automate && !access.automate)) return;
     if (!ocrFile) {
       setError('Choose an invoice PDF or image first');
       return;
@@ -1060,8 +1171,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     try {
       const form = new FormData();
       form.append('file', ocrFile);
+      if (automate && importReceivedDate) form.append('goodsReceivedDate', importReceivedDate);
       const response = await fetch(
-        '/api/pharmacy/purchase-invoices/ocr/extract',
+        `/api/pharmacy/purchase-invoices/ocr/${automate ? 'import' : 'extract'}`,
         {
           method: 'POST',
           body: form,
@@ -1079,6 +1191,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         let message = `Invoice OCR failed (${response.status})`;
         try {
           const body = await response.json();
+          if (body?.sourceDocument) {
+            resetDraft();
+            setSourceDocument(body.sourceDocument);
+            setNotice('Original file saved. Enter the invoice details manually or retry the upload.');
+          }
           message = body?.message || message;
         } catch {
           try {
@@ -1096,6 +1213,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       }
 
       applyExtractedDraft(draft, data.extraction, data.masterMatches);
+      setSourceDocument(data.sourceDocument || null);
+      if (automate) {
+        applyAutomationResult(data);
+        setOcrSummary(data.extraction || null);
+        return;
+      }
       const flagCount =
         (draft.ocrFlags?.length || 0) +
         (draft.items || []).reduce(
@@ -1113,28 +1236,33 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       setError(getErrorMessage(err) || 'Invoice OCR failed. Try another file or enter manually.');
     } finally {
       setExtracting(false);
+      void loadUnlinkedUploads();
     }
   };
 
   const saveDraft = async () => {
-    if (saveLock.current || extracting) return;
+    if (!access.create || saveLock.current || extracting) return;
     setNotice(null);
     setError(null);
-    const errors = validateDraft(header, lines);
+    const errors = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts)];
     setValidationErrors(errors);
     if (errors.length > 0) return;
 
     saveLock.current = true;
     setSaving(true);
     try {
-      const payload = { ...buildDraftPayload(header, lines), ocrFlags: splitFlags(headerFlags) };
+      const payload = { ...preserveInvoiceTotals(buildDraftPayload(header, lines), originalAmounts), ocrFlags: splitFlags(headerFlags), sourceDocumentId: sourceDocument?.id };
       const created = editingId
         ? await apiClient.updatePharmacyPurchaseInvoiceDraft<PurchaseInvoice>(editingId, payload)
         : await apiClient.createPharmacyPurchaseInvoiceDraft<PurchaseInvoice>(payload);
       setEditingId(created.id);
       setRecent((current) => [created, ...current.filter((row) => row.id !== created.id)].slice(0, 8));
       setActiveInvoice(created);
+      setOriginalAmounts(created as unknown as Record<string, unknown>);
+      setSourceDocument(created.documents?.[0] || sourceDocument);
+      void loadUnlinkedUploads();
       setNotice(`Purchase invoice ${created.invoiceNumber} saved as ${statusLabel(created.status)}.`);
+      return created;
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -1144,17 +1272,23 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const reviewInvoice = async () => {
-    if (!activeInvoice) return;
+    if (!access.review || !activeInvoice || reviewing) return;
     setNotice(null);
     setError(null);
     setReviewing(true);
     try {
+      let invoiceToReview = activeInvoice;
+      if (access.create && editingId === activeInvoice.id && !['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status)) {
+        const saved = await saveDraft();
+        if (!saved) return;
+        invoiceToReview = saved;
+      }
       const reviewed =
         await apiClient.reviewPharmacyPurchaseInvoice<PurchaseInvoice>(
-          activeInvoice.id,
+          invoiceToReview.id,
           {
             goodsReceivedDate: reviewDate,
-            handwrittenNotes: activeInvoice.handwrittenNotes || undefined,
+            handwrittenNotes: invoiceToReview.handwrittenNotes || undefined,
           },
         );
       setActiveInvoice(reviewed);
@@ -1204,6 +1338,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       ocrFlags: invoice.ocrFlags || [],
     } as ExtractedPurchaseDraft);
     setEditingId(invoice.id);
+    setSourceDocument(invoice.documents?.[0] || null);
     setActiveInvoice(invoice);
     setNotice(`Editing saved purchase invoice ${invoice.invoiceNumber}.`);
   };
@@ -1211,27 +1346,32 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const activeIssues = activeInvoice?.reconciliationIssues || [];
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
   const canReview =
-    !!activeInvoice &&
+    access.review && !!activeInvoice &&
     activeInvoice.status === 'DRAFT' &&
     activeIssues.length === 0 &&
     activeOcrFlags === 0 &&
     !!reviewDate;
-  const canCommit = activeInvoice?.status === 'REVIEWED';
+  const canCommit = access.commit && activeInvoice?.status === 'REVIEWED';
+  const savedFormLocked = !access.create || !!editingId && activeInvoice?.id === editingId &&
+    ['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status);
 
   return (
     <div className="space-y-5">
+      {permissionsLoading && <p role="status">Loading invoice permissions…</p>}
+      {permissionsError && <Alert variant="destructive"><AlertDescription>{permissionsError}</AlertDescription></Alert>}
+      {!permissionsLoading && !access.automate && <p className="text-sm text-muted-foreground">Available actions reflect your invoice permissions. Automatic import requires create, review and stock access.</p>}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 className="text-xl font-semibold tracking-tight">Purchase Invoice Intake</h3>
           <p className="text-sm text-muted-foreground">
-            Capture distributor bills, review reconciled drafts, and commit stock explicitly.
+            Import received invoices, add validated stock automatically, and correct exceptions here.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={resetDraft} disabled={saving || extracting}>
+          <Button variant="outline" onClick={resetDraft} disabled={saving || extracting || processing}>
             Clear
           </Button>
-          <Button onClick={saveDraft} disabled={saving || extracting}>
+          <Button onClick={() => saveDraft()} disabled={saving || extracting || processing || savedFormLocked}>
             {saving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
@@ -1244,7 +1384,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
       {recoveryError && <Alert><AlertDescription>{recoveryError}</AlertDescription></Alert>}
       {validationErrors.length > 0 && <Alert variant="destructive"><AlertTitle>Draft needs corrections</AlertTitle><AlertDescription>{validationErrors.join('; ')}</AlertDescription></Alert>}
-      {headerFlags && <div className="space-y-2"><Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} /><p className="text-sm text-muted-foreground">Remove a flag after checking and correcting that field against the invoice.</p></div>}
+      {headerFlags && <div className="space-y-2"><Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} /><p className="text-sm text-muted-foreground">Remove a flag after checking and correcting that field against the invoice.</p></div>}
       {notice && (
         <Alert>
           <CheckCircle2 className="h-4 w-4" />
@@ -1263,6 +1403,14 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-5">
         <div className="space-y-5 min-w-0">
+          {access.create && suppliers.length > 0 && <div className="rounded-md border p-3">
+            <Label htmlFor="saved-purchase-supplier">Saved supplier</Label>
+            <select id="saved-purchase-supplier" className="mt-2 block w-full rounded-md border p-2" value="" disabled={savedFormLocked || saving || extracting || processing}
+              onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) setHeader(current => ({ ...current, distributorName: supplier.name, distributorGstin: supplier.gstNumber || '' })); }}>
+              <option value="">Select after checking the original invoice</option>
+              {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.gstNumber || 'GSTIN missing'}</option>)}
+            </select>
+          </div>}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1270,7 +1418,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 Invoice OCR
               </CardTitle>
               <CardDescription>
-                Upload distributor invoice PDFs or images first, then review and save the extracted draft.
+                Upload an invoice for goods received. The original file is saved before extraction. Import saves the invoice details and adds stock when every check passes.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1281,22 +1429,29 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   </Label>
                   <Input
                     id="purchase-invoice-upload"
+                    ref={fileInputRef}
                     type="file"
                     accept="application/pdf,image/*"
                     onChange={(event) =>
                       setOcrFile(event.target.files?.[0] || null)
                     }
-                    disabled={extracting}
+                    disabled={extracting || saving || processing}
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Accepts scanned PDFs, photos, JPG, PNG, or WebP. Extraction only prefills this form; stock is not changed.
+                    Accepts scanned PDFs, photos, JPG, PNG, or WebP. Extract Draft saves the original file and previews the details without adding stock.
                   </p>
                 </div>
-                <div className="flex items-end">
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <Label htmlFor="import-received-date">Received on</Label>
+                    <Input id="import-received-date" type="date" value={importReceivedDate}
+                      onChange={(event) => setImportReceivedDate(event.target.value)}
+                      disabled={extracting || saving || processing} />
+                  </div>
                   <Button
                     type="button"
-                    onClick={extractFromInvoiceFile}
-                    disabled={extracting || !ocrFile}
+                    onClick={() => extractFromInvoiceFile(true)}
+                    disabled={!access.automate || extracting || saving || processing || !ocrFile || !importReceivedDate}
                     className="w-full md:w-auto"
                   >
                     {extracting ? (
@@ -1304,11 +1459,14 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     ) : (
                       <Upload className="h-4 w-4 mr-2" />
                     )}
-                    {extracting ? 'Reading Invoice' : 'Extract Draft'}
+                    {extracting ? 'Processing Invoice' : 'Import & Add Stock'}
                   </Button>
+                  <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(false)}
+                    disabled={!access.create || extracting || saving || processing || !ocrFile}>Extract Draft</Button>
                 </div>
               </div>
 
+              {sourceDocument && <div className="rounded-md border p-3 text-sm"><p className="mb-1 font-medium">Original file saved</p>{access.read && <OriginalDocumentLink document={sourceDocument} />}</div>}
               {ocrSummary && (
                 <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                   <span className="font-medium">{ocrSummary.fileName || 'Invoice'}</span>
@@ -1334,7 +1492,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </CardContent>
           </Card>
 
-          {masterMatches.length > 0 && (
+          {lines.some((line) => line.productName.trim()) && !savedFormLocked && (
             <Card>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1352,7 +1510,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     variant="outline"
                     size="sm"
                     onClick={refreshMasterMatches}
-                    disabled={masterRefreshing || masterConfirming !== null}
+                    disabled={!access.create || savedFormLocked || masterRefreshing || masterConfirming !== null}
                   >
                     {masterRefreshing ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1364,8 +1522,10 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 </div>
               </CardHeader>
               <CardContent className="space-y-3">
+                {masterMatches.length === 0 && <p className="text-sm text-muted-foreground">Refresh matches to resolve product records for these invoice lines.</p>}
                 {masterMatches.map((match) => {
-                  const line = lines[match.lineIndex];
+                  if (!access.create) return;
+    const line = lines[match.lineIndex];
                   const best = match.candidates[0];
                   const status = masterStatuses[match.lineIndex];
                   const confirmMatchKey = `${match.lineIndex}:MATCH_EXISTING`;
@@ -1452,7 +1612,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                             onClick={() =>
                               confirmMasterLine(match, 'MATCH_EXISTING', best)
                             }
-                            disabled={masterConfirming !== null}
+                            disabled={!access.create || savedFormLocked || masterConfirming !== null}
                           >
                             {masterConfirming === confirmMatchKey && (
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1463,7 +1623,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                         <Button
                           type="button"
                           onClick={() => confirmMasterLine(match, 'CREATE_NEW')}
-                          disabled={masterConfirming !== null}
+                          disabled={!access.create || savedFormLocked || masterConfirming !== null}
                         >
                           {masterConfirming === createKey && (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -1478,6 +1638,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </Card>
           )}
 
+          <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="space-y-5 min-w-0">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1575,7 +1736,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 />
                 <Field
                   id="doctor-reg"
-                  label="Doctor / Reg. No."
+                  label="Doctor / Reg. No. (optional)"
                   value={header.doctorNameOrRegNo}
                   onChange={(event) =>
                     updateHeader('doctorNameOrRegNo', event.target.value)
@@ -1920,9 +2081,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                         max="1"
                         step="0.01"
                         value={line.ocrConfidence}
-                        onChange={(event) =>
-                          updateLine(line.localId, 'ocrConfidence', event.target.value)
-                        }
+                        readOnly
                         placeholder="Manual entry"
                       />
                       <div className="md:col-span-2">
@@ -1937,6 +2096,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                         />
                       </div>
                     </div>
+                    <ReportedAmountsEditor id={line.localId} values={Array.isArray(originalAmounts?.items) ? originalAmounts.items[index] : null}
+                      labels={reportedLineAmounts} disabled={savedFormLocked || saving || extracting || processing}
+                      onChange={(key, value) => updateReportedAmount(key, value, index)} />
                   </CardContent>
                 </Card>
               );
@@ -2039,6 +2201,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   strong
                 />
               </div>
+              <ReportedAmountsEditor id="invoice" values={originalAmounts} labels={reportedHeaderAmounts}
+                disabled={savedFormLocked || saving || extracting || processing}
+                onChange={(key, value) => updateReportedAmount(key, value)} />
             </CardContent>
           </Card>
 
@@ -2072,9 +2237,25 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               )}
             </div>
           )}
+          </fieldset>
         </div>
 
         <aside className="space-y-5 min-w-0">
+          {(unlinkedUploads.length > 0 || uploadListError) && <Card>
+            <CardHeader><CardTitle className="text-base">Uploads awaiting invoice details</CardTitle>
+              <CardDescription>Originals stay saved even when extraction fails. Showing the latest 20.</CardDescription></CardHeader>
+            <CardContent className="space-y-3">
+              {uploadListError && <p className="text-sm text-destructive">Could not load saved uploads: {uploadListError}</p>}
+              {unlinkedUploads.map((document) => <div key={document.id} className="space-y-2 rounded-md border p-3">
+                <OriginalDocumentLink document={document} />
+                <Button variant="outline" size="sm" disabled={saving || extracting || processing || savedFormLocked}
+                  onClick={() => { setSourceDocument(document); setNotice('Original selected for this draft. Save Draft links the file to the invoice.'); }}>
+                  Use for this draft
+                </Button>
+              </div>)}
+              <Button variant="outline" size="sm" onClick={loadUnlinkedUploads}>Refresh saved uploads</Button>
+            </CardContent>
+          </Card>}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between gap-3">
@@ -2145,7 +2326,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </CardHeader>
             <CardContent className="space-y-4">
               {activeInvoice && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && (
-                <Button variant="outline" disabled={saving || extracting} onClick={() => editSavedDraft(activeInvoice)}>Edit saved draft</Button>
+                <Button variant="outline" disabled={!access.create || saving || extracting} onClick={() => editSavedDraft(activeInvoice)}>Edit saved draft</Button>
               )}
               {!activeInvoice ? (
                 <p className="text-sm text-muted-foreground">Select or save a purchase invoice</p>
@@ -2175,6 +2356,10 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     </div>
                   </div>
 
+                  {!!activeInvoice.documents?.length && <div className="space-y-2 text-sm">
+                    <p className="font-medium">Original documents</p>
+                    {activeInvoice.documents.map((document) => <OriginalDocumentLink key={document.id} document={document} />)}
+                  </div>}
                   {activeIssues.length > 0 && (
                     <Alert variant="destructive">
                       <AlertTriangle className="h-4 w-4" />
@@ -2211,9 +2396,18 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   </div>
 
                   <div className="grid grid-cols-1 gap-2">
+                    {!['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && (
+                      <>
+                        <Button onClick={processSavedInvoice} disabled={!access.automate || processing || saving || extracting || reviewing || committing}>
+                          {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                          {editingId === activeInvoice.id && !savedFormLocked ? 'Save & Process' : 'Process Saved Invoice'}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">Processing rechecks invoice details and adds stock when every check passes.</p>
+                      </>
+                    )}
                     <Button
                       onClick={reviewInvoice}
-                      disabled={!canReview || reviewing || committing}
+                      disabled={!canReview || reviewing || committing || processing}
                       variant="outline"
                     >
                       {reviewing ? (
@@ -2225,7 +2419,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     </Button>
                     <Button
                       onClick={commitStock}
-                      disabled={!canCommit || committing || reviewing}
+                      disabled={!canCommit || committing || reviewing || processing}
                     >
                       {committing ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2319,6 +2513,30 @@ type FieldProps = React.InputHTMLAttributes<HTMLInputElement> & {
   id: string;
   label: string;
 };
+
+function OriginalDocumentLink({ document }: { document: OriginalDocument }) {
+  return <a className="block break-words text-sm text-primary underline underline-offset-4"
+    href={`/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(document.id)}`} download={document.fileName}>
+    Download original: {document.fileName} ({Math.max(1, Math.round(document.sizeBytes / 1024))} KB)
+  </a>;
+}
+
+function ReportedAmountsEditor({ id, values, labels, disabled, onChange }: {
+  id: string; values: Record<string, unknown> | null | undefined; labels: Record<string, string>;
+  disabled: boolean; onChange: (key: string, value: string) => void;
+}) {
+  const fields = Object.entries(labels).filter(([key]) => values?.[key] !== undefined && values?.[key] !== null);
+  if (!fields.length) return null;
+  return <details className="rounded-md border p-3">
+    <summary className="cursor-pointer text-sm font-medium">Amounts read from invoice</summary>
+    <p className="my-3 text-xs text-muted-foreground">Check these amounts against the invoice and correct any reading errors. Printed amounts stay unchanged when quantities, rates or taxes change. Correct these fields only against the original invoice.</p>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {fields.map(([key, label]) => <Field key={key} id={`${id}-reported-${key}`} label={`Reported ${label}`}
+        type="number" min="0" step="0.01" value={String(values?.[key] ?? '')} disabled={disabled}
+        onChange={(event) => onChange(key, event.target.value)} />)}
+    </div>
+  </details>;
+}
 
 function Field({ id, label, className, ...props }: FieldProps) {
   return (

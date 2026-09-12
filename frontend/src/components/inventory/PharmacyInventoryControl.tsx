@@ -75,7 +75,7 @@ export function PharmacyInventoryControl() {
             active={inventoryTab === 'order-ocr'}
             icon={<FileUp className="h-4 w-4" />}
             title="Supplier invoice OCR"
-            detail="Read bills, match HSN/GST/batches, update costs, then commit stock after review."
+            detail="Import bills and add fully validated stock automatically. Review exceptions here."
             action="Scan invoice"
             onClick={() => openInventory('order-ocr')}
           />
@@ -306,7 +306,7 @@ function WorkbenchHeader({
       </div>
       <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
         <CheckCircle2 className="h-3.5 w-3.5" />
-        Review before commit
+        Validate before adding stock
       </div>
     </div>
   );

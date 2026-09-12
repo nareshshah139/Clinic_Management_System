@@ -124,6 +124,7 @@ model Branch {
   pharmacyInvoices         PharmacyInvoice[]
   pharmacyPackages         PharmacyPackage[]
   pharmacyPurchaseInvoices PharmacyPurchaseInvoice[]
+  pharmacyPurchaseDocuments PharmacyPurchaseInvoiceDocument[]
   pharmacyPurchasePayments PharmacyPurchasePayment[]
   partnerOrganizations     PartnerOrganization[]
   partnerDailySales        PartnerDailySale[]
@@ -1380,6 +1381,7 @@ model PharmacyPurchaseInvoice {
 
   branch             Branch                              @relation(fields: [branchId], references: [id])
   items              PharmacyPurchaseInvoiceItem[]
+  documents          PharmacyPurchaseInvoiceDocument[]
   paymentAllocations PharmacyPurchasePaymentAllocation[]
 
   @@unique([branchId, distributorGstin, invoiceNumber])
@@ -1390,6 +1392,28 @@ model PharmacyPurchaseInvoice {
   @@index([status])
   @@index([stockCommittedAt])
   @@map("pharmacy_purchase_invoices")
+}
+
+// Original uploads are retained independently of OCR success and linked on save.
+model PharmacyPurchaseInvoiceDocument {
+  id                String   @id @default(cuid())
+  branchId          String
+  purchaseInvoiceId String?
+  uploadedBy        String?
+  fileName          String
+  mimeType          String
+  sizeBytes         Int
+  sha256            String
+  data              Bytes
+  createdAt         DateTime @default(now())
+
+  branch          Branch @relation(fields: [branchId], references: [id])
+  purchaseInvoice PharmacyPurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, sha256])
+  @@index([purchaseInvoiceId])
+  @@index([branchId, createdAt])
+  @@map("pharmacy_purchase_invoice_documents")
 }
 
 model PharmacyPurchaseInvoiceItem {

@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: false,
   },
   experimental: {
+    // Invoice OCR performs two bounded reads plus persistence before responding.
+    proxyTimeout: 300000,
     optimizeCss: false,
     externalDir: true,
   },

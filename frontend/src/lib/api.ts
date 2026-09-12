@@ -448,6 +448,10 @@ export class ApiClient {
     return this.get<T>(`/pharmacy/purchase-invoices/${id}`);
   }
 
+  async getUnlinkedPurchaseDocuments<T = unknown>(): Promise<T> {
+    return this.get<T>('/pharmacy/purchase-invoices/documents');
+  }
+
   async createPharmacyPurchaseInvoiceDraft<T = unknown>(
     data: Record<string, unknown>
   ): Promise<T> {
@@ -486,6 +490,10 @@ export class ApiClient {
 
   async commitPharmacyPurchaseInvoiceStock<T = unknown>(id: string): Promise<T> {
     return this.post<T>(`/pharmacy/purchase-invoices/${id}/commit-stock`, {});
+  }
+
+  async processPharmacyPurchaseInvoice<T = unknown>(id: string): Promise<T> {
+    return this.post<T>(`/pharmacy/purchase-invoices/${id}/process`, {});
   }
 
   async updatePharmacyInvoice(id: string, data: Record<string, unknown>) {

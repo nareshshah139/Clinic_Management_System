@@ -2,6 +2,7 @@ import { RequestContextService } from '../../../shared/context/request-context.s
 import sharp from 'sharp';
 import { PrismaService } from '../../../shared/database/prisma.service';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
+import { readFile } from 'fs/promises';
 
 // Opt in explicitly: this invokes the configured, OAuth-authenticated Codex model.
 // No mocked fetch, model, database, or service. This extraction stage needs no DB.
@@ -44,4 +45,28 @@ live('Purchase invoice real Codex OAuth extraction', () => {
       await prisma.$disconnect();
     }
   }, 180000);
+
+  // Optional local manifest: [{ path, expected: { invoiceNumber, netPayable, items } }].
+  // Keep customer photos and extracted records outside the repository. This uses
+  // the same real extraction path, without database matching, saving or stock writes.
+  if (process.env.PHARMACY_OCR_FIXTURE_MANIFEST) {
+    it('extracts supplied invoice photos with expected identities, quantities and totals', async () => {
+      const fixtures = JSON.parse(await readFile(process.env.PHARMACY_OCR_FIXTURE_MANIFEST!, 'utf8'));
+      const prisma = new PrismaService(new RequestContextService());
+      const service = new PharmacyPurchaseInvoiceService(prisma);
+      try {
+        for (const fixture of fixtures) {
+          const buffer = await readFile(fixture.path);
+          const result = await service.extractDocumentDraft({
+            buffer, size: buffer.length, originalname: fixture.path.split('/').pop(), mimetype: 'image/jpeg',
+          } as Express.Multer.File, 'live-test-no-database');
+          expect(result.draft).toMatchObject(fixture.expected);
+          expect(result.draft.items).toHaveLength(fixture.expected.items.length);
+          console.info(`Verified supplied invoice ${result.draft.invoiceNumber}: ${result.draft.items.length} rows, total ${result.draft.netPayable}`);
+        }
+      } finally {
+        await prisma.$disconnect();
+      }
+    }, 720000);
+  }
 });

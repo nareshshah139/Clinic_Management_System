@@ -45,6 +45,13 @@ const toOptionalNumber = ({ value }: { value: unknown }) => {
   return toNumber({ value });
 };
 
+export class ImportPharmacyPurchaseInvoiceDto {
+  @ApiPropertyOptional({ description: 'Operator-confirmed date the invoiced goods were received', example: '2026-09-12' })
+  @IsOptional()
+  @IsDateString()
+  goodsReceivedDate?: string;
+}
+
 export class CreatePharmacyPurchaseInvoiceItemDto {
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
@@ -199,6 +206,11 @@ export class CreatePharmacyPurchaseInvoiceItemDto {
 }
 
 export class CreatePharmacyPurchaseInvoiceDto {
+  @ApiPropertyOptional({ description: 'Archived original upload to link to this invoice' })
+  @IsOptional()
+  @IsString()
+  sourceDocumentId?: string;
+
   @ApiProperty({ example: 'Linae Distributors' })
   @IsString()
   distributorName: string;
@@ -274,9 +286,10 @@ export class CreatePharmacyPurchaseInvoiceDto {
   @IsString()
   buyerCode?: string;
 
-  @ApiProperty({ example: 'Dr. Shravya / TS-MC-12345' })
+  @ApiPropertyOptional({ description: 'Doctor reference, only when printed on the supplier invoice' })
+  @IsOptional()
   @IsString()
-  doctorNameOrRegNo: string;
+  doctorNameOrRegNo?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

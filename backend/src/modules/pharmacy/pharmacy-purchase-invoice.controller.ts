@@ -8,6 +8,8 @@ import {
   Post,
   Query,
   Request,
+  Res,
+  StreamableFile,
   UploadedFile,
   UseInterceptors,
   UseGuards,
@@ -21,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
+import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -29,6 +32,7 @@ import { PharmacyPurchaseInvoiceService } from './pharmacy-purchase-invoice.serv
 import {
   ConfirmPharmacyPurchaseMasterDto,
   CreatePharmacyPurchaseInvoiceDto,
+  ImportPharmacyPurchaseInvoiceDto,
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
@@ -63,9 +67,24 @@ export class PharmacyPurchaseInvoiceController {
     private readonly purchaseInvoiceService: PharmacyPurchaseInvoiceService,
   ) {}
 
+  @Get('capabilities')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @ApiOperation({ summary: 'Return effective purchase permissions for the signed-in user' })
+  capabilities(@Request() req: any) {
+    return this.purchaseInvoiceService.capabilities(req.user);
+  }
+
+  @Get('suppliers')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create', 'pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: 'List active branch suppliers for invoice identity matching' })
+  suppliers(@Request() req: any) {
+    return this.purchaseInvoiceService.purchaseSuppliers(req.user.branchId);
+  }
+
   @Post('drafts')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({
     summary:
       'Create a purchase invoice draft from manual entry or reviewed OCR output',
@@ -87,16 +106,16 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Patch('drafts/:id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({ summary: 'Correct an unreviewed purchase invoice draft' })
   updateDraft(@Param('id') id: string, @Body() dto: CreatePharmacyPurchaseInvoiceDto, @Request() req: any) {
     return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId);
   }
 
   @Post('ocr/extract')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary:
@@ -105,7 +124,7 @@ export class PharmacyPurchaseInvoiceController {
   @ApiResponse({
     status: 200,
     description:
-      'Purchase invoice draft extracted for human review; no database rows are created',
+      'Original upload archived and invoice details extracted; no invoice or stock rows are created',
   })
   @UseInterceptors(
     FileInterceptor('file', {
@@ -124,12 +143,67 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.extractDraftFromDocument(
       file,
       req.user.branchId,
+      req.user.id,
     );
   }
 
+  @Get('documents')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: 'List recent original uploads awaiting invoice linkage' })
+  listUnlinkedDocuments(@Request() req: any) {
+    return this.purchaseInvoiceService.listUnlinkedDocuments(req.user.branchId);
+  }
+
+  @Get('documents/:documentId')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  @ApiOperation({ summary: 'Download the exact original invoice photo or PDF' })
+  async getOriginalDocument(@Param('documentId') documentId: string, @Request() req: any, @Res({ passthrough: true }) res: Response) {
+    const document = await this.purchaseInvoiceService.getOriginalDocument(documentId, req.user.branchId);
+    const fileName = encodeURIComponent(document.fileName).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+    res.set({
+      'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "sandbox; default-src 'none'",
+    });
+    return new StreamableFile(Buffer.from(document.data), {
+      type: document.mimeType, length: document.sizeBytes,
+      disposition: `attachment; filename="invoice-original"; filename*=UTF-8''${fileName}`,
+    });
+  }
+
+  @Post('ocr/import')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(
+    ['pharmacy:purchase-invoice:create', 'inventory:po:create'],
+    ['pharmacy:purchase-invoice:review', 'inventory:po:update'],
+    ['pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create'],
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Extract and save an invoice, then automatically commit stock only when all checks pass' })
+  @UseInterceptors(FileInterceptor('file', {
+    storage: memoryStorage(), fileFilter: purchaseInvoiceDocumentFilter,
+    limits: { fileSize: PURCHASE_OCR_UPLOAD_LIMIT_BYTES, files: 1 },
+  }))
+  importFromDocument(@UploadedFile() file: Express.Multer.File, @Body() dto: ImportPharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.importFromDocument(file, req.user.branchId, req.user.id, dto.goodsReceivedDate);
+  }
+
+  @Post(':id/process')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(
+    ['pharmacy:purchase-invoice:create', 'inventory:po:create'],
+    ['pharmacy:purchase-invoice:review', 'inventory:po:update'],
+    ['pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create'],
+  )
+  @ApiOperation({ summary: 'Recheck a saved invoice and automatically commit fully validated stock' })
+  processInvoice(@Param('id') id: string, @Request() req: any) {
+    return this.purchaseInvoiceService.processInvoice(id, req.user.branchId, req.user.id);
+  }
+
   @Post('master-matches')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({
     summary:
       'Find nearest drug-master matches for purchase invoice OCR line items',
@@ -145,8 +219,8 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Post('master-confirmations')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:create')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({
     summary:
       'Confirm an OCR purchase line against the drug master or create a reviewed drug master record',
@@ -162,8 +236,8 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
-  @Permissions('pharmacy:purchase-invoice:read')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
   @ApiOperation({ summary: 'List purchase invoice drafts' })
   findAll(
     @Query() query: QueryPharmacyPurchaseInvoiceDto,
@@ -173,8 +247,8 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Get('analytics/distributors')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
-  @Permissions('pharmacy:purchase-invoice:read')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
   @ApiOperation({
     summary: 'Get distributor purchase analytics from reviewed invoices',
   })
@@ -189,16 +263,16 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
-  @Permissions('pharmacy:purchase-invoice:read')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
   @ApiOperation({ summary: 'Get a purchase invoice draft by ID' })
   findOne(@Param('id') id: string, @Request() req: any) {
     return this.purchaseInvoiceService.findOne(id, req.user.branchId);
   }
 
   @Patch(':id/review')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:review')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:review', 'inventory:po:update'])
   @ApiOperation({
     summary:
       'Mark a purchase invoice as reviewed once OCR and reconciliation issues are clear',
@@ -212,8 +286,8 @@ export class PharmacyPurchaseInvoiceController {
   }
 
   @Post(':id/commit-stock')
-  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
-  @Permissions('pharmacy:purchase-invoice:commit-stock')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create'])
   @ApiOperation({
     summary:
       'Commit reviewed purchase invoice lines into pharmacy inventory stock',

@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
+import { PERMISSIONS_KEY, PermissionRequirement } from '../decorators/permissions.decorator';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -11,7 +11,7 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
+    const requiredPermissions = this.reflector.getAllAndOverride<PermissionRequirement[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -87,7 +87,12 @@ export class PermissionsGuard implements CanActivate {
 
     const effectivePermissions = Array.from(new Set([...(rolePermissions || []), ...(userPermissions || [])]));
 
-    // Require all listed permissions
-    return requiredPermissions.every((perm) => effectivePermissions.includes(perm));
+    // Existing string entries retain all-of semantics. Alternatives are accepted
+    // only when explicitly declared by that endpoint.
+    return requiredPermissions.every((requirement) =>
+      typeof requirement === 'string'
+        ? effectivePermissions.includes(requirement)
+        : requirement.some((permission) => effectivePermissions.includes(permission)),
+    );
   }
-} 
+}

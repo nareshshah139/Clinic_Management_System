@@ -45,7 +45,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
         quantityPurchased: 20,
         freeQuantity: 2,
         mrp: 78,
-        discountPercent: 10,
+        discountPercent: 0,
         purchaseRate: 55,
         taxableAmount: 1100,
         cgstPercent: 6,
@@ -158,7 +158,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
   });
 
-  it('marks OCR drafts as review-required when flags or low confidence exist', async () => {
+  it('marks OCR drafts as review-required while explicit flags remain', async () => {
     const dto = validDto();
     dto.source = PharmacyPurchaseInvoiceSourceDto.OCR;
     dto.ocrFlags = ['low_confidence_distributorGstin'];
@@ -174,7 +174,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           status: 'OCR_REVIEW_REQUIRED',
-          unresolvedOcrFlags: 2,
+          unresolvedOcrFlags: 1,
         }),
       }),
     );
