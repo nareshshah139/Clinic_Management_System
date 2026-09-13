@@ -130,6 +130,15 @@ describe('Automatic purchase invoice intake', () => {
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
 
+  it('keeps a header OCR issue once when automatic processing also reports it', async () => {
+    draft.ocrFlags = ['independent_read_disagrees_distributorGstin'];
+    const result = await importInvoice();
+    expect(result.automation.status).toBe('SAVED_FOR_REVIEW');
+    expect(result.invoice.reconciliationIssues.filter((issue: string) => issue.includes('independent_read_disagrees_distributorGstin')))
+      .toEqual(['OCR: independent_read_disagrees_distributorGstin']);
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
   it('preserves low OCR confidence after human correction while keeping automatic stock blocked', async () => {
     draft.items[0].ocrConfidence = 0.86;
     draft.items[0].ocrFlags = [];

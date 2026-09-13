@@ -1,4 +1,6 @@
 export const normalizedIdentity = (value: unknown) => String(value ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+// Decimal points and + signs can change a product's strength or formulation.
+const normalizedProductName = (value: string) => value.toUpperCase().replace(/\s+/g, '');
 
 // Preserve pack dimensions: 30 ML is distinct from 30 tablets or 30 G.
 export function canonicalPurchasePack(size: string, unit = ''): string {
@@ -20,6 +22,13 @@ export function verifyPurchaseRead(draft: any, verification: any) {
   const items = draft.items.map((item: any, index: number) => {
     const other = verification?.items?.[index];
     const itemFlags = [...(item.ocrFlags || [])];
+    for (const key of ['productName', 'hsnCode', 'packSize']) {
+      const normalize = key === 'packSize' ? canonicalPurchasePack
+        : key === 'productName' ? normalizedProductName : normalizedIdentity;
+      if (!other?.[key] || normalize(String(item[key] ?? '')) !== normalize(String(other[key]))) {
+        itemFlags.push(`independent_read_disagrees_${key}`);
+      }
+    }
     for (const key of ['batchNumber', 'expiryMonth', 'expiryYear', 'quantityPurchased', 'freeQuantity', 'mrp', 'purchaseRate']) {
       const equal = key === 'batchNumber'
         ? normalizedIdentity(item[key]) === normalizedIdentity(other?.[key])

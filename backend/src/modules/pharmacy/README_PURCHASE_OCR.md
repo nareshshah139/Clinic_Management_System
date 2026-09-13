@@ -24,6 +24,23 @@ original and previews extracted details without creating an invoice or stock.
 automatically receives stock only when the checks below pass.
 Excel import and manual stock approvals use application/database logic, not LLMs.
 
+## Extraction and independent verification prompts
+
+`purchase-invoice-ocr.prompts.ts` contains both prompts and their version, returned
+as `extraction.promptVersion`. Each read receives the original images; the second
+read never receives the first read's answers. The prompts traverse pages and every
+visible batch row, including 20+ rows, retain repeated products as separate rows,
+distinguish free packs from pack size, and exclude headers and carry-forward totals.
+They reread ambiguous GSTIN/batch characters without guessing from identifier format
+or product knowledge, preserve printed amounts, and flag incomplete page sets.
+
+The backend compares product name, pack size and HSN as well as supplier/invoice
+identity, batch, expiry, paid/free quantities, MRP, rate, row count and payable total
+across the reads. Disagreements remain review issues; neither answer silently wins.
+Unknown payment terms are blocked even if the model omits its uncertainty flag.
+The form's existing bill-type default is for display and cannot clear that flag.
+These changes require a backend deployment, with no database migration.
+
 ## Original documents
 
 `pharmacy_purchase_invoice_documents` stores the original binary bytes (`BYTEA`),
@@ -99,6 +116,35 @@ by **Commit Stock** without editing the model's confidence score. Expand **Amoun
 totals to correct a reading error against the source document. Matching controls
 also remain accessible for reopened drafts.
 
+### Reviewer workflow for saved exceptions
+
+The **Finish invoice review** section stays above the editor on desktop and mobile.
+Open **Review issues** on the selected saved invoice (imported exceptions open for
+editing immediately), then use this sequence:
+
+1. Open the original invoice. Choose verified Cash/Credit terms; “APPROVAL BILLS”
+   alone does not determine them. For Credit, enter the due date. Select the matching
+   saved supplier or enter its verified name/GSTIN; check the supplier, not buyer, GSTIN.
+2. Follow each **Go to…** link, correct the value and use **Confirm … checked**.
+   A confirmation for a missing manufacturer/unit stays disabled until the field
+   is filled. **Refresh Matches** can fill verified product/manufacturer/pack details;
+   the stock unit can also be entered after checking the product packaging.
+   Missing-page issues direct the reviewer to upload a complete document.
+3. Use **Save corrections**. This updates the same invoice and recalculates its
+   validation issues without adding stock. Duplicate AUTO/OCR messages from older
+   records are combined for display; new automatic checks store header flags once.
+4. Confirm **Goods Received Date**, then **Mark Reviewed**. This is the human review
+   path for checked low-confidence OCR; it does not increase the confidence score.
+5. Use **Commit Stock**, then confirm the existing stock confirmation dialog.
+   Stock changes only at this final step. A committed invoice cannot be posted again.
+
+The guide explains why review/commit are disabled and which permission is missing.
+It does not grant permissions or bypass saved validation, expiry, quantity, product
+matching or stock idempotency checks. Repeated **Save & Process** attempts still use
+the stricter automatic criteria, including 98% confidence. They are not the manual
+review path. Both backend and frontend deployment are needed for this UI and the
+duplicate-message fix; no new migration is required.
+
 Both automatic endpoints require **all three** permissions: purchase-invoice
 create, review, and commit-stock. The corresponding Inventory alternatives are
 `inventory:po:create`, `inventory:po:update`, and `inventory:transaction:create`.
@@ -156,6 +202,34 @@ and asserts invoice number, quantities, batch, expiry, price, and total. It cont
 no mocks. It verifies image processing, inference, JSON parsing, and normalization;
 it does not connect to a database or commit stock. Existing deterministic unit tests
 for database operations remain separate and are not evidence of live DB behavior.
+
+For dense 20-row and multiple-page coverage, run from the repository root:
+
+```sh
+RUN_CODEX_LIVE_TESTS=1 PHARMACY_AGENT_CODEX_PATH="$PWD/node_modules/.bin/codex" \
+  node backend/test/purchase-ocr-evaluate.cjs /tmp/purchase-ocr-20
+```
+
+The evaluator generates a sideways 20-row JPEG, a complete two-page PDF with 20
+rows, and page 2 alone. Fixtures contain synthetic supplier/buyer identities, 16
+distinct products in 20 batch rows, leading-zero batches, paid/free quantities,
+old/current MRP, varied rates and GST splits. It uses the real image/PDF processing,
+both model reads, parsing and normalization with the production timeout defaults.
+It asserts every expected field and row order, no blocking flags for the clear
+complete fixtures, and an incomplete-document flag with only visible rows for the
+missing-page fixture. Per-line GST/total comparisons allow one paisa of rounding;
+identifiers, quantities, rates and header totals must match. Results, timings and
+exact discrepancies are written to `results.json` in the output directory, and any
+failed case makes the process exit nonzero. It never calls database or stock routes.
+
+`PHARMACY_OCR_FIXTURE_MANIFEST` can point to existing `{path, mimetype, expected,
+complete}` fixtures instead of generating them; omit `complete` to compare fields
+without requiring a flag-free real-world document. `OCR_CASE_FILTER` selects a
+filename substring for a targeted rerun. Keep customer images and raw results
+outside source control. These are sampled live model checks, not a guarantee that
+every photograph is readable. The workbench component regression also checks that
+20 extracted rows render and survive an edit/save of the final row; its API is
+mocked, so it does not establish live database persistence.
 
 `pharmacy-purchase-invoice.database.spec.ts` exercises real PostgreSQL persistence,
 duplicate uploads, concurrent processing, batch increments, transaction rollback

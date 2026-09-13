@@ -125,6 +125,41 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(await screen.findByRole('link', { name: /Download original: unreadable.jpg/ })).toHaveAttribute('href', '/api/pharmacy/purchase-invoices/documents/failed-ocr-document');
   });
 
+  it('renders and saves all 20 OCR batch rows, including repeated products and a correction on the last row', async () => {
+    const items = Array.from({ length: 20 }, (_, index) => ({
+      ...draftInvoice.items[0], id: `line-${index + 1}`, lineNumber: index + 1, serialNumber: index + 1,
+      productName: `Sample Cream ${index % 16 + 1}`, batchNumber: `BATCH-${index + 1}`,
+      cgstPercent: 6, sgstPercent: 6,
+    }));
+    const invoice = { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02',
+      grossAmount: 2000, taxableAmount: 2000, totalCgst: 120, totalSgst: 120, totalGst: 240, netPayable: 2240, items };
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ draft: invoice }) });
+    api.createPharmacyPurchaseInvoiceDraft.mockResolvedValue(invoice);
+    const { container } = render(<PurchaseInvoiceWorkbench />);
+    const saveButton = screen.getByRole('button', { name: 'Save Draft' });
+    const extractButton = screen.getByRole('button', { name: 'Extract Draft' });
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), {
+      target: { files: [new File(['synthetic'], 'twenty-items.pdf', { type: 'application/pdf' })] },
+    });
+    await act(async () => { fireEvent.click(extractButton); });
+    // Select the batch inputs directly; scanning every label is slow in JSDOM.
+    const batchInputs = container.querySelectorAll<HTMLInputElement>('input[id$="-batch"]');
+    expect(batchInputs).toHaveLength(20);
+    expect(batchInputs[0]).toHaveAccessibleName('Batch');
+    expect(batchInputs[0]).toHaveValue('BATCH-1');
+    expect(batchInputs[19]).toHaveAccessibleName('Batch');
+    expect(batchInputs[19]).toHaveValue('BATCH-20');
+    fireEvent.change(batchInputs[19], { target: { value: 'CORRECTED-20' } });
+    fireEvent.click(saveButton);
+    await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalled());
+    const saved = api.createPharmacyPurchaseInvoiceDraft.mock.calls[0][0];
+    expect(saved.items).toHaveLength(20);
+    expect(saved.items.map(row => row.productName)).toEqual(items.map(row => row.productName));
+    expect(saved.items[0].batchNumber).toBe('BATCH-1');
+    expect(saved.items[19].batchNumber).toBe('CORRECTED-20');
+    expect(saved.netPayable).toBe(2240);
+  });
+
   it('lets staff attach a previously unlinked upload while correcting a saved draft', async () => {
     const document = { id: 'old-upload', fileName: 'earlier.jpg', mimeType: 'image/jpeg', sizeBytes: 3000 };
     api.getUnlinkedPurchaseDocuments.mockResolvedValue([document]);
@@ -145,6 +180,45 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(await screen.findByText('Fix Required')).toBeInTheDocument();
     expect(screen.getByText('Distributor name is required')).toBeInTheDocument();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it('provides a correction-to-commit path for an approval bill blocked by OCR and low confidence', async () => {
+    const flags = ['Bill type is uncertain: invoice states APPROVAL BILLS but does not explicitly identify CASH or CREDIT.', 'independent_read_disagrees_distributorGstin'];
+    const flagged = { ...draftInvoice, status: 'OCR_REVIEW_REQUIRED', unresolvedOcrFlags: 4,
+      ocrFlags: flags, reconciliationIssues: [
+        ...flags.map(flag => `OCR: ${flag}`), ...flags.map(flag => `AUTO: OCR: ${flag}`),
+        'AUTO: Line 1: manufacturer is required before review', 'AUTO: Line 1: missing_manufacturer',
+        'AUTO: Line 1: packUnitType is required before review',
+        'AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.',
+      ], items: [{ ...draftInvoice.items[0], manufacturer: '', packUnitType: '', ocrConfidence: 0.95,
+        ocrFlags: ['missing_manufacturer', 'missing_packUnitType'] }] };
+    const clean = { ...draftInvoice, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', ocrConfidence: 0.95, ocrFlags: [] }] };
+    let persisted: any = flagged;
+    api.getPharmacyPurchaseInvoices.mockImplementation(async () => ({ data: [persisted] }));
+    api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async () => { persisted = clean; return persisted; });
+    api.reviewPharmacyPurchaseInvoice.mockImplementation(async () => { persisted = { ...clean, status: 'REVIEWED' }; return persisted; });
+    api.commitPharmacyPurchaseInvoiceStock.mockImplementation(async () => { persisted = { ...clean, status: 'STOCK_COMMITTED' }; return persisted; });
+    render(<PurchaseInvoiceWorkbench />);
+    expect(await screen.findByRole('heading', { name: 'Finish invoice review' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Review issues' }));
+    expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm bill type checked' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' }));
+    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Alembic' } });
+    fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'Strip' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 manufacturer checked' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 stock unit checked' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save corrections' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeEnabled());
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
+      ocrFlags: [], items: [expect.objectContaining({ manufacturer: 'Alembic', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark Reviewed' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Commit Stock' }));
+    await waitFor(() => expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledWith('pinv-1'));
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
   });
 
   it('imports and adds stock in one request, displaying the persisted result without an extra save or confirmation', async () => {
