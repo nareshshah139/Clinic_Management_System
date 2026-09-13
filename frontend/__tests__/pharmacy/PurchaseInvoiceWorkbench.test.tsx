@@ -72,7 +72,7 @@ async function editSelectedInvoice() {
 function saveCurrentInvoice() {
   const more = screen.queryByText('More actions');
   if (more && !more.closest('details')?.open) fireEvent.click(more);
-  fireEvent.click(screen.getByRole('button', { name: /^(Save Draft|Save corrections)$/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^(Save Draft|Save corrections|Save & Process)$/ }));
 }
 
 describe('PurchaseInvoiceWorkbench', () => {
@@ -83,6 +83,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     sessionStorage.clear();
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [] });
     api.getUnlinkedPurchaseDocuments.mockResolvedValue([]);
+    api.processPharmacyPurchaseInvoice.mockReset().mockImplementation(async () => ({
+      invoice: await api.updatePharmacyPurchaseInvoiceDraft.mock.results.at(-1)?.value || draftInvoice,
+      automation: { status: 'SAVED_FOR_REVIEW', issues: ['OCR confidence requires human review.'] },
+    }));
     window.confirm = jest.fn(() => true);
     (global as any).fetch = jest.fn();
   });
@@ -237,6 +241,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     let persisted: any = flagged;
     api.getPharmacyPurchaseInvoices.mockImplementation(async () => ({ data: [persisted] }));
     api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async () => { persisted = clean; return persisted; });
+    api.processPharmacyPurchaseInvoice.mockImplementation(async () => {
+      persisted = { ...clean, status: 'RECONCILIATION_FAILED', reconciliationIssues: ['AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.'] };
+      return { invoice: persisted, automation: { status: 'SAVED_FOR_REVIEW', issues: persisted.reconciliationIssues } };
+    });
     api.reviewPharmacyPurchaseInvoice.mockImplementation(async () => { persisted = { ...clean, status: 'REVIEWED' }; return persisted; });
     api.commitPharmacyPurchaseInvoiceStock.mockImplementation(async () => { persisted = { ...clean, status: 'STOCK_COMMITTED' }; return persisted; });
     render(<PurchaseInvoiceWorkbench />);
@@ -250,7 +258,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'Strip' } });
     expect(screen.queryByRole('button', { name: 'Confirm line 1 manufacturer checked' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 stock unit checked' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save corrections' }));
+    expect(screen.queryByRole('button', { name: 'Save corrections' })).not.toBeInTheDocument();
+    expect(screen.queryByText('More actions')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeEnabled());
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
       ocrFlags: [], items: [expect.objectContaining({ manufacturer: '', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
@@ -259,7 +269,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Commit Stock' }));
     await waitFor(() => expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledWith('pinv-1'));
-    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1);
   });
 
   it('imports and adds stock in one request, displaying the persisted result without an extra save or confirmation', async () => {
@@ -329,15 +339,65 @@ describe('PurchaseInvoiceWorkbench', () => {
       automation: { status: 'SAVED_FOR_REVIEW', issues: ['Printed total does not reconcile'] } });
     render(<PurchaseInvoiceWorkbench />);
     await editSelectedInvoice();
+    expect(screen.getAllByRole('button', { name: 'Save & Process' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Save corrections' })).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Corrected manufacturer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
     await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1'));
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
       netPayable: 120, items: [expect.objectContaining({ ocrConfidence: 0.979 })],
     }));
+    expect(screen.queryByRole('button', { name: 'Mark Reviewed' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a single save-only action for staff without automatic stock permissions', async () => {
+    mockPurchaseAccess = { read: true, create: true, review: false, commit: false, automate: false };
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
+    render(<PurchaseInvoiceWorkbench />);
+    await editSelectedInvoice();
+    expect(screen.getAllByRole('button', { name: 'Save corrections' })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Save & Process' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save corrections' }));
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1));
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+  });
+
+  it('saves once before processing even when the button is clicked rapidly', async () => {
+    let finishSave!: (invoice: typeof draftInvoice) => void;
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    api.updatePharmacyPurchaseInvoiceDraft.mockReturnValue(new Promise(resolve => { finishSave = resolve; }));
+    api.processPharmacyPurchaseInvoice.mockResolvedValue({ invoice: { ...draftInvoice, status: 'STOCK_COMMITTED' },
+      automation: { status: 'STOCK_COMMITTED', issues: [] } });
+    render(<PurchaseInvoiceWorkbench />);
+    await editSelectedInvoice();
+    const save = screen.getByRole('button', { name: 'Save & Process' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(save).toBeDisabled();
+    await act(async () => finishSave(draftInvoice));
+    await screen.findByText(/stock added automatically/);
+    expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1);
+    expect(api.updatePharmacyPurchaseInvoiceDraft.mock.invocationCallOrder[0]).toBeLessThan(api.processPharmacyPurchaseInvoice.mock.invocationCallOrder[0]);
+  });
+
+  it('returns to Save & Process when fields change after an automatic review exception', async () => {
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
+    render(<PurchaseInvoiceWorkbench />);
+    await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
+    expect(await screen.findByRole('button', { name: 'Mark Reviewed' })).toBeEnabled();
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'NEW-BATCH' } });
+    expect(screen.queryByRole('button', { name: 'Mark Reviewed' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
   });
 
   it('saves current corrections before manually marking a draft reviewed', async () => {
+    mockPurchaseAccess = { read: true, create: true, review: true, commit: false, automate: false };
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data:[draftInvoice] });
     api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
     api.reviewPharmacyPurchaseInvoice.mockResolvedValue({...draftInvoice,status:'REVIEWED'});
@@ -667,11 +727,12 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Corrected manufacturer' } });
     saveCurrentInvoice();
     await screen.findByText('Connection interrupted');
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('Corrected manufacturer');
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValueOnce(draftInvoice);
     saveCurrentInvoice();
-    await screen.findByText(/saved as DRAFT/i);
+    await screen.findByText(/Automatic intake needs a human review/i);
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(2);
   });
 

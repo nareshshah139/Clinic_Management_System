@@ -781,6 +781,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [unlinkedUploads, setUnlinkedUploads] = useState<OriginalDocument[]>([]);
   const [uploadListError, setUploadListError] = useState<string | null>(null);
   const saveLock = useRef(false);
+  const processLock = useRef(false);
+  const [manualReviewCandidateId, setManualReviewCandidateId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [headerFlags, setHeaderFlags] = useState('');
   const [ocrFile, setOcrFile] = useState<File | null>(null);
@@ -884,7 +886,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setReviewDate(dateInputFromIso(activeInvoice?.goodsReceivedDate) || todayInput());
   }, [activeInvoice?.goodsReceivedDate, activeInvoice?.id]);
 
+  useEffect(() => {
+    setManualReviewCandidateId(null);
+  }, [activeInvoice?.id]);
+
   const updateHeader = (key: keyof HeaderForm, value: string) => {
+    setManualReviewCandidateId(null);
     if (key === 'goodsReceivedDate') setReviewDate(value);
     setHeader((current) => {
       const next = { ...current, [key]: value };
@@ -894,6 +901,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
+    setManualReviewCandidateId(null);
     setLines((current) =>
       current.map((line) =>
         line.localId === localId ? { ...line, [key]: value } : line,
@@ -902,10 +910,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const addLine = () => {
+    setManualReviewCandidateId(null);
     setLines((current) => [...current, emptyLine(current.length + 1)]);
   };
 
   const removeLine = (localId: string) => {
+    setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
     const removedIndex = lines.findIndex((line) => line.localId === localId);
     setOriginalAmounts((current) => current && Array.isArray(current.items)
@@ -920,6 +930,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const updateReportedAmount = (key: string, value: string, lineIndex?: number) => {
+    setManualReviewCandidateId(null);
     setOriginalAmounts((current) => {
       if (!current) return current;
       if (lineIndex === undefined) return { ...current, [key]: value };
@@ -929,6 +940,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const resetDraft = () => {
+    setManualReviewCandidateId(null);
     setActiveInvoice(null);
     setLineExpansion({});
     setEditingId(null);
@@ -955,6 +967,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     matches?: MasterMatchResponse,
   ) => {
     const defaults = defaultHeader();
+    setManualReviewCandidateId(null);
     setActiveInvoice(null);
     setLineExpansion({});
     setOriginalAmounts(draft as Record<string, unknown>);
@@ -1030,6 +1043,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     patch?: MasterConfirmationResponse['linePatch'],
   ) => {
     if (!patch) return;
+    setManualReviewCandidateId(null);
     setLines((current) =>
       current.map((line, index) => {
         if (index !== lineIndex) return line;
@@ -1155,22 +1169,35 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const processSavedInvoice = async () => {
-    if (!access.automate || !activeInvoice || processing) return;
+    if (!access.automate || !activeInvoice || processLock.current) return;
+    processLock.current = true;
     setProcessing(true);
+    setManualReviewCandidateId(null);
     setError(null);
     setNotice(null);
     try {
       let invoiceId = activeInvoice.id;
+      let savedForReview: PurchaseInvoice | undefined;
       if (editingId === activeInvoice.id && !['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status)) {
         const saved = await saveDraft();
         if (!saved) return;
         invoiceId = saved.id;
+        savedForReview = saved;
       }
       const result = await apiClient.processPharmacyPurchaseInvoice<OcrExtractionResponse>(invoiceId);
       applyAutomationResult(result);
+      // A clean human-corrected draft may fail stricter automatic checks (such
+      // as 98% OCR confidence). Keep manual review reachable after that result.
+      // reviewInvoice saves again and the backend revalidates before reviewing.
+      if (result.automation?.status === 'SAVED_FOR_REVIEW' && result.invoice?.id === savedForReview?.id &&
+        savedForReview?.status === 'DRAFT' && !savedForReview.unresolvedOcrFlags && !savedForReview.reconciliationIssues?.length) {
+        setManualReviewCandidateId(savedForReview.id);
+        setNotice(`Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, then choose Mark Reviewed.`);
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
+      processLock.current = false;
       setProcessing(false);
     }
   };
@@ -1364,10 +1391,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const busy = saving || extracting || processing || reviewing || committing;
   const activeIssues = purchaseBlockingIssues(activeInvoice?.reconciliationIssues || []);
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
+  const awaitingManualReview = !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const canReview =
     access.review && !!activeInvoice &&
-    activeInvoice.status === 'DRAFT' &&
-    activeIssues.length === 0 &&
+    (activeInvoice.status === 'DRAFT' && activeIssues.length === 0 || awaitingManualReview &&
+      ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status)) &&
     activeOcrFlags === 0 &&
     (editingId !== activeInvoice.id || (!(splitFlags(headerFlags)?.length) && lines.every(line => !splitFlags(line.ocrFlags)?.length))) &&
     !!reviewDate;
@@ -1483,6 +1511,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           : <>
             <p className="text-sm text-muted-foreground">{activeInvoice.status === 'REVIEWED'
               ? 'Review complete. Add the purchased and free quantities to inventory.'
+              : awaitingManualReview ? 'Corrections are saved. Check the original and mark this invoice reviewed before adding stock.'
+              : editingSelectedInvoice && access.automate ? 'Save & Process saves your corrections, checks the invoice and adds stock when every automatic check passes.'
               : canReview ? 'Checks are clear. Confirm your review before adding stock.'
               : 'Check the highlighted details against the original, then save your corrections.'}</p>
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -1497,19 +1527,18 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               <div className="flex flex-wrap items-center gap-2">
                 {activeInvoice.status === 'REVIEWED' ? <Button onClick={commitStock} disabled={!canCommit || busy}>
                   {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}Commit Stock
-                </Button> : canReview ? <Button onClick={reviewInvoice} disabled={busy}>
+                </Button> : canReview && (!editingSelectedInvoice || !access.automate || awaitingManualReview) ? <Button onClick={reviewInvoice} disabled={busy}>
                   {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Mark Reviewed
-                </Button> : editingSelectedInvoice ? <Button disabled={savedFormLocked || busy} onClick={() => saveDraft()}>
-                  {saving && <Loader2 className="h-4 w-4 animate-spin" />}Save corrections
+                </Button> : editingSelectedInvoice ? <Button disabled={savedFormLocked || busy} onClick={() => access.automate ? processSavedInvoice() : saveDraft()}>
+                  {(saving || processing) && <Loader2 className="h-4 w-4 animate-spin" />}{access.automate ? 'Save & Process' : 'Save corrections'}
                 </Button> : <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
-                {activeInvoice.status !== 'REVIEWED' && <details className="relative text-sm" onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+                {activeInvoice.status !== 'REVIEWED' && (!editingSelectedInvoice || !access.automate && canReview) && <details className="relative text-sm" onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
                   <summary className="cursor-pointer rounded-md px-3 py-2 text-muted-foreground">More actions</summary>
                   <div className="mt-2 flex flex-wrap gap-2 rounded-md border bg-background p-3">
                     {['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && <>
                       {!editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
                       {editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={savedFormLocked || busy} onClick={() => saveDraft()}>Save corrections</Button>}
-                      <Button size="sm" variant="outline" onClick={processSavedInvoice} disabled={!access.automate || busy}>{processing && <Loader2 className="h-4 w-4 animate-spin" />}{editingSelectedInvoice ? 'Save & Process' : 'Process Saved Invoice'}</Button>
-                      <p className="w-full text-xs text-muted-foreground">Automatic processing adds stock only when every check passes.</p>
+                      {access.automate && <Button size="sm" variant="outline" onClick={processSavedInvoice} disabled={busy}>{processing && <Loader2 className="h-4 w-4 animate-spin" />}Process Saved Invoice</Button>}
                     </>}
                   </div>
                 </details>}
@@ -1527,7 +1556,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           </>}
         {activeIssues.length > 0 && <details className="border-t pt-3" open={!editingSelectedInvoice}>
           <summary className="cursor-pointer text-sm font-medium">Reconciliation Issues · {uniquePurchaseReviewIssues(activeIssues).length} saved checks</summary>
-          <p className="mt-2 text-sm text-muted-foreground">Save corrections to refresh these checks. Low OCR confidence requires human review; leave the score unchanged.</p>
+          <p className="mt-2 text-sm text-muted-foreground">{access.automate ? 'Save & Process refreshes these checks.' : 'Save corrections to refresh these checks.'} Low OCR confidence requires human review; leave the score unchanged.</p>
           <ul className="mt-3 grid gap-3 text-sm md:grid-cols-2">
             {uniquePurchaseReviewIssues(activeIssues).map(issue => {
               const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
