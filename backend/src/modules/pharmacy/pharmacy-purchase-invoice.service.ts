@@ -27,6 +27,7 @@ import {
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
+  SavePharmacyPurchaseSupplierDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
 type PurchaseInvoiceStatus =
@@ -104,12 +105,41 @@ export class PharmacyPurchaseInvoiceService {
     const create = has('pharmacy:purchase-invoice:create', 'inventory:po:create');
     const review = has('pharmacy:purchase-invoice:review', 'inventory:po:update');
     const commit = has('pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create');
-    return { read, create, review, commit, automate: create && review && commit };
+    return { read, create, review, commit, automate: create && review && commit,
+      saveSupplier: create && has('inventory:supplier:create') };
   }
 
   async purchaseSuppliers(branchId: string) {
     return this.prisma.supplier.findMany({ where: { branchId, isActive: true },
       select: { id: true, name: true, gstNumber: true }, orderBy: { name: 'asc' } });
+  }
+
+  async savePurchaseSupplier(dto: SavePharmacyPurchaseSupplierDto, branchId: string) {
+    const name = dto.name?.trim();
+    const gstNumber = dto.gstNumber?.trim().toUpperCase();
+    if (!name || name.length < 2 || !normalizedIdentity(name) ||
+        !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstNumber || '') || dto.verified !== true) {
+      throw new BadRequestException('Enter a supplier name and valid GSTIN, then confirm both against the original invoice.');
+    }
+    return this.prisma.$transaction(async tx => {
+      // Serialize invoice-page saves per branch so retries/concurrent reviewers
+      // reuse the supplier rather than creating ambiguous duplicate matches.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`purchase-supplier:${branchId}`}))`;
+      const suppliers = await tx.supplier.findMany({ where: { branchId },
+        select: { id: true, name: true, gstNumber: true, isActive: true } });
+      const related = suppliers.filter(supplier => normalizedIdentity(supplier.name) === normalizedIdentity(name) ||
+        supplier.gstNumber?.trim().toUpperCase() === gstNumber);
+      const exact = related.filter(supplier => supplier.isActive && normalizedIdentity(supplier.name) === normalizedIdentity(name) &&
+        supplier.gstNumber?.trim().toUpperCase() === gstNumber);
+      if (exact.length === 1) {
+        const { id, name, gstNumber } = exact[0];
+        return { id, name, gstNumber };
+      }
+      if (related.length) throw new ConflictException(
+        'A supplier with this name or GSTIN already exists. Select the matching active supplier here, or ask a supplier administrator to correct or reactivate its record. You can still verify this invoice through manual review.');
+      return tx.supplier.create({ data: { branchId, name, gstNumber, isActive: true },
+        select: { id: true, name: true, gstNumber: true } });
+    });
   }
 
   private async supplierIssues(tx: any, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string): Promise<string[]> {

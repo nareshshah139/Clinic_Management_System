@@ -13,6 +13,7 @@ jest.mock('@/components/layout/dashboard-user-context', () => ({
 jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn(),
+    post: jest.fn(),
     getPharmacyPurchaseInvoices: jest.fn(),
     getPharmacyPurchaseInvoiceById: jest.fn(),
     getUnlinkedPurchaseDocuments: jest.fn(),
@@ -91,6 +92,30 @@ describe('PurchaseInvoiceWorkbench', () => {
     }));
     window.confirm = jest.fn(() => true);
     (global as any).fetch = jest.fn();
+  });
+
+  it('saves a verified supplier in the checklist without changing stock and restores Save & Process', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, saveSupplier: true } as typeof mockPurchaseAccess;
+    const invoice = { ...draftInvoice, status: 'RECONCILIATION_FAILED',
+      reconciliationIssues: ['AUTO: Automatic intake requires one active saved supplier with matching name and GSTIN. Select a saved supplier or review manually.'] };
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [invoice] });
+    api.post.mockResolvedValue({ id: 'supplier-1', name: invoice.distributorName, gstNumber: invoice.distributorGstin });
+    render(<PurchaseInvoiceWorkbench />);
+    await editSelectedInvoice();
+    const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
+    expect(within(checklist).getByLabelText('Distributor')).toHaveValue(invoice.distributorName);
+    expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeEnabled();
+    await waitFor(() => expect(within(checklist).getByRole('checkbox', { name: /I checked the supplier/ })).toBeEnabled());
+    fireEvent.click(within(checklist).getByRole('checkbox', { name: /I checked the supplier/ }));
+    fireEvent.click(within(checklist).getByRole('button', { name: 'Save verified supplier' }));
+    await screen.findByText(/Supplier saved. Stock has not changed/);
+    expect(api.post).toHaveBeenCalledWith('/pharmacy/purchase-invoices/suppliers', {
+      name: invoice.distributorName, gstNumber: invoice.distributorGstin, verified: true,
+    });
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
   it('disables stock actions for create-only staff and does not fetch forbidden lists', async () => {

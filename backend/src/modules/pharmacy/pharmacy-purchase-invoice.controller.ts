@@ -36,6 +36,7 @@ import {
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
+  SavePharmacyPurchaseSupplierDto,
   SuggestPharmacyPurchaseMasterMatchesDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
@@ -80,6 +81,14 @@ export class PharmacyPurchaseInvoiceController {
   @ApiOperation({ summary: 'List active branch suppliers for invoice identity matching' })
   suppliers(@Request() req: any) {
     return this.purchaseInvoiceService.purchaseSuppliers(req.user.branchId);
+  }
+
+  @Post('suppliers')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:supplier:create', ['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  @ApiOperation({ summary: 'Save a verified supplier from invoice review without changing invoices or stock' })
+  saveSupplier(@Body() dto: SavePharmacyPurchaseSupplierDto, @Request() req: any) {
+    return this.purchaseInvoiceService.savePurchaseSupplier(dto, req.user.branchId);
   }
 
   @Post('drafts')

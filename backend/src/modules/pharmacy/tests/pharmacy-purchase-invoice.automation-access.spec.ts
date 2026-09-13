@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { PrismaService } from '../../../shared/database/prisma.service';
@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -31,6 +31,7 @@ describe('Automatic intake HTTP permissions', () => {
     app.use((req: any, _res: any, next: () => void) => {
       req.user = { id: 'user-1', branchId: 'branch-1', role }; next();
     });
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalGuards(module.get(RolesGuard), module.get(PermissionsGuard));
     await app.listen(0, '127.0.0.1');
   });
@@ -39,6 +40,31 @@ describe('Automatic intake HTTP permissions', () => {
   const upload = () => request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
+
+  it('allows Reception to save suppliers only with the corresponding existing permissions', async () => {
+    role = 'RECEPTION';
+    permissions = ['inventory:po:create', 'inventory:supplier:create'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/suppliers')
+      .send({ name: ' Example Supplies ', gstNumber: '36abcde1234f1z5', verified: true, branchId: 'other-branch' }).expect(201);
+    expect(service.savePurchaseSupplier).toHaveBeenCalledWith({ name: 'Example Supplies', gstNumber: '36ABCDE1234F1Z5', verified: true }, 'branch-1');
+    expect(service.processInvoice).not.toHaveBeenCalled();
+  });
+
+  it.each(['inventory:po:create', 'inventory:supplier:create'])('rejects supplier saving without %s', async missing => {
+    role = 'RECEPTION';
+    permissions = ['inventory:po:create', 'inventory:supplier:create'].filter(permission => permission !== missing);
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/suppliers')
+      .send({ name: 'Example Supplies', gstNumber: '36ABCDE1234F1Z5', verified: true }).expect(403);
+    expect(service.savePurchaseSupplier).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid GSTIN and missing verification before calling the supplier service', async () => {
+    permissions.push('inventory:supplier:create');
+    for (const data of [{ name: 'Example Supplies', gstNumber: 'wrong', verified: true }, { name: 'Example Supplies', gstNumber: '36ABCDE1234F1Z5' }]) {
+      await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/suppliers').send(data).expect(400);
+    }
+    expect(service.savePurchaseSupplier).not.toHaveBeenCalled();
+  });
 
   it('passes the file, confirmed receipt date and authenticated identity to automatic import', async () => {
     await upload().expect(201);

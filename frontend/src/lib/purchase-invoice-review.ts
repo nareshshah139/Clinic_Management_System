@@ -62,7 +62,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   if (/active saved supplier|matching name and GSTIN|saved supplier/i.test(body)) {
     return { ...base, key: `${index ?? 'header'}:supplier-match`, label: 'saved supplier', target: 'saved-purchase-supplier',
       message: 'Automatic intake could not match the supplier.',
-      help: 'Select the matching saved supplier after checking its GSTIN, or verify and enter the supplier details before manual review.' };
+      help: 'Use Supplier in the review checklist: check the name and GSTIN, then select an existing supplier or Save verified supplier. Save & Process checks the invoice again. Manual review is also available without saving a supplier.' };
   }
   if (/product master|drug master|master record/i.test(body)) {
     return { ...base, label: 'product match', target: 'purchase-master-matching', message: `${prefix}Confirm the product record.`,

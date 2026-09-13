@@ -16,6 +16,7 @@ import {
   Truck,
   Upload,
 } from 'lucide-react';
+import { PurchaseSupplierReview } from './PurchaseSupplierReview';
 import { PurchaseOcrChecklist } from './PurchaseOcrChecklist';
 import { purchaseBlockingIssues, purchaseReviewIssue, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
@@ -778,14 +779,7 @@ export function PurchaseInvoiceWorkbench() {
 function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) {
   const { user } = useDashboardUser();
   const { permissions: access, loading: permissionsLoading, error: permissionsError } = usePurchasePermissions(user?.id);
-  const [suppliers, setSuppliers] = useState<Array<{id: string; name: string; gstNumber: string | null}>>([]);
-  useEffect(() => {
-    if (!access.create) { setSuppliers([]); return; }
-    let active = true;
-    apiClient.get<Array<{id: string; name: string; gstNumber: string | null}>>('/pharmacy/purchase-invoices/suppliers')
-      .then(rows => { if (active) setSuppliers(rows); }).catch(() => { /* Manual entry remains available. */ });
-    return () => { active = false; };
-  }, [access.create]);
+  const [savingSupplier, setSavingSupplier] = useState(false);
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [header, setHeader] = useState<HeaderForm>(() => defaultHeader());
@@ -1455,7 +1449,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const editingSelectedInvoice = !!activeInvoice && editingId === activeInvoice.id;
-  const busy = saving || extracting || processing || reviewing || committing || refreshingStockStatus;
+  const busy = saving || extracting || processing || reviewing || committing || refreshingStockStatus || savingSupplier;
   const stockStatusUnknown = !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
   const stockAdded = activeInvoice?.status === 'STOCK_COMMITTED' || !!activeInvoice?.stockCommittedAt;
   const activeIssues = purchaseBlockingIssues(activeInvoice?.reconciliationIssues || []);
@@ -1477,6 +1471,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     workbenchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   };
 
+  const showSupplierReview = !activeInvoice || !stockAdded && !['REVIEWED', 'CANCELLED'].includes(activeInvoice.status);
   const editingChecks = !savedFormLocked && (!activeInvoice || editingSelectedInvoice);
   const currentHeaderFlags = splitFlags(headerFlags) || [];
   const currentLineFlags = lines.map(line => splitFlags(line.ocrFlags) || []);
@@ -1495,7 +1490,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   ] : [];
   const otherReviewIssues = uniquePurchaseReviewIssues([...activeIssues, ...missingStockFields]).filter(issue => !coveredOcrKeys.has(issue.key));
   const manualIssueKeys = new Set(activeIssues.filter(manualReviewOnlyIssue).map(issue => purchaseReviewIssue(issue).key));
-  const correctionIssues = otherReviewIssues.filter(issue => !manualIssueKeys.has(issue.key));
+  const correctionIssues = otherReviewIssues.filter(issue => !manualIssueKeys.has(issue.key) && issue.key !== 'header:supplier-match');
   const manualConfidenceLines = otherReviewIssues.filter(issue => manualIssueKeys.has(issue.key) && issue.key.endsWith(':confidence')).map(issue => (issue.lineIndex ?? 0) + 1);
   const confirmationCount = editingChecks ? currentHeaderFlags.length + currentLineFlags.reduce((sum, flags) => sum + flags.length, 0) : activeOcrFlags;
   const reviewChecklist = <section id="purchase-review-checklist" aria-labelledby="purchase-review-checklist-title" className="space-y-4 border-t pt-4">
@@ -1505,6 +1500,13 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         ? `${confirmationCount} field confirmation${confirmationCount === 1 ? '' : 's'} remaining. Correct each value using its link, then confirm it here. Save & Process saves your work and checks the invoice again.`
         : 'Choose Review issues to open the invoice fields and confirmation controls.'}</p>
     </div>
+    <PurchaseSupplierReview name={!activeInvoice || editingSelectedInvoice ? header.distributorName : activeInvoice.distributorName}
+      gstNumber={!activeInvoice || editingSelectedInvoice ? header.distributorGstin : activeInvoice.distributorGstin}
+      canLoad={access.create || access.read} canSave={!!access.saveSupplier} readOnly={!editingChecks} disabled={busy}
+      nextAction={access.automate ? 'Save & Process' : access.review ? 'Mark Reviewed' : 'Save corrections'}
+      onChange={(distributorName, distributorGstin) => { setManualReviewCandidateId(null); setHeader(current => ({ ...current, distributorName, distributorGstin })); }}
+      onSaved={() => setManualReviewCandidateId(null)} onBusy={setSavingSupplier}
+      onEdit={activeInvoice && access.create && !savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined} />
     {editingChecks && <>
       <PurchaseOcrChecklist flags={currentHeaderFlags} values={header} disabled={busy}
         onResolve={flag => { setManualReviewCandidateId(null); setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', ')); }} />
@@ -1523,9 +1525,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         </li>;
       })}
     </ul>}
-    {manualIssueKeys.size > 0 && <div className="space-y-2 border-t pt-3 text-sm">
+    {manualConfidenceLines.length > 0 && <div className="space-y-2 border-t pt-3 text-sm">
       <p className="font-semibold">Manual review required</p>
-      {manualIssueKeys.has('header:supplier-match') && <p>There is no matching saved supplier. Verify the supplier name and GSTIN against the original to proceed through manual review.</p>}
       {manualConfidenceLines.length > 0 && <p>Check the OCR reading on line{manualConfidenceLines.length === 1 ? '' : 's'} {manualConfidenceLines.join(', ')} against the original. Keep the recorded confidence scores unchanged.</p>}
       <p className="font-medium">These checks use Mark Reviewed, then Commit Stock; there is no separate checkbox for them. Resolve the other checks first.</p>
     </div>}
@@ -1824,7 +1825,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
           <section hidden={showIntakeHome} aria-label="Invoice details and products">
             {!activeInvoice && reviewChecklist}
-          <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="mt-4 space-y-5 min-w-0">
+          <fieldset disabled={savedFormLocked || busy} className="mt-4 space-y-5 min-w-0">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1836,21 +1837,13 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-          {access.create && <div className="border-b pb-4">
-            <Label htmlFor="saved-purchase-supplier">Saved supplier</Label>
-            <select id="saved-purchase-supplier" className="mt-2 block w-full rounded-md border p-2" value={suppliers.find(supplier => supplier.name === header.distributorName && supplier.gstNumber === header.distributorGstin)?.id || ''} disabled={savedFormLocked || saving || extracting || processing}
-              onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) setHeader(current => ({ ...current, distributorName: supplier.name, distributorGstin: supplier.gstNumber || '' })); }}>
-              <option value="">{suppliers.length ? 'Select after checking the original invoice' : 'No saved suppliers available'}</option>
-              {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.gstNumber || 'GSTIN missing'}</option>)}
-            </select>
-            {!suppliers.length && <p className="mt-2 text-sm text-muted-foreground">Enter and verify the supplier name and GSTIN below for manual review. Automatic intake requires a matching saved supplier.</p>}
-          </div>}
       {headerFlags && <section id="purchase-header-checks" className="space-y-3 border-b pb-4">
         <details><summary className="cursor-pointer text-sm text-muted-foreground">Advanced OCR flags</summary>
           <Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} />
         </details>
       </section>}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                {!showSupplierReview && <>
                 <Field
                   id="distributor-name"
                   label="Distributor"
@@ -1867,6 +1860,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   }
                   placeholder="36ABCDE1234F1Z5"
                 />
+                </>}
                 <Field
                   id="distributor-dl"
                   label="DL No."

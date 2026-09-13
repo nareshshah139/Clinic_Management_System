@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
+  Equals,
   IsArray,
   IsDefined,
   IsDateString,
@@ -14,8 +15,23 @@ import {
   Matches,
   Max,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
+
+export class SavePharmacyPurchaseSupplierDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @MinLength(2)
+  name: string;
+
+  @Transform(({ value }) => typeof value === 'string' ? value.trim().toUpperCase() : value)
+  @Matches(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/)
+  gstNumber: string;
+
+  @Equals(true, { message: 'Check the supplier name and GSTIN against the original invoice before saving.' })
+  verified: boolean;
+}
 
 export enum PharmacyPurchaseBillTypeDto {
   CASH = 'CASH',
