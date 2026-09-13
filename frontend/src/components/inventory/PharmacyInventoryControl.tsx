@@ -64,6 +64,8 @@ export function PharmacyInventoryControl() {
 
   return (
     <div className="space-y-5">
+      <details open={inventoryTab !== 'order-ocr'} className="space-y-4">
+        <summary className="cursor-pointer text-sm text-muted-foreground">Other inventory tools &amp; help</summary>
       <InventoryControlSummary />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
@@ -114,11 +116,13 @@ export function PharmacyInventoryControl() {
         </div>
       </section>
 
+      </details>
+
       <section ref={workbenchRef} className="scroll-mt-4 space-y-3">
-        <WorkbenchHeader
+        {inventoryTab !== 'order-ocr' && <WorkbenchHeader
           title="Pharmacy Inventory Control"
           detail="Excel starts stock, supplier OCR receives orders, Shelf Intelligence controls location-aware picking, and analytics explains costs."
-        />
+        />}
         <Tabs
           value={inventoryTab}
           onValueChange={(value: string) =>
@@ -127,24 +131,24 @@ export function PharmacyInventoryControl() {
           className="space-y-4"
         >
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 rounded-[8px] bg-slate-100 p-1 lg:grid-cols-5">
-              <TabsTrigger value="order-ocr" className="min-h-10 gap-2">
+            <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1 lg:grid lg:grid-cols-5">
+              <TabsTrigger value="order-ocr" className="min-h-10 shrink-0 gap-2">
                 <FileUp className="h-4 w-4" />
                 Supplier OCR
               </TabsTrigger>
-              <TabsTrigger value="shelf-intelligence" className="min-h-10 gap-2">
+              <TabsTrigger value="shelf-intelligence" className="min-h-10 shrink-0 gap-2">
                 <MapPin className="h-4 w-4" />
                 Shelf Intel
               </TabsTrigger>
-              <TabsTrigger value="cost-analytics" className="min-h-10 gap-2">
+              <TabsTrigger value="cost-analytics" className="min-h-10 shrink-0 gap-2">
                 <BarChart3 className="h-4 w-4" />
                 Cost Analytics
               </TabsTrigger>
-              <TabsTrigger value="ledger" className="min-h-10 gap-2">
+              <TabsTrigger value="ledger" className="min-h-10 shrink-0 gap-2">
                 <DollarSign className="h-4 w-4" />
                 Ledger
               </TabsTrigger>
-              <TabsTrigger value="compliance" className="min-h-10 gap-2">
+              <TabsTrigger value="compliance" className="min-h-10 shrink-0 gap-2">
                 <ShieldCheck className="h-4 w-4" />
                 Compliance
               </TabsTrigger>

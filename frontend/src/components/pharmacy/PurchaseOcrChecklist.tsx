@@ -13,7 +13,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
 }) {
   if (!flags.length) return null;
   return <div className="space-y-3" aria-label={lineIndex === undefined ? 'Invoice checks' : `Line ${lineIndex + 1} checks`}>
-    <p className="text-sm text-muted-foreground">Correct each value, then confirm you checked it against the original. Save corrections before marking the invoice reviewed.</p>
+    {lineIndex === undefined && <p className="text-sm text-muted-foreground">Check against the original, then confirm each correction.</p>}
     <ul className="divide-y">
       {flags.map((flag, index) => {
         const issue = purchaseReviewIssue(flag, lineIndex);
@@ -25,7 +25,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
         const label = `${lineIndex === undefined ? '' : `line ${lineIndex + 1} `}${issue.label}`;
         return <li key={`${flag}-${index}`} className="space-y-2 py-3 first:pt-0 last:pb-0">
           <p className="text-sm font-medium">{issue.message}</p>
-          <p className="max-w-prose text-sm text-muted-foreground">{issue.help}</p>
+          {issue.requiresUpload ? <p className="max-w-prose text-sm text-muted-foreground">{issue.help}</p> : <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">How to check</summary><p className="mt-1 max-w-prose">{issue.help}</p></details>}
           <div className="flex flex-wrap items-center gap-3">
             {target && <a className="text-sm text-primary underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
             {!issue.requiresUpload && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left"

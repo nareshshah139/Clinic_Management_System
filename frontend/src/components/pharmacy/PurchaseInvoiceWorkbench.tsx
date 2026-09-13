@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
-  ClipboardCheck,
   FileSearch,
   Loader2,
   PackagePlus,
@@ -775,6 +774,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [header, setHeader] = useState<HeaderForm>(() => defaultHeader());
   const [lines, setLines] = useState<LineForm[]>(() => [emptyLine(1)]);
+  const [lineExpansion, setLineExpansion] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [originalAmounts, setOriginalAmounts] = useState<Record<string, unknown> | null>(null);
   const [sourceDocument, setSourceDocument] = useState<OriginalDocument | null>(null);
@@ -802,6 +802,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const draftSelection = useRef({ editingId, hasContent: false });
+  draftSelection.current = { editingId, hasContent: !!sourceDocument || !!header.distributorName || !!header.invoiceNumber || lines.some(line => !!line.productName) };
+
 
   useEffect(() => {
     if (!recoveryKey) return;
@@ -859,7 +862,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       const rows = Array.isArray(response?.data) ? response.data : [];
       setRecent(rows);
       setActiveInvoice((current) => {
-        if (!current) return rows[0] ?? null;
+        if (!current) {
+          const draft = draftSelection.current;
+          if (draft.editingId) return rows.find(invoice => invoice.id === draft.editingId) ?? null;
+          return draft.hasContent ? null : rows[0] ?? null;
+        }
         return rows.find((invoice) => invoice.id === current.id) ?? current;
       });
     } catch (err) {
@@ -922,6 +929,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const resetDraft = () => {
+    setActiveInvoice(null);
+    setLineExpansion({});
     setEditingId(null);
     setOriginalAmounts(null);
     setSourceDocument(null);
@@ -946,6 +955,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     matches?: MasterMatchResponse,
   ) => {
     const defaults = defaultHeader();
+    setActiveInvoice(null);
+    setLineExpansion({});
     setOriginalAmounts(draft as Record<string, unknown>);
     setEditingId(null);
     setHeaderFlags((draft.ocrFlags || extraction?.flags || []).join(', '));
@@ -1346,9 +1357,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setEditingId(invoice.id);
     setSourceDocument(invoice.documents?.[0] || null);
     setActiveInvoice(invoice);
-    setNotice(`Editing saved purchase invoice ${invoice.invoiceNumber}.`);
+    setNotice(null);
   };
 
+  const editingSelectedInvoice = !!activeInvoice && editingId === activeInvoice.id;
+  const busy = saving || extracting || processing || reviewing || committing;
   const activeIssues = activeInvoice?.reconciliationIssues || [];
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
   const canReview =
@@ -1363,7 +1376,13 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     ['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
+      const link = (event.target as HTMLElement).closest('a[href^="#"]');
+      const target = link && document.getElementById(link.getAttribute('href')!.slice(1));
+      for (let element = target; element; element = element.parentElement) {
+        if (element instanceof HTMLDetailsElement) element.open = true;
+      }
+    }}>
       {permissionsLoading && <p role="status">Loading invoice permissions…</p>}
       {permissionsError && <Alert variant="destructive"><AlertDescription>{permissionsError}</AlertDescription></Alert>}
       {!permissionsLoading && !access.automate && <p className="text-sm text-muted-foreground">Available actions reflect your invoice permissions. Automatic import requires create, review and stock access.</p>}
@@ -1371,23 +1390,85 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         <div>
           <h3 className="text-xl font-semibold tracking-tight">Purchase Invoice Intake</h3>
           <p className="text-sm text-muted-foreground">
-            Import received invoices, add validated stock automatically, and correct exceptions here.
+            Upload a bill or continue a saved invoice.
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={resetDraft} disabled={saving || extracting || processing}>
-            Clear
+          <Button variant="outline" onClick={resetDraft} disabled={busy}>
+            New invoice
           </Button>
-          <Button onClick={() => saveDraft()} disabled={saving || extracting || processing || savedFormLocked}>
+          {!activeInvoice && <Button variant="outline" onClick={() => saveDraft()} disabled={busy || savedFormLocked}>
             {saving ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
               <Save className="h-4 w-4 mr-2" />
             )}
             Save Draft
-          </Button>
+          </Button>}
         </div>
       </div>
+
+          <details className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Recent invoices ({recent.length})</summary>
+            <div className="py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <CardDescription>Latest branch purchase invoices</CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadRecent}
+                  disabled={loadingList}
+                  aria-label="Refresh purchase invoices"
+                >
+                  <RefreshCw
+                    className={`h-4 w-4 ${loadingList ? 'animate-spin' : ''}`}
+                  />
+                </Button>
+              </div>
+            </div>
+            <div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {recent.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No purchase invoices found</p>
+                ) : (
+                  recent.map((invoice) => (
+                    <button
+                      type="button"
+                      key={invoice.id}
+                      disabled={busy}
+                      onClick={() => setActiveInvoice(invoice)}
+                      className={`w-full rounded-md border p-3 text-left transition-colors ${
+                        activeInvoice?.id === invoice.id
+                          ? 'border-primary bg-primary/5'
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {invoice.invoiceNumber}
+                          </p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {invoice.distributorName}
+                          </p>
+                        </div>
+                        <Badge variant={statusVariant(invoice.status)}>
+                          {statusLabel(invoice.status)}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatDate(invoice.invoiceDate)}</span>
+                        <span>{currency.format(invoice.netPayable || 0)}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </details>
+
 
       {activeInvoice && <section aria-labelledby="purchase-review-title" className="space-y-4 rounded-md border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1400,59 +1481,70 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         {activeInvoice.status === 'STOCK_COMMITTED' ? <p className="text-sm">This invoice has already added stock. It cannot be committed again.</p>
           : activeInvoice.status === 'CANCELLED' ? <p className="text-sm">This invoice is cancelled and cannot add stock.</p>
           : <>
-            <ol className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-              <li><strong>1. Check the original</strong><p className="text-muted-foreground">Correct payment terms, supplier identity and every product line. Confirm each OCR check below.</p></li>
-              <li><strong>2. Save corrections</strong><p className="text-muted-foreground">Refresh the saved checks. Saving corrections does not add stock.</p></li>
-              <li><strong>3. Mark Reviewed</strong><p className="text-muted-foreground">Approve the corrected invoice after checking all its details and the received date.</p></li>
-              <li><strong>4. Commit Stock</strong><p className="text-muted-foreground">Add the purchased and free quantities to this branch’s inventory.</p></li>
-            </ol>
-            {(activeInvoice.items || []).some(item => item.ocrConfidence != null && item.ocrConfidence < 0.98) && <p className="max-w-prose text-sm text-muted-foreground">Low OCR confidence stops automatic intake. After checking the original and saving corrections, use Mark Reviewed and Commit Stock. You do not need to change the confidence score.</p>}
-            <div className="max-w-xs">
-              <Label htmlFor="review-goods-date">Goods Received Date</Label>
-              <Input id="review-goods-date" type="date" value={reviewDate} disabled={!access.review || activeInvoice.status === 'REVIEWED' || saving || reviewing || committing}
-                onChange={event => { setReviewDate(event.target.value); if (editingId === activeInvoice.id) updateHeader('goodsReceivedDate', event.target.value); }} />
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              {activeInvoice.documents?.[0] && <a className="text-sm text-primary underline underline-offset-4" href={`/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(activeInvoice.documents[0].id)}`} download={activeInvoice.documents[0].fileName}>Open original invoice</a>}
-              {['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && <>
-                {editingId !== activeInvoice.id && <Button variant="outline" disabled={!access.create || saving || extracting || processing || reviewing || committing} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
-                {editingId === activeInvoice.id && <Button variant={canReview ? 'outline' : 'default'} disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} onClick={() => saveDraft()}>
+            <p className="text-sm text-muted-foreground">{activeInvoice.status === 'REVIEWED'
+              ? 'Review complete. Add the purchased and free quantities to inventory.'
+              : canReview ? 'Checks are clear. Confirm your review before adding stock.'
+              : 'Check the highlighted details against the original, then save your corrections.'}</p>
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+                <span>{activeInvoice.items?.length || 0} items · {currency.format(activeInvoice.netPayable || 0)}</span>
+                {activeInvoice.documents?.[0] && <a className="text-primary underline underline-offset-4" href={`/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(activeInvoice.documents[0].id)}`} download={activeInvoice.documents[0].fileName}>Open original invoice</a>}
+                {!editingSelectedInvoice && <div>
+                  <Label htmlFor="review-goods-date">Goods Received Date</Label>
+                  <Input id="review-goods-date" type="date" value={reviewDate} disabled={!access.review || activeInvoice.status === 'REVIEWED' || busy} onChange={event => setReviewDate(event.target.value)} />
+                </div>}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {activeInvoice.status === 'REVIEWED' ? <Button onClick={commitStock} disabled={!canCommit || busy}>
+                  {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}Commit Stock
+                </Button> : canReview ? <Button onClick={reviewInvoice} disabled={busy}>
+                  {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Mark Reviewed
+                </Button> : editingSelectedInvoice ? <Button disabled={savedFormLocked || busy} onClick={() => saveDraft()}>
                   {saving && <Loader2 className="h-4 w-4 animate-spin" />}Save corrections
-                </Button>}
-              </>}
-              <Button onClick={reviewInvoice} disabled={!canReview || saving || extracting || reviewing || committing || processing} variant={canReview ? 'default' : 'outline'}>
-                {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Mark Reviewed
-              </Button>
-              <Button onClick={commitStock} disabled={!canCommit || saving || extracting || committing || reviewing || processing} variant={canCommit ? 'default' : 'outline'}>
-                {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}Commit Stock
-              </Button>
+                </Button> : <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
+                {activeInvoice.status !== 'REVIEWED' && <details className="relative text-sm" onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+                  <summary className="cursor-pointer rounded-md px-3 py-2 text-muted-foreground">More actions</summary>
+                  <div className="mt-2 flex flex-wrap gap-2 rounded-md border bg-background p-3">
+                    {['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && <>
+                      {!editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
+                      {editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={savedFormLocked || busy} onClick={() => saveDraft()}>Save corrections</Button>}
+                      <Button size="sm" variant="outline" onClick={processSavedInvoice} disabled={!access.automate || busy}>{processing && <Loader2 className="h-4 w-4 animate-spin" />}{editingSelectedInvoice ? 'Save & Process' : 'Process Saved Invoice'}</Button>
+                      <p className="w-full text-xs text-muted-foreground">Automatic processing adds stock only when every check passes.</p>
+                    </>}
+                  </div>
+                </details>}
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground" role="status">{!access.review ? 'Your account cannot mark invoices reviewed. Ask a staff member with invoice review permission.'
-              : activeInvoice.status === 'REVIEWED' ? (access.commit ? 'The invoice is reviewed. Commit Stock is ready.' : 'The invoice is reviewed. A staff member with stock permission must commit it.')
-              : canReview ? 'Saved checks are clear. Mark Reviewed confirms your review; stock is added only when you choose Commit Stock.'
-              : 'Resolve the checks below and save corrections to enable Mark Reviewed. Commit Stock becomes available after review.'}</p>
-            {!access.create && activeInvoice.status !== 'REVIEWED' && <p className="text-sm text-muted-foreground">Your account cannot edit purchase drafts. A staff member with purchase draft permission must save any corrections first.</p>}
+            {editingSelectedInvoice && <nav aria-label="Invoice sections" className="flex flex-wrap gap-4 text-sm">
+              <a className="underline underline-offset-4" href="#distributor-name">Invoice details</a>
+              <a className="underline underline-offset-4" href="#purchase-line-items">Products ({lines.length})</a>
+              <a className="underline underline-offset-4" href="#purchase-totals">Totals</a>
+            </nav>}
+            {!access.review && <p className="text-sm text-muted-foreground">A staff member with invoice review permission must approve this invoice.</p>}
+            {activeInvoice.status === 'REVIEWED' && !access.commit && <p className="text-sm text-muted-foreground">A staff member with stock permission must commit it.</p>}
+            {!access.create && activeInvoice.status !== 'REVIEWED' && <p className="text-sm text-muted-foreground">A staff member with purchase draft permission must save corrections.</p>}
+
           </>}
+        {activeIssues.length > 0 && <details className="border-t pt-3" open={!editingSelectedInvoice}>
+          <summary className="cursor-pointer text-sm font-medium">Reconciliation Issues · {uniquePurchaseReviewIssues(activeIssues).length} saved checks</summary>
+          <p className="mt-2 text-sm text-muted-foreground">Save corrections to refresh these checks. Low OCR confidence requires human review; leave the score unchanged.</p>
+          <ul className="mt-3 grid gap-3 text-sm md:grid-cols-2">
+            {uniquePurchaseReviewIssues(activeIssues).map(issue => {
+              const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
+              const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
+              return <li key={issue.key}>
+                <p className="font-medium">{issue.message}</p>
+                <p className="text-muted-foreground">{issue.help}</p>
+                {editingSelectedInvoice && target && <a className="underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
+              </li>;
+            })}
+          </ul>
+        </details>}
       </section>}
 
       {recoveryError && <Alert><AlertDescription>{recoveryError}</AlertDescription></Alert>}
-      {validationErrors.length > 0 && <Alert variant="destructive"><AlertTitle>Draft needs corrections</AlertTitle><AlertDescription>{validationErrors.join('; ')}</AlertDescription></Alert>}
-      {headerFlags && <section id="purchase-header-checks" className="space-y-3 rounded-md border p-4" aria-labelledby="purchase-header-checks-title">
-        <h4 id="purchase-header-checks-title" className="font-semibold">Check invoice details</h4>
-        <PurchaseOcrChecklist flags={splitFlags(headerFlags) || []} values={header}
-          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
-          onResolve={flag => setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', '))} />
-        <details><summary className="cursor-pointer text-sm text-muted-foreground">Advanced OCR flags</summary>
-          <Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} />
-        </details>
-      </section>}
-      {notice && (
-        <Alert>
-          <CheckCircle2 className="h-4 w-4" />
-          <AlertTitle>Done</AlertTitle>
-          <AlertDescription>{notice}</AlertDescription>
-        </Alert>
-      )}
+
+      {notice && <p role="status" className="flex items-start gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{notice}</p>}
 
       {error && (
         <Alert variant="destructive">
@@ -1462,28 +1554,16 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_390px] gap-5">
-        <div className="space-y-5 min-w-0">
-          {access.create && <div className="rounded-md border p-3">
-            <Label htmlFor="saved-purchase-supplier">Saved supplier</Label>
-            <select id="saved-purchase-supplier" className="mt-2 block w-full rounded-md border p-2" value={suppliers.find(supplier => supplier.name === header.distributorName && supplier.gstNumber === header.distributorGstin)?.id || ''} disabled={savedFormLocked || saving || extracting || processing}
-              onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) setHeader(current => ({ ...current, distributorName: supplier.name, distributorGstin: supplier.gstNumber || '' })); }}>
-              <option value="">{suppliers.length ? 'Select after checking the original invoice' : 'No saved suppliers available'}</option>
-              {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.gstNumber || 'GSTIN missing'}</option>)}
-            </select>
-            {!suppliers.length && <p className="mt-2 text-sm text-muted-foreground">Enter and verify the supplier name and GSTIN below for manual review. Automatic intake requires a matching saved supplier.</p>}
-          </div>}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileSearch className="h-5 w-5" />
-                Invoice OCR
-              </CardTitle>
+      <div className="space-y-5">
+        <div className="space-y-5 min-w-0" hidden={!!activeInvoice && !editingSelectedInvoice}>
+          <details className="rounded-lg border p-4" open={!editingSelectedInvoice}>
+            <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice ? 'Replace invoice file' : 'Upload invoice'}</summary>
+            <div className="mt-3">
               <CardDescription>
-                Upload an invoice for goods received. The original file is saved before extraction. Import saves the invoice details and adds stock when every check passes.
+                Import saves the original and adds stock only when every check passes.
               </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+            </div>
+            <div className="mt-3 space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-3">
                 <div>
                   <Label htmlFor="purchase-invoice-upload">
@@ -1500,7 +1580,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     disabled={extracting || saving || processing}
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Accepts scanned PDFs, photos, JPG, PNG, or WebP. Extract Draft saves the original file and previews the details without adding stock.
+                    PDF, JPG, PNG or WebP.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3">
@@ -1523,8 +1603,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     )}
                     {extracting ? 'Processing Invoice' : 'Import & Add Stock'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(false)}
+                  <Button type="button" variant="ghost" onClick={() => extractFromInvoiceFile(false)}
                     disabled={!access.create || extracting || saving || processing || !ocrFile}>Extract Draft</Button>
+                  <p className="max-w-xs text-xs text-muted-foreground">Extract Draft previews details without adding stock.</p>
                 </div>
               </div>
 
@@ -1551,11 +1632,220 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   ) : null}
                 </div>
               )}
+            </div>
+          </details>
+
+          <details open={editingSelectedInvoice || !!header.distributorName || lines.some(line => !!line.productName)}>
+            <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice || header.distributorName ? 'Invoice details & products' : 'Enter invoice manually'}</summary>
+          <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="mt-4 space-y-5 min-w-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Distributor Bill
+              </CardTitle>
+              <CardDescription>
+                Review extracted values or enter the distributor bill manually.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+          {access.create && <div className="border-b pb-4">
+            <Label htmlFor="saved-purchase-supplier">Saved supplier</Label>
+            <select id="saved-purchase-supplier" className="mt-2 block w-full rounded-md border p-2" value={suppliers.find(supplier => supplier.name === header.distributorName && supplier.gstNumber === header.distributorGstin)?.id || ''} disabled={savedFormLocked || saving || extracting || processing}
+              onChange={event => { const supplier = suppliers.find(row => row.id === event.target.value); if (supplier) setHeader(current => ({ ...current, distributorName: supplier.name, distributorGstin: supplier.gstNumber || '' })); }}>
+              <option value="">{suppliers.length ? 'Select after checking the original invoice' : 'No saved suppliers available'}</option>
+              {suppliers.map(supplier => <option key={supplier.id} value={supplier.id}>{supplier.name} — {supplier.gstNumber || 'GSTIN missing'}</option>)}
+            </select>
+            {!suppliers.length && <p className="mt-2 text-sm text-muted-foreground">Enter and verify the supplier name and GSTIN below for manual review. Automatic intake requires a matching saved supplier.</p>}
+          </div>}
+      {headerFlags && <section id="purchase-header-checks" className="space-y-3 border-b pb-4" aria-labelledby="purchase-header-checks-title">
+        <h4 id="purchase-header-checks-title" className="font-semibold">Check invoice details</h4>
+        <PurchaseOcrChecklist flags={splitFlags(headerFlags) || []} values={header}
+          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
+          onResolve={flag => setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', '))} />
+        <details><summary className="cursor-pointer text-sm text-muted-foreground">Advanced OCR flags</summary>
+          <Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} />
+        </details>
+      </section>}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Field
+                  id="distributor-name"
+                  label="Distributor"
+                  value={header.distributorName}
+                  onChange={(event) => updateHeader('distributorName', event.target.value)}
+                  placeholder="Distributor name"
+                />
+                <Field
+                  id="distributor-gstin"
+                  label="GSTIN"
+                  value={header.distributorGstin}
+                  onChange={(event) =>
+                    updateHeader('distributorGstin', event.target.value.toUpperCase())
+                  }
+                  placeholder="36ABCDE1234F1Z5"
+                />
+                <Field
+                  id="distributor-dl"
+                  label="DL No."
+                  value={header.distributorDlNo}
+                  onChange={(event) => updateHeader('distributorDlNo', event.target.value)}
+                  placeholder="Drug license number"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Field
+                  id="invoice-number"
+                  label="Invoice No."
+                  value={header.invoiceNumber}
+                  onChange={(event) => updateHeader('invoiceNumber', event.target.value)}
+                />
+                <Field
+                  id="invoice-date"
+                  label="Invoice Date"
+                  type="date"
+                  value={header.invoiceDate}
+                  onChange={(event) => updateHeader('invoiceDate', event.target.value)}
+                />
+                <Field
+                  id="goods-date"
+                  label="Goods Received"
+                  type="date"
+                  value={header.goodsReceivedDate}
+                  onChange={(event) => updateHeader('goodsReceivedDate', event.target.value)}
+                />
+                <div>
+                  <Label htmlFor="bill-type">Bill Type</Label>
+                  <Select
+                    value={header.billType}
+                    onValueChange={(value: string) =>
+                      updateHeader('billType', value as BillType)
+                    }
+                  >
+                    <SelectTrigger id="bill-type" className="w-full">
+                      <SelectValue placeholder="Bill type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="CASH">Cash</SelectItem>
+                      <SelectItem value="CREDIT">Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Field
+                  id="due-date"
+                  label="Due Date"
+                  type="date"
+                  value={header.dueDate}
+                  onChange={(event) => updateHeader('dueDate', event.target.value)}
+                  disabled={header.billType === 'CASH'}
+                />
+              </div>
+              <details className="border-t pt-3">
+                <summary className="cursor-pointer text-sm font-medium">Additional invoice details</summary>
+                <div className="mt-3 space-y-3">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                <Field
+                  id="food-license"
+                  label="Food License"
+                  value={header.distributorFoodLicense}
+                  onChange={(event) =>
+                    updateHeader('distributorFoodLicense', event.target.value)
+                  }
+                  placeholder="Optional"
+                />
+                <Field
+                  id="doctor-reg"
+                  label="Doctor / Reg. No. (optional)"
+                  value={header.doctorNameOrRegNo}
+                  onChange={(event) =>
+                    updateHeader('doctorNameOrRegNo', event.target.value)
+                  }
+                  placeholder="Doctor name or registration"
+                />
+                <Field
+                  id="eway-bill"
+                  label="E-Way Bill"
+                  value={header.eWayBillNo}
+                  onChange={(event) => updateHeader('eWayBillNo', event.target.value)}
+                  placeholder="Optional"
+                />
+                <Field
+                  id="lr-no"
+                  label="LR No."
+                  value={header.lrNo}
+                  onChange={(event) => updateHeader('lrNo', event.target.value)}
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <Field
+                  id="buyer-code"
+                  label="Buyer Code"
+                  value={header.buyerCode}
+                  onChange={(event) => updateHeader('buyerCode', event.target.value)}
+                  placeholder="Optional"
+                />
+                <Field
+                  id="urc-code"
+                  label="URC Code"
+                  value={header.urcCode}
+                  onChange={(event) => updateHeader('urcCode', event.target.value)}
+                  placeholder="Optional"
+                />
+                <Field
+                  id="salesman"
+                  label="Salesman"
+                  value={header.salesmanName}
+                  onChange={(event) => updateHeader('salesmanName', event.target.value)}
+                  placeholder="Optional"
+                />
+                <Field
+                  id="salesman-contact"
+                  label="Salesman Contact"
+                  value={header.salesmanContact}
+                  onChange={(event) =>
+                    updateHeader('salesmanContact', event.target.value)
+                  }
+                  placeholder="Optional"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="distributor-address">Distributor Address</Label>
+                  <Textarea
+                    id="distributor-address"
+                    value={header.distributorAddress}
+                    onChange={(event) =>
+                      updateHeader('distributorAddress', event.target.value)
+                    }
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="purchase-notes">Notes</Label>
+                  <Textarea
+                    id="purchase-notes"
+                    value={header.handwrittenNotes}
+                    onChange={(event) =>
+                      updateHeader('handwrittenNotes', event.target.value)
+                    }
+                    placeholder="Handwritten or OCR notes"
+                  />
+                </div>
+              </div>
+                </div>
+              </details>
             </CardContent>
           </Card>
 
           {lines.some((line) => line.productName.trim()) && !savedFormLocked && (
-            <Card id="purchase-master-matching">
+            <details id="purchase-master-matching" className="rounded-lg border p-4">
+              <summary className="cursor-pointer text-sm font-medium">Match products to saved inventory</summary>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -1696,212 +1986,38 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     </div>
                   );
                 })}
-              </CardContent>
-            </Card>
-          )}
-
-          <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="space-y-5 min-w-0">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Truck className="h-5 w-5" />
-                Distributor Bill
-              </CardTitle>
-              <CardDescription>
-                Review extracted values or enter the distributor bill manually.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Field
-                  id="distributor-name"
-                  label="Distributor"
-                  value={header.distributorName}
-                  onChange={(event) => updateHeader('distributorName', event.target.value)}
-                  placeholder="Distributor name"
-                />
-                <Field
-                  id="distributor-gstin"
-                  label="GSTIN"
-                  value={header.distributorGstin}
-                  onChange={(event) =>
-                    updateHeader('distributorGstin', event.target.value.toUpperCase())
-                  }
-                  placeholder="36ABCDE1234F1Z5"
-                />
-                <Field
-                  id="distributor-dl"
-                  label="DL No."
-                  value={header.distributorDlNo}
-                  onChange={(event) => updateHeader('distributorDlNo', event.target.value)}
-                  placeholder="Drug license number"
-                />
-                <Field
-                  id="food-license"
-                  label="Food License"
-                  value={header.distributorFoodLicense}
-                  onChange={(event) =>
-                    updateHeader('distributorFoodLicense', event.target.value)
-                  }
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Field
-                  id="invoice-number"
-                  label="Invoice No."
-                  value={header.invoiceNumber}
-                  onChange={(event) => updateHeader('invoiceNumber', event.target.value)}
-                />
-                <Field
-                  id="invoice-date"
-                  label="Invoice Date"
-                  type="date"
-                  value={header.invoiceDate}
-                  onChange={(event) => updateHeader('invoiceDate', event.target.value)}
-                />
-                <Field
-                  id="goods-date"
-                  label="Goods Received"
-                  type="date"
-                  value={header.goodsReceivedDate}
-                  onChange={(event) => updateHeader('goodsReceivedDate', event.target.value)}
-                />
-                <div>
-                  <Label htmlFor="bill-type">Bill Type</Label>
-                  <Select
-                    value={header.billType}
-                    onValueChange={(value: string) =>
-                      updateHeader('billType', value as BillType)
-                    }
-                  >
-                    <SelectTrigger id="bill-type" className="w-full">
-                      <SelectValue placeholder="Bill type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="CASH">Cash</SelectItem>
-                      <SelectItem value="CREDIT">Credit</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Field
-                  id="due-date"
-                  label="Due Date"
-                  type="date"
-                  value={header.dueDate}
-                  onChange={(event) => updateHeader('dueDate', event.target.value)}
-                  disabled={header.billType === 'CASH'}
-                />
-                <Field
-                  id="doctor-reg"
-                  label="Doctor / Reg. No. (optional)"
-                  value={header.doctorNameOrRegNo}
-                  onChange={(event) =>
-                    updateHeader('doctorNameOrRegNo', event.target.value)
-                  }
-                  placeholder="Doctor name or registration"
-                />
-                <Field
-                  id="eway-bill"
-                  label="E-Way Bill"
-                  value={header.eWayBillNo}
-                  onChange={(event) => updateHeader('eWayBillNo', event.target.value)}
-                  placeholder="Optional"
-                />
-                <Field
-                  id="lr-no"
-                  label="LR No."
-                  value={header.lrNo}
-                  onChange={(event) => updateHeader('lrNo', event.target.value)}
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <Field
-                  id="buyer-code"
-                  label="Buyer Code"
-                  value={header.buyerCode}
-                  onChange={(event) => updateHeader('buyerCode', event.target.value)}
-                  placeholder="Optional"
-                />
-                <Field
-                  id="urc-code"
-                  label="URC Code"
-                  value={header.urcCode}
-                  onChange={(event) => updateHeader('urcCode', event.target.value)}
-                  placeholder="Optional"
-                />
-                <Field
-                  id="salesman"
-                  label="Salesman"
-                  value={header.salesmanName}
-                  onChange={(event) => updateHeader('salesmanName', event.target.value)}
-                  placeholder="Optional"
-                />
-                <Field
-                  id="salesman-contact"
-                  label="Salesman Contact"
-                  value={header.salesmanContact}
-                  onChange={(event) =>
-                    updateHeader('salesmanContact', event.target.value)
-                  }
-                  placeholder="Optional"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="distributor-address">Distributor Address</Label>
-                  <Textarea
-                    id="distributor-address"
-                    value={header.distributorAddress}
-                    onChange={(event) =>
-                      updateHeader('distributorAddress', event.target.value)
-                    }
-                    placeholder="Optional"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="purchase-notes">Notes</Label>
-                  <Textarea
-                    id="purchase-notes"
-                    value={header.handwrittenNotes}
-                    onChange={(event) =>
-                      updateHeader('handwrittenNotes', event.target.value)
-                    }
-                    placeholder="Handwritten or OCR notes"
-                  />
-                </div>
-              </div>
             </CardContent>
-          </Card>
+            </details>
+          )}
 
           <section id="purchase-line-items" className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="font-semibold">Line Items</h4>
+              <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => {
+                const collapse = lines.every(line => lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim()));
+                setLineExpansion(Object.fromEntries(lines.map(line => [line.localId, !collapse])));
+              }}>{lines.every(line => lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim())) ? 'Collapse all' : 'Expand all'}</Button>
               <Button variant="outline" onClick={addLine}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Line
               </Button>
+              </div>
             </div>
 
             {lines.map((line, index) => {
               const amounts = calculateLine(line);
               return (
-                <Card key={line.localId} id={`${line.localId}-review`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <CardTitle className="text-base">Line {index + 1}</CardTitle>
-                        <CardDescription>
-                          {line.productName.trim() || 'Purchase product'}
-                        </CardDescription>
-                      </div>
+                <details key={line.localId} id={`${line.localId}-review`} className="rounded-lg border"
+                  open={lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim())}
+                  onToggle={event => { const open = event.currentTarget.open; setLineExpansion(current => current[line.localId] === open ? current : { ...current, [line.localId]: open }); }}>
+                  <summary className="cursor-pointer p-4">
+                    <span className="inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-2 align-middle text-sm">
+                      <span className="min-w-0"><strong>{index + 1}. {line.productName.trim() || 'New product'}</strong><span className="mt-1 block text-muted-foreground">{line.batchNumber || 'Batch needed'} · {line.quantityPurchased || '0'} paid + {line.freeQuantity || '0'} free</span></span>
+                      <span className="flex items-center gap-3">{line.ocrFlags && <span className="text-destructive">{splitFlags(line.ocrFlags)?.length} checks</span>}<strong>{currency.format(amounts.total)}</strong></span>
+                    </span>
+                  </summary>
+                  <div className="flex justify-end px-4 pb-3">
                       <Button
                         type="button"
                         variant="outline"
@@ -1912,9 +2028,17 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
+                  </div>
+                  <div className="space-y-4 px-4 pb-4">
+                      <div className="md:col-span-2">
+                        <PurchaseOcrChecklist flags={splitFlags(line.ocrFlags) || []} lineIndex={index} lineId={line.localId} values={line}
+                          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
+                          onResolve={flag => updateLine(line.localId, 'ocrFlags', (splitFlags(line.ocrFlags) || []).filter(value => value !== flag).join(', '))} />
+                        {line.ocrFlags && <details className="mt-2"><summary className="cursor-pointer text-sm text-muted-foreground">Advanced line OCR flags</summary>
+                          <Label htmlFor={`${line.localId}-ocr-flags`}>OCR Flags</Label>
+                          <Input id={`${line.localId}-ocr-flags`} value={line.ocrFlags} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} />
+                        </details>}
+                      </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-6 gap-3">
                       <Field
                         id={`${line.localId}-product`}
@@ -2053,6 +2177,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       <ReadOnlyAmount label="Taxable" value={amounts.taxable} />
                     </div>
 
+                    <details className="border-t pt-3">
+                      <summary className="cursor-pointer text-sm font-medium">Tax, discounts and OCR details</summary>
+                      <div className="mt-3 space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
                       <Field
                         id={`${line.localId}-discount`}
@@ -2146,30 +2273,26 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                         readOnly
                         placeholder="Manual entry"
                       />
-                      <div className="md:col-span-2">
-                        <PurchaseOcrChecklist flags={splitFlags(line.ocrFlags) || []} lineIndex={index} lineId={line.localId} values={line}
-                          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
-                          onResolve={flag => updateLine(line.localId, 'ocrFlags', (splitFlags(line.ocrFlags) || []).filter(value => value !== flag).join(', '))} />
-                        {line.ocrFlags && <details className="mt-2"><summary className="cursor-pointer text-sm text-muted-foreground">Advanced line OCR flags</summary>
-                          <Label htmlFor={`${line.localId}-ocr-flags`}>OCR Flags</Label>
-                          <Input id={`${line.localId}-ocr-flags`} value={line.ocrFlags} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} />
-                        </details>}
-                      </div>
+
                     </div>
                     <ReportedAmountsEditor id={line.localId} values={Array.isArray(originalAmounts?.items) ? originalAmounts.items[index] : null}
                       labels={reportedLineAmounts} disabled={savedFormLocked || saving || extracting || processing}
                       onChange={(key, value) => updateReportedAmount(key, value, index)} />
-                  </CardContent>
-                </Card>
+                      </div>
+                    </details>
+                  </div>
+                </details>
               );
             })}
           </section>
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Invoice Totals</CardTitle>
+              <CardTitle id="purchase-totals" className="text-base">Invoice Totals</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <details>
+                <summary className="cursor-pointer text-sm font-medium">Discounts and adjustments</summary>
               <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
                 <Field
                   id="trade-discount"
@@ -2247,6 +2370,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 />
               </div>
 
+              </details>
+
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <SummaryValue label="Gross" value={currency.format(totals.grossAmount)} />
                 <SummaryValue
@@ -2298,10 +2423,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </div>
           )}
           </fieldset>
+          </details>
         </div>
 
         <aside className="space-y-5 min-w-0">
-          {(unlinkedUploads.length > 0 || uploadListError) && <Card>
+          {(unlinkedUploads.length > 0 || uploadListError) && <details className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Saved uploads ({unlinkedUploads.length})</summary>
             <CardHeader><CardTitle className="text-base">Uploads awaiting invoice details</CardTitle>
               <CardDescription>Originals stay saved even when extraction fails. Showing the latest 20.</CardDescription></CardHeader>
             <CardContent className="space-y-3">
@@ -2315,156 +2442,15 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               </div>)}
               <Button variant="outline" size="sm" onClick={loadUnlinkedUploads}>Refresh saved uploads</Button>
             </CardContent>
-          </Card>}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardTitle className="text-base">Recent Purchase Drafts</CardTitle>
-                  <CardDescription>Latest branch purchase invoices</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadRecent}
-                  disabled={loadingList}
-                  aria-label="Refresh purchase invoices"
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${loadingList ? 'animate-spin' : ''}`}
-                  />
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {recent.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No purchase invoices found</p>
-                ) : (
-                  recent.map((invoice) => (
-                    <button
-                      type="button"
-                      key={invoice.id}
-                      onClick={() => setActiveInvoice(invoice)}
-                      className={`w-full rounded-md border p-3 text-left transition-colors ${
-                        activeInvoice?.id === invoice.id
-                          ? 'border-primary bg-primary/5'
-                          : 'hover:bg-muted'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {invoice.invoiceNumber}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {invoice.distributorName}
-                          </p>
-                        </div>
-                        <Badge variant={statusVariant(invoice.status)}>
-                          {statusLabel(invoice.status)}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{formatDate(invoice.invoiceDate)}</span>
-                        <span>{currency.format(invoice.netPayable || 0)}</span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          </details>}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <ClipboardCheck className="h-5 w-5" />
-                Review & Stock Commit
-              </CardTitle>
-              <CardDescription>Selected purchase invoice</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {activeInvoice && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && (
-                <Button variant="outline" disabled={!access.create || saving || extracting} onClick={() => editSavedDraft(activeInvoice)}>Edit saved draft</Button>
-              )}
-              {!activeInvoice ? (
-                <p className="text-sm text-muted-foreground">Select or save a purchase invoice</p>
-              ) : (
-                <>
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{activeInvoice.invoiceNumber}</p>
-                        <p className="truncate text-sm text-muted-foreground">
-                          {activeInvoice.distributorName}
-                        </p>
-                      </div>
-                      <Badge variant={statusVariant(activeInvoice.status)}>
-                        {statusLabel(activeInvoice.status)}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <SummaryValue
-                        label="Invoice Date"
-                        value={formatDate(activeInvoice.invoiceDate)}
-                      />
-                      <SummaryValue
-                        label="Net Payable"
-                        value={currency.format(activeInvoice.netPayable || 0)}
-                      />
-                    </div>
-                  </div>
-
+          {activeInvoice && <details className="rounded-lg border p-4">
+            <summary className="cursor-pointer text-sm font-medium">Saved invoice details</summary>
+            <div className="mt-4 space-y-4">
                   {!!activeInvoice.documents?.length && <div className="space-y-2 text-sm">
                     <p className="font-medium">Original documents</p>
                     {activeInvoice.documents.map((document) => <OriginalDocumentLink key={document.id} document={document} />)}
                   </div>}
-                  {activeIssues.length > 0 && (
-                    <Alert variant="destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertTitle>Reconciliation Issues</AlertTitle>
-                      <AlertDescription>
-                        <p className="mb-3">These are the saved checks. Correct the fields, confirm each OCR check, then Save corrections to refresh this list.</p>
-                        <ul className="list-disc pl-4 space-y-3">
-                          {uniquePurchaseReviewIssues(activeIssues).map((issue) => {
-                            const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
-                            const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
-                            return <li key={issue.key} className="space-y-1">
-                              <span className="font-medium">{issue.message}</span>
-                              <p>{issue.help}</p>
-                              {editingId === activeInvoice.id && target && <a className="underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
-                            </li>;
-                          })}
-                        </ul>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  {activeOcrFlags > 0 && (
-                    <Alert variant="destructive">
-                      <AlertTriangle className="h-4 w-4" />
-                      <AlertTitle>OCR Review Required</AlertTitle>
-                      <AlertDescription>
-                        {activeOcrFlags} unresolved OCR flag{activeOcrFlags === 1 ? '' : 's'}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-
-                  <div className="grid grid-cols-1 gap-2">
-                    {!['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && (
-                      <>
-                        <Button onClick={processSavedInvoice} disabled={!access.automate || processing || saving || extracting || reviewing || committing}>
-                          {processing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                          {editingId === activeInvoice.id && !savedFormLocked ? 'Save & Process' : 'Process Saved Invoice'}
-                        </Button>
-                        <p className="text-xs text-muted-foreground">Processing rechecks invoice details and adds stock when every check passes.</p>
-                      </>
-                    )}
-
-                  </div>
-
                   {activeInvoice.stockCommitReference && (
                     <div className="rounded-md border px-3 py-2 text-sm">
                       <span className="text-muted-foreground">Reference: </span>
@@ -2534,10 +2520,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       </AlertDescription>
                     </Alert>
                   ) : null}
-                </>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </details>}
         </aside>
       </div>
     </div>
