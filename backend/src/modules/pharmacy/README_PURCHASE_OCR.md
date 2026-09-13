@@ -122,12 +122,26 @@ build generates Prisma Client. The new document migration is additive and does
 not populate, delete or rewrite existing invoices or stock.
 
 Confirm deployment logs show the document migration completed and the backend
-has a working Codex ChatGPT OAuth login. `start.sh` supports the existing
-`CODEX_AUTH_JSON_B64` or `CODEX_ACCESS_TOKEN` configuration; credentials stay in
-Railway variables, never source control. Do not enable startup seeding for this
-feature. No filesystem volume is required for originals because they live in
+has a working Codex ChatGPT OAuth login. For OAuth authentication, attach a private
+backend volume at `/var/lib/clinic-codex` and set `CODEX_HOME` to that path. Codex
+refreshes its credentials during use, so its current `auth.json` must survive
+restarts and deployments. `start.sh` preserves an existing nonempty auth cache
+instead of replacing refreshed credentials with an older bootstrap secret.
+`CODEX_AUTH_JSON_B64` or `CODEX_ACCESS_TOKEN` can initialize an empty cache; after
+server device login, these bootstrap variables are unnecessary. Keep credentials
+out of source control, terminal output, and browser responses. This auth volume
+is separate from invoice storage. Do not enable startup seeding for this feature.
+No filesystem volume is required for originals because they live in
 PostgreSQL. Uploading invoices after deployment intentionally creates original
 documents/drafts, and validated processing intentionally changes stock.
+
+`codex login status` and `/pharmacy/agent/status` inspect cached login state;
+neither proves that the model accepts the credentials. If extraction fails and a
+minimal model request reports HTTP 401 or token-refresh failure, renew the server
+login with `codex login --device-auth` using the same `CODEX_HOME`, then verify a
+live model request and an extraction-only upload. Do not keep copying a rejected
+auth cache into new deployments. A revoked server session still needs a fresh
+sign-in even when its cache is persisted correctly.
 
 ## Live verification
 

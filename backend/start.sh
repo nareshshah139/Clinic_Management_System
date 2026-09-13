@@ -19,8 +19,14 @@ CODEX_BIN="${PHARMACY_AGENT_CODEX_PATH:-codex}"
 if command -v "$CODEX_BIN" >/dev/null 2>&1; then
   export CODEX_HOME="${CODEX_HOME:-/tmp/codex-home}"
   mkdir -p "$CODEX_HOME"
+  chmod 700 "$CODEX_HOME"
 
-  if [ -n "$CODEX_AUTH_JSON_B64" ]; then
+  # Codex rotates OAuth credentials during use. A bootstrap secret must never
+  # replace the newer cache retained on a persistent volume after a restart.
+  if [ -s "$CODEX_HOME/auth.json" ]; then
+    chmod 600 "$CODEX_HOME/auth.json"
+    echo "Preserving existing Codex auth cache; live model access is not verified by login status."
+  elif [ -n "$CODEX_AUTH_JSON_B64" ]; then
     echo "Configuring Codex CLI auth from ChatGPT OAuth cache..."
     if node <<'NODE' >/dev/null 2>&1
 const fs = require('fs');
@@ -35,7 +41,7 @@ fs.writeFileSync(path.join(codexHome, 'auth.json'), decoded, { mode: 0o600 });
 NODE
     then
       if "$CODEX_BIN" login status >/dev/null 2>&1; then
-        echo "Codex CLI authenticated with ChatGPT OAuth cache."
+        echo "Codex ChatGPT OAuth cache initialized; live model access still requires verification."
       else
         echo "Warning: Codex CLI OAuth cache was written but login status failed; Pharmacy Agent will report offline."
       fi
@@ -45,7 +51,7 @@ NODE
   elif [ -n "$CODEX_ACCESS_TOKEN" ]; then
     echo "Configuring Codex CLI auth from CODEX_ACCESS_TOKEN..."
     if printf '%s' "$CODEX_ACCESS_TOKEN" | "$CODEX_BIN" login --with-access-token >/dev/null 2>&1; then
-      echo "Codex CLI authenticated with ChatGPT access token."
+      echo "Codex ChatGPT access token saved; live model access still requires verification."
     else
       echo "Warning: Codex CLI ChatGPT auth failed; Pharmacy Agent will report offline."
     fi
@@ -53,7 +59,7 @@ NODE
     CODEX_LOGIN_STATUS="$("$CODEX_BIN" login status 2>&1 || true)"
     if printf '%s' "$CODEX_LOGIN_STATUS" | grep -qi 'logged in' &&
       ! printf '%s' "$CODEX_LOGIN_STATUS" | grep -qi 'api key'; then
-      echo "Codex CLI already authenticated with ChatGPT auth."
+      echo "Codex ChatGPT login is cached; live model access still requires verification."
     else
       echo "CODEX_ACCESS_TOKEN is not set; Pharmacy Agent Codex CLI will report offline."
       echo "Provide a ChatGPT/Codex access token instead of OPENAI_API_KEY for Pharmacy Agent auth."
