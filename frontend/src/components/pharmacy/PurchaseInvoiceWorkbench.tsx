@@ -17,7 +17,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { PurchaseOcrChecklist } from './PurchaseOcrChecklist';
-import { purchaseBlockingIssues, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
+import { purchaseBlockingIssues, purchaseReviewIssue, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { preserveInvoiceTotals, reportedAmountErrors, reportedHeaderAmounts, reportedLineAmounts } from '@/lib/purchase-invoice-totals';
 import { usePurchasePermissions } from '@/hooks/usePurchasePermissions';
@@ -166,6 +166,7 @@ type PurchaseInvoice = {
   reconciliationIssues?: string[];
   handwrittenNotes?: string | null;
   stockCommitReference?: string | null;
+  stockCommittedAt?: string | null;
   items?: PurchaseInvoiceItem[];
   committedItems?: CommittedItem[];
   documents?: OriginalDocument[];
@@ -754,6 +755,20 @@ function statusLabel(status?: string) {
   return String(status || 'DRAFT').replaceAll('_', ' ');
 }
 
+function manualReviewOnlyIssue(raw: string) {
+  const issue = raw.replace(/^AUTO:\s*/i, '').trim();
+  return /^Automatic intake requires one active saved supplier with matching name and GSTIN\. Select a saved supplier or review manually\.$/.test(issue) ||
+    /^Line \d+: OCR confidence must be at least 98% for automatic stock intake; review this line manually\.$/.test(issue);
+}
+
+function canResumeManualReview(invoice: PurchaseInvoice) {
+  const issues = purchaseBlockingIssues(invoice.reconciliationIssues || []);
+  return ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(invoice.status) &&
+    !invoice.unresolvedOcrFlags && !purchaseBlockingIssues(invoice.ocrFlags || []).length &&
+    !invoice.items?.some(item => purchaseBlockingIssues(item.ocrFlags || []).length) &&
+    issues.length > 0 && issues.every(manualReviewOnlyIssue);
+}
+
 export function PurchaseInvoiceWorkbench() {
   const { user } = useDashboardUser();
   const recoveryKey = user ? `purchase-intake:${user.branchId}:${user.id}` : null;
@@ -775,7 +790,6 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [header, setHeader] = useState<HeaderForm>(() => defaultHeader());
   const [lines, setLines] = useState<LineForm[]>(() => [emptyLine(1)]);
-  const [lineExpansion, setLineExpansion] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [originalAmounts, setOriginalAmounts] = useState<Record<string, unknown> | null>(null);
   const [sourceDocument, setSourceDocument] = useState<OriginalDocument | null>(null);
@@ -784,6 +798,13 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const saveLock = useRef(false);
   const processLock = useRef(false);
   const [manualReviewCandidateId, setManualReviewCandidateId] = useState<string | null>(null);
+  const [unknownStockInvoiceId, setUnknownStockInvoiceId] = useState<string | null>(null);
+  const [refreshingStockStatus, setRefreshingStockStatus] = useState(false);
+  const actionFeedbackRef = useRef<HTMLDivElement>(null);
+  const focusActionFeedback = () => requestAnimationFrame(() => {
+    actionFeedbackRef.current?.focus({ preventScroll: true });
+    actionFeedbackRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [headerFlags, setHeaderFlags] = useState('');
   const [ocrFile, setOcrFile] = useState<File | null>(null);
@@ -891,8 +912,10 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   }, [activeInvoice?.goodsReceivedDate, activeInvoice?.id]);
 
   useEffect(() => {
-    setManualReviewCandidateId(null);
-  }, [activeInvoice?.id]);
+    // Restore the manual path from known saved automatic-only exceptions. A
+    // review still saves the current values and the backend revalidates them.
+    setManualReviewCandidateId(activeInvoice && editingId === activeInvoice.id && canResumeManualReview(activeInvoice) ? activeInvoice.id : null);
+  }, [activeInvoice?.id, editingId]);
 
   const updateHeader = (key: keyof HeaderForm, value: string) => {
     setManualReviewCandidateId(null);
@@ -947,7 +970,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
-    setLineExpansion({});
+    setUnknownStockInvoiceId(null);
     setEditingId(null);
     setOriginalAmounts(null);
     setSourceDocument(null);
@@ -975,7 +998,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
-    setLineExpansion({});
+    setUnknownStockInvoiceId(null);
     setOriginalAmounts(draft as Record<string, unknown>);
     setEditingId(null);
     setHeaderFlags(purchaseBlockingIssues(draft.ocrFlags || extraction?.flags || []).join(', '));
@@ -1191,6 +1214,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         savedForReview = saved;
       }
       const result = await apiClient.processPharmacyPurchaseInvoice<OcrExtractionResponse>(invoiceId);
+      if (result.invoice?.id !== invoiceId || !result.automation?.status) {
+        throw new Error('Processing did not return a confirmed invoice status. Checking the saved record.');
+      }
       applyAutomationResult(result);
       // A clean human-corrected draft may fail stricter automatic checks (such
       // as 98% OCR confidence). Keep manual review reachable after that result.
@@ -1202,9 +1228,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       }
     } catch (err) {
       setError(getErrorMessage(err));
+      await refreshStockStatus(activeInvoice.id);
     } finally {
       processLock.current = false;
       setProcessing(false);
+      focusActionFeedback();
     }
   };
 
@@ -1296,7 +1324,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setError(null);
     const errors = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts)];
     setValidationErrors(errors);
-    if (errors.length > 0) return;
+    if (errors.length > 0) { focusActionFeedback(); return; }
 
     saveLock.current = true;
     setSaving(true);
@@ -1318,6 +1346,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     } finally {
       saveLock.current = false;
       setSaving(false);
+      focusActionFeedback();
     }
   };
 
@@ -1348,6 +1377,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       setError(getErrorMessage(err));
     } finally {
       setReviewing(false);
+      focusActionFeedback();
     }
   };
 
@@ -1366,6 +1396,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
           activeInvoice.id,
         );
+      if (committed?.id !== activeInvoice.id || (committed.status !== 'STOCK_COMMITTED' && !committed.stockCommittedAt)) {
+        throw new Error('Stock commit did not return a confirmed outcome. Checking the saved record.');
+      }
       setActiveInvoice(committed);
       setNotice(
         `Stock committed for ${committed.invoiceNumber}${committed.stockCommitReference ? ` (${committed.stockCommitReference})` : ''}.`,
@@ -1374,8 +1407,35 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'));
     } catch (err) {
       setError(getErrorMessage(err));
+      await refreshStockStatus(activeInvoice.id);
     } finally {
       setCommitting(false);
+      focusActionFeedback();
+    }
+  };
+
+  const refreshStockStatus = async (invoiceId: string) => {
+    setRefreshingStockStatus(true);
+    setUnknownStockInvoiceId(invoiceId);
+    try {
+      if (!access.read) throw new Error('Invoice read permission is required');
+      const invoice = await apiClient.getPharmacyPurchaseInvoiceById<PurchaseInvoice>(invoiceId);
+      if (invoice?.id !== invoiceId || !invoice.status) throw new Error('Invoice status was not returned');
+      setActiveInvoice(invoice);
+      setManualReviewCandidateId(editingId === invoice.id && canResumeManualReview(invoice) ? invoice.id : null);
+      setRecent(current => [invoice, ...current.filter(row => row.id !== invoice.id)].slice(0, 8));
+      setUnknownStockInvoiceId(null);
+      if (invoice.status === 'STOCK_COMMITTED' || invoice.stockCommittedAt) {
+        setError(null);
+        setNotice(`Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`);
+        window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'));
+      }
+    } catch {
+      setNotice(null);
+      // A lost response can hide a successful stock commit. Keep the outcome
+      // unknown until a read succeeds; never infer it from stale editor state.
+    } finally {
+      setRefreshingStockStatus(false);
     }
   };
 
@@ -1390,29 +1450,109 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setEditingId(invoice.id);
     setSourceDocument(invoice.documents?.[0] || null);
     setActiveInvoice(invoice);
+    setManualReviewCandidateId(canResumeManualReview(invoice) ? invoice.id : null);
     setNotice(null);
   };
 
   const editingSelectedInvoice = !!activeInvoice && editingId === activeInvoice.id;
-  const busy = saving || extracting || processing || reviewing || committing;
+  const busy = saving || extracting || processing || reviewing || committing || refreshingStockStatus;
+  const stockStatusUnknown = !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
+  const stockAdded = activeInvoice?.status === 'STOCK_COMMITTED' || !!activeInvoice?.stockCommittedAt;
   const activeIssues = purchaseBlockingIssues(activeInvoice?.reconciliationIssues || []);
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
   const awaitingManualReview = !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const canReview =
-    access.review && !!activeInvoice &&
+    access.review && !!activeInvoice && !stockStatusUnknown &&
     (activeInvoice.status === 'DRAFT' && activeIssues.length === 0 || awaitingManualReview &&
       ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status)) &&
     activeOcrFlags === 0 &&
     (editingId !== activeInvoice.id || (!(splitFlags(headerFlags)?.length) && lines.every(line => !splitFlags(line.ocrFlags)?.length))) &&
     !!reviewDate;
-  const canCommit = access.commit && activeInvoice?.status === 'REVIEWED';
-  const savedFormLocked = !access.create || !!editingId && activeInvoice?.id === editingId &&
+  const canCommit = access.commit && activeInvoice?.status === 'REVIEWED' && !stockStatusUnknown;
+  const savedFormLocked = !access.create || stockAdded || stockStatusUnknown || !!editingId && activeInvoice?.id === editingId &&
     ['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status);
   const navigateIntake = (showHome: boolean) => {
     setShowIntakeHome(showHome);
     headingRef.current?.focus({ preventScroll: true });
     workbenchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   };
+
+  const editingChecks = !savedFormLocked && (!activeInvoice || editingSelectedInvoice);
+  const currentHeaderFlags = splitFlags(headerFlags) || [];
+  const currentLineFlags = lines.map(line => splitFlags(line.ocrFlags) || []);
+  const coveredOcrKeys = new Set([
+    ...(editingChecks ? currentHeaderFlags.map(flag => purchaseReviewIssue(flag).key) : []),
+    ...(editingChecks ? currentLineFlags.flatMap((flags, index) => flags.map(flag => purchaseReviewIssue(flag, index).key)) : []),
+    ...(editingSelectedInvoice ? (activeInvoice?.ocrFlags || []).map(flag => purchaseReviewIssue(flag).key) : []),
+    ...(editingSelectedInvoice ? (activeInvoice?.items || []).flatMap((item, index) => (item.ocrFlags || []).map(flag => purchaseReviewIssue(flag, index).key)) : []),
+  ]);
+  const missingStockFields = editingChecks ? [
+    ...(!header.distributorDlNo.trim() ? ['distributorDlNo is required before review'] : []),
+    ...(!header.goodsReceivedDate ? ['goodsReceivedDate is required before review'] : []),
+    ...(header.billType === 'CREDIT' && !header.dueDate ? ['dueDate is required before review'] : []),
+    ...lines.flatMap((line, index) => (['productName', 'packSize', 'packUnitType', 'hsnCode', 'batchNumber'] as const)
+      .filter(field => !line[field].trim()).map(field => `Line ${index + 1}: ${field} is required before review`)),
+  ] : [];
+  const otherReviewIssues = uniquePurchaseReviewIssues([...activeIssues, ...missingStockFields]).filter(issue => !coveredOcrKeys.has(issue.key));
+  const manualIssueKeys = new Set(activeIssues.filter(manualReviewOnlyIssue).map(issue => purchaseReviewIssue(issue).key));
+  const correctionIssues = otherReviewIssues.filter(issue => !manualIssueKeys.has(issue.key));
+  const manualConfidenceLines = otherReviewIssues.filter(issue => manualIssueKeys.has(issue.key) && issue.key.endsWith(':confidence')).map(issue => (issue.lineIndex ?? 0) + 1);
+  const confirmationCount = editingChecks ? currentHeaderFlags.length + currentLineFlags.reduce((sum, flags) => sum + flags.length, 0) : activeOcrFlags;
+  const reviewChecklist = <section id="purchase-review-checklist" aria-labelledby="purchase-review-checklist-title" className="space-y-4 border-t pt-4">
+    <div>
+      <h4 id="purchase-review-checklist-title" className="font-semibold">Check before adding stock</h4>
+      <p className="mt-1 text-sm text-muted-foreground">{editingChecks
+        ? `${confirmationCount} field confirmation${confirmationCount === 1 ? '' : 's'} remaining. Correct each value using its link, then confirm it here. Save & Process saves your work and checks the invoice again.`
+        : 'Choose Review issues to open the invoice fields and confirmation controls.'}</p>
+    </div>
+    {editingChecks && <>
+      <PurchaseOcrChecklist flags={currentHeaderFlags} values={header} disabled={busy}
+        onResolve={flag => { setManualReviewCandidateId(null); setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', ')); }} />
+      {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} lineIndex={index} lineId={line.localId} values={line} disabled={busy}
+        onResolve={flag => updateLine(line.localId, 'ocrFlags', currentLineFlags[index].filter(value => value !== flag).join(', '))} />)}
+    </>}
+    {correctionIssues.length > 0 && <ul className="divide-y text-sm">
+      {correctionIssues.map(issue => {
+        const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
+        const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
+        return <li key={issue.key} className="space-y-2 py-3 first:pt-0">
+          <p className="font-medium">{issue.message}</p>
+          <p className="max-w-prose text-muted-foreground">{issue.help}</p>
+          <p className="font-medium">{issue.requiresUpload ? 'Upload the complete invoice to resolve this check.' : 'Correct the value, then Save & Process. This check cannot be dismissed with a confirmation.'}</p>
+          {editingChecks && <a className="inline-block underline underline-offset-4" href={`#${target || 'distributor-name'}`}>Go to {issue.label}</a>}
+        </li>;
+      })}
+    </ul>}
+    {manualIssueKeys.size > 0 && <div className="space-y-2 border-t pt-3 text-sm">
+      <p className="font-semibold">Manual review required</p>
+      {manualIssueKeys.has('header:supplier-match') && <p>There is no matching saved supplier. Verify the supplier name and GSTIN against the original to proceed through manual review.</p>}
+      {manualConfidenceLines.length > 0 && <p>Check the OCR reading on line{manualConfidenceLines.length === 1 ? '' : 's'} {manualConfidenceLines.join(', ')} against the original. Keep the recorded confidence scores unchanged.</p>}
+      <p className="font-medium">These checks use Mark Reviewed, then Commit Stock; there is no separate checkbox for them. Resolve the other checks first.</p>
+    </div>}
+    {editingChecks && confirmationCount === 0 && otherReviewIssues.length === 0 && <p className="text-sm">No outstanding OCR checks. Verify the invoice details, quantities, rates and totals before continuing.</p>}
+  </section>;
+
+  const invoiceActions = activeInvoice && (
+    <div className="flex flex-wrap items-center gap-2">
+      {stockStatusUnknown ? <Button variant="outline" onClick={() => refreshStockStatus(activeInvoice.id)} disabled={busy}>Refresh stock status</Button> : stockAdded || activeInvoice.status === 'CANCELLED' ? null : activeInvoice.status === 'REVIEWED' ? <Button onClick={commitStock} disabled={!canCommit || busy}>
+        {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}Commit Stock
+      </Button> : canReview && (!editingSelectedInvoice || !access.automate || awaitingManualReview) ? <Button onClick={reviewInvoice} disabled={busy}>
+        {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Mark Reviewed
+      </Button> : editingSelectedInvoice ? <Button disabled={savedFormLocked || busy} onClick={() => access.automate ? processSavedInvoice() : saveDraft()}>
+        {(saving || processing) && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? 'Saving…' : processing ? 'Checking invoice…' : access.automate ? 'Save & Process' : 'Save corrections'}
+      </Button> : <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
+      {!stockStatusUnknown && !stockAdded && activeInvoice.status !== 'CANCELLED' && activeInvoice.status !== 'REVIEWED' && (!editingSelectedInvoice || !access.automate && canReview) && <details className="relative text-sm" onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
+        <summary className="cursor-pointer rounded-md px-3 py-2 text-muted-foreground">More actions</summary>
+        <div className="mt-2 flex flex-wrap gap-2 rounded-md border bg-background p-3">
+          {['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && <>
+            {!editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
+            {editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={savedFormLocked || busy} onClick={() => saveDraft()}>Save corrections</Button>}
+            {access.automate && <Button size="sm" variant="outline" onClick={processSavedInvoice} disabled={busy}>{processing && <Loader2 className="h-4 w-4 animate-spin" />}Process Saved Invoice</Button>}
+          </>}
+        </div>
+      </details>}
+    </div>
+  );
 
   const recentInvoices = (
     <details className="rounded-lg border p-4" open={showIntakeHome}>
@@ -1478,17 +1618,24 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   );
 
   return (
-    <div ref={workbenchRef} className="space-y-5 [&_[id]]:scroll-mt-20 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
+    <div ref={workbenchRef} className="space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
       const link = (event.target as HTMLElement).closest('a[href^="#"]');
       const target = link && document.getElementById(link.getAttribute('href')!.slice(1));
       for (let element = target; element; element = element.parentElement) {
         if (element instanceof HTMLDetailsElement) element.open = true;
       }
+      if (target?.id === 'purchase-totals') target.querySelectorAll('details').forEach(details => { details.open = true; });
     }}>
-      {activeInvoice && !showIntakeHome && <nav aria-label="Invoice navigation" className="sticky top-0 z-20 border-b bg-background py-2">
+      {activeInvoice && !showIntakeHome && <nav aria-label="Invoice navigation" className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-background py-3">
         <Button variant="ghost" onClick={() => navigateIntake(true)} disabled={busy}>
           <ArrowLeft className="h-4 w-4" />Back to Invoice OCR
         </Button>
+        <div role="status" aria-label="Stock status" className="min-w-0 text-sm">
+          <p className="font-semibold">{stockStatusUnknown ? 'Stock status unknown' : committing ? 'Adding stock…' : processing || saving ? 'Saving and checking invoice…' : stockAdded ? 'Stock added' : 'Stock not added'}</p>
+          {stockAdded && activeInvoice.stockCommitReference && <p className="break-all text-xs text-muted-foreground">Reference: {activeInvoice.stockCommitReference}</p>}
+        </div>
+        {editingSelectedInvoice && !stockAdded && activeInvoice.status !== 'REVIEWED' && <a className="text-sm underline underline-offset-4" href="#purchase-review-checklist">Review checklist</a>}
+        {invoiceActions}
       </nav>}
       {permissionsLoading && <p role="status">Loading invoice permissions…</p>}
       {permissionsError && <Alert variant="destructive"><AlertDescription>{permissionsError}</AlertDescription></Alert>}
@@ -1526,22 +1673,43 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       {!showIntakeHome && recentInvoices}
 
 
+      <div ref={actionFeedbackRef} id="purchase-action-feedback" tabIndex={-1} className="space-y-3">
+        {notice && <p role="status" className="flex items-start gap-2 text-sm">
+          {stockAdded ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <FileSearch className="mt-0.5 h-4 w-4 shrink-0" />}{notice}
+        </p>}
+        {error && <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Request Failed</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>}
+        {validationErrors.length > 0 && <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Fix Required</AlertTitle>
+          <AlertDescription>
+            <p className="mb-2">These corrections were not saved. Fix the fields below, then try again.</p>
+            <ul className="list-disc pl-4 space-y-1">{validationErrors.map(item => <li key={item}>{item}</li>)}</ul>
+          </AlertDescription>
+        </Alert>}
+      </div>
+
       {activeInvoice && <section hidden={showIntakeHome} aria-labelledby="purchase-review-title" className="space-y-4 rounded-md border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h4 id="purchase-review-title" className="text-lg font-semibold">{activeInvoice.status === 'STOCK_COMMITTED' ? 'Stock added' : 'Finish invoice review'}</h4>
             <p className="text-sm text-muted-foreground">{activeInvoice.invoiceNumber} · {activeInvoice.distributorName}</p>
           </div>
-          <Badge variant={statusVariant(activeInvoice.status)}>{statusLabel(activeInvoice.status)}</Badge>
+          <Badge variant={statusVariant(activeInvoice.status)}>{canResumeManualReview(activeInvoice) ? 'MANUAL REVIEW NEEDED' : statusLabel(activeInvoice.status)}</Badge>
         </div>
         {activeInvoice.status === 'STOCK_COMMITTED' ? <p className="text-sm">This invoice has already added stock. It cannot be committed again.</p>
           : activeInvoice.status === 'CANCELLED' ? <p className="text-sm">This invoice is cancelled and cannot add stock.</p>
           : <>
-            <p className="text-sm text-muted-foreground">{activeInvoice.status === 'REVIEWED'
-              ? 'Review complete. Add the purchased and free quantities to inventory.'
-              : awaitingManualReview ? 'Corrections are saved. Check the original and mark this invoice reviewed before adding stock.'
+            <p className="text-sm font-medium">{stockStatusUnknown
+              ? 'The request was interrupted. Refresh stock status to confirm the saved outcome before continuing.'
+              : activeInvoice.status === 'REVIEWED'
+              ? 'Next: Commit Stock. Review is complete; stock has not been added yet.'
+              : awaitingManualReview ? 'Next: Mark Reviewed after checking the original, then Commit Stock. Your corrections are saved; stock has not been added.'
               : editingSelectedInvoice && access.automate ? 'Save & Process saves your corrections, checks the invoice and adds stock when every automatic check passes.'
-              : canReview ? 'Checks are clear. Confirm your review before adding stock.'
+              : canReview ? 'Next: Mark Reviewed, then Commit Stock. Stock has not been added yet.'
               : 'Check the highlighted details against the original, then save your corrections.'}</p>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -1552,25 +1720,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   <Input id="review-goods-date" type="date" value={reviewDate} disabled={!access.review || activeInvoice.status === 'REVIEWED' || busy} onChange={event => setReviewDate(event.target.value)} />
                 </div>}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {activeInvoice.status === 'REVIEWED' ? <Button onClick={commitStock} disabled={!canCommit || busy}>
-                  {committing ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}Commit Stock
-                </Button> : canReview && (!editingSelectedInvoice || !access.automate || awaitingManualReview) ? <Button onClick={reviewInvoice} disabled={busy}>
-                  {reviewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}Mark Reviewed
-                </Button> : editingSelectedInvoice ? <Button disabled={savedFormLocked || busy} onClick={() => access.automate ? processSavedInvoice() : saveDraft()}>
-                  {(saving || processing) && <Loader2 className="h-4 w-4 animate-spin" />}{access.automate ? 'Save & Process' : 'Save corrections'}
-                </Button> : <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
-                {activeInvoice.status !== 'REVIEWED' && (!editingSelectedInvoice || !access.automate && canReview) && <details className="relative text-sm" onClick={event => { if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false; }}>
-                  <summary className="cursor-pointer rounded-md px-3 py-2 text-muted-foreground">More actions</summary>
-                  <div className="mt-2 flex flex-wrap gap-2 rounded-md border bg-background p-3">
-                    {['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(activeInvoice.status) && <>
-                      {!editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>}
-                      {editingSelectedInvoice && canReview && <Button size="sm" variant="outline" disabled={savedFormLocked || busy} onClick={() => saveDraft()}>Save corrections</Button>}
-                      {access.automate && <Button size="sm" variant="outline" onClick={processSavedInvoice} disabled={busy}>{processing && <Loader2 className="h-4 w-4 animate-spin" />}Process Saved Invoice</Button>}
-                    </>}
-                  </div>
-                </details>}
-              </div>
+
             </div>
             {editingSelectedInvoice && <nav aria-label="Invoice sections" className="flex flex-wrap gap-4 text-sm">
               <a className="underline underline-offset-4" href="#distributor-name">Invoice details</a>
@@ -1582,34 +1732,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             {!access.create && activeInvoice.status !== 'REVIEWED' && <p className="text-sm text-muted-foreground">A staff member with purchase draft permission must save corrections.</p>}
 
           </>}
-        {activeIssues.length > 0 && <details className="border-t pt-3" open={!editingSelectedInvoice}>
-          <summary className="cursor-pointer text-sm font-medium">Reconciliation Issues · {uniquePurchaseReviewIssues(activeIssues).length} saved checks</summary>
-          <p className="mt-2 text-sm text-muted-foreground">{access.automate ? 'Save & Process refreshes these checks.' : 'Save corrections to refresh these checks.'} Low OCR confidence requires human review; leave the score unchanged.</p>
-          <ul className="mt-3 grid gap-3 text-sm md:grid-cols-2">
-            {uniquePurchaseReviewIssues(activeIssues).map(issue => {
-              const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
-              const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
-              return <li key={issue.key}>
-                <p className="font-medium">{issue.message}</p>
-                <p className="text-muted-foreground">{issue.help}</p>
-                {editingSelectedInvoice && target && <a className="underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
-              </li>;
-            })}
-          </ul>
-        </details>}
+        {!stockAdded && activeInvoice.status !== 'REVIEWED' && activeInvoice.status !== 'CANCELLED' && reviewChecklist}
+
       </section>}
 
       {recoveryError && <Alert><AlertDescription>{recoveryError}</AlertDescription></Alert>}
 
-      {notice && <p role="status" className="flex items-start gap-2 text-sm"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{notice}</p>}
-
-      {error && (
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Request Failed</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
 
       <div className="space-y-5">
         <div className="space-y-5 min-w-0" hidden={!showIntakeHome && !!activeInvoice && !editingSelectedInvoice}>
@@ -1694,8 +1822,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
           {showIntakeHome && recentInvoices}
 
-          <details hidden={showIntakeHome} open={editingSelectedInvoice || !!header.distributorName || lines.some(line => !!line.productName)}>
-            <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice || header.distributorName ? 'Invoice details & products' : 'Enter invoice manually'}</summary>
+          <section hidden={showIntakeHome} aria-label="Invoice details and products">
+            {!activeInvoice && reviewChecklist}
           <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="mt-4 space-y-5 min-w-0">
           <Card>
             <CardHeader>
@@ -1717,11 +1845,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </select>
             {!suppliers.length && <p className="mt-2 text-sm text-muted-foreground">Enter and verify the supplier name and GSTIN below for manual review. Automatic intake requires a matching saved supplier.</p>}
           </div>}
-      {headerFlags && <section id="purchase-header-checks" className="space-y-3 border-b pb-4" aria-labelledby="purchase-header-checks-title">
-        <h4 id="purchase-header-checks-title" className="font-semibold">Check invoice details</h4>
-        <PurchaseOcrChecklist flags={splitFlags(headerFlags) || []} values={header}
-          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
-          onResolve={flag => setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', '))} />
+      {headerFlags && <section id="purchase-header-checks" className="space-y-3 border-b pb-4">
         <details><summary className="cursor-pointer text-sm text-muted-foreground">Advanced OCR flags</summary>
           <Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} />
         </details>
@@ -2053,10 +2177,6 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             <div className="flex items-center justify-between">
               <h4 className="font-semibold">Line Items</h4>
               <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => {
-                const collapse = lines.every(line => lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim()));
-                setLineExpansion(Object.fromEntries(lines.map(line => [line.localId, !collapse])));
-              }}>{lines.every(line => lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim())) ? 'Collapse all' : 'Expand all'}</Button>
               <Button variant="outline" onClick={addLine}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Line
@@ -2067,15 +2187,13 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             {lines.map((line, index) => {
               const amounts = calculateLine(line);
               return (
-                <details key={line.localId} id={`${line.localId}-review`} className="rounded-lg border"
-                  open={lineExpansion[line.localId] ?? (lines.length === 1 || !!line.ocrFlags || !line.productName.trim())}
-                  onToggle={event => { const open = event.currentTarget.open; setLineExpansion(current => current[line.localId] === open ? current : { ...current, [line.localId]: open }); }}>
-                  <summary className="cursor-pointer p-4">
-                    <span className="inline-flex w-[calc(100%-1.5rem)] flex-wrap items-center justify-between gap-2 align-middle text-sm">
+                <section key={line.localId} id={`${line.localId}-review`} className="rounded-lg border" aria-label={`Product line ${index + 1}`}>
+                  <div className="p-4">
+                    <span className="inline-flex w-full flex-wrap items-center justify-between gap-2 align-middle text-sm">
                       <span className="min-w-0"><strong>{index + 1}. {line.productName.trim() || 'New product'}</strong><span className="mt-1 block text-muted-foreground">{line.batchNumber || 'Batch needed'} · {line.quantityPurchased || '0'} paid + {line.freeQuantity || '0'} free</span></span>
                       <span className="flex items-center gap-3">{line.ocrFlags && <span className="text-destructive">{splitFlags(line.ocrFlags)?.length} checks</span>}<strong>{currency.format(amounts.total)}</strong></span>
                     </span>
-                  </summary>
+                  </div>
                   <div className="flex justify-end px-4 pb-3">
                       <Button
                         type="button"
@@ -2090,9 +2208,6 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   </div>
                   <div className="space-y-4 px-4 pb-4">
                       <div className="md:col-span-2">
-                        <PurchaseOcrChecklist flags={splitFlags(line.ocrFlags) || []} lineIndex={index} lineId={line.localId} values={line}
-                          disabled={savedFormLocked || saving || extracting || processing || reviewing || committing}
-                          onResolve={flag => updateLine(line.localId, 'ocrFlags', (splitFlags(line.ocrFlags) || []).filter(value => value !== flag).join(', '))} />
                         {line.ocrFlags && <details className="mt-2"><summary className="cursor-pointer text-sm text-muted-foreground">Advanced line OCR flags</summary>
                           <Label htmlFor={`${line.localId}-ocr-flags`}>OCR Flags</Label>
                           <Input id={`${line.localId}-ocr-flags`} value={line.ocrFlags} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} />
@@ -2126,7 +2241,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       />
                       <Field
                         id={`${line.localId}-unit`}
-                        label="Unit"
+                        label="Stock unit"
+                        placeholder="Bottle, Tube or Strip"
                         value={line.packUnitType}
                         onChange={(event) =>
                           updateLine(line.localId, 'packUnitType', event.target.value)
@@ -2236,7 +2352,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       <ReadOnlyAmount label="Taxable" value={amounts.taxable} />
                     </div>
 
-                    <details className="border-t pt-3">
+                    <details open className="border-t pt-3">
                       <summary className="cursor-pointer text-sm font-medium">Tax, discounts and OCR details</summary>
                       <div className="mt-3 space-y-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
@@ -2340,7 +2456,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       </div>
                     </details>
                   </div>
-                </details>
+                </section>
               );
             })}
           </section>
@@ -2451,21 +2567,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </CardContent>
           </Card>
 
-          {(validationErrors.length > 0 || warnings.length > 0) && (
+          {warnings.length > 0 && (
             <div className="space-y-3">
-              {validationErrors.length > 0 && (
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Fix Required</AlertTitle>
-                  <AlertDescription>
-                    <ul className="list-disc pl-4 space-y-1">
-                      {validationErrors.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-              )}
               {warnings.length > 0 && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
@@ -2482,7 +2585,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </div>
           )}
           </fieldset>
-          </details>
+          </section>
         </div>
 
         <aside className="space-y-5 min-w-0">

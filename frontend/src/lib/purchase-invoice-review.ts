@@ -81,6 +81,12 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, key: `${index ?? 'header'}:${field}:${missing ? 'missing' : 'check'}`,
       field, label, target, message: prefix + message, help };
   }
+  if (/total|taxable|gst|discount|rounding|rate|quantity/i.test(body)) {
+    return { ...base, label: index === undefined ? 'invoice totals' : 'product amounts',
+      target: index === undefined ? 'purchase-totals' : 'purchase-line-items',
+      message: prefix + body,
+      help: 'Compare the quantities, rates, discounts, taxes and printed amounts with the original. Correct the affected values, then Save & Process to check them again.' };
+  }
   return { ...base, label: 'invoice details', message: prefix + body.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2'),
     help: 'Check the original invoice, correct the affected details, then save corrections to refresh the checks.' };
 }

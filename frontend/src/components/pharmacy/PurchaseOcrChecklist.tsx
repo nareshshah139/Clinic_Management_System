@@ -26,7 +26,8 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
         const label = `${lineIndex === undefined ? '' : `line ${lineIndex + 1} `}${issue.label}`;
         return <li key={`${flag}-${index}`} className="space-y-2 py-3 first:pt-0 last:pb-0">
           <p className="text-sm font-medium">{issue.message}</p>
-          {issue.requiresUpload ? <p className="max-w-prose text-sm text-muted-foreground">{issue.help}</p> : <details className="text-sm text-muted-foreground"><summary className="cursor-pointer">How to check</summary><p className="mt-1 max-w-prose">{issue.help}</p></details>}
+          {issue.field && <p className="text-sm">Entered {issue.label}: <strong>{value || (issue.field === 'manufacturer' ? 'Not provided (optional)' : 'Not entered')}</strong></p>}
+          <p className="max-w-prose text-sm text-muted-foreground">{issue.help}</p>
           <div className="flex flex-wrap items-center gap-3">
             {target && <a className="text-sm text-primary underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
             {!issue.requiresUpload && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left"
