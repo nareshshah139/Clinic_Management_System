@@ -60,6 +60,45 @@ describe('Automatic purchase invoice intake', () => {
 
   const importInvoice = () => (service as any).importFromDocument(file, 'branch-1', 'user-1', '2026-01-02');
 
+  it('normalizes absent manufacturer without an OCR blocker and preserves genuine identity uncertainty', () => {
+    const normalized = (service as any).normalizeExtractedPurchaseLine({ ...draft.items[0], manufacturer: null,
+      ocrFlags: ['missing_manufacturer', 'independent_read_disagrees_batchNumber', 'uncertain_manufacturer'],
+    }, 1);
+    expect(normalized.manufacturer).toBe('');
+    expect(normalized.ocrFlags).toEqual(['independent_read_disagrees_batchNumber', 'uncertain_manufacturer']);
+    expect(normalized.ocrConfidence).toBe(0.99);
+  });
+
+  it('commits a saved invoice with no manufacturer against one matching product and pack', async () => {
+    delete draft.items[0].manufacturer;
+    draft.items[0].ocrFlags = ['missing_manufacturer'];
+    const saved = await service.createDraft(draft, 'branch-1', 'user-1');
+    expect(saved.items[0]).toMatchObject({ manufacturer: '', ocrFlags: [] });
+    const result = await service.processInvoice(saved.id, 'branch-1', 'user-1');
+    expect(result.automation.status).toBe('STOCK_COMMITTED');
+    expect(prisma.drug.findMany.mock.calls[0][0].where.manufacturerName).toBeUndefined();
+    expect(prisma.stockTransaction.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('imports and commits when both the invoice and saved product have no manufacturer', async () => {
+    draft.items[0].manufacturer = '';
+    const drug = (await prisma.drug.findMany())[0];
+    prisma.drug.findMany.mockResolvedValue([{ ...drug, manufacturerName: '' }]);
+    const result = await importInvoice();
+    expect(result.automation.status).toBe('STOCK_COMMITTED');
+    expect(result.invoice.items[0].manufacturer).toBe('');
+  });
+
+  it('keeps ambiguous products blocked when manufacturer is omitted', async () => {
+    draft.items[0].manufacturer = '';
+    const drug = (await prisma.drug.findMany())[0];
+    prisma.drug.findMany.mockResolvedValue([drug, { ...drug, id: 'drug-2', manufacturerName: 'Another Pharma' }]);
+    const result = await importInvoice();
+    expect(result.automation.status).toBe('SAVED_FOR_REVIEW');
+    expect(result.automation.issues.join(' ')).toContain('multiple active product master records');
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
   it('preserves fractional quantities and blocks them before stock commit', async () => {
     const normalized = (service as any).normalizeExtractedPurchaseLine({ ...draft.items[0], freeQuantity: 0.004 }, 1);
     expect(normalized.freeQuantity).toBe(0.004);

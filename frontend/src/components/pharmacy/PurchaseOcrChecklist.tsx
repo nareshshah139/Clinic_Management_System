@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { purchaseReviewIssue } from '@/lib/purchase-invoice-review';
+import { purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
 
 export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve }: {
   flags: string[];
@@ -11,6 +11,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
   disabled: boolean;
   onResolve: (flag: string) => void;
 }) {
+  flags = purchaseBlockingIssues(flags);
   if (!flags.length) return null;
   return <div className="space-y-3" aria-label={lineIndex === undefined ? 'Invoice checks' : `Line ${lineIndex + 1} checks`}>
     {lineIndex === undefined && <p className="text-sm text-muted-foreground">Check against the original, then confirm each correction.</p>}
@@ -19,7 +20,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
         const issue = purchaseReviewIssue(flag, lineIndex);
         const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
         const value = issue.field ? values[issue.field]?.trim() : undefined;
-        const missingValue = !!issue.field && !value;
+        const missingValue = !!issue.field && issue.field !== 'manufacturer' && !value;
         const invalidGstin = issue.field === 'distributorGstin' && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value || '');
         const missingDueDate = issue.field === 'billType' && values.billType === 'CREDIT' && !values.dueDate;
         const label = `${lineIndex === undefined ? '' : `line ${lineIndex + 1} `}${issue.label}`;

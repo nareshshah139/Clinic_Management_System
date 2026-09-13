@@ -7,23 +7,33 @@ describe('Purchase OCR review controls', () => {
   it('combines old AUTO/OCR duplicates and missing-field variants into one issue per line', () => {
     const issues = uniquePurchaseReviewIssues([
       'OCR: independent_read_disagrees_distributorGstin', 'AUTO: OCR: independent_read_disagrees_distributorGstin',
-      'AUTO: Line 2: manufacturer is required before review', 'AUTO: Line 2: missing_manufacturer',
+      'AUTO: Line 2: packUnitType is required before review', 'AUTO: Line 2: missing_packUnitType',
       'AUTO: Line 1: missing_manufacturer',
     ]);
-    expect(issues).toHaveLength(3);
-    expect(issues.map(issue => issue.message)).toEqual(['Check supplier GSTIN.', 'Line 2: Manufacturer is missing.', 'Line 1: Manufacturer is missing.']);
+    expect(issues).toHaveLength(2);
+    expect(issues.map(issue => issue.message)).toEqual(['Check supplier GSTIN.', 'Line 2: Stock unit is missing.']);
   });
 
   it('requires the missing value and an explicit check before resolving a flag', () => {
     const onResolve = jest.fn();
-    const props = { flags: ['missing_manufacturer'], lineIndex: 1, lineId: 'line-2', disabled: false, onResolve };
-    const view = render(<PurchaseOcrChecklist {...props} values={{ manufacturer: '' }} />);
-    expect(screen.getByRole('button', { name: 'Confirm line 2 manufacturer checked' })).toBeDisabled();
-    view.rerender(<PurchaseOcrChecklist {...props} values={{ manufacturer: 'Verified manufacturer' }} />);
+    const props = { flags: ['missing_packUnitType'], lineIndex: 1, lineId: 'line-2', disabled: false, onResolve };
+    const view = render(<PurchaseOcrChecklist {...props} values={{ packUnitType: '' }} />);
+    expect(screen.getByRole('button', { name: 'Confirm line 2 stock unit checked' })).toBeDisabled();
+    view.rerender(<PurchaseOcrChecklist {...props} values={{ packUnitType: 'Tube' }} />);
     expect(onResolve).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 2 manufacturer checked' }));
-    expect(onResolve).toHaveBeenCalledWith('missing_manufacturer');
-    expect(screen.getByRole('link', { name: 'Go to manufacturer' })).toHaveAttribute('href', '#line-2-manufacturer');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 2 stock unit checked' }));
+    expect(onResolve).toHaveBeenCalledWith('missing_packUnitType');
+    expect(screen.getByRole('link', { name: 'Go to stock unit' })).toHaveAttribute('href', '#line-2-unit');
+  });
+
+  it('hides retired missing-manufacturer checks while retaining a reported manufacturer disagreement', () => {
+    const onResolve = jest.fn();
+    render(<PurchaseOcrChecklist flags={['missing_manufacturer', 'manufacturer is required before review', 'independent_read_disagrees_manufacturer']}
+      values={{ manufacturer: '' }} disabled={false} onResolve={onResolve} />);
+    expect(screen.queryByText('Manufacturer is missing.')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Confirm manufacturer checked' })).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm manufacturer checked' }));
+    expect(onResolve).toHaveBeenCalledWith('independent_read_disagrees_manufacturer');
   });
 
   it('requires a valid GSTIN and credit due date before those checks can be confirmed', () => {

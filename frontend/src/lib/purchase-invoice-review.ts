@@ -9,6 +9,13 @@ export type PurchaseReviewIssue = {
   requiresUpload?: boolean;
 };
 
+export function purchaseBlockingIssues(issues: string[]) {
+  return issues.filter(raw => {
+    const body = raw.trim().replace(/^(?:(?:AUTO|OCR):\s*|Line \d+:\s*)+/i, '');
+    return !!body && !/^(?:missing[_\s-]+manufacturer|manufacturer (?:is )?(?:missing|required(?: before review)?))\.?$/i.test(body);
+  });
+}
+
 const fields = [
   ['billType', 'bill type', 'bill-type', /bill.?type|cash or credit/i],
   ['distributorGstin', 'supplier GSTIN', 'distributor-gstin', /distributor.?gstin|supplier.*gstin/i],
@@ -59,7 +66,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   }
   if (/product master|drug master|master record/i.test(body)) {
     return { ...base, label: 'product match', target: 'purchase-master-matching', message: `${prefix}Confirm the product record.`,
-      help: 'Refresh Matches and confirm the correct product, manufacturer and pack. Create a new product only when no matching record exists.' };
+      help: 'Refresh Matches and confirm the correct product and pack. Manufacturer is optional, but can help distinguish similar products. Create a new product only when no matching record exists.' };
   }
   const match = fields.find(([, , , pattern]) => pattern.test(body));
   if (match) {
@@ -69,7 +76,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     let help = `Compare ${label} with the original invoice and correct it before confirming it is checked.`;
     if (field === 'billType') help = 'APPROVAL BILLS does not establish payment terms. Confirm the agreed terms, choose Cash or Credit, and enter a due date for Credit.';
     if (field === 'distributorGstin') help = 'Check the supplier GSTIN character by character against the original and the saved supplier. Do not use the buyer GSTIN.';
-    if (field === 'manufacturer') help = 'Use Refresh Matches to select the correct product and its manufacturer, or enter the verified manufacturer.';
+    if (field === 'manufacturer') help = 'Manufacturer is optional. Compare it with the original and correct it if known, or leave it blank before confirming this check.';
     if (field === 'packUnitType') help = 'Enter the stock unit for the purchased pack, such as Bottle, Tube or Strip. Check the product packaging or saved product.';
     return { ...base, key: `${index ?? 'header'}:${field}:${missing ? 'missing' : 'check'}`,
       field, label, target, message: prefix + message, help };
@@ -79,7 +86,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
 }
 
 export function uniquePurchaseReviewIssues(issues: string[]) {
-  return [...new Map(issues.map(raw => {
+  return [...new Map(purchaseBlockingIssues(issues).map(raw => {
     const issue = purchaseReviewIssue(raw);
     return [issue.key, issue];
   })).values()];

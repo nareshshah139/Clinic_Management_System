@@ -233,7 +233,7 @@ describe('PurchaseInvoiceWorkbench', () => {
         'AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.',
       ], items: [{ ...draftInvoice.items[0], manufacturer: '', packUnitType: '', ocrConfidence: 0.95,
         ocrFlags: ['missing_manufacturer', 'missing_packUnitType'] }] };
-    const clean = { ...draftInvoice, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', ocrConfidence: 0.95, ocrFlags: [] }] };
+    const clean = { ...draftInvoice, items: [{ ...draftInvoice.items[0], manufacturer: '', packUnitType: 'Strip', ocrConfidence: 0.95, ocrFlags: [] }] };
     let persisted: any = flagged;
     api.getPharmacyPurchaseInvoices.mockImplementation(async () => ({ data: [persisted] }));
     api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async () => { persisted = clean; return persisted; });
@@ -246,14 +246,14 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByRole('button', { name: 'Commit Stock' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm bill type checked' }));
     fireEvent.click(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' }));
-    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Alembic' } });
+    expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('');
     fireEvent.change(screen.getByLabelText('Unit'), { target: { value: 'Strip' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 manufacturer checked' }));
+    expect(screen.queryByRole('button', { name: 'Confirm line 1 manufacturer checked' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 stock unit checked' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save corrections' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeEnabled());
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
-      ocrFlags: [], items: [expect.objectContaining({ manufacturer: 'Alembic', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
+      ocrFlags: [], items: [expect.objectContaining({ manufacturer: '', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
     }));
     fireEvent.click(screen.getByRole('button', { name: 'Mark Reviewed' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeEnabled());
@@ -329,7 +329,7 @@ describe('PurchaseInvoiceWorkbench', () => {
       automation: { status: 'SAVED_FOR_REVIEW', issues: ['Printed total does not reconcile'] } });
     render(<PurchaseInvoiceWorkbench />);
     await editSelectedInvoice();
-    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Corrected manufacturer' } });
+    fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Corrected manufacturer' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
     await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1'));
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
@@ -424,7 +424,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.change(screen.getByLabelText('Product'), {
       target: { value: 'Azithral 500 Tablet' },
     });
-    fireEvent.change(screen.getByLabelText('Manufacturer'), {
+    fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), {
       target: { value: 'Alembic' },
     });
     fireEvent.change(screen.getByLabelText('Pack Size'), {
@@ -650,7 +650,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     saveCurrentInvoice();
     await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1));
     await screen.findByText(/saved as DRAFT/i);
-    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Corrected manufacturer' } });
+    fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Corrected manufacturer' } });
     saveCurrentInvoice();
     await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith(
       'pinv-1', expect.objectContaining({ items: [expect.objectContaining({ manufacturer: 'Corrected manufacturer' })] }),
@@ -664,10 +664,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench />);
     await editSelectedInvoice();
     expect(screen.getByLabelText('Invoice OCR Flags')).toHaveValue('check_supplier');
-    fireEvent.change(screen.getByLabelText('Manufacturer'), { target: { value: 'Corrected manufacturer' } });
+    fireEvent.change(screen.getByLabelText('Manufacturer (optional)'), { target: { value: 'Corrected manufacturer' } });
     saveCurrentInvoice();
     await screen.findByText('Connection interrupted');
-    expect(screen.getByLabelText('Manufacturer')).toHaveValue('Corrected manufacturer');
+    expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('Corrected manufacturer');
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValueOnce(draftInvoice);
     saveCurrentInvoice();

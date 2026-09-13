@@ -1,6 +1,9 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import {
+  CreatePharmacyPurchaseInvoiceItemDto,
   PharmacyPurchaseBillTypeDto,
   PharmacyPurchaseInvoiceSourceDto,
   PharmacyPurchaseMasterActionDto,
@@ -131,10 +134,58 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(saved.ocrFlags).toEqual(['check_supplier']);
     expect(saved.status).toBe('OCR_REVIEW_REQUIRED');
     expect(saved.reconciliationIssues).toEqual(expect.arrayContaining([
-      'distributorDlNo is required before review', 'Line 1: manufacturer is required before review',
+      'distributorDlNo is required before review',
     ]));
+    expect(saved.reconciliationIssues.join(' ')).not.toContain('manufacturer');
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(saved);
     await expect(service.markReviewed(saved.id, {}, branchId)).rejects.toThrow();
+  });
+
+  it.each(['', undefined, null])('saves and reviews an invoice with manufacturer %p', async (manufacturer) => {
+    const dto = validDto();
+    dto.items[0].manufacturer = manufacturer;
+    expect(await validate(plainToInstance(CreatePharmacyPurchaseInvoiceItemDto, dto.items[0]))).toEqual([]);
+    prisma.pharmacyPurchaseInvoice.create.mockImplementation(({ data }: any) => ({
+      id: 'purchase-1', ...data, items: data.items.create,
+    }));
+    const saved = await service.createDraft(dto, branchId, userId);
+    expect(saved).toMatchObject({ status: 'DRAFT', unresolvedOcrFlags: 0, reconciliationIssues: [], items: [{ manufacturer: '' }] });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(saved);
+    prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ ...saved, ...data }));
+    expect((await service.markReviewed(saved.id, {}, branchId)).status).toBe('REVIEWED');
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('allows review of a legacy draft blocked only by missing manufacturer without rewriting its lines', async () => {
+    const dto = validDto();
+    const legacy = { ...dto, id: 'purchase-1', invoiceDate: new Date(dto.invoiceDate),
+      goodsReceivedDate: new Date(dto.goodsReceivedDate), status: 'OCR_REVIEW_REQUIRED', unresolvedOcrFlags: 1,
+      reconciliationIssues: JSON.stringify(['AUTO: Line 1: manufacturer is required before review', 'AUTO: Line 1: missing_manufacturer']),
+      items: [{ ...dto.items[0], manufacturer: '', ocrFlags: JSON.stringify(['missing_manufacturer']) }],
+    };
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(legacy);
+    prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ ...legacy, ...data }));
+    const result = await service.markReviewed(legacy.id, {}, branchId);
+    expect(result).toMatchObject({ status: 'REVIEWED', unresolvedOcrFlags: 0, reconciliationIssues: [], items: [{ manufacturer: '', ocrFlags: [] }] });
+    expect(prisma.pharmacyPurchaseInvoice.update.mock.calls[0][0].data.items).toBeUndefined();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps unrelated legacy OCR and reconciliation issues blocking review', async () => {
+    const dto = validDto();
+    const legacy = { ...dto, id: 'purchase-1', status: 'OCR_REVIEW_REQUIRED', unresolvedOcrFlags: 2,
+      reconciliationIssues: JSON.stringify(['AUTO: Line 1: manufacturer is required before review', 'Header GST mismatch']),
+      items: [{ ...dto.items[0], manufacturer: '', ocrFlags: JSON.stringify(['missing_manufacturer', 'independent_read_disagrees_batchNumber']) }],
+    };
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(legacy);
+    const displayed = (service as any).formatPurchaseInvoice(legacy);
+    expect(displayed.unresolvedOcrFlags).toBe(1);
+    expect(displayed.items[0].ocrFlags).toEqual(['independent_read_disagrees_batchNumber']);
+    await expect(service.markReviewed(legacy.id, {}, branchId)).rejects.toThrow('Resolve OCR flags');
+    legacy.unresolvedOcrFlags = 1;
+    legacy.items[0].ocrFlags = JSON.stringify(['missing_manufacturer']);
+    await expect(service.markReviewed(legacy.id, {}, branchId)).rejects.toThrow('Header GST mismatch');
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
   });
 
   it('replaces draft lines atomically and clears corrected review issues', async () => {

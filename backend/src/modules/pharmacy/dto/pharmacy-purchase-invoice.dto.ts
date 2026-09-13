@@ -64,9 +64,10 @@ export class CreatePharmacyPurchaseInvoiceItemDto {
   @IsString()
   productName: string;
 
-  @ApiProperty({ example: 'Alembic Pharmaceuticals' })
+  @ApiPropertyOptional({ example: 'Alembic Pharmaceuticals', description: 'Optional; leave blank when not printed or known' })
+  @IsOptional()
   @IsString()
-  manufacturer: string;
+  manufacturer?: string;
 
   @ApiProperty({ example: 'Strip of 3' })
   @IsString()

@@ -75,6 +75,75 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     await admin?.$disconnect();
   });
 
+  it('saves, reviews and commits 20 legacy invoice rows with no manufacturer and retains the original', async () => {
+    const sourceDocument = await service.archiveOriginal(upload, branchId, userId);
+    draft.sourceDocumentId = sourceDocument.id;
+    draft.items = Array.from({ length: 20 }, (_, index) => ({ ...draft.items[0],
+      manufacturer: undefined, batchNumber: `OPTIONAL-${randomUUID()}`, serialNumber: index + 1,
+    }));
+    for (const field of ['grossAmount', 'taxableAmount', 'totalCgst', 'totalSgst', 'totalGst', 'netPayable']) draft[field] *= 20;
+    const saved = await service.createDraft(draft, branchId, userId);
+    expect(saved.items).toHaveLength(20);
+    expect(saved.items.every(item => item.manufacturer === '')).toBe(true);
+    expect(await prisma.stockTransaction.count({ where: { branchId } })).toBe(0);
+
+    // Simulate existing drafts from the previous required-manufacturer policy.
+    await prisma.pharmacyPurchaseInvoiceItem.updateMany({ where: { purchaseInvoiceId: saved.id },
+      data: { ocrFlags: JSON.stringify(['missing_manufacturer']) } });
+    await prisma.pharmacyPurchaseInvoice.update({ where: { id: saved.id }, data: {
+      status: 'OCR_REVIEW_REQUIRED', unresolvedOcrFlags: 20,
+      reconciliationIssues: JSON.stringify(draft.items.flatMap((_: any, index: number) => [
+        `AUTO: Line ${index + 1}: manufacturer is required before review`, `AUTO: Line ${index + 1}: missing_manufacturer`,
+      ])),
+    } });
+    const reopened = await service.findOne(saved.id, branchId);
+    expect(reopened).toMatchObject({ status: 'DRAFT', unresolvedOcrFlags: 0, reconciliationIssues: [] });
+    await service.markReviewed(saved.id, {}, branchId);
+    expect(await prisma.stockTransaction.count({ where: { branchId } })).toBe(0);
+    const committed = await service.commitStock(saved.id, branchId, userId);
+    expect(committed.status).toBe('STOCK_COMMITTED');
+    expect(await prisma.stockTransaction.count({ where: { reference: committed.stockCommitReference } })).toBe(20);
+    const stock = await prisma.inventoryItem.findMany({ where: { batchNumber: { in: draft.items.map((item: any) => item.batchNumber) } } });
+    expect(stock).toHaveLength(20);
+    expect(stock.every(item => item.currentStock === 12)).toBe(true);
+    const original = await service.getOriginalDocument(sourceDocument.id, branchId);
+    expect(original.purchaseInvoiceId).toBe(saved.id);
+    expect(Buffer.from(original.data)).toEqual(upload.buffer);
+    await service.commitStock(saved.id, branchId, userId);
+    expect(await prisma.stockTransaction.count({ where: { reference: committed.stockCommitReference } })).toBe(20);
+  });
+
+  it('automatically commits a manufacturer-free product and rejects ambiguous or conflicting product identities', async () => {
+    const name = `Manufacturer optional ${randomUUID()}`;
+    const product = await service.confirmMasterRecord({ action: 'CREATE_NEW' as any,
+      item: { ...draft.items[0], productName: name, manufacturer: undefined },
+    }, branchId);
+    expect(product.drug.manufacturerName).toBe('');
+    draft.items[0].productName = name;
+    delete draft.items[0].manufacturer;
+    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
+    expect(result.automation.status).toBe('STOCK_COMMITTED');
+
+    const second = await prisma.drug.create({ data: { branchId, name, manufacturerName: 'Another Pharma',
+      packSizeLabel: '20g', price: 150, composition1: 'Synthetic', category: 'Topical', dosageForm: 'Cream', strength: '1%',
+    } });
+    draft.invoiceNumber = randomUUID();
+    draft.items[0].batchNumber = randomUUID();
+    const ambiguous = await service.createDraft(draft, branchId, userId);
+    const rejected = await service.processInvoice(ambiguous.id, branchId, userId);
+    expect(rejected.automation.status).toBe('SAVED_FOR_REVIEW');
+    expect(rejected.automation.issues.join(' ')).toContain('multiple active product master records');
+    expect(await prisma.inventoryItem.count({ where: { batchNumber: draft.items[0].batchNumber } })).toBe(0);
+
+    // An explicitly supplied manufacturer must still match, never be ignored.
+    draft.invoiceNumber = randomUUID();
+    draft.items[0].manufacturer = 'Conflicting Pharma';
+    const conflicting = await service.createDraft(draft, branchId, userId);
+    expect((await service.processInvoice(conflicting.id, branchId, userId)).automation.status).toBe('SAVED_FOR_REVIEW');
+    expect(await prisma.inventoryItem.count({ where: { batchNumber: draft.items[0].batchNumber } })).toBe(0);
+    await prisma.drug.delete({ where: { id: second.id } });
+  });
+
   it('persists invoice details and stock once, including duplicate uploads and concurrent retries', async () => {
     const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
     expect(result.automation.status).toBe('STOCK_COMMITTED');

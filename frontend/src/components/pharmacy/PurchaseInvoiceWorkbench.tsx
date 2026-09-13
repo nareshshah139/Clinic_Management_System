@@ -16,7 +16,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { PurchaseOcrChecklist } from './PurchaseOcrChecklist';
-import { uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
+import { purchaseBlockingIssues, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { preserveInvoiceTotals, reportedAmountErrors, reportedHeaderAmounts, reportedLineAmounts } from '@/lib/purchase-invoice-totals';
 import { usePurchasePermissions } from '@/hooks/usePurchasePermissions';
@@ -344,10 +344,10 @@ function formString(value: unknown, fallback = '') {
 }
 
 function splitFlags(value: string) {
-  const flags = value
+  const flags = purchaseBlockingIssues(value
     .split(',')
     .map((flag) => flag.trim())
-    .filter(Boolean);
+    .filter(Boolean));
   return flags.length ? flags : undefined;
 }
 
@@ -715,7 +715,7 @@ function lineFromExtracted(item: ExtractedPurchaseLine, index: number): LineForm
     sgstPercent: formString(item.sgstPercent, base.sgstPercent),
     igstPercent: formString(item.igstPercent, base.igstPercent),
     ocrConfidence: formString(item.ocrConfidence),
-    ocrFlags: Array.isArray(item.ocrFlags) ? item.ocrFlags.join(', ') : '',
+    ocrFlags: purchaseBlockingIssues(item.ocrFlags || []).join(', '),
   };
 }
 
@@ -813,11 +813,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       const saved = raw ? JSON.parse(raw) : null;
       if (saved?.version === 1 && saved.header && Array.isArray(saved.lines)) {
         setHeader(saved.header);
-        setLines(saved.lines);
+        setLines(saved.lines.map((line: LineForm) => ({ ...line, ocrFlags: (splitFlags(line.ocrFlags || '') || []).join(', ') })));
         setEditingId(saved.editingId || null);
         setOriginalAmounts(saved.originalAmounts || null);
         setSourceDocument(saved.sourceDocument || null);
-        setHeaderFlags(saved.headerFlags || '');
+        setHeaderFlags((splitFlags(saved.headerFlags || '') || []).join(', '));
         setOcrSummary(saved.ocrSummary || null);
         setNotice('Restored your unfinished purchase draft from this tab. Save Draft stores it on the server.');
       }
@@ -959,7 +959,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     setLineExpansion({});
     setOriginalAmounts(draft as Record<string, unknown>);
     setEditingId(null);
-    setHeaderFlags((draft.ocrFlags || extraction?.flags || []).join(', '));
+    setHeaderFlags(purchaseBlockingIssues(draft.ocrFlags || extraction?.flags || []).join(', '));
     setHeader({
       ...defaults,
       distributorName: formString(draft.distributorName),
@@ -1362,7 +1362,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
   const editingSelectedInvoice = !!activeInvoice && editingId === activeInvoice.id;
   const busy = saving || extracting || processing || reviewing || committing;
-  const activeIssues = activeInvoice?.reconciliationIssues || [];
+  const activeIssues = purchaseBlockingIssues(activeInvoice?.reconciliationIssues || []);
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
   const canReview =
     access.review && !!activeInvoice &&
@@ -1854,7 +1854,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       Drug Master Matching
                     </CardTitle>
                     <CardDescription>
-                      Match each invoice line to the correct saved product, manufacturer and pack before adding stock.
+                      Match each invoice line to the correct saved product and pack before adding stock. Manufacturer is optional.
                     </CardDescription>
                   </div>
                   <Button
@@ -2050,7 +2050,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       />
                       <Field
                         id={`${line.localId}-manufacturer`}
-                        label="Manufacturer"
+                        label="Manufacturer (optional)"
                         value={line.manufacturer}
                         onChange={(event) =>
                           updateLine(line.localId, 'manufacturer', event.target.value)

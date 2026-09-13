@@ -129,9 +129,9 @@ export class PharmacyPurchaseInvoiceService {
         name: { equals: item.productName.trim(), mode: 'insensitive' } } });
       const exact = candidates.filter(drug => canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType)
         && (!item.manufacturer || normalizedIdentity(drug.manufacturerName) === normalizedIdentity(item.manufacturer)));
-      if (exact.length !== 1 || !exact[0].manufacturerName || !exact[0].packSizeLabel) continue;
+      if (exact.length !== 1 || !exact[0].packSizeLabel) continue;
       const drug = exact[0];
-      item.manufacturer = drug.manufacturerName!;
+      item.manufacturer = drug.manufacturerName || '';
       item.packSize = drug.packSizeLabel!;
       if (!item.packUnitType) item.packUnitType = 'Pack';
       item.ocrFlags = (item.ocrFlags || []).filter(flag => !['missing_manufacturer', 'missing_packUnitType', 'missing_packSize'].includes(flag));
@@ -310,7 +310,7 @@ export class PharmacyPurchaseInvoiceService {
           const updated = await tx.pharmacyPurchaseInvoice.update({
             where: { id },
             data: {
-              status: invoice.unresolvedOcrFlags > 0 ? 'OCR_REVIEW_REQUIRED' : 'RECONCILIATION_FAILED',
+              status: this.formatPurchaseInvoice(invoice).unresolvedOcrFlags > 0 ? 'OCR_REVIEW_REQUIRED' : 'RECONCILIATION_FAILED',
               reconciliationIssues: this.stringifyIssues([...new Set([
                 ...(dto.ocrFlags || []).map((flag) => `OCR: ${flag}`),
                 ...uniqueIssues.map((issue) => issue.startsWith('OCR: ') ? issue : `AUTO: ${issue}`),
@@ -507,10 +507,10 @@ export class PharmacyPurchaseInvoiceService {
           equals: item.productName.trim(),
           mode: 'insensitive',
         },
-        manufacturerName: {
+        ...(item.manufacturer?.trim() ? { manufacturerName: {
           equals: item.manufacturer.trim(),
-          mode: 'insensitive',
-        },
+          mode: 'insensitive' as const,
+        } } : {}),
       },
     });
     if (existingExact) {
@@ -524,7 +524,7 @@ export class PharmacyPurchaseInvoiceService {
         branchId,
         name: item.productName.trim(),
         price: this.money(item.mrp),
-        manufacturerName: item.manufacturer.trim(),
+        manufacturerName: this.cleanString(item.manufacturer),
         type: 'allopathy',
         packSizeLabel: item.packSize.trim(),
         composition1: this.inferComposition(item.productName),
@@ -858,13 +858,14 @@ export class PharmacyPurchaseInvoiceService {
         'Goods received date cannot be before invoice date',
       );
     }
-    if (invoice.unresolvedOcrFlags > 0) {
+    const current = this.formatPurchaseInvoice(invoice);
+    if (current.unresolvedOcrFlags > 0) {
       throw new BadRequestException(
         'Resolve OCR flags before reviewing this purchase invoice',
       );
     }
 
-    const issues = this.parseIssues(invoice.reconciliationIssues);
+    const issues = current.reconciliationIssues;
     if (issues.length > 0) {
       throw new BadRequestException(
         `Resolve reconciliation issues before review: ${issues.join('; ')}`,
@@ -880,6 +881,8 @@ export class PharmacyPurchaseInvoiceService {
             ? this.emptyToUndefined(dto.handwrittenNotes)
             : invoice.handwrittenNotes,
         status: 'REVIEWED',
+        unresolvedOcrFlags: 0,
+        reconciliationIssues: null,
       },
       include: {
         documents: { select: this.documentMetadata },
@@ -1032,6 +1035,7 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   private assertPurchaseInvoiceCanCommit(invoice: any): void {
+    invoice = this.formatPurchaseInvoice(invoice);
     if (invoice.status !== 'REVIEWED') {
       throw new BadRequestException(
         `Only reviewed purchase invoices can be committed to stock. Current status: ${invoice.status}`,
@@ -1289,10 +1293,10 @@ export class PharmacyPurchaseInvoiceService {
           equals: item.productName.trim(),
           mode: 'insensitive',
         },
-        manufacturerName: {
+        ...(item.manufacturer?.trim() ? { manufacturerName: {
           equals: item.manufacturer.trim(),
           mode: 'insensitive',
-        },
+        } } : {}),
       },
       select: {
         id: true,
@@ -2053,7 +2057,7 @@ export class PharmacyPurchaseInvoiceService {
       tcsAmount,
       rounding,
       netPayable,
-      ocrFlags: Array.from(new Set(flags)).filter(Boolean),
+      ocrFlags: this.blockingIssues(Array.from(new Set(flags))),
       items,
     };
   }
@@ -2113,7 +2117,6 @@ export class PharmacyPurchaseInvoiceService {
 
     for (const [field, value] of [
       ['productName', productName],
-      ['manufacturer', manufacturer],
       ['packSize', packSize],
       ['packUnitType', packUnitType],
       ['hsnCode', hsnCode],
@@ -2157,7 +2160,7 @@ export class PharmacyPurchaseInvoiceService {
       gstAmount,
       lineTotal,
       ocrConfidence: confidence,
-      ocrFlags: Array.from(new Set(flags)).filter(Boolean),
+      ocrFlags: this.blockingIssues(Array.from(new Set(flags))),
     };
   }
 
@@ -2332,7 +2335,7 @@ export class PharmacyPurchaseInvoiceService {
       issues.push('Due date is required for credit purchase bills before review');
     }
     // Retain the actual header flags with review issues so they can be reopened and corrected.
-    issues.push(...(dto.ocrFlags || []).filter(Boolean).map((flag) => `OCR: ${flag}`));
+    issues.push(...this.blockingIssues(dto.ocrFlags).map((flag) => `OCR: ${flag}`));
     let unresolvedOcrFlags = this.countOcrFlags(dto.ocrFlags);
     let lineTaxableSum = 0;
     let lineGstSum = 0;
@@ -2421,7 +2424,7 @@ export class PharmacyPurchaseInvoiceService {
     lineLabel: string,
   ): string[] {
     const issues: string[] = [];
-    for (const field of ['productName', 'manufacturer', 'packSize', 'packUnitType', 'hsnCode', 'batchNumber'] as const) {
+    for (const field of ['productName', 'packSize', 'packUnitType', 'hsnCode', 'batchNumber'] as const) {
       if (!item[field]?.trim()) issues.push(`${lineLabel}: ${field} is required before review`);
     }
     const quantityPurchased = Number(item.quantityPurchased);
@@ -2483,7 +2486,7 @@ export class PharmacyPurchaseInvoiceService {
       lineNumber,
       serialNumber: item.serialNumber,
       productName: item.productName.trim(),
-      manufacturer: item.manufacturer.trim(),
+      manufacturer: this.cleanString(item.manufacturer),
       packSize: item.packSize.trim(),
       packUnitType: item.packUnitType.trim(),
       hsnCode: item.hsnCode.trim(),
@@ -2504,23 +2507,39 @@ export class PharmacyPurchaseInvoiceService {
       gstAmount: this.money(item.gstAmount),
       lineTotal: this.money(item.lineTotal),
       ocrConfidence: item.ocrConfidence,
-      ocrFlags: item.ocrFlags?.length
-        ? JSON.stringify(item.ocrFlags)
-        : undefined,
+      ocrFlags: this.stringifyIssues(this.blockingIssues(item.ocrFlags)),
     };
   }
 
   private formatPurchaseInvoice(invoice: any) {
+    // Old drafts may still contain the retired required-manufacturer check.
+    // Apply the current policy without a migration or changing invoice contents.
+    const rawIssues = this.parseIssues(invoice.reconciliationIssues);
+    const reconciliationIssues = this.blockingIssues(rawIssues);
+    const rawHeaderFlags = rawIssues.filter(issue => issue.startsWith('OCR: ')).map(issue => issue.slice(5));
+    const ocrFlags = this.blockingIssues(rawHeaderFlags);
+    let removedFlags = rawHeaderFlags.length - ocrFlags.length;
+    let remainingFlags = ocrFlags.length;
+    const items = Array.isArray(invoice.items) ? invoice.items.map((item: any) => {
+      const rawFlags = this.parseIssues(item.ocrFlags);
+      const flags = this.blockingIssues(rawFlags);
+      removedFlags += rawFlags.length - flags.length;
+      remainingFlags += flags.length;
+      return { ...item, ocrFlags: flags };
+    }) : undefined;
+    // Preserve any unexplained counter discrepancy as a blocker.
+    const unresolvedOcrFlags = Math.max(remainingFlags, (invoice.unresolvedOcrFlags ?? remainingFlags + removedFlags) - removedFlags);
+    const retiredChecks = removedFlags > 0 || rawIssues.length !== reconciliationIssues.length;
+    const status = retiredChecks && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(invoice.status)
+      ? unresolvedOcrFlags > 0 ? 'OCR_REVIEW_REQUIRED' : reconciliationIssues.length ? 'RECONCILIATION_FAILED' : 'DRAFT'
+      : invoice.status;
     return {
       ...invoice,
-      ocrFlags: this.parseIssues(invoice.reconciliationIssues).filter((issue) => issue.startsWith('OCR: ')).map((issue) => issue.slice(5)),
-      reconciliationIssues: this.parseIssues(invoice.reconciliationIssues),
-      items: Array.isArray(invoice.items)
-        ? invoice.items.map((item: any) => ({
-            ...item,
-            ocrFlags: this.parseIssues(item.ocrFlags),
-          }))
-        : undefined,
+      status,
+      unresolvedOcrFlags,
+      ocrFlags,
+      reconciliationIssues,
+      items,
     };
   }
 
@@ -2583,9 +2602,14 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   private countOcrFlags(flags?: string[]): number {
-    return Array.isArray(flags)
-      ? flags.filter((flag) => flag.trim()).length
-      : 0;
+    return this.blockingIssues(flags).length;
+  }
+
+  private blockingIssues(value?: string | string[] | null): string[] {
+    return this.parseIssues(value).filter(flag => {
+      const body = flag.trim().replace(/^(?:(?:AUTO|OCR):\s*|Line \d+:\s*)+/i, '');
+      return !!body && !/^(?:missing[_\s-]+manufacturer|manufacturer (?:is )?(?:missing|required(?: before review)?))\.?$/i.test(body);
+    });
   }
 
   private withinTolerance(expected: number, actual: number): boolean {
@@ -2613,8 +2637,9 @@ export class PharmacyPurchaseInvoiceService {
     return issues.length > 0 ? JSON.stringify(issues) : undefined;
   }
 
-  private parseIssues(value?: string | null): string[] {
+  private parseIssues(value?: string | string[] | null): string[] {
     if (!value) return [];
+    if (Array.isArray(value)) return value.map(String);
     try {
       const parsed = JSON.parse(value);
       return Array.isArray(parsed) ? parsed.map(String) : [];
