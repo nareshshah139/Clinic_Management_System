@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   FileSearch,
   Loader2,
@@ -793,6 +794,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [masterStatuses, setMasterStatuses] = useState<Record<number, MasterStatus>>({});
   const [recent, setRecent] = useState<PurchaseInvoice[]>([]);
   const [activeInvoice, setActiveInvoice] = useState<PurchaseInvoice | null>(null);
+  const [showIntakeHome, setShowIntakeHome] = useState(false);
+  const workbenchRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const [reviewDate, setReviewDate] = useState(todayInput());
   const [loadingList, setLoadingList] = useState(false);
   const [extracting, setExtracting] = useState(false);
@@ -940,6 +944,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const resetDraft = () => {
+    setShowIntakeHome(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
     setLineExpansion({});
@@ -967,6 +972,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     matches?: MasterMatchResponse,
   ) => {
     const defaults = defaultHeader();
+    setShowIntakeHome(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
     setLineExpansion({});
@@ -1402,21 +1408,94 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const canCommit = access.commit && activeInvoice?.status === 'REVIEWED';
   const savedFormLocked = !access.create || !!editingId && activeInvoice?.id === editingId &&
     ['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status);
+  const navigateIntake = (showHome: boolean) => {
+    setShowIntakeHome(showHome);
+    headingRef.current?.focus({ preventScroll: true });
+    workbenchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  };
+
+  const recentInvoices = (
+    <details className="rounded-lg border p-4" open={showIntakeHome}>
+      <summary className="cursor-pointer text-sm font-medium">Recent invoices ({recent.length})</summary>
+      <div className="py-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardDescription>Latest branch purchase invoices</CardDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadRecent}
+            disabled={loadingList}
+            aria-label="Refresh purchase invoices"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${loadingList ? 'animate-spin' : ''}`}
+            />
+          </Button>
+        </div>
+      </div>
+      <div>
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {recent.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No purchase invoices found</p>
+          ) : (
+            recent.map((invoice) => (
+              <button
+                type="button"
+                key={invoice.id}
+                disabled={busy}
+                onClick={() => { setActiveInvoice(invoice); navigateIntake(false); }}
+                className={`min-w-0 w-full rounded-md border p-3 text-left transition-colors ${
+                  activeInvoice?.id === invoice.id
+                    ? 'border-primary bg-primary/5'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {invoice.invoiceNumber}
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {invoice.distributorName}
+                    </p>
+                  </div>
+                  <Badge variant={statusVariant(invoice.status)}>
+                    {statusLabel(invoice.status)}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{formatDate(invoice.invoiceDate)}</span>
+                  <span>{currency.format(invoice.netPayable || 0)}</span>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </details>
+  );
 
   return (
-    <div className="space-y-5 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
+    <div ref={workbenchRef} className="space-y-5 [&_[id]]:scroll-mt-20 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
       const link = (event.target as HTMLElement).closest('a[href^="#"]');
       const target = link && document.getElementById(link.getAttribute('href')!.slice(1));
       for (let element = target; element; element = element.parentElement) {
         if (element instanceof HTMLDetailsElement) element.open = true;
       }
     }}>
+      {activeInvoice && !showIntakeHome && <nav aria-label="Invoice navigation" className="sticky top-0 z-20 border-b bg-background py-2">
+        <Button variant="ghost" onClick={() => navigateIntake(true)} disabled={busy}>
+          <ArrowLeft className="h-4 w-4" />Back to Invoice OCR
+        </Button>
+      </nav>}
       {permissionsLoading && <p role="status">Loading invoice permissions…</p>}
       {permissionsError && <Alert variant="destructive"><AlertDescription>{permissionsError}</AlertDescription></Alert>}
       {!permissionsLoading && !access.automate && <p className="text-sm text-muted-foreground">Available actions reflect your invoice permissions. Automatic import requires create, review and stock access.</p>}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
-          <h3 className="text-xl font-semibold tracking-tight">Purchase Invoice Intake</h3>
+          <h3 ref={headingRef} tabIndex={-1} className="text-xl font-semibold tracking-tight">{showIntakeHome ? 'Invoice OCR' : 'Purchase Invoice Intake'}</h3>
           <p className="text-sm text-muted-foreground">
             Upload a bill or continue a saved invoice.
           </p>
@@ -1436,69 +1515,18 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         </div>
       </div>
 
-          <details className="rounded-lg border p-4">
-            <summary className="cursor-pointer text-sm font-medium">Recent invoices ({recent.length})</summary>
-            <div className="py-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <CardDescription>Latest branch purchase invoices</CardDescription>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={loadRecent}
-                  disabled={loadingList}
-                  aria-label="Refresh purchase invoices"
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 ${loadingList ? 'animate-spin' : ''}`}
-                  />
-                </Button>
-              </div>
-            </div>
-            <div>
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-                {recent.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No purchase invoices found</p>
-                ) : (
-                  recent.map((invoice) => (
-                    <button
-                      type="button"
-                      key={invoice.id}
-                      disabled={busy}
-                      onClick={() => setActiveInvoice(invoice)}
-                      className={`w-full rounded-md border p-3 text-left transition-colors ${
-                        activeInvoice?.id === invoice.id
-                          ? 'border-primary bg-primary/5'
-                          : 'hover:bg-muted'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">
-                            {invoice.invoiceNumber}
-                          </p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {invoice.distributorName}
-                          </p>
-                        </div>
-                        <Badge variant={statusVariant(invoice.status)}>
-                          {statusLabel(invoice.status)}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{formatDate(invoice.invoiceDate)}</span>
-                        <span>{currency.format(invoice.netPayable || 0)}</span>
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-            </div>
-          </details>
+      {activeInvoice && showIntakeHome && <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-4">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-medium">{activeInvoice.invoiceNumber} · {activeInvoice.distributorName}</p>
+          <p className="text-sm text-muted-foreground">Your place and any unsaved corrections are kept in this tab.</p>
+        </div>
+        <Button variant="outline" onClick={() => navigateIntake(false)} disabled={busy}>Resume invoice</Button>
+      </div>}
+
+      {!showIntakeHome && recentInvoices}
 
 
-      {activeInvoice && <section aria-labelledby="purchase-review-title" className="space-y-4 rounded-md border p-4 sm:p-5">
+      {activeInvoice && <section hidden={showIntakeHome} aria-labelledby="purchase-review-title" className="space-y-4 rounded-md border p-4 sm:p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h4 id="purchase-review-title" className="text-lg font-semibold">{activeInvoice.status === 'STOCK_COMMITTED' ? 'Stock added' : 'Finish invoice review'}</h4>
@@ -1584,9 +1612,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       )}
 
       <div className="space-y-5">
-        <div className="space-y-5 min-w-0" hidden={!!activeInvoice && !editingSelectedInvoice}>
-          <details className="rounded-lg border p-4" open={!editingSelectedInvoice}>
-            <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice ? 'Replace invoice file' : 'Upload invoice'}</summary>
+        <div className="space-y-5 min-w-0" hidden={!showIntakeHome && !!activeInvoice && !editingSelectedInvoice}>
+          <details className="rounded-lg border p-4" open={showIntakeHome || !editingSelectedInvoice}>
+            <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice && !showIntakeHome ? 'Replace invoice file' : 'Upload invoice'}</summary>
             <div className="mt-3">
               <CardDescription>
                 Import saves the original and adds stock only when every check passes.
@@ -1638,8 +1666,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 </div>
               </div>
 
-              {sourceDocument && <div className="rounded-md border p-3 text-sm"><p className="mb-1 font-medium">Original file saved</p>{access.read && <OriginalDocumentLink document={sourceDocument} />}</div>}
-              {ocrSummary && (
+              {sourceDocument && !showIntakeHome && <div className="rounded-md border p-3 text-sm"><p className="mb-1 font-medium">Original file saved</p>{access.read && <OriginalDocumentLink document={sourceDocument} />}</div>}
+              {ocrSummary && !showIntakeHome && (
                 <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                   <span className="font-medium">{ocrSummary.fileName || 'Invoice'}</span>
                   <span className="text-muted-foreground">
@@ -1664,7 +1692,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </div>
           </details>
 
-          <details open={editingSelectedInvoice || !!header.distributorName || lines.some(line => !!line.productName)}>
+          {showIntakeHome && recentInvoices}
+
+          <details hidden={showIntakeHome} open={editingSelectedInvoice || !!header.distributorName || lines.some(line => !!line.productName)}>
             <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice || header.distributorName ? 'Invoice details & products' : 'Enter invoice manually'}</summary>
           <fieldset disabled={savedFormLocked || saving || extracting || processing || reviewing || committing} className="mt-4 space-y-5 min-w-0">
           <Card>
@@ -2473,7 +2503,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             </CardContent>
           </details>}
 
-          {activeInvoice && <details className="rounded-lg border p-4">
+          {activeInvoice && !showIntakeHome && <details className="rounded-lg border p-4">
             <summary className="cursor-pointer text-sm font-medium">Saved invoice details</summary>
             <div className="mt-4 space-y-4">
                   {!!activeInvoice.documents?.length && <div className="space-y-2 text-sm">

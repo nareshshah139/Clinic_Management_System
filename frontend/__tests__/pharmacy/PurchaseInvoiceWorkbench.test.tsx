@@ -265,8 +265,17 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
       ocrFlags: [], items: [expect.objectContaining({ manufacturer: '', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
     }));
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume invoice' }));
+    expect(screen.getByRole('button', { name: 'Mark Reviewed' })).toBeEnabled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
+    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Mark Reviewed' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume invoice' }));
+    expect(screen.getByRole('button', { name: 'Commit Stock' })).toBeEnabled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Commit Stock' }));
     await waitFor(() => expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledWith('pinv-1'));
     expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1);
@@ -747,6 +756,26 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.queryByRole('heading', { name: 'Finish invoice review' })).not.toBeInTheDocument();
     expect(screen.getByText(/Restored your unfinished purchase draft/)).toBeInTheDocument();
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it('returns to Invoice OCR and resumes the same corrections without saving or processing', async () => {
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    render(<PurchaseInvoiceWorkbench />);
+    await editSelectedInvoice();
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'UNSAVED-CORRECTION' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
+    expect(screen.getByRole('heading', { name: 'Invoice OCR' })).toBeVisible();
+    expect(screen.getByLabelText('Upload invoice PDF or image')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'Finish invoice review' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Resume invoice' }));
+    expect(screen.getByLabelText('Batch')).toHaveValue('UNSAVED-CORRECTION');
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
+    fireEvent.click(screen.getByRole('button', { name: /APX-001.*Apex Distributors/ }));
+    expect(screen.getByLabelText('Batch')).toHaveValue('UNSAVED-CORRECTION');
+    expect(screen.queryByRole('button', { name: 'Resume invoice' })).not.toBeInTheDocument();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
   });
 
   it('reviews a clean draft and commits reviewed stock explicitly', async () => {
