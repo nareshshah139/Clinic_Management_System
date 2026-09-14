@@ -1405,6 +1405,7 @@ model PharmacyPurchaseInvoiceDocument {
   mimeType          String
   sizeBytes         Int
   sha256            String
+  sourceMap         Json?
   data              Bytes
   createdAt         DateTime @default(now())
 
@@ -1421,6 +1422,7 @@ model PharmacyPurchaseInvoiceItem {
   id                     String   @id @default(cuid())
   purchaseInvoiceId      String
   lineNumber             Int
+  ocrSourceRef           String?
   serialNumber           Int?
   productName            String
   manufacturer           String

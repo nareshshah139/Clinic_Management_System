@@ -1,7 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PurchaseOcrChecklist } from '@/components/pharmacy/PurchaseOcrChecklist';
-import { uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
+import { uniquePurchaseReviewIssues, groupPurchaseOcrFlags } from '@/lib/purchase-invoice-review';
 
 describe('Purchase OCR review controls', () => {
   it('combines old AUTO/OCR duplicates and missing-field variants into one issue per line', () => {
@@ -12,6 +12,19 @@ describe('Purchase OCR review controls', () => {
     ]);
     expect(issues).toHaveLength(2);
     expect(issues.map(issue => issue.message)).toEqual(['Check supplier GSTIN.', 'Line 2: Stock unit is missing.']);
+  });
+
+  it('never groups checks belonging to different invoice rows',()=>{
+    expect(groupPurchaseOcrFlags(['Line 1: missing_packUnitType','Line 2: missing_packUnitType'])).toHaveLength(2);
+  });
+
+  it('confirms duplicate reasons for the same field together', () => {
+    const onResolveMany=jest.fn();const onResolve=jest.fn();
+    const flags=['missing_packUnitType','uncertain_packUnitType'];
+    render(<PurchaseOcrChecklist flags={flags} lineIndex={0} values={{packUnitType:'Tube'}} disabled={false} onResolve={onResolve} onResolveMany={onResolveMany}/>);
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button',{name:'Confirm line 1 stock unit checked'}));
+    expect(onResolveMany).toHaveBeenCalledWith(flags);expect(onResolve).not.toHaveBeenCalled();
   });
 
   it('requires the missing value and an explicit check before resolving a flag', () => {

@@ -70,6 +70,11 @@ export class ImportPharmacyPurchaseInvoiceDto {
 }
 
 export class CreatePharmacyPurchaseInvoiceItemDto {
+  @IsOptional()
+  @IsString()
+  @Matches(/^[a-zA-Z0-9_-]{1,64}:[0-9]{1,3}$/)
+  ocrSourceRef?: string;
+
   @ApiPropertyOptional({ example: 1 })
   @IsOptional()
   @Transform(toOptionalNumber)

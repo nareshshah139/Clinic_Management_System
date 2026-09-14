@@ -183,7 +183,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
     render(<PurchaseInvoiceWorkbench />);
     expect(screen.getByRole('button', { name:'Save Draft' })).toBeDisabled();
-    expect(screen.getByRole('button', { name:'Import & Add Stock' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name:'Import & Add Stock' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Distributor')).toBeDisabled();
     await act(async () => {});
   });
@@ -270,6 +270,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
     render(<PurchaseInvoiceWorkbench />);
     await screen.findByRole('heading', { name: 'Finish invoice review' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
     fireEvent.click(screen.getByRole('button', { name: 'New invoice' }));
     expect(screen.queryByRole('heading', { name: 'Finish invoice review' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save Draft' })).toBeEnabled();
@@ -732,7 +733,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(await screen.findByDisplayValue('Apex Distributors')).toBeInTheDocument();
     expect(screen.getByDisplayValue('APX-001')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Azithral 500 Tablet')).toBeInTheDocument();
-    expect(screen.getByText('DB Master Candidate')).toBeInTheDocument();
+    expect(screen.getByText('Saved product')).toBeInTheDocument();
     expect(screen.getByText('Azithral 500mg Tablet')).toBeInTheDocument();
     expect(screen.getByText(/Extracted 1 line item/i)).toBeInTheDocument();
 
@@ -984,7 +985,7 @@ describe('PurchaseInvoiceWorkbench', () => {
 
     render(<PurchaseInvoiceWorkbench />);
 
-    expect((await screen.findAllByText('APX-001')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/^APX-001/)).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Mark Reviewed' }));
 
     await waitFor(() =>

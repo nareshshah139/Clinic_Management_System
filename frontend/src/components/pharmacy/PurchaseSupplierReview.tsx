@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api';
+import { SourceFieldLink } from './PurchaseSourcePreview';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -74,10 +75,10 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, read
 
   return <section aria-labelledby="purchase-supplier-title" className="space-y-3 border-b pb-4">
     <h5 id="purchase-supplier-title" className="font-semibold">Supplier</h5>
-    <p className="text-sm text-muted-foreground">Check the supplier name and GSTIN against the original invoice. Select a saved supplier or save these verified details here.</p>
+    <p className="text-sm text-muted-foreground">Match the supplier by name and GSTIN, or save verified details here.</p>
     <div className="grid gap-3 md:grid-cols-2">
-      <div><Label htmlFor="distributor-name">Distributor</Label><Input id="distributor-name" value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
-      <div><Label htmlFor="distributor-gstin">GSTIN</Label><Input id="distributor-gstin" value={gstNumber} disabled={locked} onChange={event => onChange(name, event.target.value.toUpperCase())} placeholder="36ABCDE1234F1Z5" /></div>
+      <div><div className="flex items-center"><Label htmlFor="distributor-name">Distributor</Label><SourceFieldLink id="distributor-name" label="Distributor"/></div><Input id="distributor-name" value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
+      <div><div className="flex items-center"><Label htmlFor="distributor-gstin">GSTIN</Label><SourceFieldLink id="distributor-gstin" label="GSTIN"/></div><Input id="distributor-gstin" value={gstNumber} disabled={locked} onChange={event => onChange(name, event.target.value.toUpperCase())} placeholder="36ABCDE1234F1Z5" /></div>
     </div>
     {canLoad && <>
       <div>

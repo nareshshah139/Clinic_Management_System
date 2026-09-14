@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -41,6 +41,24 @@ describe('Automatic intake HTTP permissions', () => {
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
 
+  it('allows source viewing with read permission and uses only the authenticated branch',async()=>{
+    role='RECEPTION';permissions=['inventory:po:read'];
+    await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/documents/doc/source-map?branchId=other').expect(200);
+    await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/documents/doc/pages/2').expect('Cache-Control','private, no-store').expect('Content-Type',/image\/jpeg/).expect(200);
+    expect(service.getSourceMap).toHaveBeenCalledWith('doc','branch-1');
+    expect(service.getDocumentPreview).toHaveBeenCalledWith('doc',2,'branch-1');
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/documents/doc/source-map').send({}).expect(403);
+    expect(service.locateDocumentSources).not.toHaveBeenCalled();
+    permissions.push('inventory:po:create');
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/documents/doc/source-map').send({branchId:'other'}).expect(201);
+    expect(service.locateDocumentSources).toHaveBeenCalledWith('doc','branch-1');
+  });
+  it('denies source images and metadata without invoice read access',async()=>{
+    permissions=['inventory:po:create'];
+    await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/documents/doc/source-map').expect(403);
+    await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/documents/doc/pages/1').expect(403);
+    expect(service.getSourceMap).not.toHaveBeenCalled();expect(service.getDocumentPreview).not.toHaveBeenCalled();
+  });
   it('allows same-screen catalog correction only with invoice and product-edit permissions', async () => {
     role = 'RECEPTION'; permissions = ['inventory:po:create', 'pharmacy:drug:update'];
     await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/master-records/product-1')

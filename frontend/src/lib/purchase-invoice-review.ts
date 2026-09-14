@@ -97,3 +97,13 @@ export function uniquePurchaseReviewIssues(issues: string[]) {
     return [issue.key, issue];
   })).values()];
 }
+
+export function groupPurchaseOcrFlags(flags:string[],lineIndex?:number) {
+  const groups=new Map<string,string[]>();
+  for(const flag of purchaseBlockingIssues(flags)) {
+    const issue=purchaseReviewIssue(flag,lineIndex);
+    const key=`${issue.lineIndex ?? 'header'}:${issue.field || issue.key}`;
+    groups.set(key,[...(groups.get(key)||[]),flag]);
+  }
+  return [...groups.values()];
+}

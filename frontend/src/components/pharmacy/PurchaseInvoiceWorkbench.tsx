@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,10 +16,12 @@ import {
   Truck,
   Upload,
 } from 'lucide-react';
+import { PurchaseSourceContext, PurchaseSourcePreview, SourceFieldLink } from './PurchaseSourcePreview';
+import { HEADER_SOURCE_IDS, LINE_SOURCE_IDS, sourceFieldLabel, type SourceTarget } from '@/lib/purchase-invoice-source';
 import { PurchaseProductDetails, type PurchaseProductCatalog } from './PurchaseProductDetails';
 import { PurchaseSupplierReview } from './PurchaseSupplierReview';
 import { PurchaseOcrChecklist } from './PurchaseOcrChecklist';
-import { purchaseBlockingIssues, purchaseReviewIssue, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
+import { groupPurchaseOcrFlags, purchaseBlockingIssues, purchaseReviewIssue, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { preserveInvoiceTotals, reportedAmountErrors, reportedHeaderAmounts, reportedLineAmounts } from '@/lib/purchase-invoice-totals';
 import { usePurchasePermissions } from '@/hooks/usePurchasePermissions';
@@ -90,6 +92,7 @@ type HeaderForm = {
 };
 
 type LineForm = {
+  ocrSourceRef?: string;
   localId: string;
   serialNumber: string;
   productName: string;
@@ -115,6 +118,7 @@ type LineForm = {
 };
 
 type PurchaseInvoiceItem = {
+  ocrSourceRef?: string;
   id?: string;
   lineNumber: number;
   ocrConfidence?: number | null;
@@ -185,6 +189,7 @@ type PurchaseListResponse = {
 };
 
 type ExtractedPurchaseLine = Partial<{
+  ocrSourceRef: string;
   serialNumber: number | string;
   productName: string;
   manufacturer: string;
@@ -549,7 +554,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
       ['productName', 'product'],
     ];
     for (const [key, label] of requiredLine) {
-      if (!line[key].trim()) errors.push(`${prefix}: ${label} is required`);
+      if (!line[key]?.trim()) errors.push(`${prefix}: ${label} is required`);
     }
 
     const purchased = numeric(line.quantityPurchased);
@@ -653,6 +658,7 @@ function buildDraftPayload(header: HeaderForm, lines: LineForm[]) {
     items: lines.map((line, index) => {
       const amounts = calculateLine(line);
       return {
+        ocrSourceRef: line.ocrSourceRef,
         serialNumber: Number(line.serialNumber || index + 1),
         productName: line.productName.trim(),
         manufacturer: line.manufacturer.trim(),
@@ -694,6 +700,7 @@ function lineFromExtracted(item: ExtractedPurchaseLine, index: number): LineForm
   const base = emptyLine(index + 1);
   return {
     ...base,
+    ocrSourceRef: item.ocrSourceRef,
     serialNumber: formString(item.serialNumber, String(index + 1)),
     productName: formString(item.productName),
     manufacturer: formString(item.manufacturer),
@@ -814,6 +821,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const [masterStatuses, setMasterStatuses] = useState<Record<number, MasterStatus>>({});
   const [recent, setRecent] = useState<PurchaseInvoice[]>([]);
   const [activeInvoice, setActiveInvoice] = useState<PurchaseInvoice | null>(null);
+  const [selectedSourceId, setSelectedSourceId] = useState('invoice-number');
   const [showIntakeHome, setShowIntakeHome] = useState(false);
   const workbenchRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -1493,6 +1501,32 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     workbenchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   };
 
+  const viewingSavedInvoice = !!activeInvoice && !editingSelectedInvoice;
+  const previewDocument = viewingSavedInvoice ? activeInvoice.documents?.[0] : sourceDocument || activeInvoice?.documents?.[0];
+  const sourceHeader = viewingSavedInvoice ? {...activeInvoice,
+    invoiceDate:dateInputFromIso(activeInvoice.invoiceDate),goodsReceivedDate:dateInputFromIso(activeInvoice.goodsReceivedDate),dueDate:dateInputFromIso(activeInvoice.dueDate)} : header;
+  const sourceAmounts = viewingSavedInvoice ? activeInvoice : originalAmounts;
+  const sourceLines = viewingSavedInvoice ? (activeInvoice.items || []).map((item,index)=>({...lineFromExtracted(item as unknown as ExtractedPurchaseLine,index),localId:`saved-source-${item.id || index}`})) : lines;
+  useEffect(()=>setSelectedSourceId('invoice-number'),[previewDocument?.id]);
+  const showSourcePreview = !!previewDocument && !!access.read && !!access.sourceHighlights && !showIntakeHome;
+  const sourceTargets: SourceTarget[] = [
+    ...Object.entries(HEADER_SOURCE_IDS).map(([field,id]) => ({id,field,label:sourceFieldLabel(field),value:String((sourceHeader as unknown as Record<string,unknown>)[field] ?? '')})),
+    ...['grossAmount','taxableAmount','totalCgst','totalSgst','totalIgst','totalGst','netPayable'].map(field => ({id:`invoice-reported-${field}`,field,label:sourceFieldLabel(field),value:String((sourceAmounts as Record<string,unknown> | null)?.[field] ?? '')})),
+    ...sourceLines.flatMap((line,index) => [
+      ...Object.entries(LINE_SOURCE_IDS).map(([field,suffix]) => ({id:`${line.localId}-${suffix}`,field,label:`Line ${index+1}: ${sourceFieldLabel(field)}`,value:String((line as unknown as Record<string,string>)[field] || ''),sourceRef:line.ocrSourceRef,row:line as unknown as Record<string,string>})),
+      ...['taxableAmount','gstAmount','lineTotal'].map(field=>({id:`${line.localId}-reported-${field}`,field,label:`Line ${index+1}: ${sourceFieldLabel(field)}`,value:String(((sourceAmounts?.items as Record<string,unknown>[] | undefined)?.[index])?.[field] ?? ''),sourceRef:line.ocrSourceRef,row:line as unknown as Record<string,string>})),
+    ]),
+  ];
+  const selectSource = (id:string, focusField=false) => {
+    setSelectedSourceId(id);
+    const target = document.getElementById(id);
+    if (focusField && target) {
+      for (let parent = target.parentElement; parent; parent = parent.parentElement) if(parent instanceof HTMLDetailsElement) parent.open = true;
+      target.scrollIntoView?.({block:'center',behavior:'instant'});
+      target.focus({preventScroll:true});
+    } else if (window.innerWidth < 1280) document.getElementById('purchase-source-preview')?.scrollIntoView?.({block:'start',behavior:'instant'});
+  };
+
   const showSupplierReview = !activeInvoice || !stockAdded && !['REVIEWED', 'CANCELLED'].includes(activeInvoice.status);
   const editingChecks = !savedFormLocked && (!activeInvoice || editingSelectedInvoice);
   const currentHeaderFlags = splitFlags(headerFlags) || [];
@@ -1514,12 +1548,12 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   const manualIssueKeys = new Set(activeIssues.filter(manualReviewOnlyIssue).map(issue => purchaseReviewIssue(issue).key));
   const correctionIssues = otherReviewIssues.filter(issue => !manualIssueKeys.has(issue.key) && issue.key !== 'header:supplier-match');
   const manualConfidenceLines = otherReviewIssues.filter(issue => manualIssueKeys.has(issue.key) && issue.key.endsWith(':confidence')).map(issue => (issue.lineIndex ?? 0) + 1);
-  const confirmationCount = editingChecks ? currentHeaderFlags.length + currentLineFlags.reduce((sum, flags) => sum + flags.length, 0) : activeOcrFlags;
+  const confirmationCount = editingChecks ? groupPurchaseOcrFlags(currentHeaderFlags).length + currentLineFlags.reduce((sum, flags,index) => sum + groupPurchaseOcrFlags(flags,index).length, 0) : activeOcrFlags;
   const reviewChecklist = <section id="purchase-review-checklist" aria-labelledby="purchase-review-checklist-title" className="space-y-4 border-t pt-4">
     <div>
       <h4 id="purchase-review-checklist-title" className="font-semibold">Check before adding stock</h4>
       <p className="mt-1 text-sm text-muted-foreground">{editingChecks
-        ? `${confirmationCount} field confirmation${confirmationCount === 1 ? '' : 's'} remaining. Correct each value using its link, then confirm it here. Save & Process saves your work and checks the invoice again.`
+        ? `${confirmationCount} field confirmation${confirmationCount === 1 ? '' : 's'} remaining. Check the original, correct the value, then confirm it here.`
         : 'Choose Review issues to open the invoice fields and confirmation controls.'}</p>
     </div>
     <PurchaseSupplierReview name={!activeInvoice || editingSelectedInvoice ? header.distributorName : activeInvoice.distributorName}
@@ -1531,8 +1565,10 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       onEdit={activeInvoice && access.create && !savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined} />
     {editingChecks && <>
       <PurchaseOcrChecklist flags={currentHeaderFlags} values={header} disabled={busy}
+        onResolveMany={flags => { setManualReviewCandidateId(null); setHeaderFlags(current => (splitFlags(current)||[]).filter(value=>!flags.includes(value)).join(', ')); }}
         onResolve={flag => { setManualReviewCandidateId(null); setHeaderFlags(current => (splitFlags(current) || []).filter(value => value !== flag).join(', ')); }} />
       {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} lineIndex={index} lineId={line.localId} values={line} disabled={busy}
+        onResolveMany={flags => updateLine(line.localId, 'ocrFlags', currentLineFlags[index].filter(value=>!flags.includes(value)).join(', '))}
         onResolve={flag => updateLine(line.localId, 'ocrFlags', currentLineFlags[index].filter(value => value !== flag).join(', '))} />)}
     </>}
     {correctionIssues.length > 0 && <ul className="divide-y text-sm">
@@ -1550,7 +1586,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     {manualConfidenceLines.length > 0 && <div className="space-y-2 border-t pt-3 text-sm">
       <p className="font-semibold">Manual review required</p>
       {manualConfidenceLines.length > 0 && <p>Check the OCR reading on line{manualConfidenceLines.length === 1 ? '' : 's'} {manualConfidenceLines.join(', ')} against the original. Keep the recorded confidence scores unchanged.</p>}
-      <p className="font-medium">These checks use Mark Reviewed, then Commit Stock; there is no separate checkbox for them. Resolve the other checks first.</p>
+      <p className="font-medium">After resolving the fields above, choose Mark Reviewed, then Commit Stock.</p>
     </div>}
     {editingChecks && confirmationCount === 0 && otherReviewIssues.length === 0 && <p className="text-sm">No outstanding OCR checks. Verify the invoice details, quantities, rates and totals before continuing.</p>}
   </section>;
@@ -1641,7 +1677,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   );
 
   return (
-    <div ref={workbenchRef} className="space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
+    <PurchaseSourceContext.Provider value={{enabled:showSourcePreview,fieldIds:sourceTargets.map(target=>target.id),selectedId:selectedSourceId,select:id=>selectSource(id)}}>
+    <div onFocusCapture={event=>{const id=(event.target as HTMLElement).id;if(sourceTargets.some(target=>target.id===id))setSelectedSourceId(id);}} ref={workbenchRef} className="space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none" onClick={event => {
       const link = (event.target as HTMLElement).closest('a[href^="#"]');
       const target = link && document.getElementById(link.getAttribute('href')!.slice(1));
       for (let element = target; element; element = element.parentElement) {
@@ -1657,13 +1694,14 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           <p className="font-semibold">{stockStatusUnknown ? 'Stock status unknown' : committing ? 'Adding stock…' : processing || saving ? 'Saving and checking invoice…' : stockAdded ? 'Stock added' : 'Stock not added'}</p>
           {stockAdded && activeInvoice.stockCommitReference && <p className="break-all text-xs text-muted-foreground">Reference: {activeInvoice.stockCommitReference}</p>}
         </div>
+        {showSourcePreview && <a href="#purchase-source-preview" className="text-sm underline underline-offset-4 xl:hidden">View source</a>}
         {editingSelectedInvoice && !stockAdded && activeInvoice.status !== 'REVIEWED' && <a className="text-sm underline underline-offset-4" href="#purchase-review-checklist">Review checklist</a>}
         {invoiceActions}
       </nav>}
       {permissionsLoading && <p role="status">Loading invoice permissions…</p>}
       {permissionsError && <Alert variant="destructive"><AlertDescription>{permissionsError}</AlertDescription></Alert>}
       {!permissionsLoading && !access.automate && <p className="text-sm text-muted-foreground">Available actions reflect your invoice permissions. Automatic import requires create, review and stock access.</p>}
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div hidden={!!activeInvoice && !showIntakeHome} className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h3 ref={headingRef} tabIndex={-1} className="text-xl font-semibold tracking-tight">{showIntakeHome ? 'Invoice OCR' : 'Purchase Invoice Intake'}</h3>
           <p className="text-sm text-muted-foreground">
@@ -1693,11 +1731,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         <Button variant="outline" onClick={() => navigateIntake(false)} disabled={busy}>Resume invoice</Button>
       </div>}
 
-      {!showIntakeHome && recentInvoices}
+      {!showIntakeHome && !activeInvoice && recentInvoices}
 
 
       <div ref={actionFeedbackRef} id="purchase-action-feedback" tabIndex={-1} className="space-y-3">
-        {notice && <p role="status" className="flex items-start gap-2 text-sm">
+        {notice && !(stockAdded && notice.startsWith('Restored')) && <p role="status" className="flex items-start gap-2 text-sm">
           {stockAdded ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <FileSearch className="mt-0.5 h-4 w-4 shrink-0" />}{notice}
         </p>}
         {error && <Alert variant="destructive">
@@ -1715,7 +1753,9 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         </Alert>}
       </div>
 
-      {activeInvoice && <section hidden={showIntakeHome} aria-labelledby="purchase-review-title" className="space-y-4 rounded-md border p-4 sm:p-5">
+      <div className={showSourcePreview ? 'grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : ''}>
+        <div className="min-w-0 space-y-5">
+      {activeInvoice && <section hidden={showIntakeHome} aria-labelledby="purchase-review-title" className="space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h4 id="purchase-review-title" className="text-lg font-semibold">{activeInvoice.status === 'STOCK_COMMITTED' ? 'Stock added' : 'Finish invoice review'}</h4>
@@ -1730,14 +1770,14 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               ? 'The request was interrupted. Refresh stock status to confirm the saved outcome before continuing.'
               : activeInvoice.status === 'REVIEWED'
               ? 'Next: Commit Stock. Review is complete; stock has not been added yet.'
-              : awaitingManualReview ? 'Next: Mark Reviewed after checking the original, then Commit Stock. Your corrections are saved; stock has not been added.'
+              : awaitingManualReview ? 'Next: Mark Reviewed after checking the original, then Commit Stock. Your corrections are saved.'
               : editingSelectedInvoice && access.automate ? 'Save & Process saves your corrections, checks the invoice and adds stock when every automatic check passes.'
               : canReview ? 'Next: Mark Reviewed, then Commit Stock. Stock has not been added yet.'
               : 'Check the highlighted details against the original, then save your corrections.'}</p>
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
                 <span>{activeInvoice.items?.length || 0} items · {currency.format(activeInvoice.netPayable || 0)}</span>
-                {activeInvoice.documents?.[0] && <a className="text-primary underline underline-offset-4" href={`/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(activeInvoice.documents[0].id)}`} download={activeInvoice.documents[0].fileName}>Open original invoice</a>}
+                {!showSourcePreview && activeInvoice.documents?.[0] && <a className="text-primary underline underline-offset-4" href={`/api/pharmacy/purchase-invoices/documents/${encodeURIComponent(activeInvoice.documents[0].id)}`} download={activeInvoice.documents[0].fileName}>Open original invoice</a>}
                 {!editingSelectedInvoice && <div>
                   <Label htmlFor="review-goods-date">Goods Received Date</Label>
                   <Input id="review-goods-date" type="date" value={reviewDate} disabled={!access.review || activeInvoice.status === 'REVIEWED' || busy} onChange={event => setReviewDate(event.target.value)} />
@@ -1764,7 +1804,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
       <div className="space-y-5">
         <div className="space-y-5 min-w-0" hidden={!showIntakeHome && !!activeInvoice && !editingSelectedInvoice}>
-          <details className="rounded-lg border p-4" open={showIntakeHome || !editingSelectedInvoice}>
+          <details hidden={savedFormLocked} className="rounded-lg border p-4" open={showIntakeHome || !editingSelectedInvoice}>
             <summary className="cursor-pointer text-sm font-medium">{editingSelectedInvoice && !showIntakeHome ? 'Replace invoice file' : 'Upload invoice'}</summary>
             <div className="mt-3">
               <CardDescription>
@@ -1864,7 +1904,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           <Label htmlFor="invoice-ocr-flags">Invoice OCR Flags</Label><Input id="invoice-ocr-flags" disabled={savedFormLocked || saving || extracting || processing} value={headerFlags} onChange={(event) => setHeaderFlags(event.target.value)} />
         </details>
       </section>}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {!showSupplierReview && <>
                 <Field
                   id="distributor-name"
@@ -1892,7 +1932,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   id="invoice-number"
                   label="Invoice No."
@@ -1914,7 +1954,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   onChange={(event) => updateHeader('goodsReceivedDate', event.target.value)}
                 />
                 <div>
-                  <Label htmlFor="bill-type">Bill Type</Label>
+                  <div className="flex items-center"><Label htmlFor="bill-type">Bill Type</Label><SourceFieldLink id="bill-type" label="Bill Type"/></div>
                   <Select
                     value={header.billType}
                     onValueChange={(value: string) =>
@@ -1932,7 +1972,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   id="due-date"
                   label="Due Date"
@@ -1945,7 +1985,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
               <details className="border-t pt-3">
                 <summary className="cursor-pointer text-sm font-medium">Additional invoice details</summary>
                 <div className="mt-3 space-y-3">
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   id="food-license"
                   label="Food License"
@@ -1980,7 +2020,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Field
                   id="buyer-code"
                   label="Buyer Code"
@@ -2015,7 +2055,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="distributor-address">Distributor Address</Label>
+                  <Label htmlFor="distributor-address">Distributor Address<SourceFieldLink id="distributor-address" label="Distributor address" /></Label>
                   <Textarea
                     id="distributor-address"
                     value={header.distributorAddress}
@@ -2043,8 +2083,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           </Card>
 
           {lines.some((line) => line.productName.trim()) && !savedFormLocked && (
-            <details id="purchase-master-matching" open={masterMatches.length > 0 || undefined} className="rounded-lg border p-4">
-              <summary className="cursor-pointer text-sm font-medium">Match products to saved inventory</summary>
+            <Card id="purchase-master-matching">
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
@@ -2108,7 +2147,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                      <div className="grid grid-cols-1 gap-3">
                         <div className="rounded-md bg-muted/40 p-3">
                           <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
                             OCR / Draft Line
@@ -2125,7 +2164,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
 
                         <div className="rounded-md bg-muted/40 p-3">
                           <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
-                            DB Master Candidate
+                            Saved product
                           </p>
                           {savedProduct ? (
                             <>
@@ -2188,7 +2227,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   );
                 })}
             </CardContent>
-            </details>
+            </Card>
           )}
 
           <section id="purchase-line-items" className="space-y-3">
@@ -2209,7 +2248,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                   <div className="p-4">
                     <span className="inline-flex w-full flex-wrap items-center justify-between gap-2 align-middle text-sm">
                       <span className="min-w-0"><strong>{index + 1}. {line.productName.trim() || 'New product'}</strong><span className="mt-1 block text-muted-foreground">{line.batchNumber || 'Batch needed'} · {line.quantityPurchased || '0'} paid + {line.freeQuantity || '0'} free</span></span>
-                      <span className="flex items-center gap-3">{line.ocrFlags && <span className="text-destructive">{splitFlags(line.ocrFlags)?.length} checks</span>}<strong>{currency.format(amounts.total)}</strong></span>
+                      <span className="flex items-center gap-3">{line.ocrFlags && <span className="text-destructive">{groupPurchaseOcrFlags(splitFlags(line.ocrFlags) || [],index).length} {groupPurchaseOcrFlags(splitFlags(line.ocrFlags) || [],index).length === 1 ? 'check' : 'checks'}</span>}<strong>{currency.format(amounts.total)}</strong></span>
                     </span>
                   </div>
                   <div className="flex justify-end px-4 pb-3">
@@ -2231,7 +2270,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                           <Input id={`${line.localId}-ocr-flags`} value={line.ocrFlags} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} />
                         </details>}
                       </div>
-                    <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Field
                         id={`${line.localId}-product`}
                         label="Product"
@@ -2284,7 +2323,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <Field
                         id={`${line.localId}-expiry-month`}
                         label="Exp. Month"
@@ -2373,7 +2412,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     <details open className="border-t pt-3">
                       <summary className="cursor-pointer text-sm font-medium">Tax, discounts and OCR details</summary>
                       <div className="mt-3 space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <Field
                         id={`${line.localId}-discount`}
                         label="Disc %"
@@ -2454,7 +2493,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                       />
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Field
                         id={`${line.localId}-confidence`}
                         label="OCR Confidence"
@@ -2486,7 +2525,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
             <CardContent className="space-y-4">
               <details>
                 <summary className="cursor-pointer text-sm font-medium">Discounts and adjustments</summary>
-              <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 <Field
                   id="trade-discount"
                   label="Trade Disc."
@@ -2704,7 +2743,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           </details>}
         </aside>
       </div>
+        </div>
+        {showSourcePreview && previewDocument && <PurchaseSourcePreview key={previewDocument.id} document={previewDocument} targets={sourceTargets} selectedId={selectedSourceId} onSelect={id=>selectSource(id,true)} canLocate={access.create} />}
+      </div>
     </div>
+    </PurchaseSourceContext.Provider>
   );
 }
 
@@ -2738,10 +2781,11 @@ function ReportedAmountsEditor({ id, values, labels, disabled, onChange }: {
 }
 
 function Field({ id, label, className, ...props }: FieldProps) {
+  const source=useContext(PurchaseSourceContext);
   return (
     <div className={className}>
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} {...props} />
+      <div className="flex items-center"><Label htmlFor={id}>{label}</Label><SourceFieldLink id={id} label={label}/></div>
+      <Input id={id} {...props} className={source.enabled && source.selectedId===id ? 'outline-2 outline-amber-600 bg-amber-50 dark:bg-amber-950' : undefined} />
     </div>
   );
 }

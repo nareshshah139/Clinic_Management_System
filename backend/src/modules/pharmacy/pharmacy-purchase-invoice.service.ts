@@ -1,6 +1,8 @@
+import { Prisma } from '@prisma/client';
+import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
-import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
+import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_SOURCE_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
   BadRequestException,
   ConflictException,
@@ -111,7 +113,7 @@ export class PharmacyPurchaseInvoiceService {
     const commit = has('pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create');
     return { read, create, review, commit, automate: create && review && commit,
       saveSupplier: create && has('inventory:supplier:create'),
-      catalogDetails: true, editProduct: create && has('pharmacy:drug:update') };
+      sourceHighlights: true, catalogDetails: true, editProduct: create && has('pharmacy:drug:update') };
   }
 
   async purchaseSuppliers(branchId: string) {
@@ -207,6 +209,48 @@ export class PharmacyPurchaseInvoiceService {
     return document;
   }
 
+  async getSourceMap(id: string, branchId: string) {
+    const document = await this.getOriginalDocument(id, branchId);
+    let pageCount = 1;
+    if (document.mimeType === 'application/pdf') {
+      const { pdf } = await import('pdf-to-img');
+      pageCount = (await pdf(Buffer.from(document.data))).length;
+    }
+    return { sourceMap: document.sourceMap || null, pageCount };
+  }
+
+  private readonly sourceJobs = new Map<string, Promise<unknown>>();
+  async locateDocumentSources(id: string, branchId: string) {
+    const key = `${branchId}:${id}`;
+    const running = this.sourceJobs.get(key);
+    if (running) return running;
+    const job = (async () => {
+      const document = await this.getOriginalDocument(id, branchId);
+      if (document.sourceMap) return document.sourceMap;
+      // Locate older uploads without changing the saved invoice, review state or stock.
+      const result = await this.extractDocumentDraft({ buffer: Buffer.from(document.data), size: document.sizeBytes,
+        mimetype: document.mimeType, originalname: document.fileName } as Express.Multer.File, branchId);
+      if (!result.sourceMap) throw new ServiceUnavailableException('Source locations could not be read. Retry or review the original without highlights.');
+      const updated = await this.prisma.pharmacyPurchaseInvoiceDocument.updateMany({ where: { id, branchId, sourceMap: { equals: Prisma.DbNull } }, data: { sourceMap: result.sourceMap as any } });
+      return updated.count === 1 ? result.sourceMap : (await this.getOriginalDocument(id,branchId)).sourceMap;
+    })();
+    this.sourceJobs.set(key,job);
+    try { return await job; } finally { this.sourceJobs.delete(key); }
+  }
+
+  async getDocumentPreview(id: string, page: number, branchId: string) {
+    if (!Number.isInteger(page) || page < 1 || page > 50) throw new BadRequestException('Invalid invoice page');
+    const document = await this.getOriginalDocument(id,branchId);
+    let buffer: Buffer | undefined;
+    if (document.mimeType === 'application/pdf') {
+      const { pdf } = await import('pdf-to-img');
+      const rendered = await pdf(Buffer.from(document.data), { scale: 2 });
+      if (page <= rendered.length) buffer = await rendered.getPage(page);
+    } else if (page === 1) buffer = Buffer.from(document.data);
+    if (!buffer) throw new NotFoundException('Invoice page not found');
+    return Buffer.from((await this.bufferToVisionDataUrl(buffer)).split(',')[1],'base64');
+  }
+
   private async linkOriginal(tx: any, documentId: string, invoiceId: string, branchId: string) {
     const linked = await tx.pharmacyPurchaseInvoiceDocument.updateMany({
       where: { id: documentId, branchId, OR: [{ purchaseInvoiceId: null }, { purchaseInvoiceId: invoiceId }] },
@@ -218,6 +262,19 @@ export class PharmacyPurchaseInvoiceService {
   private async extractArchivedDocument(file: Express.Multer.File, branchId: string, sourceDocument: Awaited<ReturnType<PharmacyPurchaseInvoiceService['archiveOriginal']>>) {
     try {
       const extracted = await this.extractDocumentDraft(file, branchId);
+      let sourceMap = extracted.sourceMap;
+      if (sourceMap) {
+        const updated = await this.prisma.pharmacyPurchaseInvoiceDocument.updateMany({
+          where: { id: sourceDocument.id, branchId, sourceMap: { equals: Prisma.DbNull } }, data: { sourceMap: sourceMap as any },
+        });
+        if (updated.count !== 1) sourceMap = (await this.getOriginalDocument(sourceDocument.id,branchId)).sourceMap as unknown as PurchaseSourceMap;
+      }
+      if (sourceMap?.rows) {
+        const indexes = matchingSourceRows(extracted.draft.items,sourceMap.rows.map(row=>row.values));
+        extracted.draft.items.forEach((item,index)=>{
+          item.ocrSourceRef = indexes[index] === undefined ? undefined : `${sourceDocument.id}:${sourceMap!.rows[indexes[index]!].index}`;
+        });
+      }
       extracted.draft = await this.enrichKnownProducts(extracted.draft, branchId);
       return { ...extracted, draft: { ...extracted.draft, sourceDocumentId: sourceDocument.id }, sourceDocument };
     } catch (error) {
@@ -424,6 +481,26 @@ export class PharmacyPurchaseInvoiceService {
     const document = await this.buildOcrImageDataUrls(file);
     const { model, reasoningEffort } = purchaseOcrCodexConfig();
     const raw = await this.extractPurchaseInvoiceJson(document.imageDataUrls);
+    const sizes = await Promise.all(document.imageDataUrls.map(async url => {
+      const metadata = await sharp(Buffer.from(url.split(',')[1], 'base64')).metadata();
+      return { width: metadata.width!, height: metadata.height! };
+    }));
+    // Geometry has no authority over invoice values, confidence or reconciliation.
+    // All external passes receive only the original images, never saved invoice data.
+    const sourcePromise = readPurchaseSourcePages(document.imageDataUrls, async image => {
+      try { return this.parseJsonObject(await extractWithCodexOAuth(PURCHASE_INVOICE_SOURCE_PROMPT,[image])); }
+      catch (error) {
+        this.logger.warn(`Optional invoice source page unavailable: ${error instanceof HttpException ? error.message : 'invalid location response'}`);
+        throw error;
+      }
+    }).then(locations => {
+        const map = alignPurchaseSource(raw, locations, sizes);
+        return Object.keys(map.headers).length || map.rows.some(row => Object.keys(row.regions).length) ? map : undefined;
+      })
+      .catch(error => {
+        this.logger.warn(`Optional invoice source locations unavailable: ${error instanceof HttpException ? error.message : 'invalid location response'}`);
+        return undefined;
+      });
     let draft = this.normalizeExtractedPurchaseDraft(raw, document.flags);
     try {
       const verificationText = await extractWithCodexOAuth(
@@ -437,6 +514,7 @@ export class PharmacyPurchaseInvoiceService {
 
     return {
       draft,
+      sourceMap: await sourcePromise,
       extraction: {
         source: PharmacyPurchaseInvoiceSourceDto.OCR,
         model,
@@ -2523,6 +2601,7 @@ export class PharmacyPurchaseInvoiceService {
     lineNumber: number,
   ) {
     return {
+      ocrSourceRef: item.ocrSourceRef || null,
       lineNumber,
       serialNumber: item.serialNumber,
       productName: item.productName.trim(),

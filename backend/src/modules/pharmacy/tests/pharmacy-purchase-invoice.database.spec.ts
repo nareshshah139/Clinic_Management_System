@@ -1,3 +1,4 @@
+import {normalizePurchaseSource} from '../purchase-invoice-source';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
@@ -38,6 +39,9 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_invoice_documents"');
     const migration = readFileSync(path.resolve('prisma/migrations/20260912_add_purchase_invoice_documents/migration.sql'), 'utf8');
     for (const statement of migration.split(';').filter((sql) => sql.trim())) await prisma.$executeRawUnsafe(statement);
+    await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_items" DROP COLUMN "ocrSourceRef"');
+    const sourceMigration=readFileSync(path.resolve('prisma/migrations/20260914100000_purchase_source_highlights/migration.sql'),'utf8');
+    for(const statement of sourceMigration.split(';').filter(sql=>sql.trim())) await prisma.$executeRawUnsafe(statement);
     branchId = (await prisma.branch.create({ data: { name: 'Synthetic OCR Test', address: 'Synthetic' } })).id;
     userId = (await prisma.user.create({ data: {
       firstName: 'Synthetic', lastName: 'Operator', email: 'ocr-test@example.invalid', password: 'no-login-test-only',
@@ -84,11 +88,17 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     const sourceDocument = await service.archiveOriginal(upload, branchId, userId);
     draft.sourceDocumentId = sourceDocument.id;
     draft.items = Array.from({ length: 20 }, (_, index) => ({ ...draft.items[0],
-      manufacturer: undefined, batchNumber: `OPTIONAL-${randomUUID()}`, serialNumber: index + 1,
+      manufacturer: undefined, batchNumber: `OPTIONAL-${randomUUID()}`, serialNumber: index + 1, ocrSourceRef: `${sourceDocument.id}:${index}`,
     }));
     for (const field of ['grossAmount', 'taxableAmount', 'totalCgst', 'totalSgst', 'totalGst', 'netPayable']) draft[field] *= 20;
+    const map=normalizePurchaseSource({items:draft.items.map((item:any,index:number)=>({...item,sourceRegions:{batchNumber:[1,10,index*40,100,index*40+20]}}))},[{width:800,height:1000}]);
+    await prisma.pharmacyPurchaseInvoiceDocument.update({where:{id:sourceDocument.id},data:{sourceMap:map}});
     const saved = await service.createDraft(draft, branchId, userId);
     expect(saved.items).toHaveLength(20);
+    const reversed=await service.updateDraft(saved.id,{...draft,items:[...draft.items].reverse()},branchId);
+    expect(reversed.items[0].ocrSourceRef).toBe(`${sourceDocument.id}:19`);
+    expect(reversed.items[19].ocrSourceRef).toBe(`${sourceDocument.id}:0`);
+    expect((await service.getSourceMap(sourceDocument.id,branchId)).sourceMap).toEqual(map);
     expect(saved.items.every(item => item.manufacturer === '')).toBe(true);
     expect(await prisma.stockTransaction.count({ where: { branchId } })).toBe(0);
 

@@ -173,6 +173,29 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.listUnlinkedDocuments(req.user.branchId);
   }
 
+  @Get('documents/:documentId/source-map')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  getSourceMap(@Param('documentId') id: string, @Request() req: any) {
+    return this.purchaseInvoiceService.getSourceMap(id,req.user.branchId);
+  }
+
+  @Post('documents/:documentId/source-map')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'], ['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  locateSources(@Param('documentId') id: string, @Request() req: any) {
+    return this.purchaseInvoiceService.locateDocumentSources(id,req.user.branchId);
+  }
+
+  @Get('documents/:documentId/pages/:page')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])
+  async previewPage(@Param('documentId') id: string, @Param('page') page: string, @Request() req: any, @Res({ passthrough:true }) res: Response) {
+    const data = await this.purchaseInvoiceService.getDocumentPreview(id,Number(page),req.user.branchId);
+    res.set({ 'Cache-Control':'private, no-store', 'X-Content-Type-Options':'nosniff' });
+    return new StreamableFile(data,{type:'image/jpeg',length:data.length});
+  }
+
   @Get('documents/:documentId')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR, UserRole.RECEPTION)
   @Permissions(['pharmacy:purchase-invoice:read', 'inventory:po:read'])

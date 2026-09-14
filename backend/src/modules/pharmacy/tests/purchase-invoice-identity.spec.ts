@@ -81,7 +81,7 @@ describe('Purchase identity and access', () => {
   it('uses role defaults and user permissions together for UI capabilities', async () => {
     const prisma = { user:{findUnique:async()=>({role:'RECEPTION',permissions:'["inventory:transaction:create"]'})}, role:{findFirst:async()=>({permissions:'["inventory:po:create","inventory:po:read","inventory:po:update"]'})} };
     const service = new PharmacyPurchaseInvoiceService(prisma as any);
-    expect(await service.capabilities({id:'test',role:'RECEPTION'})).toEqual({read:true,create:true,review:true,commit:true,automate:true,saveSupplier:false,catalogDetails:true,editProduct:false});
+    expect(await service.capabilities({id:'test',role:'RECEPTION'})).toEqual({read:true,create:true,review:true,commit:true,automate:true,saveSupplier:false,catalogDetails:true,sourceHighlights:true,editProduct:false});
     prisma.user.findUnique = async()=>({role:'RECEPTION',permissions:'[]'});
     expect(await service.capabilities({id:'test',role:'RECEPTION'})).toMatchObject({create:true,commit:false,automate:false});
   });

@@ -1,22 +1,24 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
+import { groupPurchaseOcrFlags, purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
 
-export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve }: {
+export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve, onResolveMany }: {
   flags: string[];
   lineIndex?: number;
   lineId?: string;
   values: Record<string, string>;
   disabled: boolean;
   onResolve: (flag: string) => void;
+  onResolveMany?: (flags:string[]) => void;
 }) {
   flags = purchaseBlockingIssues(flags);
   if (!flags.length) return null;
   return <div className="space-y-3" aria-label={lineIndex === undefined ? 'Invoice checks' : `Line ${lineIndex + 1} checks`}>
     {lineIndex === undefined && <p className="text-sm text-muted-foreground">Check against the original, then confirm each correction.</p>}
     <ul className="divide-y">
-      {flags.map((flag, index) => {
+      {groupPurchaseOcrFlags(flags,lineIndex).map((group, index) => {
+        const flag=group[0];
         const issue = purchaseReviewIssue(flag, lineIndex);
         const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
         const value = issue.field ? values[issue.field]?.trim() : undefined;
@@ -31,7 +33,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
           <div className="flex flex-wrap items-center gap-3">
             {target && <a className="text-sm text-primary underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
             {!issue.requiresUpload && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left"
-              disabled={disabled || missingValue || invalidGstin || missingDueDate} onClick={() => onResolve(flag)}>
+              disabled={disabled || missingValue || invalidGstin || missingDueDate} onClick={() => onResolveMany ? onResolveMany(group) : group.forEach(flag=>onResolve(flag))}>
               Confirm {label} checked
             </Button>}
           </div>
