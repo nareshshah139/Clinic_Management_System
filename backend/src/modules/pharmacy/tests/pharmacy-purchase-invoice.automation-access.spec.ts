@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -40,6 +40,25 @@ describe('Automatic intake HTTP permissions', () => {
   const upload = () => request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
+
+  it('allows same-screen catalog correction only with invoice and product-edit permissions', async () => {
+    role = 'RECEPTION'; permissions = ['inventory:po:create', 'pharmacy:drug:update'];
+    await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/master-records/product-1')
+      .send({ productKind: 'COSMETIC', branchId: 'other-branch' }).expect(200);
+    expect(service.updateProductCatalog).toHaveBeenCalledWith('product-1', { productKind: 'COSMETIC' }, 'branch-1');
+  });
+  it.each(['inventory:po:create','pharmacy:drug:update'])('denies catalog correction without %s', async missing => {
+    role = 'RECEPTION'; permissions = ['inventory:po:create', 'pharmacy:drug:update'].filter(p => p !== missing);
+    await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/master-records/product-1').send({ productKind: 'COSMETIC' }).expect(403);
+    expect(service.updateProductCatalog).not.toHaveBeenCalled();
+  });
+  it('validates the catalog kind and prescription boolean before saving', async () => {
+    permissions.push('pharmacy:drug:update');
+    for (const data of [{ productKind: 'GUESSED' }, { productKind: 'MEDICINE', requiresPrescription: 'false' }]) {
+      await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/master-records/product-1').send(data).expect(400);
+    }
+    expect(service.updateProductCatalog).not.toHaveBeenCalled();
+  });
 
   it('allows Reception to save suppliers only with the corresponding existing permissions', async () => {
     role = 'RECEPTION';

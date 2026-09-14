@@ -48,6 +48,11 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
       branchId, name: 'Synthetic Cream', manufacturerName: 'Synthetic Pharma', packSizeLabel: '20g', price: 150,
       composition1: 'Synthetic', category: 'Topical', dosageForm: 'Cream', strength: '1%',
     } });
+    // Apply the new migration to a legacy row and verify its values are untouched.
+    const legacyBefore = await prisma.drug.findFirstOrThrow();
+    await prisma.$executeRawUnsafe('ALTER TABLE "drugs" DROP COLUMN "requiresPrescription"');
+    await prisma.$executeRawUnsafe(readFileSync(path.resolve('prisma/migrations/20260914080000_drug_prescription_requirement/migration.sql'), 'utf8'));
+    expect(await prisma.drug.findUniqueOrThrow({ where: { id: legacyBefore.id } })).toEqual(legacyBefore);
     service = new PharmacyPurchaseInvoiceService(prisma as PrismaService);
     jest.spyOn(service, 'extractDocumentDraft').mockImplementation(async () => ({ draft, extraction: { provider: 'synthetic-database-test' } } as any));
   }, 60000);
@@ -116,6 +121,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
   it('automatically commits a manufacturer-free product and rejects ambiguous or conflicting product identities', async () => {
     const name = `Manufacturer optional ${randomUUID()}`;
     const product = await service.confirmMasterRecord({ action: 'CREATE_NEW' as any,
+      catalog: { productKind: 'COSMETIC' },
       item: { ...draft.items[0], productName: name, manufacturer: undefined },
     }, branchId);
     expect(product.drug.manufacturerName).toBe('');

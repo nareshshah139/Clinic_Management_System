@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api';
 
-export type PurchasePermissions = { read: boolean; create: boolean; review: boolean; commit: boolean; automate: boolean; saveSupplier?: boolean };
+export type PurchasePermissions = { read: boolean; create: boolean; review: boolean; commit: boolean; automate: boolean; saveSupplier?: boolean; catalogDetails?: boolean; editProduct?: boolean };
 const denied: PurchasePermissions = { read: false, create: false, review: false, commit: false, automate: false };
 
 export function usePurchasePermissions(userId?: string) {

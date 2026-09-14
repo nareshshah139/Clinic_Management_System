@@ -1066,6 +1066,7 @@ model Drug {
   description       String?
   dosageForm        String?
   strength          String?
+  requiresPrescription Boolean?
   storageConditions String?
   expiryMonths      Int?     @default(24)
   minStockLevel     Int?     @default(10)

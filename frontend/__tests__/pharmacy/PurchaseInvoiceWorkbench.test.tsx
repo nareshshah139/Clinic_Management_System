@@ -14,6 +14,7 @@ jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
     getPharmacyPurchaseInvoices: jest.fn(),
     getPharmacyPurchaseInvoiceById: jest.fn(),
     getUnlinkedPurchaseDocuments: jest.fn(),
@@ -88,10 +89,58 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getUnlinkedPurchaseDocuments.mockResolvedValue([]);
     api.processPharmacyPurchaseInvoice.mockReset().mockImplementation(async () => ({
       invoice: await api.updatePharmacyPurchaseInvoiceDraft.mock.results.at(-1)?.value || draftInvoice,
-      automation: { status: 'SAVED_FOR_REVIEW', issues: ['OCR confidence requires human review.'] },
+      automation: { status: 'SAVED_FOR_REVIEW', issues: ['Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.'] },
     }));
     window.confirm = jest.fn(() => true);
     (global as any).fetch = jest.fn();
+  });
+
+  it('saves a new cosmetic through the invoice page with blank clinical fields', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true } as typeof mockPurchaseAccess;
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'CREATE_NEW' }] });
+    api.confirmPharmacyPurchaseMaster.mockResolvedValue({ action: 'CREATE_NEW', drug: { id: 'cosmetic', name: 'Example cosmetic', productKind: 'COSMETIC', requiresPrescription: false, catalogIssues: [] }, linePatch: {} });
+    render(<PurchaseInvoiceWorkbench />); await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Matches' }));
+    fireEvent.change(await screen.findByLabelText('Product kind'), { target: { value: 'COSMETIC' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save new product' }));
+    await waitFor(() => expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledWith(expect.objectContaining({ action: 'CREATE_NEW', catalog: { productKind: 'COSMETIC', category: 'Cosmetic', composition1: '', dosageForm: '', strength: '', requiresPrescription: false } })));
+    expect(await screen.findByText('COSMETIC')).toBeInTheDocument();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('enforces saved product edit capability (%s) on the invoice screen', async editProduct => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, editProduct } as typeof mockPurchaseAccess;
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    const drug = { id: 'legacy', name: 'Example cosmetic', type: 'allopathy', category: 'Uncategorized', dosageForm: 'Tablet', strength: 'Review strength', catalogIssues: ['category', 'strength'] };
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [{ drug, score: 99, confidence: 'HIGH' }], recommendedAction: 'MATCH_EXISTING' }] });
+    api.patch.mockResolvedValue({ ...drug, productKind: 'COSMETIC', type: 'cosmetic', category: 'Cosmetic', composition1: null, dosageForm: null, strength: null, requiresPrescription: false, catalogIssues: [] });
+    render(<PurchaseInvoiceWorkbench />); await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Matches' }));
+    await screen.findByText('Check or correct saved product details');
+    if (!editProduct) {
+      expect(screen.queryByRole('button', { name: 'Save product details' })).not.toBeInTheDocument();
+      expect(screen.getByText(/Staff with product-edit permission/)).toBeInTheDocument();
+      return;
+    }
+    const form = screen.getByRole('region', { name: 'Edit saved product details' });
+    fireEvent.change(within(form).getByLabelText('Product kind'), { target: { value: 'COSMETIC' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Save product details' }));
+    await waitFor(() => expect(api.patch).toHaveBeenCalledWith('/pharmacy/purchase-invoices/master-records/legacy', expect.objectContaining({ productKind: 'COSMETIC', dosageForm: '', strength: '', requiresPrescription: false })));
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('keeps Save & Process as the action when product records still block intake', async () => {
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [draftInvoice] });
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(draftInvoice);
+    api.processPharmacyPurchaseInvoice.mockResolvedValue({ invoice: { ...draftInvoice, status: 'RECONCILIATION_FAILED' }, automation: { status: 'SAVED_FOR_REVIEW', issues: ['Line 1: product master is missing or inactive.'] } });
+    render(<PurchaseInvoiceWorkbench />); await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Save & Process' }));
+    await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalled());
+    expect(await screen.findByText(/saved for correction/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Mark Reviewed' })).not.toBeInTheDocument();
   });
 
   it('saves a verified supplier in the checklist without changing stock and restores Save & Process', async () => {

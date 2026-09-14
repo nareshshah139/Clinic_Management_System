@@ -37,6 +37,7 @@ import {
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
+  PurchaseProductCatalogDto,
   SuggestPharmacyPurchaseMasterMatchesDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
@@ -89,6 +90,14 @@ export class PharmacyPurchaseInvoiceController {
   @ApiOperation({ summary: 'Save a verified supplier from invoice review without changing invoices or stock' })
   saveSupplier(@Body() dto: SavePharmacyPurchaseSupplierDto, @Request() req: any) {
     return this.purchaseInvoiceService.savePurchaseSupplier(dto, req.user.branchId);
+  }
+
+  @Patch('master-records/:id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('pharmacy:drug:update', ['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  @ApiOperation({ summary: 'Correct verified catalog details from the invoice screen' })
+  updateProductCatalog(@Param('id') id: string, @Body() dto: PurchaseProductCatalogDto, @Request() req: any) {
+    return this.purchaseInvoiceService.updateProductCatalog(id, dto, req.user.branchId);
   }
 
   @Post('drafts')

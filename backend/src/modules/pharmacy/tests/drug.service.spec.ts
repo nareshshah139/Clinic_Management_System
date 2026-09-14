@@ -56,6 +56,11 @@ describe('DrugService inventory change approvals', () => {
     jest.clearAllMocks();
   });
 
+  it('allows existing cosmetics to be edited without clinical placeholders', () => {
+    expect(() => (service as any).assertProductMasterComplete({}, { type: 'cosmetic', category: 'Cosmetic', composition1: null, dosageForm: null, strength: null })).not.toThrow();
+    expect(() => (service as any).assertProductMasterComplete({}, { type: 'allopathy', category: 'Uncategorized', composition1: 'Brand', dosageForm: 'Tablet', strength: 'Review strength' })).toThrow(/incomplete/);
+  });
+
   it('blocks direct pharmacist edits to drug prices', async () => {
     prisma.drug.findFirst.mockResolvedValue({
       id: 'drug-1',

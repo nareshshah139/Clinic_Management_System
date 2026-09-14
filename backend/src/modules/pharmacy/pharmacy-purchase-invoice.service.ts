@@ -1,3 +1,4 @@
+import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
 import { canonicalPurchasePack, normalizedIdentity, verifyPurchaseRead } from './purchase-invoice-identity';
 import { PURCHASE_INVOICE_EXTRACTION_PROMPT, PURCHASE_INVOICE_VERIFICATION_PROMPT, PURCHASE_INVOICE_OCR_PROMPT_VERSION } from './purchase-invoice-ocr.prompts';
 import {
@@ -28,6 +29,7 @@ import {
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
+  PurchaseProductCatalogDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
 type PurchaseInvoiceStatus =
@@ -66,6 +68,8 @@ type AnalyticsLine = {
 };
 
 type MasterMatchDrug = {
+  type?: string;
+  requiresPrescription?: boolean | null;
   id: string;
   name: string;
   price: number;
@@ -106,7 +110,8 @@ export class PharmacyPurchaseInvoiceService {
     const review = has('pharmacy:purchase-invoice:review', 'inventory:po:update');
     const commit = has('pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create');
     return { read, create, review, commit, automate: create && review && commit,
-      saveSupplier: create && has('inventory:supplier:create') };
+      saveSupplier: create && has('inventory:supplier:create'),
+      catalogDetails: true, editProduct: create && has('pharmacy:drug:update') };
   }
 
   async purchaseSuppliers(branchId: string) {
@@ -529,6 +534,8 @@ export class PharmacyPurchaseInvoiceService {
       throw new BadRequestException('Unsupported drug master confirmation action');
     }
 
+    const catalogData = purchaseCatalogData(dto.catalog);
+
     const existingExact = await this.prisma.drug.findFirst({
       where: {
         branchId,
@@ -555,14 +562,9 @@ export class PharmacyPurchaseInvoiceService {
         name: item.productName.trim(),
         price: this.money(item.mrp),
         manufacturerName: this.cleanString(item.manufacturer),
-        type: 'allopathy',
         packSizeLabel: item.packSize.trim(),
-        composition1: this.inferComposition(item.productName),
-        category: this.inferCategory(item),
-        dosageForm: this.inferDosageForm(item),
-        strength: this.inferStrength(item.productName),
-        description:
-          'Created from a pharmacist-confirmed purchase invoice OCR line. Review composition, category, dosage form, and strength before broad use.',
+        ...catalogData,
+        description: 'Created from an invoice with explicitly reviewed product kind and catalog details.',
         minStockLevel: 10,
         maxStockLevel: 1000,
         isActive: true,
@@ -576,6 +578,19 @@ export class PharmacyPurchaseInvoiceService {
       linePatch: this.linePatchFromDrug(created, item),
       message: `Created drug master ${created.name}`,
     };
+  }
+
+  async updateProductCatalog(id: string, dto: PurchaseProductCatalogDto, branchId: string) {
+    const existing = await this.prisma.drug.findFirst({ where: { id, branchId, isActive: true, isDiscontinued: false } });
+    if (!existing) throw new NotFoundException('Active product not found in this branch.');
+    const data = purchaseCatalogData(dto);
+    const updated = await this.prisma.drug.update({ where: { id }, data: {
+      ...data,
+      // Preserve the existing medicine system (allopathy, ayurveda, etc.).
+      type: dto.productKind === 'MEDICINE' && purchaseProductKind(existing.type) === 'MEDICINE' ? existing.type : data.type,
+      description: 'Product catalog details explicitly reviewed from the invoice screen.',
+    } });
+    return this.masterDrugSummary(updated);
   }
 
   async createDraft(
@@ -1333,6 +1348,8 @@ export class PharmacyPurchaseInvoiceService {
         name: true,
         price: true,
         manufacturerName: true,
+        type: true,
+        requiresPrescription: true,
         packSizeLabel: true,
         composition1: true,
         category: true,
@@ -1356,14 +1373,7 @@ export class PharmacyPurchaseInvoiceService {
     }
 
     const drug = candidates[0];
-    const missing = [
-      ['composition1', drug.composition1],
-      ['category', drug.category],
-      ['dosageForm', drug.dosageForm],
-      ['strength', drug.strength],
-    ]
-      .filter(([, value]) => !String(value ?? '').trim())
-      .map(([field]) => field);
+    const missing = purchaseCatalogIssues(drug);
 
     if (missing.length > 0) {
       throw new BadRequestException(
@@ -1426,6 +1436,9 @@ export class PharmacyPurchaseInvoiceService {
       return tx.inventoryItem.update({
         where: { id: existingBatch.id },
         data: {
+          ...purchaseInventoryClassification(drug),
+          category: drug.category,
+          genericName: drug.composition1,
           currentStock: {
             increment: quantities.totalQuantity,
           },
@@ -1454,7 +1467,7 @@ export class PharmacyPurchaseInvoiceService {
         name: drug.name,
         genericName: drug.composition1,
         brandName: drug.name,
-        type: 'MEDICINE',
+        ...purchaseInventoryClassification(drug),
         category: drug.category,
         manufacturer: drug.manufacturerName,
         supplier: invoice.distributorName,
@@ -1474,7 +1487,6 @@ export class PharmacyPurchaseInvoiceService {
         batchNumber: item.batchNumber.trim(),
         hsnCode: item.hsnCode.trim(),
         gstRate,
-        requiresPrescription: true,
         status: 'ACTIVE',
         stockStatus: this.deriveIncomingStockStatus({
           currentStock,
@@ -1678,6 +1690,8 @@ export class PharmacyPurchaseInvoiceService {
         name: true,
         price: true,
         manufacturerName: true,
+        type: true,
+        requiresPrescription: true,
         packSizeLabel: true,
         composition1: true,
         composition2: true,
@@ -1708,7 +1722,7 @@ export class PharmacyPurchaseInvoiceService {
     const packScore = this.textSimilarity(item.packSize, drug.packSizeLabel);
     const inferredStrength = this.inferStrength(item.productName);
     const strengthScore =
-      drug.strength && inferredStrength !== 'Review strength'
+      drug.strength && !!inferredStrength
         ? this.textSimilarity(inferredStrength, drug.strength)
       : 0;
     const dosageScore = drug.dosageForm
@@ -1747,7 +1761,7 @@ export class PharmacyPurchaseInvoiceService {
       item.productName,
       item.manufacturer,
       item.packSize,
-      inferredStrength === 'Review strength' ? '' : inferredStrength,
+      inferredStrength,
     ];
     const terms = new Set<string>();
     for (const value of raw) {
@@ -1823,6 +1837,10 @@ export class PharmacyPurchaseInvoiceService {
     return {
       id: drug.id,
       name: drug.name,
+      type: drug.type,
+      productKind: purchaseProductKind(drug.type),
+      requiresPrescription: drug.requiresPrescription,
+      catalogIssues: purchaseCatalogIssues(drug),
       price: this.money(drug.price),
       manufacturerName: drug.manufacturerName,
       packSizeLabel: drug.packSizeLabel,
@@ -1848,15 +1866,6 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
-  private inferComposition(productName: string): string {
-    const name = this.cleanString(productName);
-    return name || 'Review composition';
-  }
-
-  private inferCategory(_item: CreatePharmacyPurchaseInvoiceItemDto): string {
-    return 'Uncategorized';
-  }
-
   private inferDosageForm(item: CreatePharmacyPurchaseInvoiceItemDto): string {
     const text = `${item.productName || ''} ${item.packUnitType || ''}`.toLowerCase();
     if (/\b(cap|capsule)\b/.test(text)) return 'Capsule';
@@ -1864,14 +1873,15 @@ export class PharmacyPurchaseInvoiceService {
     if (/\b(syrup|suspension)\b/.test(text)) return 'Liquid';
     if (/\b(inj|injection)\b/.test(text)) return 'Injection';
     if (/\b(drop|drops)\b/.test(text)) return 'Drops';
-    return 'Tablet';
+    if (/\b(tab|tablet)\b/.test(text)) return 'Tablet';
+    return '';
   }
 
   private inferStrength(productName: string): string {
     const match = this.cleanString(productName).match(
       /\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|ml|iu|%)\b/i,
     );
-    return match?.[0] || 'Review strength';
+    return match?.[0] || '';
   }
 
   private async buildOcrImageDataUrls(file: Express.Multer.File): Promise<{

@@ -43,6 +43,7 @@ import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
 
 interface Drug {
+  type?: string;
   id: string;
   name: string;
   price: number;
@@ -193,6 +194,8 @@ export function DrugManagement() {
     }
   };
 
+  const medicineForm = !['cosmetic', 'consumable'].includes(editingDrug?.type || '');
+
   const validateProductMasterForm = () => {
     const requiredFields: Array<[keyof typeof formData, string]> = [
       ['name', 'Drug name'],
@@ -205,7 +208,7 @@ export function DrugManagement() {
     ];
 
     const missing = requiredFields
-      .filter(([field]) => !formData[field]?.trim())
+      .filter(([field]) => (medicineForm || ['name', 'packSizeLabel', 'category'].includes(field)) && !formData[field]?.trim())
       .map(([, label]) => label);
 
     if (missing.length > 0) {
@@ -610,7 +613,7 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label htmlFor="manufacturerName">Manufacturer *</Label>
+              <Label htmlFor="manufacturerName">Manufacturer{medicineForm ? ' *' : ' (optional)'}</Label>
               <Input
                 id="manufacturerName"
                 value={formData.manufacturerName}
@@ -621,7 +624,7 @@ export function DrugManagement() {
                   }))
                 }
                 placeholder="e.g., Sun Pharmaceuticals"
-                required
+                required={medicineForm}
               />
             </div>
 
@@ -642,7 +645,7 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label htmlFor="composition1">Primary Composition *</Label>
+              <Label htmlFor="composition1">Primary Composition{medicineForm ? ' *' : ' (optional)'}</Label>
               <Input
                 id="composition1"
                 value={formData.composition1}
@@ -653,7 +656,7 @@ export function DrugManagement() {
                   }))
                 }
                 placeholder="e.g., Paracetamol (500mg)"
-                required
+                required={medicineForm}
               />
             </div>
 
@@ -686,7 +689,7 @@ export function DrugManagement() {
             </div>
 
             <div>
-              <Label htmlFor="dosageForm">Dosage Form *</Label>
+              <Label htmlFor="dosageForm">Dosage Form{medicineForm ? ' *' : ' (optional)'}</Label>
               <Input
                 id="dosageForm"
                 value={formData.dosageForm}
@@ -697,12 +700,12 @@ export function DrugManagement() {
                   }))
                 }
                 placeholder="e.g., Tablet"
-                required
+                required={medicineForm}
               />
             </div>
 
             <div>
-              <Label htmlFor="strength">Strength *</Label>
+              <Label htmlFor="strength">Strength{medicineForm ? ' *' : ' (optional)'}</Label>
               <Input
                 id="strength"
                 value={formData.strength}
@@ -710,7 +713,7 @@ export function DrugManagement() {
                   setFormData((prev) => ({ ...prev, strength: e.target.value }))
                 }
                 placeholder="e.g., 500mg"
-                required
+                required={medicineForm}
               />
             </div>
 

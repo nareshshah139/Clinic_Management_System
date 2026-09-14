@@ -16,6 +16,7 @@ import {
   Truck,
   Upload,
 } from 'lucide-react';
+import { PurchaseProductDetails, type PurchaseProductCatalog } from './PurchaseProductDetails';
 import { PurchaseSupplierReview } from './PurchaseSupplierReview';
 import { PurchaseOcrChecklist } from './PurchaseOcrChecklist';
 import { purchaseBlockingIssues, purchaseReviewIssue, uniquePurchaseReviewIssues } from '@/lib/purchase-invoice-review';
@@ -233,6 +234,10 @@ type OcrExtractionResponse = {
 };
 
 type MasterDrug = {
+  type?: string;
+  productKind?: PurchaseProductCatalog['productKind'];
+  requiresPrescription?: boolean | null;
+  catalogIssues?: string[];
   id: string;
   name: string;
   price: number;
@@ -1119,7 +1124,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
     match: MasterMatch,
     action: 'MATCH_EXISTING' | 'CREATE_NEW',
     candidate?: MasterCandidate,
-  ) => {
+    catalog?: PurchaseProductCatalog,
+  ): Promise<string | undefined> => {
     if (!access.create) return;
     const line = lines[match.lineIndex];
     if (!line) {
@@ -1127,11 +1133,8 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       return;
     }
 
-    const confirmed = window.confirm(
-      action === 'MATCH_EXISTING'
-        ? `Confirm this DB master match for ${line.productName || 'this OCR line'}?`
-        : `Create a new drug master record for ${line.productName || 'this OCR line'} from the reviewed OCR values?`,
-    );
+    if (action === 'CREATE_NEW' && !access.catalogDetails) return 'Product details are not available yet. Reload after the update completes.';
+    const confirmed = action === 'CREATE_NEW' || window.confirm(`Confirm this DB master match for ${line.productName || 'this OCR line'}?`);
     if (!confirmed) return;
 
     const key = `${match.lineIndex}:${action}`;
@@ -1143,6 +1146,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
         await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>({
           action,
           drugId: candidate?.drug.id,
+          catalog,
           item: linePayload(line),
         });
       applyLinePatch(match.lineIndex, response.linePatch);
@@ -1159,10 +1163,27 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           `${masterActionLabel(response.action)} ${response.drug.name} in the drug master.`,
       );
     } catch (err) {
-      setError(getErrorMessage(err));
+      const message = getErrorMessage(err);
+      setError(message);
+      return message;
     } finally {
       setMasterConfirming(null);
     }
+  };
+
+  const saveProductDetails = async (drug: MasterDrug, catalog: PurchaseProductCatalog): Promise<string | undefined> => {
+    if (!access.editProduct) return 'Product-edit permission is required to correct this saved product.';
+    setMasterConfirming(`edit:${drug.id}`);
+    setError(null);
+    try {
+      const updated = await apiClient.patch<MasterDrug>(`/pharmacy/purchase-invoices/master-records/${drug.id}`, catalog);
+      setMasterMatches(current => current.map(match => ({ ...match, candidates: match.candidates.map(candidate => candidate.drug.id === drug.id ? { ...candidate, drug: updated } : candidate) })));
+      setMasterStatuses(current => Object.fromEntries(Object.entries(current).map(([key, status]) => [key, status.drug.id === drug.id ? { ...status, drug: updated } : status])));
+      setManualReviewCandidateId(null);
+      setNotice(`Saved product details for ${updated.name}. Choose Save & Process to check the invoice again.`);
+    } catch (err) {
+      const message = getErrorMessage(err); setError(message); return message;
+    } finally { setMasterConfirming(null); }
   };
 
   const applyAutomationResult = (data: Pick<OcrExtractionResponse, 'invoice' | 'automation'>) => {
@@ -1216,6 +1237,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
       // as 98% OCR confidence). Keep manual review reachable after that result.
       // reviewInvoice saves again and the backend revalidates before reviewing.
       if (result.automation?.status === 'SAVED_FOR_REVIEW' && result.invoice?.id === savedForReview?.id &&
+        purchaseBlockingIssues(result.automation.issues || []).every(manualReviewOnlyIssue) &&
         savedForReview?.status === 'DRAFT' && !savedForReview.unresolvedOcrFlags && !savedForReview.reconciliationIssues?.length) {
         setManualReviewCandidateId(savedForReview.id);
         setNotice(`Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, then choose Mark Reviewed.`);
@@ -1449,7 +1471,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
   };
 
   const editingSelectedInvoice = !!activeInvoice && editingId === activeInvoice.id;
-  const busy = saving || extracting || processing || reviewing || committing || refreshingStockStatus || savingSupplier;
+  const busy = saving || extracting || processing || reviewing || committing || refreshingStockStatus || savingSupplier || masterConfirming !== null || masterRefreshing;
   const stockStatusUnknown = !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
   const stockAdded = activeInvoice?.status === 'STOCK_COMMITTED' || !!activeInvoice?.stockCommittedAt;
   const activeIssues = purchaseBlockingIssues(activeInvoice?.reconciliationIssues || []);
@@ -2021,14 +2043,14 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
           </Card>
 
           {lines.some((line) => line.productName.trim()) && !savedFormLocked && (
-            <details id="purchase-master-matching" className="rounded-lg border p-4">
+            <details id="purchase-master-matching" open={masterMatches.length > 0 || undefined} className="rounded-lg border p-4">
               <summary className="cursor-pointer text-sm font-medium">Match products to saved inventory</summary>
               <CardHeader>
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <FileSearch className="h-5 w-5" />
-                      Drug Master Matching
+                      Product matching and details
                     </CardTitle>
                     <CardDescription>
                       Match each invoice line to the correct saved product and pack before adding stock. Manufacturer is optional.
@@ -2039,7 +2061,7 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                     variant="outline"
                     size="sm"
                     onClick={refreshMasterMatches}
-                    disabled={!access.create || savedFormLocked || masterRefreshing || masterConfirming !== null}
+                    disabled={!access.create || busy || masterRefreshing || masterConfirming !== null}
                   >
                     {masterRefreshing ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2054,11 +2076,11 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                 {masterMatches.length === 0 && <p className="text-sm text-muted-foreground">Choose Refresh Matches to find saved products. Confirm a match to fill its manufacturer and pack details, then enter the stock unit (Bottle, Tube or Strip) if it is still missing.</p>}
                 {masterMatches.map((match) => {
                   if (!access.create) return;
-    const line = lines[match.lineIndex];
+                  const line = lines[match.lineIndex];
                   const best = match.candidates[0];
                   const status = masterStatuses[match.lineIndex];
                   const confirmMatchKey = `${match.lineIndex}:MATCH_EXISTING`;
-                  const createKey = `${match.lineIndex}:CREATE_NEW`;
+                  const savedProduct = status?.drug || best?.drug;
                   return (
                     <div
                       key={`${match.lineIndex}-${fieldValue(match.ocr?.productName)}`}
@@ -2105,17 +2127,19 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                           <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
                             DB Master Candidate
                           </p>
-                          {best ? (
+                          {savedProduct ? (
                             <>
                               <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm">
-                                <Detail label="Product" value={best.drug.name} />
-                                <Detail label="Manufacturer" value={best.drug.manufacturerName} />
-                                <Detail label="Pack" value={best.drug.packSizeLabel} />
-                                <Detail label="MRP" value={best.drug.price} currencyValue />
-                                <Detail label="Composition" value={best.drug.composition1} />
-                                <Detail label="Strength" value={best.drug.strength} />
+                                <Detail label="Product" value={savedProduct.name} />
+                                <Detail label="Manufacturer" value={savedProduct.manufacturerName} />
+                                <Detail label="Pack" value={savedProduct.packSizeLabel} />
+                                <Detail label="MRP" value={savedProduct.price} currencyValue />
+                                <Detail label="Product kind" value={savedProduct.productKind || savedProduct.type} />
+                                <Detail label="Prescription required" value={savedProduct.requiresPrescription == null ? 'Not recorded' : savedProduct.requiresPrescription ? 'Yes' : 'No'} />
+                                <Detail label="Composition" value={savedProduct.composition1} />
+                                <Detail label="Strength" value={savedProduct.strength} />
                               </dl>
-                              {best.reasons?.length ? (
+                              {!status && best?.reasons?.length ? (
                                 <div className="mt-3 flex flex-wrap gap-2">
                                   {best.reasons.map((reason) => (
                                     <Badge key={reason} variant="outline">
@@ -2127,21 +2151,21 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                             </>
                           ) : (
                             <p className="text-sm text-muted-foreground">
-                              Create a new master only after reviewing the OCR values.
+                              Choose a product kind below and save its known details. Clinical fields are optional for cosmetics and consumables.
                             </p>
                           )}
                         </div>
                       </div>
 
                       <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
-                        {best && (
+                        {best && !status && (
                           <Button
                             type="button"
                             variant="outline"
                             onClick={() =>
                               confirmMasterLine(match, 'MATCH_EXISTING', best)
                             }
-                            disabled={!access.create || savedFormLocked || masterConfirming !== null}
+                            disabled={!access.create || busy || masterConfirming !== null}
                           >
                             {masterConfirming === confirmMatchKey && (
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -2149,17 +2173,17 @@ function PurchaseInvoiceEditor({ recoveryKey }: { recoveryKey: string | null }) 
                             Confirm Match
                           </Button>
                         )}
-                        <Button
-                          type="button"
-                          onClick={() => confirmMasterLine(match, 'CREATE_NEW')}
-                          disabled={!access.create || savedFormLocked || masterConfirming !== null}
-                        >
-                          {masterConfirming === createKey && (
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          )}
-                          Create New Master
-                        </Button>
                       </div>
+                      {savedProduct && access.catalogDetails && <details className="mt-3" open={(!!savedProduct.catalogIssues?.length && (status || match.recommendedAction === 'MATCH_EXISTING') ? true : undefined)}>
+                        <summary className="cursor-pointer text-sm font-medium">Check or correct saved product details</summary>
+                        {!!savedProduct.catalogIssues?.length && <p role="alert" className="my-2 text-sm text-destructive">Complete the saved product details: {savedProduct.catalogIssues.join(', ')}. Choose the correct product kind if this is a cosmetic or consumable.</p>}
+                        {access.editProduct ? <PurchaseProductDetails key={JSON.stringify(savedProduct)} id={`product-${match.lineIndex}-edit`} product={savedProduct} disabled={busy || masterConfirming !== null} onSave={catalog => saveProductDetails(savedProduct, catalog)} />
+                          : <p className="mt-2 text-sm">Staff with product-edit permission must correct this saved record.</p>}
+                      </details>}
+                      {!status && (access.catalogDetails ? best ? <details className="mt-3" open={match.recommendedAction === 'CREATE_NEW' || undefined}><summary className="cursor-pointer text-sm">This is a different product: create a new record</summary>
+                        <PurchaseProductDetails id={`product-${match.lineIndex}-new`} disabled={busy || masterConfirming !== null} onSave={catalog => confirmMasterLine(match, 'CREATE_NEW', undefined, catalog)} />
+                      </details> : <div className="mt-3"><PurchaseProductDetails id={`product-${match.lineIndex}-new`} disabled={busy || masterConfirming !== null} onSave={catalog => confirmMasterLine(match, 'CREATE_NEW', undefined, catalog)} /></div>
+                        : <p className="mt-3 text-sm">Product creation requires the updated backend. Reload after the update completes.</p>)}
                     </div>
                   );
                 })}

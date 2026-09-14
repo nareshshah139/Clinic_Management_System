@@ -1,3 +1,4 @@
+import { purchaseCatalogIssues } from './purchase-product-catalog';
 import {
   Injectable,
   NotFoundException,
@@ -1325,6 +1326,7 @@ export class DrugService {
   private assertProductMasterComplete(
     input: Partial<CreateDrugDto & UpdateDrugDto>,
     existing?: {
+      type?: string | null;
       isActive?: boolean | null;
       isDiscontinued?: boolean | null;
       composition1?: string | null;
@@ -1342,19 +1344,8 @@ export class DrugService {
       return;
     }
 
-    const requiredFields: Array<[keyof typeof candidate, string]> = [
-      ['composition1', 'Generic/Salt or primary composition'],
-      ['category', 'Therapeutic category'],
-      ['dosageForm', 'Dosage form'],
-      ['strength', 'Strength'],
-    ];
-
-    const missing = requiredFields
-      .filter(([field]) => {
-        const value = candidate[field];
-        return typeof value !== 'string' || value.trim().length === 0;
-      })
-      .map(([, label]) => label);
+    const labels = { composition1: 'Generic/Salt or primary composition', category: 'Therapeutic category', dosageForm: 'Dosage form', strength: 'Strength' };
+    const missing = purchaseCatalogIssues(candidate).map(field => labels[field]);
 
     if (missing.length > 0) {
       throw new BadRequestException(

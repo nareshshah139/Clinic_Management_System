@@ -66,7 +66,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   }
   if (/product master|drug master|master record/i.test(body)) {
     return { ...base, label: 'product match', target: 'purchase-master-matching', message: `${prefix}Confirm the product record.`,
-      help: 'Refresh Matches and confirm the correct product and pack. Manufacturer is optional, but can help distinguish similar products. Create a new product only when no matching record exists.' };
+      help: 'Refresh Matches and confirm the correct product and pack. Manufacturer is optional, but can help distinguish similar products. Create a new product only when no matching record exists. Choose its product kind and known details here. For an incomplete saved record, use Check or correct saved product details.' };
   }
   const match = fields.find(([, , , pattern]) => pattern.test(body));
   if (match) {

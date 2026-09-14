@@ -4,6 +4,7 @@ import {
   ArrayMinSize,
   Equals,
   IsArray,
+  IsBoolean,
   IsDefined,
   IsDateString,
   IsEnum,
@@ -554,6 +555,31 @@ export class SuggestPharmacyPurchaseMasterMatchesDto {
   items: CreatePharmacyPurchaseInvoiceItemDto[];
 }
 
+export class PurchaseProductCatalogDto {
+  @IsIn(['MEDICINE', 'COSMETIC', 'CONSUMABLE'])
+  productKind: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';
+
+  @IsOptional()
+  @IsString()
+  composition1?: string;
+
+  @IsOptional()
+  @IsString()
+  category?: string;
+
+  @IsOptional()
+  @IsString()
+  dosageForm?: string;
+
+  @IsOptional()
+  @IsString()
+  strength?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  requiresPrescription?: boolean;
+}
+
 export class ConfirmPharmacyPurchaseMasterDto {
   @ApiProperty({ enum: PharmacyPurchaseMasterActionDto })
   @IsEnum(PharmacyPurchaseMasterActionDto)
@@ -569,4 +595,9 @@ export class ConfirmPharmacyPurchaseMasterDto {
   @ValidateNested()
   @Type(() => CreatePharmacyPurchaseInvoiceItemDto)
   item: CreatePharmacyPurchaseInvoiceItemDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PurchaseProductCatalogDto)
+  catalog?: PurchaseProductCatalogDto;
 }

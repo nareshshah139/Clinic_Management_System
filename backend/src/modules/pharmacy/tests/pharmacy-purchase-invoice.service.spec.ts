@@ -469,6 +469,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       {
         action: PharmacyPurchaseMasterActionDto.CREATE_NEW,
         item,
+        catalog: { productKind: 'MEDICINE', composition1: 'Test ingredient', category: 'Test category', dosageForm: 'Syrup', strength: '1mg/ml', requiresPrescription: true },
       },
       branchId,
     );
@@ -482,7 +483,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
           manufacturerName: 'New Labs',
           price: 95,
           packSizeLabel: 'Bottle of 60ml',
-          category: 'Uncategorized',
+          category: 'Test category',
           isActive: true,
           isDiscontinued: false,
         }),
