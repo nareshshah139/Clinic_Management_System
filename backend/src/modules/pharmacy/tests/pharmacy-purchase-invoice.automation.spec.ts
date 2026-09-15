@@ -25,6 +25,8 @@ describe('Automatic purchase invoice intake', () => {
       }],
     };
     prisma = {
+      auditLog: { create: jest.fn().mockResolvedValue({}) },
+      pharmacyPurchaseInvoiceItem: { update: jest.fn().mockResolvedValue({}) },
       supplier: { findMany: jest.fn(async () => [{ id:'supplier-1', name:'Example Supplies', gstNumber:'36ABCDE1234F1Z5' }]) },
       pharmacyPurchaseInvoiceDocument: { updateMany: jest.fn(async () => ({ count: 1 })) },
       pharmacyPurchaseInvoice: {
@@ -52,7 +54,7 @@ describe('Automatic purchase invoice intake', () => {
       }),
     };
     service = new PharmacyPurchaseInvoiceService(prisma);
-    jest.spyOn(service, 'archiveOriginal').mockResolvedValue({ id: 'document-1', fileName: 'synthetic.jpg', mimeType: 'image/jpeg', sizeBytes: 9, sha256: 'synthetic', createdAt: new Date(), purchaseInvoiceId: null });
+    jest.spyOn(service, 'archiveOriginal').mockResolvedValue({ id: 'document-1', fileName: 'synthetic.jpg', mimeType: 'image/jpeg', sizeBytes: 9, sha256: 'synthetic', createdAt: new Date(), purchaseInvoiceId: null, uploadedBy: 'user-1' });
     jest.spyOn(service, 'extractDocumentDraft').mockImplementation(async () => ({
       draft, extraction: { provider: 'codex-oauth' },
     } as any));

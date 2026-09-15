@@ -1,0 +1,260 @@
+{
+  "baseline": "4586a3e2991edf66b7d2d1105edc81b835710798",
+  "date": "2026-09-14",
+  "scope": "Target acceptance criteria and current-code audit, not a claim of complete implementation",
+  "syntax": {
+    "features": 42,
+    "criteria": 211,
+    "contracts": 50,
+    "files": [
+      {
+        "file": "frontend/src/app/dashboard/inventory/page.tsx",
+        "contracts": 4,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/inventory/PharmacyInventoryControl.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/inventory/inventory.service.ts",
+        "contracts": 10,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/inventory/ShelfIntelligence.tsx",
+        "contracts": 3,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/inventory/inventory-import.service.ts",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PurchaseSupplierReview.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts",
+        "contracts": 5,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PurchaseSourcePreview.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx",
+        "contracts": 7,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/pharmacy/pharmacy-purchase-ledger.service.ts",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PurchaseLedger.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PharmacyInvoiceBuilderFixed.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/PharmacyInvoiceList.tsx",
+        "contracts": 2,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/pharmacy/ComplianceCenter.tsx",
+        "contracts": 3,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/pharmacy/pharmacy-compliance.service.ts",
+        "contracts": 3,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/inventory/AddInventoryItemDialog.tsx",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "frontend/src/components/stock-prediction/StockPredictionDashboard.tsx",
+        "contracts": 3,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      },
+      {
+        "file": "backend/src/modules/pharmacy/pharmacy-invoice.service.ts",
+        "contracts": 1,
+        "status": "PASS",
+        "missing": []
+      }
+    ],
+    "status": "PASS",
+    "limit": "Checks syntax, discoverability and traceability. Does not verify feature behavior or close acceptance criteria."
+  },
+  "probes": {
+    "generatedAt": "2026-09-14T13:22:37.762Z",
+    "environment": "In-memory service probes; no database or network",
+    "passed": 1,
+    "failed": 8,
+    "results": [
+      {
+        "contract": "inventory-movement-atomic",
+        "name": "A failed stock update rolls back its movement",
+        "status": "FAIL",
+        "evidence": "A failed operation left a persisted PURCHASE movement\n\n1 !== 0\n"
+      },
+      {
+        "contract": "inventory-adjustment-direction",
+        "name": "Negative adjustments retain their signed stock effect",
+        "status": "FAIL",
+        "evidence": "Movement encodes 3 while stock changed from 10 to 7\n\n3 !== -3\n"
+      },
+      {
+        "contract": "inventory-posted-movement-immutable",
+        "name": "Posted movement quantities cannot be edited in place",
+        "status": "FAIL",
+        "evidence": "Missing expected rejection: Posted movement edit succeeded without a reversal"
+      },
+      {
+        "contract": "inventory-outbound-no-clamping",
+        "name": "Insufficient stock rejects the whole outbound operation",
+        "status": "FAIL",
+        "evidence": "Missing expected rejection: Sale of 15 from stock 10 succeeded"
+      },
+      {
+        "contract": "inventory-po-no-stock",
+        "name": "Creating a purchase order does not receive stock",
+        "status": "PASS",
+        "evidence": "Order saved with total 125; stock 10 and no movements"
+      },
+      {
+        "contract": "purchase-payables-posted-only",
+        "name": "OCR drafts do not create supplier dues",
+        "status": "FAIL",
+        "evidence": "Unposted OCR draft contributes 1000 to supplier outstanding\n\n1000 !== 0\n"
+      },
+      {
+        "contract": "inventory-audit-approval-before-post",
+        "name": "An adjustment requiring approval does not immediately change stock",
+        "status": "FAIL",
+        "evidence": "Stock became 7 although approvalRequired=true\n\n7 !== 10\n"
+      },
+      {
+        "contract": "inventory-statistics-money",
+        "name": "Inventory total value is money, not a count of units",
+        "status": "FAIL",
+        "evidence": "10 units at 25 each were valued as 10\n\n10 !== 250\n"
+      },
+      {
+        "contract": "sales-pending-confirmation-stock",
+        "name": "Confirming a pending sale cannot skip its stock effect",
+        "status": "FAIL",
+        "evidence": "Result status is CONFIRMED, but no batch was decremented\n\n0 !== 1\n"
+      }
+    ]
+  },
+  "tests": {
+    "backend": {
+      "suites": 6,
+      "tests": 77
+    },
+    "frontend": {
+      "suites": 2,
+      "tests": 48
+    }
+  },
+  "featureStatuses": {
+    "GAP": 12,
+    "PARTIAL": 22,
+    "FAIL": 8
+  },
+  "criterionAssessments": {
+    "FAIL": 104,
+    "PARTIAL": 42,
+    "SOURCE_SUPPORTED": 9,
+    "NOT_VERIFIED": 19,
+    "TARGETED_TEST_PARTIAL_EVIDENCE": 24,
+    "PRIOR_CONTROLLED_TEST_PARTIAL_EVIDENCE": 13
+  },
+  "preview": {
+    "nav": [
+      "Today",
+      "Purchases",
+      "Stock",
+      "Sales",
+      "Reorder"
+    ],
+    "uniqueFeatures": 42,
+    "highlighted": "batch",
+    "before": "Source linked: batch. Illustration only.",
+    "after": "Illustrative result: 10 bottles added; original retained. No data was saved.",
+    "width": 1440,
+    "scrollWidth": 1440,
+    "mobile": {
+      "width": 390,
+      "scrollWidth": 390,
+      "nav": [
+        {
+          "text": "Today",
+          "width": 75
+        },
+        {
+          "text": "Purchases",
+          "width": 80
+        },
+        {
+          "text": "Stock",
+          "width": 75
+        },
+        {
+          "text": "Sales",
+          "width": 75
+        },
+        {
+          "text": "Reorder",
+          "width": 75
+        }
+      ],
+      "buttons": 0
+    },
+    "errors": []
+  },
+  "runtimeDiff": {
+    "files": 19,
+    "emittedJavaScriptChanged": []
+  }
+}

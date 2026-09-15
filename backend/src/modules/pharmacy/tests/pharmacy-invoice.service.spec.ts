@@ -35,6 +35,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
     tx = {
       inventoryItem: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         updateMany: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
@@ -102,7 +103,8 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
   });
 
   it('deducts stock in FEFO order and records batch metadata', async () => {
-    prisma.pharmacyInvoice.findFirst.mockResolvedValue(makeInvoice(8));
+    const original=makeInvoice(8);Object.assign(original.items[0],{totalAmount:212.4,taxAmount:32.4,taxPercent:18});
+    prisma.pharmacyInvoice.findFirst.mockResolvedValue(original);
     tx.inventoryItem.findMany.mockResolvedValue([
       {
         id: 'batch-late',
@@ -130,6 +132,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
         invoiceNumber: 'PHI-2026-001',
       });
     tx.stockTransaction.create.mockResolvedValue({});
+    tx.inventoryItem.findFirst.mockImplementation(({where}:any)=>Promise.resolve({id:where.id,currentStock:where.id==='batch-early'?3:10,heldStock:0}));
     tx.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
     tx.inventoryItem.findUnique
       .mockResolvedValueOnce({
@@ -157,6 +160,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
 
     expect(result).toEqual({ id: 'invoice-1', status: 'CONFIRMED' });
     expect(tx.stockTransaction.create).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(tx.stockTransaction.create.mock.calls[0][0].data.notes)).toMatchObject({costPerStockUnit:20,saleTerms:{taxablePerUnit:22.5,taxPerUnit:4.05}});
     expect(tx.stockTransaction.create.mock.calls[0][0].data).toMatchObject({
       itemId: 'batch-early',
       quantity: 3,
@@ -177,9 +181,8 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
       where: {
         id: 'batch-early',
         branchId,
-        currentStock: {
-          gte: 3,
-        },
+        currentStock: 3,
+        heldStock: 0,
       },
       data: {
         currentStock: {
@@ -191,9 +194,8 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
       where: {
         id: 'batch-late',
         branchId,
-        currentStock: {
-          gte: 5,
-        },
+        currentStock: 10,
+        heldStock: 0,
       },
     });
   });

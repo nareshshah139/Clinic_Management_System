@@ -69,6 +69,7 @@ export function PharmacyInventoryStarterImport({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [preview,setPreview]=useState<any>(null);
   const [summary, setSummary] = useState<InventoryImportSummary | null>(null);
 
   const selectFile = (file: File | undefined) => {
@@ -100,6 +101,7 @@ export function PharmacyInventoryStarterImport({
       });
       return;
     }
+    setPreview(null);
     setSelectedFile(file);
     setSummary(null);
   };
@@ -117,6 +119,7 @@ export function PharmacyInventoryStarterImport({
     try {
       setIsUploading(true);
       setSummary(null);
+      if(!preview){const body=new FormData();body.append('file',selectedFile);const response=await fetch('/api/inventory/items/import-preview',{method:'POST',body,credentials:'include'});const result=await response.json();if(!response.ok)throw new Error(result.message||'Preview failed');setPreview(result);return;}
       const response =
         await apiClient.importInventoryStarterExcel<InventoryImportSummary>(
           selectedFile,
@@ -150,6 +153,7 @@ export function PharmacyInventoryStarterImport({
     if (inputRef.current) inputRef.current.value = "";
   };
 
+  const previewTable=preview&&<div className="overflow-x-auto border-t pt-4"><p className="mb-3 text-sm font-medium">Review {preview.rows.length} source rows. Existing batch balances cannot be reset.</p><table className="w-full text-left text-xs"><thead><tr>{['Row','Product','Pack / unit','Batch / expiry','Opening qty','PTR / MRP','HSN / GST','Location','Min / max','Errors'].map(t=><th key={t} className="p-2">{t}</th>)}</tr></thead><tbody>{preview.rows.map((r:any)=><tr key={r.sourceRow} className="border-t"><td className="p-2">{r.sourceRow}</td><td>{r.name}</td><td>{r.packSizeLabel} / {r.unit}</td><td>{r.batchNumber} / {r.expiryDate}</td><td>{r.currentStock}</td><td>{r.costPrice} / {r.mrp}</td><td>{r.hsnCode} / {r.gstRate}</td><td>{r.storageLocation}</td><td>{r.minStockLevel} / {r.maxStockLevel}</td><td className="text-destructive">{r.error||'Ready'}</td></tr>)}</tbody></table></div>;
   if (compact) {
     return (
       <Card
@@ -239,7 +243,7 @@ export function PharmacyInventoryStarterImport({
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
-              Import
+              {preview?'Confirm opening import':'Preview import'}
             </Button>
           </div>
 
@@ -285,6 +289,7 @@ export function PharmacyInventoryStarterImport({
               ))}
             </div>
           </details>
+          {previewTable}
         </CardContent>
       </Card>
     );
@@ -326,7 +331,7 @@ export function PharmacyInventoryStarterImport({
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
-              Import Inventory
+              {preview?'Confirm opening import':'Preview import'}
             </Button>
           </div>
         </div>
@@ -460,7 +465,7 @@ function ImportErrors({ summary }: { summary: InventoryImportSummary }) {
       </div>
       {summary.importId && (
         <p className="mt-2 break-all text-xs">
-          Import reference: {summary.importId}
+          Import reference: {summary.importId} <a className="ml-3 underline" href={`/api/inventory/imports/${summary.importId}/original`} target="_blank" rel="noreferrer">Download original Excel</a>
         </p>
       )}
     </div>

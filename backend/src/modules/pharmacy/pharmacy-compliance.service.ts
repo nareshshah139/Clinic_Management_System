@@ -1,9 +1,11 @@
 import {
   BadRequestException,
+  GoneException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { jsonObject, movementDelta } from '../inventory/inventory-stock';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   ApplyPharmacyAuditAdjustmentsDto,
@@ -29,6 +31,13 @@ export class PharmacyComplianceService {
 
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-reports-posted-scope
+   * Posted GST and financial reports MUST exclude unposted drafts and identify the document
+   * statuses, date range and branch used; exports MUST reconcile with the same eligible records.
+   * Acceptance: INV-42. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async getGstSummary(
     query: PharmacyGstSummaryQueryDto,
     branchId: string,
@@ -39,7 +48,7 @@ export class PharmacyComplianceService {
         where: {
           branchId,
           invoiceDate: { gte: start, lte: end },
-          status: { not: 'CANCELLED' },
+          status: 'STOCK_COMMITTED',
         },
         include: { items: true },
       }),
@@ -47,12 +56,13 @@ export class PharmacyComplianceService {
         where: {
           branchId,
           invoiceDate: { gte: start, lte: end },
-          status: { not: 'CANCELLED' },
+          status: { in: ['CONFIRMED', 'DISPENSED', 'COMPLETED'] },
         },
         include: { items: true },
       }),
     ]);
 
+    const workflowRows=await this.workflowReportRows(branchId,start,end);purchaseInvoices.push(...workflowRows.purchases);salesInvoices.push(...workflowRows.sales);
     const purchaseSlabs = new Map<number, GstSlab>();
     for (const invoice of purchaseInvoices) {
       for (const item of invoice.items || []) {
@@ -83,7 +93,7 @@ export class PharmacyComplianceService {
         this.addSlab(salesSlabs, this.money(item.taxPercent), {
           taxableAmount,
           cgst: localTax,
-          sgst: localTax,
+          sgst: this.money(totalGst-localTax),
           igst: 0,
           totalGst,
           grossAmount: item.totalAmount,
@@ -95,6 +105,8 @@ export class PharmacyComplianceService {
     const salesOutputGst = this.sumSlabs(salesSlabs).totalGst;
 
     return {
+      scope: {branchId,statuses:['STOCK_COMMITTED','CONFIRMED','DISPENSED','COMPLETED','POSTED','RELEASED'],draftsExcluded:true,dateBasis:'Saved document date; inclusive UTC period',startDate:start.toISOString(),endDate:end.toISOString()},
+      records:this.reportRecords(purchaseInvoices,salesInvoices),
       period: {
         startDate: start.toISOString(),
         endDate: end.toISOString(),
@@ -115,6 +127,38 @@ export class PharmacyComplianceService {
     };
   }
 
+  private async workflowReportRows(branchId:string,start:Date,end:Date){
+    const db=this.prisma as any;if(!db.inventoryWorkflowDocument)return {purchases:[],sales:[]};
+    const documents=await db.inventoryWorkflowDocument.findMany({where:{branchId,status:{in:['POSTED','RELEASED']},kind:{in:['COUNTER_SALE','SALES_RETURN','SUPPLIER_RETURN','CREDIT_NOTE']}}});
+    const purchases:any[]=[],sales:any[]=[];
+    for(const doc of documents){const p=doc.payload;const date=new Date(p.date);if(date<start||date>end)continue;const sign=['SALES_RETURN','SUPPLIER_RETURN','CREDIT_NOTE'].includes(doc.kind)?-1:1;
+      const items=p.lines.map((l:any)=>({taxableAmount:sign*l.taxable,cgstPercent:l.gstRate/2,sgstPercent:l.gstRate/2,igstPercent:0,gstAmount:sign*l.tax,lineTotal:sign*l.total,totalAmount:sign*l.total,taxAmount:sign*l.tax,taxPercent:l.gstRate,quantity:sign*l.quantity,freeQuantity:sign*(l.freeQuantity||0),productName:l.name,batchNumber:l.batchNumber,packUnitType:l.unit,unitPrice:l.unitPrice,discountPercent:l.discountPercent,schemeAmount:l.schemeAmount}));
+      const total=items.reduce((n:number,l:any)=>n+l.totalAmount,0),tax=items.reduce((n:number,l:any)=>n+l.taxAmount,0);
+      const record={id:doc.id,kind:doc.kind,status:doc.status,sourceType:'workflow',invoiceNumber:doc.reference,invoiceDate:date,distributorName:doc.reference,distributorGstin:doc.supplierGstin,totalAmount:total,taxAmount:tax,netPayable:total,taxableAmount:total-tax,totalGst:tax,items};
+      (['COUNTER_SALE','SALES_RETURN'].includes(doc.kind)?sales:purchases).push(record);
+    }return {purchases,sales};
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] compliance-export-same-records
+   * Report drilldown/export records MUST be derived from the exact eligible invoice collections
+   * used by report totals, retaining source kind, units, tax and posted status without a page cap.
+   */
+  private reportRecords(purchases:any[],sales:any[]) {
+    return [...purchases.map(row=>({row,type:'purchase'})),...sales.map(row=>({row,type:'sale'}))].map(({row,type})=>{
+      const sourceType=row.sourceType||type,kind=row.kind||(type==='purchase'?'PURCHASE_INVOICE':'PHARMACY_INVOICE');
+      return {id:row.id,sourceType,kind,invoiceNumber:row.invoiceNumber,status:row.status,invoiceDate:row.invoiceDate,party:type==='purchase'?row.distributorName:undefined,supplierGstin:row.distributorGstin||null,
+        taxableAmount:this.money(type==='purchase'?row.taxableAmount:Number(row.totalAmount||0)-Number(row.taxAmount||0)),gstAmount:this.money(type==='purchase'?row.totalGst:row.taxAmount),totalAmount:this.money(type==='purchase'?row.netPayable:row.totalAmount),
+        lines:(row.items||[]).map((l:any)=>({id:l.id,lineNumber:l.lineNumber,product:l.productName||l.itemName||l.name||l.drugName||'',batch:l.batchNumber||'',unit:l.packUnitType||l.unit||'Not recorded',pack:l.packSize||null,paidQuantity:l.quantityPurchased??l.quantity??0,freeQuantity:l.freeQuantity||0,MRP:l.mrp??null,PTR:l.purchaseRate??l.unitPrice??null,discountPercent:l.discountPercent||0,schemeAmount:l.schemeAmount||0,taxableAmount:this.money(l.taxableAmount??Number(l.totalAmount||0)-Number(l.taxAmount||0)),gstAmount:this.money(l.gstAmount??l.taxAmount??0),totalAmount:this.money(l.lineTotal??l.totalAmount??0)}))};
+    });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] historical-movement-cost
+   * Profit reports MUST use recorded movement costs and signed reversals/accepted returns.
+   * Changing current batch cost cannot reprice history; unavailable historical costs are counted
+   * as unknown and excluded from known-cost totals, never silently taken from today's batch.
+   */
   async getMonthlyReport(
     query: PharmacyMonthlyReportQueryDto,
     branchId: string,
@@ -131,7 +175,7 @@ export class PharmacyComplianceService {
         where: {
           branchId,
           invoiceDate: { gte: start, lte: end },
-          status: { not: 'CANCELLED' },
+          status: 'STOCK_COMMITTED',
         },
         include: { items: true },
       }),
@@ -139,7 +183,7 @@ export class PharmacyComplianceService {
         where: {
           branchId,
           invoiceDate: { gte: start, lte: end },
-          status: { not: 'CANCELLED' },
+          status: { in: ['CONFIRMED', 'DISPENSED', 'COMPLETED'] },
         },
         include: { items: true },
       }),
@@ -148,7 +192,6 @@ export class PharmacyComplianceService {
         where: {
           branchId,
           createdAt: { gte: start, lte: end },
-          type: { in: ['SALE', 'EXPIRED', 'DAMAGED'] },
         },
         include: { item: true },
       }),
@@ -162,6 +205,7 @@ export class PharmacyComplianceService {
       }),
     ]);
 
+    const workflowRows=await this.workflowReportRows(branchId,start,end);purchaseInvoices.push(...workflowRows.purchases);salesInvoices.push(...workflowRows.sales);
     const procurementTotal = this.money(
       purchaseInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.netPayable || 0), 0),
     );
@@ -175,21 +219,14 @@ export class PharmacyComplianceService {
       salesInvoices.reduce((sum: number, invoice: any) => sum + Number(invoice.taxAmount || 0), 0),
     );
     const salesBeforeTax = this.money(salesTotal - salesTax);
-    const saleStockTransactions = stockTransactions.filter(
-      (tx: any) => tx.type === 'SALE',
-    );
-    const writeOffTransactions = stockTransactions.filter((tx: any) =>
-      ['EXPIRED', 'DAMAGED'].includes(tx.type),
-    );
-    const estimatedCogs = this.money(
-      saleStockTransactions.reduce(
-        (sum: number, tx: any) =>
-          sum +
-          Number(tx.quantity || 0) *
-            Number(tx.item?.costPrice ?? tx.unitPrice ?? 0),
-        0,
-      ),
-    );
+    const saleStockTransactions = stockTransactions.filter((tx:any)=>['SALE','SALE_RETURN'].includes(jsonObject(tx.notes).accountingCategory) || tx.type === 'SALE');
+    const writeOffTransactions = stockTransactions.filter((tx:any)=>jsonObject(tx.notes).accountingCategory === 'LOSS' || ['EXPIRED','DAMAGED'].includes(tx.type));
+    const unknownCostMovements = [...saleStockTransactions,...writeOffTransactions].filter((tx:any)=>!Number.isFinite(jsonObject(tx.notes).costPerStockUnit));
+    const movementCost = (tx:any) => {
+      const cost = jsonObject(tx.notes).costPerStockUnit;
+      return Number.isFinite(cost) ? -(movementDelta(tx)||0)*cost : 0;
+    };
+    const estimatedCogs = this.money(saleStockTransactions.reduce((sum:number,tx:any)=>sum+movementCost(tx),0));
     const stockValueAtCost = this.money(
       inventoryItems.reduce(
         (sum: number, item: any) => sum + Number(item.currentStock || 0) * Number(item.costPrice || 0),
@@ -207,19 +244,21 @@ export class PharmacyComplianceService {
     );
     const writeOffValue = this.money(
       writeOffTransactions.reduce(
-        (sum: number, tx: any) => sum + Number(tx.totalAmount || 0),
+        (sum: number, tx: any) => sum + movementCost(tx),
         0,
       ) +
         writeOffAdjustments.reduce(
           (sum: number, adj: any) =>
             sum +
             Math.abs(Number(adj.quantity || 0)) *
-              Number(adj.item?.costPrice || 0),
+              (Number.isFinite(jsonObject(adj.metadata).costPerStockUnit) ? jsonObject(adj.metadata).costPerStockUnit : 0),
           0,
         ),
     );
 
     return {
+      scope: {branchId,statuses:['STOCK_COMMITTED','CONFIRMED','DISPENSED','COMPLETED','POSTED','RELEASED'],draftsExcluded:true,dateBasis:'Saved document date; inclusive UTC period',startDate:start.toISOString(),endDate:end.toISOString()},
+      records:this.reportRecords(purchaseInvoices,salesInvoices),
       month: query.month,
       period: { startDate: start.toISOString(), endDate: end.toISOString() },
       procurement: {
@@ -245,6 +284,9 @@ export class PharmacyComplianceService {
         totalAmount: salesTotal,
       },
       profitAndLoss: {
+        costBasis: 'Recorded movement cost per stock unit; missing historical costs excluded',
+        unknownCostMovementCount: unknownCostMovements.length,
+        unknownCostAdjustmentCount: writeOffAdjustments.filter((a:any)=>!Number.isFinite(jsonObject(a.metadata).costPerStockUnit)).length,
         revenue: salesBeforeTax,
         estimatedCogs,
         grossProfit: this.money(salesBeforeTax - estimatedCogs),
@@ -256,6 +298,7 @@ export class PharmacyComplianceService {
         netAfterWriteOff: this.money(salesBeforeTax - estimatedCogs - writeOffValue),
       },
       stockValue: {
+        asOf:new Date().toISOString(),basis:'Current physical stock snapshot; not a historical month-end valuation',
         itemCount: inventoryItems.length,
         atCost: stockValueAtCost,
         atMrp: stockValueAtMrp,
@@ -269,19 +312,13 @@ export class PharmacyComplianceService {
     };
   }
 
-  async getExpiryReturns(window: ExpiryReturnWindowDto, branchId: string) {
-    const now = new Date();
-    const upper = new Date(now);
-    if (window === ExpiryReturnWindowDto.ONE_MONTH) {
-      upper.setMonth(upper.getMonth() + 1);
-    } else if (window === ExpiryReturnWindowDto.THREE_MONTHS) {
-      upper.setMonth(upper.getMonth() + 3);
-    }
 
-    const expiryFilter =
-      window === ExpiryReturnWindowDto.EXPIRED
-        ? { lt: now }
-        : { gte: now, lte: this.endOfDay(upper) };
+  async getExpiryReturns(window: ExpiryReturnWindowDto, branchId: string) {
+    const now = new Date(), start = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())), upper = new Date(start);
+    const months=({'1m':1,'2m':2,'3m':3,'6m':6,expired:0} as Record<string,number>)[window];
+    if(months===undefined)throw new BadRequestException('Choose expired, 1, 2, 3 or 6 months');
+    const day=upper.getUTCDate();upper.setUTCDate(1);upper.setUTCMonth(upper.getUTCMonth()+months);upper.setUTCDate(Math.min(day,new Date(Date.UTC(upper.getUTCFullYear(),upper.getUTCMonth()+1,0)).getUTCDate()));upper.setUTCHours(23,59,59,999);
+    const expiryFilter = window === ExpiryReturnWindowDto.EXPIRED ? { lt: start } : { gte: start, lte: upper };
 
     const items: any[] = await (this.prisma as any).inventoryItem.findMany({
       where: {
@@ -289,12 +326,12 @@ export class PharmacyComplianceService {
         currentStock: { gt: 0 },
         expiryDate: expiryFilter,
       },
-      orderBy: { expiryDate: 'asc' },
-      take: 200,
+      orderBy: [{expiryDate:'asc'},{id:'asc'}],
     });
 
     return {
       window,
+      scope:{branchId,expiryStart:start.toISOString(),expiryEnd:upper.toISOString(),expiryBoundary:'Valid through the entire UTC expiry day; clamped inclusive calendar-month window'},
       generatedAt: new Date().toISOString(),
       totals: {
         batchCount: items.length,
@@ -322,14 +359,14 @@ export class PharmacyComplianceService {
         manufacturer: item.manufacturer,
         supplier: item.supplier,
         expiryDate: item.expiryDate,
-        currentStock: item.currentStock,
+        currentStock: item.currentStock,unit:item.unit,packSize:item.packSize,packUnit:item.packUnit,location:item.storageLocation,heldStock:item.heldStock,available:item.currentStock-item.heldStock,
         valueAtCost: this.money(Number(item.currentStock || 0) * Number(item.costPrice || 0)),
         valueAtMrp: this.money(
           Number(item.currentStock || 0) *
             Number(item.mrp ?? item.sellingPrice ?? item.costPrice ?? 0),
         ),
         suggestedAction:
-          item.expiryDate && new Date(item.expiryDate) < now
+          item.expiryDate && new Date(item.expiryDate) < start
             ? 'QUARANTINE_EXPIRED_STOCK'
             : 'RETURN_TO_DISTRIBUTOR_OR_MOVE_TO_EXPIRY_BIN',
       })),
@@ -406,171 +443,25 @@ export class PharmacyComplianceService {
     };
   }
 
+
+  /**
+   * @cc [owner:nareshshah139,label:product] legacy-audit-no-policy-bypass
+   * The retired direct audit-adjustment entry point MUST reject every caller before database
+   * access and return the canonical Counts & audit destination. Only versioned workflow counts
+   * may apply stock changes using the branch approval policy and stock CAS.
+   */
   async applyAuditAdjustments(
-    auditId: string,
-    dto: ApplyPharmacyAuditAdjustmentsDto,
-    branchId: string,
-    userId: string,
-    userRole?: string,
-  ) {
-    const reason = dto.reason?.trim();
-    if (!reason) {
-      throw new BadRequestException('Adjustment reason is required');
-    }
-
-    return (this.prisma as any).$transaction(async (tx: any) => {
-      const itemIds = [...new Set(dto.counts.map((count) => count.inventoryId))];
-      const [auditRows, inventoryItems]: [any[], any[]] = await Promise.all([
-        tx.inventoryAudit.findMany({
-          where: {
-            branchId,
-            status: { startsWith: `${this.auditStatusPrefix}:${auditId}:` },
-          },
-          include: { item: true },
-        }),
-        tx.inventoryItem.findMany({
-          where: { branchId, id: { in: itemIds } },
-        }),
-      ]);
-
-      if (auditRows.length === 0) {
-        throw new NotFoundException('Audit batch not found');
-      }
-
-      const auditById = new Map<string, any>(
-        auditRows.map((row: any) => [row.id, row]),
-      );
-      const auditByItem = new Map<string, any>(
-        auditRows.map((row: any) => [row.itemId, row]),
-      );
-      const itemById = new Map<string, any>(
-        inventoryItems.map((item: any) => [item.id, item]),
-      );
-      const adjustments = [];
-
-      for (const count of dto.counts) {
-        const auditRow =
-          (count.auditRowId && auditById.get(count.auditRowId)) ||
-          auditByItem.get(count.inventoryId);
-        const item = itemById.get(count.inventoryId);
-
-        if (!auditRow || !item) {
-          throw new NotFoundException(
-            `Audit inventory row not found for ${count.inventoryId}`,
-          );
-        }
-        if (count.physicalStock < 0) {
-          throw new BadRequestException('Physical stock cannot be negative');
-        }
-
-        const beforeStock = Number(item.currentStock || 0);
-        const afterStock = Number(count.physicalStock);
-        const delta = afterStock - beforeStock;
-        if (afterStock < 0) {
-          throw new BadRequestException(
-            `Adjustment would make stock negative for ${item.name}`,
-          );
-        }
-
-        const approvalRequired = this.approvalRequired(delta, item, userRole);
-        let stockAdjustment = null;
-        let stockTransaction = null;
-        if (delta !== 0) {
-          const metadata = {
-            auditId,
-            auditRowId: auditRow.id,
-            userId,
-            reason,
-            beforeStock,
-            afterStock,
-            delta,
-            approvalRequired,
-          };
-          stockAdjustment = await tx.stockAdjustment.create({
-            data: {
-              branchId,
-              itemId: item.id,
-              userId,
-              type: 'PHYSICAL_COUNT',
-              quantity: delta,
-              reason,
-              notes: dto.notes,
-              metadata: JSON.stringify(metadata),
-            },
-          });
-          stockTransaction = await tx.stockTransaction.create({
-            data: {
-              branchId,
-              itemId: item.id,
-              userId,
-              type: 'ADJUSTMENT',
-              quantity: Math.abs(delta),
-              unitPrice: this.money(item.costPrice),
-              totalAmount: this.money(Math.abs(delta) * Number(item.costPrice || 0)),
-              reference: `AUDIT-${auditId}`,
-              reason,
-              notes: JSON.stringify(metadata),
-              batchNumber: item.batchNumber,
-              expiryDate: item.expiryDate,
-              supplier: item.supplier,
-              location: item.storageLocation,
-            },
-          });
-          await tx.inventoryItem.update({
-            where: { id: item.id },
-            data: {
-              currentStock: afterStock,
-              stockStatus: this.stockStatus(afterStock, item),
-            },
-          });
-        }
-
-        const updatedAudit = await tx.inventoryAudit.update({
-          where: { id: auditRow.id },
-          data: {
-            physicalStock: afterStock,
-            systemStock: beforeStock,
-            variance: delta,
-            status: this.auditStatus(auditId, 'ADJUSTED'),
-            notes: JSON.stringify({
-              auditId,
-              state: 'ADJUSTED',
-              userId,
-              reason,
-              beforeStock,
-              afterStock,
-              delta,
-              approvalRequired,
-              stockAdjustmentId: stockAdjustment?.id || null,
-              stockTransactionId: stockTransaction?.id || null,
-            }),
-          },
-        });
-
-        adjustments.push({
-          auditRowId: updatedAudit.id,
-          inventoryId: item.id,
-          itemName: item.name,
-          userId,
-          reason,
-          beforeCount: beforeStock,
-          afterCount: afterStock,
-          variance: delta,
-          approvalRequired,
-          stockAdjustmentId: stockAdjustment?.id || null,
-          stockTransactionId: stockTransaction?.id || null,
-          transactionReference: stockTransaction?.reference || `AUDIT-${auditId}`,
-        });
-      }
-
-      return {
-        auditId,
-        userId,
-        reason,
-        adjustedAt: new Date().toISOString(),
-        adjustmentCount: adjustments.length,
-        adjustments,
-      };
+    _auditId: string,
+    _dto: ApplyPharmacyAuditAdjustmentsDto,
+    _branchId: string,
+    _userId: string,
+    _userRole?: string,
+  ): Promise<never> {
+    throw new GoneException({
+      statusCode: 410,
+      error: 'Gone',
+      message: 'This audit submission has been retired. Open Counts & audit and start a reviewed count; no stock was changed.',
+      workflowUrl: '/dashboard/inventory?area=stock&view=COUNT',
     });
   }
 
@@ -694,24 +585,6 @@ export class PharmacyComplianceService {
       variance: row.variance,
       status: row.status,
     };
-  }
-
-  private approvalRequired(delta: number, item: any, userRole?: string) {
-    const adjustmentValue = Math.abs(delta) * Number(item.costPrice || 0);
-    const privileged = ['OWNER', 'ADMIN', 'MANAGER'].includes(userRole || '');
-    return !privileged && (delta < 0 || adjustmentValue >= 5000);
-  }
-
-  private stockStatus(stock: number, item: any) {
-    if (stock <= 0) return 'OUT_OF_STOCK';
-    if (item.expiryDate && new Date(item.expiryDate) < new Date()) return 'EXPIRED';
-    if (item.reorderLevel !== null && item.reorderLevel !== undefined && stock <= item.reorderLevel) {
-      return 'LOW_STOCK';
-    }
-    if (item.minStockLevel !== null && item.minStockLevel !== undefined && stock <= item.minStockLevel) {
-      return 'LOW_STOCK';
-    }
-    return 'IN_STOCK';
   }
 
   private percentAmount(amount: number, percent: number) {

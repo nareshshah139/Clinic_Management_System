@@ -70,6 +70,9 @@ interface BulkOrderItem {
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
+
+
+
 export function StockPredictionDashboard() {
   const [predictions, setPredictions] = useState<PredictionResponse | null>(null);
   const [bulkOrder, setBulkOrder] = useState<{ items: BulkOrderItem[]; totalEstimatedCost: number } | null>(null);

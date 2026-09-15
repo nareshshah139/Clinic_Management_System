@@ -11,6 +11,7 @@ import {
   Res,
   StreamableFile,
   UploadedFile,
+  UploadedFiles,
   UseInterceptors,
   UseGuards,
 } from '@nestjs/common';
@@ -21,7 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import type { Response } from 'express';
 import { UserRole } from '@prisma/client';
@@ -60,6 +61,14 @@ function purchaseInvoiceDocumentFilter(_req: any, file: any, cb: any) {
   return cb(null, true);
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product;target] purchase-role-permission-boundary
+ * Invoice endpoints MUST enforce both the allowed role and corresponding existing permission
+ * using the authenticated branch; Reception access MUST NOT grant unrelated stock, payment or
+ * administrative powers.
+ * Acceptance: INV-40. Validation and open gaps:
+ * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+ */
 @ApiTags('Pharmacy Purchase Invoices')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -128,8 +137,20 @@ export class PharmacyPurchaseInvoiceController {
   @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({ summary: 'Correct an unreviewed purchase invoice draft' })
   updateDraft(@Param('id') id: string, @Body() dto: CreatePharmacyPurchaseInvoiceDto, @Request() req: any) {
-    return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId);
+    return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId, req.user.id);
   }
+
+  @Post('ocr/pages/extract')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  @UseInterceptors(FilesInterceptor('files',10,{storage:memoryStorage(),limits:{fileSize:PURCHASE_OCR_UPLOAD_LIMIT_BYTES},fileFilter:purchaseInvoiceDocumentFilter}))
+  extractPages(@UploadedFiles() files:Express.Multer.File[],@Request() req:any){return this.purchaseInvoiceService.extractMany(files,req.user.branchId,req.user.id);}
+
+  @Post('ocr/pages/import')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create','inventory:po:create'],['pharmacy:purchase-invoice:review','inventory:po:update'],['pharmacy:purchase-invoice:commit','inventory:transaction:create'])
+  @UseInterceptors(FilesInterceptor('files',10,{storage:memoryStorage(),limits:{fileSize:PURCHASE_OCR_UPLOAD_LIMIT_BYTES},fileFilter:purchaseInvoiceDocumentFilter}))
+  importPages(@UploadedFiles() files:Express.Multer.File[],@Body() dto:ImportPharmacyPurchaseInvoiceDto,@Request() req:any){return this.purchaseInvoiceService.extractMany(files,req.user.branchId,req.user.id,true,dto.goodsReceivedDate);}
 
   @Post('ocr/extract')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
@@ -323,7 +344,7 @@ export class PharmacyPurchaseInvoiceController {
     @Body() dto: ReviewPharmacyPurchaseInvoiceDto,
     @Request() req: any,
   ) {
-    return this.purchaseInvoiceService.markReviewed(id, dto, req.user.branchId);
+    return this.purchaseInvoiceService.markReviewed(id, dto, req.user.branchId, req.user.id);
   }
 
   @Post(':id/commit-stock')

@@ -17,6 +17,7 @@ interface AddInventoryItemDialogProps {
   onSuccess: () => void;
 }
 
+
 export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInventoryItemDialogProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

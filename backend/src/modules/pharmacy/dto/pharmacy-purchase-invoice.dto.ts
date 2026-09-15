@@ -42,6 +42,8 @@ export enum PharmacyPurchaseBillTypeDto {
 export enum PharmacyPurchaseInvoiceSourceDto {
   MANUAL = 'MANUAL',
   OCR = 'OCR',
+  CSV = 'CSV',
+  GMAIL = 'GMAIL',
 }
 
 export enum PharmacyPurchaseMasterActionDto {
@@ -162,6 +164,8 @@ export class CreatePharmacyPurchaseInvoiceItemDto {
   @Max(100)
   specialDiscountPercent?: number = 0;
 
+  @IsOptional() @Transform(toOptionalNumber) @IsNumber() @Min(0) schemeAmount?: number = 0;
+
   @ApiProperty({ example: 52.5 })
   @Transform(toNumber)
   @IsNumber()
@@ -229,10 +233,14 @@ export class CreatePharmacyPurchaseInvoiceItemDto {
 }
 
 export class CreatePharmacyPurchaseInvoiceDto {
+  @IsOptional() @IsDateString() expectedUpdatedAt?: string;
   @ApiPropertyOptional({ description: 'Archived original upload to link to this invoice' })
   @IsOptional()
   @IsString()
   sourceDocumentId?: string;
+
+  @IsOptional() @IsArray() @IsString({ each: true }) sourceDocumentIds?: string[];
+  @IsOptional() @IsString() workflowReceiptId?: string;
 
   @ApiProperty({ example: 'Linae Distributors' })
   @IsString()
@@ -443,6 +451,9 @@ export class CreatePharmacyPurchaseInvoiceDto {
 }
 
 export class QueryPharmacyPurchaseInvoiceDto {
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsIn(['MANUAL','OCR','CSV','GMAIL']) source?: string;
+  @IsOptional() @IsString() unposted?: string;
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

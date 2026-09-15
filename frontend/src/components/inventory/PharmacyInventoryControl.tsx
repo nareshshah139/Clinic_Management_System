@@ -31,6 +31,8 @@ type InventoryControlTab =
   | 'ledger'
   | 'compliance';
 
+
+
 export function PharmacyInventoryControl() {
   const workbenchRef = useRef<HTMLDivElement | null>(null);
   const [inventoryTab, setInventoryTab] =

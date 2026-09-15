@@ -61,10 +61,12 @@ const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatusType, string> = {
   [PharmacyPaymentStatus.PARTIALLY_PAID]: 'bg-orange-100 text-orange-800',
 };
 
+
+
 export function PharmacyInvoiceList() {
   const [invoices, setInvoices] = useState<PharmacyInvoiceSummary[]>([]);
   const [loading, setLoading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(typeof window==='undefined'?'':new URLSearchParams(window.location.search).get('search')||'');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');

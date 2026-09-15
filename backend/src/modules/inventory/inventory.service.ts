@@ -1,3 +1,4 @@
+import { writeStockMovement, movementDelta, money } from './inventory-stock';
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -192,6 +193,7 @@ export class InventoryService {
     return this.formatInventoryItem(item);
   }
 
+
   async updateInventoryItem(id: string, updateItemDto: UpdateInventoryItemDto, branchId: string) {
     const existingItem = await this.prisma.inventoryItem.findFirst({
       where: { id, branchId },
@@ -199,6 +201,11 @@ export class InventoryService {
 
     if (!existingItem) {
       throw new NotFoundException('Inventory item not found');
+    }
+
+    const supplied = updateItemDto as any;
+    for (const field of ['currentStock','heldStock','costPrice','unit','packSize','packUnit']) {
+      if (supplied[field] !== undefined && supplied[field] !== (existingItem as any)[field]) throw new BadRequestException('Posted stock quantity, unit basis and purchase cost require a linked stock or purchase correction');
     }
 
     // Check for SKU conflicts
@@ -243,6 +250,8 @@ export class InventoryService {
       throw new NotFoundException('Inventory item not found');
     }
 
+    if (item.currentStock || item.heldStock) throw new BadRequestException('Dispose or return remaining stock before deleting a batch');
+    if (await this.prisma.inventoryWorkflowEffect.count({where:{branchId,inventoryId:id}})) throw new BadRequestException('This batch has workflow history and must be archived instead');
     // Check if item has stock transactions
     const transactionCount = await this.prisma.stockTransaction.count({
       where: { itemId: id },
@@ -260,34 +269,27 @@ export class InventoryService {
   }
 
   // Stock Transaction Management
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-movement-atomic
+   * The movement record and its inventory balance update MUST commit atomically; if either fails,
+   * neither change may persist.
+   * Acceptance: INV-32.3. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async createStockTransaction(createTransactionDto: CreateStockTransactionDto, branchId: string, userId: string) {
-    const item = await this.prisma.inventoryItem.findFirst({
-      where: { id: createTransactionDto.itemId, branchId },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Inventory item not found');
+    if (!Number.isSafeInteger(createTransactionDto.quantity) || createTransactionDto.quantity <= 0) {
+      throw new BadRequestException('Quantity must be a positive whole number');
     }
-
-    // Calculate total amount if not provided
-    const totalAmount = createTransactionDto.totalAmount || 
-      (createTransactionDto.unitPrice || item.costPrice) * createTransactionDto.quantity;
-
-    const transaction = await this.prisma.stockTransaction.create({
-      data: {
-        ...createTransactionDto,
-        branchId,
-        userId,
-        totalAmount,
-        unitPrice: createTransactionDto.unitPrice || item.costPrice,
-      },
-    });
-
-    // Update item stock
-    await this.updateItemStock(createTransactionDto.itemId, createTransactionDto.type, createTransactionDto.quantity);
-
-    return this.formatStockTransaction(transaction);
+    const sign = ['PURCHASE', 'RETURN'].includes(createTransactionDto.type) ? 1
+      : ['SALE', 'EXPIRED', 'DAMAGED'].includes(createTransactionDto.type) ? -1 : 0;
+    if (!sign) throw new BadRequestException('Use the adjustment or transfer workflow for this movement');
+    return this.prisma.$transaction(async (tx: any) => this.formatStockTransaction(await writeStockMovement(tx, {
+      branchId, userId, itemId: createTransactionDto.itemId, type: createTransactionDto.type,
+      delta: sign * createTransactionDto.quantity, unitPrice: createTransactionDto.unitPrice,
+      reference: createTransactionDto.reference, reason: createTransactionDto.reason, notes: createTransactionDto.notes,
+    })), { isolationLevel: 'Serializable' });
   }
+
 
   async findAllStockTransactions(query: QueryStockTransactionsDto, branchId: string) {
     const {
@@ -383,52 +385,30 @@ export class InventoryService {
     return this.formatStockTransaction(transaction);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-posted-movement-immutable
+   * A posted stock movement MUST NOT have its quantity, direction or price rewritten in place;
+   * corrections require linked reversal and replacement entries.
+   * Acceptance: INV-27.5. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async updateStockTransaction(id: string, updateTransactionDto: UpdateStockTransactionDto, branchId: string) {
-    const existingTransaction = await this.prisma.stockTransaction.findFirst({
-      where: { id, branchId },
-    });
-
-    if (!existingTransaction) {
-      throw new NotFoundException('Stock transaction not found');
-    }
-
-    // Calculate total amount if not provided
-    const totalAmount = updateTransactionDto.totalAmount || 
-      (updateTransactionDto.unitPrice || existingTransaction.unitPrice) * 
-      (updateTransactionDto.quantity || existingTransaction.quantity);
-
-    const updatedTransaction = await this.prisma.stockTransaction.update({
-      where: { id },
-      data: {
-        ...updateTransactionDto,
-        totalAmount,
-      },
-    });
-
-    return this.formatStockTransaction(updatedTransaction);
+    const existing = await this.prisma.stockTransaction.findFirst({ where: { id, branchId } });
+    if (!existing) throw new NotFoundException('Stock transaction not found');
+    throw new BadRequestException('Posted movements are immutable. Create a linked correction from the batch ledger.');
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-movement-history-retained
+   * Deleting a posted movement MUST NOT erase its audit history; an authorized correction must
+   * retain the original and a linked reversal with the correct signed effect.
+   * Acceptance: INV-32.5. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async deleteStockTransaction(id: string, branchId: string) {
-    const transaction = await this.prisma.stockTransaction.findFirst({
-      where: { id, branchId },
-    });
-
-    if (!transaction) {
-      throw new NotFoundException('Stock transaction not found');
-    }
-
-    // Reverse the stock impact
-    await this.updateItemStock(
-      transaction.itemId,
-      this.reverseTransactionType(transaction.type),
-      transaction.quantity,
-    );
-
-    await this.prisma.stockTransaction.delete({
-      where: { id },
-    });
-
-    return { message: 'Stock transaction deleted successfully' };
+    const existing = await this.prisma.stockTransaction.findFirst({ where: { id, branchId } });
+    if (!existing) throw new NotFoundException('Stock transaction not found');
+    throw new BadRequestException('Posted movements cannot be deleted. Create a linked reversal from the batch ledger.');
   }
 
   // Bulk Operations
@@ -452,105 +432,32 @@ export class InventoryService {
     };
   }
 
+
   async adjustStock(stockAdjustmentDto: StockAdjustmentDto, branchId: string, userId: string) {
-    const item = await this.prisma.inventoryItem.findFirst({
-      where: { id: stockAdjustmentDto.itemId, branchId },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Inventory item not found');
-    }
-
-    const transactionType = stockAdjustmentDto.adjustmentQuantity > 0 
-      ? TransactionType.ADJUSTMENT 
-      : TransactionType.ADJUSTMENT;
-
-    const transaction = await this.prisma.stockTransaction.create({
-      data: {
-        itemId: stockAdjustmentDto.itemId,
-        type: transactionType,
-        quantity: Math.abs(stockAdjustmentDto.adjustmentQuantity),
-        unitPrice: item.costPrice,
-        totalAmount: Math.abs(stockAdjustmentDto.adjustmentQuantity) * item.costPrice,
-        reason: stockAdjustmentDto.reason || 'Stock adjustment',
-        notes: stockAdjustmentDto.notes,
-        batchNumber: stockAdjustmentDto.batchNumber,
-        expiryDate: stockAdjustmentDto.expiryDate,
-        branchId,
-        userId,
-      },
-    });
-
-    // Update item stock
-    await this.updateItemStock(
-      stockAdjustmentDto.itemId,
-      stockAdjustmentDto.adjustmentQuantity > 0 ? TransactionType.PURCHASE : TransactionType.SALE,
-      Math.abs(stockAdjustmentDto.adjustmentQuantity),
-    );
-
-    return this.formatStockTransaction(transaction);
+    if (!stockAdjustmentDto.reason?.trim()) throw new BadRequestException('An adjustment reason is required');
+    return this.prisma.$transaction(async (tx: any) => this.formatStockTransaction(await writeStockMovement(tx, {
+      branchId, userId, itemId: stockAdjustmentDto.itemId, delta: stockAdjustmentDto.adjustmentQuantity,
+      type: 'ADJUSTMENT', reason: stockAdjustmentDto.reason?.trim(), notes: stockAdjustmentDto.notes,
+    })), { isolationLevel: 'Serializable' });
   }
 
   async transferStock(stockTransferDto: StockTransferDto, branchId: string, userId: string) {
-    const item = await this.prisma.inventoryItem.findFirst({
-      where: { id: stockTransferDto.itemId, branchId },
-    });
-
-    if (!item) {
-      throw new NotFoundException('Inventory item not found');
-    }
-
-    if (item.currentStock < stockTransferDto.quantity) {
-      throw new BadRequestException('Insufficient stock for transfer');
-    }
-
-    // Create outbound transaction
-    const outboundTransaction = await this.prisma.stockTransaction.create({
-      data: {
-        itemId: stockTransferDto.itemId,
-        type: TransactionType.TRANSFER,
-        quantity: stockTransferDto.quantity,
-        unitPrice: item.costPrice,
-        totalAmount: stockTransferDto.quantity * item.costPrice,
-        reason: 'Stock transfer - outbound',
-        notes: stockTransferDto.notes,
-        batchNumber: stockTransferDto.batchNumber,
-        expiryDate: stockTransferDto.expiryDate,
-        location: stockTransferDto.fromLocation,
-        branchId,
-        userId,
-      },
-    });
-
-    // Create inbound transaction
-    const inboundTransaction = await this.prisma.stockTransaction.create({
-      data: {
-        itemId: stockTransferDto.itemId,
-        type: TransactionType.TRANSFER,
-        quantity: stockTransferDto.quantity,
-        unitPrice: item.costPrice,
-        totalAmount: stockTransferDto.quantity * item.costPrice,
-        reason: 'Stock transfer - inbound',
-        notes: stockTransferDto.notes,
-        batchNumber: stockTransferDto.batchNumber,
-        expiryDate: stockTransferDto.expiryDate,
-        location: stockTransferDto.toLocation,
-        branchId,
-        userId,
-      },
-    });
-
-    // Update item stock (net effect is zero, but we track the movement)
-    await this.updateItemStock(stockTransferDto.itemId, TransactionType.SALE, stockTransferDto.quantity);
-    await this.updateItemStock(stockTransferDto.itemId, TransactionType.PURCHASE, stockTransferDto.quantity);
-
-    return {
-      outboundTransaction: this.formatStockTransaction(outboundTransaction),
-      inboundTransaction: this.formatStockTransaction(inboundTransaction),
-    };
+    if (!stockTransferDto.fromLocation?.trim() || !stockTransferDto.toLocation?.trim() || stockTransferDto.fromLocation === stockTransferDto.toLocation) throw new BadRequestException('Choose distinct source and destination locations');
+    return this.prisma.$transaction(async (tx:any)=>{
+      const item = await tx.inventoryItem.findFirst({where:{id:stockTransferDto.itemId,branchId}});
+      if (!item) throw new NotFoundException('Inventory item not found');
+      if (item.storageLocation !== stockTransferDto.fromLocation) throw new ConflictException('The batch location changed. Refresh before transferring');
+      if (stockTransferDto.quantity !== item.currentStock) throw new BadRequestException('A location transfer moves the complete batch; split batches require distinct inventory records');
+      const reference = `TRANSFER-${Date.now()}-${item.id}`;
+      const outboundTransaction = await writeStockMovement(tx,{branchId,userId,itemId:item.id,delta:-stockTransferDto.quantity,type:'TRANSFER',reference,reason:'Stock transfer - outbound',location:stockTransferDto.fromLocation,metadata:{fromLocation:stockTransferDto.fromLocation,toLocation:stockTransferDto.toLocation}});
+      const inboundTransaction = await writeStockMovement(tx,{branchId,userId,itemId:item.id,delta:stockTransferDto.quantity,type:'TRANSFER',reference,reason:'Stock transfer - inbound',location:stockTransferDto.toLocation,metadata:{fromLocation:stockTransferDto.fromLocation,toLocation:stockTransferDto.toLocation}});
+      await tx.inventoryItem.update({where:{id:item.id,branchId},data:{storageLocation:stockTransferDto.toLocation}});
+      return {outboundTransaction:this.formatStockTransaction(outboundTransaction),inboundTransaction:this.formatStockTransaction(inboundTransaction)};
+    },{isolationLevel:'Serializable'});
   }
 
   // Purchase Order Management
+
   async createPurchaseOrder(createOrderDto: CreatePurchaseOrderDto, branchId: string, userId: string) {
     const order = await this.prisma.purchaseOrder.create({
       data: {
@@ -816,6 +723,7 @@ export class InventoryService {
   }
 
   // Reports and Analytics
+
   async getStockReport(query: StockReportDto, branchId: string) {
     const where: any = { branchId };
 
@@ -873,68 +781,31 @@ export class InventoryService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-statistics-money
+   * totalValue MUST be a monetary inventory valuation with a declared basis, not the sum of stock
+   * quantities; 10 units costing 25 each have cost value 250.
+   * Acceptance: INV-07.3. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async getInventoryStatistics(query: InventoryStatisticsDto, branchId: string) {
     const where: any = { branchId };
-
     if (query.type) where.type = query.type;
     if (query.category) where.category = query.category;
     if (query.storageLocation) where.storageLocation = query.storageLocation;
+    const items = await this.prisma.inventoryItem.findMany({ where });
+    const breakdown = (key: string) => Object.entries(items.reduce((groups: Record<string, any>, item: any) => {
+      const value = item[key] || 'Unassigned';
+      const row = groups[value] ||= { [key]: value, _count: { id: 0 }, _sum: { currentStock: 0 } };
+      row._count.id++; row._sum.currentStock += item.currentStock; return groups;
+    }, {})).map(([, value]) => value);
+    return { totalItems: items.length,
+      totalValue: money(items.reduce((sum, item) => sum + item.currentStock * item.costPrice, 0)),
+      valuationBasis: 'Cost per stock unit; excludes tax',
+      lowStockCount: items.filter(item => item.currentStock <= (item.reorderLevel ?? item.minStockLevel ?? -1)).length,
+      expiredCount: items.filter(item => item.expiryDate && item.expiryDate < new Date()).length,
+      typeBreakdown: breakdown('type'), categoryBreakdown: breakdown('category'), locationBreakdown: breakdown('storageLocation') };
 
-    const [
-      totalItems,
-      totalValue,
-      lowStockCount,
-      expiredCount,
-      typeBreakdown,
-      categoryBreakdown,
-      locationBreakdown,
-    ] = await Promise.all([
-      this.prisma.inventoryItem.count({ where }),
-      this.prisma.inventoryItem.aggregate({
-        where,
-        _sum: { currentStock: true },
-      }),
-      this.prisma.inventoryItem.count({
-        where: {
-          ...where,
-          currentStock: { lte: 10 },
-        },
-      }),
-      this.prisma.inventoryItem.count({
-        where: {
-          ...where,
-          expiryDate: { lt: new Date() },
-        },
-      }),
-      this.prisma.inventoryItem.groupBy({
-        by: ['type'],
-        where,
-        _count: { id: true },
-        _sum: { currentStock: true },
-      }),
-      this.prisma.inventoryItem.groupBy({
-        by: ['category'],
-        where,
-        _count: { id: true },
-        _sum: { currentStock: true },
-      }),
-      this.prisma.inventoryItem.groupBy({
-        by: ['storageLocation'],
-        where,
-        _count: { id: true },
-        _sum: { currentStock: true },
-      }),
-    ]);
-
-    return {
-      totalItems,
-      totalValue: totalValue._sum.currentStock || 0,
-      lowStockCount,
-      expiredCount,
-      typeBreakdown,
-      categoryBreakdown,
-      locationBreakdown,
-    };
   }
 
   async getLowStockAlerts(query: LowStockAlertDto, branchId: string) {
@@ -1046,12 +917,19 @@ export class InventoryService {
   }
 
   // Helper Methods
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-outbound-no-clamping
+   * An outbound quantity greater than available stock MUST fail without a movement or balance
+   * change; clamping a negative result to zero is not a valid stock update.
+   * Acceptance: INV-32.4. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   private async updateItemStock(itemId: string, transactionType: TransactionType, quantity: number) {
     const item = await this.prisma.inventoryItem.findUnique({
       where: { id: itemId },
     });
 
-    if (!item) return;
+    if (!item) throw new NotFoundException('Inventory item not found');
 
     let newStock = item.currentStock;
 
@@ -1073,6 +951,8 @@ export class InventoryService {
         break;
     }
 
+    if (newStock < 0) throw new BadRequestException('Insufficient stock');
+
     // Determine stock status
     let stockStatus = StockStatus.IN_STOCK;
     if (newStock <= 0) {
@@ -1089,7 +969,7 @@ export class InventoryService {
     await this.prisma.inventoryItem.update({
       where: { id: itemId },
       data: {
-        currentStock: Math.max(0, newStock),
+        currentStock: newStock,
         stockStatus,
       },
     });
@@ -1119,7 +999,7 @@ export class InventoryService {
       } catch (error) {
         // If parsing fails, treat as comma-separated string
         if (typeof item.tags === 'string') {
-          tags = item.tags.split(',').map(tag => tag.trim()).filter(tag => tag.length > 0);
+          tags = item.tags.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0);
         }
       }
     }
@@ -1144,6 +1024,7 @@ export class InventoryService {
   private formatStockTransaction(transaction: any) {
     return {
       ...transaction,
+      delta: movementDelta(transaction),
       item: transaction.item ? this.formatInventoryItem(transaction.item) : null,
     };
   }

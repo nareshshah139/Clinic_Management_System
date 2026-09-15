@@ -48,6 +48,8 @@ type ShelfGroup = {
   lowStock: number;
 };
 
+
+
 export function ShelfIntelligence() {
   const { toast } = useToast();
   const [items, setItems] = useState<ShelfInventoryItem[]>([]);
@@ -167,6 +169,7 @@ export function ShelfIntelligence() {
       setSavingShelf(false);
     }
   };
+
 
   const postCycleCounts = async () => {
     const countRows = Object.entries(physicalCounts)

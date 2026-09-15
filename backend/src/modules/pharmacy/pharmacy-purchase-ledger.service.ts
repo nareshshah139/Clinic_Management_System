@@ -17,6 +17,7 @@ type LedgerInvoice = {
   invoiceDate: Date | string;
   dueDate?: Date | string | null;
   netPayable: number;
+  creditApplied?: number;
   tcsAmount?: number | null;
   status?: string;
   paymentAllocations?: {
@@ -39,14 +40,20 @@ const MONEY_TOLERANCE = 0.01;
 export class PharmacyPurchaseLedgerService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-payment-idempotent-balance
+   * A nonempty request key MUST identify one payment per branch. Rounded allocations must equal
+   * the payment exactly and cannot exceed posted balances after credits, even under concurrency.
+   */
   async createPayment(
     dto: CreatePharmacyPurchasePaymentDto,
     branchId: string,
     userId: string,
   ) {
+    if (!dto.requestKey?.trim() || !branchId) throw new BadRequestException('Payment request key and branch are required');
     const distributorGstin = dto.distributorGstin.trim().toUpperCase();
     const distributorName = dto.distributorName.trim();
-    const paidBy = (dto.paidBy || userId || '').trim();
+    const paidBy = (userId || '').trim();
     const allocations = this.normalizeAllocations(dto.allocations);
     const allocationTotal = this.money(
       allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
@@ -56,13 +63,15 @@ export class PharmacyPurchaseLedgerService {
     if (!paidBy) {
       throw new BadRequestException('paidBy is required');
     }
-    if (Math.abs(allocationTotal - amount) > MONEY_TOLERANCE) {
+    if (!Number.isFinite(amount) || amount <= 0 || !allocations.length) throw new BadRequestException('A positive payment and allocations are required');
+    if (Math.round(allocationTotal * 100) !== Math.round(amount * 100)) {
       throw new BadRequestException(
         'Payment amount must equal the total allocated amount',
       );
     }
 
-    return (this.prisma as any).$transaction(async (tx: any) => {
+    return this.transaction(async (tx: any) => {
+      if (dto.requestKey) { const existing = await tx.pharmacyPurchasePayment.findUnique({where:{branchId_requestKey:{branchId,requestKey:dto.requestKey}},include:{allocations:true}}); if(existing) return existing; }
       const invoiceIds = allocations.map(
         (allocation) => allocation.purchaseInvoiceId,
       );
@@ -90,6 +99,7 @@ export class PharmacyPurchaseLedgerService {
       const payment = await tx.pharmacyPurchasePayment.create({
         data: {
           branchId,
+          requestKey: dto.requestKey || null,
           distributorGstin,
           distributorName,
           paymentDate: new Date(dto.paymentDate),
@@ -122,7 +132,7 @@ export class PharmacyPurchaseLedgerService {
           const existingPaid = this.sumAllocations(
             originalInvoice?.paymentAllocations,
           );
-          const paidAfter = this.money(existingPaid + allocation.amount);
+          const paidAfter = this.money(existingPaid + Number(originalInvoice?.creditApplied || 0) + allocation.amount);
           const outstandingAfter = this.outstanding(invoice, paidAfter);
 
           return {
@@ -140,13 +150,21 @@ export class PharmacyPurchaseLedgerService {
     });
   }
 
+  private async transaction<T>(run: (tx:any)=>Promise<T>): Promise<T> {
+    for (let attempt=0;;attempt++) {
+      try { return await this.prisma.$transaction(run,{isolationLevel:'Serializable'}); }
+      catch(error) { if (['P2034','P2002'].includes((error as any)?.code) && attempt<2) continue; throw error; }
+    }
+  }
+
   async getDistributorSummaries(branchId: string, asOfDate = new Date()) {
-    const invoices = await this.findLedgerInvoices(branchId);
+    const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
     const groups = this.groupInvoicesByDistributor(invoices);
     const fiscalYearStart = this.fiscalYearStart(asOfDate);
 
     return {
       asOfDate: asOfDate.toISOString(),
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       tcsThreshold: TCS_THRESHOLD_AMOUNT,
       distributors: Array.from(groups.values())
         .map((groupInvoices) =>
@@ -166,17 +184,18 @@ export class PharmacyPurchaseLedgerService {
     asOfDate = new Date(),
   ) {
     const gstin = distributorGstin.trim().toUpperCase();
-    const invoices = await this.findLedgerInvoices(branchId, gstin);
+    const invoices = await this.findLedgerInvoices(branchId, gstin, asOfDate);
     if (invoices.length === 0) {
       throw new NotFoundException('Distributor ledger not found');
     }
 
-    const payments = await (
+    const allPayments = await (
       this.prisma as any
     ).pharmacyPurchasePayment.findMany({
       where: {
         branchId,
         distributorGstin: gstin,
+        paymentDate: { lte: asOfDate }, createdAt: { lte: asOfDate },
       },
       include: {
         allocations: {
@@ -188,6 +207,8 @@ export class PharmacyPurchaseLedgerService {
       orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
     });
 
+    const invoiceIds = new Set(invoices.map(i=>i.id));
+    const payments = allPayments.map((payment:any)=>{const allocations=payment.allocations.filter((a:any)=>invoiceIds.has(a.purchaseInvoiceId)&&new Date(a.createdAt||payment.createdAt||payment.paymentDate)<=asOfDate);return {...payment,allocations,amount:this.money(allocations.reduce((n:number,a:any)=>n+Number(a.amount),0))};}).filter((payment:any)=>payment.allocations.length);
     const invoiceRows = invoices
       .map((invoice) => this.invoiceLedgerRow(invoice, asOfDate))
       .sort(
@@ -195,6 +216,9 @@ export class PharmacyPurchaseLedgerService {
           new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime(),
       );
 
+    const creditAllocations = await (this.prisma as any).inventoryCreditAllocation.findMany({
+      where:{branchId,purchaseInvoiceId:{in:invoices.map(i=>i.id)},createdAt:{lte:asOfDate}},include:{credit:true},orderBy:[{createdAt:'asc'},{id:'asc'}],
+    });
     let runningBalance = 0;
     const events = [
       ...invoiceRows.map((invoice) => ({
@@ -213,12 +237,16 @@ export class PharmacyPurchaseLedgerService {
         description: `Payment ${payment.referenceNo || payment.mode}`,
         paymentId: payment.id,
       })),
+      ...creditAllocations.flatMap((a:any)=>[
+        {eventDate:a.createdAt,type:'CREDIT_ALLOCATION',debit:0,credit:Number(a.amount),description:`Credit ${a.credit.reference}`,allocationId:a.id,invoiceId:a.purchaseInvoiceId},
+        ...(a.reversedAt && new Date(a.reversedAt)<=asOfDate ? [{eventDate:a.reversedAt,type:'CREDIT_REVERSAL',debit:Number(a.amount),credit:0,description:`Reversal: ${a.reversalReason}`,allocationId:a.id,invoiceId:a.purchaseInvoiceId}] : []),
+      ]),
     ]
       .sort((a, b) => {
         const byDate =
           new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime();
         if (byDate !== 0) return byDate;
-        return a.type.localeCompare(b.type);
+        return a.type.localeCompare(b.type) || String((a as any).invoiceId||(a as any).paymentId||(a as any).allocationId).localeCompare(String((b as any).invoiceId||(b as any).paymentId||(b as any).allocationId));
       })
       .map((event) => {
         runningBalance = this.money(
@@ -235,6 +263,7 @@ export class PharmacyPurchaseLedgerService {
       distributorGstin: gstin,
       distributorName: invoices[0].distributorName,
       asOfDate: asOfDate.toISOString(),
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       invoices: invoiceRows,
       payments: payments.map((payment: any) => ({
         id: payment.id,
@@ -251,6 +280,7 @@ export class PharmacyPurchaseLedgerService {
           amount: this.money(allocation.amount),
         })),
       })),
+      creditAllocations:creditAllocations.map((a:any)=>({...a,amount:Number(a.amount),reversedAt:a.reversedAt&&new Date(a.reversedAt)<=asOfDate?a.reversedAt:null,reversedBy:a.reversedAt&&new Date(a.reversedAt)<=asOfDate?a.reversedBy:null,reversalReason:a.reversedAt&&new Date(a.reversedAt)<=asOfDate?a.reversalReason:null})),
       runningLedger: events,
     };
   }
@@ -263,11 +293,12 @@ export class PharmacyPurchaseLedgerService {
       this.emptyBucket('90+'),
     ];
 
-    const invoices = await this.findLedgerInvoices(branchId);
+    const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
     for (const invoice of invoices) {
-      const paid = this.sumAllocations(invoice.paymentAllocations);
+      if (invoice.status !== 'STOCK_COMMITTED') throw new BadRequestException('Only posted purchase bills can receive payments');
+      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
       const outstanding = this.outstanding(invoice, paid);
-      if (outstanding <= MONEY_TOLERANCE) continue;
+      if (outstanding <= 0) continue;
 
       const anchorDate = new Date(invoice.dueDate || invoice.invoiceDate);
       const days = Math.max(0, this.daysBetween(anchorDate, asOfDate));
@@ -295,6 +326,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       asOfDate: asOfDate.toISOString(),
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       buckets,
       totalOutstanding: this.money(
         buckets.reduce((sum, bucket) => sum + bucket.amount, 0),
@@ -303,7 +335,7 @@ export class PharmacyPurchaseLedgerService {
   }
 
   async getAlerts(branchId: string, asOfDate = new Date()) {
-    const invoices = await this.findLedgerInvoices(branchId);
+    const invoices = await this.findLedgerInvoices(branchId, undefined, asOfDate);
     const fiscalYearStart = this.fiscalYearStart(asOfDate);
     const groups = this.groupInvoicesByDistributor(invoices);
     const dueToday: any[] = [];
@@ -313,7 +345,7 @@ export class PharmacyPurchaseLedgerService {
     const sevenDaysEnd = this.endOfDay(this.addDays(todayStart, 7));
 
     for (const invoice of invoices) {
-      const paid = this.sumAllocations(invoice.paymentAllocations);
+      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
       const outstanding = this.outstanding(invoice, paid);
       if (outstanding <= MONEY_TOLERANCE || !invoice.dueDate) continue;
 
@@ -353,6 +385,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       asOfDate: asOfDate.toISOString(),
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       dueIn7Days,
       dueToday,
       overdue,
@@ -376,7 +409,7 @@ export class PharmacyPurchaseLedgerService {
       if (!purchaseInvoiceId) {
         throw new BadRequestException('purchaseInvoiceId is required');
       }
-      if (amount <= 0) {
+      if (!Number.isFinite(amount) || amount <= 0) {
         throw new BadRequestException('Allocation amounts must be positive');
       }
       byInvoice.set(
@@ -416,6 +449,7 @@ export class PharmacyPurchaseLedgerService {
           'One or more purchase invoices were not found for this branch',
         );
       }
+      if (invoice.status !== 'STOCK_COMMITTED') throw new BadRequestException('Only posted purchase bills can receive payments');
       if (invoice.branchId !== params.branchId) {
         throw new BadRequestException(
           'Purchase invoice does not belong to this branch',
@@ -430,9 +464,9 @@ export class PharmacyPurchaseLedgerService {
         );
       }
 
-      const paid = this.sumAllocations(invoice.paymentAllocations);
+      const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
       const outstanding = this.outstanding(invoice, paid);
-      if (allocation.amount - outstanding > MONEY_TOLERANCE) {
+      if (Math.round(allocation.amount * 100) > Math.round(outstanding * 100)) {
         throw new BadRequestException(
           `Allocation exceeds outstanding balance for invoice ${invoice.invoiceNumber}`,
         );
@@ -440,27 +474,32 @@ export class PharmacyPurchaseLedgerService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-payables-posted-only
+   * Unposted purchase drafts and OCR-review records MUST NOT contribute to posted supplier dues;
+   * posted bills, allocated payments and finalized supplier credits MUST reconcile to the displayed
+   * outstanding balance.
+   * Acceptance: INV-21. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-ledger-historical-cutoff
+   * As-of balances MUST include only invoices posted/dated, payments effective/recorded, and
+   * credit applications recorded through the cutoff. A reversal after the cutoff MUST NOT
+   * remove an earlier credit. Current creditApplied must not substitute for historical events.
+   */
   private async findLedgerInvoices(
     branchId: string,
     distributorGstin?: string,
-  ) {
-    return (this.prisma as any).pharmacyPurchaseInvoice.findMany({
-      where: {
-        branchId,
-        ...(distributorGstin
-          ? { distributorGstin: distributorGstin.trim().toUpperCase() }
-          : {}),
-        status: { not: 'CANCELLED' },
-      },
-      include: {
-        paymentAllocations: {
-          include: {
-            payment: true,
-          },
-        },
-      },
-      orderBy: [{ distributorName: 'asc' }, { invoiceDate: 'asc' }],
+    asOfDate = new Date(),
+  ): Promise<LedgerInvoice[]> {
+    if(!Number.isFinite(asOfDate.getTime()))throw new BadRequestException('Invalid supplier ledger cutoff');
+    const rows=await (this.prisma as any).pharmacyPurchaseInvoice.findMany({
+      where:{branchId,...(distributorGstin?{distributorGstin:distributorGstin.trim().toUpperCase()}:{}),status:'STOCK_COMMITTED',invoiceDate:{lte:asOfDate},OR:[{stockCommittedAt:{lte:asOfDate}},{stockCommittedAt:null,createdAt:{lte:asOfDate}}]},
+      include:{paymentAllocations:{include:{payment:true}}},orderBy:[{distributorName:'asc'},{invoiceDate:'asc'},{id:'asc'}],
     });
+    const allocations=await (this.prisma as any).inventoryCreditAllocation.findMany({where:{branchId,purchaseInvoiceId:{in:rows.map((r:any)=>r.id)},createdAt:{lte:asOfDate},OR:[{reversedAt:null},{reversedAt:{gt:asOfDate}}]}});
+    return rows.map((invoice:any)=>({...invoice,creditApplied:this.money(allocations.filter((a:any)=>a.purchaseInvoiceId===invoice.id).reduce((n:number,a:any)=>n+Number(a.amount),0)),paymentAllocations:(invoice.paymentAllocations||[]).filter((a:any)=>a.payment&&new Date(a.payment.paymentDate)<=asOfDate&&new Date(a.payment.createdAt||a.payment.paymentDate)<=asOfDate&&new Date(a.createdAt||a.payment.createdAt||a.payment.paymentDate)<=asOfDate)}));
   }
 
   private groupInvoicesByDistributor(invoices: LedgerInvoice[]) {
@@ -479,6 +518,7 @@ export class PharmacyPurchaseLedgerService {
   ) {
     let invoiceTotal = 0;
     let paid = 0;
+    let credits = 0;
     let pendingCount = 0;
     let partialCount = 0;
     let paidCount = 0;
@@ -494,11 +534,12 @@ export class PharmacyPurchaseLedgerService {
 
     for (const invoice of invoices) {
       const invoiceAmount = this.money(invoice.netPayable);
-      const invoicePaid = this.sumAllocations(invoice.paymentAllocations);
+      const invoicePaid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
       const outstanding = this.outstanding(invoice, invoicePaid);
       const status = this.paymentStatus(invoiceAmount, invoicePaid);
       invoiceTotal = this.money(invoiceTotal + invoiceAmount);
-      paid = this.money(paid + invoicePaid);
+      paid = this.money(paid + this.sumAllocations(invoice.paymentAllocations));
+      credits = this.money(credits + Number(invoice.creditApplied || 0));
 
       if (status === 'PENDING') pendingCount += 1;
       if (status === 'PARTIALLY_PAID') partialCount += 1;
@@ -539,7 +580,8 @@ export class PharmacyPurchaseLedgerService {
       invoiceCount: invoices.length,
       invoiceTotal,
       paid,
-      outstanding: this.money(invoiceTotal - paid),
+      credits,
+      outstanding: this.money(invoiceTotal - paid - credits),
       counts: {
         pending: pendingCount,
         partial: partialCount,
@@ -572,7 +614,7 @@ export class PharmacyPurchaseLedgerService {
   }
 
   private invoiceLedgerRow(invoice: LedgerInvoice, asOfDate: Date) {
-    const paid = this.sumAllocations(invoice.paymentAllocations);
+    const paid = this.money(this.sumAllocations(invoice.paymentAllocations) + Number(invoice.creditApplied || 0));
     const outstanding = this.outstanding(invoice, paid);
     return {
       id: invoice.id,
@@ -580,7 +622,8 @@ export class PharmacyPurchaseLedgerService {
       invoiceDate: invoice.invoiceDate,
       dueDate: invoice.dueDate,
       netPayable: this.money(invoice.netPayable),
-      paid,
+      paid: this.sumAllocations(invoice.paymentAllocations),
+      creditApplied: Number(invoice.creditApplied || 0),
       outstanding,
       paymentStatus: this.paymentStatus(invoice.netPayable, paid),
       daysPastDue:

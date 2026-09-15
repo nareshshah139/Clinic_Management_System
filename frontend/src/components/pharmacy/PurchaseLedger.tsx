@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Send,
 } from "lucide-react";
+import { SupplierCreditPanel } from "@/components/inventory/SupplierCreditPanel";
 import { apiClient } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -46,6 +47,7 @@ type DistributorSummary = {
   invoiceCount: number;
   invoiceTotal: number;
   paid: number;
+  creditApplied?: number;
   outstanding: number;
   counts: {
     pending: number;
@@ -80,6 +82,7 @@ type LedgerInvoice = {
   dueDate?: string | null;
   netPayable: number;
   paid: number;
+  creditApplied?: number;
   outstanding: number;
   paymentStatus: PaymentStatus;
 };
@@ -129,12 +132,21 @@ const formatMoney = (value: number) =>
 
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
-export function PurchaseLedger() {
+
+export function PurchaseLedger({
+  initialGstin,
+  canWrite = true,
+  onInvoice,
+}: {
+  initialGstin?: string;
+  canWrite?: boolean;
+  onInvoice?: (id: string) => void;
+} = {}) {
   const [summaries, setSummaries] = useState<DistributorSummary[]>([]);
   const [aging, setAging] = useState<AgingBucket[]>([]);
   const [alerts, setAlerts] = useState<AlertsResponse | null>(null);
   const [ledger, setLedger] = useState<DistributorLedger | null>(null);
-  const [selectedGstin, setSelectedGstin] = useState("");
+  const [selectedGstin, setSelectedGstin] = useState(initialGstin || "");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -247,6 +259,10 @@ export function PurchaseLedger() {
     });
   };
 
+  const [paymentAttempt, setPaymentAttempt] = useState<{
+    payload: string;
+    key: string;
+  } | null>(null);
   const submitPayment = async () => {
     if (!selectedDistributor) return;
     const allocationRows = Object.entries(allocations)
@@ -256,11 +272,31 @@ export function PurchaseLedger() {
       }))
       .filter((allocation) => allocation.amount > 0);
 
+    const signature = JSON.stringify({
+      selectedDistributor,
+      paymentDate,
+      mode,
+      amount,
+      referenceNo,
+      notes,
+      allocationRows,
+    });
+    const attempt =
+      paymentAttempt?.payload === signature
+        ? paymentAttempt
+        : {
+            payload: signature,
+            key: Array.from(crypto.getRandomValues(new Uint8Array(16)), (v) =>
+              v.toString(16).padStart(2, "0"),
+            ).join(""),
+          };
+    setPaymentAttempt(attempt);
     setSaving(true);
     setError("");
     setMessage("");
     try {
       await apiClient.post("/pharmacy/purchase-ledger/payments", {
+        requestKey: attempt.key,
         distributorGstin: selectedDistributor.distributorGstin,
         distributorName: selectedDistributor.distributorName,
         paymentDate,
@@ -271,6 +307,7 @@ export function PurchaseLedger() {
         allocations: allocationRows,
       });
       setMessage("Payment recorded and allocated.");
+      setPaymentAttempt(null);
       setAllocations({});
       setAmount("");
       setReferenceNo("");
@@ -498,6 +535,14 @@ export function PurchaseLedger() {
         </div>
       </div>
 
+      {selectedGstin && (
+        <SupplierCreditPanel
+          key={selectedGstin}
+          supplierGstin={selectedGstin}
+          canWrite={canWrite}
+          onChanged={loadAll}
+        />
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Bulk Payment Allocation</CardTitle>
@@ -597,7 +642,24 @@ export function PurchaseLedger() {
               {outstandingInvoices.map((invoice) => (
                 <TableRow key={invoice.id}>
                   <TableCell>
-                    <div className="font-medium">{invoice.invoiceNumber}</div>
+                    <a
+                      className="font-medium underline"
+                      href={`/dashboard/inventory?area=purchases&view=intake&invoice=${invoice.id}`}
+                      onClick={
+                        onInvoice
+                          ? (e) => {
+                              e.preventDefault();
+                              onInvoice(invoice.id);
+                            }
+                          : undefined
+                      }
+                    >
+                      {invoice.invoiceNumber}
+                    </a>
+                    <p className="text-xs text-muted-foreground">
+                      Cash paid {formatMoney(invoice.paid)} · Credits{" "}
+                      {formatMoney(invoice.creditApplied || 0)}
+                    </p>
                     <div className="text-xs text-gray-500">
                       Due {invoice.dueDate ? invoice.dueDate.slice(0, 10) : "-"}
                     </div>
@@ -663,6 +725,7 @@ export function PurchaseLedger() {
               onClick={() => void submitPayment()}
               disabled={
                 saving ||
+                !canWrite ||
                 !selectedDistributor ||
                 Number(amount || 0) <= 0 ||
                 allocationTotal <= 0 ||

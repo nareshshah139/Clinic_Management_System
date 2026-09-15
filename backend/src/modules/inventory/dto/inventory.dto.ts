@@ -558,6 +558,8 @@ export class UpdatePurchaseOrderDto {
 
 // Supplier DTOs
 export class CreateSupplierDto {
+  @IsOptional() @IsString() drugLicenseNo?: string;
+  @IsOptional() @IsString() foodLicenseNo?: string;
   @IsString()
   name: string;
 
@@ -615,6 +617,8 @@ export class CreateSupplierDto {
 }
 
 export class UpdateSupplierDto {
+  @IsOptional() @IsString() drugLicenseNo?: string;
+  @IsOptional() @IsString() foodLicenseNo?: string;
   @IsString()
   @IsOptional()
   name?: string;

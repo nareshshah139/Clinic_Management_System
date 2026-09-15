@@ -90,7 +90,7 @@ export class PharmacyPurchaseInvoiceService {
   private readonly logger = new Logger(PharmacyPurchaseInvoiceService.name);
   private readonly documentMetadata = {
     id: true, fileName: true, mimeType: true, sizeBytes: true, sha256: true,
-    createdAt: true, purchaseInvoiceId: true,
+    createdAt: true, purchaseInvoiceId: true, uploadedBy: true,
   } as const;
 
   constructor(private prisma: PrismaService) {}
@@ -176,6 +176,13 @@ export class PharmacyPurchaseInvoiceService {
     return draft;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-original-byte-retention
+   * An accepted invoice upload MUST retain the exact original bytes with branch, hash and file
+   * metadata before extraction; OCR failure MUST NOT discard the archived source.
+   * Acceptance: INV-10. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async archiveOriginal(file: Express.Multer.File, branchId: string, userId?: string) {
     if (!file?.buffer?.length) throw new BadRequestException('No invoice file provided');
     const configuredMb = Number(process.env.PHARMACY_PURCHASE_OCR_MAX_FILE_MB || 25);
@@ -199,7 +206,7 @@ export class PharmacyPurchaseInvoiceService {
   async listUnlinkedDocuments(branchId: string) {
     return this.prisma.pharmacyPurchaseInvoiceDocument.findMany({
       where: { branchId, purchaseInvoiceId: null }, orderBy: { createdAt: 'desc' },
-      take: 20, select: this.documentMetadata,
+      select: this.documentMetadata,
     });
   }
 
@@ -276,8 +283,12 @@ export class PharmacyPurchaseInvoiceService {
         });
       }
       extracted.draft = await this.enrichKnownProducts(extracted.draft, branchId);
+      await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
+        userId: sourceDocument.uploadedBy, action: 'OCR_EXTRACTED', newValues: JSON.stringify({ branchId, lineCount: extracted.draft.items.length, sourceMapAvailable: !!sourceMap }) } });
       return { ...extracted, draft: { ...extracted.draft, sourceDocumentId: sourceDocument.id }, sourceDocument };
     } catch (error) {
+      await this.prisma.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoiceDocument', entityId: sourceDocument.id,
+        userId: sourceDocument.uploadedBy, action: 'OCR_FAILED', newValues: JSON.stringify({ branchId, originalRetained: true, error: error instanceof HttpException ? error.message : 'Extraction unavailable' }) } });
       throw new HttpException({
         message: error instanceof HttpException ? error.message : 'Invoice extraction failed. The original upload is saved; retry or enter the invoice details manually.',
         sourceDocument,
@@ -285,7 +296,25 @@ export class PharmacyPurchaseInvoiceService {
     }
   }
 
-  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] multi-page-original-retention
+   * Multi-file intake MUST retain each original byte stream before OCR. The assembled page order
+   * MUST match upload order; all source documents MUST link to the saved invoice before processing.
+   */
+  async extractMany(files: Express.Multer.File[], branchId: string, userId: string, automate = false, receivedDate?: string) {
+    if (!files?.length || files.length > 10 || files.reduce((n,f)=>n+f.size,0)>100*1024*1024) throw new BadRequestException('Choose 1–10 files totalling at most 100 MB');
+    if (files.length === 1) return automate ? this.importFromDocument(files[0],branchId,userId,receivedDate) : this.extractDraftFromDocument(files[0],branchId,userId);
+    const originals=[] as any[];for(const file of files)originals.push(await this.archiveOriginal(file,branchId,userId));
+    if(originals.some(d=>d.purchaseInvoiceId))throw new ConflictException('A selected original is already linked to an invoice. Open that invoice from the register.');
+    const PDFDocument=require('pdfkit');const pdf=new PDFDocument({autoFirstPage:false,info:{Title:'Assembled invoice pages'}}),chunks:Buffer[]=[];
+    const complete=new Promise<Buffer>((resolve,reject)=>{pdf.on('data',(c:Buffer)=>chunks.push(c));pdf.on('end',()=>resolve(Buffer.concat(chunks)));pdf.on('error',reject)});
+    for(const file of files){const pages=await this.buildOcrImageDataUrls(file);for(const dataUrl of pages.imageDataUrls){const data=Buffer.from(dataUrl.split(',')[1],'base64'),meta=await sharp(data).metadata();const width=meta.width||1200,height=meta.height||1600;pdf.addPage({size:[width,height],margin:0});pdf.image(data,0,0,{width,height});}}
+    pdf.end();const buffer=await complete;const combined={...files[0],originalname:'Combined invoice pages.pdf',mimetype:'application/pdf',buffer,size:buffer.length};
+    const result=automate?await this.importFromDocument(combined,branchId,userId,receivedDate,originals.map(d=>d.id)):await this.extractDraftFromDocument(combined,branchId,userId);
+    return {...result,draft:{...result.draft,sourceDocumentIds:originals.map(d=>d.id)},sourceDocuments:originals};
+  }
+
+  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string, sourceDocumentIds: string[] = []) {
     const sourceDocument = await this.archiveOriginal(file, branchId, userId);
     // A lost HTTP response must not trigger a new OCR interpretation of the same
     // already-linked bytes. Reopen the persisted invoice, including on retries.
@@ -295,7 +324,7 @@ export class PharmacyPurchaseInvoiceService {
     }
     const extracted = await this.extractArchivedDocument(file, branchId, sourceDocument);
     // Receipt date is supplied by the operator; an invoice date is not proof of receipt.
-    const draft = { ...extracted.draft, goodsReceivedDate: goodsReceivedDate || undefined };
+    const draft = { ...extracted.draft, sourceDocumentIds, goodsReceivedDate: goodsReceivedDate || undefined };
     const dto = plainToInstance(CreatePharmacyPurchaseInvoiceDto, draft);
     const errors = await this.automaticSaveErrors(dto);
     if (errors.length) {
@@ -375,11 +404,11 @@ export class PharmacyPurchaseInvoiceService {
           for (const [index, item] of dto.items.entries()) {
             const label = `Line ${index + 1}`;
             issues.push(...(item.ocrFlags || []).map((flag) => `${label}: ${flag}`));
-            if (dto.source === 'OCR' && (item.ocrConfidence === undefined || item.ocrConfidence < 0.98)) {
+            if (['OCR', 'GMAIL'].includes(dto.source || '') && (item.ocrConfidence === undefined || item.ocrConfidence < 0.98)) {
               issues.push(`${label}: OCR confidence must be at least 98% for automatic stock intake; review this line manually.`);
             }
             const expectedTaxable = this.money(item.quantityPurchased * item.purchaseRate *
-              (1 - (item.discountPercent + (item.specialDiscountPercent || 0)) / 100));
+              (1 - (item.discountPercent + (item.specialDiscountPercent || 0)) / 100) - (item.schemeAmount || 0));
             if (!this.withinTolerance(expectedTaxable, item.taxableAmount)) {
               issues.push(`${label}: quantity, rate and discounts do not reconcile with the taxable amount.`);
             }
@@ -416,6 +445,7 @@ export class PharmacyPurchaseInvoiceService {
         await tx.pharmacyPurchaseInvoice.update({
           where: { id }, data: { status: 'REVIEWED', reconciliationIssues: null, unresolvedOcrFlags: 0 },
         });
+        await this.purchaseAudit(tx, id, branchId, userId, 'AUTOMATIC_REVIEWED', { status: invoice.status }, { status: 'REVIEWED', unresolvedOcrFlags: 0 });
         const committed = await this.commitStockInTransaction(tx, id, branchId, userId);
         return this.automationResult(committed, 'STOCK_COMMITTED');
       }, { timeout: 30000, isolationLevel: 'Serializable' });
@@ -474,6 +504,13 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   // Real OCR without database access; matching and writes remain separate steps.
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-ocr-completeness-before-auto
+   * OCR extraction MUST preserve all detected invoice rows and surface unreadable or disagreeing
+   * values as review issues; model confidence alone MUST NOT authorize stock posting.
+   * Acceptance: INV-11. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async extractDocumentDraft(file: Express.Multer.File, branchId: string) {
     if (!file || !file.buffer || file.size <= 0) {
       throw new BadRequestException('No invoice file provided');
@@ -561,6 +598,13 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-match-identity-before-stock
+   * A purchase line MUST NOT be automatically mapped to a different product strength, form, pack or
+   * branch; ambiguous matches MUST require an explicit reviewer selection.
+   * Acceptance: INV-13. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async confirmMasterRecord(
     dto: ConfirmPharmacyPurchaseMasterDto,
     branchId: string,
@@ -683,14 +727,16 @@ export class PharmacyPurchaseInvoiceService {
           data: this.draftData(dto, branchId, userId),
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
-        if (!dto.sourceDocumentId) return created;
-        await this.linkOriginal(tx, dto.sourceDocumentId, created.id, branchId);
+        const sources=[...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[];
+        await this.purchaseAudit(tx, created.id, branchId, userId, 'CREATED', null, created);
+        if(!sources.length)return created;
+        for (const sourceId of sources) await this.linkOriginal(tx, sourceId, created.id, branchId);
         return tx.pharmacyPurchaseInvoice.findFirst({
           where: { id: created.id, branchId },
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
       };
-      const created = dto.sourceDocumentId ? await this.prisma.$transaction(create) : await create(prismaAny);
+      const created = await this.prisma.$transaction(create);
 
       return this.formatPurchaseInvoice(created);
     } catch (error: any) {
@@ -709,6 +755,7 @@ export class PharmacyPurchaseInvoiceService {
     return {
       branchId,
       createdBy: userId,
+      workflowReceiptId: dto.workflowReceiptId || null,
       distributorName: dto.distributorName.trim(),
       distributorAddress: (this.emptyToUndefined(dto.distributorAddress) ?? null),
       distributorGstin: dto.distributorGstin.trim().toUpperCase(),
@@ -759,24 +806,32 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
-  async updateDraft(id: string, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-draft-stale-write-rejected
+   * An expectedUpdatedAt value MUST match the saved draft before replacing lines; reviewed or
+   * posted purchases MUST NOT be edited here. The correction and its audit record commit together.
+   */
+  async updateDraft(id: string, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, userId?: string) {
     const { createdBy, ...data } = this.draftData(dto, branchId);
     try {
       return await this.prisma.$transaction(async (tx: any) => {
+        const before = await tx.pharmacyPurchaseInvoice.findFirst({ where: { id, branchId }, include: { items: true } });
         // Take a row lock before replacing lines; reviewed/committed bills are immutable here.
         const locked = await tx.pharmacyPurchaseInvoice.updateMany({
-          where: { id, branchId, status: { in: ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'] } },
+          where: { id, branchId, status: { in: ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'] },
+            ...(dto.expectedUpdatedAt ? { updatedAt: new Date(dto.expectedUpdatedAt) } : {}) },
           data: { updatedAt: new Date() },
         });
         if (locked.count !== 1) {
           throw new ConflictException('This invoice is no longer an editable draft. Refresh the purchase invoices.');
         }
-        if (dto.sourceDocumentId) await this.linkOriginal(tx, dto.sourceDocumentId, id, branchId);
+        for (const sourceId of [...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[]) await this.linkOriginal(tx, sourceId, id, branchId);
         const updated = await tx.pharmacyPurchaseInvoice.update({
           where: { id },
           data: { ...data, reconciliationIssues: data.reconciliationIssues ?? null, items: { deleteMany: {}, create: data.items.create } },
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
+        await this.purchaseAudit(tx, id, branchId, userId, 'DRAFT_CORRECTED', before, updated);
         return this.formatPurchaseInvoice(updated);
       });
     } catch (error: any) {
@@ -791,11 +846,24 @@ export class PharmacyPurchaseInvoiceService {
     const prismaAny = this.prisma as any;
     const page = this.toPositiveInt(query.page, 1);
     const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
+    const where = this.purchaseRegisterWhere(query, branchId);
+    const orderBy: any = {
+      [this.normalizeSortBy(query.sortBy)]: query.sortOrder === 'asc' ? 'asc' : 'desc',
+    };
+    const [data, total] = await Promise.all([
+      prismaAny.pharmacyPurchaseInvoice.findMany({ where, skip: (page - 1) * limit, take: limit,
+        orderBy: [orderBy, { id: 'asc' }], include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } } }),
+      prismaAny.pharmacyPurchaseInvoice.count({ where }),
+    ]);
+    return { data: data.map((invoice: any) => this.formatPurchaseInvoice(invoice)), pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+  }
+
+  purchaseRegisterWhere(query: QueryPharmacyPurchaseInvoiceDto, branchId: string) {
     const startDate = query.startDate
       ? this.parseDate(query.startDate, 'startDate')
       : undefined;
     const endDate = query.endDate
-      ? this.parseDate(query.endDate, 'endDate')
+      ? this.endOfDay(this.parseDate(query.endDate, 'endDate'))
       : undefined;
 
     if (startDate && endDate && startDate > endDate) {
@@ -803,48 +871,24 @@ export class PharmacyPurchaseInvoiceService {
     }
 
     const where: any = { branchId };
+    if (query.search?.trim()) {
+      const search = query.search.trim();
+      where.OR = search.startsWith('purchase:') ? [{ id: search.slice('purchase:'.length) }] :
+        [{ invoiceNumber: { contains: search, mode: 'insensitive' } }, { distributorName: { contains: search, mode: 'insensitive' } }];
+    }
+    if (query.source) where.source = query.source;
     if (query.distributorGstin) {
       where.distributorGstin = query.distributorGstin.trim().toUpperCase();
     }
-    if (query.status) {
-      where.status = query.status;
-    }
+    if (query.status) { where.status = query.status; }
+    if (query.unposted === 'true') where.status = {notIn:['STOCK_COMMITTED','CANCELLED']};
     if (startDate || endDate) {
       where.invoiceDate = {};
       if (startDate) where.invoiceDate.gte = startDate;
       if (endDate) where.invoiceDate.lte = endDate;
     }
 
-    const orderBy: any = {
-      [this.normalizeSortBy(query.sortBy)]:
-        query.sortOrder === 'asc' ? 'asc' : 'desc',
-    };
-
-    const [data, total] = await Promise.all([
-      prismaAny.pharmacyPurchaseInvoice.findMany({
-        where,
-        skip: (page - 1) * limit,
-        take: limit,
-        orderBy,
-        include: {
-          documents: { select: this.documentMetadata },
-          items: {
-            orderBy: { lineNumber: 'asc' },
-          },
-        },
-      }),
-      prismaAny.pharmacyPurchaseInvoice.count({ where }),
-    ]);
-
-    return {
-      data: data.map((invoice: any) => this.formatPurchaseInvoice(invoice)),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit),
-      },
-    };
+    return where;
   }
 
   async findOne(id: string, branchId: string) {
@@ -866,6 +910,12 @@ export class PharmacyPurchaseInvoiceService {
     return this.formatPurchaseInvoice(invoice);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation] purchase-analytics-compatible-posted-set
+   * Totals and complete rankings MUST use the same filtered posted invoice lines. Product and
+   * discount comparisons MUST preserve master identity, pack and declared stock unit. A blended
+   * effective unit cost across incompatible product bases MUST be unknown rather than numeric.
+   */
   async getDistributorAnalytics(
     query: QueryPharmacyPurchaseAnalyticsDto,
     branchId: string,
@@ -895,7 +945,7 @@ export class PharmacyPurchaseInvoiceService {
 
     const where: any = {
       branchId,
-      status: { in: ['REVIEWED', 'STOCK_COMMITTED'] },
+      status: 'STOCK_COMMITTED',
     };
     if (query.distributorGstin?.trim()) {
       where.distributorGstin = query.distributorGstin.trim().toUpperCase();
@@ -922,8 +972,30 @@ export class PharmacyPurchaseInvoiceService {
       },
     });
 
+    // Read identity from the posted mapping, not a fresh name match against today's catalog.
+    const invoiceIds = invoices.map((invoice: any) => invoice.id);
+    const mappings = invoiceIds.length ? await prismaAny.auditLog.findMany({
+      where: { entity: 'PharmacyPurchaseInvoice', entityId: { in: invoiceIds }, action: 'PRODUCT_MAPPED' },
+      select: { entityId: true, newValues: true }, orderBy: { timestamp: 'asc' },
+    }) : [];
+    const masterByLine = new Map<string, string>();
+    for (const mapping of mappings) {
+      try {
+        const value = typeof mapping.newValues === 'string' ? JSON.parse(mapping.newValues) : mapping.newValues;
+        if (value?.branchId === branchId && value.lineId && value.drugId) masterByLine.set(`${mapping.entityId}:${value.lineId}`, value.drugId);
+      } catch { /* A legacy or malformed mapping cannot establish product identity. */ }
+    }
+    const inventoryIds = [...new Set(invoices.flatMap((invoice: any) => invoice.items.map((item: any) => item.inventoryItemId).filter(Boolean)))];
+    const inventory = inventoryIds.length ? await prismaAny.inventoryItem.findMany({
+      where: { branchId, id: { in: inventoryIds } }, select: { id: true, drugs: { select: { id: true } } },
+    }) : [];
+    const masterByInventory = new Map<string, string>(inventory.filter((item: any) => item.drugs?.length === 1).map((item: any) => [item.id, item.drugs[0].id]));
+    for (const invoice of invoices) for (const item of invoice.items || []) {
+      const drugId = masterByLine.get(`${invoice.id}:${item.id}`) || masterByInventory.get(item.inventoryItemId);
+      item.productIdentityKey = drugId ? `master:${drugId}` : item.inventoryItemId ? `inventory:${item.inventoryItemId}` : `unresolved:${invoice.id}:${item.id}`;
+      item.productIdentityKnown = !!drugId;
+    }
     const lines = this.toAnalyticsLines(invoices, itemWhere);
-    const limit = Math.min(this.toPositiveInt(query.limit, 25), 100);
     const minDiscountDropPercent = this.money(
       query.minDiscountDropPercent ?? 5,
     );
@@ -935,25 +1007,34 @@ export class PharmacyPurchaseInvoiceService {
         distributorGstin: query.distributorGstin?.trim().toUpperCase(),
         productName: query.productName?.trim(),
         hsnCode: query.hsnCode?.trim(),
-        includedStatuses: ['REVIEWED', 'STOCK_COMMITTED'],
+        includedStatuses: ['STOCK_COMMITTED'],
         minDiscountDropPercent,
       },
+      rankingScope: 'All filtered posted purchase lines; no ranked rows omitted',
       totals: this.buildPurchaseAnalyticsTotals(lines),
-      distributors: this.buildDistributorAnalytics(lines).slice(0, limit),
-      products: this.buildProductDistributorAnalytics(lines).slice(0, limit),
+      distributors: this.buildDistributorAnalytics(lines),
+      products: this.buildProductDistributorAnalytics(lines),
       discountDropAlerts: this.buildDiscountDropAlerts(
         lines,
         minDiscountDropPercent,
-      ).slice(0, limit),
+      ),
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-review-blockers-enforced
+   * Review MUST reject unresolved OCR flags, unreconciled totals or missing receipt details even
+   * when invoked directly through the API; saving a draft MUST NOT count as resolving those issues.
+   * Acceptance: INV-15. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async markReviewed(
     id: string,
     dto: ReviewPharmacyPurchaseInvoiceDto,
     branchId: string,
+    userId?: string,
   ) {
-    const prismaAny = this.prisma as any;
+    return this.prisma.$transaction(async (prismaAny: any) => {
     const invoice = await prismaAny.pharmacyPurchaseInvoice.findFirst({
       where: { id, branchId },
       include: { documents: { select: this.documentMetadata }, items: true },
@@ -961,6 +1042,9 @@ export class PharmacyPurchaseInvoiceService {
 
     if (!invoice) {
       throw new NotFoundException('Purchase invoice not found');
+    }
+    if (invoice.status === 'STOCK_COMMITTED' || invoice.stockCommittedAt) {
+      throw new ConflictException('This purchase is already posted. Use a linked return and replacement bill to correct it.');
     }
     if (invoice.status === 'CANCELLED') {
       throw new BadRequestException(
@@ -1015,9 +1099,19 @@ export class PharmacyPurchaseInvoiceService {
       },
     });
 
+    await this.purchaseAudit(prismaAny, id, branchId, userId, 'REVIEWED', invoice, updated);
     return this.formatPurchaseInvoice(updated);
+    });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;target] purchase-commit-once-atomic
+   * A validated purchase receipt MUST atomically create its batch stock effects and posted invoice
+   * state at most once; retries or a failure partway through MUST NOT duplicate or partially add
+   * stock.
+   * Acceptance: INV-17. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async commitStock(id: string, branchId: string, userId?: string) {
     if (!userId) {
       throw new BadRequestException(
@@ -1025,9 +1119,18 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
-    return this.prisma.$transaction((tx) => this.commitStockInTransaction(tx, id, branchId, userId));
+    for (let attempt = 0; ; attempt++) {
+      try { return await this.prisma.$transaction((tx) => this.commitStockInTransaction(tx, id, branchId, userId), { isolationLevel: 'Serializable', timeout: 30000 }); }
+      catch (error) { if ((error as any)?.code === 'P2034' && attempt < 2) continue; throw error; }
+    }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] receipt-linked-purchase-bill-only
+   * Billing a posted inward challan MUST match each product, batch, expiry, MRP and paid/free
+   * stock unit exactly once, add zero additional stock, and retain the verified invoice rate and
+   * tax-exclusive cost per received paid-plus-free unit. The original receipt effects stay intact.
+   */
   private async commitStockInTransaction(tx: any, id: string, branchId: string, userId: string) {
     const invoice = await tx.pharmacyPurchaseInvoice.findFirst({
       where: { id, branchId },
@@ -1086,6 +1189,14 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
+    let receipt: any = null;
+    if (invoice.workflowReceiptId) {
+      receipt = await tx.inventoryWorkflowDocument.findFirst({where:{id:invoice.workflowReceiptId,branchId,kind:'INWARD_CHALLAN',status:'POSTED'}});
+      if (!receipt || receipt.supplierGstin !== invoice.distributorGstin) throw new BadRequestException('Select a posted inward challan for this supplier');
+      if (await tx.pharmacyPurchaseInvoice.count({where:{branchId,workflowReceiptId:receipt.id,status:'STOCK_COMMITTED',id:{not:id}}})) throw new ConflictException('This inward challan is already billed');
+      if (receipt.payload.lines.length !== invoice.items.length) throw new BadRequestException('The bill must contain every inward challan line exactly once');
+    }
+    const receivedIds = new Set<string>();
     const committedItems: Array<{
       lineNumber: number;
       productName: string;
@@ -1100,17 +1211,38 @@ export class PharmacyPurchaseInvoiceService {
 
     for (const item of invoice.items) {
       const drug = await this.resolvePurchaseLineDrug(tx, item, branchId);
-      const inventoryItem = await this.applyPurchaseLineToInventory(
-        tx,
-        invoice,
-        item,
-        drug,
-        branchId,
-      );
+      await this.purchaseAudit(tx, id, branchId, userId, 'PRODUCT_MAPPED',
+        { lineId: item.id, productName: item.productName, packSize: item.packSize, source: item.ocrSourceRef },
+        { lineId: item.id, drugId: drug.id, productName: drug.name, packSize: drug.packSizeLabel });
+      let inventoryItem: any;
+      if (receipt) {
+        const line = receipt.payload.lines.find((l:any)=>!receivedIds.has(l.id) && normalizedIdentity(l.name)===normalizedIdentity(item.productName) && l.batchNumber===item.batchNumber && l.quantity===item.quantityPurchased && (l.freeQuantity||0)===item.freeQuantity);
+        if (!line) throw new BadRequestException('Bill product, batch, paid and free quantities must match the inward challan');
+        inventoryItem = await tx.inventoryItem.findFirst({where:{id:line.inventoryId,branchId}});
+        if (!inventoryItem || inventoryItem.unit!==this.mapUnitType(item.packUnitType,item.packSize) || !this.isSamePurchaseBatch(inventoryItem,item,this.getExpiryDate(item))) throw new BadRequestException('Inward challan expiry, MRP or quantity unit differs from the bill');
+        receivedIds.add(line.id);
+        const quantity = this.getPurchaseStockQuantities(item).totalQuantity;
+        const previousMetadata = (() => { try { return JSON.parse(inventoryItem.metadata || '{}'); } catch { return {}; } })();
+        const priceBasis = { invoiceId: id, receiptId: receipt.id, lineId: item.id, quantity,
+          purchaseRate: this.money(item.purchaseRate), taxableAmount: this.money(item.taxableAmount),
+          landingCostPerStockUnit: quantity ? this.money(item.taxableAmount / quantity) : 0,
+          basis: 'Saved bill taxable amount / received paid + free stock units; recoverable GST excluded' };
+        await tx.inventoryItem.update({where:{id:inventoryItem.id},data:{drugs:{connect:{id:drug.id}},
+          costPrice: this.money(item.purchaseRate), supplier: invoice.distributorName,
+          gstRate: this.money(item.cgstPercent + item.sgstPercent + item.igstPercent),
+          metadata: JSON.stringify({ ...previousMetadata, priceBasis: 'Purchase rate per stock unit',
+            landingCostPerStockUnit: priceBasis.landingCostPerStockUnit, landingCostBasis: priceBasis.basis,
+            lastBilledPurchase: priceBasis }),
+        }});
+        await this.purchaseAudit(tx, id, branchId, userId, 'RECEIPT_BILL_PRICE_APPLIED',
+          { inventoryId: inventoryItem.id, costPrice: inventoryItem.costPrice, metadata: previousMetadata },
+          { inventoryId: inventoryItem.id, costPrice: item.purchaseRate, priceBasis, stockEffect: 0 });
+      } else inventoryItem = await this.applyPurchaseLineToInventory(tx,invoice,item,drug,branchId);
       const quantities = this.getPurchaseStockQuantities(item);
       const expiryDate = this.getExpiryDate(item);
 
-      await this.createPurchaseStockTransaction(
+      await tx.pharmacyPurchaseInvoiceItem.update({where:{id:item.id},data:{inventoryItemId:inventoryItem.id}});
+      if (!receipt) await this.createPurchaseStockTransaction(
         tx,
         invoice,
         item,
@@ -1127,7 +1259,7 @@ export class PharmacyPurchaseInvoiceService {
         productName: item.productName,
         drugId: drug.id,
         inventoryItemId: inventoryItem.id,
-        quantityCommitted: quantities.totalQuantity,
+        quantityCommitted: receipt ? 0 : quantities.totalQuantity,
         purchasedQuantity: quantities.purchasedQuantity,
         freeQuantity: quantities.freeQuantity,
         batchNumber: item.batchNumber,
@@ -1151,10 +1283,17 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
+    await this.purchaseAudit(tx, id, branchId, userId, 'STOCK_COMMITTED', invoice, { ...updated, committedItems });
     return {
       ...this.formatPurchaseInvoice(updated),
       committedItems,
     };
+  }
+
+  private async purchaseAudit(tx: any, id: string, branchId: string, userId: string | undefined, action: string, before: any, after: any) {
+    const snapshot = (value: any) => value == null ? null : JSON.stringify({ branchId, ...value }, (key, child) => key === 'documents' || key === 'data' ? undefined : child);
+    await tx.auditLog.create({ data: { entity: 'PharmacyPurchaseInvoice', entityId: id, action,
+      userId, oldValues: snapshot(before), newValues: snapshot(after) } });
   }
 
   private assertPurchaseInvoiceCanCommit(invoice: any): void {
@@ -1209,6 +1348,7 @@ export class PharmacyPurchaseInvoiceService {
   private toAnalyticsLines(invoices: any[], itemWhere: any): AnalyticsLine[] {
     const lines: AnalyticsLine[] = [];
     for (const invoice of invoices) {
+      if (invoice.status !== 'STOCK_COMMITTED') continue;
       for (const item of invoice.items || []) {
         if (!this.matchesAnalyticsItemFilter(item, itemWhere)) continue;
         const purchasedQuantity = Number(item.quantityPurchased);
@@ -1246,6 +1386,15 @@ export class PharmacyPurchaseInvoiceService {
     return true;
   }
 
+  private analyticsProductBasis(item: any): string {
+    return JSON.stringify([
+      item.productIdentityKey,
+      canonicalPurchasePack(item.packSize || '', item.packUnitType || ''),
+      normalizedIdentity(item.packUnitType || ''),
+      item.hsnCode || '',
+    ]);
+  }
+
   private buildPurchaseAnalyticsTotals(lines: AnalyticsLine[]) {
     const invoiceIds = new Set(lines.map((line) => line.invoice.id));
     const taxableAmount = this.sum(lines, (line) => line.taxableAmount);
@@ -1264,7 +1413,11 @@ export class PharmacyPurchaseInvoiceService {
       freeQuantity,
       totalQuantity,
       freeQuantityRatioPercent: this.percent(freeQuantity, totalQuantity),
-      effectiveUnitCost: this.unitCost(taxableAmount, totalQuantity),
+      effectiveUnitCost: lines.length && lines.every(line => line.item.productIdentityKnown) &&
+        new Set(lines.map(line => this.analyticsProductBasis(line.item))).size === 1
+          ? this.unitCost(taxableAmount, totalQuantity) : null,
+      unitCostBasis: 'Taxable cost / paid plus free declared stock units; only one verified product, pack and unit basis',
+      compatibleUnitBasis: lines.length > 0 && lines.every(line => line.item.productIdentityKnown) && new Set(lines.map(line => this.analyticsProductBasis(line.item))).size === 1,
       averageDiscountPercent: this.weightedAverage(
         lines,
         (line) => line.discountPercent,
@@ -1276,7 +1429,7 @@ export class PharmacyPurchaseInvoiceService {
   private buildDistributorAnalytics(lines: AnalyticsLine[]) {
     const groups = new Map<string, AnalyticsLine[]>();
     for (const line of lines) {
-      const key = `${line.invoice.distributorGstin}|${line.invoice.distributorName}`;
+      const key = line.invoice.distributorGstin;
       groups.set(key, [...(groups.get(key) || []), line]);
     }
 
@@ -1310,13 +1463,7 @@ export class PharmacyPurchaseInvoiceService {
   private buildProductDistributorAnalytics(lines: AnalyticsLine[]) {
     const groups = new Map<string, AnalyticsLine[]>();
     for (const line of lines) {
-      const key = [
-        line.invoice.distributorGstin,
-        line.item.productName,
-        line.item.manufacturer,
-        line.item.packSize,
-        line.item.hsnCode,
-      ].join('|');
+      const key = JSON.stringify([line.invoice.distributorGstin, this.analyticsProductBasis(line.item)]);
       groups.set(key, [...(groups.get(key) || []), line]);
     }
 
@@ -1330,6 +1477,9 @@ export class PharmacyPurchaseInvoiceService {
           productName: sample.item.productName,
           manufacturer: sample.item.manufacturer,
           packSize: sample.item.packSize,
+          packUnitType: sample.item.packUnitType,
+          productIdentityKey: sample.item.productIdentityKey,
+          productIdentityKnown: sample.item.productIdentityKnown,
           hsnCode: sample.item.hsnCode,
           invoiceCount: totals.invoiceCount,
           purchasedQuantity: totals.purchasedQuantity,
@@ -1354,12 +1504,8 @@ export class PharmacyPurchaseInvoiceService {
   ) {
     const groups = new Map<string, AnalyticsLine[]>();
     for (const line of lines) {
-      const key = [
-        line.invoice.distributorGstin,
-        line.item.productName,
-        line.item.manufacturer,
-        line.item.packSize,
-      ].join('|');
+      if (!line.item.productIdentityKnown) continue;
+      const key = JSON.stringify([line.invoice.distributorGstin, this.analyticsProductBasis(line.item)]);
       groups.set(key, [...(groups.get(key) || []), line]);
     }
 
@@ -1389,6 +1535,8 @@ export class PharmacyPurchaseInvoiceService {
           productName: latest.item.productName,
           manufacturer: latest.item.manufacturer,
           packSize: latest.item.packSize,
+          packUnitType: latest.item.packUnitType,
+          productIdentityKey: latest.item.productIdentityKey,
           previousInvoiceNumber: previous.invoice.invoiceNumber,
           latestInvoiceNumber: latest.invoice.invoiceNumber,
           previousInvoiceDate: previous.invoice.invoiceDate,
@@ -1495,6 +1643,8 @@ export class PharmacyPurchaseInvoiceService {
         expiryDate: true,
         mrp: true,
         status: true,
+        metadata: true,
+        unit: true,
       },
     });
 
@@ -1503,6 +1653,9 @@ export class PharmacyPurchaseInvoiceService {
     );
 
     if (existingBatch) {
+      if (existingBatch.unit !== this.mapUnitType(item.packUnitType, item.packSize)) {
+        throw new BadRequestException(`${this.lineLabel(item)}: the saved batch stock unit differs from the invoice. Correct the declared unit before posting.`);
+      }
       if (existingBatch.status !== 'ACTIVE') {
         throw new BadRequestException(
           `${this.lineLabel(item)}: matching inventory batch is not active`,
@@ -1514,6 +1667,7 @@ export class PharmacyPurchaseInvoiceService {
       return tx.inventoryItem.update({
         where: { id: existingBatch.id },
         data: {
+          metadata: JSON.stringify({ ...(() => {try{return JSON.parse(existingBatch.metadata||'{}')}catch{return {}}})(), priceBasis:'Purchase rate per stock unit', landingCostPerStockUnit:quantities.totalQuantity ? this.money(item.taxableAmount/quantities.totalQuantity) : 0 }),
           ...purchaseInventoryClassification(drug),
           category: drug.category,
           genericName: drug.composition1,
@@ -1543,6 +1697,7 @@ export class PharmacyPurchaseInvoiceService {
       data: {
         branchId,
         name: drug.name,
+        metadata: JSON.stringify({priceBasis:'Purchase rate per stock unit',landingCostPerStockUnit:quantities.totalQuantity ? this.money(item.taxableAmount/quantities.totalQuantity) : 0}),
         genericName: drug.composition1,
         brandName: drug.name,
         ...purchaseInventoryClassification(drug),
@@ -1604,6 +1759,7 @@ export class PharmacyPurchaseInvoiceService {
         userId,
         type: 'PURCHASE',
         quantity: quantities.totalQuantity,
+        quantityDelta: quantities.totalQuantity,
         unitPrice: this.money(effectiveUnitCost),
         totalAmount: this.money(effectiveUnitCost * quantities.totalQuantity),
         reference: stockCommitReference,
@@ -1699,7 +1855,27 @@ export class PharmacyPurchaseInvoiceService {
     return 'IN_STOCK';
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;calculation] purchase-declared-stock-unit-precedence
+   * A recognized explicit stock unit MUST determine the inventory unit before pack-size
+   * inference. Pack contents such as ML or GM MUST NOT override Pack, Tube, Vial, Box,
+   * or another declared unit. Mapping MUST NOT rescale paid/free quantities or rewrite
+   * historical batches; incompatible existing batch units remain blocking errors.
+   */
   private mapUnitType(packUnitType?: string, packSize?: string): string {
+    const declared = String(packUnitType ?? '').trim().toLowerCase();
+    const units: Record<string, string> = {
+      strip: 'STRIPS', strips: 'STRIPS', bottle: 'BOTTLES', bottles: 'BOTTLES',
+      tube: 'TUBES', tubes: 'TUBES', vial: 'VIALS', vials: 'VIALS',
+      amp: 'AMPOULES', ampoule: 'AMPOULES', ampoules: 'AMPOULES',
+      ampule: 'AMPOULES', ampules: 'AMPOULES', syringe: 'SYRINGES', syringes: 'SYRINGES',
+      kit: 'KITS', kits: 'KITS', box: 'BOXES', boxes: 'BOXES', pack: 'PACKS', packs: 'PACKS',
+      piece: 'PIECES', pieces: 'PIECES', tablet: 'PIECES', tablets: 'PIECES',
+      capsule: 'PIECES', capsules: 'PIECES', unit: 'PIECES', units: 'PIECES',
+    };
+    if (Object.hasOwn(units, declared)) return units[declared];
+
+    // Preserve legacy inference only when no recognized stock unit was declared.
     const normalized = `${packUnitType ?? ''} ${packSize ?? ''}`.toLowerCase();
     if (normalized.includes('strip')) return 'STRIPS';
     if (normalized.includes('bottle') || normalized.includes('ml')) {
@@ -2270,6 +2446,7 @@ export class PharmacyPurchaseInvoiceService {
         this.optionalMoney(raw?.discountPercent ?? raw?.discount) ?? 0,
       specialDiscountPercent:
         this.optionalMoney(raw?.specialDiscountPercent) ?? 0,
+      schemeAmount: this.optionalMoney(raw?.schemeAmount) ?? 0,
       purchaseRate,
       taxableAmount,
       cgstPercent,
@@ -2557,7 +2734,7 @@ export class PharmacyPurchaseInvoiceService {
       issues.push(`${lineLabel}: purchase stock quantities must be whole numbers`);
     }
     const expectedTaxable = this.money(quantityPurchased * item.purchaseRate *
-      (1 - (item.discountPercent + (item.specialDiscountPercent || 0)) / 100));
+      (1 - (item.discountPercent + (item.specialDiscountPercent || 0)) / 100) - (item.schemeAmount || 0));
     if (!this.withinTolerance(expectedTaxable, item.taxableAmount)) {
       issues.push(`${lineLabel}: quantity, rate and discounts do not reconcile with the taxable amount.`);
     }
@@ -2618,6 +2795,7 @@ export class PharmacyPurchaseInvoiceService {
       oldMrp: item.oldMrp === undefined ? undefined : this.money(item.oldMrp),
       discountPercent: this.money(item.discountPercent),
       specialDiscountPercent: this.money(item.specialDiscountPercent),
+      schemeAmount: this.money(item.schemeAmount),
       purchaseRate: this.money(item.purchaseRate),
       taxableAmount: this.money(item.taxableAmount),
       cgstPercent: this.money(item.cgstPercent),
@@ -2659,6 +2837,13 @@ export class PharmacyPurchaseInvoiceService {
       ocrFlags,
       reconciliationIssues,
       items,
+      ...(status === 'STOCK_COMMITTED' && items ? { committedItems: items.filter((item: any) => item.inventoryItemId).map((item: any) => ({
+        lineNumber: item.lineNumber, productName: item.productName, drugId: item.matchedDrugId,
+        inventoryItemId: item.inventoryItemId, batchNumber: item.batchNumber,
+        purchasedQuantity: Number(item.quantityPurchased), freeQuantity: Number(item.freeQuantity || 0),
+        quantityCommitted: invoice.workflowReceiptId ? 0 : Number(item.quantityPurchased) + Number(item.freeQuantity || 0),
+        expiryDate: item.expiryDate || null,
+      })) } : {}),
     };
   }
 

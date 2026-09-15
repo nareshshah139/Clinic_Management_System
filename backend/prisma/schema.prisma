@@ -859,6 +859,7 @@ model InventoryItem {
   packSize             Int?
   packUnit             String?
   currentStock         Int                @default(0)
+  heldStock            Int                @default(0)
   minStockLevel        Int?
   maxStockLevel        Int?
   reorderLevel         Int?
@@ -896,6 +897,7 @@ model StockTransaction {
   userId      String
   type        TransactionType
   quantity    Int
+  quantityDelta Int?
   unitPrice   Float
   totalAmount Float
   reference   String?
@@ -946,6 +948,8 @@ model Supplier {
   pincode       String?
   gstNumber     String?
   panNumber     String?
+  drugLicenseNo String?
+  foodLicenseNo String?
   bankDetails   String?
   paymentTerms  String?
   notes         String?
@@ -1356,6 +1360,8 @@ model PharmacyPurchaseInvoice {
   urcCode                String?
   handwrittenNotes       String?
   source                 String                        @default("MANUAL")
+  actionVersion          Int                           @default(1)
+  actionMetadata         Json?
   status                 PharmacyPurchaseInvoiceStatus @default(DRAFT)
   grossAmount            Float
   tradeDiscount          Float                         @default(0)
@@ -1377,6 +1383,8 @@ model PharmacyPurchaseInvoice {
   stockCommittedAt       DateTime?
   stockCommittedBy       String?
   stockCommitReference   String?
+  workflowReceiptId      String?
+  creditApplied          Float                         @default(0)
   createdAt              DateTime                      @default(now())
   updatedAt              DateTime                      @updatedAt
 
@@ -1386,6 +1394,7 @@ model PharmacyPurchaseInvoice {
   paymentAllocations PharmacyPurchasePaymentAllocation[]
 
   @@unique([branchId, distributorGstin, invoiceNumber])
+  @@unique([branchId, workflowReceiptId])
   @@index([branchId])
   @@index([distributorGstin])
   @@index([invoiceDate])
@@ -1419,6 +1428,7 @@ model PharmacyPurchaseInvoiceDocument {
 }
 
 model PharmacyPurchaseInvoiceItem {
+  inventoryItemId        String?
   id                     String   @id @default(cuid())
   purchaseInvoiceId      String
   lineNumber             Int
@@ -1438,6 +1448,7 @@ model PharmacyPurchaseInvoiceItem {
   oldMrp                 Float?
   discountPercent        Float
   specialDiscountPercent Float    @default(0)
+  schemeAmount           Float    @default(0)
   purchaseRate           Float
   taxableAmount          Float
   cgstPercent            Float    @default(0)
@@ -1470,6 +1481,7 @@ model PharmacyPurchasePayment {
   paidBy           String
   amount           Float
   referenceNo      String?
+  requestKey       String?
   notes            String?
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
@@ -1481,7 +1493,143 @@ model PharmacyPurchasePayment {
   @@index([distributorGstin])
   @@index([paymentDate])
   @@index([branchId, distributorGstin, paymentDate])
+  @@unique([branchId, requestKey])
   @@map("pharmacy_purchase_payments")
+}
+
+// Operational documents share a versioned lifecycle; their lines retain the
+// exact item/batch/unit/price snapshots used for each stock or financial effect.
+model InventoryWorkflowDocument {
+  id                String   @id @default(cuid())
+  branchId          String
+  kind              String
+  status            String   @default("DRAFT")
+  reference         String
+  supplierId        String?
+  supplierGstin     String?
+  sourceId          String?
+  purchaseInvoiceId String?
+  salesInvoiceId    String?
+  payload           Json
+  totalAmount       Decimal  @default(0) @db.Decimal(16, 2)
+  requestKey        String
+  version           Int      @default(1)
+  createdBy         String
+  approvedBy        String?
+  postedBy          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  postedAt          DateTime?
+  events            InventoryWorkflowEvent[]
+  effects           InventoryWorkflowEffect[]
+
+  @@unique([branchId, requestKey])
+  @@index([branchId, kind, status, createdAt])
+  @@index([branchId, sourceId])
+  @@index([branchId, supplierGstin])
+  @@map("inventory_workflow_documents")
+}
+
+model InventoryWorkflowEvent {
+  id           String   @id @default(cuid())
+  documentId   String
+  branchId     String
+  actorId      String
+  action       String
+  fromStatus   String?
+  toStatus     String
+  version      Int
+  detail       Json
+  createdAt    DateTime @default(now())
+  document     InventoryWorkflowDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, version])
+  @@index([branchId, createdAt])
+  @@map("inventory_workflow_events")
+}
+
+model InventoryWorkflowEffect {
+  id            String @id @default(cuid())
+  documentId    String
+  branchId      String
+  effectKey     String @unique
+  lineId        String
+  inventoryId   String?
+  transactionId String?
+  sourceLineId  String?
+  quantityDelta Int    @default(0)
+  sourceQuantity Int   @default(0)
+  heldDelta     Int    @default(0)
+  amount        Decimal @default(0) @db.Decimal(16, 2)
+  createdAt     DateTime @default(now())
+  document      InventoryWorkflowDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, inventoryId])
+  @@index([branchId, sourceLineId])
+  @@map("inventory_workflow_effects")
+}
+
+model InventorySupplierCredit {
+  reversedAt DateTime?
+  id           String @id @default(cuid())
+  branchId     String
+  supplierGstin String
+  documentId   String @unique
+  reference    String
+  amount       Decimal @db.Decimal(16, 2)
+  applied      Decimal @default(0) @db.Decimal(16, 2)
+  createdAt    DateTime @default(now())
+  allocations  InventoryCreditAllocation[]
+
+  @@index([branchId, supplierGstin])
+  @@map("inventory_supplier_credits")
+}
+
+model InventoryCreditAllocation {
+  id                String @id @default(cuid())
+  branchId          String
+  creditId          String
+  purchaseInvoiceId String
+  amount            Decimal @db.Decimal(16, 2)
+  requestKey        String
+  createdBy         String
+  reversedAt        DateTime?
+  reversedBy        String?
+  reversalReason    String?
+  createdAt         DateTime @default(now())
+  credit            InventorySupplierCredit @relation(fields: [creditId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, requestKey])
+  @@index([branchId, purchaseInvoiceId])
+  @@map("inventory_credit_allocations")
+}
+
+model InventoryWorkflowSettings {
+  branchId     String @id
+  settings     Json
+  version      Int @default(1)
+  updatedBy    String
+  updatedAt    DateTime @updatedAt
+
+  @@map("inventory_workflow_settings")
+}
+
+model InventoryIntakeDraft {
+  id           String @id @default(cuid())
+  branchId     String
+  requestKey   String
+  documentIds  String[]
+  payload      Json
+  channel      String
+  version      Int @default(1)
+  invoiceId    String?
+  createdBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([branchId, requestKey])
+  @@index([branchId, updatedAt])
+  @@map("inventory_intake_drafts")
 }
 
 model PharmacyPurchasePaymentAllocation {
@@ -2146,4 +2294,33 @@ enum PharmacyAgentProposalStatus {
   REJECTED
   FAILED
   EXPIRED
+}
+
+model InventoryMailboxConnection {
+  id String @id @default(cuid())
+  branchId String
+  userId String
+  email String?
+  encryptedTokens String?
+  stateHash String?
+  stateExpiresAt DateTime?
+  lastSyncAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([branchId,userId])
+  @@map("inventory_mailbox_connections")
+}
+
+model InventoryMigration {
+  id String @id @default(cuid())
+  branchId String
+  createdBy String
+  fileName String
+  sha256 String
+  data Bytes
+  result Json?
+  processingUntil DateTime?
+  createdAt DateTime @default(now())
+  @@unique([branchId,sha256])
+  @@map("inventory_migrations")
 }

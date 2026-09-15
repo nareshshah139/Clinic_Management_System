@@ -1,0 +1,32 @@
+# Inventory workflow implementation and validation
+
+Production-readiness follow-up, 15 September: the declared-stock-unit defect is fixed and a fresh original-photo UI/DB test posts Eucerin as 9/7 PACKS. Actual Railway health gates are configured and a full read-only production backup restored 270,989 rows identically; the migration preserved every existing application field. See [the current readiness and database-impact report](../qa/inventory-production-readiness-2026-09-15.md). Application code and the migration are still local, awaiting deployment and its smoke checks; this is not a deployed-release claim.
+
+Completed implementation on 14 September 2026 in the local workspace. The five-area UI covers Today, Purchases, Stock, Sales and Reorder. The acceptance baseline remains 42 features and 211 criteria; the evidence matrix distinguishes implemented source, controlled tests, real PostgreSQL checks and actual browser exercises. This is not a claim that all external acceptance activities have been performed.
+
+## Resulting behavior
+
+- A photo/PDF is retained, extracted and reviewed beside source highlights. Validated invoices can post automatically. Remaining supplier/product/unit/field checks have explicit controls in the same screen. Manufacturer is optional. Incomplete work is recoverable and stock status comes from saved server records.
+- Posted invoices reopen with their batch receipts and links to inventory. Receipt-linked bills say that stock was received earlier and add no duplicate stock. Original files remain downloadable. Existing quantities keep their declared units; pack equivalents do not silently rescale balances.
+- Stock has complete filters, valuations, product/batch details, signed movement history, counts, opening balances, holds, loss and supplier returns. Holds reduce available stock; supplier-return challans deduct once and finalisation creates credit once. Customer returns use original sale terms and explicit restock/quarantine/loss treatment.
+- Supplier accounts support same-supplier credits and cash payments with remaining dues. Reports identify their date and posting basis, expose their records and avoid inventing unknown historical cost.
+- Shortbook, manual targets/exclusions, proposals, orders, partial inward receipts, gate passes and linked bills are connected. Automation records its owner, configuration and outcomes. Gmail and supplier sending require configured external services.
+- Mobile navigation collapses to a keyboard-managed drawer. All five areas remain visible and a Task selector keeps essential content readable. The retired stock-prediction URL opens the active target workspace. The legacy direct audit-adjustment endpoint returns 410 before DB access and points to versioned Counts & audit.
+
+## Actual local evidence
+
+- Uploaded Eucerin photo SB-26-136543: two rows, INR45,602, 9 and 7 packs committed through the UI. Its ambiguous approval-bill terms and missing stock unit were resolved explicitly for this local test; those test choices are not claims about the real supplier's commercial terms.
+- Synthetic two-page SOURCE-20 PDF: all 20 rows retained, INR2,240, 20 separate batches receiving three tubes each. Selecting line20 opens the matching source region on page2.
+- Duplicate processing leaves stock unchanged. Both downloaded originals hash-match the uploaded bytes.
+- Generic browser workflow exercised opening30, hold4, loss1, release3, supplier-return2, sale3 and customer-return1. Independent read-only PostgreSQL verification confirms25 tubes physical,0 held, and INR112+20 supplier credits.
+- The current-bill credit panel allocated INR20; the payment UI allocated INR40. SOURCE-20 has INR2,180 remaining.
+- An approved six-unit order received two partial receipts. Posting its linked bill left nine current units and three movements unchanged. The order shows six received and zero remaining.
+- Desktop1440/mobile390 checks and screenshot inspection passed for Today, invoice, stock and targets. Keyboard-only tests covered the navigation dialog, target selection/edit/review/save and source selector. This does not substitute for three actual clinic staff completing acceptance tasks.
+- Backend build and frontend production build pass. Production source type checking remains enabled through frontend/tsconfig.build.json. Historical unrelated test-file typing errors remain in the broad frontend/backend repository type-check commands; focused workflow test suites are run separately.
+- Latest focused rerun:58 purchase backend tests and70 UI tests passed. Additional isolated database, finance, replenishment, import, held-stock, concurrency, permission and legacy-route checks are recorded in gates/inventory and output/diagnostics/inventory-workflow.
+
+## Evidence and operator guide
+
+See inventory-workflow.acceptance.json and inventory-workflow-acceptance.md for every original criterion and its current evidence. The reproducible guide is generated by scripts/diagnostics/build-inventory-workflow-guide.py using actual screenshots from output/diagnostics/inventory-workflow/screenshots/manifest.json. Final guide: output/pdf/inventory-workflow-guide.pdf.
+
+No production database was written, reset or migrated during this validation. No outgoing supplier messages or emails were sent. Deployment and external Gmail/email activation are not established by these local tests. Three representative staff and exhaustive field-level/keyboard combinations remain acceptance activities explicitly recorded in the matrix.

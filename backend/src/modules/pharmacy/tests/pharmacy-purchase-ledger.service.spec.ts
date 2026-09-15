@@ -18,7 +18,7 @@ describe('PharmacyPurchaseLedgerService', () => {
     invoiceNumber: overrides.invoiceNumber || 'LD-001',
     invoiceDate: overrides.invoiceDate || new Date('2026-04-01T00:00:00.000Z'),
     dueDate: overrides.dueDate ?? new Date('2026-05-01T00:00:00.000Z'),
-    status: overrides.status || 'REVIEWED',
+    status: overrides.status || 'STOCK_COMMITTED',
     netPayable: overrides.netPayable ?? 1000,
     tcsAmount: overrides.tcsAmount ?? 0,
     paymentAllocations: overrides.paymentAllocations || [],
@@ -30,7 +30,9 @@ describe('PharmacyPurchaseLedgerService', () => {
       pharmacyPurchaseInvoice: {
         findMany: jest.fn(),
       },
+      inventoryCreditAllocation: {findMany:jest.fn().mockResolvedValue([])},
       pharmacyPurchasePayment: {
+        findUnique: jest.fn().mockResolvedValue(null),
         create: jest.fn(),
         findMany: jest.fn(),
       },
@@ -72,6 +74,7 @@ describe('PharmacyPurchaseLedgerService', () => {
 
     const result = await service.createPayment(
       {
+        requestKey: 'payment-fixture',
         distributorGstin: gstin,
         distributorName: 'Linae Distributors',
         paymentDate: '2026-05-06',
@@ -91,7 +94,8 @@ describe('PharmacyPurchaseLedgerService', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           branchId,
-          distributorGstin: gstin,
+          requestKey: 'payment-fixture',
+        distributorGstin: gstin,
           paidBy: userId,
           amount: 800,
           allocations: {
@@ -132,7 +136,8 @@ describe('PharmacyPurchaseLedgerService', () => {
     await expect(
       service.createPayment(
         {
-          distributorGstin: gstin,
+          requestKey: 'payment-fixture',
+        distributorGstin: gstin,
           distributorName: 'Linae Distributors',
           paymentDate: '2026-05-06',
           mode: PharmacyPurchasePaymentModeDto.UPI,
@@ -154,7 +159,8 @@ describe('PharmacyPurchaseLedgerService', () => {
     await expect(
       service.createPayment(
         {
-          distributorGstin: gstin,
+          requestKey: 'payment-fixture',
+        distributorGstin: gstin,
           distributorName: 'Linae Distributors',
           paymentDate: '2026-05-06',
           mode: PharmacyPurchasePaymentModeDto.CHEQUE,

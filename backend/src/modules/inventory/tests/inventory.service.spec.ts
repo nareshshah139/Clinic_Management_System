@@ -14,7 +14,9 @@ describe('InventoryService', () => {
   let service: InventoryService;
   let prisma: PrismaService;
 
-  const mockPrisma = {
+  const mockPrisma: any = {
+    $transaction: jest.fn(),
+    inventoryWorkflowEffect: {count:jest.fn()},
     inventoryItem: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -25,7 +27,6 @@ describe('InventoryService', () => {
       count: jest.fn(),
       groupBy: jest.fn(),
       aggregate: jest.fn(),
-      groupBy: jest.fn(),
     },
     stockTransaction: {
       create: jest.fn(),
@@ -57,6 +58,9 @@ describe('InventoryService', () => {
   };
 
   beforeEach(async () => {
+    jest.resetAllMocks();
+    mockPrisma.$transaction.mockImplementation((run:any)=>run(mockPrisma));
+    mockPrisma.inventoryWorkflowEffect.count.mockResolvedValue(0);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
@@ -282,7 +286,7 @@ describe('InventoryService', () => {
 
       const updateDto = {
         name: 'Updated Paracetamol',
-        costPrice: 12.0,
+        sellingPrice: 12.0,
       };
 
       const updatedItem = {
@@ -298,7 +302,7 @@ describe('InventoryService', () => {
       expect(result).toMatchObject({
         id: 'item-123',
         name: 'Updated Paracetamol',
-        costPrice: 12.0,
+        sellingPrice: 12.0,
       });
     });
 
@@ -308,6 +312,13 @@ describe('InventoryService', () => {
       await expect(service.updateInventoryItem('non-existent', {}, 'branch-123'))
         .rejects.toThrow(NotFoundException);
     });
+  });
+
+  it('rejects posted cost and unit changes in the item master', async () => {
+    mockPrisma.inventoryItem.findFirst.mockResolvedValue({id:'batch',costPrice:10,unit:'PIECES',currentStock:5});
+    await expect(service.updateInventoryItem('batch',{costPrice:20} as any,'branch-123')).rejects.toThrow(BadRequestException);
+    await expect(service.updateInventoryItem('batch',{currentStock:50} as any,'branch-123')).rejects.toThrow(BadRequestException);
+    expect(mockPrisma.inventoryItem.update).not.toHaveBeenCalled();
   });
 
   describe('deleteInventoryItem', () => {
@@ -443,11 +454,12 @@ describe('InventoryService', () => {
         id: 'item-123',
         costPrice: 10.5,
         currentStock: 50,
+        storageLocation: 'Store A',
       };
 
       const transferDto = {
         itemId: 'item-123',
-        quantity: 10,
+        quantity: 50,
         fromLocation: 'Store A',
         toLocation: 'Store B',
       };
@@ -455,14 +467,14 @@ describe('InventoryService', () => {
       const mockOutboundTransaction = {
         id: 'outbound-123',
         type: TransactionType.TRANSFER,
-        quantity: 10,
+        quantity: 50,
         location: 'Store A',
       };
 
       const mockInboundTransaction = {
         id: 'inbound-123',
         type: TransactionType.TRANSFER,
-        quantity: 10,
+        quantity: 50,
         location: 'Store B',
       };
 
@@ -471,7 +483,7 @@ describe('InventoryService', () => {
       mockPrisma.stockTransaction.create
         .mockResolvedValueOnce(mockOutboundTransaction)
         .mockResolvedValueOnce(mockInboundTransaction);
-      mockPrisma.inventoryItem.update.mockResolvedValue({});
+      mockPrisma.inventoryItem.update.mockImplementation(({data}:any)=>Object.assign(mockItem,data));
 
       const result = await service.transferStock(transferDto, 'branch-123', 'user-123');
 
@@ -485,6 +497,7 @@ describe('InventoryService', () => {
       const mockItem = {
         id: 'item-123',
         currentStock: 5,
+        storageLocation: 'Store A',
       };
 
       const transferDto = {
@@ -612,41 +625,14 @@ describe('InventoryService', () => {
 
   describe('getInventoryStatistics', () => {
     it('should return inventory statistics', async () => {
-      const mockStats = {
-        totalItems: 100,
-        totalValue: 5000,
-        lowStockCount: 15,
-        expiredCount: 5,
-        typeBreakdown: [
-          { type: InventoryItemType.MEDICINE, _count: { id: 60 }, _sum: { currentStock: 3000 } },
-          { type: InventoryItemType.EQUIPMENT, _count: { id: 40 }, _sum: { currentStock: 2000 } },
-        ],
-        categoryBreakdown: [
-          { category: 'Pain Relief', _count: { id: 30 }, _sum: { currentStock: 1500 } },
-          { category: 'Antibiotics', _count: { id: 20 }, _sum: { currentStock: 1000 } },
-        ],
-        locationBreakdown: [
-          { storageLocation: 'Store A', _count: { id: 50 }, _sum: { currentStock: 2500 } },
-          { storageLocation: 'Store B', _count: { id: 50 }, _sum: { currentStock: 2500 } },
-        ],
-      };
-
-      mockPrisma.inventoryItem.count.mockResolvedValue(100);
-      mockPrisma.inventoryItem.aggregate.mockResolvedValue({ _sum: { currentStock: 5000 } });
-      mockPrisma.inventoryItem.groupBy
-        .mockResolvedValueOnce(mockStats.typeBreakdown)
-        .mockResolvedValueOnce(mockStats.categoryBreakdown)
-        .mockResolvedValueOnce(mockStats.locationBreakdown);
-
+      mockPrisma.inventoryItem.findMany.mockResolvedValue([
+        {id:'a',currentStock:10,costPrice:25,type:'MEDICINE',category:'Pain Relief',storageLocation:'Store A'},
+        {id:'b',currentStock:2,costPrice:10,type:'EQUIPMENT',category:'Supplies',storageLocation:'Store B'},
+      ]);
       const result = await service.getInventoryStatistics({}, 'branch-123');
+      expect(result).toMatchObject({totalItems:2,totalValue:270});
+      expect(result.typeBreakdown).toContainEqual({type:'MEDICINE',_count:{id:1},_sum:{currentStock:10}});
 
-      expect(result).toMatchObject({
-        totalItems: 100,
-        totalValue: 5000,
-        typeBreakdown: mockStats.typeBreakdown,
-        categoryBreakdown: mockStats.categoryBreakdown,
-        locationBreakdown: mockStats.locationBreakdown,
-      });
     });
   });
 

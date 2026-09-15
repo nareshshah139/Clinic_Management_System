@@ -14,7 +14,9 @@ import { Transform, Type } from 'class-transformer';
 
 export enum ExpiryReturnWindowDto {
   ONE_MONTH = '1m',
+  TWO_MONTHS = '2m',
   THREE_MONTHS = '3m',
+  SIX_MONTHS = '6m',
   EXPIRED = 'expired',
 }
 

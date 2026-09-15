@@ -1,6 +1,13 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   InventoryItemType,
@@ -45,6 +52,8 @@ interface InventoryStarterImportRow {
   hasSellingPrice: boolean;
   hasMrp: boolean;
   hasCurrentStock: boolean;
+  importId?: string;
+  sourceRow?: number;
 }
 
 interface InventoryStarterImportOutcome {
@@ -58,6 +67,57 @@ export class InventoryImportService {
   private readonly logger = new Logger(InventoryImportService.name);
   constructor(private readonly prisma: PrismaService) {}
 
+  async originalImport(id: string, branchId: string) {
+    const source = await this.prisma.inventoryMigration.findFirst({
+      where: { id, branchId },
+    });
+    if (!source)
+      throw new NotFoundException('Opening import original not found');
+    return source;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-preview-no-side-effects
+   * Opening preview MUST preserve worksheet row numbers and report invalid values without changing
+   * stock or writing an import. Preview and import use the same field parser.
+   */
+  async previewStarterExcel(file: Express.Multer.File | undefined) {
+    if (!file?.buffer?.length || !/\.(xlsx|xls)$/i.test(file.originalname))
+      throw new BadRequestException('Choose an Excel inventory file');
+    const rows = this.readWorkbookRows(file.buffer).filter((r) =>
+      Object.values(r).some((v) => String(v ?? '').trim()),
+    );
+    if (rows.length > 1000)
+      throw new BadRequestException('Preview is limited to 1,000 rows');
+    const duplicates = this.findDuplicateImportRows(rows);
+    return {
+      fileName: file.originalname,
+      hash: createHash('sha256').update(file.buffer).digest('hex'),
+      rows: rows.map((row, index) => {
+        const sourceRow =
+          typeof row.__rowNum__ === 'number' ? row.__rowNum__ + 1 : index + 2;
+        try {
+          const parsed = this.mapImportRow(row);
+          if (!parsed) throw new Error('Product name is required');
+          if (duplicates.has(sourceRow))
+            throw new Error('Duplicate product/code and batch');
+          if (parsed.minStockLevel > parsed.maxStockLevel)
+            throw new Error('Minimum exceeds maximum');
+          return { sourceRow, ...parsed };
+        } catch (e) {
+          return { sourceRow, error: (e as Error).message };
+        }
+      }),
+    };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;target] inventory-opening-import-retry
+   * Retrying an opening-stock import MUST NOT add its absolute opening quantities again; rejected
+   * rows MUST identify their worksheet row and leave that row’s inventory unchanged.
+   * Acceptance: INV-08. Validation and open gaps:
+   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   */
   async importStarterExcel(
     file: Express.Multer.File | undefined,
     branchId: string,
@@ -86,8 +146,48 @@ export class InventoryImportService {
       );
     }
 
+    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+    const prior = await (this.prisma as any).inventoryMigration?.findUnique({
+      where: { branchId_sha256: { branchId, sha256 } },
+    });
+    if (prior?.result) return prior.result;
+    const migration = (this.prisma as any).inventoryMigration
+      ? await (this.prisma as any).inventoryMigration.upsert({
+          where: { branchId_sha256: { branchId, sha256 } },
+          update: {},
+          create: {
+            branchId,
+            createdBy: userId,
+            fileName: file.originalname,
+            sha256,
+            data: file.buffer,
+          },
+        })
+      : null;
+    if (migration) {
+      const claim = await (this.prisma as any).inventoryMigration.updateMany({
+        where: {
+          id: migration.id,
+          result: { equals: Prisma.DbNull },
+          OR: [
+            { processingUntil: null },
+            { processingUntil: { lt: new Date() } },
+          ],
+        },
+        data: { processingUntil: new Date(Date.now() + 30 * 60 * 1000) },
+      });
+      if (!claim.count) {
+        const completed = await (
+          this.prisma as any
+        ).inventoryMigration.findUnique({ where: { id: migration.id } });
+        if (completed?.result) return completed.result;
+        throw new ConflictException(
+          'This opening import is already processing. Retry after it completes; the file is retained.',
+        );
+      }
+    }
     const result = {
-      importId: randomUUID(),
+      importId: migration?.id || sha256,
       totalRows: nonEmptyRows.length,
       created: 0,
       updated: 0,
@@ -143,6 +243,10 @@ export class InventoryImportService {
           continue;
         }
 
+        parsed.importId = result.importId;
+        parsed.sourceRow = rowNumber;
+        if (parsed.minStockLevel > parsed.maxStockLevel)
+          throw new BadRequestException('Minimum exceeds maximum');
         const outcome = await this.upsertImportRow(parsed, branchId, userId);
         if (outcome.status === 'created') result.created += 1;
         if (outcome.status === 'updated') result.updated += 1;
@@ -168,7 +272,9 @@ export class InventoryImportService {
               ? `Database could not finish saving this row (${code}). Contact support with the import reference.`
               : code === 'P2002'
                 ? 'A medicine with this SKU or barcode already exists. Check for duplicate codes.'
-                : `Could not save this row (${code}). Contact support with the import reference.`,
+                : error instanceof BadRequestException
+                  ? error.message
+                  : `Could not save this row (${code}). Contact support with the import reference.`,
         });
       }
     }
@@ -182,6 +288,11 @@ export class InventoryImportService {
       skipped: result.skipped,
       durationMs: Date.now() - startedAt,
     });
+    if (migration)
+      await (this.prisma as any).inventoryMigration.update({
+        where: { id: migration.id },
+        data: { result, processingUntil: null },
+      });
     return result;
   }
 
@@ -373,9 +484,7 @@ export class InventoryImportService {
       'cost',
     ]);
     const basePrice = sellingPriceValue ?? mrpValue ?? costPriceValue ?? 0;
-    const costPrice = this.roundMoney(
-      costPriceValue ?? (basePrice > 0 ? basePrice * 0.75 : 0),
-    );
+    const costPrice = this.roundMoney(costPriceValue ?? 0);
     const sellingPrice = this.roundMoney(
       sellingPriceValue ?? mrpValue ?? basePrice,
     );
@@ -401,6 +510,19 @@ export class InventoryImportService {
       'maxstock',
       'maxstocklevel',
     ]);
+    for (const [label, value] of Object.entries({
+      stock: currentStockValue,
+      minimum: reorderLevelValue,
+      maximum: maxStockLevelValue,
+    })) {
+      if (value !== undefined && (!Number.isInteger(value) || value < 0))
+        throw new BadRequestException(
+          `${label} must be a whole nonnegative quantity in the declared stock unit`,
+        );
+    }
+    for (const value of [sellingPriceValue, mrpValue, costPriceValue])
+      if (value !== undefined && value < 0)
+        throw new BadRequestException('Prices cannot be negative');
     const packInfo = this.parsePackSizeLabel(packSizeLabel);
     const requiresPrescription =
       this.readImportBoolean(row, [
@@ -475,6 +597,9 @@ export class InventoryImportService {
     userId: string,
   ): Promise<InventoryStarterImportOutcome> {
     return this.prisma.$transaction(async (tx) => {
+      // Serialize opening receipts within a branch, including different files for the same batch.
+      if (typeof tx.$executeRaw === 'function')
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${branchId}))`;
       const existingDrug = await this.findImportedDrug(tx, row, branchId);
       const drugUniqueFields = await this.getSafeDrugUniqueFields(
         tx,
@@ -568,7 +693,12 @@ export class InventoryImportService {
             storageConditions: row.storageConditions,
             status: InventoryStatus.ACTIVE,
             stockStatus,
-            metadata: JSON.stringify({ source: 'excel-starter-import' }),
+            metadata: JSON.stringify({
+              source: 'excel-starter-import',
+              importId: row.importId,
+              sourceRow: row.sourceRow,
+              manualTargets: true,
+            }),
             ...inventoryUniqueFields,
             drugs: {
               connect: { id: drug.id },
@@ -596,6 +726,30 @@ export class InventoryImportService {
       const stockDelta = row.hasCurrentStock
         ? row.currentStock - existingInventory.currentStock
         : 0;
+      if (stockDelta !== 0)
+        throw new BadRequestException(
+          'This batch already exists. Opening import cannot reset its stock; use a reviewed count or linked correction.',
+        );
+      if (existingInventory.unit !== row.unit)
+        throw new BadRequestException(
+          'Existing batch stock unit differs; reconcile pack units before import.',
+        );
+      const changedBasis =
+        (row.packSize !== undefined &&
+          row.packSize !== existingInventory.packSize) ||
+        (row.packUnit !== undefined &&
+          row.packUnit !== existingInventory.packUnit) ||
+        (expiryDate &&
+          expiryDate.toISOString().slice(0, 10) !==
+            existingInventory.expiryDate?.toISOString().slice(0, 10)) ||
+        (row.hasCostPrice && row.costPrice !== existingInventory.costPrice) ||
+        (row.hasMrp && row.mrp !== existingInventory.mrp) ||
+        (row.hasSellingPrice &&
+          row.sellingPrice !== existingInventory.sellingPrice);
+      if (changedBasis)
+        throw new BadRequestException(
+          'This batch already exists. Opening import cannot replace its pack, expiry or price basis; use the product details or a linked purchase correction.',
+        );
       const isDrugLinked = await tx.inventoryItem.count({
         where: {
           id: existingInventory.id,
@@ -607,20 +761,20 @@ export class InventoryImportService {
         description: row.description,
         genericName: row.composition1,
         brandName: row.name,
-        type: InventoryItemType.MEDICINE,
+        type: existingInventory.type,
         category: row.category,
         subCategory: row.category,
         manufacturer: row.manufacturer,
         supplier: row.supplier,
         unit: row.unit,
-        packSize: row.packSize,
-        packUnit: row.packUnit,
+        packSize: existingInventory.packSize,
+        packUnit: existingInventory.packUnit,
         minStockLevel: row.minStockLevel,
         maxStockLevel: row.maxStockLevel,
         reorderLevel: row.reorderLevel,
         reorderQuantity: row.reorderLevel,
-        expiryDate,
-        batchNumber: row.batchNumber,
+        expiryDate: existingInventory.expiryDate,
+        batchNumber: existingInventory.batchNumber,
         hsnCode: row.hsnCode,
         gstRate: row.gstRate,
         requiresPrescription: row.requiresPrescription,
@@ -628,7 +782,13 @@ export class InventoryImportService {
         storageLocation: row.storageLocation,
         storageConditions: row.storageConditions,
         status: InventoryStatus.ACTIVE,
-        metadata: JSON.stringify({ source: 'excel-starter-import' }),
+        metadata: JSON.stringify({
+          ...this.existingMetadata(existingInventory.metadata),
+          source: 'excel-starter-import',
+          importId: row.importId,
+          sourceRow: row.sourceRow,
+          manualTargets: true,
+        }),
         ...inventoryUniqueFields,
       };
       if (row.hasCostPrice) updatePayload.costPrice = row.costPrice;
@@ -647,6 +807,21 @@ export class InventoryImportService {
       await tx.inventoryItem.update({
         where: { id: existingInventory.id },
         data: updatePayload,
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId,
+          action: 'OPENING_IMPORT_METADATA',
+          entity: 'InventoryItem',
+          entityId: existingInventory.id,
+          oldValues: JSON.stringify(existingInventory),
+          newValues: JSON.stringify({
+            importId: row.importId,
+            sourceRow: row.sourceRow,
+            ...updatePayload,
+          }),
+        },
       });
 
       const stockAdjusted = await this.createStarterStockTransaction(
@@ -700,6 +875,8 @@ export class InventoryImportService {
       const value = row[this.normalizeImportKey(alias)];
       const parsed = this.parseImportNumber(value);
       if (parsed !== undefined) return parsed;
+      if (value !== undefined && value !== null && String(value).trim() !== '')
+        throw new BadRequestException(`Invalid number in ${alias}`);
     }
     return undefined;
   }
@@ -763,14 +940,30 @@ export class InventoryImportService {
     return undefined;
   }
 
+  private existingMetadata(raw: unknown): Record<string, unknown> {
+    try {
+      return typeof raw === 'string'
+        ? JSON.parse(raw)
+        : raw && typeof raw === 'object'
+          ? (raw as Record<string, unknown>)
+          : {};
+    } catch {
+      return {};
+    }
+  }
+
   private parseImportNumber(value: unknown): number | undefined {
     if (value === undefined || value === null || value === '') return undefined;
     if (typeof value === 'number') {
       return Number.isFinite(value) ? value : undefined;
     }
     const cleaned = String(value)
+      .trim()
+      .replace(/^(?:₹|INR|Rs\.?)\s*/i, '')
+      .replace(/%$/, '')
       .replace(/,/g, '')
-      .replace(/[^\d.-]/g, '');
+      .trim();
+    if (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(cleaned)) return undefined;
     if (!cleaned || cleaned === '-' || cleaned === '.') return undefined;
     const parsed = Number(cleaned);
     return Number.isFinite(parsed) ? parsed : undefined;
@@ -1032,14 +1225,22 @@ export class InventoryImportService {
         userId,
         type: TransactionType.ADJUSTMENT,
         quantity,
+        quantityDelta,
         unitPrice,
         totalAmount: quantity * unitPrice,
-        reference: 'Excel starter import',
+        reference: row.importId
+          ? `OPEN-${row.importId}:${row.sourceRow}`
+          : 'Excel starter import',
         reason:
           quantityDelta > 0
             ? 'Opening stock imported from Excel'
             : 'Opening stock corrected from Excel',
-        notes: `Imported ${row.name} from pharmacy starter inventory file`,
+        notes: JSON.stringify({
+          importId: row.importId,
+          sourceRow: row.sourceRow,
+          delta: quantityDelta,
+          quantityUnit: row.unit,
+        }),
         batchNumber: row.batchNumber,
         expiryDate: row.expiryDate ? new Date(row.expiryDate) : undefined,
         supplier: row.supplier,
@@ -1055,7 +1256,12 @@ export class InventoryImportService {
     reorderLevel: number,
     expiryDate?: Date,
   ) {
-    if (expiryDate && expiryDate < new Date()) return StockStatus.EXPIRED;
+    if (
+      expiryDate &&
+      expiryDate <
+        new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z')
+    )
+      return StockStatus.EXPIRED;
     if (currentStock <= 0) return StockStatus.OUT_OF_STOCK;
     if (reorderLevel && currentStock <= reorderLevel) {
       return StockStatus.LOW_STOCK;

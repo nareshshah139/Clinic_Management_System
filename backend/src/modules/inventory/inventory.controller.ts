@@ -10,6 +10,7 @@ import {
   UseGuards,
   Request,
   UploadedFile,
+  Res,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -71,7 +72,43 @@ export class InventoryController {
     @Body() createItemDto: CreateInventoryItemDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.createInventoryItem(createItemDto, req.user.branchId);
+    return this.inventoryService.createInventoryItem(
+      createItemDto,
+      req.user.branchId,
+    );
+  }
+
+  @Get('imports/:id/original')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:read')
+  async originalImport(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+    @Res() res: any,
+  ) {
+    const file = await this.inventoryImportService.originalImport(
+      id,
+      req.user.branchId,
+    );
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename*=UTF-8''${encodeURIComponent(file.fileName)}`,
+    );
+    res.send(Buffer.from(file.data));
+  }
+
+  @Post('items/import-preview')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:create')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
+  previewImport(@UploadedFile() file: Express.Multer.File) {
+    return this.inventoryImportService.previewStarterExcel(file);
   }
 
   @Post('items/import')
@@ -100,7 +137,10 @@ export class InventoryController {
     @Query() query: QueryInventoryItemsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.findAllInventoryItems(query, req.user.branchId);
+    return this.inventoryService.findAllInventoryItems(
+      query,
+      req.user.branchId,
+    );
   }
 
   @Get('items/:id')
@@ -121,7 +161,11 @@ export class InventoryController {
     @Body() updateItemDto: UpdateInventoryItemDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.updateInventoryItem(id, updateItemDto, req.user.branchId);
+    return this.inventoryService.updateInventoryItem(
+      id,
+      updateItemDto,
+      req.user.branchId,
+    );
   }
 
   @Delete('items/:id')
@@ -156,7 +200,10 @@ export class InventoryController {
     @Query() query: QueryStockTransactionsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.findAllStockTransactions(query, req.user.branchId);
+    return this.inventoryService.findAllStockTransactions(
+      query,
+      req.user.branchId,
+    );
   }
 
   @Get('transactions/:id')
@@ -166,7 +213,10 @@ export class InventoryController {
     @Param('id') id: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.findStockTransactionById(id, req.user.branchId);
+    return this.inventoryService.findStockTransactionById(
+      id,
+      req.user.branchId,
+    );
   }
 
   @Patch('transactions/:id')
@@ -177,7 +227,11 @@ export class InventoryController {
     @Body() updateTransactionDto: UpdateStockTransactionDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.updateStockTransaction(id, updateTransactionDto, req.user.branchId);
+    return this.inventoryService.updateStockTransaction(
+      id,
+      updateTransactionDto,
+      req.user.branchId,
+    );
   }
 
   @Delete('transactions/:id')
@@ -198,7 +252,11 @@ export class InventoryController {
     @Body() bulkUpdateDto: BulkStockUpdateDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.bulkStockUpdate(bulkUpdateDto, req.user.branchId, req.user.id);
+    return this.inventoryService.bulkStockUpdate(
+      bulkUpdateDto,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Post('adjustments')
@@ -208,7 +266,11 @@ export class InventoryController {
     @Body() stockAdjustmentDto: StockAdjustmentDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.adjustStock(stockAdjustmentDto, req.user.branchId, req.user.id);
+    return this.inventoryService.adjustStock(
+      stockAdjustmentDto,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Post('transfers')
@@ -218,7 +280,11 @@ export class InventoryController {
     @Body() stockTransferDto: StockTransferDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.transferStock(stockTransferDto, req.user.branchId, req.user.id);
+    return this.inventoryService.transferStock(
+      stockTransferDto,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   // Purchase Order Management
@@ -229,7 +295,11 @@ export class InventoryController {
     @Body() createOrderDto: CreatePurchaseOrderDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.createPurchaseOrder(createOrderDto, req.user.branchId, req.user.id);
+    return this.inventoryService.createPurchaseOrder(
+      createOrderDto,
+      req.user.branchId,
+      req.user.id,
+    );
   }
 
   @Get('purchase-orders')
@@ -239,7 +309,10 @@ export class InventoryController {
     @Query() query: QueryPurchaseOrdersDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.findAllPurchaseOrders(query, req.user.branchId);
+    return this.inventoryService.findAllPurchaseOrders(
+      query,
+      req.user.branchId,
+    );
   }
 
   @Get('purchase-orders/:id')
@@ -260,7 +333,11 @@ export class InventoryController {
     @Body() updateOrderDto: UpdatePurchaseOrderDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.updatePurchaseOrder(id, updateOrderDto, req.user.branchId);
+    return this.inventoryService.updatePurchaseOrder(
+      id,
+      updateOrderDto,
+      req.user.branchId,
+    );
   }
 
   @Delete('purchase-orders/:id')
@@ -281,7 +358,10 @@ export class InventoryController {
     @Body() createSupplierDto: CreateSupplierDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.createSupplier(createSupplierDto, req.user.branchId);
+    return this.inventoryService.createSupplier(
+      createSupplierDto,
+      req.user.branchId,
+    );
   }
 
   @Get('suppliers')
@@ -312,7 +392,11 @@ export class InventoryController {
     @Body() updateSupplierDto: UpdateSupplierDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.updateSupplier(id, updateSupplierDto, req.user.branchId);
+    return this.inventoryService.updateSupplier(
+      id,
+      updateSupplierDto,
+      req.user.branchId,
+    );
   }
 
   @Delete('suppliers/:id')
@@ -343,7 +427,10 @@ export class InventoryController {
     @Query() query: InventoryStatisticsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.inventoryService.getInventoryStatistics(query, req.user.branchId);
+    return this.inventoryService.getInventoryStatistics(
+      query,
+      req.user.branchId,
+    );
   }
 
   @Get('alerts/low-stock')

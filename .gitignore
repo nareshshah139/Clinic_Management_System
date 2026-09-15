@@ -44,3 +44,5 @@ DATABASE_BACKUP_SUMMARY.md
 *.dump
 backend/src/data/indian_medicine_data.csv
 prod-backup*.list
+
+!backend/prisma/migrations/20260914143000_inventory_workflow/migration.sql

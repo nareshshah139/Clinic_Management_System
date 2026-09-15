@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   BarChart3,
@@ -8,14 +8,14 @@ import {
   RefreshCw,
   Search,
   Truck,
-} from 'lucide-react';
-import { apiClient } from '@/lib/api';
-import { getErrorMessage } from '@/lib/utils';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from "lucide-react";
+import { apiClient } from "@/lib/api";
+import { getErrorMessage } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 
 type AnalyticsTotals = {
   invoiceCount: number;
@@ -35,7 +35,7 @@ type AnalyticsTotals = {
   freeQuantity: number;
   totalQuantity: number;
   freeQuantityRatioPercent: number;
-  effectiveUnitCost: number;
+  effectiveUnitCost: number | null;
   averageDiscountPercent: number;
 };
 
@@ -51,7 +51,7 @@ type DistributorRow = {
   freeQuantity: number;
   totalQuantity: number;
   freeQuantityRatioPercent: number;
-  effectiveUnitCost: number;
+  effectiveUnitCost: number | null;
   averageDiscountPercent: number;
   lastInvoiceDate: string;
 };
@@ -62,6 +62,8 @@ type ProductRow = {
   productName: string;
   manufacturer: string;
   packSize: string;
+  packUnitType?: string;
+  productIdentityKey?: string;
   hsnCode: string;
   invoiceCount: number;
   purchasedQuantity: number;
@@ -70,7 +72,7 @@ type ProductRow = {
   taxableAmount: number;
   gstAmount: number;
   lineTotal: number;
-  effectiveUnitCost: number;
+  effectiveUnitCost: number | null;
   averageDiscountPercent: number;
   latestPurchaseRate: number;
   latestDiscountPercent: number;
@@ -83,6 +85,8 @@ type DiscountDropAlert = {
   productName: string;
   manufacturer: string;
   packSize: string;
+  packUnitType?: string;
+  productIdentityKey?: string;
   previousInvoiceNumber: string;
   latestInvoiceNumber: string;
   previousInvoiceDate: string;
@@ -108,13 +112,13 @@ type FilterState = {
   minDiscountDropPercent: string;
 };
 
-const currency = new Intl.NumberFormat('en-IN', {
-  style: 'currency',
-  currency: 'INR',
+const currency = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
   minimumFractionDigits: 2,
 });
 
-const number = new Intl.NumberFormat('en-IN', {
+const number = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
@@ -129,21 +133,21 @@ function defaultFilters(): FilterState {
   return {
     startDate: toDateInput(start),
     endDate: toDateInput(end),
-    distributorGstin: '',
-    productName: '',
-    hsnCode: '',
-    minDiscountDropPercent: '5',
+    distributorGstin: "",
+    productName: "",
+    hsnCode: "",
+    minDiscountDropPercent: "5",
   };
 }
 
 function formatDate(value?: string) {
-  if (!value) return '-';
+  if (!value) return "-";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
@@ -247,7 +251,7 @@ export function DistributorAnalytics() {
           </Button>
           <Button onClick={loadAnalytics} disabled={loading}>
             <RefreshCw
-              className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`}
+              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
             />
             Refresh
           </Button>
@@ -261,7 +265,7 @@ export function DistributorAnalytics() {
             id="purchase-start"
             type="date"
             value={filters.startDate}
-            onChange={(event) => updateFilter('startDate', event.target.value)}
+            onChange={(event) => updateFilter("startDate", event.target.value)}
           />
         </div>
         <div>
@@ -270,7 +274,7 @@ export function DistributorAnalytics() {
             id="purchase-end"
             type="date"
             value={filters.endDate}
-            onChange={(event) => updateFilter('endDate', event.target.value)}
+            onChange={(event) => updateFilter("endDate", event.target.value)}
           />
         </div>
         <div>
@@ -279,7 +283,7 @@ export function DistributorAnalytics() {
             id="purchase-distributor"
             value={filters.distributorGstin}
             onChange={(event) =>
-              updateFilter('distributorGstin', event.target.value)
+              updateFilter("distributorGstin", event.target.value)
             }
             placeholder="Distributor GSTIN"
           />
@@ -290,7 +294,7 @@ export function DistributorAnalytics() {
             id="purchase-product"
             value={filters.productName}
             onChange={(event) =>
-              updateFilter('productName', event.target.value)
+              updateFilter("productName", event.target.value)
             }
             placeholder="Product name"
           />
@@ -300,7 +304,7 @@ export function DistributorAnalytics() {
           <Input
             id="purchase-hsn"
             value={filters.hsnCode}
-            onChange={(event) => updateFilter('hsnCode', event.target.value)}
+            onChange={(event) => updateFilter("hsnCode", event.target.value)}
             placeholder="HSN code"
           />
         </div>
@@ -313,7 +317,7 @@ export function DistributorAnalytics() {
             max="100"
             value={filters.minDiscountDropPercent}
             onChange={(event) =>
-              updateFilter('minDiscountDropPercent', event.target.value)
+              updateFilter("minDiscountDropPercent", event.target.value)
             }
           />
         </div>
@@ -346,7 +350,11 @@ export function DistributorAnalytics() {
         />
         <MetricCard
           title="Effective Cost"
-          value={currency.format(analytics.totals.effectiveUnitCost || 0)}
+          value={
+            analytics.totals.effectiveUnitCost == null
+              ? "Mixed units — compare products"
+              : currency.format(analytics.totals.effectiveUnitCost)
+          }
           detail={`Avg discount ${number.format(analytics.totals.averageDiscountPercent || 0)}%`}
           icon={<Search className="h-5 w-5 text-slate-600" />}
         />
@@ -422,12 +430,14 @@ export function DistributorAnalytics() {
             ) : (
               analytics.products.map((row) => (
                 <TableRow
-                  key={`${row.distributorGstin}-${row.productName}-${row.packSize}`}
+                  key={`${row.distributorGstin}-${row.productIdentityKey || row.productName}-${row.packSize}-${row.packUnitType}`}
                 >
                   <TableCell>
                     <div className="font-medium">{row.productName}</div>
                     <div className="text-xs text-muted-foreground">
-                      {row.manufacturer} · {row.packSize} · HSN {row.hsnCode}
+                      {row.manufacturer || "Manufacturer not recorded"} ·{" "}
+                      {row.packSize} · {row.packUnitType || "Unit unverified"} ·
+                      HSN {row.hsnCode}
                     </div>
                   </TableCell>
                   <TableCell>{row.distributorName}</TableCell>
@@ -435,7 +445,9 @@ export function DistributorAnalytics() {
                     {number.format(row.totalQuantity || 0)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {currency.format(row.effectiveUnitCost || 0)}
+                    {row.effectiveUnitCost == null
+                      ? "Mixed units — compare products"
+                      : currency.format(row.effectiveUnitCost)}
                   </TableCell>
                   <TableCell className="text-right">
                     {currency.format(row.latestPurchaseRate || 0)}
@@ -453,7 +465,11 @@ export function DistributorAnalytics() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="font-semibold">Discount Drop Alerts</h4>
-          <Badge variant={analytics.discountDropAlerts.length ? 'destructive' : 'outline'}>
+          <Badge
+            variant={
+              analytics.discountDropAlerts.length ? "destructive" : "outline"
+            }
+          >
             {analytics.discountDropAlerts.length} alerts
           </Badge>
         </div>
@@ -482,7 +498,9 @@ export function DistributorAnalytics() {
                       <span className="font-medium">{alert.productName}</span>
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {alert.manufacturer} · {alert.packSize}
+                      {alert.manufacturer || "Manufacturer not recorded"} ·{" "}
+                      {alert.packSize} ·{" "}
+                      {alert.packUnitType || "Unit unverified"}
                     </div>
                   </TableCell>
                   <TableCell>{alert.distributorName}</TableCell>
@@ -497,7 +515,8 @@ export function DistributorAnalytics() {
                   </TableCell>
                   <TableCell>
                     <div className="text-xs">
-                      {alert.previousInvoiceNumber} to {alert.latestInvoiceNumber}
+                      {alert.previousInvoiceNumber} to{" "}
+                      {alert.latestInvoiceNumber}
                     </div>
                     <div className="text-xs text-muted-foreground">
                       {formatDate(alert.latestInvoiceDate)}

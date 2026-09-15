@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useMemo } from 'react';
-import { usePathname, useSearchParams } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { useDashboardUser } from './dashboard-user-context';
-import type { LucideIcon } from 'lucide-react';
+import Link from "next/link";
+import { useMemo } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
+import { useDashboardUser } from "./dashboard-user-context";
+import type { LucideIcon } from "lucide-react";
 import {
   Calendar,
   ClipboardCheck,
@@ -23,9 +23,9 @@ import {
   Receipt,
   TrendingUp,
   Mic,
-} from 'lucide-react';
+} from "lucide-react";
 
-type PharmacySidebarSection = 'desk' | 'counter' | 'billing';
+type PharmacySidebarSection = "desk" | "counter" | "billing";
 
 type NavigationItem = {
   name: string;
@@ -37,105 +37,129 @@ type NavigationItem = {
 
 const navigation: NavigationItem[] = [
   {
-    name: 'Dashboard',
-    href: '/dashboard',
+    name: "Dashboard",
+    href: "/dashboard",
     icon: Home,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION', 'PHARMACIST', 'ACCOUNTANT'],
+    allowedRoles: [
+      "OWNER",
+      "ADMIN",
+      "MANAGER",
+      "DOCTOR",
+      "NURSE",
+      "RECEPTION",
+      "PHARMACIST",
+      "ACCOUNTANT",
+    ],
   },
   {
-    name: 'Patients',
-    href: '/dashboard/patients',
+    name: "Patients",
+    href: "/dashboard/patients",
     icon: Users,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: 'Appointments',
-    href: '/dashboard/appointments',
+    name: "Appointments",
+    href: "/dashboard/appointments",
     icon: Calendar,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: 'Visits',
-    href: '/dashboard/visits',
+    name: "Visits",
+    href: "/dashboard/visits",
     icon: Stethoscope,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE"],
   },
   {
-    name: 'Procedures',
-    href: '/dashboard/procedures',
+    name: "Procedures",
+    href: "/dashboard/procedures",
     icon: Activity,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR"],
   },
   {
-    name: 'Rooms',
-    href: '/dashboard/rooms',
+    name: "Rooms",
+    href: "/dashboard/rooms",
     icon: MapPin,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: 'Pharmacy Desk',
-    href: '/dashboard/pharmacy?section=desk',
+    name: "Pharmacy Desk",
+    href: "/dashboard/pharmacy?section=desk",
     icon: Pill,
-    pharmacySection: 'desk',
-    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
+    pharmacySection: "desk",
+    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: 'Pharmacy Counter',
-    href: '/dashboard/pharmacy?section=counter',
+    name: "Pharmacy Counter",
+    href: "/dashboard/pharmacy?section=counter",
     icon: ClipboardCheck,
-    pharmacySection: 'counter',
-    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
+    pharmacySection: "counter",
+    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: 'Pharmacy Billing',
-    href: '/dashboard/pharmacy?section=billing',
+    name: "Pharmacy Billing",
+    href: "/dashboard/pharmacy?section=billing",
     icon: Receipt,
-    pharmacySection: 'billing',
-    allowedRoles: ['ADMIN', 'PHARMACIST', 'RECEPTION'],
+    pharmacySection: "billing",
+    allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: 'Inventory',
-    href: '/dashboard/inventory',
+    name: "Inventory",
+    href: "/dashboard/inventory",
     icon: Package,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST', 'RECEPTION'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: 'Inventory Updates',
-    href: '/dashboard/inventory-updates',
+    name: "Inventory Updates",
+    href: "/dashboard/inventory-updates",
     icon: PackageCheck,
-    allowedRoles: ['OWNER', 'ADMIN', 'DOCTOR', 'PHARMACIST'],
+    allowedRoles: ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
   },
   {
-    name: 'Stock Predictions',
-    href: '/dashboard/stock-predictions',
+    name: "Reorder targets",
+    href: "/dashboard/inventory?area=reorder&view=targets",
     icon: TrendingUp,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "PHARMACIST"],
   },
   {
-    name: 'Reports',
-    href: '/dashboard/reports',
+    name: "Reports",
+    href: "/dashboard/reports",
     icon: BarChart3,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
   },
   {
-    name: 'Users',
-    href: '/dashboard/users',
+    name: "Users",
+    href: "/dashboard/users",
     icon: UserIcon,
-    allowedRoles: ['OWNER', 'ADMIN', 'MANAGER'],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
   },
   {
-    name: 'Test Transcribe',
-    href: '/test-transcribe',
+    name: "Test Transcribe",
+    href: "/test-transcribe",
     icon: Mic,
-    allowedRoles: ['OWNER', 'ADMIN', 'DOCTOR'],
+    allowedRoles: ["OWNER", "ADMIN", "DOCTOR"],
   },
 ];
 
-const defaultAllowedRoles = new Set<string>(['OWNER', 'ADMIN', 'MANAGER', 'DOCTOR', 'NURSE', 'RECEPTION', 'PHARMACIST', 'ACCOUNTANT']);
+const defaultAllowedRoles = new Set<string>([
+  "OWNER",
+  "ADMIN",
+  "MANAGER",
+  "DOCTOR",
+  "NURSE",
+  "RECEPTION",
+  "PHARMACIST",
+  "ACCOUNTANT",
+]);
 
-const filterNavigationByRole = (items: NavigationItem[], role: string | undefined) => {
+const filterNavigationByRole = (
+  items: NavigationItem[],
+  role: string | undefined,
+) => {
   if (!role) {
-    return items.filter((item) => item.allowedRoles?.some((r) => defaultAllowedRoles.has(r)) ?? true);
+    return items.filter(
+      (item) =>
+        item.allowedRoles?.some((r) => defaultAllowedRoles.has(r)) ?? true,
+    );
   }
 
   return items.filter((item) => {
@@ -148,42 +172,56 @@ const filterNavigationByRole = (items: NavigationItem[], role: string | undefine
 
 function getActivePharmacySection(
   pathname: string,
-  searchParams: Pick<URLSearchParams, 'get' | 'has'>,
+  searchParams: Pick<URLSearchParams, "get" | "has">,
 ): PharmacySidebarSection | null {
-  if (!pathname.startsWith('/dashboard/pharmacy')) return null;
+  if (!pathname.startsWith("/dashboard/pharmacy")) return null;
 
-  if (pathname === '/dashboard/pharmacy/invoices') return 'billing';
+  if (pathname === "/dashboard/pharmacy/invoices") return "billing";
 
-  const requested = searchParams.get('section') || searchParams.get('tab') || '';
-  if (requested === 'desk' || requested === 'counter' || requested === 'billing') {
+  const requested =
+    searchParams.get("section") || searchParams.get("tab") || "";
+  if (
+    requested === "desk" ||
+    requested === "counter" ||
+    requested === "billing"
+  ) {
     return requested;
   }
 
-  if (requested === 'invoices' || requested === 'payments') return 'billing';
+  if (requested === "invoices" || requested === "payments") return "billing";
 
   if (
-    searchParams.has('patientId') ||
-    searchParams.has('prescriptionId') ||
-    searchParams.has('doctorId') ||
-    searchParams.has('visitId')
+    searchParams.has("patientId") ||
+    searchParams.has("prescriptionId") ||
+    searchParams.has("doctorId") ||
+    searchParams.has("visitId")
   ) {
-    return 'billing';
+    return "billing";
   }
 
-  return 'desk';
+  return "desk";
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user, logout, loading } = useDashboardUser();
   const role = user?.role;
 
-  const navigationItems = useMemo(() => filterNavigationByRole(navigation, role), [role]);
-  const activePharmacySection = getActivePharmacySection(pathname, searchParams);
+  const navigationItems = useMemo(
+    () => filterNavigationByRole(navigation, role),
+    [role],
+  );
+  const activePharmacySection = getActivePharmacySection(
+    pathname,
+    searchParams,
+  );
 
   return (
-    <div className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]" data-tour="sidebar">
+    <div
+      className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]"
+      data-tour="sidebar"
+    >
       {/* Logo */}
       <div className="flex h-16 items-center px-6 border-b border-[var(--border)]">
         <div className="flex items-center">
@@ -197,27 +235,40 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1">
         {navigationItems.map((item) => {
-          const itemPath = item.href.split('?')[0];
-          const isActive = item.pharmacySection
-            ? activePharmacySection === item.pharmacySection
-            : itemPath === '/dashboard'
-              ? pathname === itemPath
-              : pathname === itemPath || pathname.startsWith(itemPath + '/');
+          const itemPath = item.href.split("?")[0];
+          const targetParams = new URLSearchParams(
+            item.href.split("?")[1] || "",
+          );
+          const isActive =
+            targetParams.size > 0 && !item.pharmacySection
+              ? pathname === itemPath &&
+                [...targetParams.entries()].every(
+                  ([key, value]) => searchParams.get(key) === value,
+                )
+              : item.pharmacySection
+                ? activePharmacySection === item.pharmacySection
+                : itemPath === "/dashboard"
+                  ? pathname === itemPath
+                  : pathname === itemPath ||
+                    pathname.startsWith(itemPath + "/");
           return (
             <Link
               key={item.name}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
-                'group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors border',
+                "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors border",
                 isActive
-                  ? 'bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--ring)] shadow-sm'
-                  : 'border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]'
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--ring)] shadow-sm"
+                  : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]",
               )}
             >
               <item.icon
                 className={cn(
-                  'mr-3 h-5 w-5',
-                  isActive ? 'text-[var(--accent-foreground)]' : 'text-[var(--muted-foreground)] group-hover:text-[var(--primary)]'
+                  "mr-3 h-5 w-5",
+                  isActive
+                    ? "text-[var(--accent-foreground)]"
+                    : "text-[var(--muted-foreground)] group-hover:text-[var(--primary)]",
                 )}
               />
               {item.name}
@@ -234,13 +285,21 @@ export function Sidebar() {
           </div>
           <div className="ml-3 flex-1">
             <p className="text-sm font-medium text-[var(--foreground)]">
-              {loading ? 'Loading…' : `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || user?.email || 'Unknown User'}
+              {loading
+                ? "Loading…"
+                : `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim() ||
+                  user?.email ||
+                  "Unknown User"}
             </p>
-            <p className="text-xs text-[var(--muted-foreground)]">{role ?? 'Unknown Role'}</p>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {role ?? "Unknown Role"}
+            </p>
           </div>
           <button
             className="ml-2 p-1 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-            onClick={() => { void logout(); }}
+            onClick={() => {
+              void logout();
+            }}
             aria-label="Log out"
           >
             <LogOut className="h-4 w-4" />

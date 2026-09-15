@@ -1,4 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
+import { GoneException } from '@nestjs/common';
+import { PharmacyComplianceController } from '../pharmacy-compliance.controller';
 import { PharmacyComplianceService } from '../pharmacy-compliance.service';
 import { ExpiryReturnWindowDto } from '../dto/pharmacy-compliance.dto';
 
@@ -187,97 +188,24 @@ describe('PharmacyComplianceService', () => {
     );
   });
 
-  it('applies audit corrections with stock adjustment and transaction references', async () => {
-    const item = {
-      id: 'inventory-1',
-      name: 'Azithral',
-      currentStock: 10,
-      costPrice: 50,
-      batchNumber: 'AZT1',
-      expiryDate: new Date('2027-12-01'),
-      supplier: 'Apex',
-      storageLocation: 'A1',
-      minStockLevel: 5,
-      reorderLevel: 5,
-    };
-    prisma.inventoryAudit.findMany.mockResolvedValue([
-      {
-        id: 'audit-row-1',
-        branchId,
-        itemId: item.id,
-        physicalStock: 10,
-        systemStock: 10,
-        variance: 0,
-        status: 'AUDIT_SESSION:audit-1:PENDING',
-        item,
-      },
-    ]);
-    prisma.inventoryItem.findMany.mockResolvedValue([item]);
-    prisma.stockAdjustment.create.mockResolvedValue({ id: 'adjustment-1' });
-    prisma.stockTransaction.create.mockResolvedValue({
-      id: 'transaction-1',
-      reference: 'AUDIT-audit-1',
+  it.each(['OWNER', 'ADMIN', 'MANAGER', 'PHARMACIST'])('rejects retired direct audit submission for %s before any database access', async (role) => {
+    const accessed: string[] = [];
+    const unavailableDb = new Proxy({}, { get(_target, key) { accessed.push(String(key)); throw new Error('Retired audit must not access database'); } });
+    const guardedService = new PharmacyComplianceService(unavailableDb as any);
+    const controller = new PharmacyComplianceController(guardedService);
+    let rejection: any;
+    try {
+      await controller.applyAuditAdjustments('old-audit', {
+        reason: 'Legitimate old-client request',
+        counts: [{ inventoryId: 'inventory-1', physicalStock: 8 }],
+      }, { user: { id: userId, branchId, role } });
+    } catch (error) { rejection = error; }
+    expect(rejection).toBeInstanceOf(GoneException);
+    expect(rejection.getStatus()).toBe(410);
+    expect(rejection.getResponse()).toMatchObject({
+      workflowUrl: '/dashboard/inventory?area=stock&view=COUNT',
+      message: expect.stringContaining('no stock was changed'),
     });
-    prisma.inventoryItem.update.mockResolvedValue({ ...item, currentStock: 8 });
-    prisma.inventoryAudit.update.mockResolvedValue({
-      id: 'audit-row-1',
-      physicalStock: 8,
-      systemStock: 10,
-      variance: -2,
-    });
-
-    const result = await service.applyAuditAdjustments(
-      'audit-1',
-      {
-        reason: 'Verified physical count shortage',
-        counts: [{ inventoryId: item.id, physicalStock: 8 }],
-      },
-      branchId,
-      userId,
-      'PHARMACIST',
-    );
-
-    expect(prisma.stockAdjustment.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          type: 'PHYSICAL_COUNT',
-          quantity: -2,
-          reason: 'Verified physical count shortage',
-        }),
-      }),
-    );
-    expect(prisma.stockTransaction.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          type: 'ADJUSTMENT',
-          quantity: 2,
-          reference: 'AUDIT-audit-1',
-        }),
-      }),
-    );
-    expect(result.adjustments[0]).toMatchObject({
-      userId,
-      reason: 'Verified physical count shortage',
-      beforeCount: 10,
-      afterCount: 8,
-      approvalRequired: true,
-      stockAdjustmentId: 'adjustment-1',
-      stockTransactionId: 'transaction-1',
-      transactionReference: 'AUDIT-audit-1',
-    });
-  });
-
-  it('rejects blank audit adjustment reasons', async () => {
-    await expect(
-      service.applyAuditAdjustments(
-        'audit-1',
-        {
-          reason: ' ',
-          counts: [{ inventoryId: 'inventory-1', physicalStock: 1 }],
-        },
-        branchId,
-        userId,
-      ),
-    ).rejects.toThrow(BadRequestException);
+    expect(accessed).toEqual([]);
   });
 });

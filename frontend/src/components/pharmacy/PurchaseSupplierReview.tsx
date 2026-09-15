@@ -11,6 +11,13 @@ type Supplier = { id: string; name: string; gstNumber: string | null };
 const identity = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 const gstin = (value: string | null) => (value || '').trim().toUpperCase();
 
+/**
+ * @cc [owner:nareshshah139,label:product;target] purchase-supplier-inline-resolution
+ * An unmatched or ambiguous supplier MUST be selectable or verifiable in the invoice screen using
+ * its name and GSTIN; resolving it MUST preserve the invoice edits and original document.
+ * Acceptance: INV-09. Validation and open gaps:
+ * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+ */
 export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, readOnly, disabled, nextAction = 'Save & Process', onChange, onSaved, onBusy, onEdit }: {
   name: string;
   gstNumber: string;
@@ -99,7 +106,7 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, read
     </div>}
     {!readOnly && !canSave && <p className="text-sm text-muted-foreground">Your permissions allow invoice entry but not saving suppliers. A staff member with supplier creation permission can save it here.</p>}
     {readOnly && onEdit && <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onEdit}>Edit supplier details</Button>}
-    {matches.length !== 1 && <p className="text-sm text-muted-foreground">You can also continue without saving a supplier: verify these details, resolve the other checks, then use Mark Reviewed → Commit Stock.</p>}
+    {matches.length !== 1 && <p className="text-sm text-muted-foreground">You can also continue without saving a supplier: verify these details, resolve the other checks, then confirm your review and choose Save &amp; Process.</p>}
     {message && <p role="status" className="text-sm font-medium">{message}</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
   </section>;

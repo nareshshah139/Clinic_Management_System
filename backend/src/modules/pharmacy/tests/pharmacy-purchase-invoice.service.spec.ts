@@ -40,7 +40,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
         productName: 'Azithral 500 Tablet',
         manufacturer: 'Alembic Pharmaceuticals',
         packSize: 'Strip of 3',
-        packUnitType: 'Tablet',
+        packUnitType: 'Strip',
         hsnCode: '3004',
         batchNumber: 'AZT2401',
         expiryMonth: 12,
@@ -62,6 +62,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
 
   beforeEach(() => {
     prisma = {
+      auditLog: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((callback: any) => callback(prisma)),
       pharmacyPurchaseInvoice: {
         create: jest.fn(),
@@ -71,6 +72,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
+      pharmacyPurchaseInvoiceItem: { update: jest.fn().mockResolvedValue({}) },
       drug: {
         findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
@@ -91,6 +93,14 @@ describe('PharmacyPurchaseInvoiceService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([null, 'receipt-1'])('restores persisted receipt quantities without repeating a stock commit (receipt %s)', async (workflowReceiptId) => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({ id:'posted-1', status:'STOCK_COMMITTED', workflowReceiptId, items:[{ inventoryItemId:'batch-1', productName:'Cream', batchNumber:'A', quantityPurchased:6, freeQuantity:3, packSize:'30ML', ocrFlags:[] }] });
+    const invoice = await service.findOne('posted-1', branchId);
+    expect(invoice.committedItems).toEqual([expect.objectContaining({inventoryItemId:'batch-1',purchasedQuantity:6,freeQuantity:3,quantityCommitted:workflowReceiptId ? 0 : 9})]);
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({where:{id:'posted-1',branchId}}));
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
 
   it('stores a clean purchase invoice as a draft without stock mutation', async () => {
@@ -557,6 +567,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       {
         id: 'inventory-1',
         currentStock: 10,
+        unit: 'STRIPS',
         minStockLevel: 5,
         reorderLevel: null,
         expiryDate: new Date(2027, 11, 31, 23, 59, 59, 999),
@@ -636,6 +647,56 @@ describe('PharmacyPurchaseInvoiceService', () => {
     );
   });
 
+  it.each([
+    ['Pack', '30ML', 'PACKS'],
+    ['Tube', '30ML', 'TUBES'],
+    ['Vial', '10ML', 'VIALS'],
+    ['Ampoule', '2ML', 'AMPOULES'],
+    ['Syringe', '1ML', 'SYRINGES'],
+    ['Box', '50GM', 'BOXES'],
+    ['Kit', '30ML', 'KITS'],
+    ['Bottle', '50GM', 'BOTTLES'],
+    ['Strip', "10'S", 'STRIPS'],
+    ['Piece', '30ML', 'PIECES'],
+    ['Tablet', 'Strip of 10', 'PIECES'],
+  ])('posts the declared %s unit for %s without reinterpreting content size', async (packUnitType, packSize, unit) => {
+    const invoice = reviewedInvoice();
+    Object.assign(invoice.items[0], { packUnitType, packSize, quantityPurchased: 6, freeQuantity: 3 });
+    prisma.pharmacyPurchaseInvoice.findFirst
+      .mockResolvedValueOnce(invoice)
+      .mockResolvedValueOnce({ ...invoice, status: 'STOCK_COMMITTED' });
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    prisma.drug.findMany.mockResolvedValue([{ ...completeDrug(), packSizeLabel: packSize }]);
+    prisma.inventoryItem.findMany.mockResolvedValue([]);
+    prisma.inventoryItem.create.mockResolvedValue({ id: 'inventory-new' });
+
+    await service.commitStock('purchase-1', branchId, userId);
+
+    expect(prisma.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ unit, packUnit: packUnitType, currentStock: 9 }),
+    }));
+    expect(prisma.stockTransaction.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ quantity: 9 }),
+    }));
+  });
+
+  it('rejects a historical batch with a different declared unit instead of relabelling or adding stock', async () => {
+    const invoice = reviewedInvoice();
+    Object.assign(invoice.items[0], { packUnitType: 'Pack', packSize: '30ML' });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(invoice);
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    prisma.drug.findMany.mockResolvedValue([{ ...completeDrug(), packSizeLabel: '30ML' }]);
+    prisma.inventoryItem.findMany.mockResolvedValue([{
+      id: 'legacy-batch', currentStock: 9, unit: 'BOTTLES', status: 'ACTIVE',
+      expiryDate: new Date(2027, 11, 31, 23, 59, 59, 999), mrp: 78,
+    }]);
+
+    await expect(service.commitStock('purchase-1', branchId, userId)).rejects.toThrow('saved batch stock unit differs');
+    expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
   it('returns an already committed purchase invoice without mutating stock again', async () => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(
       reviewedInvoice({
@@ -658,7 +719,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     distributorGstin: '36ABCDE1234F1Z5',
     invoiceNumber: 'LD-AN-001',
     invoiceDate: new Date('2026-03-01T09:00:00.000Z'),
-    status: 'REVIEWED',
+    status: 'STOCK_COMMITTED',
     items: [
       {
         id: 'analytics-line-1',
@@ -666,6 +727,8 @@ describe('PharmacyPurchaseInvoiceService', () => {
         productName: 'Azithral 500 Tablet',
         manufacturer: 'Alembic Pharmaceuticals',
         packSize: 'Strip of 3',
+        packUnitType: 'Strip',
+        inventoryItemId: 'inventory-analytics',
         hsnCode: '3004',
         quantityPurchased: 20,
         freeQuantity: 2,
@@ -680,7 +743,8 @@ describe('PharmacyPurchaseInvoiceService', () => {
     ...overrides,
   });
 
-  it('builds distributor analytics from reviewed purchase invoices only', async () => {
+  it('builds distributor analytics from posted purchase invoices only', async () => {
+    prisma.inventoryItem.findMany.mockResolvedValue([{ id: 'inventory-analytics', drugs: [{ id: 'master-analytics' }] }]);
     prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([
       analyticsInvoice(),
       analyticsInvoice({
@@ -695,6 +759,8 @@ describe('PharmacyPurchaseInvoiceService', () => {
             productName: 'Azithral 500 Tablet',
             manufacturer: 'Alembic Pharmaceuticals',
             packSize: 'Strip of 3',
+        packUnitType: 'Strip',
+        inventoryItemId: 'inventory-analytics',
             hsnCode: '3004',
             quantityPurchased: 10,
             freeQuantity: 0,
@@ -723,7 +789,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           branchId,
-          status: { in: ['REVIEWED', 'STOCK_COMMITTED'] },
+          status: 'STOCK_COMMITTED',
           invoiceDate: {
             gte: new Date('2026-03-01'),
             lte: new Date('2026-03-31T23:59:59.999Z'),
@@ -771,6 +837,43 @@ describe('PharmacyPurchaseInvoiceService', () => {
         dropPercent: 8,
       }),
     ]);
+  });
+
+  it('keeps the complete filtered ranking and separates product masters and declared pack units', async () => {
+    const base = analyticsInvoice();
+    const line = base.items[0];
+    const invoices = [
+      base,
+      analyticsInvoice({ id: 'purchase-second-unit', invoiceNumber: 'UNIT-2', items: [{ ...line, id: 'line-unit', packUnitType: 'Tablet', discountPercent: 0, specialDiscountPercent: 0 }] }),
+      analyticsInvoice({ id: 'purchase-other-master', invoiceNumber: 'MASTER-2', items: [{ ...line, id: 'line-master', discountPercent: 0 }] }),
+      analyticsInvoice({ id: 'reviewed-unposted', status: 'REVIEWED', items: [{ ...line, id: 'line-unposted', taxableAmount: 999999 }] }),
+      analyticsInvoice({ id: 'other-product', items: [{ ...line, id: 'line-unrelated', productName: 'Unrelated cream', taxableAmount: 999999 }] }),
+    ];
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue(invoices);
+    prisma.inventoryItem.findMany.mockResolvedValue([{ id: 'inventory-analytics', drugs: [{ id: 'master-fallback' }] }]);
+    prisma.auditLog.findMany.mockResolvedValue(invoices.flatMap(invoice => invoice.items.map((item: any) => ({ entityId: invoice.id, newValues: JSON.stringify({ branchId, lineId: item.id, drugId: invoice.id === 'purchase-other-master' ? 'master-other' : 'master-one' }) }))));
+    const result = await service.getDistributorAnalytics({ productName: 'Azithral', hsnCode: '3004', distributorGstin: '36ABCDE1234F1Z5', limit: 1 }, branchId);
+    expect(result.products).toHaveLength(3);
+    expect(result.totals).toMatchObject({ invoiceCount: 3, lineCount: 3, taxableAmount: 3300, effectiveUnitCost: null, compatibleUnitBasis: false });
+    expect(result.products.reduce((sum, row) => sum + row.lineTotal, 0)).toBe(result.totals.lineTotal);
+    expect(result.distributors.reduce((sum, row) => sum + row.lineTotal, 0)).toBe(result.totals.lineTotal);
+    expect(result.distributors[0].effectiveUnitCost).toBeNull();
+    expect(result.discountDropAlerts).toEqual([]);
+    expect(result.products.map(row => [row.productIdentityKey, row.packUnitType])).toEqual(expect.arrayContaining([
+      ['master:master-one', 'Strip'], ['master:master-one', 'Tablet'], ['master:master-other', 'Strip'],
+    ]));
+    expect(result.filters.includedStatuses).toEqual(['STOCK_COMMITTED']);
+    expect(prisma.pharmacyPurchaseInvoice.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ branchId, status: 'STOCK_COMMITTED', distributorGstin: '36ABCDE1234F1Z5', items: { some: { productName: { contains: 'Azithral', mode: 'insensitive' }, hsnCode: '3004' } } }) }));
+  });
+
+  it('keeps historical purchases without verifiable master identity visible but their comparable cost unknown', async () => {
+    const invoice = analyticsInvoice();
+    invoice.items[0].inventoryItemId = null;
+    prisma.pharmacyPurchaseInvoice.findMany.mockResolvedValue([invoice]);
+    const result = await service.getDistributorAnalytics({}, branchId);
+    expect(result.totals.lineCount).toBe(1);
+    expect(result.products[0]).toMatchObject({ productIdentityKnown: false, effectiveUnitCost: null });
+    expect(result.discountDropAlerts).toEqual([]);
   });
 
   it('rejects distributor analytics with an inverted date range', async () => {

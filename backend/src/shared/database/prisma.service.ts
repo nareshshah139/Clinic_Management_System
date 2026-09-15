@@ -7,6 +7,9 @@ function redactSensitiveFields<T>(input: T): T {
     'password',
     'resetToken',
     'resetTokenExpiry',
+    'encryptedTokens',
+    'googleRefreshToken',
+    'stateHash',
   ]);
 
   const visit = (val: any): any => {

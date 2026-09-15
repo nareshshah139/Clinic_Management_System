@@ -88,8 +88,8 @@ export class PharmacyComplianceController {
   @Post('audits/:auditId/adjustments')
   @Roles('OWNER' as any, 'ADMIN' as any, 'PHARMACIST' as any, 'MANAGER' as any)
   @Permissions('pharmacy:compliance:audit')
-  @ApiOperation({ summary: 'Apply post-audit stock corrections' })
-  @ApiResponse({ status: 201, description: 'Audit adjustments applied' })
+  @ApiOperation({ summary: 'Retired audit submission; use versioned Counts & audit' })
+  @ApiResponse({ status: 410, description: 'No stock changed; canonical count workflow URL returned' })
   applyAuditAdjustments(
     @Param('auditId') auditId: string,
     @Body() dto: ApplyPharmacyAuditAdjustmentsDto,

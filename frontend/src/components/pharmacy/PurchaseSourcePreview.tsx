@@ -45,6 +45,14 @@ export function SourceFieldLink({ id, label }: { id: string; label: string }) {
 }
 
 type Document = { id: string; fileName: string; mimeType: string };
+/**
+ * @cc [owner:nareshshah139,label:product;target] purchase-source-links-honest
+ * A source link MUST navigate to the matching retained page and estimated region; missing or
+ * ambiguous geometry MUST say that no reliable location is available, and MUST NOT replace
+ * invoice values.
+ * Acceptance: INV-12. Validation and open gaps:
+ * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+ */
 export function PurchaseSourcePreview({
   document: doc,
   targets,
