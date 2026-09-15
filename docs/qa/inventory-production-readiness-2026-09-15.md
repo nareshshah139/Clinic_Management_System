@@ -1,5 +1,7 @@
 # Inventory readiness fixes and database impact — 15 September 2026
 
+**Deployment follow-up:** The release was subsequently deployed and migrated on 15 September. See the [production deployment verification](inventory-production-deployment-2026-09-15.md). The assessment below records the earlier predeployment state.
+
 The three blockers identified in the [14 September assessment](inventory-production-readiness-2026-09-14.md) have been addressed: explicit stock-unit precedence, live Railway deployment health-check settings, and a fresh backup with an isolated full-data restoration/migration rehearsal. The code remains local and uncommitted; no application deployment or production migration was performed. This is predeployment evidence, not a claim that a new Railway release has already passed its deployment checks.
 
 ## What changed
