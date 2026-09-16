@@ -5,6 +5,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
+import { inventoryNameAliases, inventoryProductName, retainPreviousInventoryName } from './inventory-names';
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -15,8 +16,8 @@ export class InventoryWorkspaceService {
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
-    const productName = item.drugs?.length === 1 ? item.drugs[0].name || item.name : item.name;
-    const packLabel = metadata.sourcePackLabel || metadata.packLabel || (item.packSize && item.packUnit ? `${item.packSize} ${item.packUnit}` : null);
+    const productName = inventoryProductName(item, metadata);
+    const packLabel = metadata.nameNormalization?.sourcePackLabel || metadata.sourcePackLabel || metadata.packLabel || (item.packSize && item.packUnit ? `${item.packSize} ${item.packUnit}` : null);
     const baseFactor = ['STRIPS','PACKS','BOXES'].includes(item.unit) ? item.packSize || null : 1;
     const available = item.currentStock - item.heldStock;
     const packUnits = ['STRIPS','PACKS','BOXES'].includes(item.unit);
@@ -69,7 +70,7 @@ export class InventoryWorkspaceService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] inventory-search-not-identity
-   * Stock lookup MUST search source and linked product names and source codes with all query
+   * Stock lookup MUST search retained aliases, source and linked product names and source codes with all query
    * words in any order. Lookup MUST NOT merge records or infer product identity. An inventory:
    * code MUST resolve only the exact branch item ID.
    */
@@ -101,7 +102,7 @@ export class InventoryWorkspaceService {
       if (search.startsWith('inventory:')) {
         if (i.id !== search.slice('inventory:'.length)) return false;
       } else if (search) {
-        const values = [i.id,i.name,i.productName,i.genericName,i.brandName,i.batchNumber,i.barcode,i.sku,i.packLabel,i.metadata.sourceItemCode,...(i.drugs||[]).map((d: { name: string })=>d.name)];
+        const values = [i.id,i.name,i.productName,i.genericName,i.brandName,i.batchNumber,i.barcode,i.sku,i.packLabel,i.metadata.sourceItemCode,...inventoryNameAliases(i.metadata),...(i.drugs||[]).map((d: { name: string })=>d.name)];
         const haystack = values.map(v=>words(v).join(' '));
         if (!values.some(v=>text(v).includes(text(search))) && (!searchWords.length || !searchWords.every(w=>haystack.some(v=>v.includes(w))))) return false;
       }
@@ -194,6 +195,7 @@ export class InventoryWorkspaceService {
       const data:any={},meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
       for(const f of ['name','genericName','brandName','category','subCategory','manufacturer','supplier','hsnCode','storageLocation','storageConditions','barcode','sku'])if(input[f]!==undefined)data[f]=String(input[f]).trim()||null;
       if(input.name!==undefined&&!data.name)throw new BadRequestException('Product name is required');
+      if(data.name && data.name!==item.name)retainPreviousInventoryName(meta,item.name);
       for(const f of ['barcode','sku']) if(data[f] && data[f]!==item[f] && await tx.inventoryItem.findFirst({where:{[f]:data[f],id:{not:id}},select:{id:true}})) throw new ConflictException(`This ${f.toUpperCase()} is already assigned. Choose a unique code.`);
       for(const f of ['gstRate','minStockLevel','maxStockLevel','reorderLevel','reorderQuantity'])if(input[f]!==undefined){data[f]=input[f]===''||input[f]===null?null:Number(input[f]);if(data[f]!=null&&(!Number.isFinite(data[f])||data[f]<0||(f!=='gstRate'&&!Number.isSafeInteger(data[f]))))throw new BadRequestException(`${f} must be nonnegative`);}
       const value=(f:string)=>Object.prototype.hasOwnProperty.call(data,f)?data[f]:item[f];

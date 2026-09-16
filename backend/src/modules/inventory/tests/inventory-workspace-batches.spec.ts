@@ -57,4 +57,54 @@ describe('stock batch views and name lookup', () => {
       branchId: 'clinic', drugs: { some: { id: 'cream' }, every: { id: 'cream' } }, unit: 'PACKS', packSize: 100, packUnit: 'g',
     });
   });
+  it('displays reviewed names and finds former names without merging units, IDs or batches', async () => {
+    prisma.inventoryItem.findMany.mockResolvedValue([
+      row('a', 12, { name: 'Tyrodin FSR Tablet', unit: 'PIECES',
+        metadata: { nameNormalization: { version: 1, aliases: ['Tyrodin Fsr Tab'] } },
+        drugs: [{ id: 'loose', name: 'Tyrodin Fsr Tab (loose tablets)' }] }),
+      row('b', 2, { name: 'Tyrodin FSR Tablet', unit: 'STRIPS',
+        metadata: { nameNormalization: { version: 1, aliases: ['Tyrodin Fsr Tab'] } },
+        drugs: [{ id: 'strip', name: 'Tyrodin Fsr Tab' }] }),
+    ]);
+    const result = await service.stock(actor, { search: 'fsr tab' });
+    expect(result.total).toBe(2);
+    expect(result.rows.map(r => [r.id, r.productName, r.currentStock, r.unit, r.drugs[0].id])).toEqual([
+      ['a', 'Tyrodin FSR Tablet (loose tablets)', 12, 'PIECES', 'loose'],
+      ['b', 'Tyrodin FSR Tablet', 2, 'STRIPS', 'strip'],
+    ]);
+  });
+  it('keeps aliases and pack text from legacy names searchable after normalization', async () => {
+    prisma.inventoryItem.findMany.mockResolvedValue([
+      row('legacy', 0, { name: 'Tricosilk Pro Hair Solution', packSize: null, packUnit: null, drugs: [],
+        metadata: { nameNormalization: { version: 1, sourcePackLabel: '60 ml', aliases: ['TRICOSLIK PRO SOLUTION 60ML'] } } }),
+    ]);
+    const result = await service.stock(actor, { search: 'tricoslik 60ml' });
+    expect(result.rows[0].productName).toBe('Tricosilk Pro Hair Solution');
+    expect(result.rows[0].packLabel).toBe('60 ml');
+    expect(result.rows[0].packSize).toBeNull();
+  });
+  it('makes subsequent manual name corrections visible, retains old aliases and audits only item metadata', async () => {
+    const original = row('a', 12, { name: 'Previous Name', updatedAt: new Date(),
+      metadata: JSON.stringify({ sourceItemCode: 'M123', nameNormalization: { version: 1, aliases: ['Original Name'] } }) });
+    const tx = {
+      inventoryItem: {
+        findFirst: jest.fn().mockResolvedValue(original),
+        update: jest.fn().mockImplementation(async ({ data }) => ({ ...original, ...data })),
+      }, auditLog: { create: jest.fn() },
+    };
+    service = new InventoryWorkspaceService(prisma, {
+      permissions: async () => new Set(['inventory:item:update', 'inventory:item:read']),
+      transaction: (fn: any) => fn(tx),
+    } as any);
+    const saved = await service.saveItem(actor, original.id, { updatedAt: original.updatedAt.toISOString(), name: 'Corrected Name' });
+    const metadata = JSON.parse(saved.metadata);
+    expect(metadata.nameNormalization.aliases).toEqual(['Original Name', 'Previous Name']);
+    expect(metadata.sourceItemCode).toBe('M123');
+    expect(Object.keys(tx.inventoryItem.update.mock.calls[0][0].data).sort()).toEqual(['metadata', 'name', 'stockStatus']);
+    expect(tx.auditLog.create).toHaveBeenCalledTimes(1);
+    prisma.inventoryItem.findMany.mockResolvedValue([saved]);
+    expect((await service.stock(actor, { search: 'original name' })).rows[0].productName).toBe('Corrected Name');
+    await expect(service.saveItem(actor, original.id, { updatedAt: 'stale', name: 'Bad Name' })).rejects.toThrow('Batch details changed');
+    expect(tx.inventoryItem.update).toHaveBeenCalledTimes(1);
+  });
 });
