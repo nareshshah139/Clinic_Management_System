@@ -5,6 +5,7 @@ import { ArrowLeft, Search, Printer, Download, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
+import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
   fmtMoney,
   fmtDate,
@@ -57,6 +58,10 @@ export function WorkspaceStock({
   onBack,
 }: Props) {
   const { user } = useDashboardUser();
+  const stockQuery = stockPageQuery(query);
+  const selectionScope = JSON.stringify(Object.entries(stockQuery)
+    .filter(([key]) => !["page", "item", "return"].includes(key))
+    .sort(([a], [b]) => a.localeCompare(b)));
   const editKey = `inventory-item-edit:${user?.branchId}:${user?.id}:${itemId}`;
   const [data, setData] = useState<any>(null),
     [detail, setDetail] = useState<any>(null),
@@ -100,7 +105,7 @@ export function WorkspaceStock({
       } else
         setData(
           await apiClient.get(
-            "/inventory/workspace/stock?" + new URLSearchParams(query),
+            "/inventory/workspace/stock?" + new URLSearchParams(stockQuery),
           ),
         );
     } catch (e: any) {
@@ -112,6 +117,10 @@ export function WorkspaceStock({
   useEffect(() => {
     void load();
   }, [itemId, JSON.stringify(query)]);
+  useEffect(() => {
+    setSearch(query.search || "");
+  }, [JSON.stringify(query)]);
+  useEffect(() => { setSelected([]); }, [selectionScope]);
   useEffect(() => {
     if (edit && itemId)
       try {
@@ -126,7 +135,7 @@ export function WorkspaceStock({
     setBusy(true);
     try {
       const d = await apiClient.post<any>("/inventory/workspace/counts", {
-        filters: query,
+        filters: stockQuery,
         itemIds: selected,
         requestKey: requestKey(),
       });
@@ -142,7 +151,7 @@ export function WorkspaceStock({
     try {
       const first = await apiClient.get<any>(
         "/inventory/workspace/stock?" +
-          new URLSearchParams({ ...query, page: "1", limit: "100" }),
+          new URLSearchParams({ ...stockQuery, page: "1", limit: "100" }),
       );
       const rows = [...first.rows];
       for (let page = 2; page <= first.totalPages; page++)
@@ -151,7 +160,7 @@ export function WorkspaceStock({
             await apiClient.get<any>(
               "/inventory/workspace/stock?" +
                 new URLSearchParams({
-                  ...query,
+                  ...stockQuery,
                   page: String(page),
                   limit: "100",
                 }),
@@ -161,7 +170,10 @@ export function WorkspaceStock({
       downloadCsv(
         "inventory-stock.csv",
         rows.map((r: any) => ({
-          Product: r.name,
+          Product: r.productName || r.name,
+          SourceName: r.name,
+          Pack: r.packLabel,
+          BatchState: batchState(r),
           Batch: r.batchNumber,
           Expiry: r.expiryDate,
           Unit: r.unit,
@@ -233,10 +245,12 @@ export function WorkspaceStock({
             <>
               <header className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-semibold">{item.name}</h2>
+                  <h2 className="text-2xl font-semibold">{item.productName || item.name}</h2>
+                  {item.packLabel && <p>{item.packLabel} · Stock counted in {item.unit}</p>}
+                  <p className="text-sm">{batchState(item)}</p>
                   <p className="text-muted-foreground">
                     {item.batchNumber || "Batch unspecified"} · Expiry{" "}
-                    {fmtDate(item.expiryDate)} ·{" "}
+                    {fmtStockExpiry(item.expiryDate)} ·{" "}
                     {item.storageLocation || "Location not assigned"}
                   </p>
                 </div>
@@ -456,6 +470,7 @@ export function WorkspaceStock({
               </nav>
               {tab === "batches" && (
                 <>
+                  <p className="text-sm text-muted-foreground">{detail.identityBasis}. Multiple batches can be on hand; compare expiry dates when choosing stock.</p>
                   <label className="flex gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -470,6 +485,7 @@ export function WorkspaceStock({
                         <tr>
                           {[
                             "Batch",
+                            "Batch state",
                             "Expiry",
                             "Physical",
                             "Held",
@@ -493,7 +509,7 @@ export function WorkspaceStock({
                         {detail.batches
                           .filter((b: any) => !hideZero || b.currentStock !== 0)
                           .map((b: any) => (
-                            <tr key={b.id}>
+                            <tr key={b.id} className={batchRowClass(b)}>
                               <td className="p-3">
                                 <button
                                   className="font-medium underline"
@@ -502,7 +518,8 @@ export function WorkspaceStock({
                                   {b.batchNumber || "No batch"}
                                 </button>
                               </td>
-                              <td>{fmtDate(b.expiryDate)}</td>
+                              <td>{batchState(b)}</td>
+                              <td>{fmtStockExpiry(b.expiryDate)}</td>
                               <td>{b.currentStock}</td>
                               <td>{b.heldStock}</td>
                               <td>{b.available}</td>
@@ -929,7 +946,7 @@ export function WorkspaceStock({
             }}
           >
             <label className="min-w-60 flex-1">
-              <span className="sr-only">Search stock</span>
+              <span className="mb-1 block text-sm">Search stock</span>
               <input
                 className={inputClass}
                 value={search}
@@ -966,9 +983,25 @@ export function WorkspaceStock({
               Reset
             </Button>
           </form>
+          <div className="space-y-2">
+            <nav aria-label="Batch view" className="flex flex-wrap gap-2">
+              {[["ALL", "All batches"], ["ON_HAND", "Current / on hand"], ["EMPTY", "Previous / depleted"]].map(([value, label]) => (
+                <Button key={value} variant={stockQuery.batchView === value ? "default" : "outline"}
+                  aria-pressed={stockQuery.batchView === value}
+                  onClick={() => navigate({ batchView: value, stock: "", expiryMonths: "", page: "1", item: "" })}>
+                  {label}
+                </Button>
+              ))}
+            </nav>
+            <p className="text-sm text-muted-foreground">
+              {stockQuery.batchView === "ON_HAND" ? "Batches with physical stock, including held or expired units. Multiple batches can be on hand at once."
+                : stockQuery.batchView === "EMPTY" ? "Depleted batches have zero stock and remain available for history. Open a batch's ledger to see sales and other movements."
+                : "All batches stay visible. Current stock is green, depleted batches are grey, and stock needing attention is amber. Multiple batches can hold current stock."}
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             {[
-              ["", "All stock"],
+              ["", "Any stock level"],
               ["LOW", "Low stock"],
               ["HIGH", "Above maximum"],
               ["POSITIVE", "Positive"],
@@ -981,7 +1014,7 @@ export function WorkspaceStock({
                 size="sm"
                 key={v}
                 variant={(query.stock || "") === v ? "default" : "outline"}
-                onClick={() => filter("stock", v)}
+                onClick={() => navigate({ stock: v, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}
               >
                 {t}
               </Button>
@@ -994,7 +1027,7 @@ export function WorkspaceStock({
                   query.expiryMonths === String(n) ? "default" : "outline"
                 }
                 onClick={() =>
-                  navigate({ expiryMonths: String(n), stock: "", page: "1" })
+                  navigate({ expiryMonths: String(n), stock: "", batchView: "ALL", page: "1" })
                 }
               >
                 Expires in {n} {n === 1 ? "month" : "months"}
@@ -1279,6 +1312,7 @@ export function WorkspaceStock({
                   {[
                     "Select",
                     "Product / batch",
+                    "Batch state",
                     "Expiry",
                     "Physical",
                     "Held",
@@ -1296,7 +1330,7 @@ export function WorkspaceStock({
               </thead>
               <tbody className="divide-y">
                 {data?.rows.map((i: any) => (
-                  <tr key={i.id}>
+                  <tr key={i.id} className={batchRowClass(i)}>
                     <td className="p-3">
                       <input
                         type="checkbox"
@@ -1316,14 +1350,17 @@ export function WorkspaceStock({
                         onClick={() => navigate({ item: i.id })}
                         className="text-left font-medium underline decoration-muted-foreground/50 underline-offset-4"
                       >
-                        {i.name}
+                        {i.productName || i.name}
                       </button>
+                      {i.packLabel && <p className="text-sm">{i.packLabel}</p>}
+                      {i.productName && i.productName !== i.name && <p className="text-xs text-muted-foreground">Recorded as: {i.name}</p>}
                       <p className="text-xs text-muted-foreground">
                         {i.batchNumber || "Batch missing"}
                       </p>
                     </td>
+                    <td className="p-3">{batchState(i)}</td>
                     <td className="whitespace-nowrap p-3">
-                      {fmtDate(i.expiryDate)}
+                      {fmtStockExpiry(i.expiryDate)}
                     </td>
                     <td className="p-3">{i.currentStock}</td>
                     <td className="p-3">{i.heldStock}</td>
@@ -1339,7 +1376,7 @@ export function WorkspaceStock({
                 {!busy && !error && data && !data.rows?.length && (
                   <tr>
                     <td
-                      colSpan={10}
+                      colSpan={11}
                       className="p-8 text-center text-muted-foreground"
                     >
                       No batches match these filters. Reset or change the

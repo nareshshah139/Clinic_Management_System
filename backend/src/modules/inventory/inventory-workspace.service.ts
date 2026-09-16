@@ -15,6 +15,8 @@ export class InventoryWorkspaceService {
   }
   private present(item: any) {
     const metadata = jsonObject(item.metadata), priceBasis = metadata.purchaseInvoice?.priceBasis || metadata.priceBasis;
+    const productName = item.drugs?.length === 1 ? item.drugs[0].name || item.name : item.name;
+    const packLabel = metadata.sourcePackLabel || metadata.packLabel || (item.packSize && item.packUnit ? `${item.packSize} ${item.packUnit}` : null);
     const baseFactor = ['STRIPS','PACKS','BOXES'].includes(item.unit) ? item.packSize || null : 1;
     const available = item.currentStock - item.heldStock;
     const packUnits = ['STRIPS','PACKS','BOXES'].includes(item.unit);
@@ -22,7 +24,7 @@ export class InventoryWorkspaceService {
     const packQuantity = packUnits ? item.currentStock : Number.isSafeInteger(unitsPerPack) && unitsPerPack > 0 ? item.currentStock / unitsPerPack : null;
     const packEquivalentUnit = packUnits ? item.unit : packQuantity != null ? metadata.packLabel || (/strip/i.test(item.packUnit||'')?'STRIPS':`packs of ${unitsPerPack} ${item.unit}`) : null;
     const mappingStatus = metadata.mappingStatus === 'PENDING' || metadata.mappingPending ? 'PENDING' : (item._count?.drugs || item.drugs?.length) ? 'MAPPED' : 'UNMAPPED';
-    return { ...item, metadata, available, mappingStatus, packQuantity, packEquivalentUnit, unitsPerPack:packUnits?baseFactor:unitsPerPack||null, baseFactor, baseQuantity: baseFactor ? item.currentStock * baseFactor : null,
+    return { ...item, metadata, productName, packLabel, available, mappingStatus, packQuantity, packEquivalentUnit, unitsPerPack:packUnits?baseFactor:unitsPerPack||null, baseFactor, baseQuantity: baseFactor ? item.currentStock * baseFactor : null,
       margin: item.mrp > 0 ? money((item.mrp - item.costPrice) / item.mrp * 100) : null,
       priceBasis: priceBasis || 'Historical purchase cost per stock unit; landing-cost allocation unknown',
       issues: [!item.category && 'Category missing', !item.hsnCode && 'HSN missing', item.gstRate == null && 'GST missing', !item.storageLocation && 'Location missing',
@@ -59,10 +61,26 @@ export class InventoryWorkspaceService {
    * Acceptance: INV-30. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-batch-view-scope
+   * ON_HAND MUST include every positive physical balance, including held or expired stock;
+   * EMPTY MUST include only zero physical balances. An omitted view MUST retain all batches
+   * for existing API consumers. View filters MUST apply before pagination and valuation.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-search-not-identity
+   * Stock lookup MUST search source and linked product names and source codes with all query
+   * words in any order. Lookup MUST NOT merge records or infer product identity. An inventory:
+   * code MUST resolve only the exact branch item ID.
+   */
   async stock(actor: WorkflowActor, q: Record<string, any> = {}) {
     await this.require(actor, 'inventory:item:read');
-    const all = (await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId},include:{_count:{select:{drugs:true}}},orderBy:[{name:'asc'},{expiryDate:'asc'},{id:'asc'}]})).map(i=>this.present(i));
+    const batchView = q.batchView || 'ALL';
+    if (!['ALL','ON_HAND','EMPTY'].includes(batchView)) throw new BadRequestException('Unknown batch view');
+    const all = (await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId},include:{drugs:{select:{id:true,name:true,packSizeLabel:true}},_count:{select:{drugs:true}}},orderBy:[{name:'asc'},{expiryDate:'asc'},{id:'asc'}]})).map(i=>this.present(i));
     const text = (s:any)=>String(s||'').toLowerCase();
+    const words = (s:any)=>text(s).replace(/[^\p{L}\p{N}.]+/gu,' ').trim().split(/\s+/).filter(Boolean);
+    const search = String(q.search || '').trim(), searchWords = words(search);
     const now = new Date(), expiryStart = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())), future = new Date(expiryStart);
     const months = Number(q.expiryMonths||0); if (![0,1,2,3,6].includes(months)) throw new BadRequestException('Expiry window must be 1, 2, 3 or 6 months');
     const day=future.getUTCDate(); future.setUTCDate(1);future.setUTCMonth(future.getUTCMonth()+months);future.setUTCDate(Math.min(day,new Date(Date.UTC(future.getUTCFullYear(),future.getUTCMonth()+1,0)).getUTCDate())); future.setUTCHours(23,59,59,999);
@@ -77,8 +95,16 @@ export class InventoryWorkspaceService {
     }
     const fields = ['category','subCategory','manufacturer','supplier','type','unit','storageLocation','status'];
     const rows = all.filter(i=> {
+      if (batchView === 'ON_HAND' && i.currentStock <= 0) return false;
+      if (batchView === 'EMPTY' && i.currentStock !== 0) return false;
       if (q.saleEligible==='true' && (i.status!=='ACTIVE'||i.available<=0||!!i.expiryDate&&i.expiryDate<expiryStart)) return false;
-      if (q.search && ![i.id,i.name,i.genericName,i.brandName,i.batchNumber,i.barcode,i.sku].some(v=>text(v).includes(text(String(q.search).replace(/^inventory:/,''))))) return false;
+      if (search.startsWith('inventory:')) {
+        if (i.id !== search.slice('inventory:'.length)) return false;
+      } else if (search) {
+        const values = [i.id,i.name,i.productName,i.genericName,i.brandName,i.batchNumber,i.barcode,i.sku,i.packLabel,i.metadata.sourceItemCode,...(i.drugs||[]).map((d: { name: string })=>d.name)];
+        const haystack = values.map(v=>words(v).join(' '));
+        if (!values.some(v=>text(v).includes(text(search))) && (!searchWords.length || !searchWords.every(w=>haystack.some(v=>v.includes(w))))) return false;
+      }
       if (fields.some(f=>q[f] && text((i as any)[f])!==text(q[f]))) return false;
       if (q.dosageForm && text(i.metadata.dosageForm)!==text(q.dosageForm)) return false;
       if (q.schedule && text(i.metadata.schedule)!==text(q.schedule)) return false;
@@ -110,7 +136,7 @@ export class InventoryWorkspaceService {
     rows.sort((a:any,b:any)=>{const av=a[sortBy],bv=b[sortBy]; const cmp=av==null?(bv==null?0:1):bv==null?-1:typeof av==='number'?av-bv:av instanceof Date?av.getTime()-new Date(bv).getTime():String(av).localeCompare(String(bv));return (q.sortOrder==='desc'?-cmp:cmp)||a.id.localeCompare(b.id);});
     const page=Math.max(1,Number(q.page)||1),limit=Math.min(100,Math.max(1,Number(q.limit)||30));
     const totals = (list:any[])=>({batches:list.length,units:list.reduce((n,i)=>n+i.currentStock,0),PTR:money(list.reduce((n,i)=>n+i.currentStock*i.costPrice,0)),MRP:money(list.reduce((n,i)=>n+i.currentStock*(i.mrp??i.sellingPrice),0)),MRPExcludingTax:money(list.reduce((n,i)=>n+(i.gstRate!=null?i.currentStock*(i.mrp??i.sellingPrice)/(1+i.gstRate/100):0),0)),MRPTaxUnknownBatches:list.filter(i=>i.gstRate==null).length,landingKnown:money(list.reduce((n,i)=>n+(i.metadata.landingCostPerStockUnit!=null?i.currentStock*i.metadata.landingCostPerStockUnit:0),0)),landingUnknownBatches:list.filter(i=>i.currentStock>0&&i.metadata.landingCostPerStockUnit==null).length});
-    return {filterScope:{asOf:now.toISOString(),expiryStart:expiryStart.toISOString(),expiryEnd:future.toISOString(),expiryBoundary:'Expiry dates remain valid through the entire UTC calendar day. Expired before expiryStart; upcoming through inclusive expiryEnd using clamped calendar months',priceBasis,sortBy,sortOrder:q.sortOrder||'asc'},rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit),
+    return {filterScope:{batchView,asOf:now.toISOString(),expiryStart:expiryStart.toISOString(),expiryEnd:future.toISOString(),expiryBoundary:'Expiry dates remain valid through the entire UTC calendar day. Expired before expiryStart; upcoming through inclusive expiryEnd using clamped calendar months',priceBasis,sortBy,sortOrder:q.sortOrder||'asc'},rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit),
       facets:Object.fromEntries(fields.map(f=>[f,[...new Set(all.map(i=>(i as any)[f]).filter(Boolean))].sort()])),
       valuation:{current:totals(rows.filter(i=>!i.expiryDate||i.expiryDate>=expiryStart)),expired:totals(rows.filter(i=>i.expiryDate&&i.expiryDate<expiryStart))},
       quality:Object.fromEntries([...new Set(all.flatMap(i=>i.issues))].map(key=>[key,all.filter(i=>i.issues.includes(key)).length]))};
@@ -122,11 +148,17 @@ export class InventoryWorkspaceService {
    * Acceptance: INV-27. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] inventory-sibling-batch-identity
+   * Sibling batches MUST share one unambiguous linked product, branch, stock unit and exact pack.
+   * Legacy inventory category differences MUST NOT hide a sibling with that verified identity.
+   * Unmapped or multiply mapped records MUST remain isolated; similar names are not identity.
+   */
   async item(actor: WorkflowActor,id:string) {
     await this.require(actor,'inventory:item:read');
-    const item=await this.prisma.inventoryItem.findFirst({where:{id,branchId:actor.branchId},include:{drugs:{select:{id:true}}}}); if(!item)throw new NotFoundException('Batch not found');
+    const item=await this.prisma.inventoryItem.findFirst({where:{id,branchId:actor.branchId},include:{drugs:{select:{id:true,name:true}}}}); if(!item)throw new NotFoundException('Batch not found');
     const [batches,movements,effects,purchases]=await Promise.all([
-      this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,...(item.drugs.length===1?{drugs:{some:{id:item.drugs[0].id},every:{id:item.drugs[0].id}},unit:item.unit,packSize:item.packSize,packUnit:item.packUnit,type:item.type}:{id:item.id})},include:{_count:{select:{drugs:true}}},orderBy:[{expiryDate:'asc'},{id:'asc'}]}),
+      this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId,...(item.drugs.length===1?{drugs:{some:{id:item.drugs[0].id},every:{id:item.drugs[0].id}},unit:item.unit,packSize:item.packSize,packUnit:item.packUnit}:{id:item.id})},include:{drugs:{select:{id:true,name:true}},_count:{select:{drugs:true}}},orderBy:[{expiryDate:'asc'},{id:'asc'}]}),
       this.prisma.stockTransaction.findMany({where:{branchId:actor.branchId,itemId:id},orderBy:[{createdAt:'asc'},{id:'asc'}]}),
       this.prisma.inventoryWorkflowEffect.findMany({where:{branchId:actor.branchId,inventoryId:id},include:{document:true},orderBy:{createdAt:'desc'}}),
       this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,items:{some:{inventoryItemId:id}}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}})
