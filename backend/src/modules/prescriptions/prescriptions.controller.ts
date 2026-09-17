@@ -165,9 +165,10 @@ export class PrescriptionsController {
   @Get('drugs/autocomplete')
   autocompleteDrugs(
     @Query('q') q: string,
+    @Request() req: AuthenticatedRequest,
     @Query('limit') limit?: number,
   ) {
-    return this.prescriptionsService.autocompleteDrugs(q || '', Number(limit) || 15);
+    return this.prescriptionsService.autocompleteDrugs(q || '', Number(limit) || 15, req.user.branchId);
   }
 
   // Clinical field autocomplete (DB-backed)

@@ -46,3 +46,7 @@ backend/src/data/indian_medicine_data.csv
 prod-backup*.list
 
 !backend/prisma/migrations/20260914143000_inventory_workflow/migration.sql
+!backend/prisma/migrations/20260916100000_product_search_extension/migration.sql
+!backend/prisma/migrations/20260916100100_product_search_name_index/migration.sql
+!backend/prisma/migrations/20260916100200_product_search_ingredient_index/migration.sql
+!backend/prisma/migrations/20260916100300_product_search_aux_index/migration.sql

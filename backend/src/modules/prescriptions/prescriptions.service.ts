@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
 import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
@@ -853,41 +854,8 @@ export class PrescriptionsService {
   }
 
   // Autocomplete lookup for drug names from local Drug table
-  async autocompleteDrugs(q: string, limit: number) {
-    const term = (q || '').trim();
-    if (!term) return [];
-
-    const results = await this.prisma.drug.findMany({
-      where: {
-        OR: [
-          { name: { contains: term, mode: 'insensitive' } },
-          { genericName: { contains: term, mode: 'insensitive' } },
-        ],
-      },
-      select: {
-        id: true,
-        name: true,
-        genericName: true,
-        strength: true,
-        form: true,
-        manufacturer: true,
-        brandNames: true,
-        isGeneric: true,
-      },
-      orderBy: { name: 'asc' },
-      take: limit,
-    });
-
-    return results.map((r) => ({
-      id: r.id,
-      name: r.name,
-      genericName: r.genericName,
-      brandNames: r.brandNames ? (() => { try { return JSON.parse(r.brandNames as unknown as string); } catch { return []; } })() : [],
-      strength: r.strength,
-      form: r.form,
-      manufacturer: r.manufacturer,
-      isGeneric: r.isGeneric,
-    }));
+  async autocompleteDrugs(q: string, limit: number, branchId: string) {
+    return searchPrescriptionDrugs(this.prisma, q, limit, branchId);
   }
 
   // Autocomplete for clinical fields using recent visits and prescription metadata

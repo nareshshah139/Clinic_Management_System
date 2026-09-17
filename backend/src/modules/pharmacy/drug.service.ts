@@ -1,3 +1,4 @@
+import { autocompleteDrugCatalog } from '../../shared/search/drug-search';
 import { purchaseCatalogIssues } from './purchase-product-catalog';
 import {
   Injectable,
@@ -692,156 +693,14 @@ export class DrugService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] drug-autocomplete-shared-search
+   * Autocomplete MUST use the shared product matcher and branch-scoped active catalogue
+   * candidates. Ingredient/name modes MUST restrict matches to their requested fields. It MUST
+   * rank before limiting results and MUST NOT change products, prices, mappings or stock.
+   */
   async autocomplete(query: DrugAutocompleteDto, branchId: string) {
-    // Handle limit conversion manually since DTO transformation may not work reliably
-    let limit = 10; // default
-    if ((query as any).limit !== undefined) {
-      if (typeof (query as any).limit === 'string') {
-        const num = parseInt((query as any).limit, 10);
-        if (!isNaN(num) && num >= 1 && num <= 50) {
-          limit = num;
-        }
-      } else if (
-        typeof (query as any).limit === 'number' &&
-        (query as any).limit >= 1 &&
-        (query as any).limit <= 50
-      ) {
-        limit = (query as any).limit;
-      }
-    }
-
-    const rawQ = ((query as any).q as string | undefined) || '';
-    const q = rawQ.trim();
-    const mode = (
-      ((query as any).mode as string | undefined) || 'all'
-    ).toLowerCase();
-
-    try {
-      const where: Prisma.DrugWhereInput = {
-        branchId,
-        isActive: true,
-        isDiscontinued: false,
-      };
-
-      if (q) {
-        const tokens = this.normalizeSearchTokens(q);
-        if (mode === 'name') {
-          if (tokens.length > 1) {
-            where.AND = tokens.map((token) => ({
-              OR: [{ name: { contains: token, mode: 'insensitive' } }],
-            }));
-          } else {
-            where.OR = [{ name: { contains: q, mode: 'insensitive' } }];
-          }
-        } else if (mode === 'ingredient') {
-          const ingredientClauses = (token: string) => [
-            { composition1: { contains: token, mode: 'insensitive' } },
-            { composition2: { contains: token, mode: 'insensitive' } },
-          ];
-          if (tokens.length > 1) {
-            where.AND = tokens.map((token) => ({
-              OR: ingredientClauses(token),
-            }));
-          } else {
-            where.OR = ingredientClauses(q);
-          }
-        } else {
-          if (tokens.length > 1) {
-            where.AND = tokens.map((token) => ({
-              OR: this.buildDrugSearchClauses(token),
-            }));
-          } else {
-            where.OR = this.buildDrugSearchClauses(q);
-          }
-        }
-      }
-
-      // Fetch a broader candidate set for better ranking, then score & trim
-      const sampleTake = Math.min(200, Math.max(limit * 5, 50));
-
-      const candidates = await this.prisma.drug.findMany({
-        where,
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          manufacturerName: true,
-          packSizeLabel: true,
-          composition1: true,
-          composition2: true,
-          category: true,
-          dosageForm: true,
-          strength: true,
-        },
-        orderBy: { name: 'asc' },
-        take: q ? sampleTake : limit, // if no q provided, just return first page
-      });
-
-      if (!q) {
-        return candidates.slice(0, limit);
-      }
-
-      const qLower = q.toLowerCase();
-      const scoreOf = (drug: {
-        name?: string | null;
-        composition1?: string | null;
-        composition2?: string | null;
-        manufacturerName?: string | null;
-        category?: string | null;
-      }) => {
-        let score = 0;
-        const name = (drug.name || '').toLowerCase();
-        const comp1 = (drug.composition1 || '').toLowerCase();
-        const comp2 = (drug.composition2 || '').toLowerCase();
-        const manu = (drug.manufacturerName || '').toLowerCase();
-        const cat = (drug.category || '').toLowerCase();
-
-        if (mode === 'name') {
-          if (name.startsWith(qLower)) score += 1000;
-          else if (name.includes(qLower)) score += 700;
-          // small boosts if ingredient also matches
-          if (comp1.includes(qLower)) score += 50;
-          if (comp2.includes(qLower)) score += 25;
-        } else if (mode === 'ingredient') {
-          if (comp1.startsWith(qLower)) score += 1000;
-          else if (comp1.includes(qLower)) score += 700;
-          if (comp2.startsWith(qLower)) score += 800;
-          else if (comp2.includes(qLower)) score += 500;
-          // small boosts if name also matches
-          if (name.includes(qLower)) score += 50;
-        } else {
-          // all signals
-          if (name.startsWith(qLower)) score += 1000;
-          else if (name.includes(qLower)) score += 700;
-          if (comp1.startsWith(qLower)) score += 500;
-          else if (comp1.includes(qLower)) score += 300;
-          if (comp2.startsWith(qLower)) score += 200;
-          else if (comp2.includes(qLower)) score += 120;
-          if (manu.startsWith(qLower)) score += 90;
-          else if (manu.includes(qLower)) score += 50;
-          if (cat.startsWith(qLower)) score += 40;
-          else if (cat.includes(qLower)) score += 20;
-        }
-
-        return score;
-      };
-
-      const ranked = candidates
-        .map((d) => ({ d, s: scoreOf(d) }))
-        .filter((x) => x.s > 0)
-        .sort((a, b) => {
-          if (b.s !== a.s) return b.s - a.s;
-          const an = (a.d.name || '').toLowerCase();
-          const bn = (b.d.name || '').toLowerCase();
-          return an.localeCompare(bn);
-        })
-        .slice(0, limit)
-        .map((x) => x.d);
-
-      return ranked;
-    } catch (error) {
-      throw new Error(`Failed to autocomplete drugs: ${error.message}`);
-    }
+    return autocompleteDrugCatalog(this.prisma, query, branchId);
   }
 
   async getCategories(branchId: string) {

@@ -16,7 +16,7 @@ import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Langua
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { sortDrugsByRelevance, getErrorMessage } from '@/lib/utils';
+import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
@@ -1358,51 +1358,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   // removed doctor's personal notes composition and autocomplete logic
 
-  // Debounced drug search per row
+  // Each effect owns its results. Cleanup also invalidates requests already in flight.
   useEffect(() => {
     if (activeSearchRow === null) return;
-    
+    const row = activeSearchRow;
+    const q = (rowDrugQueries[row] || '').trim();
+    let current = true;
+    setRowDrugResults(prev => ({ ...prev, [row]: [] }));
+    setRowLoadingDrugs(prev => ({ ...prev, [row]: q.length >= 2 }));
+    if (q.length < 2) return;
+
     const t = setTimeout(async () => {
-      const q = (rowDrugQueries[activeSearchRow] || '').trim();
-      if (q.length < 2) {
-        setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: [] }));
-        return;
-      }
       try {
-        setRowLoadingDrugs(prev => ({ ...prev, [activeSearchRow]: true }));
-        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
-        const primary = Array.isArray(res)
-          ? res
-          : (Array.isArray(res?.data)
-            ? res.data
-            : (Array.isArray(res?.items)
-              ? res.items
-              : (Array.isArray(res?.results) ? res.results : [])));
-        let list: any[] = primary;
-        if (!Array.isArray(list) || list.length === 0) {
-          // Fallback to pharmacy autocomplete which supports broader modes
-          try {
-            const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
-            list = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
-          } catch {}
-        }
-        // Sort by relevance if available
-        const sorted = sortDrugsByRelevance(Array.isArray(list) ? list : [], q);
-        setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: sorted.slice(0, 10) }));
-      } catch (e) {
-        try {
-          const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
-          const list2 = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
-          const sorted2 = sortDrugsByRelevance(Array.isArray(list2) ? list2 : [], q);
-          setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: sorted2.slice(0, 10) }));
-        } catch {
-          setRowDrugResults(prev => ({ ...prev, [activeSearchRow]: [] }));
-        }
+        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        if (current) setRowDrugResults(prev => ({ ...prev, [row]: results.slice(0, 10) }));
+      } catch {
+        if (current) setRowDrugResults(prev => ({ ...prev, [row]: [] }));
       } finally {
-        setRowLoadingDrugs(prev => ({ ...prev, [activeSearchRow]: false }));
+        if (current) setRowLoadingDrugs(prev => ({ ...prev, [row]: false }));
       }
     }, 300);
-    return () => clearTimeout(t);
+    return () => { current = false; clearTimeout(t); };
   }, [rowDrugQueries, activeSearchRow]);
 
   const searchDrugsForRow = (rowIdx: number, q: string) => {
@@ -2762,48 +2738,26 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     setNewTplDrugQuery('');
   };
 
-  // Debounced search for New Template dialog (separate from main builder)
+  // Closing the dialog or changing the query invalidates any older response.
   useEffect(() => {
+    const q = (newTplDrugQuery || '').trim();
+    let current = true;
+    setNewTplDrugResults([]);
+    setNewTplLoadingDrugs(newTemplateOpen && q.length >= 2);
+    if (!newTemplateOpen || q.length < 2) return;
+
     const t = setTimeout(async () => {
-      const q = (newTplDrugQuery || '').trim();
-      if (q.length < 2) {
-        setNewTplDrugResults([]);
-        return;
-      }
       try {
-        setNewTplLoadingDrugs(true);
-        const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q, limit: 30 });
-        const primary = Array.isArray(res)
-          ? res
-          : (Array.isArray(res?.data)
-            ? res.data
-            : (Array.isArray(res?.items)
-              ? res.items
-              : (Array.isArray(res?.results) ? res.results : [])));
-        let list: any[] = primary;
-        if (!Array.isArray(list) || list.length === 0) {
-          try {
-            const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
-            list = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
-          } catch {}
-        }
-        const sorted = sortDrugsByRelevance(Array.isArray(list) ? list : [], q);
-        setNewTplDrugResults(sorted.slice(0, 10));
-      } catch (e) {
-        try {
-          const res2: any = await apiClient.get('/drugs/autocomplete', { q, limit: 30, mode: 'all' });
-          const list2 = Array.isArray(res2) ? res2 : (Array.isArray(res2?.data) ? res2.data : []);
-          const sorted2 = sortDrugsByRelevance(Array.isArray(list2) ? list2 : [], q);
-          setNewTplDrugResults(sorted2.slice(0, 10));
-        } catch {
-          setNewTplDrugResults([]);
-        }
+        const results = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q, limit: 30 });
+        if (current) setNewTplDrugResults(results.slice(0, 10));
+      } catch {
+        if (current) setNewTplDrugResults([]);
       } finally {
-        setNewTplLoadingDrugs(false);
+        if (current) setNewTplLoadingDrugs(false);
       }
     }, 300);
-    return () => clearTimeout(t);
-  }, [newTplDrugQuery]);
+    return () => { current = false; clearTimeout(t); };
+  }, [newTplDrugQuery, newTemplateOpen]);
 
   const allTemplates = useMemo(() => {
     const seen = new Set<string>();
