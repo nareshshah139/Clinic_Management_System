@@ -1,6 +1,7 @@
 'use client';
 
 import { InventoryRegimenFields } from './InventoryRegimenFields';
+import "./inventory-readability.css";
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -177,7 +178,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="inventory-surface w-[calc(100%-2rem)] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Inventory Item</DialogTitle>
           <DialogDescription>
@@ -192,7 +193,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Item Name *</Label>
                 <Input
@@ -231,7 +232,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="genericName">Generic Name</Label>
                 <Input
@@ -253,7 +254,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Input
@@ -275,7 +276,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="manufacturer">Manufacturer</Label>
                 <Input
@@ -302,7 +303,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Identification</h3>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="barcode">Barcode</Label>
                 <Input
@@ -329,7 +330,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Pricing</h3>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="costPrice">Cost Price (₹) *</Label>
                 <Input
@@ -377,7 +378,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Unit & Packaging</h3>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="unit">Unit *</Label>
                 <Select value={formData.unit} onValueChange={(value: string) => setFormData({ ...formData, unit: value })}>
@@ -427,7 +428,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Stock Levels</h3>
             
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="minStockLevel">Min Stock</Label>
                 <Input
@@ -482,7 +483,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Additional Details</h3>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="batchNumber">Batch Number</Label>
                 <Input
@@ -514,7 +515,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="gstRate">GST Rate (%)</Label>
                 <Input
@@ -604,4 +605,3 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
     </Dialog>
   );
 }
-

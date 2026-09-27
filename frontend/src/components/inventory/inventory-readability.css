@@ -1,0 +1,54 @@
+/* Inventory-only scale: secondary 14px, dense UI 15px, body/mobile entry 16px.
+   Keep rem units so browser text enlargement remains effective. */
+.inventory-surface {
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.9375rem;
+  --text-sm--line-height: 1.5;
+  min-width: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
+/* Controls can grow when labels wrap or text is enlarged. Tables retain their
+   own horizontal scrolling; no page-level clipping hides controls. */
+.inventory-surface :where([data-slot="button"]) {
+  min-height: 2.5rem;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.inventory-surface :where(label, fieldset, section, [data-slot="card"], [data-slot="card-content"]) {
+  min-width: 0;
+}
+
+.inventory-surface :where(.grid > *) {
+  min-width: 0;
+}
+
+.inventory-surface :where([data-slot="select-trigger"]) {
+  width: 100%;
+  max-width: 100%;
+  min-height: 2.5rem;
+  height: auto;
+  white-space: normal;
+  text-align: left;
+}
+
+.inventory-surface :where([data-slot="select-value"]) {
+  min-width: 0;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.inventory-surface :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  max-width: 100%;
+}
+
+@media (max-width: 639px) {
+  .inventory-surface :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, [role="combobox"]) {
+    font-size: 1rem;
+  }
+}

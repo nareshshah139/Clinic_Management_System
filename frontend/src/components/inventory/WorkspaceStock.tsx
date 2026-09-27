@@ -3,6 +3,8 @@ import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Search, Printer, Download, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { InventoryAction, InventoryHelp } from "./InventoryPresentation";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InventoryRegimenFields } from "./InventoryRegimenFields";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
@@ -257,15 +259,12 @@ export function WorkspaceStock({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {capabilities?.itemWrite && (
-                    <Button
-                      variant="outline"
-                      onClick={() => setEdit({ ...item, ...item.metadata })}
-                    >
-                      Edit product details
-                    </Button>
+                    <InventoryAction label="Edit product details" onClick={() => setEdit({ ...item, ...item.metadata })}>
+                      <Pencil className="h-4 w-4" />
+                    </InventoryAction>
                   )}
-                  <Button
-                    variant="outline"
+                  <InventoryAction
+                    label="Print batch label"
                     onClick={() =>
                       window.open(
                         `/api/inventory/workspace/labels/${item.id}`,
@@ -274,8 +273,7 @@ export function WorkspaceStock({
                     }
                   >
                     <Printer className="h-4 w-4" />
-                    Print batch label
-                  </Button>
+                  </InventoryAction>
                 </div>
               </header>
               <dl className="grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4">
@@ -903,26 +901,24 @@ export function WorkspaceStock({
         <>
           <header className="flex flex-wrap justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">Stock</h2>
-              <p className="text-muted-foreground">
-                Find a batch, see what is available, and take the next action.
-              </p>
+              <div className="flex items-center gap-2"><h2 className="text-2xl font-semibold">Stock</h2>
+                <InventoryHelp label="Stock search">Search by product, generic, old name, batch, barcode or SKU. Open a batch to review its stock and movement history.</InventoryHelp>
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               {capabilities?.itemCreate && (
                 <Button onClick={() => setAdd(true)}>
                   <Plus className="h-4 w-4" />
-                  Add product / batch
+                  Add batch
                 </Button>
               )}
-              <Button
-                variant="outline"
+              <InventoryAction
+                label="Export all matching stock"
                 onClick={download}
                 disabled={busy || !data?.total}
               >
                 <Download className="h-4 w-4" />
-                Export
-              </Button>
+              </InventoryAction>
             </div>
           </header>
           <form

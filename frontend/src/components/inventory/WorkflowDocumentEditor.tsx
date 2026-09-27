@@ -10,6 +10,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { InventoryAction } from "./InventoryPresentation";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -502,10 +503,9 @@ export function WorkflowDocumentEditor({
   return (
     <div className="space-y-5">
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-3 print:hidden">
-        <Button variant="ghost" onClick={onBack} disabled={busy}>
+        <InventoryAction label={`Back to ${definition.label.toLowerCase()}`} variant="ghost" onClick={onBack} disabled={busy}>
           <ArrowLeft className="h-4 w-4" />
-          Back to {definition.label.toLowerCase()}
-        </Button>
+        </InventoryAction>
         <span role="status" className="text-sm font-semibold">
           {doc ? labelStatus(doc.status) : "Unsaved draft • no stock change"}
         </span>
@@ -611,7 +611,7 @@ export function WorkflowDocumentEditor({
         )}
         {["INWARD_CHALLAN", "GATE_PASS"].includes(kind) && (
           <label className="text-sm">
-            Approved purchase order
+            Purchase order
             <select
               className={inputClass}
               value={form.sourceId}
@@ -635,7 +635,7 @@ export function WorkflowDocumentEditor({
         )}
         {["LOSS", "SUPPLIER_RETURN"].includes(kind) && (
           <label className="text-sm">
-            Use held stock from
+            Stock source
             <select
               className={inputClass}
               value={form.payload.sourceHoldId || ""}
@@ -665,12 +665,13 @@ export function WorkflowDocumentEditor({
               Phone (optional)
               <input
                 className={inputClass}
+                placeholder="e.g. 9876543210"
                 value={form.payload.customerPhone || ""}
                 onChange={(e) => payload("customerPhone", e.target.value)}
               />
             </label>
             <label className="text-sm">
-              Payment / refund method
+              {kind === "SALES_RETURN" ? "Refund method" : "Payment method"}
               <select
                 className={inputClass}
                 value={
@@ -787,7 +788,7 @@ export function WorkflowDocumentEditor({
           </>
         )}
         <label className="text-sm sm:col-span-2">
-          Reason / delivery notes
+          Reason / notes
           <input
             className={inputClass}
             value={form.payload.reason || ""}
@@ -1142,10 +1143,9 @@ export function WorkflowDocumentEditor({
                 )}
                 {editable && (
                   <td className="p-3 print:hidden">
-                    <Button
+                    <InventoryAction
                       variant="ghost"
-                      size="icon"
-                      aria-label={`Remove line ${index + 1}`}
+                      label={`Remove line ${index + 1}`}
                       onClick={() =>
                         payload(
                           "lines",
@@ -1156,7 +1156,7 @@ export function WorkflowDocumentEditor({
                       }
                     >
                       <Trash2 className="h-4 w-4" />
-                    </Button>
+                    </InventoryAction>
                   </td>
                 )}
               </tr>
@@ -1189,16 +1189,15 @@ export function WorkflowDocumentEditor({
       )}
       {doc && (
         <div className="flex flex-wrap gap-2 print:hidden">
-          <Button
+          <InventoryAction label="Export lines"
             variant="outline"
             onClick={() =>
               downloadCsv(`${doc.reference}.csv`, form.payload.lines)
             }
           >
             <FileDown className="h-4 w-4" />
-            Export lines
-          </Button>
-          <Button
+          </InventoryAction>
+          <InventoryAction label="Print QR label"
             variant="outline"
             onClick={() =>
               window.open(
@@ -1208,8 +1207,7 @@ export function WorkflowDocumentEditor({
             }
           >
             <Printer className="h-4 w-4" />
-            Print QR label
-          </Button>
+          </InventoryAction>
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&
@@ -1261,7 +1259,7 @@ export function WorkflowDocumentEditor({
       )}
       {showReverse && (
         <div className="flex flex-wrap gap-3 rounded-md border p-4">
-          <label className="min-w-64 flex-1 text-sm">
+          <label className="min-w-0 basis-64 flex-1 text-sm">
             Reversal reason
             <input
               className={inputClass}
