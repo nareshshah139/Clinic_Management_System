@@ -1,5 +1,6 @@
 import {
   IsOptional,
+  IsEnum,
   IsBoolean,
   IsString,
   IsUUID,
@@ -9,8 +10,13 @@ import {
   Max,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
+import { ConsultationType } from '../consultation';
 
 export class QueryVisitsDto {
+  @IsOptional()
+  @IsEnum(ConsultationType)
+  consultationType?: ConsultationType;
+
   @IsOptional()
   @IsString()
   patientId?: string;

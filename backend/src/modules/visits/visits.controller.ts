@@ -260,7 +260,7 @@ export class VisitsController {
     @Body() createVisitDto: CreateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.create(createVisitDto, req.user.branchId);
+    return this.visitsService.create(createVisitDto, req.user.branchId, req.user.id);
   }
 
   @Get()
@@ -458,7 +458,7 @@ export class VisitsController {
     @Body() updateVisitDto: UpdateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.update(id, updateVisitDto, req.user.branchId);
+    return this.visitsService.update(id, updateVisitDto, req.user.branchId, req.user.id);
   }
 
   @Post(':id/complete')

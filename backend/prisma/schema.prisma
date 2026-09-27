@@ -274,11 +274,19 @@ model Appointment {
   @@map("appointments")
 }
 
+enum ConsultationType {
+  IN_PERSON
+  TELE_VIDEO
+}
+
 model Visit {
   id               String            @id @default(cuid())
   patientId        String
   doctorId         String
   appointmentId    String?           @unique
+  consultationType ConsultationType @default(IN_PERSON)
+  teleVideoConsentById String?
+  teleVideoConsentAt DateTime?
   vitals           String?
   complaints       String
   history          String?

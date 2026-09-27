@@ -52,3 +52,4 @@ prod-backup*.list
 !backend/prisma/migrations/20260916100300_product_search_aux_index/migration.sql
 !backend/prisma/migrations/20260927120000_medicine_regimen_defaults/migration.sql
 !backend/prisma/migrations/20260927120100_prescription_history_date_index/migration.sql
+!backend/prisma/migrations/20260927160000_tele_video_consultation/migration.sql

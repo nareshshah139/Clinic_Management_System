@@ -501,6 +501,9 @@ export interface DrugInventoryChangeRequestResponse {
 
 // Visit summaries used in procedures dashboard
 export interface VisitSummary {
+  consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
+  teleVideoConsentById?: string | null;
+  teleVideoConsentAt?: string | null;
   id: string;
   patientId: string;
   doctorId: string;
@@ -565,6 +568,9 @@ export interface VisitPatientSummary {
 }
 
 export interface VisitDetails {
+  consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
+  teleVideoConsentById?: string | null;
+  teleVideoConsentAt?: string | null;
   id: string;
   patientId: string;
   doctorId: string;

@@ -6,6 +6,7 @@ interface EmailOptions {
   subject: string;
   html?: string;
   text?: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 type WhatsAppTemplateParameter =
@@ -127,6 +128,7 @@ export class NotificationsService {
       subject: opts.subject,
       html: opts.html,
       text: opts.text,
+      attachments: opts.attachments,
     });
   }
 

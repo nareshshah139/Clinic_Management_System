@@ -881,6 +881,15 @@ export class ApiClient {
     return this.post(`/prescriptions/${id}/share`, data);
   }
 
+  async sharePrescriptionPreview(id: string, file: File, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('channel', data.channel);
+    formData.append('to', data.to);
+    if (data.message) formData.append('message', data.message);
+    return this.request(`/prescriptions/${encodeURIComponent(id)}/share-preview`, { method: 'POST', body: formData }, { timeoutMs: 120000 });
+  }
+
   async recordPrescriptionPrintEvent(id: string, data: { eventType: string; channel?: string; count?: number; metadata?: unknown }) {
     return this.post(`/prescriptions/${id}/print-events`, data);
   }

@@ -1,4 +1,5 @@
 'use client';
+import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { encounterTime } from '@/lib/patient-history';
 import { compactClinicalPatch } from '@/lib/clinical-patch';
@@ -76,6 +77,8 @@ interface PrescriptionItemForm extends RegimenRow {
 }
 
 interface Props {
+  consultationType?: ConsultationType;
+  teleVideoConsent?: boolean;
   patientId: string;
   visitId: string | null;
   doctorId: string;
@@ -154,7 +157,13 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
-function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+/**
+ * @cc [owner:nareshshah139,label:product] tele-video-preview-and-exports
+ * Tele-video print content MUST include the consultation label beside the date
+ * and the disclaimer above the signature, even when the signature is hidden.
+ * Switching to In-person MUST remove both from regenerated preview and exports.
+ */
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
@@ -571,6 +580,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [complaintOptions, setComplaintOptions] = useState<string[]>([]);
   const [loadingVisit, setLoadingVisit] = useState(false);
   const [visitData, setVisitData] = useState<any>(null);
+  const isTeleVideo = (consultationType ?? visitData?.consultationType) === 'TELE_VIDEO';
   const createdPrescriptionIdRef = useRef<string | null>(null);
   const [savedPrescriptionId, setSavedPrescriptionId] = useState<string | null>(null);
   const [savingFromPreview, setSavingFromPreview] = useState(false);
@@ -593,6 +603,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const [pagedJsProcessing, setPagedJsProcessing] = useState(false);
   const pagedJsRunningRef = useRef(false);
   const pagedJsPendingRef = useRef(false);
+  const [renderedTeleVideo, setRenderedTeleVideo] = useState<boolean | null>(null);
+  const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
+  const [sharingEmail, setSharingEmail] = useState(false);
+  const exportPreviewPending = renderedTeleVideo !== isTeleVideo;
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
@@ -602,6 +616,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const prevPreviewOpenRef = useRef(previewOpen);
   // Refs to track previous values for change detection to prevent unnecessary refreshes
   const prevDepsRef = useRef<{
+    isTeleVideo: boolean;
     items: string;
     diagnosis: string;
     followUpInstructions: string;
@@ -2365,6 +2380,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         })), [validItems]);
 
   const clinicalData = useMemo(() => compactClinicalPatch({
+          ...(consultationType ? { consultationType, teleVideoConsent } : {}),
           scribeJson: { customSections: customSections.filter(section => section.title.trim() || section.content.trim()), procedureMetrics },
           vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
             ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
@@ -2413,12 +2429,16 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               skinConcerns: Array.from(skinConcerns),
             }
           },
-        }), [exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+        }), [consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   latestClinicalDataRef.current = clinicalData;
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
+    if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
+      toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
+      return;
+    }
     if (!canCreate) {
       const missing: string[] = [];
       if (!patientId) missing.push('patient');
@@ -2538,7 +2558,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
@@ -3129,6 +3149,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(async () => {
+    if (exportPreviewPending || pagedJsProcessing) return;
     const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
     if (!container || !container.querySelector('.pagedjs_page')) {
       toast({ variant: 'destructive', title: 'Print failed', description: 'No paginated preview is ready yet.' });
@@ -3169,7 +3190,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       });
     });
-  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast]);
+  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast, exportPreviewPending, pagedJsProcessing]);
+
+  const renderPreviewPdf = async () => {
+    if (exportPreviewPending || pagedJsProcessing) throw new Error('Wait for the prescription preview to finish updating.');
+    const container = document.getElementById('pagedjs-container');
+    if (!container?.querySelector('.pagedjs_page')) throw new Error('No paginated preview is ready yet.');
+    const stylesheets = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(element => element.outerHTML);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+      <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+      ${stylesheets.join('\n')}
+      <style>
+        @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        html, body { margin: 0; padding: 0; }
+        ${pagedPrintExportCss}
+      </style>
+      ${container.innerHTML}`;
+    const { renderPrescriptionPages } = await import('@/lib/pdf-export');
+    return renderPrescriptionPages(wrapper, paperPreset);
+  };
 
   useEffect(() => {
     return () => {
@@ -3211,6 +3252,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
     // Create a snapshot of current dependencies for comparison
     const currentDeps = {
+      isTeleVideo,
       items: itemsStringified,
       diagnosis,
       followUpInstructions,
@@ -3267,7 +3309,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -3319,6 +3361,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     // Create a content hash of values that actually affect the rendered output
     // This prevents re-processing when React re-renders but content hasn't changed
     const contentHash = JSON.stringify({
+      isTeleVideo,
       items: itemsStringified,
       diagnosis,
       chiefComplaints,
@@ -3515,6 +3558,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           .rx-row { break-inside: avoid; page-break-inside: avoid; }
+          .doctor-signature-block { break-inside: avoid; page-break-inside: avoid; }
         `;
         
         // Process with Paged.js - pass CSS via Blob URLs so the content markup stays clean.
@@ -3555,6 +3599,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Mark initial render as done and update content hash to prevent flickering
         initialRenderDoneRef.current = true;
         lastContentHashRef.current = contentHash;
+        setRenderedTeleVideo(isTeleVideo);
         console.log('📏 Container dimensions:', {
           width: container.offsetWidth,
           height: container.offsetHeight,
@@ -3834,10 +3879,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           // Clear flag and immediately re-run with the latest state
           pagedJsPendingRef.current = false;
           // Run in microtask to let state settle
-          setTimeout(() => processWithPagedJs(), 0);
+          setTimeout(() => void pagedJsProcessRef.current?.(), 0);
         }
       }
     };
+    pagedJsProcessRef.current = processWithPagedJs;
     
     // Wait for container to mount if needed, then process
     let cancelled = false;
@@ -3859,7 +3905,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
@@ -5395,7 +5441,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <span>{previewDoctorName}</span>
                   </div>
                   <div className="text-xs text-gray-600">
-                    Date: {new Date().toLocaleDateString()} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
+                    Date: {new Date().toLocaleDateString()} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -5442,8 +5488,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }}
               >
                 <div id="prescription-print-content">
-                  {!spaceOptimized && (
-                    <div className="text-sm text-gray-700 mb-2">{todayStr}</div>
+                  {(!spaceOptimized || isTeleVideo) && (
+                    <div className="text-sm text-gray-700 mb-2">{todayStr}{isTeleVideo && <span data-consultation-label> • Consultation: Tele-video</span>}</div>
                   )}
                   {/* Optional plain text preview block (shown only when TEXT format) */}
                   {rxPrintFormat === 'TEXT' && (
@@ -5736,9 +5782,12 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                   </div>
                 ) : null}
 
+                {/* Keep the required disclaimer with the signature, independently of signature visibility. */}
+                <div data-prescription-signoff className={breakBeforeSignature ? 'pb-before-page' : undefined} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
+                {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-gray-700">{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className={`pt-6 mt-4 border-t ${breakBeforeSignature ? 'pb-before-page' : ''}`}>
+                  <div className="doctor-signature-block pt-6 mt-4 border-t">
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
                         <div className="h-10" />
@@ -5748,6 +5797,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </div>
                   </div>
                 )}
+                </div>
               </div>
             </div>
               </div>
@@ -5933,16 +5983,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
-                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                          <Button variant="secondary" disabled={!hasSavedPrescription || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                            setSharingEmail(true);
                             try {
-                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
-                              if (!prescId) return;
-                              await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
-                              toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                              const to = visitData?.patient?.email?.trim();
+                              if (!to) throw new Error('Patient has no email address on file.');
+                              const saved = await saveBeforeExport();
+                              if (!saved?.prescriptionId) return;
+                              const pdfBlob = await renderPreviewPdf();
+                              const file = new File([pdfBlob], `prescription-${saved.documentId}.pdf`, { type: 'application/pdf' });
+                              await apiClient.sharePrescriptionPreview(saved.prescriptionId, file, { channel: 'EMAIL', to, message: 'Your prescription is attached.' });
+                              toast({ title: 'Email sent', description: 'Prescription PDF sent by email.' });
                             } catch (e) {
-                              toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                              toast({ variant: 'destructive', title: 'Email failed', description: getErrorMessage(e) || 'Could not send email.' });
+                            } finally {
+                              setSharingEmail(false);
                             }
-                          }}>Email</Button>
+                          }}>{sharingEmail ? 'Sending…' : 'Email'}</Button>
                         </span>
                       </TooltipTrigger>
                       {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
@@ -5952,7 +6009,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span >
-                          <Button variant="secondary" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button variant="secondary" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
@@ -5962,33 +6019,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
                               }
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
                               const fileName = `prescription-${saved.documentId}.pdf`;
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
@@ -6026,42 +6059,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview} onClick={printPreviewInPlace}>Print</Button>
+                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="col-span-1">
-                          <Button className="w-full" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button className="w-full" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
                               const prescId = saved.prescriptionId;
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'PDF failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');

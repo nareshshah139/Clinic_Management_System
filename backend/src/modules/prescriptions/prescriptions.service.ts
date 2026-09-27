@@ -2,6 +2,7 @@
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
+import { ConsultationType, TELE_VIDEO_DISCLAIMER } from '../visits/consultation';
 import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -36,7 +37,7 @@ export class PrescriptionsService {
     @Optional() private pharmacyQueue?: PharmacyPrescriptionQueueService,
   ) {}
 
-  async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string) {
+  async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string, actorId?: string) {
     const {
       patientId,
       visitId,
@@ -112,7 +113,7 @@ export class PrescriptionsService {
           ...(metadata.procedures ? { dermatology: { procedures: [{ type: metadata.procedures }] } } : {}),
         },
       }, createPrescriptionDto.clinicalData);
-      await new VisitsService(tx as any).update(visitId, patch, branchId);
+      await new VisitsService(tx as any).update(visitId, patch, branchId, actorId);
       return tx.prescription.create({
       data: {
         visitId,
@@ -405,7 +406,7 @@ export class PrescriptionsService {
     } as any;
   }
 
-  async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string) {
+  async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string, actorId?: string) {
     const prescription = await this.findPrescriptionById(id, branchId);
 
     // Check if prescription can be updated
@@ -434,7 +435,7 @@ export class PrescriptionsService {
           ...(updatePrescriptionDto.followUpInstructions !== undefined ? { followUpInstructions: updatePrescriptionDto.followUpInstructions } : {}),
         },
       }, updatePrescriptionDto.clinicalData);
-      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId);
+      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId, actorId);
       return tx.prescription.update({
         where: { id }, data: updateData,
         include: { visit: { include: { patient: { select: { id: true, name: true, phone: true } }, doctor: { select: { id: true, firstName: true, lastName: true } } } } },
@@ -1642,6 +1643,12 @@ export class PrescriptionsService {
     return { id };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] tele-video-prescription-output
+   * PDF downloads and shared PDFs MUST show the tele-video label beside the date
+   * and the clinic disclaimer above the signature only for tele-video visits.
+   * The disclaimer and signature MUST stay together when pagination is needed.
+   */
   private async buildPrescriptionPdfBuffer(
     prescriptionId: string,
     branchId: string,
@@ -1664,6 +1671,9 @@ export class PrescriptionsService {
     doc.moveDown(0.5);
     doc.fontSize(10).text(this.renderTemplate('Patient: {{ patient.name }}', ctx));
     doc.text(this.renderTemplate('Doctor: {{ doctor.firstName }} {{ doctor.lastName }}', ctx));
+    const teleVideo = prescription.visit.consultationType === ConsultationType.TELE_VIDEO;
+    const date = new Date(prescription.visit.createdAt || prescription.createdAt || Date.now()).toLocaleDateString('en-IN');
+    doc.text(`Date: ${date}${teleVideo ? ' | Consultation: Tele-video' : ''}`);
     doc.moveDown();
 
     try {
@@ -1675,6 +1685,20 @@ export class PrescriptionsService {
       });
     } catch {}
 
+    // Keep the signature and name together, with the same space for hand signing.
+    const signatureHeight = 64;
+    doc.fontSize(9);
+    const disclaimerHeight = teleVideo ? doc.heightOfString(TELE_VIDEO_DISCLAIMER) + 16 : 0;
+    if (doc.y + disclaimerHeight + signatureHeight + 60 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+    doc.moveDown();
+    if (teleVideo) {
+      doc.text(TELE_VIDEO_DISCLAIMER);
+      doc.moveDown();
+    }
+    const signatureY = doc.y;
+    doc.y = signatureY + signatureHeight + 4;
+    doc.fontSize(11).text(`Dr. ${prescription.visit.doctor.firstName} ${prescription.visit.doctor.lastName}`, 40, doc.y, { align: 'right' });
+    doc.fontSize(9).text('Signature', { align: 'right' });
     doc.end();
     const pdfBuffer = await finish;
     return { pdfBuffer, fileName: `prescription-${prescriptionId}.pdf` };
@@ -1700,11 +1724,14 @@ export class PrescriptionsService {
     userId: string,
     body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
   ) {
+    await this.requireSharePrescription(prescriptionId, branchId, body);
+    const pdf = body.includePdf ? await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body) : null;
     if (body.channel === 'EMAIL') {
-      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached/generated.' });
+      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is ready.',
+        attachments: pdf ? [{ filename: pdf.fileName, content: pdf.pdfBuffer, contentType: 'application/pdf' }] : undefined });
     } else if (body.channel === 'WHATSAPP') {
       if (body.includePdf) {
-        const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId);
+        const { pdfBuffer, fileName } = pdf!;
         await this.notifications.sendWhatsAppDocument({
           toPhoneE164: body.to,
           pdfBuffer,
@@ -1718,6 +1745,37 @@ export class PrescriptionsService {
     await this.prisma.prescriptionPrintEvent.create({
       data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message, includePdf: !!body.includePdf }) : null },
     });
+    return { status: 'QUEUED', channel: body.channel, to: body.to };
+  }
+
+  private async requireSharePrescription(prescriptionId: string, branchId: string, body: { channel: string; to: string }) {
+    if (!['EMAIL', 'WHATSAPP'].includes(body.channel) || typeof body.to !== 'string' || !body.to.trim()) {
+      throw new BadRequestException('Choose a sharing channel and recipient.');
+    }
+    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } }, select: { id: true } });
+    if (!prescription) throw new NotFoundException('Prescription not found');
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] preview-share-boundary
+   * Preview sharing MUST reject prescriptions outside the authenticated branch,
+   * missing recipients, unsupported channels and non-PDF or oversized uploads
+   * before sending any message or recording a print event.
+   */
+  async sharePrescriptionPreview(prescriptionId: string, branchId: string,
+    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }, file?: Express.Multer.File) {
+    await this.requireSharePrescription(prescriptionId, branchId, body);
+    if (!file?.buffer?.length || file.buffer.length > 15 * 1024 * 1024 || file.mimetype !== 'application/pdf' || file.buffer.subarray(0, 5).toString() !== '%PDF-') {
+      throw new BadRequestException('A valid prescription PDF up to 15 MB is required.');
+    }
+    const fileName = `prescription-${prescriptionId}.pdf`;
+    if (body.channel === 'EMAIL') {
+      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached.',
+        attachments: [{ filename: fileName, content: file.buffer, contentType: 'application/pdf' }] });
+    } else {
+      await this.notifications.sendWhatsAppDocument({ toPhoneE164: body.to, pdfBuffer: file.buffer, fileName, caption: body.message || 'Your prescription is attached.' });
+    }
+    await this.prisma.prescriptionPrintEvent.create({ data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1 } });
     return { status: 'QUEUED', channel: body.channel, to: body.to };
   }
 
@@ -1936,7 +1994,7 @@ export class PrescriptionsService {
     return { experiment: exp.key, variant: chosen.key, assignmentId: assignment.id };
   }
 
-  async createPrescriptionPad(payload: CreatePrescriptionPadDto, branchId: string) {
+  async createPrescriptionPad(payload: CreatePrescriptionPadDto, branchId: string, actorId?: string) {
     const {
       patientId,
       doctorId,
@@ -2010,6 +2068,7 @@ export class PrescriptionsService {
           procedureMetrics,
         },
         branchId,
+        actorId,
       );
 
       return {

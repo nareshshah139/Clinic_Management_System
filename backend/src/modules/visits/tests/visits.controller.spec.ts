@@ -116,7 +116,7 @@ describe('VisitsController', () => {
       const result = await controller.create(createVisitDto, mockRequest as any);
 
       expect(result).toEqual(mockVisit);
-      expect(service.create).toHaveBeenCalledWith(createVisitDto, mockRequest.user.branchId);
+      expect(service.create).toHaveBeenCalledWith(createVisitDto, mockRequest.user.branchId, mockRequest.user.id);
     });
   });
 
@@ -304,6 +304,7 @@ describe('VisitsController', () => {
         visitId,
         updateDto,
         mockRequest.user.branchId,
+        mockRequest.user.id,
       );
     });
   });
