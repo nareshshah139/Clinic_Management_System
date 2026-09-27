@@ -422,6 +422,14 @@ export class VisitsController {
     );
   }
 
+  @Get('patient/:patientId/personal-history')
+  getPatientPersonalHistory(
+    @Param('patientId') patientId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.visitsService.getPatientPersonalHistory(patientId, req.user.branchId);
+  }
+
   @Get('patient/:patientId/history')
   getPatientVisitHistory(
     @Param('patientId') patientId: string,

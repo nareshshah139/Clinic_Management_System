@@ -12,6 +12,39 @@ import * as fs from 'fs';
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product;security] personal-history-source
+   * Carry-forward MUST use only this patient's visits in this branch. An empty
+   * saved personalHistory MUST stop fallback to older nonempty values.
+   */
+  private async latestPersonalHistory(patientId: string, branchId: string): Promise<string | undefined> {
+    const visit = await this.prisma.visit.findFirst({
+      where: { patientId, patient: { branchId }, history: { contains: '"personalHistory":' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { history: true },
+    });
+    const history = this.safeParse<any>(visit?.history, null);
+    // An explicit empty string is a saved clear and must stop carry-forward.
+    return typeof history?.personalHistory === 'string' ? history.personalHistory : undefined;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] personal-history-patient-scope
+   * A patient outside the requested branch MUST produce NotFoundException;
+   * an authorized patient without recorded personal history MUST receive null.
+   */
+  async getPatientPersonalHistory(patientId: string, branchId: string) {
+    const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId } });
+    if (!patient) throw new NotFoundException('Patient not found in this branch');
+    return { personalHistory: (await this.latestPersonalHistory(patientId, branchId)) ?? null };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] personal-history-snapshot
+   * When personalHistory is omitted, a new visit MUST inherit the patient's last
+   * saved value if present. An explicit value, including empty text, MUST win;
+   * earlier visit snapshots and unrelated submitted history MUST remain intact.
+   */
   async create(createVisitDto: CreateVisitDto, branchId: string) {
     const {
       patientId,
@@ -92,6 +125,13 @@ export class VisitsService {
       return basePlan;
     })();
 
+    // Keep a visit snapshot while carrying the patient's last saved personal history forward.
+    let visitHistory = history;
+    if (!history || typeof history !== 'object' || history.personalHistory === undefined) {
+      const personalHistory = await this.latestPersonalHistory(patientId, branchId);
+      if (personalHistory !== undefined) visitHistory = mergeClinicalData(history, { personalHistory });
+    }
+
     // Create visit and update appointment status atomically
     const visit = await this.prisma.$transaction(async tx => {
       const createdVisit = await tx.visit.create({
@@ -102,7 +142,7 @@ export class VisitsService {
           followUp: treatmentPlan?.followUpDate ? new Date(treatmentPlan.followUpDate) : null,
           vitals: vitals ? JSON.stringify(vitals) : null,
           complaints: JSON.stringify(complaints),
-          history: history ? JSON.stringify(history) : null,
+          history: visitHistory ? JSON.stringify(visitHistory) : null,
           exam: examination ? JSON.stringify(examination) : null,
           diagnosis: diagnosis ? JSON.stringify(diagnosis) : null,
           plan: mergedPlanObject ? JSON.stringify(mergedPlanObject) : null,
@@ -776,6 +816,7 @@ export class VisitsService {
             if (!hist) return {};
             const out: any = {};
             if (hist.pastHistory) out.pastHistory = hist.pastHistory;
+            if (typeof hist.personalHistory === 'string') out.personalHistory = hist.personalHistory;
             if (hist.medicationHistory) out.medicationHistory = hist.medicationHistory;
             if (hist.menstrualHistory) out.menstrualHistory = hist.menstrualHistory;
             if (hist.familyHistory) out.familyHistory = hist.familyHistory;

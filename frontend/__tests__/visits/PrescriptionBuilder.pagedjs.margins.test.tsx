@@ -23,6 +23,7 @@ jest.mock('@/lib/api', () => ({
     ]),
     getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }),
     getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
+    recordPrescriptionPrintEvent: jest.fn().mockResolvedValue({}),
     autocompletePrescriptionField: jest.fn().mockResolvedValue([]),
     translateTexts: jest.fn().mockResolvedValue({ translations: [] }),
     sharePrescription: jest.fn().mockResolvedValue({}),
@@ -35,6 +36,7 @@ jest.mock('@/lib/pdf-export', () => ({ renderPrescriptionPages: (...args: unknow
 
 // Capture CSS injected for Paged.js via the temp <style> element
 let lastPagedCssText: string | null = null;
+let paginateSourceContent = false;
 const originalRequestAnimationFrame = window.requestAnimationFrame;
 const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
 const originalCreateObjectURL = URL.createObjectURL;
@@ -51,6 +53,11 @@ jest.mock('pagedjs', () => {
       const firstCssUrl = Array.isArray(cssArray) ? cssArray[0] : null;
       const firstCssBlob = typeof firstCssUrl === 'string' ? blobUrlMap.get(firstCssUrl) : null;
       lastPagedCssText = firstCssBlob ? await firstCssBlob.text() : null;
+
+      if (paginateSourceContent) {
+        container.innerHTML = `<div class="pagedjs_page"><div class="pagedjs_pagebox"><div class="pagedjs_page_content">${_content}</div></div></div>`;
+        return { pages: 1 };
+      }
 
       // Build minimal paged structure expected by component after preview
       container.innerHTML = `
@@ -92,6 +99,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.useFakeTimers();
   lastPagedCssText = null;
+  paginateSourceContent = false;
   blobUrlMap.clear();
   blobUrlCounter = 0;
   global.Blob = class MockBlob extends OriginalBlob {
@@ -337,6 +345,77 @@ describe('saving before prescription export', () => {
     print.mockRestore();
   });
 });
+
+it('refreshes personal history in an already-open paginated preview', async () => {
+  paginateSourceContent = true;
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ history: { personalHistory: 'Original personal history' } });
+  try {
+    render(<PrescriptionBuilder patientId="live-personal-patient" visitId="live-personal-visit" doctorId="doctor" />);
+    await screen.findByDisplayValue('Original personal history');
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.change(document.getElementById('personal-history')!, { target: { value: 'Updated products and occupation' } });
+    await settlePreviewPagination();
+    expect(document.querySelector('#pagedjs-container [data-personal-history]')).toHaveTextContent('Updated products and occupation');
+    fireEvent.change(document.getElementById('personal-history')!, { target: { value: '' } });
+    await settlePreviewPagination();
+    expect(document.querySelector('#pagedjs-container [data-personal-history]')).toBeNull();
+  } finally {
+    get.mockRestore();
+    localStorage.removeItem('rxDraft:live-personal-patient:live-personal-visit');
+  }
+});
+
+it.each([
+  ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', false],
+  ['Diet: vegetarian\nSleep: 6 hours; teacher; sunscreen daily', true],
+  ['', false], ['', true], ['  \n  ', false], ['  \n  ', true],
+])('prints personal history %j only when populated (space-optimized: %j)', async (personalHistory, optimized) => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    history: { personalHistory: 'Previously saved personal history' },
+    prescription: { id: 'personal-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'personal-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  mockPdfOutput.mockClear();
+  try {
+    render(<PrescriptionBuilder patientId="personal-patient" visitId="personal-visit" doctorId="doctor" onBeforeExport={async () => 'personal-visit'} />);
+    await screen.findByDisplayValue('Previously saved personal history');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Personal history' }), { target: { value: personalHistory } });
+    await openPreview();
+    if (optimized) fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    const assertHistory = (element: Element | null) => {
+      expect(element).toHaveTextContent(item.drugName);
+      const section = element?.querySelector('[data-personal-history]');
+      if (personalHistory.trim()) {
+        expect(section).toHaveTextContent('Personal history');
+        expect(section).toHaveTextContent(personalHistory.replace(/\s+/g, ' '));
+        expect(section?.firstElementChild?.classList.contains('flex')).toBe(optimized);
+      } else {
+        expect(section).toBeNull();
+        expect(element).not.toHaveTextContent('Personal history');
+      }
+    };
+    assertHistory(document.getElementById('prescription-print-root'));
+    assertHistory(document.getElementById('pagedjs-container'));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+    expect(print).toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })); });
+    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalled());
+    assertHistory(mockPdfOutput.mock.calls.at(-1)![0] as Element);
+    expect(patch).toHaveBeenLastCalledWith('/prescriptions/personal-rx', expect.objectContaining({
+      clinicalData: expect.objectContaining({ history: { personalHistory } }),
+    }), expect.anything());
+  } finally {
+    get.mockRestore(); patch.mockRestore(); print.mockRestore(); click.mockRestore();
+    localStorage.removeItem('rxDraft:personal-patient:personal-visit');
+  }
+});
+
 
 it('saves medications before PDF output and updates the same prescription on another export', async () => {
   const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'saved-rx' } as any);
