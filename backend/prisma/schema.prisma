@@ -375,6 +375,7 @@ model Prescription {
   // Back-relations
   templateUsages TemplateUsage[]
 
+  @@index([createdAt])
   @@map("prescriptions")
 }
 
@@ -839,6 +840,11 @@ model Referral {
 }
 
 model InventoryItem {
+  defaultDuration     Int?
+  defaultDurationUnit String?
+  defaultFrequency    String?
+  defaultTiming       String?
+  defaultInstructions String?
   id                   String             @id @default(cuid())
   branchId             String
   name                 String

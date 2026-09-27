@@ -1,3 +1,4 @@
+import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
@@ -192,7 +193,7 @@ export class InventoryWorkspaceService {
     try { return await this.workflow.transaction(async tx=>{
       const item=await tx.inventoryItem.findFirst({where:{id,branchId:actor.branchId}});if(!item)throw new NotFoundException('Batch not found');
       if(input.updatedAt!==item.updatedAt.toISOString())throw new ConflictException('Batch details changed. Reload before saving.');
-      const data:any={},meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
+      const data:any=inventoryRegimenDefaults(input,item),meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
       for(const f of ['name','genericName','brandName','category','subCategory','manufacturer','supplier','hsnCode','storageLocation','storageConditions','barcode','sku'])if(input[f]!==undefined)data[f]=String(input[f]).trim()||null;
       if(input.name!==undefined&&!data.name)throw new BadRequestException('Product name is required');
       if(data.name && data.name!==item.name)retainPreviousInventoryName(meta,item.name);

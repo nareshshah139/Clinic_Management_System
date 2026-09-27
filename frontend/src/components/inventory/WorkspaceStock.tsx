@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Search, Printer, Download, Plus } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { InventoryRegimenFields } from "./InventoryRegimenFields";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
@@ -425,6 +426,7 @@ export function WorkspaceStock({
                       </select>
                     </label>
                   </div>
+                  {(item.type === 'MEDICINE' || item.drugs?.length > 0) && <InventoryRegimenFields value={edit} onChange={patch => setEdit({ ...edit, ...patch })} />}
                   <p className="text-sm text-muted-foreground">
                     Manual min/max edits are protected from automatic target
                     changes. Batch units and historical prices remain on their

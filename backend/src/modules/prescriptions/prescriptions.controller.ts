@@ -171,6 +171,15 @@ export class PrescriptionsController {
     return this.prescriptionsService.autocompleteDrugs(q || '', Number(limit) || 15, req.user.branchId);
   }
 
+  @Get('drugs/:drugId/regimen-defaults')
+  medicineRegimenDefaults(
+    @Param('drugId') drugId: string,
+    @Request() req: AuthenticatedRequest,
+    @Query('visitId') visitId?: string,
+  ) {
+    return this.prescriptionsService.getMedicineRegimenDefaults(drugId, req.user.branchId, req.user.id, visitId);
+  }
+
   // Clinical field autocomplete (DB-backed)
   @Get('fields/autocomplete')
   autocompleteField(

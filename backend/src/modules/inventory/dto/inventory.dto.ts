@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested, IsDateString, IsBoolean, Min, Max, IsUUID } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested, IsDateString, IsBoolean, Min, Max, IsUUID, IsInt, IsIn, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Enums
@@ -45,8 +45,35 @@ export enum UnitType {
   KITS = 'KITS',
 }
 
+export class InventoryRegimenDefaultsDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  defaultDuration?: number | null;
+
+  @IsOptional()
+  @IsIn(['DAYS', 'WEEKS', 'MONTHS', 'YEARS'])
+  defaultDurationUnit?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  defaultFrequency?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  defaultTiming?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  defaultInstructions?: string | null;
+}
+
 // Inventory Item DTOs
-export class CreateInventoryItemDto {
+export class CreateInventoryItemDto extends InventoryRegimenDefaultsDto {
   @IsString()
   name: string;
 
@@ -178,7 +205,7 @@ export class CreateInventoryItemDto {
   status?: InventoryStatus;
 }
 
-export class UpdateInventoryItemDto {
+export class UpdateInventoryItemDto extends InventoryRegimenDefaultsDto {
   @IsString()
   @IsOptional()
   name?: string;

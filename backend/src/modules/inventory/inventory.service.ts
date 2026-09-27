@@ -1,3 +1,4 @@
+import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { writeStockMovement, movementDelta, money } from './inventory-stock';
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -61,6 +62,7 @@ export class InventoryService {
     const item = await this.prisma.inventoryItem.create({
       data: {
         ...createItemDto,
+        ...inventoryRegimenDefaults(createItemDto),
         branchId,
         currentStock: 0,
         stockStatus: StockStatus.OUT_OF_STOCK,
@@ -232,6 +234,7 @@ export class InventoryService {
       where: { id },
       data: {
         ...updateItemDto,
+        ...inventoryRegimenDefaults(updateItemDto, existingItem),
         // Ensure DateTime field receives a JS Date
         expiryDate: updateItemDto.expiryDate ? new Date(updateItemDto.expiryDate) : undefined,
         tags: updateItemDto.tags ? JSON.stringify(updateItemDto.tags) : existingItem.tags,

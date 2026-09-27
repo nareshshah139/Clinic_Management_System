@@ -1,5 +1,6 @@
 'use client';
 
+import { InventoryRegimenFields } from './InventoryRegimenFields';
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
   // Form state
   const [formData, setFormData] = useState({
     // Basic Information
+    defaultDuration: '', defaultDurationUnit: 'DAYS', defaultFrequency: '', defaultTiming: '', defaultInstructions: '',
     name: '',
     description: '',
     genericName: '',
@@ -101,6 +103,14 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
       if (formData.storageConditions) payload.storageConditions = formData.storageConditions;
       if (formData.packUnit) payload.packUnit = formData.packUnit;
 
+      if (formData.defaultDuration) {
+        payload.defaultDuration = Number(formData.defaultDuration);
+        payload.defaultDurationUnit = formData.defaultDurationUnit;
+      }
+      if (formData.defaultFrequency) payload.defaultFrequency = formData.defaultFrequency;
+      if (formData.defaultTiming) payload.defaultTiming = formData.defaultTiming;
+      if (formData.defaultInstructions) payload.defaultInstructions = formData.defaultInstructions;
+
       // Add optional numeric fields
       if (formData.mrp) payload.mrp = parseFloat(formData.mrp);
       if (formData.packSize) payload.packSize = parseInt(formData.packSize);
@@ -122,7 +132,8 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
       // Reset form
       setFormData({
-        name: '',
+        defaultDuration: '', defaultDurationUnit: 'DAYS', defaultFrequency: '', defaultTiming: '', defaultInstructions: '',
+    name: '',
         description: '',
         genericName: '',
         brandName: '',
@@ -175,6 +186,8 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {formData.type === 'MEDICINE' && <InventoryRegimenFields value={formData}
+            onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
           {/* Basic Information */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
