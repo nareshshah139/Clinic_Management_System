@@ -45,11 +45,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import {
-  sortDrugsByRelevance,
-  calculateDrugRelevanceScore,
-  getErrorMessage,
-} from '@/lib/utils';
+import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
 
@@ -59,6 +55,7 @@ interface Drug {
   price: number;
   sellingPrice?: number | null;
   mrp?: number | null;
+  gstRate?: number | null;
   manufacturerName: string;
   packSizeLabel: string;
   composition1?: string;
@@ -66,6 +63,7 @@ interface Drug {
   category?: string;
   dosageForm?: string;
   strength?: string;
+  totalStock?: number;
 }
 
 interface PharmacyPackage {
@@ -117,7 +115,7 @@ interface InvoiceItem {
   quantity: number;
   unitPrice: number;
   discountPercent: number;
-  taxPercent: number;
+  taxPercent: number | null;
   discountAmount: number;
   taxAmount: number;
   totalAmount: number;
@@ -125,7 +123,19 @@ interface InvoiceItem {
   frequency?: string;
   duration?: string;
   instructions?: string;
+  prescribedDrugName?: string;
+  stockStatus?: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK' | 'CHECK_FAILED';
+  availableStock?: number;
+  substituted?: boolean;
 }
+
+type PrescriptionStockItem = {
+  prescribedQuantity?: number | null;
+  drugName: string;
+  matchedDrug: Pick<Drug, 'id' | 'name'> | null;
+  stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
+  totalNonExpiredStock: number;
+};
 
 type PharmacyInvoicePrintPreview = {
   invoice: any;
@@ -140,6 +150,11 @@ type PharmacyInvoicePrintPreview = {
 
 type PharmacyInvoiceCopyType = 'ORIGINAL' | 'DUPLICATE';
 
+const getDrugGstRate = (drug?: Partial<Drug> | null): number | null => {
+  const rate = drug?.gstRate;
+  return typeof rate === 'number' && Number.isFinite(rate) && rate >= 0 && rate <= 100
+    ? rate : null;
+};
 
 export function PharmacyInvoiceBuilderFixed({
   prefill,
@@ -151,11 +166,6 @@ export function PharmacyInvoiceBuilderFixed({
     visitId?: string;
   };
 }) {
-  console.log(
-    '🏥 PharmacyInvoiceBuilderFixed initialized with prefill:',
-    prefill
-  );
-
   const { toast } = useToast();
   const [patients, setPatients] = useState<Patient[]>([]);
   const patientsAllRef = useRef<Patient[]>([]);
@@ -164,7 +174,6 @@ export function PharmacyInvoiceBuilderFixed({
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [prescriptionItems, setPrescriptionItems] = useState<InvoiceItem[]>([]);
   const [prescriptionData, setPrescriptionData] = useState<any>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
@@ -177,6 +186,7 @@ export function PharmacyInvoiceBuilderFixed({
   const [loading, setLoading] = useState(false);
   const [loadingPrescription, setLoadingPrescription] = useState(false);
   const [prefillError, setPrefillError] = useState<string | null>(null);
+  const [substitutingItemId, setSubstitutingItemId] = useState<string | null>(null);
   const [printPreviewOpen, setPrintPreviewOpen] = useState(false);
   const [printPreviewData, setPrintPreviewData] =
     useState<PharmacyInvoicePrintPreview | null>(null);
@@ -239,6 +249,14 @@ export function PharmacyInvoiceBuilderFixed({
 
   const fetchedPrefillPatientsRef = useRef<Set<string>>(new Set());
   const lastPrefilledPrescriptionIdRef = useRef<string | null>(null);
+  const lastPrefilledVisitIdRef = useRef<string | null>(null);
+  const prescriptionRequestRef = useRef(0);
+  const removedPrescriptionIdsRef = useRef(new Set<string>());
+  useEffect(() => () => {
+    ++prescriptionRequestRef.current;
+    lastPrefilledPrescriptionIdRef.current = null;
+    lastPrefilledVisitIdRef.current = null;
+  }, []);
 
   const ensurePatientSelected = useCallback(
     async (
@@ -295,6 +313,7 @@ export function PharmacyInvoiceBuilderFixed({
           billingPhone: patient.phone || fallback?.phone || '',
         }));
       } catch (error) {
+        fetchedPrefillPatientsRef.current.delete(patientId);
         console.error('Failed to fetch prefill patient', error);
         toast({
           variant: 'destructive',
@@ -314,21 +333,25 @@ export function PharmacyInvoiceBuilderFixed({
     [patients, toast]
   );
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-bill-complete-load
+   * Every prescribed line MUST load with its quantity, including unmatched and unavailable
+   * medicines. Only the stock check's matched product ID may establish an automatic link;
+   * failed lookups MUST retain flagged lines and expose a retryable error, never omit them.
+   */
   const loadPrescriptionData = useCallback(
     async (prescriptionId: string) => {
+      const request = ++prescriptionRequestRef.current;
       setLoadingPrescription(true);
       setPrefillError(null);
       try {
-        console.log('📋 Loading prescription data for ID:', prescriptionId);
         type MinimalPrescription = {
           id?: string;
           items?: any[] | string;
         } & Record<string, unknown>;
         const prescription =
           await apiClient.getPrescription<MinimalPrescription>(prescriptionId);
-        console.log('✅ Prescription data loaded:', prescription);
-
-        setPrescriptionData(prescription);
+        if (request !== prescriptionRequestRef.current) return;
 
         const previousPrefilledMap = new Map<string, InvoiceItem>(
           invoiceItemsRef.current
@@ -336,22 +359,15 @@ export function PharmacyInvoiceBuilderFixed({
             .map((item) => [item.id, item])
         );
 
-        setItems((prevItems) => {
-          const filtered = prevItems.filter(
-            (item) => !item.id.startsWith('prescription_')
-          );
-          invoiceItemsRef.current = filtered;
-          return filtered;
-        });
-        setPrescriptionItems([]);
-
-        const patientFromPrescription = (prescription as any)?.patient;
+        const patientFromPrescription = (prescription as any)?.patient || (prescription as any)?.visit?.patient;
         const patientIdFromPrescription =
           (prescription as any)?.patientId || patientFromPrescription?.id;
         await ensurePatientSelected(patientIdFromPrescription, {
           name: patientFromPrescription?.name,
           phone: patientFromPrescription?.phone,
         });
+        if (request !== prescriptionRequestRef.current) return;
+        setPrescriptionData(prescription);
 
         // Extract and set doctor information from prescription
         const doctorFromPrescription =
@@ -359,21 +375,12 @@ export function PharmacyInvoiceBuilderFixed({
         const doctorIdFromPrescription =
           (prescription as any)?.doctorId || doctorFromPrescription?.id;
         if (doctorIdFromPrescription) {
-          console.log(
-            '📋 Setting doctor from prescription:',
-            doctorIdFromPrescription
-          );
           setInvoiceData((prev) => ({
             ...prev,
             doctorId: doctorIdFromPrescription,
           }));
           // Try to find and set the selected doctor
-          const existingDoctor = doctors.find(
-            (d) => d.id === doctorIdFromPrescription
-          );
-          if (existingDoctor) {
-            setSelectedDoctor(existingDoctor);
-          }
+          if (doctorFromPrescription) setSelectedDoctor(doctorFromPrescription);
         }
 
         const rawItems = (prescription as any)?.items;
@@ -385,63 +392,63 @@ export function PharmacyInvoiceBuilderFixed({
           !Array.isArray(prescriptionItemsRaw) ||
           prescriptionItemsRaw.length === 0
         ) {
-          setPrefillError(
-            'Prescription has no medications to prefill. Add items manually.'
-          );
-          toast({
-            variant: 'warning',
-            title: 'Prescription empty',
-            description:
-              'The linked prescription does not contain any medications.',
-          });
-          return;
+          throw new Error('Prescription has no medications to load.');
         }
 
-        console.log('💊 Processing prescription items:', prescriptionItemsRaw);
+        let stockItems: PrescriptionStockItem[] = [];
+        let lookupFailed = false;
+        try {
+          const stock = await apiClient.get<{ items: PrescriptionStockItem[] }>(
+            `/pharmacy/prescription-queue/${prescriptionId}/stock-check`
+          );
+          if (!Array.isArray(stock.items) || stock.items.length !== prescriptionItemsRaw.length) {
+            throw new Error('Incomplete prescription stock check');
+          }
+          stockItems = stock.items;
+        } catch (error) {
+          console.error('Prescription inventory check failed:', getErrorMessage(error));
+          lookupFailed = true;
+        }
 
-        const invoiceItems: (InvoiceItem | null)[] = await Promise.all(
+        const invoiceItems: InvoiceItem[] = await Promise.all(
           prescriptionItemsRaw.map(async (item: any, index: number) => {
+            const stock = stockItems[index];
+            let drug: Drug | undefined;
+            let stockStatus: InvoiceItem['stockStatus'] = stock?.stockStatus || 'CHECK_FAILED';
             try {
-              let drug = null;
-              if (item.drugName) {
-                const drugSearchResult = await apiClient.get<
-                  { data?: Drug[] } | Drug[]
-                >('/drugs', {
-                  search: item.drugName,
-                  limit: 1,
-                  isActive: true,
-                });
-                const drugList = Array.isArray((drugSearchResult as any)?.data)
-                  ? ((drugSearchResult as any).data as Drug[])
-                  : Array.isArray(drugSearchResult)
-                    ? (drugSearchResult as Drug[])
-                    : [];
-                drug = drugList[0] || null;
+              if (stock?.matchedDrug) {
+                drug = await apiClient.get<Drug>(`/drugs/${encodeURIComponent(stock.matchedDrug.id)}`);
+                if (!drug || drug.id !== stock.matchedDrug.id) throw new Error('Matched inventory product details are unavailable');
               }
+            } catch (error) {
+              console.error('Prescription product lookup failed:', getErrorMessage(error));
+              stockStatus = 'CHECK_FAILED';
+              lookupFailed = true;
+            }
 
               const invoiceItemId = `prescription_${prescriptionId}_${index}`;
               const existingItem = previousPrefilledMap.get(invoiceItemId);
+              // Preserve pharmacist changes when retrying a failed inventory read.
+              const substituted = existingItem?.substituted === true;
+              const reviewedDrug = substituted ? existingItem.drug : drug;
+              const sameProduct = Boolean(existingItem?.drugId && existingItem.drugId === reviewedDrug?.id);
 
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
-                drugId: drug?.id || existingItem?.drugId || undefined,
+                drugId: reviewedDrug?.id,
                 itemType: 'DRUG',
-                drug: drug ||
-                  existingItem?.drug || {
-                    id: existingItem?.drug?.id || `temp_${Date.now()}_${index}`,
-                    name: item.drugName || 'Unknown Drug',
+                drug: reviewedDrug || {
+                    id: `temp_${prescriptionId}_${index}`,
+                    name: item.drugName || item.brandName || item.genericName || 'Unknown Drug',
                     price: existingItem?.drug?.price ?? 0,
                     manufacturerName:
                       existingItem?.drug?.manufacturerName ?? '',
                     packSizeLabel: existingItem?.drug?.packSizeLabel ?? '',
                   },
-                quantity: existingItem?.quantity ?? item.quantity ?? 1,
-                unitPrice:
-                  existingItem?.unitPrice && existingItem.unitPrice > 0
-                    ? existingItem.unitPrice
-                    : getDrugUnitPrice(drug || existingItem?.drug),
+                quantity: existingItem?.quantity ?? (firstPositiveNumber(item.quantity, item.prescribedQuantity, item.totalQuantity, item.qty, stock?.prescribedQuantity) || 1),
+                unitPrice: sameProduct ? existingItem!.unitPrice : getDrugUnitPrice(reviewedDrug),
                 discountPercent: existingItem?.discountPercent ?? 0,
-                taxPercent: existingItem?.taxPercent ?? 18,
+                taxPercent: sameProduct ? existingItem!.taxPercent : getDrugGstRate(reviewedDrug),
                 discountAmount: existingItem?.discountAmount ?? 0,
                 taxAmount: existingItem?.taxAmount ?? 0,
                 totalAmount: existingItem?.totalAmount ?? 0,
@@ -453,44 +460,40 @@ export function PharmacyInvoiceBuilderFixed({
                   ? `${item.duration} ${item.durationUnit || ''}`.trim()
                   : existingItem?.duration,
                 instructions: item.instructions || existingItem?.instructions,
+                prescribedDrugName: item.drugName || item.brandName || 'Unknown Drug',
+                stockStatus: substituted ? existingItem?.stockStatus : stockStatus,
+                availableStock: substituted ? existingItem?.availableStock : stock?.totalNonExpiredStock,
+                substituted,
               };
 
               calculateItemTotal(invoiceItem);
               return invoiceItem;
-            } catch (error) {
-              console.error('Error processing prescription item:', item, error);
-              return null;
-            }
           })
         );
 
-        const validItems = invoiceItems.filter(
-          (item) => item !== null
-        ) as InvoiceItem[];
-        console.log('💊 Valid prescription items created:', validItems.length);
+        if (request !== prescriptionRequestRef.current) return;
+        if (lookupFailed) setPrefillError('Prescription loaded, but some inventory details could not be checked. Retry loading or select a replacement for the flagged items.');
 
-        setPrescriptionItems(validItems);
         setItems((prevItems) => {
           const filtered = prevItems.filter(
             (item) => !item.id.startsWith('prescription_')
           );
-          const merged = [...validItems, ...filtered];
+          const merged = [...invoiceItems.filter(item => !removedPrescriptionIdsRef.current.has(item.id)), ...filtered];
           invoiceItemsRef.current = merged;
           return merged;
         });
       } catch (error) {
-        console.error('❌ Failed to load prescription data:', error);
-        setPrefillError(
-          'We could not load the prescription details. You can still bill manually.'
-        );
+        if (request !== prescriptionRequestRef.current) return;
+        console.error('Failed to load prescription:', getErrorMessage(error));
+        const message = `Could not load prescription: ${getErrorMessage(error)}. Retry loading to continue.`;
+        setPrefillError(message);
         toast({
           variant: 'destructive',
           title: 'Prescription load failed',
-          description:
-            'The linked prescription could not be loaded. Add items manually or retry.',
+          description: message,
         });
       } finally {
-        setLoadingPrescription(false);
+        if (request === prescriptionRequestRef.current) setLoadingPrescription(false);
       }
     },
     [ensurePatientSelected, toast]
@@ -512,7 +515,10 @@ export function PharmacyInvoiceBuilderFixed({
   useEffect(() => {
     const run = async () => {
       const visitId = prefill?.visitId;
-      if (!visitId) return;
+      // A selected prescription is authoritative; do not concurrently load the visit's prescription.
+      if (!visitId || prefill?.prescriptionId || lastPrefilledVisitIdRef.current === visitId) return;
+      lastPrefilledVisitIdRef.current = visitId;
+      setLoadingPrescription(true);
       try {
         const visit: any = await apiClient.get(`/visits/${visitId}`);
         const patient = visit?.patient;
@@ -543,10 +549,13 @@ export function PharmacyInvoiceBuilderFixed({
         }
       } catch (e) {
         console.error('Failed to prefill from visitId', e);
+        setPrefillError(`Could not load visit: ${getErrorMessage(e)}. Reopen billing to retry.`);
+      } finally {
+        setLoadingPrescription(false);
       }
     };
     void run();
-  }, [prefill?.visitId, ensurePatientSelected, loadPrescriptionData]);
+  }, [prefill?.visitId, prefill?.prescriptionId, ensurePatientSelected, loadPrescriptionData]);
 
   useEffect(() => {
     const prefillPrescriptionId = prefill?.prescriptionId;
@@ -852,7 +861,29 @@ export function PharmacyInvoiceBuilderFixed({
     return null;
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-explicit-substitution
+   * A pharmacist-selected replacement MUST retain the original prescribed name, quantity,
+   * and instructions while replacing the billed product identity, price, GST and stock warning.
+   */
   const addDrugToInvoice = (drug: Drug) => {
+    if (substitutingItemId) {
+      setItems(current => current.map(item => {
+        if (item.id !== substitutingItemId) return item;
+        const replacement: InvoiceItem = {
+          ...item, drugId: drug.id, drug, unitPrice: getDrugUnitPrice(drug),
+          taxPercent: getDrugGstRate(drug), availableStock: drug.totalStock,
+          substituted: true,
+          stockStatus: drug.totalStock === undefined ? undefined : drug.totalStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
+        };
+        calculateItemTotal(replacement);
+        return replacement;
+      }));
+      setSubstitutingItemId(null);
+      setDrugSearchQuery('');
+      setShowDrugSearchResults(false);
+      return;
+    }
     const existingItemIndex = items.findIndex(
       (item) => item.itemType === 'DRUG' && item.drugId === drug.id
     );
@@ -924,7 +955,8 @@ export function PharmacyInvoiceBuilderFixed({
     const subtotal = item.quantity * item.unitPrice;
     item.discountAmount = (subtotal * item.discountPercent) / 100;
     const discountedAmount = subtotal - item.discountAmount;
-    item.taxAmount = (discountedAmount * item.taxPercent) / 100;
+    // Unresolved GST is displayed as pending and cannot be submitted.
+    item.taxAmount = (discountedAmount * (item.taxPercent ?? 0)) / 100;
     item.totalAmount = discountedAmount + item.taxAmount;
   };
 
@@ -974,12 +1006,13 @@ export function PharmacyInvoiceBuilderFixed({
     setItems(updatedItems);
   };
 
-  const updateItemTax = (itemId: string, taxPercent: number) => {
+  const updateItemTax = (itemId: string, taxPercent: number | null) => {
     const updatedItems = items.map((item) => {
       if (item.id === itemId) {
         const updatedItem = {
           ...item,
-          taxPercent: Math.max(0, Math.min(100, taxPercent)),
+          taxPercent: taxPercent !== null && Number.isFinite(taxPercent)
+            ? Math.max(0, Math.min(100, taxPercent)) : null,
         };
         calculateItemTotal(updatedItem);
         return updatedItem;
@@ -1001,22 +1034,15 @@ export function PharmacyInvoiceBuilderFixed({
     );
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-draft-removal
+   * Removing a prescribed medicine MUST remove only that draft bill line and MUST NOT
+   * alter the doctor's prescription. Unmatched and unavailable lines are removable too.
+   */
   const removeItem = (itemId: string) => {
-    // Check if this is a prescription item (sticky - cannot be removed)
-    const isPrescriptionItem = prescriptionItems.some(
-      (item) => item.id === itemId
-    );
-    if (isPrescriptionItem) {
-      toast({
-        variant: 'warning',
-        title: 'Action not allowed',
-        description:
-          'Prescription items cannot be removed. Adjust quantity or pricing instead.',
-      });
-      return;
-    }
-
+    if (itemId.startsWith('prescription_')) removedPrescriptionIdsRef.current.add(itemId);
     setItems(items.filter((item) => item.id !== itemId));
+    if (substitutingItemId === itemId) setSubstitutingItemId(null);
   };
 
   const calculateInvoiceTotals = () => {
@@ -1035,6 +1061,10 @@ export function PharmacyInvoiceBuilderFixed({
   };
 
   const getValidInvoiceItems = () => {
+    if (loadingPrescription || (invoiceData.prescriptionId && !prescriptionData)) {
+      toast({ title: 'Prescription not ready', description: 'Wait for the prescription to load, or retry the failed load before billing.', variant: 'destructive' });
+      return null;
+    }
     if (
       !invoiceData.patientId ||
       items.length === 0 ||
@@ -1050,6 +1080,20 @@ export function PharmacyInvoiceBuilderFixed({
             : !invoiceData.billingName
               ? 'Billing name is required'
               : 'Billing phone is required',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    if (items.some(item => item.itemType === 'DRUG' && (!item.drugId || item.drugId.startsWith('temp_')))) {
+      toast({ title: 'Medicine needs review', description: 'Select a replacement or remove each unmatched medicine before confirming the invoice.', variant: 'destructive' });
+      return null;
+    }
+
+    if (items.some(item => item.taxPercent === null)) {
+      toast({
+        title: 'GST rate needs review',
+        description: 'Enter Tax % for every item before previewing or confirming the invoice.',
         variant: 'destructive',
       });
       return null;
@@ -1781,6 +1825,7 @@ export function PharmacyInvoiceBuilderFixed({
 
   const { subtotal, totalDiscount, totalTax, grandTotal } =
     calculateInvoiceTotals();
+  const hasUnresolvedGst = items.some(item => item.taxPercent === null);
   const previewInvoiceCore = getPrintPreviewInvoiceCore();
   const previewPatient = getPrintPreviewPatient();
   const isPrintPreviewSaved = hasSavedInvoiceIdentity(printPreviewData?.invoice);
@@ -1793,9 +1838,8 @@ export function PharmacyInvoiceBuilderFixed({
     maximumFractionDigits: 2,
   });
 
-  const isPrescriptionItem = (itemId: string) => {
-    return prescriptionItems.some((item) => item.id === itemId);
-  };
+  const prescriptionItems = items.filter(item => item.id.startsWith('prescription_'));
+  const isPrescriptionItem = (itemId: string) => itemId.startsWith('prescription_');
 
   const renderPrescriptionHeader = () => {
     if (!prescriptionData) return null;
@@ -1814,8 +1858,8 @@ export function PharmacyInvoiceBuilderFixed({
             <strong>Items from prescription:</strong> {prescriptionItems.length}
           </p>
           <p className="mt-2 text-xs text-blue-600">
-            💡 Items from prescription are marked with 📋 and cannot be removed
-            (only quantities/pricing can be adjusted)
+            Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
+            Changes here do not alter the doctor's prescription.
           </p>
         </div>
       </div>
@@ -1848,8 +1892,14 @@ export function PharmacyInvoiceBuilderFixed({
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {prefillError && (
             <div className="lg:col-span-3">
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-900">
+              <div role="alert" className="p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-900">
                 {prefillError}
+                {invoiceData.prescriptionId && (
+                  <Button className="ml-3" variant="outline" size="sm" disabled={loadingPrescription}
+                    onClick={() => { void loadPrescriptionData(invoiceData.prescriptionId); }}>
+                    Retry loading prescription
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -1984,11 +2034,18 @@ export function PharmacyInvoiceBuilderFixed({
 
                   <TabsContent value="drugs" className="space-y-4">
                     <div ref={drugSearchRef} className="space-y-2">
+                      {substitutingItemId && (
+                        <div role="status" className="flex items-center justify-between rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                          <span>Choose a replacement for {items.find(item => item.id === substitutingItemId)?.drug?.name}. The prescribed quantity will be kept.</span>
+                          <Button variant="ghost" size="sm" onClick={() => setSubstitutingItemId(null)}>Cancel substitution</Button>
+                        </div>
+                      )}
                       <Label htmlFor="drugSearch">Search Drugs</Label>
                       <div className="relative">
                         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
                           id="drugSearch"
+                          ref={searchInputRef}
                           placeholder="Search by drug name, manufacturer, or ingredient..."
                           value={drugSearchQuery}
                           onChange={(e) => setDrugSearchQuery(e.target.value)}
@@ -2173,7 +2230,7 @@ export function PharmacyInvoiceBuilderFixed({
                 <CardContent>
                   <div className="space-y-4">
                     {items.map((item) => (
-                      <Card key={item.id} className="p-4">
+                      <Card key={item.id} data-invoice-item={item.id} className="p-4">
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
@@ -2195,15 +2252,17 @@ export function PharmacyInvoiceBuilderFixed({
                                   ? item.drug?.name
                                   : item.package?.name}
                               </h4>
-                              {item.drugId &&
-                                item.drugId.startsWith('temp_') && (
-                                  <Badge
-                                    variant="destructive"
-                                    className="text-xs"
-                                  >
-                                    ⚠️ Not in DB
-                                  </Badge>
-                                )}
+                              {item.stockStatus === 'CHECK_FAILED' ? (
+                                <Badge variant="destructive">Inventory check failed</Badge>
+                              ) : item.itemType === 'DRUG' && !item.drugId ? (
+                                <Badge variant="destructive">No match</Badge>
+                              ) : item.stockStatus === 'OUT_OF_STOCK' ? (
+                                <Badge variant="destructive">Out of stock</Badge>
+                              ) : item.availableStock !== undefined && item.quantity > item.availableStock ? (
+                                <Badge variant="destructive">Insufficient stock: {item.availableStock} available</Badge>
+                              ) : item.stockStatus === 'LOW_STOCK' ? (
+                                <Badge variant="outline">Low stock: {item.availableStock} available</Badge>
+                              ) : null}
                               <Badge
                                 variant={
                                   item.itemType === 'DRUG'
@@ -2227,6 +2286,9 @@ export function PharmacyInvoiceBuilderFixed({
                                 {item.drug.manufacturerName} •{' '}
                                 {item.drug.packSizeLabel}
                               </p>
+                            )}
+                            {item.prescribedDrugName && item.prescribedDrugName !== item.drug?.name && (
+                              <p className="text-sm text-blue-700">Prescribed: {item.prescribedDrugName}</p>
                             )}
                             {item.itemType === 'PACKAGE' && item.package && (
                               <p className="text-sm text-gray-600">
@@ -2262,32 +2324,38 @@ export function PharmacyInvoiceBuilderFixed({
                               </div>
                             )}
                           </div>
-                          {isPrescriptionItem(item.id) ? (
+                          <div className="flex gap-1">
+                            {item.itemType === 'DRUG' && (
+                              <Button variant="outline" size="sm" aria-label={`Substitute ${item.drug?.name}`}
+                                onClick={() => {
+                                  setSubstitutingItemId(item.id);
+                                  setSelectedTab('drugs');
+                                  setDrugSearchQuery('');
+                                  requestAnimationFrame(() => {
+                                    searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    searchInputRef.current?.focus({ preventScroll: true });
+                                  });
+                                }}>
+                                Substitute
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled
-                              title="Prescription items cannot be removed"
-                              className="text-gray-400 cursor-not-allowed"
-                            >
-                              🔒
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
+                              aria-label={`Remove ${item.drug?.name || item.package?.name}`}
                               onClick={() => removeItem(item.id)}
                               className="text-red-600 hover:text-red-700"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
-                          )}
+                          </div>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                           <div>
-                            <Label className="text-xs">Quantity</Label>
+                            <Label htmlFor={`quantity-${item.id}`} className="text-xs">Quantity</Label>
                             <Input
+                              id={`quantity-${item.id}`}
                               type="number"
                               min="1"
                               value={item.quantity}
@@ -2335,17 +2403,21 @@ export function PharmacyInvoiceBuilderFixed({
                             />
                           </div>
                           <div>
-                            <Label className="text-xs">Tax %</Label>
+                            <Label htmlFor={`gst-${item.id}`} className="text-xs">Tax %</Label>
                             <Input
+                              id={`gst-${item.id}`}
                               type="number"
                               min="0"
                               max="100"
                               step="0.1"
-                              value={item.taxPercent}
+                              value={item.taxPercent ?? ''}
+                              placeholder="Enter GST"
+                              aria-invalid={item.taxPercent === null}
+                              aria-describedby={item.taxPercent === null ? `gst-review-${item.id}` : undefined}
                               onChange={(e) =>
                                 updateItemTax(
                                   item.id,
-                                  parseFloat(e.target.value) || 0
+                                  e.target.value === '' ? null : Number(e.target.value)
                                 )
                               }
                               className="h-8"
@@ -2354,12 +2426,18 @@ export function PharmacyInvoiceBuilderFixed({
                           <div>
                             <Label className="text-xs">Total</Label>
                             <Input
-                              value={`₹${item.totalAmount.toFixed(2)}`}
+                              value={item.taxPercent === null ? 'GST pending' : `₹${item.totalAmount.toFixed(2)}`}
                               readOnly
                               className="h-8 bg-gray-50 font-medium"
                             />
                           </div>
                         </div>
+
+                        {item.taxPercent === null && (
+                          <p id={`gst-review-${item.id}`} className="mt-2 text-sm text-destructive">
+                            GST rate needs review. Enter Tax % before previewing or confirming this invoice.
+                          </p>
+                        )}
 
                         {item.itemType === 'PACKAGE' && item.package && (
                           <div className="mt-3 p-3 bg-gray-50 rounded">
@@ -2490,12 +2568,12 @@ export function PharmacyInvoiceBuilderFixed({
                   </div>
                   <div className="flex justify-between">
                     <span>Tax:</span>
-                    <span>₹{totalTax.toFixed(2)}</span>
+                    <span>{hasUnresolvedGst ? 'GST pending' : `₹${totalTax.toFixed(2)}`}</span>
                   </div>
                   <div className="border-t pt-3">
                     <div className="flex justify-between font-semibold text-lg">
                       <span>Total:</span>
-                      <span>₹{grandTotal.toFixed(2)}</span>
+                      <span>{hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)}`}</span>
                     </div>
                   </div>
                 </div>
@@ -2604,7 +2682,7 @@ export function PharmacyInvoiceBuilderFixed({
                 )}
               </Button>
               <p className="text-xs text-gray-500 text-center">
-                {items.length} items • ₹{grandTotal.toFixed(2)} total
+                {items.length} items • {hasUnresolvedGst ? 'GST pending' : `₹${grandTotal.toFixed(2)} total`}
               </p>
             </div>
           </div>

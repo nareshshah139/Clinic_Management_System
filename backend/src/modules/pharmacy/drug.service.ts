@@ -1,3 +1,4 @@
+import { loadInventoryGstRates } from './pharmacy-inventory-gst';
 import { autocompleteDrugCatalog } from '../../shared/search/drug-search';
 import { purchaseCatalogIssues } from './purchase-product-catalog';
 import {
@@ -236,6 +237,11 @@ export class DrugService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] billing-drug-detail-inventory-gst
+   * A branch-scoped product lookup MUST expose its Inventory GST rate, including zero.
+   * Missing or conflicting inventory rates MUST remain null for pharmacist review.
+   */
   async findOne(id: string, branchId: string) {
     try {
       const drug = await this.prisma.drug.findFirst({
@@ -297,7 +303,8 @@ export class DrugService {
         throw new NotFoundException('Drug not found');
       }
 
-      return drug;
+      const rates = await loadInventoryGstRates(this.prisma, [drug.id], branchId);
+      return { ...drug, gstRate: rates.get(drug.id) ?? null };
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

@@ -180,10 +180,7 @@ function PharmacyPageContent() {
 
   const openPharmacyTab = (tab: PharmacySideTab, billingPrefill?: PharmacyBillingPrefill) => {
     if (billingPrefill) {
-      setPrefill((current) => ({
-        ...(current ?? {}),
-        ...billingPrefill,
-      }));
+      setPrefill(billingPrefill);
     }
     setPharmacyTab(tab);
     const params = new URLSearchParams();
@@ -192,8 +189,8 @@ function PharmacyPageContent() {
     if (billingPrefill?.prescriptionId) params.set('prescriptionId', billingPrefill.prescriptionId);
     if (billingPrefill?.doctorId) params.set('doctorId', billingPrefill.doctorId);
     if (billingPrefill?.visitId) params.set('visitId', billingPrefill.visitId);
-    router.push(`/dashboard/pharmacy?${params.toString()}`);
-    focusWorkbench();
+    router.push(`/dashboard/pharmacy?${params.toString()}`, { scroll: false });
+    if (!billingPrefill) focusWorkbench();
   };
 
   return (
@@ -436,6 +433,11 @@ function PharmacyCounterPanel({
   );
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] prescription-load-visible-draft
+ * Loading a prescription MUST bring its bill into view. Switching prescriptions MUST
+ * create a separate draft so medicines and billing details from another patient cannot carry over.
+ */
 function PharmacyBillingPanel({
   prefill,
   onLoadPrescription,
@@ -443,6 +445,17 @@ function PharmacyBillingPanel({
   prefill?: PharmacyBillingPrefill | null;
   onLoadPrescription: (prefill: PharmacyBillingPrefill) => void;
 }) {
+  const billRef = useRef<HTMLDivElement>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  useEffect(() => {
+    if (!prefill?.prescriptionId && !prefill?.visitId) return;
+    const frame = requestAnimationFrame(() => {
+      billRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      billRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [prefill?.prescriptionId, prefill?.visitId, loadAttempt]);
+
   return (
     <section className="space-y-3">
       <WorkbenchHeader
@@ -450,10 +463,18 @@ function PharmacyBillingPanel({
         detail="Visit drugs auto-load as a draft; pharmacist review is required before label, invoice, payment, and stock deduction."
       />
       <PrescriptionDispensingQueue
-        onOpenBilling={onLoadPrescription}
+        onOpenBilling={(selected) => {
+          onLoadPrescription(selected);
+          setLoadAttempt(attempt => attempt + 1);
+        }}
         openActionLabel="Load"
       />
-      <PharmacyInvoiceBuilderFixed prefill={prefill || undefined} />
+      <div ref={billRef} role="region" aria-label="Prescription bill" tabIndex={-1} className="scroll-mt-4">
+        <PharmacyInvoiceBuilderFixed
+          key={`${prefill?.prescriptionId || prefill?.visitId || 'manual'}:${loadAttempt}`}
+          prefill={prefill || undefined}
+        />
+      </div>
     </section>
   );
 }
