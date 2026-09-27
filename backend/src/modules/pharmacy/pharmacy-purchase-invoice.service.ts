@@ -1,3 +1,6 @@
+import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
+import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
+import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
 import { Prisma } from '@prisma/client';
 import { alignPurchaseSource, matchingSourceRows, readPurchaseSourcePages, PurchaseSourceMap } from './purchase-invoice-source';
 import { purchaseCatalogData, purchaseCatalogIssues, purchaseInventoryClassification, purchaseProductKind } from './purchase-product-catalog';
@@ -568,6 +571,16 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] purchase-manual-search-scope
+   * Manual selection search MUST return only active products in the caller's branch and MUST NOT
+   * mutate catalogue or stock. An empty query MUST return no products.
+   */
+  async searchMasterProducts(q: string, branchId: string) {
+    if (!checkedProductQuery(q).trim()) return [];
+    return (await autocompleteDrugCatalog(this.prisma, { q, mode: 'name', limit: 10 }, branchId)).map(drug => this.masterDrugSummary(drug));
+  }
+
   async suggestMasterMatches(
     items: CreatePharmacyPurchaseInvoiceItemDto[],
     branchId: string,
@@ -578,21 +591,29 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
-    const matches = await Promise.all(
-      items.map(async (item, index) => ({
-        lineIndex: index,
-        ocr: this.masterLineSummary(item),
-        candidates: await this.findMasterMatchCandidates(item, branchId),
-      })),
-    );
+    // Validate before database work; share aliases and repeated-name retrieval across a whole invoice.
+    for (const item of items) checkedProductQuery(item.productName);
+    const aliases = await loadReviewedProductAliases(this.prisma, branchId);
+    const candidates = new Map<string, Promise<DrugSearchCandidate[]>>();
+    const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[] }[] = [];
+    for (let offset = 0; offset < items.length; offset += 4) {
+      matches.push(...await Promise.all(items.slice(offset, offset + 4).map(async (item, index) => {
+        const { query } = ocrProductSearchQuery(item.productName);
+        const key = normalizeProductSearch(query);
+        if (!candidates.has(key)) candidates.set(key, findDrugSearchCandidates(this.prisma, query, branchId, 'name', aliases));
+        return { lineIndex: offset + index, ocr: this.masterLineSummary(item),
+          candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!) };
+      })));
+    }
 
     return {
       matches: matches.map((match) => {
         const best = match.candidates[0];
         return {
           ...match,
+          matchLabel: best ? best.mismatches.length === 0 && best.searchMatch.kind === 'exact' ? 'Same product' : 'Possible match' : 'Not in inventory',
           recommendedAction:
-            best && best.score >= 65 ? 'MATCH_EXISTING' : 'CREATE_NEW',
+            best ? best.score >= 65 ? 'MATCH_EXISTING' : 'REVIEW_MATCHES' : 'CREATE_NEW',
         };
       }),
     };
@@ -605,9 +626,17 @@ export class PharmacyPurchaseInvoiceService {
    * Acceptance: INV-13. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-mismatch-explicit-acknowledgement
+   * Matching different names, known kinds, strengths or pack dimensions MUST fail before writes
+   * unless mismatchAcknowledged is true. A successful match MUST atomically retain the original
+   * line, selected product, mismatch reasons and acknowledgement in audit history with catalogue
+   * updates; confirming a match MUST NOT change stock.
+   */
   async confirmMasterRecord(
     dto: ConfirmPharmacyPurchaseMasterDto,
     branchId: string,
+    userId?: string,
   ) {
     if (!dto?.item) {
       throw new BadRequestException(
@@ -632,17 +661,32 @@ export class PharmacyPurchaseInvoiceService {
         throw new NotFoundException('Drug master record not found');
       }
 
+      const mismatches = purchaseMatchMismatches(item, existing);
+      if (mismatches.length && dto.mismatchAcknowledged !== true) {
+        throw new ConflictException({ code: 'PURCHASE_PRODUCT_MISMATCH',
+          message: 'These look like different products. Confirm anyway?', mismatches });
+      }
       const updateData: Record<string, unknown> = {};
       if (this.money(item.mrp) > 0) {
         updateData.price = this.money(item.mrp);
       }
-      const updated =
-        Object.keys(updateData).length > 0
-          ? await this.prisma.drug.update({
+      const updated = await this.prisma.$transaction(async tx => {
+        const saved = Object.keys(updateData).length > 0
+          ? await tx.drug.update({
               where: { id: existing.id },
               data: updateData,
             })
           : existing;
+        const suggestion = this.scoreMasterCandidate(item, { ...existing, aliases: [] });
+        await tx.auditLog.create({ data: { entity: 'PurchaseProductMatch', entityId: existing.id,
+          action: 'MATCH_CONFIRMED', userId,
+          oldValues: JSON.stringify({ branchId, item }),
+          newValues: JSON.stringify({ branchId, drug: this.masterDrugSummary(existing), mismatches,
+            mismatchAcknowledged: dto.mismatchAcknowledged === true, score: suggestion?.score ?? null,
+            reasons: suggestion?.reasons || [], nameEvidence: hasPurchaseNameEvidence(item, existing) }),
+        } });
+        return saved;
+      });
 
       return {
         action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING,
@@ -1913,161 +1957,41 @@ export class PharmacyPurchaseInvoiceService {
     return `Line ${item.lineNumber ?? '?'}`;
   }
 
-  private async findMasterMatchCandidates(
-    item: CreatePharmacyPurchaseInvoiceItemDto,
-    branchId: string,
-  ) {
-    const terms = this.matchTerms(item);
-    const whereOr = terms.map((term) => ({
-      OR: [
-        { name: { contains: term, mode: 'insensitive' as const } },
-        {
-          manufacturerName: {
-            contains: term,
-            mode: 'insensitive' as const,
-          },
-        },
-        { packSizeLabel: { contains: term, mode: 'insensitive' as const } },
-        { composition1: { contains: term, mode: 'insensitive' as const } },
-      ],
-    }));
-
-    const candidates = await this.prisma.drug.findMany({
-      where: {
-        branchId,
-        isActive: true,
-        isDiscontinued: false,
-        ...(whereOr.length ? { OR: whereOr } : {}),
-      },
-      select: {
-        id: true,
-        name: true,
-        price: true,
-        manufacturerName: true,
-        type: true,
-        requiresPrescription: true,
-        packSizeLabel: true,
-        composition1: true,
-        composition2: true,
-        category: true,
-        dosageForm: true,
-        strength: true,
-      },
-      orderBy: { name: 'asc' },
-      take: whereOr.length ? 200 : 50,
-    });
-
-    return candidates
-      .map((drug) => this.scoreMasterCandidate(item, drug))
-      .filter((candidate) => candidate.score >= 35)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+  /**
+   * @cc [owner:nareshshah139,label:product] ocr-shared-search-suggestions-only
+   * OCR suggestions MUST use shared name/alias scoring, exclude known strength, dosage-form and
+   * pack conflicts, and break score ties deterministically. Suggesting a product MUST NOT write
+   * catalogue, invoice or stock data or bypass explicit selection and exact commitment checks.
+   * A low-confidence candidate MUST request review instead of recommending a duplicate new record.
+   * Every candidate MUST have distinguishing name/alias evidence; generic forms or pack metadata
+   * alone MUST produce no candidates, regardless of manufacturer, price or combined score.
+   */
+  private rankMasterMatchCandidates(item: CreatePharmacyPurchaseInvoiceItemDto, candidates: DrugSearchCandidate[]) {
+    return candidates.map(drug => this.scoreMasterCandidate(item, drug))
+      .filter((c): c is NonNullable<typeof c> => !!c && c.score >= 35)
+      .sort((a,b) => b.score-a.score || b.searchMatch.score-a.searchMatch.score || a.drug.name.localeCompare(b.drug.name) || a.drug.id.localeCompare(b.drug.id))
+      .slice(0,3);
   }
 
-  private scoreMasterCandidate(
-    item: CreatePharmacyPurchaseInvoiceItemDto,
-    drug: MasterMatchDrug,
-  ) {
-    const nameScore = this.textSimilarity(item.productName, drug.name);
-    const manufacturerScore = this.textSimilarity(
-      item.manufacturer,
-      drug.manufacturerName,
-    );
-    const packScore = this.textSimilarity(item.packSize, drug.packSizeLabel);
-    const inferredStrength = this.inferStrength(item.productName);
-    const strengthScore =
-      drug.strength && !!inferredStrength
-        ? this.textSimilarity(inferredStrength, drug.strength)
-      : 0;
-    const dosageScore = drug.dosageForm
-      ? this.textSimilarity(this.inferDosageForm(item), drug.dosageForm)
-      : 0;
-
-    const score = Math.min(
-      100,
-      this.money(
-        nameScore * 58 +
-          manufacturerScore * 18 +
-          packScore * 14 +
-          strengthScore * 6 +
-          dosageScore * 4,
-      ),
-    );
-
-    const reasons = [];
-    if (nameScore >= 0.9) reasons.push('name exact/near match');
-    else if (nameScore >= 0.65) reasons.push('name token overlap');
-    if (manufacturerScore >= 0.8) reasons.push('manufacturer match');
-    if (packScore >= 0.8) reasons.push('pack size match');
-    if (strengthScore >= 0.8) reasons.push('strength match');
-
-    return {
-      drug: this.masterDrugSummary(drug),
-      score,
-      confidence: score >= 85 ? 'HIGH' : score >= 65 ? 'MEDIUM' : 'LOW',
-      reasons,
-    };
-  }
-
-  private matchTerms(item: CreatePharmacyPurchaseInvoiceItemDto): string[] {
-    const inferredStrength = this.inferStrength(item.productName);
-    const raw = [
-      item.productName,
-      item.manufacturer,
-      item.packSize,
-      inferredStrength,
-    ];
-    const terms = new Set<string>();
-    for (const value of raw) {
-      for (const token of this.normalizeText(value).split(' ')) {
-        if (token.length >= 4) terms.add(token);
-      }
-    }
-    return [...terms].slice(0, 8);
-  }
-
-  private textSimilarity(a: unknown, b: unknown): number {
-    const left = this.normalizeText(a);
-    const right = this.normalizeText(b);
-    if (!left || !right) return 0;
-    if (left === right) return 1;
-    if (left.includes(right) || right.includes(left)) return 0.86;
-
-    const leftTokens = new Set(left.split(' ').filter(Boolean));
-    const rightTokens = new Set(right.split(' ').filter(Boolean));
-    const intersection = [...leftTokens].filter((token) =>
-      rightTokens.has(token),
-    ).length;
-    const union = new Set([...leftTokens, ...rightTokens]).size;
-    const tokenScore = union ? intersection / union : 0;
-    const editScore =
-      1 -
-      this.levenshtein(left, right) / Math.max(left.length, right.length, 1);
-    return Math.max(tokenScore, editScore * 0.9);
-  }
-
-  private normalizeText(value: unknown): string {
-    return this.cleanString(value)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ' ')
-      .replace(/\b(tab|tabs|tablet|tablets|cap|caps|capsule|capsules|strip|strips|of|the)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  private levenshtein(a: string, b: string): number {
-    const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
-    for (let i = 1; i <= a.length; i += 1) {
-      const current = [i];
-      for (let j = 1; j <= b.length; j += 1) {
-        current[j] =
-          a[i - 1] === b[j - 1]
-            ? previous[j - 1]
-            : Math.min(previous[j - 1], previous[j], current[j - 1]) + 1;
-      }
-      for (let j = 0; j < current.length; j += 1) previous[j] = current[j];
-    }
-    return previous[b.length] ?? 0;
+  private scoreMasterCandidate(item: CreatePharmacyPurchaseInvoiceItemDto, drug: DrugSearchCandidate) {
+    if (!hasPurchaseNameEvidence(item, drug)) return null;
+    const mismatches = purchaseMatchMismatches(item, drug);
+    if (mismatches.includes('Product kinds differ')) return null;
+    const { query, notes } = ocrProductSearchQuery(item.productName);
+    const name = matchProductSearch(query, searchableDrug(drug), 'name');
+    if (!name) return null;
+    const pack = searchPackKey(item.packSize || ''), candidatePack = searchPackKey(drug.packSizeLabel || '');
+    if (pack && candidatePack && pack !== candidatePack) return null;
+    const forms = (value: string) => normalizeProductSearch(value).split(' ').filter(t => ['tablet','capsule','cream','ointment','gel','lotion','solution','syrup','suspension','injection','drops'].includes(t));
+    const wantedForms = forms(item.productName), actualForms = forms(drug.name + ' ' + (drug.dosageForm || ''));
+    if (wantedForms.length && actualForms.length && !wantedForms.some(f => actualForms.includes(f))) return null;
+    const manufacturer = item.manufacturer ? matchProductSearch(item.manufacturer, {names:[drug.manufacturerName || '']}, 'name') : null;
+    const score = this.money(Math.min(100, name.quality * 64 + (manufacturer?.quality || 0) * 18 + (pack && candidatePack && pack===candidatePack ? 14 : 0) + (wantedForms.some(f => actualForms.includes(f)) ? 4 : 0)));
+    const reasons = [name.kind==='fuzzy' ? 'similar spelling: '+name.corrections.join(', ') : name.kind==='alias' ? 'reviewed earlier name' : 'name '+name.kind+' match'];
+    reasons.push(...notes);
+    if (manufacturer) reasons.push('manufacturer match');
+    if (pack && pack===candidatePack) reasons.push('pack size match');
+    return { drug:this.masterDrugSummary(drug), score, confidence:score>=85?'HIGH':score>=65?'MEDIUM':'LOW', reasons, searchMatch:name, mismatches };
   }
 
   private masterLineSummary(item: CreatePharmacyPurchaseInvoiceItemDto) {
@@ -2118,24 +2042,6 @@ export class PharmacyPurchaseInvoiceService {
       mrp: this.money(item.mrp || drug.price || 0),
       purchaseRate: this.money(item.purchaseRate),
     };
-  }
-
-  private inferDosageForm(item: CreatePharmacyPurchaseInvoiceItemDto): string {
-    const text = `${item.productName || ''} ${item.packUnitType || ''}`.toLowerCase();
-    if (/\b(cap|capsule)\b/.test(text)) return 'Capsule';
-    if (/\b(cream|ointment|gel|lotion)\b/.test(text)) return 'Topical';
-    if (/\b(syrup|suspension)\b/.test(text)) return 'Liquid';
-    if (/\b(inj|injection)\b/.test(text)) return 'Injection';
-    if (/\b(drop|drops)\b/.test(text)) return 'Drops';
-    if (/\b(tab|tablet)\b/.test(text)) return 'Tablet';
-    return '';
-  }
-
-  private inferStrength(productName: string): string {
-    const match = this.cleanString(productName).match(
-      /\b\d+(?:\.\d+)?\s*(?:mg|mcg|g|gm|ml|iu|%)\b/i,
-    );
-    return match?.[0] || '';
   }
 
   private async buildOcrImageDataUrls(file: Express.Multer.File): Promise<{

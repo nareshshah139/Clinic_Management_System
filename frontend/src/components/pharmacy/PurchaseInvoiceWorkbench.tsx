@@ -39,6 +39,7 @@ import {
   PurchaseProductDetails,
   type PurchaseProductCatalog,
 } from "./PurchaseProductDetails";
+import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import {
@@ -128,6 +129,7 @@ type HeaderForm = {
 };
 
 type LineForm = {
+  productKind?: PurchaseProductCatalog["productKind"];
   ocrSourceRef?: string;
   localId: string;
   serialNumber: string;
@@ -233,6 +235,7 @@ type PurchaseListResponse = {
 };
 
 type ExtractedPurchaseLine = Partial<{
+  productKind: PurchaseProductCatalog["productKind"];
   ocrSourceRef: string;
   serialNumber: number | string;
   productName: string;
@@ -307,10 +310,11 @@ type MasterCandidate = {
 };
 
 type MasterMatch = {
+  matchLabel?: "Same product" | "Possible match" | "Not in inventory";
   lineIndex: number;
   ocr: Record<string, unknown>;
   candidates: MasterCandidate[];
-  recommendedAction: "MATCH_EXISTING" | "CREATE_NEW";
+  recommendedAction: "MATCH_EXISTING" | "REVIEW_MATCHES" | "CREATE_NEW";
 };
 
 type MasterMatchResponse = {
@@ -837,6 +841,7 @@ function lineFromExtracted(
   return {
     ...base,
     ocrSourceRef: item.ocrSourceRef,
+    productKind: item.productKind,
     serialNumber: formString(item.serialNumber, String(index + 1)),
     productName: formString(item.productName),
     manufacturer: formString(item.manufacturer),
@@ -988,6 +993,14 @@ export function PurchaseInvoiceWorkbench({
  * unrelated sections.
  * Acceptance: INV-41. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-match-labels-and-fallback
+ * Authorized editors with catalogue support MUST see Not in inventory, Create new item and
+ * manual search when no candidate exists or the response recommends CREATE_NEW; such responses
+ * MUST NOT expose a suggested saved product or Confirm Match button. Suggestions MUST use plain
+ * identity labels rather than numeric confidence. Editing a name or pack, or removing a line,
+ * MUST discard previous suggested and confirmed mappings before they can be reused.
  */
 function PurchaseInvoiceEditor({
   recoveryKey,
@@ -1284,6 +1297,10 @@ function PurchaseInvoiceEditor({
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
+    if (["productName", "packSize", "packUnitType"].includes(key)) {
+      setMasterMatches([]);
+      setMasterStatuses({});
+    }
     setLines((current) =>
       current.map((line) =>
         line.localId === localId ? { ...line, [key]: value } : line,
@@ -1301,6 +1318,8 @@ function PurchaseInvoiceEditor({
     setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
     const removedIndex = lines.findIndex((line) => line.localId === localId);
+    setMasterMatches([]);
+    setMasterStatuses({});
     setOriginalAmounts((current) =>
       current && Array.isArray(current.items)
         ? {
@@ -1467,7 +1486,7 @@ function PurchaseInvoiceEditor({
   const linePayload = (line: LineForm) => {
     const payload = buildDraftPayload(header, [line]);
     const item = Array.isArray(payload.items) ? payload.items[0] : undefined;
-    return item as Record<string, unknown>;
+    return { ...item as Record<string, unknown>, productKind: line.productKind || undefined };
   };
 
   const applyLinePatch = (
@@ -1531,6 +1550,11 @@ function PurchaseInvoiceEditor({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-mismatch-warning-before-retry
+   * A server-reported product mismatch MUST display the different-products warning and both
+   * identities before retrying with acknowledgement. Cancelling MUST leave the line unchanged.
+   */
   const confirmMasterLine = async (
     match: MasterMatch,
     action: "MATCH_EXISTING" | "CREATE_NEW",
@@ -1548,27 +1572,32 @@ function PurchaseInvoiceEditor({
 
     if (action === "CREATE_NEW" && !access.catalogDetails)
       return "Product details are not available yet. Reload after the update completes.";
-    const confirmed =
-      action === "CREATE_NEW" ||
-      window.confirm(
-        `Confirm this DB master match for ${line.productName || "this OCR line"}?`,
-      );
-    if (!confirmed) return;
-
     const key = `${match.lineIndex}:${action}`;
     setMasterConfirming(key);
     setNotice(null);
     setError(null);
     try {
-      const response =
-        await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>(
-          {
+      const payload = {
             action,
             drugId: candidate?.drug.id,
             catalog,
             item: linePayload(line),
-          },
-        );
+          };
+      let response: MasterConfirmationResponse;
+      try {
+        response = await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>(payload);
+      } catch (err) {
+        const conflict = err as { status?: number; body?: { code?: string; mismatches?: string[] } };
+        if (action !== "MATCH_EXISTING" || conflict.status !== 409 || conflict.body?.code !== "PURCHASE_PRODUCT_MISMATCH") throw err;
+        const confirmed = window.confirm([
+          "These look like different products. Confirm anyway?",
+          `Invoice: ${line.productName} · ${line.packSize}${line.productKind ? ` · ${line.productKind}` : ""}`,
+          `Saved product: ${candidate?.drug.name} · ${candidate?.drug.packSizeLabel} · ${candidate?.drug.productKind || candidate?.drug.type || "Kind not recorded"}`,
+          ...(conflict.body.mismatches || []),
+        ].join("\n"));
+        if (!confirmed) return;
+        response = await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>({ ...payload, mismatchAcknowledged: true });
+      }
       applyLinePatch(match.lineIndex, response.linePatch);
       setMasterStatuses((current) => ({
         ...current,
@@ -3887,7 +3916,7 @@ function PurchaseInvoiceEditor({
                             {masterMatches.map((match) => {
                               if (!access.create) return;
                               const line = lines[match.lineIndex];
-                              const best = match.candidates[0];
+                              const best = match.recommendedAction === "CREATE_NEW" ? undefined : match.candidates[0];
                               const status = masterStatuses[match.lineIndex];
                               const confirmMatchKey = `${match.lineIndex}:MATCH_EXISTING`;
                               const savedProduct = status?.drug || best?.drug;
@@ -3903,12 +3932,6 @@ function PurchaseInvoiceEditor({
                                         {line?.productName ||
                                           fieldValue(match.ocr?.productName)}
                                       </p>
-                                      <p className="text-xs text-muted-foreground">
-                                        Recommended:{" "}
-                                        {match.recommendedAction
-                                          .replaceAll("_", " ")
-                                          .toLowerCase()}
-                                      </p>
                                     </div>
                                     {status ? (
                                       <Badge variant="default">
@@ -3923,12 +3946,11 @@ function PurchaseInvoiceEditor({
                                             : "secondary"
                                         }
                                       >
-                                        {best.confidence} ·{" "}
-                                        {numberFormat.format(best.score)}
+                                        {match.matchLabel || "Possible match"}
                                       </Badge>
                                     ) : (
                                       <Badge variant="outline">
-                                        No close match
+                                        Not in inventory
                                       </Badge>
                                     )}
                                   </div>
@@ -4060,6 +4082,14 @@ function PurchaseInvoiceEditor({
                                     </div>
                                   </div>
 
+                                  {!status && <label className="mt-3 block text-sm">
+                                    Invoice product kind
+                                    <select className="mt-1 block w-full rounded-md border bg-background p-2" value={line?.productKind || ""} disabled={busy || masterConfirming !== null} onChange={event => {
+                                      if (line) updateLine(line.localId, "productKind", event.target.value);
+                                    }}>
+                                      <option value="">Not recorded</option><option value="MEDICINE">Medicine</option><option value="COSMETIC">Cosmetic / skin care</option><option value="CONSUMABLE">Other consumable</option>
+                                    </select>
+                                  </label>}
                                   <div className="mt-3 flex flex-col gap-2 md:flex-row md:justify-end">
                                     {best && !status && (
                                       <Button
@@ -4153,6 +4183,8 @@ function PurchaseInvoiceEditor({
                                           </summary>
                                           <PurchaseProductDetails
                                             id={`product-${match.lineIndex}-new`}
+                                            createLabel="Create new item"
+                                            onKindChange={kind => { if (line) updateLine(line.localId, "productKind", kind); }}
                                             disabled={
                                               busy || masterConfirming !== null
                                             }
@@ -4170,6 +4202,8 @@ function PurchaseInvoiceEditor({
                                         <div className="mt-3">
                                           <PurchaseProductDetails
                                             id={`product-${match.lineIndex}-new`}
+                                            createLabel="Create new item"
+                                            onKindChange={kind => { if (line) updateLine(line.localId, "productKind", kind); }}
                                             disabled={
                                               busy || masterConfirming !== null
                                             }
@@ -4191,6 +4225,12 @@ function PurchaseInvoiceEditor({
                                         completes.
                                       </p>
                                     ))}
+                                  {!status && <PurchaseManualMatchSearch
+                                    key={line?.localId || match.lineIndex}
+                                    lineNumber={match.lineIndex + 1}
+                                    disabled={busy || masterConfirming !== null}
+                                    onSelect={drug => { void confirmMasterLine(match, "MATCH_EXISTING", { drug, score: 0, confidence: "LOW" }); }}
+                                  />}
                                 </div>
                               );
                             })}
