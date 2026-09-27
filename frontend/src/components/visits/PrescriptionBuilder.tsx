@@ -159,6 +159,13 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 });
 
 /**
+ * @cc [owner:nareshshah139,label:product] compact-clinical-print-fields
+ * Space-optimized print content MUST place Chief Complaints, Review Date and
+ * Follow-up labels beside their values, with wrapped text aligned under the
+ * value. Disabling it MUST restore the stacked headings and original labels;
+ * fields without values MUST remain omitted in both layouts.
+ */
+/**
  * @cc [owner:nareshshah139,label:product] personal-history-editing
  * Personal history MUST remain scoped to the selected patient and visit. Saved
  * drafts and edits, including clears, MUST take precedence over delayed prefill.
@@ -5724,9 +5731,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Chief Complaints */}
                 {(chiefComplaints?.trim()?.length > 0) && (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Chief Complaints</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('chiefComplaints', chiefComplaints)}</div>
+                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Chief Complaints{spaceOptimized ? ':' : ''}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('chiefComplaints', chiefComplaints)}</div>
                   </div>
                 )}
 
@@ -5855,17 +5862,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
                 {/* Review Date */}
                 {reviewDateDisplay ? (
-                  <div className="py-3">
-                    <div className="font-semibold mb-1">Review Date</div>
-                    <div className="text-sm">{reviewDateDisplay}</div>
+                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>Review Date{spaceOptimized ? ':' : ''}</div>
+                    <div className={`text-sm ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{reviewDateDisplay}</div>
                   </div>
                 ) : null}
 
                 {/* Follow-up Instructions */}
                 {(followUpInstructions?.trim()?.length) ? (
-                  <div className={`py-3 ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
-                    <div className="font-semibold mb-1">Follow-up Instructions</div>
-                    <div className="text-sm whitespace-pre-wrap">{tt('followUpInstructions', followUpInstructions)}</div>
+                  <div className={`py-3 ${spaceOptimized ? 'flex items-baseline gap-2 text-sm' : ''} ${breakBeforeFollowUp ? 'pb-before-page' : ''}`}>
+                    <div className={`font-semibold ${spaceOptimized ? 'shrink-0' : 'mb-1'}`}>{spaceOptimized ? 'Follow-up:' : 'Follow-up Instructions'}</div>
+                    <div className={`text-sm whitespace-pre-wrap ${spaceOptimized ? 'min-w-0 flex-1 [overflow-wrap:anywhere]' : ''}`}>{tt('followUpInstructions', followUpInstructions)}</div>
                   </div>
                 ) : null}
 
