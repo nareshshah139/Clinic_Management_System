@@ -700,6 +700,20 @@ export class ApiClient {
     return this.patch(`/users/${id}/profile`, data);
   }
 
+  async getDoctorSignature(doctorId: string) {
+    return this.get<{ signature: { id: string; url: string; width?: number; height?: number } | null }>(`/users/${encodeURIComponent(doctorId)}/signature`);
+  }
+
+  async uploadOwnSignature(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.request<{ signature: { id: string; url: string } }>('/users/me/signature', { method: 'POST', body: formData });
+  }
+
+  async removeOwnSignature() {
+    return this.delete('/users/me/signature');
+  }
+
   async deleteUser(id: string) {
     return this.delete(`/users/${id}`);
   }
@@ -740,7 +754,7 @@ export class ApiClient {
     opts?: {
       idempotencyKey?: string;
       timeoutMs?: number;
-      pdf?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean };
+      pdf?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean };
     },
   ) {
     const prescription = await this.createPrescription(data, {
@@ -867,7 +881,7 @@ export class ApiClient {
   }
 
   // PDF Generation & Share
-  async generatePrescriptionPdf(id: string, data?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean }) {
+  async generatePrescriptionPdf(id: string, data?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean }) {
     // Generate from the current saved state, not a permanently cached PDF.
     const autoKey = `cms:POST:prescriptions:pdf:${id}:${this.newOperationKey()}`;
     return this.post<{ fileUrl: string; fileName: string; fileSize: number }>(
@@ -877,8 +891,17 @@ export class ApiClient {
     );
   }
 
-  async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean }) {
+  async sharePrescription(id: string, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean; showSignature?: boolean }) {
     return this.post(`/prescriptions/${id}/share`, data);
+  }
+
+  async sharePrescriptionPreview(id: string, file: File, data: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('channel', data.channel);
+    formData.append('to', data.to);
+    if (data.message) formData.append('message', data.message);
+    return this.request(`/prescriptions/${encodeURIComponent(id)}/share-preview`, { method: 'POST', body: formData }, { timeoutMs: 120000 });
   }
 
   async recordPrescriptionPrintEvent(id: string, data: { eventType: string; channel?: string; count?: number; metadata?: unknown }) {

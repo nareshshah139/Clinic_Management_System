@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
 
 @Injectable()
 export class UsersService {
@@ -12,6 +13,58 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
   ) {}
+
+  async getDoctorSignature(doctorId: string, branchId: string) {
+    return { signature: await readDoctorSignature(this.prisma, branchId, doctorId) };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] signature-owner-only
+   * Signature mutations MUST require both the authenticated DOCTOR role and an
+   * active doctor record matching the session user and branch; otherwise forbid.
+   */
+  private async requireSignatureOwner(user: { id: string; branchId: string; role: string }) {
+    if (user.role !== 'DOCTOR' || !await this.prisma.user.findFirst({
+      where: { id: user.id, branchId: user.branchId, role: 'DOCTOR', isActive: true },
+      select: { id: true },
+    })) throw new ForbiddenException('Only the logged-in doctor can change her signature.');
+  }
+
+  async uploadOwnSignature(user: { id: string; branchId: string; role: string }, file?: Express.Multer.File) {
+    await this.requireSignatureOwner(user);
+    const url = await signatureDataUrl(file);
+    const signature = await this.prisma.$transaction(async tx => {
+      await tx.clinicAsset.updateMany({
+        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        data: { isActive: false },
+      });
+      return tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Doctor signature', url },
+        select: { id: true, url: true },
+      });
+    });
+    return { signature };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] signature-removal-persists
+   * Removing a signature MUST leave the authenticated doctor's signature absent
+   * on subsequent reads, including when only the bundled default existed.
+   */
+  async removeOwnSignature(user: { id: string; branchId: string; role: string }) {
+    await this.requireSignatureOwner(user);
+    await this.prisma.$transaction(async tx => {
+      await tx.clinicAsset.updateMany({
+        where: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', isActive: true },
+        data: { isActive: false },
+      });
+      // Persist the choice even when there was no uploaded asset to deactivate.
+      await tx.clinicAsset.create({
+        data: { branchId: user.branchId, ownerId: user.id, type: 'SIGNATURE', name: 'Signature removed', url: '', isActive: false },
+      });
+    });
+    return { signature: null };
+  }
 
   // User Management Methods
   async createUser(createUserDto: CreateUserDto, branchId: string) {

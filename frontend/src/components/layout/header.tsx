@@ -24,6 +24,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useBrandedMode } from './branded-mode-context';
 import { ReceptionistTour } from '@/components/tours/ReceptionistTour';
 import { useToast } from '@/hooks/use-toast';
+import { DoctorSignatureSettings } from '@/components/users/DoctorSignatureSettings';
 import {
   buildTemplateSelectionValue,
   getSelectableWhatsAppTemplates,
@@ -661,13 +662,14 @@ export function Header() {
           <DialogTrigger asChild>
             <Button variant="ghost" size="sm" aria-label="Open settings"><Settings className="h-5 w-5" /></Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[520px]">
+          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>My Settings</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {String((user as any)?.role || '').toUpperCase() === 'DOCTOR' && (
                 <>
+                  {settingsOpen && user?.id && <DoctorSignatureSettings doctorId={user.id} />}
                   <div className="border rounded p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>

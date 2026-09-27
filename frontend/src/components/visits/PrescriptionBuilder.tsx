@@ -24,6 +24,7 @@ import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -154,6 +155,12 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
+/**
+ * @cc [owner:nareshshah139,label:product] signature-preview-output
+ * When Show signature is checked and the signature block is included, print,
+ * download and shared PDFs MUST place the proportional image above the doctor's
+ * name. Unchecking MUST remove it; exports MUST wait for updated pagination.
+ */
 function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
@@ -624,6 +631,10 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
+  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen || autoPreview);
+  const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
+  const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
+  const [sharingEmail, setSharingEmail] = useState(false);
   // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
   const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
@@ -860,6 +871,8 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   });
 
   const includeSections = includeSectionsProp ?? localIncludeSections;
+  const printedSignatureUrl = includeSections.doctorSignature && showSignature ? signatureUrl : null;
+  const exportPreviewPending = Boolean(showSignature && (signatureLoading || signatureError)) || renderedSignatureUrl !== printedSignatureUrl;
   
   // Stabilize setIncludeSections using useRef to prevent infinite loops
   const onChangeIncludeSectionsRef = useRef(onChangeIncludeSections);
@@ -3129,6 +3142,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [removePreviewPrintHost]);
 
   const printPreviewInPlace = useCallback(async () => {
+    if (exportPreviewPending || pagedJsProcessing) return;
     const container = pagedJsContainerRef.current || document.getElementById('pagedjs-container');
     if (!container || !container.querySelector('.pagedjs_page')) {
       toast({ variant: 'destructive', title: 'Print failed', description: 'No paginated preview is ready yet.' });
@@ -3144,6 +3158,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       return;
     }
     previewPrintHostRef.current = printHost;
+    try {
+      const { waitForSignatureImages } = await import('@/lib/pdf-export');
+      await waitForSignatureImages(printHost);
+    } catch {
+      cleanupPreviewPrintMode();
+      toast({ variant: 'destructive', title: 'Print failed', description: 'The signature image could not be loaded. Please retry.' });
+      return;
+    }
     document.body.classList.add('prescription-preview-printing');
 
     const handleAfterPrint = () => {
@@ -3169,7 +3191,27 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         }
       });
     });
-  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast]);
+  }, [cleanupPreviewPrintMode, createPreviewPrintHost, saveBeforeExport, toast, exportPreviewPending, pagedJsProcessing]);
+
+  const renderPreviewPdf = async () => {
+    if (exportPreviewPending || pagedJsProcessing) throw new Error('Wait for the prescription preview to finish updating.');
+    const container = document.getElementById('pagedjs-container');
+    if (!container?.querySelector('.pagedjs_page')) throw new Error('No paginated preview is ready yet.');
+    const stylesheets = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).map(element => element.outerHTML);
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = `
+      <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+      ${stylesheets.join('\n')}
+      <style>
+        @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
+        * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+        html, body { margin: 0; padding: 0; }
+        ${pagedPrintExportCss}
+      </style>
+      ${container.innerHTML}`;
+    const { renderPrescriptionPages } = await import('@/lib/pdf-export');
+    return renderPrescriptionPages(wrapper, paperPreset);
+  };
 
   useEffect(() => {
     return () => {
@@ -3333,6 +3375,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
       offsetX: contentOffsetXPx,
       offsetY: contentOffsetYPx,
       showRefillStamp,
+      printedSignatureUrl,
       grayscale,
       letterheadOption,
       rxPrintFormat,
@@ -3515,6 +3558,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           .medication-item { break-inside: avoid; page-break-inside: avoid; }
           .pb-before-page { break-before: page; page-break-before: always; }
           .rx-row { break-inside: avoid; page-break-inside: avoid; }
+          .doctor-signature-block { break-inside: avoid; page-break-inside: avoid; }
         `;
         
         // Process with Paged.js - pass CSS via Blob URLs so the content markup stays clean.
@@ -3555,6 +3599,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         // Mark initial render as done and update content hash to prevent flickering
         initialRenderDoneRef.current = true;
         lastContentHashRef.current = contentHash;
+        setRenderedSignatureUrl(printedSignatureUrl);
         console.log('📏 Container dimensions:', {
           width: container.offsetWidth,
           height: container.offsetHeight,
@@ -3834,10 +3879,11 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
           // Clear flag and immediately re-run with the latest state
           pagedJsPendingRef.current = false;
           // Run in microtask to let state settle
-          setTimeout(() => processWithPagedJs(), 0);
+          setTimeout(() => void pagedJsProcessRef.current?.(), 0);
         }
       }
     };
+    pagedJsProcessRef.current = processWithPagedJs;
     
     // Wait for container to mount if needed, then process
     let cancelled = false;
@@ -3862,7 +3908,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
   }, [previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -5272,7 +5318,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div data-prescription-preview-main className="h-full min-h-0 flex flex-row">
+            <div data-prescription-preview-main className="h-full min-h-0 min-w-0 flex flex-col sm:flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -5386,7 +5432,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 }
                 `
               }} />
-            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
               <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
                   <div className="flex flex-wrap gap-2 items-center text-gray-800">
@@ -5738,10 +5784,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className={`pt-6 mt-4 border-t ${breakBeforeSignature ? 'pb-before-page' : ''}`}>
+                  <div className={`doctor-signature-block pt-6 mt-4 border-t ${breakBeforeSignature ? 'pb-before-page' : ''}`} style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
-                        <div className="h-10" />
+                        {printedSignatureUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
+                        ) : <div className="h-10" />}
                         <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
                         {!spaceOptimized && <div className="text-gray-600">Signature</div>}
                       </div>
@@ -5753,7 +5802,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
               </div>
             </div>
             {/* Right Sidebar Controls */}
-            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
@@ -5916,6 +5965,15 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
                     Refill stamp
                   </label>
+                  <label className="text-sm text-gray-700 flex items-center gap-2">
+                    <input type="checkbox" checked={showSignature} disabled={savingForExport || sharingEmail || (!showSignature && (signatureLoading || !signatureUrl))} onChange={event => setShowSignature(event.target.checked)} aria-describedby="signature-preview-help" />
+                    Show signature
+                  </label>
+                  <div id="signature-preview-help" className="text-xs text-gray-600">
+                    {signatureLoading ? 'Loading signature…' : signatureError ? (
+                      <><span role="alert">{signatureError}</span> <button type="button" className="underline" onClick={reloadSignature}>Retry</button></>
+                    ) : !signatureUrl ? 'No signature uploaded. The doctor can add one in My Settings → Doctor signature.' : 'Remembered for this doctor on this browser. Applies to print, PDF, WhatsApp and Email.'}
+                  </div>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {(
@@ -5933,16 +5991,23 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className={!hasSavedPrescription ? 'cursor-not-allowed' : ''}>
-                          <Button variant="secondary" disabled={!hasSavedPrescription} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                          <Button variant="secondary" disabled={!hasSavedPrescription || savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} className={!hasSavedPrescription ? 'pointer-events-none opacity-50' : ''} onClick={async () => {
+                            setSharingEmail(true);
                             try {
-                              const prescId = visitData?.prescriptionId || savedPrescriptionId || createdPrescriptionIdRef?.current || undefined;
-                              if (!prescId) return;
-                              await apiClient.sharePrescription(prescId, { channel: 'EMAIL', to: (visitData?.patient?.email || '') as string, message: 'Your prescription is ready.' });
-                              toast({ title: 'Email sent', description: 'Prescription email queued.' });
+                              const to = visitData?.patient?.email?.trim();
+                              if (!to) throw new Error('Patient has no email address on file.');
+                              const saved = await saveBeforeExport();
+                              if (!saved?.prescriptionId) return;
+                              const pdfBlob = await renderPreviewPdf();
+                              const file = new File([pdfBlob], `prescription-${saved.documentId}.pdf`, { type: 'application/pdf' });
+                              await apiClient.sharePrescriptionPreview(saved.prescriptionId, file, { channel: 'EMAIL', to, message: 'Your prescription is attached.' });
+                              toast({ title: 'Email sent', description: 'Prescription PDF sent by email.' });
                             } catch (e) {
-                              toast({ variant: 'destructive', title: 'Email failed', description: 'Could not send email.' });
+                              toast({ variant: 'destructive', title: 'Email failed', description: getErrorMessage(e) || 'Could not send email.' });
+                            } finally {
+                              setSharingEmail(false);
                             }
-                          }}>Email</Button>
+                          }}>{sharingEmail ? 'Sending…' : 'Email'}</Button>
                         </span>
                       </TooltipTrigger>
                       {!hasSavedPrescription && <TooltipContent><p>Save the prescription first</p></TooltipContent>}
@@ -5952,7 +6017,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span >
-                          <Button variant="secondary" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button variant="secondary" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
@@ -5962,33 +6027,9 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 toast({ variant: 'destructive', title: 'No phone number', description: 'Patient has no phone number on file.' });
                                 return;
                               }
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'WhatsApp failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Preparing prescription for WhatsApp.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
                               const fileName = `prescription-${saved.documentId}.pdf`;
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               try { if (prescId) await apiClient.recordPrescriptionPrintEvent(prescId, { eventType: 'WHATSAPP_SHARE' }); } catch {}
 
@@ -6026,42 +6067,18 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                     </Tooltip>
                   </TooltipProvider>
                   <Button variant="ghost" className="col-span-2" onClick={() => document.body.classList.toggle('high-contrast')}>High contrast</Button>
-                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview} onClick={printPreviewInPlace}>Print</Button>
+                  <Button className="col-span-1" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={printPreviewInPlace}>Print</Button>
                   <TooltipProvider delayDuration={200}>
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="col-span-1">
-                          <Button className="w-full" disabled={savingForExport || savingFromPreview} onClick={async () => {
+                          <Button className="w-full" disabled={savingForExport || savingFromPreview || sharingEmail || exportPreviewPending || pagedJsProcessing} onClick={async () => {
                             try {
                               const saved = await saveBeforeExport();
                               if (!saved) return;
                               const prescId = saved.prescriptionId;
-                              const container = document.getElementById('pagedjs-container');
-                              if (!container) {
-                                toast({ variant: 'destructive', title: 'PDF failed', description: 'No preview content. Open the preview first.' });
-                                return;
-                              }
                               toast({ title: 'Generating PDF…', description: 'Capturing prescription preview.' });
-
-                              const stylesheets: string[] = [];
-                              document.querySelectorAll('style').forEach(s => stylesheets.push(s.outerHTML));
-                              document.querySelectorAll('link[rel="stylesheet"]').forEach(l => stylesheets.push(l.outerHTML));
-
-                              const wrapper = document.createElement('div');
-                              wrapper.innerHTML = `
-                                <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-                                ${stylesheets.join('\n')}
-                                <style>
-                                  @page { size: ${paperPreset === 'LETTER' ? '8.5in 11in' : 'A4'}; margin: 0; }
-                                  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-                                  html, body { margin: 0; padding: 0; }
-                                  ${pagedPrintExportCss}
-                                </style>
-                                ${container.innerHTML}
-                              `;
-
-                              const { renderPrescriptionPages } = await import('@/lib/pdf-export');
-                              const pdfBlob = await renderPrescriptionPages(wrapper, paperPreset);
+                              const pdfBlob = await renderPreviewPdf();
 
                               const blobUrl = URL.createObjectURL(pdfBlob);
                               const a = document.createElement('a');

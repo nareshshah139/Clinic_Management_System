@@ -3,7 +3,8 @@ import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
 import { VisitsService } from '../visits/visits.service';
-import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional, ForbiddenException } from '@nestjs/common';
+import { readDoctorSignature } from '../users/doctor-signature';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
@@ -1563,6 +1564,13 @@ export class PrescriptionsService {
     ownerId: string,
     body: { id?: string; type: 'LOGO'|'STAMP'|'SIGNATURE'; name: string; url: string; opacity?: number; scale?: number; rotationDeg?: number; crop?: any; placement?: any; isActive?: boolean },
   ) {
+    // Signature ownership cannot be bypassed through the general asset editor,
+    // including by changing an existing signature's type to LOGO or STAMP.
+    const existing = body.id ? await this.prisma.clinicAsset.findFirst({ where: { id: body.id, branchId } }) : null;
+    if (body.id && !existing) throw new NotFoundException('Asset not found');
+    if (body.type === 'SIGNATURE' || existing?.type === 'SIGNATURE') {
+      throw new ForbiddenException('Change your signature from your own doctor settings.');
+    }
     const data = {
       branchId,
       ownerId,
@@ -1585,6 +1593,7 @@ export class PrescriptionsService {
   async deleteClinicAsset(branchId: string, id: string) {
     const asset = await this.prisma.clinicAsset.findFirst({ where: { id, branchId } });
     if (!asset) throw new NotFoundException('Asset not found');
+    if (asset.type === 'SIGNATURE') throw new ForbiddenException('Remove your signature from your own doctor settings.');
     await this.prisma.clinicAsset.delete({ where: { id } });
     return { id };
   }
@@ -1642,16 +1651,24 @@ export class PrescriptionsService {
     return { id };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-signature-selection
+   * PDF generation MUST use the prescribing doctor's branch-scoped signature
+   * only when showSignature is true; otherwise leave space to sign by hand.
+   */
   private async buildPrescriptionPdfBuffer(
     prescriptionId: string,
     branchId: string,
-    body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+    body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, visit: { patient: { branchId } } },
       include: { visit: { include: { patient: true, doctor: true } } },
     });
     if (!prescription) throw new NotFoundException('Prescription not found');
+    const signature = body?.showSignature === true
+      ? await readDoctorSignature(this.prisma, branchId, prescription.visit.doctorId || prescription.visit.doctor.id)
+      : null;
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -1675,6 +1692,16 @@ export class PrescriptionsService {
       });
     } catch {}
 
+    // Keep the signature and name together, with the same space for hand signing.
+    const signatureHeight = 64;
+    if (doc.y + signatureHeight + 60 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+    doc.moveDown();
+    const signatureY = doc.y;
+    if (signature) doc.image(Buffer.from(signature.url.split(',')[1], 'base64'), doc.page.width - 200, signatureY,
+      { fit: [160, signatureHeight], align: 'right', valign: 'bottom' });
+    doc.y = signatureY + signatureHeight + 4;
+    doc.fontSize(11).text(`Dr. ${prescription.visit.doctor.firstName} ${prescription.visit.doctor.lastName}`, 40, doc.y, { align: 'right' });
+    doc.fontSize(9).text('Signature', { align: 'right' });
     doc.end();
     const pdfBuffer = await finish;
     return { pdfBuffer, fileName: `prescription-${prescriptionId}.pdf` };
@@ -1684,7 +1711,7 @@ export class PrescriptionsService {
   async generatePrescriptionPdf(
     prescriptionId: string,
     branchId: string,
-    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ) {
     const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body);
     const base64 = pdfBuffer.toString('base64');
@@ -1698,13 +1725,16 @@ export class PrescriptionsService {
     prescriptionId: string,
     branchId: string,
     userId: string,
-    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
+    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean; showSignature?: boolean },
   ) {
+    await this.requireSharePrescription(prescriptionId, branchId, body);
+    const pdf = body.includePdf ? await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body) : null;
     if (body.channel === 'EMAIL') {
-      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached/generated.' });
+      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is ready.',
+        attachments: pdf ? [{ filename: pdf.fileName, content: pdf.pdfBuffer, contentType: 'application/pdf' }] : undefined });
     } else if (body.channel === 'WHATSAPP') {
       if (body.includePdf) {
-        const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId);
+        const { pdfBuffer, fileName } = pdf!;
         await this.notifications.sendWhatsAppDocument({
           toPhoneE164: body.to,
           pdfBuffer,
@@ -1718,6 +1748,37 @@ export class PrescriptionsService {
     await this.prisma.prescriptionPrintEvent.create({
       data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1, metadata: body.message ? JSON.stringify({ message: body.message, includePdf: !!body.includePdf }) : null },
     });
+    return { status: 'QUEUED', channel: body.channel, to: body.to };
+  }
+
+  private async requireSharePrescription(prescriptionId: string, branchId: string, body: { channel: string; to: string }) {
+    if (!['EMAIL', 'WHATSAPP'].includes(body.channel) || typeof body.to !== 'string' || !body.to.trim()) {
+      throw new BadRequestException('Choose a sharing channel and recipient.');
+    }
+    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } }, select: { id: true } });
+    if (!prescription) throw new NotFoundException('Prescription not found');
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;security] preview-share-parity
+   * Sharing MUST verify the prescription belongs to the caller's branch before
+   * sending the supplied PDF bytes unchanged to Email or WhatsApp. Invalid PDF
+   * inputs or recipients MUST fail without sending.
+   */
+  async sharePrescriptionPreview(prescriptionId: string, branchId: string,
+    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }, file?: Express.Multer.File) {
+    await this.requireSharePrescription(prescriptionId, branchId, body);
+    if (!file?.buffer?.length || file.buffer.length > 15 * 1024 * 1024 || file.mimetype !== 'application/pdf' || file.buffer.subarray(0, 5).toString() !== '%PDF-') {
+      throw new BadRequestException('A valid prescription PDF up to 15 MB is required.');
+    }
+    const fileName = `prescription-${prescriptionId}.pdf`;
+    if (body.channel === 'EMAIL') {
+      await this.notifications.sendEmail({ to: body.to, subject: 'Your Prescription', text: body.message || 'Your prescription is attached.',
+        attachments: [{ filename: fileName, content: file.buffer, contentType: 'application/pdf' }] });
+    } else {
+      await this.notifications.sendWhatsAppDocument({ toPhoneE164: body.to, pdfBuffer: file.buffer, fileName, caption: body.message || 'Your prescription is attached.' });
+    }
+    await this.prisma.prescriptionPrintEvent.create({ data: { prescriptionId, eventType: `${body.channel}_SHARE`, channel: body.to, count: 1 } });
     return { status: 'QUEUED', channel: body.channel, to: body.to };
   }
 

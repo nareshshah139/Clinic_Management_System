@@ -27,6 +27,18 @@ export function normalizePdfColors(document: Document): void {
   }
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] signature-export-ready
+ * Export MUST wait for every selected signature image to decode and fail if any
+ * cannot load, rather than silently producing an unsigned document.
+ */
+export async function waitForSignatureImages(root: HTMLElement): Promise<void> {
+  await Promise.all(Array.from(root.querySelectorAll<HTMLImageElement>('img[data-doctor-signature]')).map(async image => {
+    await image.decode();
+    if (!image.naturalWidth) throw new Error('The signature image could not be loaded. Please retry.');
+  }));
+}
+
 /** Export each already-paginated preview page once, without re-paginating it. */
 export async function renderPrescriptionPages(wrapper: HTMLElement, paperPreset?: string): Promise<Blob> {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
@@ -37,6 +49,7 @@ export async function renderPrescriptionPages(wrapper: HTMLElement, paperPreset?
   document.body.appendChild(wrapper);
   try {
     await document.fonts.ready;
+    await waitForSignatureImages(wrapper);
     const pdf = new jsPDF({ unit: 'mm', format: paperPreset === 'LETTER' ? 'letter' : 'a4', orientation: 'portrait' });
     for (const [index, page] of pages.entries()) {
       const canvas = await html2canvas(page, { scale: 2, useCORS: true, backgroundColor: '#ffffff', onclone: normalizePdfColors });
