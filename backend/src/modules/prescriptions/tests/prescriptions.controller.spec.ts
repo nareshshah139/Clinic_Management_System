@@ -99,7 +99,7 @@ describe('PrescriptionsController', () => {
       const result = await controller.createPrescription(createPrescriptionDto, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
 
       expect(result).toEqual(mockPrescription);
-      expect(service.createPrescription).toHaveBeenCalledWith(createPrescriptionDto, mockRequest.user.branchId);
+      expect(service.createPrescription).toHaveBeenCalledWith(createPrescriptionDto, mockRequest.user.branchId, mockRequest.user.id);
     });
   });
 
@@ -260,6 +260,7 @@ describe('PrescriptionsController', () => {
         prescriptionId,
         updateDto,
         mockRequest.user.branchId,
+        mockRequest.user.id,
       );
     });
   });

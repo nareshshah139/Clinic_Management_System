@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { InventoryAction } from "./InventoryPresentation";
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -412,19 +413,19 @@ export function InventoryUpdates() {
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-72">
+          <div className="relative min-w-0 sm:w-72">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
             <Input
+              aria-label="Search drug updates"
               className="pl-9"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               placeholder="Search drug, manufacturer, salt"
             />
           </div>
-          <Button variant="outline" onClick={refreshAll} disabled={loading}>
+          <InventoryAction label="Refresh inventory updates" onClick={refreshAll} disabled={loading}>
             <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-            Refresh
-          </Button>
+          </InventoryAction>
           {canSubmit && (
             <Button
               onClick={submitDrafts}
@@ -516,13 +517,13 @@ export function InventoryUpdates() {
                       <TableRow key={drug.id}>
                         <TableCell className="px-4">
                           <div className="min-w-0">
-                            <p className="max-w-[320px] truncate font-medium text-slate-950">
+                            <p className="max-w-[320px] whitespace-normal break-words font-medium text-slate-950">
                               {drug.name}
                             </p>
-                            <p className="max-w-[320px] truncate text-xs text-slate-600">
+                            <p className="max-w-[320px] whitespace-normal break-words text-xs text-slate-600">
                               {drug.manufacturerName} · {drug.packSizeLabel}
                             </p>
-                            <p className="max-w-[320px] truncate text-xs text-slate-500">
+                            <p className="max-w-[320px] whitespace-normal break-words text-xs text-slate-500">
                               {[drug.category, drug.dosageForm, drug.strength]
                                 .filter(Boolean)
                                 .join(' · ') || 'Uncategorized'}
@@ -539,6 +540,7 @@ export function InventoryUpdates() {
                             min="0"
                             step="0.01"
                             disabled={disabled}
+                            aria-label={`Proposed price for ${drug.name}`}
                             value={proposedPriceValue}
                             onChange={(event) =>
                               setDraftPrice(drug, event.target.value)
@@ -563,6 +565,7 @@ export function InventoryUpdates() {
                             min="0"
                             step="1"
                             disabled={disabled || !drug.primaryInventoryItemId}
+                            aria-label={`Proposed stock for ${drug.name}`}
                             value={proposedStockValue}
                             onChange={(event) =>
                               setDraftStock(drug, event.target.value)
@@ -573,6 +576,7 @@ export function InventoryUpdates() {
                         <TableCell>
                           <Input
                             disabled={disabled}
+                            aria-label={`Reason for ${drug.name}`}
                             value={draft?.reason ?? pending?.reason ?? ''}
                             onChange={(event) =>
                               setDraftReason(drug, event.target.value)
@@ -585,14 +589,13 @@ export function InventoryUpdates() {
                           {pending ? (
                             <Badge variant="secondary">Pending</Badge>
                           ) : draft ? (
-                            <Button
+                            <InventoryAction
+                              label={`Clear changes for ${drug.name}`}
                               variant="ghost"
-                              size="sm"
                               onClick={() => clearDraft(drug.id)}
                             >
                               <X className="h-4 w-4" />
-                              Clear
-                            </Button>
+                            </InventoryAction>
                           ) : (
                             <Badge variant="outline">Current</Badge>
                           )}
@@ -662,10 +665,10 @@ export function InventoryUpdates() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-slate-950">
+                        <p className="break-words font-medium text-slate-950">
                           {request.drug.name}
                         </p>
-                        <p className="truncate text-xs text-slate-600">
+                        <p className="break-words text-xs text-slate-600">
                           {request.drug.manufacturerName} ·{' '}
                           {request.drug.packSizeLabel}
                         </p>
@@ -737,7 +740,7 @@ export function InventoryUpdates() {
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="inventory-surface">
           <DialogHeader>
             <DialogTitle>
               {approvalDialog?.action === 'approve'

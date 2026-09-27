@@ -3,13 +3,13 @@
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
-  CheckCircle2,
   FileSpreadsheet,
   Loader2,
   Upload,
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { InventoryDetails } from "@/components/inventory/InventoryPresentation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -395,13 +395,8 @@ export function PharmacyInventoryStarterImport({
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[8px] border bg-slate-50 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-700" />
-              <p className="text-sm font-semibold text-gray-900">
-                Starter Columns
-              </p>
-            </div>
+          <InventoryDetails summary="Excel columns and format">
+            <p>Required columns are filled; optional columns are outlined.</p>
             <div className="flex flex-wrap gap-2">
               {requiredColumns.map((column) => (
                 <Badge key={column} variant="default">
@@ -414,7 +409,7 @@ export function PharmacyInventoryStarterImport({
                 </Badge>
               ))}
             </div>
-          </div>
+          </InventoryDetails>
 
           {summary && (
             <div className="rounded-[8px] border bg-slate-50 p-4">

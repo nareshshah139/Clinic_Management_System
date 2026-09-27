@@ -38,7 +38,7 @@ it('requires explicit row selection, before/after review and reason, and sends o
   const review = screen.getByRole('form', { name: 'Review manual target changes' });
   expect(within(review).getByText('Saved min / max / reorder: 2 / 8 / 3')).toBeInTheDocument(); expect(within(review).getByText('New min / max / reorder: 4 / 8 / 3')).toBeInTheDocument();
   expect(within(review).queryByText(/Target item B/)).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Save reviewed targets' })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText('Reason for target changes (required)'), { target: { value: 'Demand reviewed with manager' } }); fireEvent.click(screen.getByRole('button', { name: 'Save reviewed targets' }));
+  fireEvent.change(screen.getByLabelText('Reason (required)'), { target: { value: 'Demand reviewed with manager' } }); fireEvent.click(screen.getByRole('button', { name: 'Save reviewed targets' }));
   await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/inventory/workspace/replenishment/manual-targets', { settingsVersion: 7, reason: 'Demand reviewed with manager', items: [{ id: 'a', updatedAt: item.updatedAt, minStockLevel: '4', maxStockLevel: '8', reorderLevel: '3', manualTargets: true, excluded: true }] }));
   await waitFor(() => expect(screen.queryByRole('form', { name: 'Review manual target changes' })).not.toBeInTheDocument());
 });
@@ -47,8 +47,8 @@ it('reviews multiple selected rows atomically and retains edits on a stale-versi
   render(<ReplenishmentCenter {...props} view="targets"/>); await screen.findByLabelText('Minimum for Target item A (PIECES)');
   fireEvent.click(screen.getByRole('button', { name: 'Select all matching items' })); fireEvent.change(screen.getByLabelText('Reorder level for Target item B (PIECES)'), { target: { value: '6' } });
   fireEvent.click(screen.getByRole('button', { name: 'Review selected changes' })); expect(screen.getByText('Review 2 selected items')).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText('Reason for target changes (required)'), { target: { value: 'Monthly review' } }); fireEvent.click(screen.getByRole('button', { name: 'Save reviewed targets' }));
-  await screen.findByRole('alert'); expect((apiClient.post as jest.Mock).mock.calls[0][1].items).toHaveLength(2); expect(screen.getByLabelText('Reorder level for Target item B (PIECES)')).toHaveValue(6); expect(screen.getByLabelText('Reason for target changes (required)')).toHaveValue('Monthly review');
+  fireEvent.change(screen.getByLabelText('Reason (required)'), { target: { value: 'Monthly review' } }); fireEvent.click(screen.getByRole('button', { name: 'Save reviewed targets' }));
+  await screen.findByRole('alert'); expect((apiClient.post as jest.Mock).mock.calls[0][1].items).toHaveLength(2); expect(screen.getByLabelText('Reorder level for Target item B (PIECES)')).toHaveValue(6); expect(screen.getByLabelText('Reason (required)')).toHaveValue('Monthly review');
 });
 it('read-only viewers can inspect saved units and history without changing target values', async () => {
   (apiClient.get as jest.Mock).mockResolvedValue({ ...data, rows: [{ ...item, history: [{ id: 'h1', actorId: 'manager', at: item.updatedAt, before: item, after: { ...item, reason: 'Saved target review', minStockLevel: 4 } }] }] });

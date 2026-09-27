@@ -65,7 +65,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.createPrescription(createPrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Post('pad')
@@ -75,7 +75,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.createPrescriptionPad(createPrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Get()
@@ -519,7 +519,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.updatePrescription(id, updatePrescriptionDto, req.user.branchId);
+    return this.prescriptionsService.updatePrescription(id, updatePrescriptionDto, req.user.branchId, req.user.id);
   }
 
   @Delete(':id')

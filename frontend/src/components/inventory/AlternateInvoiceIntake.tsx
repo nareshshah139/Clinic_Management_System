@@ -1,5 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
+import { InventoryAction, InventoryDetails } from "./InventoryPresentation";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { downloadCsv, inputClass } from "./workspace-model";
@@ -113,8 +115,8 @@ export function AlternateInvoiceIntake({
         </h2>
         <p className="mt-1 max-w-3xl text-muted-foreground">
           {mode === "csv"
-            ? "One row per invoice item. Repeat the same bill header on every row. Imported lines open in the invoice review screen before stock is added."
-            : "Connect your account, find the supplier message and choose an invoice attachment. The original file is retained and opens for invoice review."}
+            ? "Review imported lines before adding stock."
+            : "Choose an invoice attachment to open a review draft."}
         </p>
       </header>
       {error && (
@@ -127,14 +129,14 @@ export function AlternateInvoiceIntake({
       )}
       {mode === "csv" ? (
         <div className="space-y-4">
-          <Button
-            variant="outline"
+          <InventoryAction
+            label="Download purchase CSV template"
             onClick={() =>
               downloadCsv("purchase-invoice-template.csv", [template])
             }
           >
-            Download CSV template
-          </Button>
+            <Download className="h-4 w-4" />
+          </InventoryAction>
           <label className="block max-w-xl text-sm">
             Purchase invoice CSV
             <input
@@ -164,12 +166,13 @@ export function AlternateInvoiceIntake({
           >
             {busy ? "Reading CSV…" : "Open review draft"}
           </Button>
-          <p className="text-sm text-muted-foreground">
-            Required before posting: supplier identity, bill number and dates,
+          <InventoryDetails summary="CSV format and required columns">
+            <p>Use one row per invoice item and repeat the bill header on each row.</p>
+            <p>Required before posting: supplier identity, bill number and dates,
             product/pack, batch/expiry, paid/free quantities and reconciled
             prices and tax. Manufacturer is optional. The source CSV is retained
-            in the database.
-          </p>
+            in the database.</p>
+          </InventoryDetails>
         </div>
       ) : (
         <>
@@ -182,13 +185,12 @@ export function AlternateInvoiceIntake({
               <p role="status">Checking Gmail connection…</p>
             )
           ) : !status.configured ? (
-            <p className="rounded-md border p-4">
-              Gmail is not configured for this deployment. The administrator
-              must set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI
-              and a 32-byte base64 INVENTORY_TOKEN_KEY. The redirect should
-              return to this Gmail intake screen. Photo/PDF and CSV intake
-              remain available.
-            </p>
+            <div className="space-y-3">
+              <p className="rounded-md border p-4">Gmail is not configured. Ask your administrator to connect it. Photo/PDF and CSV intake are available.</p>
+              <InventoryDetails summary="Administrator setup">
+                <p>Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REDIRECT_URI and a 32-byte base64 INVENTORY_TOKEN_KEY. The redirect must return to this Gmail intake screen.</p>
+              </InventoryDetails>
+            </div>
           ) : !status.connected ? (
             <Button
               disabled={busy}
@@ -249,7 +251,7 @@ export function AlternateInvoiceIntake({
                   });
                 }}
               >
-                <label className="min-w-64 flex-1">
+                <label className="min-w-0 basis-64 flex-1">
                   <span className="sr-only">Gmail search</span>
                   <input
                     className={inputClass}

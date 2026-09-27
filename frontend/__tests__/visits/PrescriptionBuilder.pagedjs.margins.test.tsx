@@ -208,6 +208,69 @@ afterEach(() => {
 // Import after mocks
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import { apiClient } from '@/lib/api';
+import { TELE_VIDEO_DISCLAIMER } from '@/lib/tele-consultation';
+
+it('keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and removes it on switching back', async () => {
+  paginateSourceContent = true;
+  const item = { drugName: 'Synthetic tele-video medicine', dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    consultationType: 'TELE_VIDEO',
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    doctor: { id: 'tele-doctor', firstName: 'Test', lastName: 'Doctor' },
+    prescription: { id: 'tele-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'tele-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  const props = { patientId: 'tele-patient', visitId: 'tele-visit', doctorId: 'tele-doctor', onBeforeExport: async () => 'tele-visit' };
+  try {
+    const view = render(<PrescriptionBuilder {...props} consultationType="TELE_VIDEO" teleVideoConsent />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Space-optimized layout' }));
+    await settlePreviewPagination();
+    const assertTele = (root: Element | null, enabled: boolean) => {
+      if (enabled) {
+        expect(root?.querySelector('[data-consultation-label]')).toHaveTextContent('Consultation: Tele-video');
+        expect(root?.querySelector('[data-tele-video-disclaimer]')).toHaveTextContent(TELE_VIDEO_DISCLAIMER);
+        const signoff = root?.querySelector('[data-prescription-signoff]');
+        expect(signoff?.firstElementChild).toHaveAttribute('data-tele-video-disclaimer');
+        expect(signoff).toHaveStyle({ breakInside: 'avoid' });
+      } else {
+        expect(root?.querySelector('[data-consultation-label]')).toBeNull();
+        expect(root?.querySelector('[data-tele-video-disclaimer]')).toBeNull();
+      }
+    };
+    for (const enabled of [true, false]) {
+      if (!enabled) {
+        view.rerender(<PrescriptionBuilder {...props} consultationType="IN_PERSON" teleVideoConsent={false} />);
+        await settlePreviewPagination();
+      }
+      assertTele(document.getElementById('prescription-print-root'), enabled);
+      assertTele(document.getElementById('pagedjs-container'), enabled);
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: /^Print$/ })));
+      expect(print).toHaveBeenCalled();
+      assertTele(document.getElementById('prescription-print-host'), enabled);
+      act(() => window.dispatchEvent(new Event('afterprint')));
+      for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
+        mockPdfOutput.mockClear();
+        await act(async () => fireEvent.click(screen.getByRole('button', { name: action })));
+        await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+        assertTele(mockPdfOutput.mock.calls[0][0] as Element, enabled);
+      }
+      expect(share).toHaveBeenCalledWith('tele-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL' }));
+    }
+    view.rerender(<PrescriptionBuilder {...props} consultationType="TELE_VIDEO" teleVideoConsent includeSections={{ doctorSignature: false }} />);
+    await settlePreviewPagination();
+    assertTele(document.getElementById('prescription-print-root'), true);
+    expect(document.querySelector('#prescription-print-root .doctor-signature-block')).toBeNull();
+  } finally {
+    get.mockRestore(); patch.mockRestore(); print.mockRestore(); open.mockRestore(); click.mockRestore(); share.mockRestore();
+    localStorage.removeItem('rxDraft:tele-patient:tele-visit');
+  }
+});
 
 function pxToMm(px: number): number {
   // Component rounds to 0.1mm: Math.round((px/3.78)*10)/10

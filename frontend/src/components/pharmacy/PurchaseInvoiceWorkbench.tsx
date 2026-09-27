@@ -2907,7 +2907,7 @@ function PurchaseInvoiceEditor({
                     <p className="truncate text-sm font-medium">
                       {invoice.invoiceNumber}
                     </p>
-                    <p className="truncate text-xs text-muted-foreground">
+                    <p className="break-words text-xs text-muted-foreground">
                       {invoice.distributorName}
                     </p>
                   </div>
@@ -3120,7 +3120,7 @@ function PurchaseInvoiceEditor({
               Upload a bill or continue a saved invoice.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -4765,7 +4765,7 @@ function PurchaseInvoiceEditor({
                           </div>
                         </details>
 
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3">
                           <SummaryValue
                             label="Gross"
                             value={currency.format(totals.grossAmount)}
@@ -4789,7 +4789,7 @@ function PurchaseInvoiceEditor({
                           />
                         </div>
                         <div
-                          className="grid grid-cols-2 gap-3 border-t pt-4 md:grid-cols-5"
+                          className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,9rem),1fr))] gap-3 border-t pt-4"
                           aria-label="Receipt quantity and margin summary"
                         >
                           <SummaryValue
@@ -5135,6 +5135,11 @@ function ReadOnlyAmount({ label, value }: { label: string; value: number }) {
   );
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] purchase-summary-full-values
+ * Receipt summary amounts and quantities MUST remain fully visible without ellipses when the
+ * containing panel narrows or text is enlarged. Supporting explanations may use help tooltips.
+ */
 function SummaryValue({
   label,
   value,
@@ -5148,7 +5153,7 @@ function SummaryValue({
     <div className="rounded-md border px-3 py-2">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p
-        className={`truncate text-sm ${strong ? "font-semibold" : "font-medium"}`}
+        className={`break-words text-base tabular-nums ${strong ? "font-semibold" : "font-medium"}`}
       >
         {value}
       </p>

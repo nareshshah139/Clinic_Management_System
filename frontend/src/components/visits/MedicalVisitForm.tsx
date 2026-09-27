@@ -45,6 +45,7 @@ import {
   Image,
   Keyboard
 } from 'lucide-react';
+import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
@@ -100,6 +101,8 @@ type CompositeLabValue = Record<string, SimpleLabValue>;
 type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 
 type MedicalVisitDraftState = {
+  consultationType?: ConsultationType;
+  teleVideoConsent?: boolean;
   prescriptionClinical?: Record<string, unknown>;
   labSelections?: string[];
   labResults?: LabResultsMap;
@@ -184,6 +187,11 @@ const ROLE_PERMISSIONS = {
   OWNER: ['all'],
 };
 
+/**
+ * @cc [owner:nareshshah139,label:product] consultation-consent-form
+ * New visits default to In-person. Tele-video saves and exports MUST be blocked
+ * until consent is checked; visit recovery MUST restore the consultation choice.
+ */
 export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId }: Props) {
   // Parse helper
   const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
@@ -198,6 +206,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
     return undefined;
   }, []);
+
+  const [consultationType, setConsultationType] = useState<ConsultationType | undefined>(initialVisitId || appointmentId ? undefined : 'IN_PERSON');
+  const [teleVideoConsent, setTeleVideoConsent] = useState(false);
+  const consentMissing = consultationType === 'TELE_VIDEO' && !teleVideoConsent;
 
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(initialVisitId || null);
@@ -506,10 +518,22 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     return Math.abs(hash).toString(36);
   }, []);
 
+  const visitSaveAttempt = useRef<{ fingerprint: string; key: string } | null>(null);
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-save-attempt-identity
+   * Retries of one failed payload reuse a key, but a later save after success or
+   * a changed payload MUST use a new key, including Tele-video/In-person reversals.
+   */
   const buildIdempotencyKey = useCallback((method: 'POST' | 'PATCH', rid: string | null, payload: Record<string, unknown>) => {
     const base = JSON.stringify(payload);
     const scope = rid ? `visits:${rid}` : `visits:create:${patientId}:${doctorId}:${appointmentId || ''}`;
-    return `cms:${method}:${scope}:${stableHash(base)}`;
+    const fingerprint = `${method}:${scope}:${base}`;
+    if (visitSaveAttempt.current?.fingerprint !== fingerprint) {
+      const nonce = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      visitSaveAttempt.current = { fingerprint, key: `cms:${method}:${scope}:${nonce}` };
+    }
+    return visitSaveAttempt.current.key;
   }, [appointmentId, doctorId, patientId, stableHash]);
 
   const clearAutoSaveTimer = useCallback(() => {
@@ -520,6 +544,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, []);
 
   const serializeDraft = useCallback((): MedicalVisitDraftState => ({
+    consultationType,
+    teleVideoConsent,
     prescriptionClinical,
     labSelections,
     labResults,
@@ -581,6 +607,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     vitals,
     visitStatus,
     acneSeverity,
+    consultationType,
+    teleVideoConsent,
   ]);
 
   const latestDraftStateRef = useRef(serializeDraft());
@@ -588,6 +616,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
     restoredDraftRef.current = true;
+    if (draft.consultationType) {
+      setConsultationType(draft.consultationType);
+      setTeleVideoConsent(draft.consultationType === 'TELE_VIDEO' && draft.teleVideoConsent === true);
+    }
     if (draft.prescriptionClinical) receiveClinicalData(draft.prescriptionClinical);
     if (draft.labSelections) setLabSelections(draft.labSelections);
     if (draft.labResults) setLabResults(draft.labResults);
@@ -763,8 +795,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const compact = compactClinicalPatch(payload);
     const merged = mergeClinicalPatch(compact, prescriptionClinicalRef.current);
     if (compact.vitals) merged.vitals = { ...merged.vitals, ...compact.vitals };
+    if (consultationType) {
+      merged.consultationType = consultationType;
+      merged.teleVideoConsent = teleVideoConsent;
+    }
     return merged;
-  }, [triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [consultationType, teleVideoConsent, triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -785,6 +821,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     const payload = buildPayload();
+    if (payload.consultationType === 'TELE_VIDEO' && payload.teleVideoConsent !== true) {
+      setSaveStatus('unsaved');
+      return;
+    }
     autoSavePromiseRef.current = (async () => {
       let retryAllowed = true;
       try {
@@ -797,6 +837,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           lastIdempotencyKeyRef.current = idemKey;
         }
         await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
+        visitSaveAttempt.current = null;
         if (JSON.stringify(payload) !== JSON.stringify(latestPayload.current())) {
           hasUnsavedChangesRef.current = true;
           setSaveStatus('unsaved');
@@ -974,6 +1015,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       try {
         const initialState = JSON.stringify(latestDraftStateRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
+        if (!latestDraftStateRef.current.consultationType) {
+          setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
+          setTeleVideoConsent(res?.consultationType === 'TELE_VIDEO' && !!res.teleVideoConsentById && !!res.teleVideoConsentAt);
+        }
         if (restoredDraftRef.current || initialState !== JSON.stringify(latestDraftStateRef.current)) return;
         // Prefill complaints, vitals, exam, diagnosis, plan when empty
         try {
@@ -1390,6 +1435,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const save = async (complete = false, requireLatest = false) => {
     if (manualSaveInFlight.current) return;
+    if (consentMissing) {
+      toast({ variant: 'destructive', title: 'Patient consent required', description: TELE_VIDEO_CONSENT_REQUIRED });
+      return;
+    }
     if (!patientId || !doctorId) {
       toast({
         variant: 'destructive',
@@ -1460,6 +1509,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       }
       
       if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
+      visitSaveAttempt.current = null;
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
@@ -1713,6 +1763,31 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
             </div>
           </div>
         </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <div className="max-w-xs space-y-1.5">
+            <label htmlFor="visit-consultation-type" className="text-sm font-medium">Consultation type</label>
+            <select id="visit-consultation-type" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              value={consultationType || 'IN_PERSON'} onChange={event => {
+                setConsultationType(event.target.value as ConsultationType);
+                setTeleVideoConsent(false);
+              }}>
+              <option value="IN_PERSON">In-person</option>
+              <option value="TELE_VIDEO">Tele-video</option>
+            </select>
+          </div>
+          {consultationType === 'TELE_VIDEO' && (
+            <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+              <label className="flex items-start gap-2 text-sm font-medium">
+                <input type="checkbox" className="mt-0.5 h-4 w-4" checked={teleVideoConsent}
+                  required aria-describedby="tele-video-consent-help" onChange={event => setTeleVideoConsent(event.target.checked)} />
+                Patient consented to tele-video consultation
+              </label>
+              <p id="tele-video-consent-help" className={`text-sm ${consentMissing ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {consentMissing ? TELE_VIDEO_CONSENT_REQUIRED : 'Consent will be recorded with your account and the save time.'}
+              </p>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
       <Dialog open={shortcutsOpen} onOpenChange={setShortcutsOpen}>
@@ -2144,6 +2219,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   allowDelete={hasPermission('photos') || hasPermission('all')}
                   onChangeCount={(c) => { setPhotoCount(c); }}
                   onVisitNeeded={async () => {
+                    if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (!visitId) {
                       const minimalPayload = buildPayload();
                       const newVisit = await apiClient.createVisit(minimalPayload);
@@ -2169,6 +2245,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   doctorId={doctorId}
                   visitId={visitId}
+                  consultationType={consultationType}
+                  teleVideoConsent={teleVideoConsent}
                   onClinicalDataChange={receiveClinicalData}
                   onBeforeExport={async () => {
                     const savedId = await save(false, true);
@@ -2179,6 +2257,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   }}
                   onChangeChiefComplaints={(value) => setComplaints(value?.trim() ? [value.trim()] : [])}
                   ensureVisitId={async () => {
+                    if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (visitId) return visitId;
                     if (typeof patientId !== 'string' || typeof doctorId !== 'string') {
                       console.warn('[MedicalVisitForm] Missing IDs when ensuring visit', { patientId, doctorId });

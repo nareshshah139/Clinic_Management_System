@@ -1,7 +1,10 @@
 "use client";
+import "./inventory-readability.css";
 import { useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileDown } from "lucide-react";
+import { InventoryAction } from "./InventoryPresentation";
+import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
@@ -84,6 +87,12 @@ const menus: Record<string, string[][]> = {
  * browser-only navigation.
  * Acceptance: INV-01. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+ */
+/**
+ * @cc [owner:nareshshah139,label:accessibility] inventory-readable-scope
+ * Inventory content MUST use scalable text of at least 14px at the default root size,
+ * with 16px phone inputs. Increasing text size MUST leave actions reachable and wide tables
+ * scrollable within the workspace, without changing typography on unrelated routes.
  */
 export function InventoryWorkspace() {
   const params = useSearchParams(),
@@ -188,7 +197,7 @@ export function InventoryWorkspace() {
     setInitial(null);
   };
   return (
-    <main className="min-w-0 space-y-5 pb-12">
+    <main className="inventory-surface min-w-0 space-y-5 pb-12">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Inventory</h1>
@@ -196,8 +205,8 @@ export function InventoryWorkspace() {
             Receive, review and manage pharmacy stock.
           </p>
         </div>
-        <Button
-          variant="outline"
+        <InventoryAction
+          label="Refresh inventory"
           onClick={() => {
             router.refresh();
             window.dispatchEvent(
@@ -206,8 +215,7 @@ export function InventoryWorkspace() {
           }}
         >
           <RefreshCw className="h-4 w-4" />
-          Refresh
-        </Button>
+        </InventoryAction>
       </header>
       <nav
         aria-label="Inventory areas"
@@ -216,7 +224,7 @@ export function InventoryWorkspace() {
         {areas.map(([id, label]) => (
           <Button
             key={id}
-            className="min-w-0 flex-1 px-2 text-xs sm:min-w-24 sm:flex-none sm:text-sm"
+            className="min-w-0 flex-1 px-1 text-xs sm:min-w-24 sm:flex-none sm:px-2 sm:text-sm"
             aria-current={area === id ? "page" : undefined}
             variant={area === id ? "default" : "ghost"}
             onClick={() => switchArea(id)}
@@ -731,8 +739,9 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
       <h2 className="text-2xl font-semibold">Purchase register</h2>
       <div className="flex flex-wrap gap-3">
         <label className="flex-1 text-sm">
-          Invoice number or supplier
+          Search
           <input
+            placeholder="Invoice number or supplier"
             className={inputClass}
             value={query.search || ""}
             onChange={(e) => navigate({ search: e.target.value, page: "1" })}
@@ -751,8 +760,8 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
             ))}
           </select>
         </label>
-        <Button
-          variant="outline"
+        <InventoryAction
+          label="Export full purchase register"
           className="self-end"
           onClick={() =>
             window.open(
@@ -774,8 +783,8 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
             )
           }
         >
-          Export full register
-        </Button>
+          <FileDown className="h-4 w-4" />
+        </InventoryAction>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">
@@ -1288,9 +1297,9 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
               </>
             )}
             {canUpdate && (
-              <Button variant="outline" onClick={() => setSelected(s)}>
-                Edit supplier
-              </Button>
+              <InventoryAction label={`Edit supplier ${s.name}`} onClick={() => setSelected(s)}>
+                <Pencil className="h-4 w-4" />
+              </InventoryAction>
             )}
           </li>
         ))}

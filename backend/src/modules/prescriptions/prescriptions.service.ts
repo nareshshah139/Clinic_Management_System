@@ -2,6 +2,7 @@
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
+import { ConsultationType, TELE_VIDEO_DISCLAIMER } from '../visits/consultation';
 import { VisitsService } from '../visits/visits.service';
 import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional, ForbiddenException } from '@nestjs/common';
 import { readDoctorSignature } from '../users/doctor-signature';
@@ -37,7 +38,7 @@ export class PrescriptionsService {
     @Optional() private pharmacyQueue?: PharmacyPrescriptionQueueService,
   ) {}
 
-  async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string) {
+  async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string, actorId?: string) {
     const {
       patientId,
       visitId,
@@ -113,7 +114,7 @@ export class PrescriptionsService {
           ...(metadata.procedures ? { dermatology: { procedures: [{ type: metadata.procedures }] } } : {}),
         },
       }, createPrescriptionDto.clinicalData);
-      await new VisitsService(tx as any).update(visitId, patch, branchId);
+      await new VisitsService(tx as any).update(visitId, patch, branchId, actorId);
       return tx.prescription.create({
       data: {
         visitId,
@@ -406,7 +407,7 @@ export class PrescriptionsService {
     } as any;
   }
 
-  async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string) {
+  async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string, actorId?: string) {
     const prescription = await this.findPrescriptionById(id, branchId);
 
     // Check if prescription can be updated
@@ -435,7 +436,7 @@ export class PrescriptionsService {
           ...(updatePrescriptionDto.followUpInstructions !== undefined ? { followUpInstructions: updatePrescriptionDto.followUpInstructions } : {}),
         },
       }, updatePrescriptionDto.clinicalData);
-      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId);
+      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId, actorId);
       return tx.prescription.update({
         where: { id }, data: updateData,
         include: { visit: { include: { patient: { select: { id: true, name: true, phone: true } }, doctor: { select: { id: true, firstName: true, lastName: true } } } } },
@@ -1656,6 +1657,12 @@ export class PrescriptionsService {
    * PDF generation MUST use the prescribing doctor's branch-scoped signature
    * only when showSignature is true; otherwise leave space to sign by hand.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] tele-video-prescription-output
+   * PDF downloads and shared PDFs MUST show the tele-video label beside the date
+   * and the clinic disclaimer above the signature only for tele-video visits.
+   * The disclaimer and signature MUST stay together when pagination is needed.
+   */
   private async buildPrescriptionPdfBuffer(
     prescriptionId: string,
     branchId: string,
@@ -1681,6 +1688,9 @@ export class PrescriptionsService {
     doc.moveDown(0.5);
     doc.fontSize(10).text(this.renderTemplate('Patient: {{ patient.name }}', ctx));
     doc.text(this.renderTemplate('Doctor: {{ doctor.firstName }} {{ doctor.lastName }}', ctx));
+    const teleVideo = prescription.visit.consultationType === ConsultationType.TELE_VIDEO;
+    const date = new Date(prescription.visit.createdAt || prescription.createdAt || Date.now()).toLocaleDateString('en-IN');
+    doc.text(`Date: ${date}${teleVideo ? ' | Consultation: Tele-video' : ''}`);
     doc.moveDown();
 
     try {
@@ -1694,8 +1704,14 @@ export class PrescriptionsService {
 
     // Keep the signature and name together, with the same space for hand signing.
     const signatureHeight = 64;
-    if (doc.y + signatureHeight + 60 > doc.page.height - doc.page.margins.bottom) doc.addPage();
+    doc.fontSize(9);
+    const disclaimerHeight = teleVideo ? doc.heightOfString(TELE_VIDEO_DISCLAIMER) + 16 : 0;
+    if (doc.y + disclaimerHeight + signatureHeight + 60 > doc.page.height - doc.page.margins.bottom) doc.addPage();
     doc.moveDown();
+    if (teleVideo) {
+      doc.text(TELE_VIDEO_DISCLAIMER);
+      doc.moveDown();
+    }
     const signatureY = doc.y;
     if (signature) doc.image(Buffer.from(signature.url.split(',')[1], 'base64'), doc.page.width - 200, signatureY,
       { fit: [160, signatureHeight], align: 'right', valign: 'bottom' });
@@ -1764,6 +1780,12 @@ export class PrescriptionsService {
    * Sharing MUST verify the prescription belongs to the caller's branch before
    * sending the supplied PDF bytes unchanged to Email or WhatsApp. Invalid PDF
    * inputs or recipients MUST fail without sending.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security] preview-share-boundary
+   * Preview sharing MUST reject prescriptions outside the authenticated branch,
+   * missing recipients, unsupported channels and non-PDF or oversized uploads
+   * before sending any message or recording a print event.
    */
   async sharePrescriptionPreview(prescriptionId: string, branchId: string,
     body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string }, file?: Express.Multer.File) {
@@ -1997,7 +2019,7 @@ export class PrescriptionsService {
     return { experiment: exp.key, variant: chosen.key, assignmentId: assignment.id };
   }
 
-  async createPrescriptionPad(payload: CreatePrescriptionPadDto, branchId: string) {
+  async createPrescriptionPad(payload: CreatePrescriptionPadDto, branchId: string, actorId?: string) {
     const {
       patientId,
       doctorId,
@@ -2071,6 +2093,7 @@ export class PrescriptionsService {
           procedureMetrics,
         },
         branchId,
+        actorId,
       );
 
       return {

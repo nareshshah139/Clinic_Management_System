@@ -1,4 +1,5 @@
 import { mergeClinicalData, mergeClinicalEntries } from './clinical-data';
+import { consultationPatch } from './consultation';
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
@@ -12,7 +13,13 @@ import * as fs from 'fs';
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createVisitDto: CreateVisitDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-consent-on-create
+   * Tele-video visits MUST pass consent validation before any visit or appointment
+   * write; the receipt MUST be derived from the authenticated actor, not the DTO.
+   */
+  async create(createVisitDto: CreateVisitDto, branchId: string, actorId?: string) {
+    const consultation = consultationPatch(createVisitDto, undefined, actorId);
     const {
       patientId,
       doctorId,
@@ -96,6 +103,7 @@ export class VisitsService {
     const visit = await this.prisma.$transaction(async tx => {
       const createdVisit = await tx.visit.create({
         data: {
+          ...consultation,
           patientId,
           doctorId,
           appointmentId,
@@ -191,6 +199,7 @@ export class VisitsService {
     if (patientId) where.patientId = patientId;
     if (doctorId) where.doctorId = doctorId;
     if (appointmentId) where.appointmentId = appointmentId;
+    if (query.consultationType) where.consultationType = query.consultationType;
 
     // Date filters
     if (date) {
@@ -417,11 +426,16 @@ export class VisitsService {
     return parsedVisit;
   }
 
-  async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] visit-consent-on-update
+   * Every visit update MUST validate the resulting consultation against its saved
+   * consent receipt before writing, including clinical updates from prescriptions.
+   */
+  async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string, actorId?: string) {
     const visit = await this.findOne(id, branchId);
 
     // Prepare update data
-    const updateData: any = {};
+    const updateData: any = consultationPatch(updateVisitDto, visit, actorId);
 
     if (updateVisitDto.vitals !== undefined) {
       updateData.vitals = updateVisitDto.vitals ? JSON.stringify(mergeClinicalData(visit.vitals, updateVisitDto.vitals)) : null;
