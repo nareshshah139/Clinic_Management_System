@@ -1378,7 +1378,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         }
         
         // 3. Clinical details (histories, examination, etc.)
-        const hasClinicalDetails = draft.pastHistory || draft.medicationHistory || 
+        const hasClinicalDetails = draft.pastHistory || draft.personalHistory || draft.medicationHistory ||
                                    draft.menstrualHistory || draft.exObjective || 
                                    draft.procedurePlanned;
         if (hasClinicalDetails) {

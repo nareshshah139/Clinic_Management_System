@@ -159,6 +159,16 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
 });
 
 /**
+ * @cc [owner:nareshshah139,label:product] personal-history-editing
+ * Personal history MUST remain scoped to the selected patient and visit. Saved
+ * drafts and edits, including clears, MUST take precedence over delayed prefill.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] personal-history-printing
+ * Empty or whitespace-only personal history MUST omit its print heading. A
+ * nonempty value MUST use its own heading, inline in the space-optimized layout.
+ */
+/**
  * @cc [owner:nareshshah139,label:product] signature-preview-output
  * When Show signature is checked and the signature block is included, print,
  * download and shared PDFs MUST place the proportional image above the doctor's
@@ -317,6 +327,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Additional clinical fields per requirements
   const [chiefComplaints, setChiefComplaints] = useState<string>('');
   const [pastHistory, setPastHistory] = useState<string>('');
+  // Undefined means not loaded/edited yet; an empty string is an explicit clear.
+  const [personalHistoryState, setPersonalHistoryState] = useState<{ patientId: string; visitId: string | null | undefined; value: string | undefined }>({ patientId, visitId, value: undefined });
+  const matchesPersonalHistoryContext = (state: typeof personalHistoryState) => state.patientId === patientId && (!state.visitId || state.visitId === visitId);
+  const personalHistory = matchesPersonalHistoryContext(personalHistoryState) ? personalHistoryState.value : undefined;
+  const setPersonalHistory = (next: React.SetStateAction<string | undefined>) => setPersonalHistoryState(previous => ({
+    patientId, visitId,
+    value: typeof next === 'function' ? next(matchesPersonalHistoryContext(previous) ? previous.value : undefined) : next,
+  }));
   const [medicationHistory, setMedicationHistory] = useState<string>('');
   const [menstrualHistory, setMenstrualHistory] = useState<string>('');
   const [familyHistoryTouched, setFamilyHistoryTouched] = useState<string[]>([]);
@@ -637,6 +655,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     overrideTopMarginPx: number | null;
     overrideBottomMarginPx: number | null;
     spaceOptimized: boolean;
+    personalHistory: string | undefined;
   } | null>(null);
   const previewRefreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Change detection refs to prevent flickering - track if initial render is done and last content hash
@@ -936,6 +955,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     pushIf('diagnosis', diagnosis);
     pushIf('chiefComplaints', chiefComplaints);
     pushIf('pastHistory', pastHistory);
+    pushIf('personalHistory', personalHistory);
     pushIf('medicationHistory', medicationHistory);
     pushIf('menstrualHistory', menstrualHistory);
     pushIf('familyHistoryOthers', familyHistoryOthers);
@@ -1011,14 +1031,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         description: 'Showing original text. Check server OPENAI_API_KEY and network.',
       });
     }
-  }, [language, diagnosis, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedures, procedurePlanned, investigations, customSections, items, counselingText]);
+  }, [language, diagnosis, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryOthers, procedures, procedurePlanned, investigations, customSections, items, counselingText]);
 
   // Derived flags to show inline UI feedback for auto-included sections
   const hasDiagnosis = useMemo(() => Boolean(diagnosis?.trim()?.length), [diagnosis]);
   const hasChiefComplaints = useMemo(() => Boolean(chiefComplaints?.trim()?.length), [chiefComplaints]);
   const hasHistories = useMemo(() => Boolean(
-    pastHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
-  ), [pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
+    pastHistory?.trim()?.length || personalHistory?.trim()?.length || medicationHistory?.trim()?.length || menstrualHistory?.trim()?.length || exTriggers?.trim()?.length || exPriorTx?.trim()?.length
+  ), [pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx]);
   
   const hasFamilyHistory = useMemo(() => Boolean(
     familyHistoryDM || familyHistoryHTN || familyHistoryThyroid || familyHistoryOthers?.trim()?.length
@@ -1185,12 +1205,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const loadVisit = async () => {
       if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
         const initialClinicalData = JSON.stringify(latestClinicalDataRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
+        if (cancelled) return;
+        const savedHistory = typeof res?.history === 'string' ? (() => { try { return JSON.parse(res.history); } catch { return null; } })() : res?.history;
+        if (typeof savedHistory?.personalHistory === 'string') {
+          setPersonalHistory(current => current ?? savedHistory.personalHistory);
+        }
         setVisitData(res || null);
         if (res?.prescription?.id) setSavedPrescriptionId(res.prescription.id);
         if (restoredClinicalDraftRef.current || initialClinicalData !== JSON.stringify(latestClinicalDataRef.current)) return;
@@ -1307,8 +1333,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
     };
     void loadVisit();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitId, refreshKey, standalone]);
+  }, [patientId, visitId, refreshKey, standalone]);
+
+  // Before a visit exists, seed from the patient's saved history. Drafts and edits win.
+  useEffect(() => {
+    if (!patientId || visitId) return;
+    let cancelled = false;
+    void apiClient.get<{ personalHistory: string | null }>(`/visits/patient/${patientId}/personal-history`)
+      .then(result => {
+        if (!cancelled && typeof result?.personalHistory === 'string') {
+          setPersonalHistory(current => current ?? result.personalHistory!);
+        }
+      })
+      .catch(() => { /* Saving a new visit also carries forward server-side. */ });
+    return () => { cancelled = true; };
+  }, [patientId, visitId]);
 
   // Load patient details if visitId is not present or visit payload lacks patient
   useEffect(() => {
@@ -2389,7 +2430,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           pulseRegimen: it.pulseRegimen || undefined,
         })), [validItems]);
 
-  const clinicalData = useMemo(() => compactClinicalPatch({
+  const clinicalData = useMemo(() => {
+    const patch = { ...compactClinicalPatch({
           ...(consultationType ? { consultationType, teleVideoConsent } : {}),
           scribeJson: { customSections: customSections.filter(section => section.title.trim() || section.content.trim()), procedureMetrics },
           vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
@@ -2439,7 +2481,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               skinConcerns: Array.from(skinConcerns),
             }
           },
-        }), [consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
+        }) };
+    // Apply after compaction so clearing this field survives the clinical merge.
+    if (personalHistory !== undefined) patch.history = { ...patch.history, personalHistory };
+    return patch;
+  }, [consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   latestClinicalDataRef.current = clinicalData;
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
@@ -2509,6 +2555,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           chiefComplaints: chiefComplaints || undefined,
           histories: {
             pastHistory: pastHistory || undefined,
+            personalHistory,
             medicationHistory: medicationHistory || undefined,
             menstrualHistory: menstrualHistory || undefined,
             triggers: exTriggers || undefined,
@@ -2568,7 +2615,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
@@ -2650,6 +2697,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       setChiefComplaints(md?.chiefComplaints || '');
 
       setPastHistory(md?.histories?.pastHistory || '');
+      // Generic templates must not erase this patient's saved personal history.
+      if (typeof md?.histories?.personalHistory === 'string') setPersonalHistory(md.histories.personalHistory);
       setMedicationHistory(md?.histories?.medicationHistory || '');
       setMenstrualHistory(md?.histories?.menstrualHistory || '');
 
@@ -3275,6 +3324,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       diagnosis,
       followUpInstructions,
       chiefComplaints,
+      personalHistory,
       investigations: investigationsStringified,
       customSections: customSectionsStringified,
       contentOffsetXPx,
@@ -3327,7 +3377,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       window.removeEventListener('beforeprint', handleBeforePrint);
       window.removeEventListener('afterprint', handleAfterPrint);
     };
-  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
+  }, [isTeleVideo, previewOpen, autoPreview, language, rxPrintFormat, itemsStringified, diagnosis, followUpInstructions, chiefComplaints, personalHistory, investigationsStringified, customSectionsStringified, contentOffsetXPx, contentOffsetYPx, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, activeProfileId, overrideTopMarginPx, overrideBottomMarginPx, spaceOptimized, avoidBreakInsideTables, translateForPreview]);
 
   // Globally suppress Paged.js internal DOM errors while preview is active or in autoPreview mode
   useEffect(() => {
@@ -3383,6 +3433,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       items: itemsStringified,
       diagnosis,
       chiefComplaints,
+      personalHistory,
       investigations: investigationsStringified,
       customSections: customSectionsStringified,
       followUpInstructions,
@@ -3925,7 +3976,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Only clear the reference, not the container content
       // The container will be cleared by processWithPagedJs when it runs next
     };
-  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
+  }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
       designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
@@ -3960,6 +4011,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         chiefComplaints,
         diagnosis,
         pastHistory,
+        personalHistory,
         medicationHistory,
         menstrualHistory,
         exObjective,
@@ -4004,7 +4056,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4028,6 +4080,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
         if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
         if (typeof data?.pastHistory === 'string') setPastHistory(data.pastHistory);
+        if (typeof data?.personalHistory === 'string') setPersonalHistory(data.personalHistory);
         if (typeof data?.medicationHistory === 'string') setMedicationHistory(data.medicationHistory);
         if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
         if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
@@ -4508,6 +4561,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                     <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
                   </div>
+                </div>
+                <div className="mt-3">
+                  <label htmlFor="personal-history" className="text-xs text-gray-600 flex items-center gap-1">Personal history{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
+                  <Textarea id="personal-history" rows={2} placeholder="Diet, sleep, habits, occupation, cosmetics/products used" value={personalHistory ?? ''} onChange={(e) => setPersonalHistory(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                   <div>
@@ -5679,6 +5736,16 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <div className="flex flex-wrap gap-2 items-start">
                       <span className="font-semibold">History:</span>
                       <span className="flex-1 min-w-[200px] whitespace-pre-wrap">{historyLine || '—'}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Personal history */}
+                {!!personalHistory?.trim() && (
+                  <div className="py-3 text-sm" data-personal-history>
+                    <div className={spaceOptimized ? 'flex flex-wrap gap-2 items-start' : ''}>
+                      <div className={`font-semibold ${spaceOptimized ? '' : 'mb-1'}`}>Personal history{spaceOptimized ? ':' : ''}</div>
+                      <div className={spaceOptimized ? 'flex-1 min-w-[200px] whitespace-pre-wrap' : 'whitespace-pre-wrap'}>{tt('personalHistory', personalHistory)}</div>
                     </div>
                   </div>
                 )}

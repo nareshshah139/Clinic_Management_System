@@ -1,4 +1,9 @@
 /** Merge a partial clinical document without dropping unrelated stored fields. */
+/**
+ * @cc [owner:nareshshah139,label:product] clinical-history-partial-merge
+ * An object history patch MUST retain unrelated stored fields and legacy text; an
+ * explicit empty string MUST replace its corresponding stored value.
+ */
 export function mergeClinicalData(previous: unknown, patch: unknown): any {
   if (patch === undefined) return previous;
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return patch;
