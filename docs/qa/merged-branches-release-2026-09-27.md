@@ -35,6 +35,23 @@ Previous healthy application commit: `7166ea575a76c6f05a7db6c13d88db867638c1da`.
 - Backend deployment: `e96f183e-57ec-48c7-9785-f27ae65eb9e8`.
 - Frontend deployment: `afbc65a8-551d-4fea-b669-84852831e071`.
 
-Ordinary application rollback can use these deployments without reverting or restoring the database. Preserve any writes made after release. Live rollout results will be recorded after verification.
+Ordinary application rollback can use these deployments without reverting or restoring the database. Preserve any writes made after release. Live rollout results are recorded below.
 
-Local evidence: `/private/tmp/clinic-merge-20260927/output/merge-2026-09-27/`; compact-print screenshots: `/private/tmp/clinic-merge-20260927/output/cr08-print-layout/`.
+Local evidence: `/Users/nshah/Clinic_Management_System/output/merged-branches-2026-09-27/`. The isolated release checkout remains at `/private/tmp/clinic-merge-20260927`.
+
+## Completed deployment
+
+Both Railway services report **SUCCESS** and are serving exact application commit `b8099ceee75de39c59eeb288cb1323258d0ba710`, verified at 12:07:48 UTC (17:37:48 IST).
+
+| Service | Deployment |
+| --- | --- |
+| Backend | `f0cacf3c-1e4f-4c8d-86dd-2636ff82e2b4` |
+| Frontend | `75808515-70ac-4922-8c95-fac5431885bd` |
+
+Backend startup confirmed 29 migrations, no pending migrations and skipped startup seeding. At 12:07:17 UTC all seven checked table hashes and row counts exactly matched the pre-release baseline. No database migrations or data corrections were applied by this rollout.
+
+Eighteen live HTTP checks passed: backend health, frontend login, frontend API proxy health, all 12 login JavaScript assets, and authentication enforcement on personal-history, purchase-search and signature routes. Obscura rendered the live login form successfully. Production clinical workflows were not exercised with real patient records; the interactive acceptance checks used local synthetic fixtures.
+
+[GitHub CI run](https://github.com/nareshshah139/Clinic_Management_System/actions/runs/36317697408) failed before tests ran with `jest: not found`, matching the previously deployed main's documented CI setup failure. Local production builds, contract checks and merge-specific acceptance checks passed; the 19 baseline suite failures remain explicitly recorded above. No protection bypass or forced Git update was used.
+
+This final documentation update does not change application files from the deployed commit.
