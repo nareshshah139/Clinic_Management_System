@@ -63,3 +63,15 @@ it('keeps each patient and saved visit in its own personal history context', asy
   await screen.findByDisplayValue('Second patient');
   expect(screen.getByRole('textbox', { name: 'Personal history' })).not.toHaveValue('First patient');
 });
+
+it('preserves tele-video consent while clearing personal history and recomputes when consultation changes', async () => {
+  jest.mocked(apiClient.get).mockImplementation(async url => url.endsWith('/personal-history') ? { personalHistory: 'Saved history' } : {});
+  const onClinicalDataChange = jest.fn();
+  const props = { patientId: 'patient', visitId: null, doctorId: 'doctor', onClinicalDataChange };
+  const { rerender } = render(<PrescriptionBuilder {...props} consultationType="TELE_VIDEO" teleVideoConsent={true} />);
+  await screen.findByDisplayValue('Saved history');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Personal history' }), { target: { value: '' } });
+  expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ consultationType: 'TELE_VIDEO', teleVideoConsent: true, history: { personalHistory: '' } }));
+  rerender(<PrescriptionBuilder {...props} consultationType="IN_PERSON" teleVideoConsent={false} />);
+  expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ consultationType: 'IN_PERSON', teleVideoConsent: false, history: { personalHistory: '' } }));
+});

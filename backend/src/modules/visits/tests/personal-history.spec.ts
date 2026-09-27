@@ -1,6 +1,7 @@
 import { NotFoundException, ValidationPipe } from '@nestjs/common';
 import { CreateVisitDto, UpdateVisitDto } from '../dto/create-visit.dto';
 import { VisitsService } from '../visits.service';
+import { ConsultationType } from '../consultation';
 
 function fixture() {
   const visits: any[] = [];
@@ -72,4 +73,16 @@ it('returns no default history for a patient who has never recorded it', async (
   expect(await service.getPatientPersonalHistory('patient', 'branch')).toEqual({ personalHistory: null });
   const visit = await create();
   expect(visit.history).toBeNull();
+});
+
+it('carries personal history into a consented tele-video visit without bypassing the consent gate', async () => {
+  const { db, service, create } = fixture();
+  await create({ personalHistory: 'Retain this patient history' });
+  db.visit.create.mockClear();
+  const input = { patientId: 'patient', doctorId: 'doctor', complaints: [{ complaint: 'Synthetic visit' }], consultationType: ConsultationType.TELE_VIDEO };
+  await expect(service.create(input, 'branch', 'staff')).rejects.toThrow(/consent/i);
+  expect(db.visit.create).not.toHaveBeenCalled();
+  const visit = await service.create({ ...input, teleVideoConsent: true }, 'branch', 'staff');
+  expect(await service.findOne(visit.id, 'branch')).toMatchObject({ consultationType: ConsultationType.TELE_VIDEO, teleVideoConsentById: 'staff', history: { personalHistory: 'Retain this patient history' } });
+  expect(visit.teleVideoConsentAt).toBeInstanceOf(Date);
 });

@@ -4,7 +4,7 @@ const path = require('node:path');
 const puppeteer = require('puppeteer-core');
 
 const output = path.resolve(__dirname, '../../output/cr08-print-layout');
-const baseUrl = 'http://localhost:3000';
+const baseUrl = process.env.CR08_BASE_URL || 'http://localhost:3000';
 const patient = { id: '00000000-0000-4000-8000-000000000001', name: 'SYNTHETIC CR08 PATIENT', gender: 'FEMALE', age: 36, branchId: 'synthetic' };
 const doctor = { id: '00000000-0000-4000-8000-000000000002', firstName: 'Test', lastName: 'Doctor', role: 'DOCTOR', branchId: 'synthetic', isActive: true };
 const visitId = '00000000-0000-4000-8000-000000000003';
@@ -108,7 +108,7 @@ async function main() {
       try {
         await page.goto(`${baseUrl}/dashboard/visits?visitId=${visitId}`, { waitUntil: 'networkidle2', timeout: 60000 });
         await clickText(page, 'Prescription');
-        await page.waitForFunction(value => document.querySelector('#chief-complaints')?.value === value, {}, scenario.complaints);
+        await page.waitForFunction(value => document.querySelector('#section-chief-complaints-content textarea')?.value === value, {}, scenario.complaints);
         await page.$eval('input[type="date"]', (input, value) => {
           Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, value);
           input.dispatchEvent(new Event('input', { bubbles: true }));
