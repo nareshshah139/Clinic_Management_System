@@ -102,6 +102,11 @@ const statusOptions: Array<{ value: QueueStatus | 'all'; label: string }> = [
   { value: 'expired', label: 'Expired' },
 ];
 
+/**
+ * @cc [owner:nareshshah139,label:product] pending-refresh-after-invoice
+ * After a pharmacy invoice refresh event, the queue MUST reload its current filter from
+ * the server so prescriptions linked to saved invoices leave Pending without a page reload.
+ */
 export function PrescriptionDispensingQueue({
   onOpenBilling,
   openActionLabel = 'Open',
@@ -172,6 +177,12 @@ export function PrescriptionDispensingQueue({
 
   useEffect(() => {
     void loadQueue();
+  }, [loadQueue]);
+
+  useEffect(() => {
+    const refresh = () => { void loadQueue(); };
+    window.addEventListener('pharmacy-invoices-refresh', refresh);
+    return () => window.removeEventListener('pharmacy-invoices-refresh', refresh);
   }, [loadQueue]);
 
   const handlePull = async (prescriptionId: string) => {

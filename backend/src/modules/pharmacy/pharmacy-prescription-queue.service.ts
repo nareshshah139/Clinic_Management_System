@@ -274,12 +274,18 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
+   * Stock checks MUST return each line's prescribed quantity, including the queue's
+   * duration/frequency inference when no explicit quantity was recorded.
+   */
   async stockCheck(prescriptionId: string, branchId: string) {
     const entry = await this.findOne(prescriptionId, branchId);
     const items = await Promise.all(
-      entry.medications.map(async (item) =>
-        this.stockCheckMedication(item, branchId),
-      ),
+      entry.medications.map(async (item) => ({
+        ...await this.stockCheckMedication(item, branchId),
+        prescribedQuantity: item.prescribedQuantity,
+      })),
     );
     await this.persistStockCheck(prescriptionId, branchId, items);
 
@@ -716,6 +722,11 @@ export class PharmacyPrescriptionQueueService {
     return currentStatus;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] billed-prescription-not-pending
+   * A prescription with invoice-derived Partial or Dispensed status MUST NOT return to
+   * Pending because its workflow task remains In Review, Ready to Bill, or Paid.
+   */
   private queueStatusFromTask(
     taskStatus: string,
     fallback: PrescriptionQueueStatus,
@@ -737,7 +748,9 @@ export class PharmacyPrescriptionQueueService {
       taskStatus === PharmacyDispenseTaskStatusDto.PAID ||
       taskStatus === PharmacyDispenseTaskStatusDto.IN_REVIEW
     ) {
-      return PrescriptionQueueStatus.PENDING;
+      return fallback === PrescriptionQueueStatus.PARTIAL || fallback === PrescriptionQueueStatus.DISPENSED
+        ? fallback
+        : PrescriptionQueueStatus.PENDING;
     }
     return fallback;
   }
