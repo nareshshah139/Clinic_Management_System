@@ -555,3 +555,71 @@ it('retains an explicitly entered zero in a current draft, shows validation, and
     localStorage.removeItem('rxDraft:validation-patient:visit');
   }
 });
+
+it('toggles and remembers the doctor signature across preview, print, PDF, WhatsApp and Email', async () => {
+  paginateSourceContent = true;
+  const url = 'data:image/png;base64,c2lnbmF0dXJl';
+  const signature = jest.spyOn(apiClient, 'getDoctorSignature').mockResolvedValue({ signature: { id: 'sig', url } });
+  const item = { drugName: 'Synthetic medicine', dosage: 1, dosageUnit: 'TABLET', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({
+    doctor: { id: 'signature-doctor', firstName: 'Praneeta', lastName: 'Jain' },
+    patient: { phone: '+10000000000', email: 'synthetic@example.test' },
+    prescription: { id: 'signature-rx', items: [item] },
+  });
+  const patch = jest.spyOn(apiClient, 'patch').mockResolvedValue({ id: 'signature-rx' });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const open = jest.spyOn(window, 'open').mockImplementation(() => null);
+  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const share = jest.spyOn(apiClient, 'sharePrescriptionPreview').mockResolvedValue({});
+  mockPdfOutput.mockClear();
+  const key = 'cms:prescription:showSignature:signature-doctor';
+  localStorage.removeItem(key);
+  try {
+    const view = render(<PrescriptionBuilder patientId="signature-patient" visitId="signature-visit" doctorId="signature-doctor" onBeforeExport={async () => 'signature-visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    await settlePreviewPagination();
+    const toggle = screen.getByRole('checkbox', { name: 'Show signature', exact: true });
+    expect(toggle).not.toBeChecked();
+    for (const enabled of [true, false, true]) {
+      fireEvent.click(toggle);
+      // Exports stay disabled until pagination reflects the new selection.
+      expect(screen.getByRole('button', { name: 'Print', exact: true })).toBeDisabled();
+      await settlePreviewPagination();
+      const assertSignature = (root: Element | null) => {
+        expect(root).toHaveTextContent('Dr. Praneeta Jain');
+        const image = root?.querySelector('img[data-doctor-signature]');
+        if (enabled) {
+          expect(image).toHaveAttribute('src', url);
+          expect(image?.nextElementSibling).toHaveTextContent('Dr. Praneeta Jain');
+          expect(image?.closest('.doctor-signature-block')).toHaveStyle({ breakInside: 'avoid' });
+        } else expect(image).toBeNull();
+      };
+      assertSignature(document.getElementById('pagedjs-container'));
+      await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Print', exact: true })); });
+      expect(print).toHaveBeenCalled();
+      assertSignature(document.getElementById('prescription-print-host'));
+      act(() => { window.dispatchEvent(new Event('afterprint')); });
+      for (const action of ['Download PDF', 'PDF via WhatsApp', 'Email']) {
+        mockPdfOutput.mockClear();
+        await act(async () => { fireEvent.click(screen.getByRole('button', { name: action, exact: true })); });
+        await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
+        assertSignature(mockPdfOutput.mock.calls[0][0] as Element);
+      }
+      expect(share).toHaveBeenCalledWith('signature-rx', expect.any(File), expect.objectContaining({ channel: 'EMAIL' }));
+      expect(localStorage.getItem(key)).toBe(String(enabled));
+    }
+    view.unmount();
+    render(<PrescriptionBuilder patientId="signature-other-patient" visitId="signature-other-visit" doctorId="signature-doctor" onBeforeExport={async () => 'signature-other-visit'} />);
+    await screen.findByDisplayValue(item.drugName);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(screen.getByRole('checkbox', { name: 'Show signature', exact: true })).toBeChecked();
+    await waitFor(() => expect(document.querySelector('#pagedjs-container img[data-doctor-signature]')).toHaveAttribute('src', url));
+  } finally {
+    signature.mockRestore(); get.mockRestore(); patch.mockRestore(); print.mockRestore(); open.mockRestore(); click.mockRestore(); share.mockRestore();
+    localStorage.removeItem(key);
+    localStorage.removeItem('rxDraft:signature-patient:signature-visit');
+    localStorage.removeItem('rxDraft:signature-other-patient:signature-other-visit');
+  }
+});

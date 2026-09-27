@@ -5,6 +5,7 @@
   "compilerOptions": {
     "builder": "swc",
     "deleteOutDir": true,
-    "typeCheck": false
+    "typeCheck": false,
+    "assets": ["modules/users/assets/*.png"]
   }
 }

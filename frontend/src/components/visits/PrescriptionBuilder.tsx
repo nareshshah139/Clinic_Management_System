@@ -25,6 +25,7 @@ import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/
 import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
+import { usePrescriptionSignature } from '@/hooks/usePrescriptionSignature';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
 
 // Minimal local types aligned with backend DTO enums
@@ -157,6 +158,12 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
   );
 });
 
+/**
+ * @cc [owner:nareshshah139,label:product] signature-preview-output
+ * When Show signature is checked and the signature block is included, print,
+ * download and shared PDFs MUST place the proportional image above the doctor's
+ * name. Unchecking MUST remove it; exports MUST wait for updated pagination.
+ */
 /**
  * @cc [owner:nareshshah139,label:product] tele-video-preview-and-exports
  * Tele-video print content MUST include the consultation label beside the date
@@ -604,9 +611,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const pagedJsRunningRef = useRef(false);
   const pagedJsPendingRef = useRef(false);
   const [renderedTeleVideo, setRenderedTeleVideo] = useState<boolean | null>(null);
-  const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
-  const [sharingEmail, setSharingEmail] = useState(false);
-  const exportPreviewPending = renderedTeleVideo !== isTeleVideo;
   const pagedJsContainerRef = useRef<HTMLDivElement>(null);
   const pagedInstanceRef = useRef<any>(null); // Store paged.js instance for cleanup
   const isPrintingRef = useRef(false);
@@ -639,6 +643,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const initialRenderDoneRef = useRef(false);
   const lastContentHashRef = useRef<string | null>(null);
   const [showRefillStamp, setShowRefillStamp] = useState<boolean>(false);
+  const { showSignature, setShowSignature, signatureUrl, signatureWidth, signatureHeight, signatureLoading, signatureError, reloadSignature } = usePrescriptionSignature(visitData?.doctor?.id || doctorId, previewOpen || autoPreview);
+  const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
+  const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
+  const [sharingEmail, setSharingEmail] = useState(false);
   // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
   const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
@@ -875,6 +883,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   });
 
   const includeSections = includeSectionsProp ?? localIncludeSections;
+  const printedSignatureUrl = includeSections.doctorSignature && showSignature ? signatureUrl : null;
+  const exportPreviewPending = Boolean(showSignature && (signatureLoading || signatureError)) || renderedSignatureUrl !== printedSignatureUrl || renderedTeleVideo !== isTeleVideo;
   
   // Stabilize setIncludeSections using useRef to prevent infinite loops
   const onChangeIncludeSectionsRef = useRef(onChangeIncludeSections);
@@ -3165,6 +3175,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       return;
     }
     previewPrintHostRef.current = printHost;
+    try {
+      const { waitForSignatureImages } = await import('@/lib/pdf-export');
+      await waitForSignatureImages(printHost);
+    } catch {
+      cleanupPreviewPrintMode();
+      toast({ variant: 'destructive', title: 'Print failed', description: 'The signature image could not be loaded. Please retry.' });
+      return;
+    }
     document.body.classList.add('prescription-preview-printing');
 
     const handleAfterPrint = () => {
@@ -3376,6 +3394,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       offsetX: contentOffsetXPx,
       offsetY: contentOffsetYPx,
       showRefillStamp,
+      printedSignatureUrl,
       grayscale,
       letterheadOption,
       rxPrintFormat,
@@ -3599,6 +3618,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         // Mark initial render as done and update content hash to prevent flickering
         initialRenderDoneRef.current = true;
         lastContentHashRef.current = contentHash;
+        setRenderedSignatureUrl(printedSignatureUrl);
         setRenderedTeleVideo(isTeleVideo);
         console.log('📏 Container dimensions:', {
           width: container.offsetWidth,
@@ -3908,7 +3928,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -5318,7 +5338,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             <DialogHeader className="sr-only">
               <DialogTitle>Prescription Preview</DialogTitle>
             </DialogHeader>
-            <div data-prescription-preview-main className="h-full min-h-0 flex flex-row">
+            <div data-prescription-preview-main className="h-full min-h-0 min-w-0 flex flex-col sm:flex-row">
               {/* Scoped print CSS to only print the preview container */}
               <style dangerouslySetInnerHTML={{
                 __html: `
@@ -5432,7 +5452,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 }
                 `
               }} />
-            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
+            <div id="print-preview-scroll" data-prescription-preview-scroll className="flex-1 min-h-0 min-w-0 overflow-auto overflow-x-auto" style={{ position: 'relative' }}>
               <div data-prescription-preview-toolbar className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-white/90 backdrop-blur border-b text-sm">
                 <div className="space-y-0.5">
                   <div className="flex flex-wrap gap-2 items-center text-gray-800">
@@ -5787,10 +5807,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {isTeleVideo && <p data-tele-video-disclaimer className="mt-4 border-t pt-3 text-sm text-gray-700">{TELE_VIDEO_DISCLAIMER}</p>}
                 {/* Signature */}
                 {includeSections.doctorSignature && (
-                  <div className="doctor-signature-block pt-6 mt-4 border-t">
+                  <div className="doctor-signature-block pt-6 mt-4 border-t" style={{ breakInside: 'avoid', pageBreakInside: 'avoid' }}>
                     <div className="flex justify-end text-sm">
                       <div className="text-right">
-                        <div className="h-10" />
+                        {printedSignatureUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img data-doctor-signature src={printedSignatureUrl} alt="Doctor’s signature" width={signatureWidth} height={signatureHeight} style={{ display: 'block', width: signatureWidth, height: signatureHeight, marginLeft: 'auto', marginBottom: 4 }} />
+                        ) : <div className="h-10" />}
                         <div className="font-medium">Dr. {visitData?.doctor?.firstName} {visitData?.doctor?.lastName}</div>
                         {!spaceOptimized && <div className="text-gray-600">Signature</div>}
                       </div>
@@ -5803,7 +5826,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               </div>
             </div>
             {/* Right Sidebar Controls */}
-            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-l h-full overflow-auto">
+            <div data-prescription-preview-sidebar className="print:hidden w-full sm:w-96 shrink-0 border-t sm:border-t-0 sm:border-l h-1/2 sm:h-full min-h-0 overflow-auto">
               <div className="p-4 space-y-4">
                 <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="text-sm font-medium text-blue-900 mb-1">📋 Print Settings Tip</div>
@@ -5966,6 +5989,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <input type="checkbox" checked={showRefillStamp} onChange={(e) => setShowRefillStamp(e.target.checked)} />
                     Refill stamp
                   </label>
+                  <label className="text-sm text-gray-700 flex items-center gap-2">
+                    <input type="checkbox" checked={showSignature} disabled={savingForExport || sharingEmail || (!showSignature && (signatureLoading || !signatureUrl))} onChange={event => setShowSignature(event.target.checked)} aria-describedby="signature-preview-help" />
+                    Show signature
+                  </label>
+                  <div id="signature-preview-help" className="text-xs text-gray-600">
+                    {signatureLoading ? 'Loading signature…' : signatureError ? (
+                      <><span role="alert">{signatureError}</span> <button type="button" className="underline" onClick={reloadSignature}>Retry</button></>
+                    ) : !signatureUrl ? 'No signature uploaded. The doctor can add one in My Settings → Doctor signature.' : 'Remembered for this doctor on this browser. Applies to print, PDF, WhatsApp and Email.'}
+                  </div>
                 </div>
                 <div className="pt-2 grid grid-cols-2 gap-2">
                   {(

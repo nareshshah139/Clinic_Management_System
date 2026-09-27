@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, Query, Request, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { MAX_SIGNATURE_BYTES } from './doctor-signature';
 import { ValidationPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
@@ -17,6 +19,22 @@ interface AuthenticatedRequest {
 @UseGuards(JwtAuthGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Post('me/signature')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_SIGNATURE_BYTES, files: 1 } }))
+  uploadOwnSignature(@Request() req: AuthenticatedRequest, @UploadedFile() file?: Express.Multer.File) {
+    return this.usersService.uploadOwnSignature(req.user, file);
+  }
+
+  @Delete('me/signature')
+  removeOwnSignature(@Request() req: AuthenticatedRequest) {
+    return this.usersService.removeOwnSignature(req.user);
+  }
+
+  @Get(':id/signature')
+  getDoctorSignature(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.usersService.getDoctorSignature(id, req.user.branchId);
+  }
 
   // User Management Endpoints
   @Post()

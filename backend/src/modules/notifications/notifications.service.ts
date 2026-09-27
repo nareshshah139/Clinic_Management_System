@@ -224,4 +224,4 @@ export class NotificationsService {
     await this.postWhatsApp(phoneId, token, messagePayload);
     this.logger.log(`WhatsApp document sent to ${normalized}: ${opts.fileName}`);
   }
-} 
+}

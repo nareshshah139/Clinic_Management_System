@@ -4,7 +4,8 @@ import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
 import { ConsultationType, TELE_VIDEO_DISCLAIMER } from '../visits/consultation';
 import { VisitsService } from '../visits/visits.service';
-import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException, Optional, ForbiddenException } from '@nestjs/common';
+import { readDoctorSignature } from '../users/doctor-signature';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PharmacyPrescriptionQueueService } from '../pharmacy/pharmacy-prescription-queue.service';
@@ -1564,6 +1565,13 @@ export class PrescriptionsService {
     ownerId: string,
     body: { id?: string; type: 'LOGO'|'STAMP'|'SIGNATURE'; name: string; url: string; opacity?: number; scale?: number; rotationDeg?: number; crop?: any; placement?: any; isActive?: boolean },
   ) {
+    // Signature ownership cannot be bypassed through the general asset editor,
+    // including by changing an existing signature's type to LOGO or STAMP.
+    const existing = body.id ? await this.prisma.clinicAsset.findFirst({ where: { id: body.id, branchId } }) : null;
+    if (body.id && !existing) throw new NotFoundException('Asset not found');
+    if (body.type === 'SIGNATURE' || existing?.type === 'SIGNATURE') {
+      throw new ForbiddenException('Change your signature from your own doctor settings.');
+    }
     const data = {
       branchId,
       ownerId,
@@ -1586,6 +1594,7 @@ export class PrescriptionsService {
   async deleteClinicAsset(branchId: string, id: string) {
     const asset = await this.prisma.clinicAsset.findFirst({ where: { id, branchId } });
     if (!asset) throw new NotFoundException('Asset not found');
+    if (asset.type === 'SIGNATURE') throw new ForbiddenException('Remove your signature from your own doctor settings.');
     await this.prisma.clinicAsset.delete({ where: { id } });
     return { id };
   }
@@ -1644,6 +1653,11 @@ export class PrescriptionsService {
   }
 
   /**
+   * @cc [owner:nareshshah139,label:product] prescription-signature-selection
+   * PDF generation MUST use the prescribing doctor's branch-scoped signature
+   * only when showSignature is true; otherwise leave space to sign by hand.
+   */
+  /**
    * @cc [owner:nareshshah139,label:product] tele-video-prescription-output
    * PDF downloads and shared PDFs MUST show the tele-video label beside the date
    * and the clinic disclaimer above the signature only for tele-video visits.
@@ -1652,13 +1666,16 @@ export class PrescriptionsService {
   private async buildPrescriptionPdfBuffer(
     prescriptionId: string,
     branchId: string,
-    body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+    body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
       where: { id: prescriptionId, visit: { patient: { branchId } } },
       include: { visit: { include: { patient: true, doctor: true } } },
     });
     if (!prescription) throw new NotFoundException('Prescription not found');
+    const signature = body?.showSignature === true
+      ? await readDoctorSignature(this.prisma, branchId, prescription.visit.doctorId || prescription.visit.doctor.id)
+      : null;
 
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -1696,6 +1713,8 @@ export class PrescriptionsService {
       doc.moveDown();
     }
     const signatureY = doc.y;
+    if (signature) doc.image(Buffer.from(signature.url.split(',')[1], 'base64'), doc.page.width - 200, signatureY,
+      { fit: [160, signatureHeight], align: 'right', valign: 'bottom' });
     doc.y = signatureY + signatureHeight + 4;
     doc.fontSize(11).text(`Dr. ${prescription.visit.doctor.firstName} ${prescription.visit.doctor.lastName}`, 40, doc.y, { align: 'right' });
     doc.fontSize(9).text('Signature', { align: 'right' });
@@ -1708,7 +1727,7 @@ export class PrescriptionsService {
   async generatePrescriptionPdf(
     prescriptionId: string,
     branchId: string,
-    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean },
+    body: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ) {
     const { pdfBuffer, fileName } = await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body);
     const base64 = pdfBuffer.toString('base64');
@@ -1722,7 +1741,7 @@ export class PrescriptionsService {
     prescriptionId: string,
     branchId: string,
     userId: string,
-    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean },
+    body: { channel: 'EMAIL'|'WHATSAPP'; to: string; message?: string; includePdf?: boolean; showSignature?: boolean },
   ) {
     await this.requireSharePrescription(prescriptionId, branchId, body);
     const pdf = body.includePdf ? await this.buildPrescriptionPdfBuffer(prescriptionId, branchId, body) : null;
@@ -1756,6 +1775,12 @@ export class PrescriptionsService {
     if (!prescription) throw new NotFoundException('Prescription not found');
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product;security] preview-share-parity
+   * Sharing MUST verify the prescription belongs to the caller's branch before
+   * sending the supplied PDF bytes unchanged to Email or WhatsApp. Invalid PDF
+   * inputs or recipients MUST fail without sending.
+   */
   /**
    * @cc [owner:nareshshah139,label:security] preview-share-boundary
    * Preview sharing MUST reject prescriptions outside the authenticated branch,
