@@ -20,7 +20,8 @@ import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { ensureGlobalPrintStyles } from '@/lib/printStyles';
 import { inferTimingFromDosePattern, getAllFrequencyOptions, addCustomFrequency, formatFrequency, getTimingOptionsForFrequency, TIMING_OPTIONS, getAllTimingOptions, addCustomTiming, getAllDosePatternOptions, addCustomDosePattern, getAllDurationUnitOptions, addCustomDurationUnit } from '@/lib/frequency';
-import { buildLearnedMedicationSuggestion, buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
+import { buildLearnedPrescriptionPlan, type LearnedPlanSuggestion } from '@/lib/prescription-learning';
+import { editRegimenRow, beginRegimenSelection, applyRegimenSuggestion, acceptRegimenField, regimenLabels, type RegimenField, type RegimenRow } from '@/lib/medicine-regimen-defaults';
 import { appendSpeechToText, pickSpeechToTextInsert } from '@/lib/speech-to-text';
 import { useSpeechToTextRecorder } from '@/hooks/useSpeechToTextRecorder';
 // ID format validation is relaxed; backend accepts string IDs (cuid/uuid/custom)
@@ -44,7 +45,7 @@ function restoreLegacyDosage<T>(dosage: T): T | '' {
 
 // Use centralized options from lib/frequency
 
-interface PrescriptionItemForm {
+interface PrescriptionItemForm extends RegimenRow {
   drugName: string;
   genericName?: string;
   brandName?: string;
@@ -281,13 +282,13 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         genericName: '',
         dosage: '',
         dosageUnit: 'TABLET',
-        frequency: 'ONCE_DAILY',
-        duration: 5,
+        frequency: '',
+        duration: '',
         durationUnit: 'DAYS',
         instructions: '',
         route: 'Oral',
         timing: '',
-        quantity: 5,
+        quantity: '',
         isGeneric: true,
       };
       setItems(prev => [...prev, newRow]);
@@ -1546,7 +1547,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     drugName: '',
     dosage: '',
     dosageUnit: 'TABLET',
-    frequency: 'ONCE_DAILY',
+    frequency: '',
     dosePattern: '',
     duration: '',
     durationUnit: 'DAYS',
@@ -1623,6 +1624,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
     return {
       drugName: name,
+      drugId: raw?.drugId || undefined,
       genericName: raw?.genericName ? String(raw.genericName) : undefined,
       brandName: raw?.brandName ? String(raw.brandName) : undefined,
       dosePattern: dosePattern || '',
@@ -2090,7 +2092,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const updateItem = (index: number, patch: Partial<PrescriptionItemForm>) => {
     setItems(prev => {
-      const next = prev.map((it, i) => (i === index ? { ...it, ...patch } : it));
+      const next = prev.map((it, i) => (i === index ? editRegimenRow(it, patch) : it));
       // If user types a drug name into the last row, append a new blank row
       const isLastRow = index === prev.length - 1;
       const newDrugName = typeof patch.drugName === 'string' ? patch.drugName : undefined;
@@ -2101,81 +2103,76 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
     });
   };
 
-  const buildMedicationPresetFromDrug = useCallback((drug: any): {
-    patch: Partial<PrescriptionItemForm>;
-    learnedLabel?: string;
-    learnedEvidenceCount?: number;
-  } => {
-    const base: Partial<PrescriptionItemForm> = {
-      drugName: drug.name,
-      genericName: drug.genericName,
-      dosage: '',
-      dosageUnit: inferDosageUnitFromDosageForm(drug.dosageForm),
-      frequency: 'ONCE_DAILY',
-      duration: 5,
-      durationUnit: 'DAYS',
-      instructions: '',
-      route: 'Oral',
-      timing: '',
-      quantity: 5,
-      isGeneric: true,
-    };
-
-    const learnedSuggestion = buildLearnedMedicationSuggestion({
-      drugName: String(drug?.name || ''),
-      diagnosis,
-      patientVisits: patientHistoryForLearning,
-      doctorPrescriptions: doctorPrescriptionsForLearning,
-      currentVisitId: visitId,
-      doctorId,
-    });
-    const learnedItem = learnedSuggestion ? mapPrevRxItem(learnedSuggestion.item) : null;
-
-    if (!learnedItem) {
-      return { patch: base };
-    }
-
-    return {
-      patch: {
-        ...base,
-        ...learnedItem,
-        drugName: String(drug?.name || learnedItem.drugName || ''),
-        genericName: drug?.genericName || learnedItem.genericName,
-        isGeneric: typeof learnedItem.isGeneric === 'boolean' ? learnedItem.isGeneric : true,
-      },
-      learnedLabel: learnedSuggestion?.sourceLabel,
-      learnedEvidenceCount: learnedSuggestion?.evidenceCount,
-    };
-  }, [diagnosis, patientHistoryForLearning, doctorPrescriptionsForLearning, visitId, doctorId, inferDosageUnitFromDosageForm, mapPrevRxItem]);
-
-  const applyDrugSelectionToRow = useCallback((rowIdx: number, drug: any, options?: {
+  const regimenRequestSequence = useRef(0);
+  const regimenContext = JSON.stringify([patientId, doctorId, visitId]);
+  const regimenContextRef = useRef(regimenContext);
+  regimenContextRef.current = regimenContext;
+  const applyDrugSelectionToRow = (rowIdx: number, drug: any, options?: {
     clearSearch?: boolean;
     showToast?: boolean;
   }) => {
-    const { patch, learnedLabel, learnedEvidenceCount } = buildMedicationPresetFromDrug(drug);
-    updateItem(rowIdx, patch);
-
+    const selection = `${Date.now()}:${++regimenRequestSequence.current}`;
+    const drugName = String(drug?.name || '');
+    setItems(prev => {
+      const next = prev.map((item, index) => index === rowIdx ? {
+        ...beginRegimenSelection(item, selection), drugId: drug.id, drugName, genericName: drug.genericName,
+        dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
+      } : item);
+      if (!hasTrailingBlank(next)) next.push(createBlankItem());
+      return next;
+    });
+    // Resolve recent-name shortcuts only when the catalog match is unambiguous.
+    void (async () => {
+      try {
+        let drugId = drug.id;
+        if (!drugId) {
+          const res: any = await apiClient.get('/drugs', { search: drugName, limit: 30, isActive: true });
+          const matches = (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
+            .filter((candidate: any) => candidate.name?.trim().toLowerCase() === drugName.trim().toLowerCase());
+          if (matches.length === 1) drugId = matches[0].id;
+        }
+        const suggestion: any = drugId
+          ? await apiClient.get(`/prescriptions/drugs/${encodeURIComponent(drugId)}/regimen-defaults`, visitId ? { visitId } : undefined)
+          : { values: {}, source: 'none' };
+        const values = { ...suggestion.values };
+        if (values.frequency && !values.dosePattern) {
+          values.dosePattern = values.frequency;
+          values.frequency = inferFrequencyFromDosePattern(values.dosePattern) || values.frequency;
+        } else if (values.dosePattern && !values.frequency) {
+          values.frequency = inferFrequencyFromDosePattern(values.dosePattern) || values.dosePattern;
+        }
+        if (regimenContextRef.current !== regimenContext) return;
+        // Tokens stay with rows through removal/reordering; stale selections cannot apply.
+        setItems(prev => prev.map(item => item.regimenState?.selection === selection
+          ? { ...applyRegimenSuggestion(item, values, suggestion.source), drugId } : item));
+      } catch {
+        if (regimenContextRef.current !== regimenContext) return;
+        setItems(prev => prev.map(item => item.regimenState?.selection === selection
+          ? { ...item, regimenState: { ...item.regimenState, loading: false, failed: true } } : item));
+      }
+    })();
     if (options?.clearSearch) {
       setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
       setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
       setActiveSearchRow(null);
     }
-
-    if (patch.drugName) {
-      pushRecent('drugNames', String(patch.drugName));
-      if (patientId) pushRecent(`drugNames:${patientId}`, String(patch.drugName));
+    if (drugName) {
+      pushRecent('drugNames', drugName);
+      if (patientId) pushRecent(`drugNames:${patientId}`, drugName);
     }
-    if (patch.genericName) pushRecent('drugGeneric', String(patch.genericName));
+    if (drug.genericName) pushRecent('drugGeneric', drug.genericName);
+  };
 
-    if (options?.showToast && learnedLabel) {
-      toast({
-        title: 'Usual sig filled',
-        description: learnedEvidenceCount && learnedEvidenceCount > 1
-          ? `${learnedLabel}. Review and adjust if needed.`
-          : `${learnedLabel}. Review before saving.`,
-      });
-    }
-  }, [buildMedicationPresetFromDrug, patientId, toast]);
+  const regimenHint = (item: PrescriptionItemForm, index: number, field: RegimenField) =>
+    item.regimenState?.suggested?.includes(field) ? (
+      <button type="button" className="mt-1 block whitespace-nowrap text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
+        aria-label={`Accept suggested ${regimenLabels[field].toLowerCase()}`}
+        title={item.regimenState.source === 'doctor' ? 'Suggested from your prescriptions in the last 12 months'
+          : item.regimenState.source === 'clinic' ? 'Suggested from clinic prescriptions in the last 12 months' : 'Suggested from inventory defaults'}
+        onClick={() => setItems(prev => prev.map((row, i) => i === index ? acceptRegimenField(row, field) : row))}>
+        Suggested · Accept
+      </button>
+    ) : null;
 
   const addRowAndFocus = () => {
     setItems(prev => {
@@ -2338,6 +2335,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
 
   const prescriptionItemsPayload = useMemo(() => validItems.map(it => ({
           drugName: it.drugName,
+          drugId: it.drugId || undefined,
           genericName: it.genericName || undefined,
           brandName: it.brandName || undefined,
           dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
@@ -2903,6 +2901,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
         description: '',
         items: validItems.map(it => ({
           drugName: it.drugName,
+          drugId: it.drugId || undefined,
           genericName: it.genericName,
           brandName: it.brandName,
           dosage: it.dosage === '' || it.dosage === undefined || it.dosage === null ? undefined : Number(it.dosage),
@@ -2965,6 +2964,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
             description: '',
             items: validItems.map(it => ({
               drugName: it.drugName,
+          drugId: it.drugId || undefined,
               genericName: it.genericName,
               brandName: it.brandName,
               dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
@@ -4851,7 +4851,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                 </div>
                 <div className="overflow-visible border rounded">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
+                    <table className="w-full min-w-[1080px] text-sm">
                     <thead className="bg-gray-50 text-gray-700">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium">Medicine</th>
@@ -4918,15 +4918,17 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
                               </span>
                             </div>
+                            {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
+                            {it.regimenState?.failed && <p className="mt-1 text-xs text-amber-700" role="status">Suggestions unavailable. Enter values or select the medicine again to retry.</p>}
                           </td>
                           <td className="px-3 py-2 align-top">
                             <div className="min-w-[100px]">
-                              <Select value={it.dosePattern || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
+                              <Select value={it.dosePattern || it.frequency || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('dosePattern', idx); return; }
                                 const inferred = inferFrequencyFromDosePattern(v);
                                 const inferredTiming = inferTimingFromDosePattern(v);
                                 const patch: any = { dosePattern: v };
-                                if (inferred) patch.frequency = inferred;
+                                patch.frequency = inferred || v;
                                 const effectiveFreq = inferred || it.frequency;
                                 const allowedTimings = getTimingOptionsForFrequency(effectiveFreq);
                                 if (!it.timing && inferredTiming && allowedTimings.includes(inferredTiming)) {
@@ -4936,13 +4938,14 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                               }}>
                                 <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                 <SelectContent>
-                                  {dosePatternOptions.map(p => (
+                                  {Array.from(new Set([...dosePatternOptions, it.dosePattern || it.frequency].filter(Boolean))).map(p => (
                                     <SelectItem key={p} value={p}>{p.toUpperCase()}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {regimenHint(it, idx, 'frequency')}
                           </td>
                           <td className="px-3 py-2 align-top">
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
@@ -4951,38 +4954,39 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                             }}>
                               <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                               <SelectContent>
-                                {getTimingOptionsForFrequency(it.frequency).map(t => (
+                                {Array.from(new Set([...getTimingOptionsForFrequency(it.frequency), it.timing].filter((t): t is string => Boolean(t)))).map(t => (
                                   <SelectItem key={t} value={t}>{t}</SelectItem>
                                 ))}
                                 <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                               </SelectContent>
                             </Select>
+                            {regimenHint(it, idx, 'timing')}
                           </td>
                           <td className="px-3 py-2 align-top">
-                            <div className="grid grid-cols-2 gap-1">
-                              <Input type="number" value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
+                            <div className="grid grid-cols-[5rem_6rem] gap-2">
+                              <Input type="number" aria-label={`Duration for ${it.drugName || 'new medicine'}`} value={it.duration} onFocus={() => setActiveRowIdx(idx)} onChange={(e) => updateItem(idx, { duration: e.target.value === '' ? '' : Number(e.target.value) })} placeholder="#" />
                               <Select value={it.durationUnit} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: DurationUnit) => {
                                 if (v === '__CUSTOM__') { openCustomDialog('durationUnit', idx); return; }
                                 updateItem(idx, { durationUnit: v });
                               }}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
-                                  {durationUnitOptions.map(u => (
+                                  {Array.from(new Set([...durationUnitOptions, it.durationUnit].filter(Boolean))).map(u => (
                                     <SelectItem key={u} value={u}>{u}</SelectItem>
                                   ))}
                                   <SelectItem value="__CUSTOM__" className="text-blue-600 border-t mt-1 pt-1">+ Custom...</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
+                            {regimenHint(it, idx, 'duration')}
                           </td>
-                          <td className="px-3 py-2 align-top relative">
+                          <td className="min-w-[190px] px-3 py-2 align-top relative">
                             <div className="space-y-1">
                               <Input
                                 value={it.instructions || ''}
                                 onFocus={() => { setInstrFocusIdx(idx); setActiveRowIdx(idx); }}
                                 onBlur={(e) => {
                                   setTimeout(() => setInstrFocusIdx((cur) => (cur === idx ? null : cur)), 120);
-                                  updateItem(idx, { instructions: e.target.value });
                                   pushRecent('instructions', e.target.value);
                                   const byDrugKey = 'instr:' + (it.drugName || '').trim().toLowerCase();
                                   pushRecent(byDrugKey, e.target.value);
@@ -4990,6 +4994,7 @@ function PrescriptionBuilder({ patientId, visitId, doctorId, userRole = 'DOCTOR'
                                 onChange={(e) => updateItem(idx, { instructions: e.target.value })}
                                 placeholder="e.g., Avoid alcohol"
                               />
+                              {regimenHint(it, idx, 'instructions')}
                               {instrFocusIdx === idx && !!getInstructionSuggestions(it.drugName, it.instructions || '').length && (
                                 <div className="absolute z-50 mt-1 w-[260px] bg-white border rounded shadow max-h-48 overflow-auto">
                                   {getInstructionSuggestions(it.drugName, it.instructions || '').map((s) => (

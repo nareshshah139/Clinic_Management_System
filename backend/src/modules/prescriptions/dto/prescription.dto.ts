@@ -75,6 +75,10 @@ export enum RefillStatus {
 export class PrescriptionItemDto {
   @IsOptional()
   @IsString()
+  drugId?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()

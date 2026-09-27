@@ -424,7 +424,7 @@ describe('AddInventoryItemDialog', () => {
         />
       );
 
-      const unitSelect = screen.getByRole('combobox', { name: /Unit/i });
+      const unitSelect = screen.getByRole('combobox', { name: /^Unit/i });
       expect(unitSelect).toBeInTheDocument();
     });
 
@@ -451,7 +451,7 @@ describe('AddInventoryItemDialog', () => {
         />
       );
 
-      const unitSelect = screen.getByRole('combobox', { name: /Unit/i });
+      const unitSelect = screen.getByRole('combobox', { name: /^Unit/i });
       expect(unitSelect).toHaveTextContent('Pieces');
     });
   });

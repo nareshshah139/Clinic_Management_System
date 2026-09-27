@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
 import { VisitsService } from '../visits/visits.service';
@@ -851,6 +852,10 @@ export class PrescriptionsService {
 
     await Promise.allSettled(tasks);
     return { imported: drugs.length, upserts, errors };
+  }
+
+  getMedicineRegimenDefaults(drugId: string, branchId: string, doctorId: string, visitId?: string) {
+    return medicineRegimenDefaults(this.prisma, drugId, branchId, doctorId, visitId);
   }
 
   // Autocomplete lookup for drug names from local Drug table
