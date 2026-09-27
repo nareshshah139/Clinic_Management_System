@@ -19,10 +19,12 @@ type CatalogProduct = {
   requiresPrescription?: boolean | null;
 };
 
-export function PurchaseProductDetails({ id, product, disabled, onSave }: {
+export function PurchaseProductDetails({ id, product, disabled, onSave, createLabel = 'Save new product', onKindChange }: {
   id: string;
   product?: CatalogProduct;
   disabled: boolean;
+  createLabel?: string;
+  onKindChange?: (kind: PurchaseProductCatalog['productKind'] | '') => void;
   onSave: (catalog: PurchaseProductCatalog) => Promise<string | undefined>;
 }) {
   const [kind, setKind] = useState<PurchaseProductCatalog['productKind'] | ''>(product?.productKind || (product ? product.type === 'cosmetic' ? 'COSMETIC' : product.type === 'consumable' ? 'CONSUMABLE' : 'MEDICINE' : ''));
@@ -51,7 +53,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave }: {
       <div>
         <Label htmlFor={`${id}-kind`}>Product kind</Label>
         <select id={`${id}-kind`} value={kind} className="mt-1 block w-full rounded-md border bg-background p-2" onChange={event => {
-          const next = event.target.value as typeof kind; setKind(next); setSaved(false); setError('');
+          const next = event.target.value as typeof kind; setKind(next); onKindChange?.(next); setSaved(false); setError('');
           // Changing kind discards inherited clinical defaults, including legacy
           // Tablet / Review strength values from cosmetic invoice records.
           setFields({ category: next === 'COSMETIC' ? 'Cosmetic' : next === 'CONSUMABLE' ? 'Consumable' : '', composition1: '', dosageForm: '', strength: '' });
@@ -78,7 +80,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave }: {
         </div>}
       </>}
       {!ready && <p className="text-muted-foreground">{!kind ? 'Choose a product kind to continue.' : 'Enter the required medicine details and prescription requirement. Placeholder values cannot be used.'}</p>}
-      <Button type="button" disabled={!ready || saved} onClick={save}>{saving ? 'Saving product…' : product ? 'Save product details' : 'Save new product'}</Button>
+      <Button type="button" disabled={!ready || saved} onClick={save}>{saving ? 'Saving product…' : product ? 'Save product details' : createLabel}</Button>
     </fieldset>
     {error && <p role="alert" className="text-destructive">{error}</p>}
     {saved && <p role="status">Product details saved. Continue with Save & Process to check the invoice again.</p>}

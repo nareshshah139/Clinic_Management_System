@@ -1,0 +1,208 @@
+backend/src/modules/pharmacy/purchase-match-safety.ts
+=> backend/src/modules/pharmacy/purchase-match-safety.ts <=
+
+◆ purchase-name-evidence-required:9
+  scope:declaration function `hasPurchaseNameEvidence` · owner:nareshshah139 · label:product
+
+  > A suggestion MUST have distinguishing product-name or reviewed-alias evidence. Manufacturer,
+  > price, dosage form, strength and pack alone MUST NOT establish a purchase product match.
+
+◆ purchase-mismatch-warning-reasons:21
+  scope:declaration function `purchaseMatchMismatches` · owner:nareshshah139 · label:product
+
+  > Different normalized names, known product kinds, strengths or pack dimensions MUST require
+  > acknowledgement. Unknown kind/pack data MUST NOT be asserted equal or inferred from price.
+
+backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts
+=> backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts <=
+
+◆ purchase-original-byte-retention:182
+  scope:declaration method `archiveOriginal` · owner:nareshshah139 · label:product;target
+
+  > An accepted invoice upload MUST retain the exact original bytes with branch, hash and file
+  > metadata before extraction; OCR failure MUST NOT discard the archived source.
+  > Acceptance: INV-10. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ multi-page-original-retention:302
+  scope:declaration method `extractMany` · owner:nareshshah139 · label:product
+
+  > Multi-file intake MUST retain each original byte stream before OCR. The assembled page order
+  > MUST match upload order; all source documents MUST link to the saved invoice before processing.
+
+◆ purchase-ocr-completeness-before-auto:510
+  scope:declaration method `extractDocumentDraft` · owner:nareshshah139 · label:product;target
+
+  > OCR extraction MUST preserve all detected invoice rows and surface unreadable or disagreeing
+  > values as review issues; model confidence alone MUST NOT authorize stock posting.
+  > Acceptance: INV-11. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-manual-search-scope:574
+  scope:declaration method `searchMasterProducts` · owner:nareshshah139 · label:security
+
+  > Manual selection search MUST return only active products in the caller's branch and MUST NOT
+  > mutate catalogue or stock. An empty query MUST return no products.
+
+◆ purchase-match-identity-before-stock:622
+  scope:declaration method `confirmMasterRecord` · owner:nareshshah139 · label:product;target
+
+  > A purchase line MUST NOT be automatically mapped to a different product strength, form, pack or
+  > branch; ambiguous matches MUST require an explicit reviewer selection.
+  > Acceptance: INV-13. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-mismatch-explicit-acknowledgement:629
+  scope:declaration method `confirmMasterRecord` · owner:nareshshah139 · label:product
+
+  > Matching different names, known kinds, strengths or pack dimensions MUST fail before writes
+  > unless mismatchAcknowledged is true. A successful match MUST atomically retain the original
+  > line, selected product, mismatch reasons and acknowledgement in audit history with catalogue
+  > updates; confirming a match MUST NOT change stock.
+
+◆ purchase-draft-stale-write-rejected:853
+  scope:declaration method `updateDraft` · owner:nareshshah139 · label:product
+
+  > An expectedUpdatedAt value MUST match the saved draft before replacing lines; reviewed or
+  > posted purchases MUST NOT be edited here. The correction and its audit record commit together.
+
+◆ purchase-analytics-compatible-posted-set:957
+  scope:declaration method `getDistributorAnalytics` · owner:nareshshah139 · label:calculation
+
+  > Totals and complete rankings MUST use the same filtered posted invoice lines. Product and
+  > discount comparisons MUST preserve master identity, pack and declared stock unit. A blended
+  > effective unit cost across incompatible product bases MUST be unknown rather than numeric.
+
+◆ purchase-review-blockers-enforced:1068
+  scope:declaration method `markReviewed` · owner:nareshshah139 · label:product;target
+
+  > Review MUST reject unresolved OCR flags, unreconciled totals or missing receipt details even
+  > when invoked directly through the API; saving a draft MUST NOT count as resolving those issues.
+  > Acceptance: INV-15. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-commit-once-atomic:1151
+  scope:declaration method `commitStock` · owner:nareshshah139 · label:product;target
+
+  > A validated purchase receipt MUST atomically create its batch stock effects and posted invoice
+  > state at most once; retries or a failure partway through MUST NOT duplicate or partially add
+  > stock.
+  > Acceptance: INV-17. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ receipt-linked-purchase-bill-only:1172
+  scope:declaration method `commitStockInTransaction` · owner:nareshshah139 · label:product
+
+  > Billing a posted inward challan MUST match each product, batch, expiry, MRP and paid/free
+  > stock unit exactly once, add zero additional stock, and retain the verified invoice rate and
+  > tax-exclusive cost per received paid-plus-free unit. The original receipt effects stay intact.
+
+◆ purchase-declared-stock-unit-precedence:1902
+  scope:declaration method `mapUnitType` · owner:nareshshah139 · label:product;calculation
+
+  > A recognized explicit stock unit MUST determine the inventory unit before pack-size
+  > inference. Pack contents such as ML or GM MUST NOT override Pack, Tube, Vial, Box,
+  > or another declared unit. Mapping MUST NOT rescale paid/free quantities or rewrite
+  > historical batches; incompatible existing batch units remain blocking errors.
+
+◆ ocr-shared-search-suggestions-only:1960
+  scope:declaration method `rankMasterMatchCandidates` · owner:nareshshah139 · label:product
+
+  > OCR suggestions MUST use shared name/alias scoring, exclude known strength, dosage-form and
+  > pack conflicts, and break score ties deterministically. Suggesting a product MUST NOT write
+  > catalogue, invoice or stock data or bypass explicit selection and exact commitment checks.
+  > A low-confidence candidate MUST request review instead of recommending a duplicate new record.
+  > Every candidate MUST have distinguishing name/alias evidence; generic forms or pack metadata
+  > alone MUST produce no candidates, regardless of manufacturer, price or combined score.
+
+backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts
+=> backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts <=
+
+◆ purchase-role-permission-boundary:64
+  scope:declaration class `PharmacyPurchaseInvoiceController` · owner:nareshshah139 · label:product;target
+
+  > Invoice endpoints MUST enforce both the allowed role and corresponding existing permission
+  > using the authenticated branch; Reception access MUST NOT grant unrelated stock, payment or
+  > administrative powers.
+  > Acceptance: INV-40. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts
+
+frontend/src/components/pharmacy/PurchaseManualMatchSearch.tsx
+=> frontend/src/components/pharmacy/PurchaseManualMatchSearch.tsx <=
+
+◆ purchase-manual-selection-only:13
+  scope:declaration function `PurchaseManualMatchSearch` · owner:nareshshah139 · label:product
+
+  > Search MUST NOT select or confirm a product automatically. Cleared or changed queries MUST
+  > discard stale results; search failures MUST remain visible. Selection uses the same guarded
+  > confirmation callback as suggested products.
+
+frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx
+=> frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx <=
+
+◆ purchase-receipt-margin-basis:560
+  scope:declaration function `calculateReceiptSummary` · owner:nareshshah139 · label:calculation
+
+  > Quantity summaries MUST use paid plus free quantities in each declared stock unit, without
+  > multiplying by pack contents. Indicative margin MUST compare tax-exclusive MRP sales for
+  > those received units with taxable line cost; missing MRP MUST remain unknown.
+
+◆ purchase-entry-field-coverage:981
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product;target
+
+  > The purchase editor MUST retain the supplier header, batch receipt quantities and commercial
+  > terms needed to reconstruct the printed bill; unsupported printed terms MUST be shown as
+  > unresolved instead of discarded.
+  > Acceptance: INV-14. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-required-controls-visible:989
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product;target
+
+  > All controls required to resolve the active invoice’s blockers MUST remain discoverable and
+  > keyboard reachable, with the next action and persisted stock state visible without expanding
+  > unrelated sections.
+  > Acceptance: INV-41. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-match-labels-and-fallback:997
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product
+
+  > Authorized editors with catalogue support MUST see Not in inventory, Create new item and
+  > manual search when no candidate exists or the response recommends CREATE_NEW; such responses
+  > MUST NOT expose a suggested saved product or Confirm Match button. Suggestions MUST use plain
+  > identity labels rather than numeric confidence. Editing a name or pack, or removing a line,
+  > MUST discard previous suggested and confirmed mappings before they can be reused.
+
+◆ purchase-mismatch-warning-before-retry:1553
+  scope:declaration variable `confirmMasterLine` · owner:nareshshah139 · label:product
+
+  > A server-reported product mismatch MUST display the different-products warning and both
+  > identities before retrying with acknowledgement. Cancelling MUST leave the line unchanged.
+
+◆ purchase-process-visible-outcome:1722
+  scope:declaration variable `processSavedInvoice` · owner:nareshshah139 · label:product;target
+
+  > Save & Process MUST save the current corrections and then show the server-confirmed outcome for
+  > that invoice: stock added, saved with actionable blockers, or status could not be confirmed.
+  > Acceptance: INV-16. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-recovery-server-revision:2207
+  scope:declaration variable `acceptRecoveredInvoice` · owner:nareshshah139 · label:state
+
+  > Recovered fields MUST retain the revision they were edited from. A changed or unknown
+  > revision MUST block saving, reviewing and posting while retaining local fields until an
+  > explicit Reload saved invoice succeeds. Background list reads MUST NOT advance this baseline.
+
+◆ purchase-summary-full-values:5178
+  scope:declaration function `SummaryValue` · owner:nareshshah139 · label:accessibility
+
+  > Receipt summary amounts and quantities MUST remain fully visible without ellipses when the
+  > containing panel narrows or text is enlarged. Supporting explanations may use help tooltips.
+
+frontend/src/components/pharmacy/PurchaseProductDetails.tsx
+
+The .cjs diagnostics were manually inspected because cc-check does not support that extension.

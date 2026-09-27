@@ -294,7 +294,15 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.confirmMasterRecord(
       dto,
       req.user.branchId,
+      req.user.id || req.user.sub,
     );
+  }
+
+  @Get('master-products')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  searchMasterProducts(@Query('q') q: string, @Request() req: any) {
+    return this.purchaseInvoiceService.searchMasterProducts(q || '', req.user.branchId);
   }
 
   @Get()

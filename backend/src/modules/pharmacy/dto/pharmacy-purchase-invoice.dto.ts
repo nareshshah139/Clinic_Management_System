@@ -73,6 +73,10 @@ export class ImportPharmacyPurchaseInvoiceDto {
 
 export class CreatePharmacyPurchaseInvoiceItemDto {
   @IsOptional()
+  @IsIn(['MEDICINE', 'COSMETIC', 'CONSUMABLE'])
+  productKind?: 'MEDICINE' | 'COSMETIC' | 'CONSUMABLE';
+
+  @IsOptional()
   @IsString()
   @Matches(/^[a-zA-Z0-9_-]{1,64}:[0-9]{1,3}$/)
   ocrSourceRef?: string;
@@ -597,6 +601,10 @@ export class PurchaseProductCatalogDto {
 }
 
 export class ConfirmPharmacyPurchaseMasterDto {
+  @IsOptional()
+  @IsBoolean()
+  mismatchAcknowledged?: boolean;
+
   @ApiProperty({ enum: PharmacyPurchaseMasterActionDto })
   @IsEnum(PharmacyPurchaseMasterActionDto)
   action: PharmacyPurchaseMasterActionDto;

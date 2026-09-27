@@ -108,6 +108,39 @@ describe('PurchaseInvoiceWorkbench', () => {
     (global as any).fetch = jest.fn();
   });
 
+  it.each([false, true])('CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (%s)', async (acknowledge) => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true } as typeof mockPurchaseAccess;
+    const invoice = { ...draftInvoice, items: [{ ...draftInvoice.items[0], productName: 'Moisturex Hydra Gel Cream', packSize: '50 ml' }] };
+    const drug = { id: 'abzorb', name: 'Abzorb 1% Cream', manufacturerName: 'Sun Pharma', packSizeLabel: 'tube of 15 gm Cream', productKind: 'MEDICINE', price: 429 };
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [{ drug, score: 36.79, confidence: 'LOW', reasons: ['manufacturer match'] }], recommendedAction: 'CREATE_NEW', matchLabel: 'Not in inventory' }] });
+    api.get.mockImplementation(async url => url === '/pharmacy/purchase-invoices/master-products' ? [drug] : []);
+    const mismatch = Object.assign(new Error('These look like different products. Confirm anyway?'), { status: 409, body: { code: 'PURCHASE_PRODUCT_MISMATCH', mismatches: ['Product names differ', 'Product kinds differ', 'Pack sizes or types differ'] } });
+    api.confirmPharmacyPurchaseMaster.mockRejectedValueOnce(mismatch).mockResolvedValueOnce({ action: 'MATCH_EXISTING', drug, linePatch: { productName: drug.name } });
+    window.confirm = jest.fn(() => acknowledge);
+    renderSavedInvoice(invoice); await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Matches' }));
+    expect(await screen.findByText('Not in inventory')).toBeInTheDocument();
+    expect(screen.queryByText('Abzorb 1% Cream')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Confirm Match' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/LOW|36.79/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create new item' })).toHaveClass('bg-primary');
+    fireEvent.change(screen.getByLabelText('Invoice product kind'), { target: { value: 'COSMETIC' } });
+    fireEvent.change(screen.getByLabelText('Search saved products manually'), { target: { value: 'Abzorb' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Match Abzorb 1% Cream' }));
+    await waitFor(() => expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('These look like different products. Confirm anyway?')));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('Moisturex Hydra Gel Cream · 50 ml · COSMETIC'));
+    expect(api.confirmPharmacyPurchaseMaster).toHaveBeenNthCalledWith(1, expect.not.objectContaining({ mismatchAcknowledged: true }));
+    if (acknowledge) {
+      await waitFor(() => expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledTimes(2));
+      expect(api.confirmPharmacyPurchaseMaster).toHaveBeenLastCalledWith(expect.objectContaining({ mismatchAcknowledged: true, item: expect.objectContaining({ productKind: 'COSMETIC' }) }));
+      expect(await screen.findByDisplayValue('Abzorb 1% Cream')).toBeInTheDocument();
+    } else {
+      expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledTimes(1);
+      expect(screen.getByDisplayValue('Moisturex Hydra Gel Cream')).toBeInTheDocument();
+    }
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('summarizes paid plus free stock units and tax-exclusive indicative margin without pack multiplication', async () => {
     const invoice = { ...draftInvoice, items: [{ ...draftInvoice.items[0], packSize: 'Strip of 10', packUnitType: 'STRIPS', quantityPurchased: 2, freeQuantity: 1, mrp: 112, purchaseRate: 75, cgstPercent: 6, sgstPercent: 6, taxableAmount: 150, gstAmount: 18, lineTotal: 168 }], taxableAmount: 150, totalGst: 18, netPayable: 168 };
     renderSavedInvoice(invoice); await editSelectedInvoice();
@@ -128,7 +161,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(draftInvoice); await editSelectedInvoice();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh Matches' }));
     fireEvent.change(await screen.findByLabelText('Product kind'), { target: { value: 'COSMETIC' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save new product' }));
+    expect(screen.getByLabelText('Invoice product kind')).toHaveValue('COSMETIC');
+    fireEvent.click(screen.getByRole('button', { name: 'Create new item' }));
     await waitFor(() => expect(api.confirmPharmacyPurchaseMaster).toHaveBeenCalledWith(expect.objectContaining({ action: 'CREATE_NEW', catalog: { productKind: 'COSMETIC', category: 'Cosmetic', composition1: '', dosageForm: '', strength: '', requiresPrescription: false } })));
     expect(await screen.findByText('COSMETIC')).toBeInTheDocument();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();

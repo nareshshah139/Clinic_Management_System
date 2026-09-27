@@ -1,0 +1,105 @@
+{
+  "browser": "Chrome",
+  "synthetic": true,
+  "checks": [
+    "No Abzorb suggestion; Not in inventory and Create new item shown",
+    "Manual mismatch warning cancelled; zero catalogue, audit or stock writes",
+    "Manual selection remains reachable at 390px with no horizontal page overflow"
+  ],
+  "warnings": [
+    "These look like different products. Confirm anyway?\nInvoice: Moisturex Hydra Gel Cream · 50 ml\nSaved product: Abzorb 1% Cream · tube of 15 gm Cream · MEDICINE\nProduct names differ\nPack sizes or types differ"
+  ],
+  "writes": [],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/users/cr15-user",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/reports/alerts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/suppliers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/documents",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/intake",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/cr15-invoice",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/purchases/cr15-invoice/actions",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/suppliers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/suppliers",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/purchases/cr15-invoice/actions",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/pharmacy/purchase-invoices/master-matches",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/pharmacy/purchase-invoices/master-products",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/pharmacy/purchase-invoices/master-confirmations",
+      "status": 409
+    }
+  ]
+}

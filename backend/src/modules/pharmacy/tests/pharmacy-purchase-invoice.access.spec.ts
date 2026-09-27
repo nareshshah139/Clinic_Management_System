@@ -27,6 +27,7 @@ describe('Purchase invoice access through HTTP', () => {
     updateDraft: jest.fn().mockResolvedValue({ id: 'draft-1' }),
     suggestMasterMatches: jest.fn().mockResolvedValue({ matches: [] }),
     confirmMasterRecord: jest.fn().mockResolvedValue({}),
+    searchMasterProducts: jest.fn().mockResolvedValue([]),
     getDistributorAnalytics: jest.fn().mockResolvedValue({}),
     markReviewed: jest.fn().mockResolvedValue({ status: 'REVIEWED' }),
     commitStock: jest.fn().mockResolvedValue({ status: 'STOCK_COMMITTED' }),
@@ -128,6 +129,7 @@ describe('Purchase invoice access through HTTP', () => {
     ['patch', '/drafts/draft-1', 'create', 'inventory:po:create', 'updateDraft', 200],
     ['post', '/master-matches', 'create', 'inventory:po:create', 'suggestMasterMatches', 201],
     ['post', '/master-confirmations', 'create', 'inventory:po:create', 'confirmMasterRecord', 201],
+    ['get', '/master-products?q=Abzorb', 'create', 'inventory:po:create', 'searchMasterProducts', 200],
     ['patch', '/draft-1/review', 'review', 'inventory:po:update', 'markReviewed', 200],
     ['post', '/draft-1/commit-stock', 'commit-stock', 'inventory:transaction:create', 'commitStock', 201],
   ] as const;

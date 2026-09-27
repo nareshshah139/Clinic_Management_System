@@ -62,6 +62,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
 
   beforeEach(() => {
     prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{id:'drug-1'},{id:'drug-2'}]),
       auditLog: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn((callback: any) => callback(prisma)),
       pharmacyPurchaseInvoice: {
@@ -369,6 +370,52 @@ describe('PharmacyPurchaseInvoiceService', () => {
     ...overrides,
   });
 
+  it.each(['Moisturex Hydra Gel Cream', 'Cream', '50 ml'])('CR-15: unrelated names and pack/form-only lines do not suggest Abzorb (%s)', async (productName) => {
+    prisma.drug.findMany.mockResolvedValue([completeDrug({ name: 'Abzorb 1% Cream', manufacturerName: 'Sun Pharma', packSizeLabel: '50 ml', dosageForm: 'Cream', strength: '1%', price: 429 })]);
+    const result = await service.suggestMasterMatches([{ ...validDto().items[0], productName, manufacturer: 'Sun Pharma', packSize: '50 ml', mrp: 429 }], branchId);
+    expect(result.matches[0]).toMatchObject({ candidates: [], recommendedAction: 'CREATE_NEW', matchLabel: 'Not in inventory' });
+    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
+  it('CR-15: rejects Moisturex to Abzorb confirmation before any catalogue or stock writes', async () => {
+    prisma.drug.findFirst.mockResolvedValue(completeDrug({ name: 'Abzorb 1% Cream', packSizeLabel: 'tube of 15 gm Cream', type: 'allopathy', dosageForm: 'Cream', strength: '1%' }));
+    prisma.drug.update.mockResolvedValue(completeDrug({ name: 'Abzorb 1% Cream' }));
+    await expect(service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: { ...validDto().items[0], productName: 'Moisturex Hydra Gel Cream', packSize: '50 ml' } }, branchId)).rejects.toMatchObject({ response: { code: 'PURCHASE_PRODUCT_MISMATCH', message: 'These look like different products. Confirm anyway?', mismatches: expect.arrayContaining(['Product names differ', 'Pack sizes or types differ']) } });
+    expect(prisma.drug.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ productKind: 'COSMETIC' }, {}, 'Product kinds differ'],
+    [{ packSize: '50 ml' }, { packSizeLabel: '50 gm' }, 'Pack sizes or types differ'],
+  ])('CR-15: guards kind and pack mismatches even with identical names', async (lineChanges, drugChanges, reason) => {
+    prisma.drug.findFirst.mockResolvedValue(completeDrug({ type: 'allopathy', ...drugChanges }));
+    await expect(service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: 'drug-1', item: { ...validDto().items[0], ...lineChanges } as any }, branchId)).rejects.toMatchObject({ response: { mismatches: expect.arrayContaining([reason]) } });
+    expect(prisma.drug.update).not.toHaveBeenCalled();
+  });
+
+  it('CR-15: audits original identity and explicit override without changing stock', async () => {
+    const drug = completeDrug({ name: 'Abzorb 1% Cream', packSizeLabel: '15 gm', type: 'allopathy' });
+    prisma.drug.findFirst.mockResolvedValue(drug);
+    prisma.drug.update.mockResolvedValue(drug);
+    const item = { ...validDto().items[0], productName: 'Moisturex Hydra Gel Cream', productKind: 'COSMETIC' as const, packSize: '50 ml' };
+    const result = await service.confirmMasterRecord({ action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING, drugId: drug.id, item, mismatchAcknowledged: true }, branchId, userId);
+    expect(result.linePatch.productName).toBe(drug.name);
+    const audit = prisma.auditLog.create.mock.calls[0][0].data;
+    expect(audit).toMatchObject({ entity: 'PurchaseProductMatch', userId, action: 'MATCH_CONFIRMED' });
+    expect(JSON.parse(audit.oldValues)).toEqual({ branchId, item });
+    expect(JSON.parse(audit.newValues)).toMatchObject({ mismatchAcknowledged: true, nameEvidence: false, mismatches: ['Product names differ', 'Product kinds differ', 'Pack sizes or types differ'] });
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
+  it('CR-15: same normalized name is labelled Same product without a price or manufacturer boost', async () => {
+    prisma.drug.findMany.mockResolvedValue([completeDrug({ manufacturerName: '' })]);
+    const result = await service.suggestMasterMatches([{ ...validDto().items[0], manufacturer: '' }], branchId);
+    expect(result.matches[0].matchLabel).toBe('Same product');
+  });
+
   it('suggests nearest drug-master matches for OCR purchase lines', async () => {
     prisma.drug.findMany.mockResolvedValue([
       completeDrug({
@@ -411,6 +458,35 @@ describe('PharmacyPurchaseInvoiceService', () => {
     });
   });
 
+  it('matches 20 OCR rows independently, excludes conflicting packs/strengths/forms and performs no writes', async () => {
+    prisma.drug.findMany.mockResolvedValue([
+      completeDrug({id:'five',name:'Folitrax 5mg Tablet',strength:'5mg',packSizeLabel:'10 Tablets'}),
+      completeDrug({id:'different-strength',name:'Folitrax 10mg Tablet',strength:'10mg',packSizeLabel:'10 Tablets'}),
+      completeDrug({id:'different-pack',name:'Folitrax 5mg Tablet',strength:'5mg',packSizeLabel:'5 Tablets'}),
+      completeDrug({id:'different-form',name:'Folitrax 5mg Injection',dosageForm:'Injection',strength:'5mg',packSizeLabel:'10 Tablets'}),
+    ]);
+    const items=Array.from({length:20},(_,i)=>({...validDto().items[0],productName:'Folitrax 5mg Tab (DPC)',manufacturer:'',packSize:i%2?'5 Tablets':'10 Tablets',batchNumber:`B${i}`}));
+    const before=JSON.stringify(items);
+    const result=await service.suggestMasterMatches(items,branchId);
+    expect(result.matches.map(m=>m.lineIndex)).toEqual(Array.from({length:20},(_,i)=>i));
+    expect(result.matches.map(m=>m.candidates.map(c=>c.drug.id))).toEqual(Array.from({length:20},(_,i)=>[i%2?'different-pack':'five']));
+    expect(result.matches[0].candidates[0].reasons).toContain('Search omitted supplier annotation (DPC); verify the original line');
+    expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(prisma.drug.findMany).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(items)).toBe(before);
+    for(const entity of [prisma.drug,prisma.inventoryItem,prisma.pharmacyPurchaseInvoice,prisma.stockTransaction]) {
+      for(const method of ['create','update','updateMany']) if(entity[method]) expect(entity[method]).not.toHaveBeenCalled();
+    }
+  });
+
+  it('requests review of a weak candidate instead of recommending a new duplicate', async () => {
+    prisma.drug.findMany.mockResolvedValue([completeDrug({name:'Tyrodin Cream',strength:'',dosageForm:'Cream',packSizeLabel:'20g'})]);
+    const result=await service.suggestMasterMatches([{...validDto().items[0],productName:'Tyrodni Cream',manufacturer:'',packSize:''}],branchId);
+    expect(result.matches[0].recommendedAction).toBe('REVIEW_MATCHES');
+    expect(result.matches[0].candidates[0].confidence).toBe('LOW');
+    expect(prisma.drug.create).not.toHaveBeenCalled();
+  });
+
   it('updates an existing drug master only after a confirmed OCR match', async () => {
     const item = {
       ...validDto().items[0],
@@ -439,6 +515,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
       {
         action: PharmacyPurchaseMasterActionDto.MATCH_EXISTING,
         drugId: 'drug-1',
+        mismatchAcknowledged: true,
         item,
       },
       branchId,
@@ -548,6 +625,22 @@ describe('PharmacyPurchaseInvoiceService', () => {
 
     expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('CR-15: processing Moisturex creates its own stock without updating Abzorb', async () => {
+    const invoice = reviewedInvoice();
+    Object.assign(invoice.items[0], { productName: 'Moisturex Hydra Gel Cream', packSize: '50 ml', packUnitType: 'Tube', manufacturer: 'Sun Pharma' });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValueOnce(invoice).mockResolvedValueOnce({ ...invoice, status: 'STOCK_COMMITTED' });
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    prisma.drug.findMany.mockImplementation(async ({ where }: any) => {
+      expect(where.name.equals).toBe('Moisturex Hydra Gel Cream');
+      return [completeDrug({ id: 'moisturex', name: 'Moisturex Hydra Gel Cream', packSizeLabel: '50 ml', type: 'cosmetic', category: 'Cosmetic' })];
+    });
+    prisma.inventoryItem.findMany.mockImplementation(async ({ where }: any) => { expect(where.drugs.some.id).toBe('moisturex'); return []; });
+    prisma.inventoryItem.create.mockResolvedValue({ id: 'moisturex-stock' });
+    await service.commitStock('purchase-1', branchId, userId);
+    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ itemId: 'moisturex-stock' }) }));
   });
 
   it('commits reviewed purchase stock into an existing batch exactly once', async () => {
