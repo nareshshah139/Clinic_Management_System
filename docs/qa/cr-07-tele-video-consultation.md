@@ -17,7 +17,7 @@ Implemented on 2026-09-27 using the disclaimer wording supplied in the change re
 
 The migration `backend/prisma/migrations/20260927160000_tele_video_consultation/migration.sql` adds the enum, default and consent receipt columns, plus a database constraint requiring a receipt for tele-video visits.
 
-Apply this migration through the normal reviewed migration process before deploying the updated backend. Prisma Client has been regenerated locally. No clinic database migration or production deployment was performed by this task.
+The migration was deployed successfully to production on 2026-09-27 after a Railway-native database snapshot. See `cr-07-production-deployment-2026-09-27.md` for deployment and live acceptance evidence.
 
 The migration was rehearsed against synthetic rows in an isolated PostgreSQL schema inside a transaction, then rolled back. Checks passed for legacy defaults, rejecting an unconsented tele-video insert, accepting a consented insert, and switching back to in-person.
 
@@ -36,4 +36,4 @@ Known baseline limit: seven existing dosage-preview tests expect numeric-dose co
 
 Production preflight found 28 applied migrations, only CR-07 pending, no failed migrations and no checksum mismatches. Startup seeding is disabled. A Railway-native snapshot was created as `Pre-CR07-tele-video-2026-09-27` (ID `d5d32c52-07f7-452c-b93c-157736c4d85d`). Backup data remains inside Railway. Aggregate pre-deployment hashes were captured for seven clinical/stock tables without downloading records.
 
-Local evidence: `tmp/cr07-release-ops/` and `output/cr07-deployment/`. Production rollout results will be recorded separately.
+Local evidence: `tmp/cr07-release-ops/` and `output/cr07-deployment/`. Production rollout results are recorded in `cr-07-production-deployment-2026-09-27.md`.
