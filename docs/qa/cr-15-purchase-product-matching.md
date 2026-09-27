@@ -1,6 +1,6 @@
 # CR-15 — Purchase invoice product identity
 
-Prepared on 2026-09-27 on `codex/cr15-purchase-matching`, based on `origin/main`. Not deployed by this task. The branch includes the shared name-matching integration required by this fix; unrelated working-tree changes are excluded.
+Prepared on 2026-09-27 on `codex/cr15-purchase-matching`, based on `origin/main`. Deployed and verified on production; see [the deployment record](cr-15-production-deployment-2026-09-27.md) for the final consolidated release and live catalogue finding. The branch includes the shared name-matching integration required by this fix; unrelated working-tree changes are excluded.
 
 ## Behavior
 
