@@ -1,6 +1,6 @@
 # CR-06 — Doctor signature
 
-Implemented in the local workspace on 2026-09-27. No production upload, deployment, email, or WhatsApp message was performed.
+Implemented on 2026-09-27 and subsequently merged and deployed. See [production deployment and live acceptance](cr-06-production-deployment-2026-09-27.md). No Email or WhatsApp messages were sent during verification.
 
 ## Behavior
 
