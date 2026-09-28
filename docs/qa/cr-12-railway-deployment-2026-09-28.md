@@ -1,13 +1,13 @@
 # CR-12 production deployment — 2026-09-28
 
-Application commit: `4cd85cba5ccd2abca34756e337b4f73ab86e5a32`, pushed to GitHub `main`.
+Application commit: `45679f218df31e6a246c6874ac39bb969cfbfdfa`, pushed to GitHub `main`.
 
 Frontend: https://frontend-production-703e.up.railway.app/dashboard/inventory
 
 Both Railway production services report `SUCCESS` for the exact application commit:
 
-- Backend deployment: `8ec4546a-6ce8-462d-9c5d-6f58e30f12bb`.
-- Frontend deployment: `f7b1375a-26d1-4a85-b28d-5dc3f4bae37d`.
+- Backend deployment: `2a9665ef-56ce-4ca7-b57f-22203cffa17b`.
+- Frontend deployment: `f17dd2d1-f4c5-4dae-a334-7b53a4ec933f`.
 - Backend health and frontend login return HTTP 200.
 - All 32 Prisma migrations are applied, with no pending, failed or mismatched migrations. Startup seeding remains disabled.
 
@@ -15,7 +15,7 @@ The release includes CR-12 and the stock-identity / approval-snapshot dependenci
 
 ## Validation
 
-Both production builds passed. The release passed 22 focused suites (159 tests): 66 backend tests and 93 frontend tests. Code-contract syntax/discoverability checks passed. Browser/database acceptance passed again on the final release checkout. The complete migration chain was rehearsed successfully in a new local database. Whole-backend TypeScript checking has existing errors in untouched modules; the production SWC build passed.
+Both production builds passed. The initial release passed 22 focused suites (159 tests): 66 backend tests and 93 frontend tests. Code-contract syntax/discoverability checks passed. Browser/database acceptance passed again on the final release checkout. The complete migration chain was rehearsed successfully in a new local database. Whole-backend TypeScript checking has existing errors in untouched modules; the production SWC build passed.
 
 Production acceptance used normal authentication through the public frontend proxy and an isolated temporary clinic branch:
 
@@ -34,3 +34,9 @@ All temporary branch, user, inventory, drug, request and request-log records wer
 Railway native database snapshot: `Pre-CR12-unified-inventory-2026-09-28`, backup ID `c0d85aa3-b2c9-4e03-aa3b-0812fc821fe1`, created before release. A rollback can redeploy the preceding application commit `b8099ceee75de39c59eeb288cb1323258d0ba710`; retain the additive schema and reconcile any newly created batch-edit requests before using the older approval screen.
 
 Live acceptance and screenshots are in `output/cr12-deployment/`. Local browser evidence is in `output/cr12/`. Operational logs, migration preflight and aggregate integrity reports remain in the local working folder under `output/cr12-deployment/`; no credentials or clinical rows were exported.
+
+## Admin approval follow-up
+
+The deployed UI explicitly says “doctor or admin approval”. Admin access was already allowed by the API and UI; regression coverage now exercises Doctor, Admin and Owner approval/rejection and failed approvals. Follow-up checks passed: 70 frontend inventory tests, 32 backend approval tests, both production builds and the approval-role contract checks.
+
+A normally authenticated Admin approved a pharmacist price proposal through the deployed browser UI. Admin stock approvals produced the same 17 / 4 / 2 physical-batch / other-batch / held balances and 19 available units in Billing and Rx. A pharmacist was denied with HTTP 403 even when explicitly assigned the approval permission. Temporary records were removed, and all ten original data-table hashes remained unchanged. Evidence: `output/cr12-deployment/admin-live-acceptance.json` and `live-admin-approval.png`.

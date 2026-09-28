@@ -1,6 +1,6 @@
 # CR-12 — Unified Inventory
 
-Deployed to production on 2026-09-28 at application commit `4cd85cba5ccd2abca34756e337b4f73ab86e5a32`. See [deployment verification](cr-12-railway-deployment-2026-09-28.md).
+Deployed to production on 2026-09-28 at application commit `45679f218df31e6a246c6874ac39bb969cfbfdfa`. See [deployment verification](cr-12-railway-deployment-2026-09-28.md).
 
 Inventory is the single sidebar destination for stock work. Inventory Updates and Reorder targets no longer appear separately. Reorder targets remain in Inventory → Reorder → Manual targets & exclusions. Doctors now have the Inventory entry needed to review edits. Existing `/dashboard/inventory-updates` bookmarks redirect to `/dashboard/inventory?area=stock&view=approvals`.
 
@@ -33,7 +33,7 @@ The browser run uses real application components and domain services, a syntheti
 The browser/database acceptance verified:
 
 1. One Inventory menu and no duplicate Updates/Reorder target entries; catalog-only drugs are absent from Stock.
-2. A pharmacist price proposal leaves the live price unchanged, appears in Today, and opens the queue. Pharmacists see no approval action; a doctor can approve.
+2. A pharmacist price proposal leaves the live price unchanged, appears in Today, and opens the queue. Pharmacists see no approval action; a doctor or admin can approve.
 3. The approved price appears on the inventory item and the drug detail used for billing.
 4. A physical batch count changes 10 → 17 only after approval, while the other batch stays 4 and holds stay 2. Stock reports 17 for the edited batch; pharmacy inventory checks and the Rx picker both report 19 available (21 physical less 2 held).
 5. An unlinked clinic item's count can be approved and is reflected in the Rx picker without creating a drug link.
