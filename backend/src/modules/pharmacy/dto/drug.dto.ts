@@ -472,9 +472,20 @@ export class DrugAutocompleteDto {
 }
 
 export class DrugInventoryChangeItemDto {
-  @ApiProperty({ description: 'Drug ID', example: 'clx123' })
+  @ApiPropertyOptional({ description: 'Drug ID for legacy product-total edits', example: 'clx123' })
+  @IsOptional()
   @IsString()
-  drugId: string;
+  drugId?: string;
+
+  @ApiPropertyOptional({ enum: ['BATCH'], description: 'Edit the exact clinic batch instead of the product total' })
+  @IsOptional()
+  @IsIn(['BATCH'])
+  scope?: 'BATCH';
+
+  @ApiPropertyOptional({ description: 'Batch revision displayed when editing' })
+  @IsOptional()
+  @IsString()
+  expectedUpdatedAt?: string;
 
   @ApiPropertyOptional({
     description: 'Linked inventory item ID to adjust stock against',

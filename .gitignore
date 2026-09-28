@@ -53,3 +53,8 @@ prod-backup*.list
 !backend/prisma/migrations/20260927120000_medicine_regimen_defaults/migration.sql
 !backend/prisma/migrations/20260927120100_prescription_history_date_index/migration.sql
 !backend/prisma/migrations/20260927160000_tele_video_consultation/migration.sql
+
+# Approval-safe clinic inventory identity and batch edits
+!backend/prisma/migrations/20260927170000_prescription_inventory_identity/migration.sql
+!backend/prisma/migrations/20260927200000_pharmacy_inventory_approval_snapshot/migration.sql
+!backend/prisma/migrations/20260928100000_inventory_batch_edits/migration.sql

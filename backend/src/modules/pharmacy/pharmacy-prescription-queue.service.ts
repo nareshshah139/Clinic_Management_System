@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { DrugService } from './drug.service';
 import {
@@ -13,6 +14,8 @@ import {
 } from './dto/pharmacy-dispense-task.dto';
 
 type QueueMedication = {
+  inventoryItemId?: string | null;
+  drugId?: string | null;
   lineId?: string;
   drugName: string;
   genericName?: string | null;
@@ -42,6 +45,7 @@ type QueueMedication = {
 type QueueEntry = {
   dispenseTaskId?: string;
   prescriptionId: string;
+  prescriptionUpdatedAt?: Date;
   patient: { id: string; name: string; patientCode?: string | null };
   doctor: { id: string; name: string };
   createdAt: Date;
@@ -65,6 +69,8 @@ type QueueEntry = {
 };
 
 type PrescriptionItem = {
+  inventoryItemId?: string | null;
+  drugId?: string | null;
   drugName?: string;
   genericName?: string | null;
   brandName?: string | null;
@@ -82,6 +88,7 @@ type PrescriptionItem = {
 
 type LoadedPrescription = {
   id: string;
+  updatedAt?: Date;
   items: string;
   createdAt: Date;
   visit: {
@@ -98,6 +105,7 @@ type LoadedInvoice = {
 };
 
 type LoadedInvoiceItem = {
+  inventoryItemId?: string | null;
   quantity: number;
   drug?: { id: string; name: string } | null;
 };
@@ -123,6 +131,12 @@ type InventoryBatch = {
 };
 
 type StockCheckResult = {
+  inventoryItemId?: string | null;
+  unit?: string | null;
+  totalOnHandStock?: number;
+  heldStock?: number;
+  expiredStock?: number;
+  suggestions?: any[];
   drugName: string;
   matchedDrug: {
     id: string;
@@ -292,7 +306,7 @@ export class PharmacyPrescriptionQueueService {
     return {
       prescriptionId,
       checkedAt: new Date(),
-      items,
+      items: items.map(item => ({ ...item, prescriptionVersion: entry.prescriptionUpdatedAt?.toISOString() })),
     };
   }
 
@@ -872,7 +886,7 @@ export class PharmacyPrescriptionQueueService {
           branchId,
         },
         orderBy: {
-          invoiceDate: 'desc',
+          invoiceDate: 'desc' as const,
         },
         select: {
           id: true,
@@ -880,6 +894,7 @@ export class PharmacyPrescriptionQueueService {
           items: {
             select: {
               quantity: true,
+              inventoryItemId: true,
               drug: {
                 select: {
                   id: true,
@@ -893,6 +908,12 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-coverage-posted-invoices-only
+   * Only CONFIRMED, DISPENSED and COMPLETED invoices may contribute fulfilled quantities.
+   * Draft/pending invoices alone MUST leave the prescription pending (or age-expired),
+   * including after a failed stock confirmation; linked invoice IDs remain available for review.
+   */
   private toQueueEntry(prescription: LoadedPrescription): QueueEntry {
     const nowMs = Date.now();
     const pendingHours = Math.max(
@@ -903,7 +924,7 @@ export class PharmacyPrescriptionQueueService {
       (invoice) => invoice.id,
     );
     const activeInvoices = prescription.pharmacyInvoices.filter(
-      (invoice) => invoice.status !== 'CANCELLED',
+      (invoice) => ['CONFIRMED', 'DISPENSED', 'COMPLETED'].includes(invoice.status),
     );
     const rawItems = this.parsePrescriptionItems(prescription.items);
     const medications = rawItems.map((item) =>
@@ -917,7 +938,7 @@ export class PharmacyPrescriptionQueueService {
     );
 
     let status: PrescriptionQueueStatus;
-    if (prescription.pharmacyInvoices.length === 0) {
+    if (activeInvoices.length === 0 && !prescription.pharmacyInvoices.some(invoice => invoice.status === 'CANCELLED')) {
       status =
         pendingHours > this.expiredAfterHours
           ? PrescriptionQueueStatus.EXPIRED
@@ -936,6 +957,7 @@ export class PharmacyPrescriptionQueueService {
 
     return {
       prescriptionId: prescription.id,
+      prescriptionUpdatedAt: prescription.updatedAt,
       patient: prescription.visit.patient,
       doctor: {
         id: prescription.visit.doctor.id,
@@ -960,9 +982,11 @@ export class PharmacyPrescriptionQueueService {
       return (
         sum +
         invoice.items
-          .filter((invoiceItem) =>
-            this.namesMatch(drugName, invoiceItem.drug?.name || ''),
-          )
+          .filter((invoiceItem) => {
+            if (item.inventoryItemId && invoiceItem.inventoryItemId) return item.inventoryItemId === invoiceItem.inventoryItemId;
+            if (item.drugId) return item.drugId === invoiceItem.drug?.id;
+            return this.namesMatch(drugName, invoiceItem.drug?.name || '');
+          })
           .reduce((itemSum, invoiceItem) => itemSum + invoiceItem.quantity, 0)
       );
     }, 0);
@@ -977,6 +1001,8 @@ export class PharmacyPrescriptionQueueService {
 
     return {
       drugName,
+      drugId: item.drugId || null,
+      inventoryItemId: item.inventoryItemId || null,
       genericName: item.genericName || null,
       dosage: item.dosage ?? null,
       dosageUnit: item.dosageUnit || null,
@@ -991,143 +1017,91 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
-  private async stockCheckMedication(
-    medication: QueueMedication,
-    branchId: string,
-  ): Promise<StockCheckResult> {
-    const matchedDrug = await this.matchDrug(medication.drugName, branchId);
-    if (!matchedDrug) {
-      return {
-        drugName: medication.drugName,
-        matchedDrug: null,
-        stockStatus: 'UNMATCHED',
-        totalNonExpiredStock: 0,
-        batches: [],
-        lowStock: true,
-        nearExpiry: false,
-        alternatives: [],
-      };
-    }
-
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-stock-available-units
+   * Every prescribed line MUST report current branch stock using saved inventory identity.
+   * Available quantity excludes held and expired units; expiry remains valid through its UTC
+   * calendar day. Failed reads MUST propagate instead of becoming zero-stock results.
+   */
+  private async stockCheckMedication(medication: QueueMedication, branchId: string): Promise<StockCheckResult> {
+    const resolved = await resolvePrescriptionInventory(this.prisma, medication, branchId);
+    if (!resolved) return {
+      drugName: medication.drugName, matchedDrug: null, inventoryItemId: null,
+      stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, batches: [], lowStock: false,
+      nearExpiry: false, alternatives: [],
+      suggestions: await searchClinicInventory(this.prisma, medication.drugName, branchId, 5),
+    };
+    const { anchor, drug } = resolved;
     const now = new Date();
-    const nearExpiryCutoff = new Date(
-      now.getTime() + this.nearExpiryDays * 24 * 60 * 60 * 1000,
-    );
-    const batches = matchedDrug.inventoryItems
-      .filter(
-        (batch) =>
-          batch.currentStock > 0 &&
-          batch.stockStatus !== 'EXPIRED' &&
-          (!batch.expiryDate || batch.expiryDate >= now),
-      )
-      .sort((a, b) => this.compareExpiry(a.expiryDate, b.expiryDate))
-      .map((batch) => ({
-        id: batch.id,
-        batchNumber: batch.batchNumber,
-        currentStock: batch.currentStock,
-        expiryDate: batch.expiryDate,
-        sellingPrice: batch.sellingPrice,
-        mrp: batch.mrp,
-        stockStatus: batch.stockStatus,
-        storageLocation: batch.storageLocation,
-      }));
-    const totalNonExpiredStock = batches.reduce(
-      (sum, batch) => sum + batch.currentStock,
-      0,
-    );
-    const minStock = matchedDrug.minStockLevel ?? 0;
-    const lowStock = totalNonExpiredStock <= minStock;
-    const nearExpiry = batches.some(
-      (batch) => batch.expiryDate && batch.expiryDate <= nearExpiryCutoff,
-    );
-    const stockStatus =
-      totalNonExpiredStock <= 0
-        ? 'OUT_OF_STOCK'
-        : lowStock
-          ? 'LOW_STOCK'
-          : 'IN_STOCK';
-
-    let alternatives: unknown[] = [];
-    try {
-      alternatives = await this.drugService.getAlternatives(
-        matchedDrug.id,
-        branchId,
-      );
-    } catch {
-      alternatives = [];
-    }
-
+    const batches = resolved.batches.filter((b: any) => availableStock(b, now) > 0)
+      .sort((a: any, b: any) => this.compareExpiry(a.expiryDate, b.expiryDate) || a.id.localeCompare(b.id))
+      .map((b: any) => ({ ...b, currentStock: availableStock(b, now) }));
+    const quantity = batches.reduce((sum: number, b: any) => sum + b.currentStock, 0);
+    const thresholds = resolved.batches.map((b: any) => b.reorderLevel ?? b.minStockLevel).filter((n: any) => n != null);
+    const threshold = thresholds.length ? Math.max(...thresholds) : drug?.minStockLevel ?? 0;
+    const lowStock = quantity > 0 && quantity <= threshold;
     return {
-      drugName: medication.drugName,
-      matchedDrug: {
-        id: matchedDrug.id,
-        name: matchedDrug.name,
-        manufacturerName: matchedDrug.manufacturerName,
-      },
-      stockStatus,
-      totalNonExpiredStock,
-      batches,
-      lowStock,
-      nearExpiry,
-      alternatives,
+      drugName: medication.drugName, inventoryItemId: anchor.id, unit: anchor.unit,
+      matchedDrug: drug ? { id: drug.id, name: drug.name, manufacturerName: drug.manufacturerName } : null,
+      stockStatus: quantity === 0 ? 'OUT_OF_STOCK' : lowStock ? 'LOW_STOCK' : 'IN_STOCK',
+      totalNonExpiredStock: quantity,
+      totalOnHandStock: resolved.batches.reduce((n: number, b: any) => n + b.currentStock, 0),
+      heldStock: resolved.batches.reduce((n: number, b: any) => n + (b.heldStock || 0), 0),
+      expiredStock: resolved.batches.reduce((n: number, b: any) => n + (b.expiryDate && new Date(b.expiryDate) < new Date(now.toISOString().slice(0, 10)) ? b.currentStock : 0), 0),
+      batches, lowStock,
+      nearExpiry: batches.some((b: any) => b.expiryDate && new Date(b.expiryDate).getTime() <= now.getTime() + this.nearExpiryDays * 86400000),
+      alternatives: [], suggestions: [],
     };
   }
 
-  private async matchDrug(drugName: string, branchId: string) {
-    const baseWhere = {
-      branchId,
-      isActive: true,
-      isDiscontinued: false,
-    };
-    const select = {
-      id: true,
-      name: true,
-      manufacturerName: true,
-      minStockLevel: true,
-      inventoryItems: {
-        where: {
-          branchId,
-          status: 'ACTIVE',
-        },
-        select: {
-          id: true,
-          currentStock: true,
-          minStockLevel: true,
-          batchNumber: true,
-          expiryDate: true,
-          sellingPrice: true,
-          mrp: true,
-          stockStatus: true,
-          storageLocation: true,
-        },
-      },
-    };
+  async inventoryStock(inventoryItemId: string, branchId: string) {
+    return this.stockCheckMedication({ drugName: '', inventoryItemId } as QueueMedication, branchId);
+  }
 
-    const exact = (await this.prisma.drug.findFirst({
-      where: {
-        ...baseWhere,
-        name: {
-          equals: drugName,
-          mode: 'insensitive',
-        },
-      },
-      select,
-    })) as DrugMatch | null;
-    if (exact) return exact;
+  async inventorySuggestions(query: string, branchId: string) {
+    return searchClinicInventory(this.prisma, query, branchId);
+  }
 
-    return (await this.prisma.drug.findFirst({
-      where: {
-        ...baseWhere,
-        name: {
-          contains: drugName,
-          mode: 'insensitive',
-        },
-      },
-      orderBy: {
-        name: 'asc',
-      },
-      select,
-    })) as DrugMatch | null;
+  /**
+   * @cc [owner:nareshshah139,label:product] pharmacist-link-confirmation
+   * Only an explicitly selected active inventory item in the prescription's branch may become
+   * a remembered mapping, and its prescription revision MUST match the reviewed stock check.
+   * Mapping and actor/before-after audit MUST commit together, leave stock
+   * unchanged, and apply to the same source identity across patients in that branch.
+   */
+  async linkInventory(prescriptionId: string, index: number, inventoryItemId: string, branchId: string, userId: string, expectedVersion: string) {
+    if (!Number.isSafeInteger(index) || index < 0 || !inventoryItemId || !userId) throw new BadRequestException('Select a prescription line and inventory item');
+    await this.prisma.$transaction(async (tx) => {
+      const prescription = await tx.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
+      if (!prescription) throw new NotFoundException('Prescription not found in this branch');
+      if (!expectedVersion || prescription.updatedAt.toISOString() !== expectedVersion) throw new BadRequestException('Prescription changed. Refresh before linking inventory.');
+      const items = this.parsePrescriptionItems(prescription.items);
+      const source = items[index];
+      if (!source) throw new BadRequestException('Prescription line no longer exists');
+      const inventory = await tx.inventoryItem.findFirst({ where: { id: inventoryItemId, branchId, status: 'ACTIVE' }, include: inventoryIdentityInclude });
+      if (!inventory) throw new NotFoundException('Inventory item not found in this branch');
+      if (inventory.drugs.some(d => d.branchId !== branchId || !d.isActive || d.isDiscontinued)) throw new BadRequestException('Review inactive or invalid product links in Inventory first');
+      if (inventory.drugs.length > 1) throw new BadRequestException('This inventory item has multiple product links. Review duplicate products first.');
+      // Unmapped inventory is promoted to a clinic catalog product only after this explicit choice.
+      if (!inventory.drugs.length) await tx.drug.create({ data: {
+        name: inventory.name, price: inventory.sellingPrice, manufacturerName: inventory.manufacturer || '',
+        packSizeLabel: `${inventory.packSize || 1} ${inventory.packUnit || inventory.unit}`,
+        branchId, inventoryItems: { connect: { id: inventory.id } },
+      } });
+      const sourceKey = prescriptionSourceKey({ ...source, drugName: this.itemDrugName(source) });
+      const where = { branchId_sourceKey: { branchId, sourceKey } };
+      const previous = await tx.prescriptionInventoryLink.findUnique({ where });
+      const link = await tx.prescriptionInventoryLink.upsert({ where,
+        create: { branchId, sourceKey, sourceName: this.itemDrugName(source), inventoryItemId, linkedBy: userId },
+        update: { inventoryItemId, linkedBy: userId },
+      });
+      // Bind this historical prescription too, so a later alias edit cannot silently change it.
+      items[index] = { ...source, inventoryItemId };
+      await tx.prescription.update({ where: { id: prescription.id, updatedAt: prescription.updatedAt }, data: { items: JSON.stringify(items) } });
+      await tx.auditLog.create({ data: { userId, action: 'PRESCRIPTION_INVENTORY_LINKED', entity: 'PrescriptionInventoryLink', entityId: link.id,
+        oldValues: JSON.stringify(previous), newValues: JSON.stringify({ ...link, prescriptionId, lineIndex: index, reason: 'Pharmacist confirmed inventory match' }) } });
+    }, { isolationLevel: 'Serializable' });
+    return this.stockCheck(prescriptionId, branchId);
   }
 
   private parsePrescriptionItems(items: string): PrescriptionItem[] {

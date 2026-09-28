@@ -136,6 +136,7 @@ model Branch {
   pharmacyAgentProposals   PharmacyAgentProposal[]
   pharmacyAgentActions     PharmacyAgentProposalAction[]
   pharmacyAgentAuditEvents PharmacyAgentAuditEvent[]
+  prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   // Back-relations
@@ -899,6 +900,7 @@ model InventoryItem {
   stockMovements       StockMovement[]
   transactions         StockTransaction[]
   drugs                Drug[]
+  prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
   @@map("inventory_items")
@@ -1110,10 +1112,28 @@ model Drug {
   @@map("drugs")
 }
 
+// Pharmacist-confirmed legacy prescription identities. Historical events remain in AuditLog.
+model PrescriptionInventoryLink {
+  id              String   @id @default(cuid())
+  branchId        String
+  sourceKey       String
+  sourceName      String
+  inventoryItemId String
+  linkedBy        String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  branch          Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, sourceKey])
+  @@index([inventoryItemId])
+  @@map("prescription_inventory_links")
+}
+
 model DrugInventoryChangeRequest {
   id            String                       @id @default(cuid())
   branchId      String
-  drugId        String
+  drugId        String?
   inventoryItemId String?
   requestedById String
   reviewedById  String?
@@ -1121,6 +1141,7 @@ model DrugInventoryChangeRequest {
   proposedPrice Float?
   currentStock  Int?
   proposedStock Int?
+  stockSnapshot Json?
   reason        String?
   status        DrugInventoryChangeRequestStatus @default(PENDING)
   reviewNote    String?
@@ -1129,7 +1150,7 @@ model DrugInventoryChangeRequest {
   updatedAt     DateTime                     @updatedAt
 
   branch      Branch @relation(fields: [branchId], references: [id])
-  drug        Drug   @relation(fields: [drugId], references: [id])
+  drug        Drug?  @relation(fields: [drugId], references: [id], onDelete: Restrict)
   inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
   requestedBy User   @relation("DrugInventoryChangeRequestedBy", fields: [requestedById], references: [id])
   reviewedBy  User?  @relation("DrugInventoryChangeReviewedBy", fields: [reviewedById], references: [id])
@@ -1202,6 +1223,7 @@ model PharmacyInvoice {
 
 // Pharmacy Invoice Items
 model PharmacyInvoiceItem {
+  inventoryItemId String?
   id        String  @id @default(cuid())
   invoiceId String
   drugId    String? // Made optional for package items

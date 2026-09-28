@@ -3,6 +3,7 @@ export type RegimenField = typeof regimenFields[number];
 export const regimenLabels: Record<RegimenField, string> = { duration: 'Duration', frequency: 'Frequency', timing: 'When', instructions: 'Instructions' };
 export interface RegimenRow {
   drugId?: string;
+  inventoryItemId?: string;
   duration: number | '';
   durationUnit: string;
   frequency: string;
@@ -28,6 +29,11 @@ const hasValue = (row: RegimenRow, field: RegimenField) => field === 'duration'
   ? row.duration !== '' && row.duration != null
   : field === 'frequency' ? Boolean(row.frequency?.trim() || row.dosePattern?.trim()) : Boolean(row[field]?.trim());
 
+/**
+ * @cc [owner:nareshshah139,label:product] typed-medicine-invalidates-stock-identity
+ * Editing the medicine name MUST clear both drug and inventory IDs so the old medicine's stock
+ * and regimen requests cannot establish identity for the newly typed medicine.
+ */
 export function editRegimenRow<T extends RegimenRow>(row: T, patch: Partial<T>): T {
   const state = row.regimenState || {};
   const edited = regimenFields.filter(field => keys[field].some(key => Object.prototype.hasOwnProperty.call(patch, key)));
@@ -39,6 +45,7 @@ export function editRegimenRow<T extends RegimenRow>(row: T, patch: Partial<T>):
     // Invalidate requests when the user types a new name, even before choosing it.
     next = clearSuggestions(next);
     next.drugId = undefined;
+    next.inventoryItemId = undefined;
     next.regimenState = { ...next.regimenState, selection: undefined, loading: false, failed: false };
   }
   return next;

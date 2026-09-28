@@ -1,869 +1,118 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  Check,
-  ClipboardCheck,
-  Loader2,
-  RefreshCw,
-  Search,
-  Send,
-  X,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { InventoryAction } from "./InventoryPresentation";
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useToast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
-import type {
-  DrugInventoryCatalogRow,
-  DrugInventoryChangeRequest,
-} from '@/lib/types';
+import type { DrugInventoryChangeRequest } from '@/lib/types';
+import { fmtMoney, inputClass } from './workspace-model';
 
-type DraftEdit = {
-  drug: DrugInventoryCatalogRow;
-  proposedPrice?: string;
-  proposedStock?: string;
-  reason: string;
-};
-
-type ApprovalDialogState = {
-  request: DrugInventoryChangeRequest;
-  action: 'approve' | 'reject';
-} | null;
-
-const PAGE_SIZE = 50;
-
+/**
+ * @cc [owner:nareshshah139,label:product] inventory-approval-queue-only
+ * The Inventory approval queue MUST page through every pending branch edit without loading
+ * the drug catalog. Read failures MUST remain distinct from an empty queue; only doctors,
+ * owners and admins may see review actions.
+ */
 export function InventoryUpdates() {
   const { user } = useDashboardUser();
   const { toast } = useToast();
-  const [drugs, setDrugs] = useState<DrugInventoryCatalogRow[]>([]);
-  const [pendingRequests, setPendingRequests] = useState<
-    DrugInventoryChangeRequest[]
-  >([]);
+  const canApprove = ['DOCTOR', 'ADMIN', 'OWNER'].includes(user?.role || '');
+  const [requests, setRequests] = useState<DrugInventoryChangeRequest[]>([]);
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [requestsLoading, setRequestsLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [reviewingId, setReviewingId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
-  const [catalogPage, setCatalogPage] = useState(1);
-  const [catalogPages, setCatalogPages] = useState(1);
-  const [catalogTotal, setCatalogTotal] = useState(0);
-  const [drafts, setDrafts] = useState<Record<string, DraftEdit>>({});
-  const [approvalDialog, setApprovalDialog] = useState<ApprovalDialogState>(null);
-  const [reviewNote, setReviewNote] = useState('');
-
-  const canApprove =
-    user?.role === 'DOCTOR' || user?.role === 'ADMIN' || user?.role === 'OWNER';
-  const canSubmit =
-    user?.role === 'PHARMACIST' ||
-    user?.role === 'ADMIN' ||
-    user?.role === 'OWNER';
-
-  const pendingByDrugId = useMemo(() => {
-    return new Map(
-      pendingRequests
-        .filter((request) => request.status === 'PENDING')
-        .map((request) => [request.drugId, request]),
-    );
-  }, [pendingRequests]);
-
-  const draftChanges = useMemo(() => {
-    return Object.values(drafts)
-      .map((draft) => {
-        const { drug } = draft;
-        const priceValue = draft.proposedPrice?.trim();
-        const stockValue = draft.proposedStock?.trim();
-        const proposedPrice =
-          priceValue === undefined || priceValue === ''
-            ? undefined
-            : Number(priceValue);
-        const proposedStock =
-          stockValue === undefined || stockValue === ''
-            ? undefined
-            : Number(stockValue);
-        const hasValidPrice =
-          proposedPrice !== undefined &&
-          Number.isFinite(proposedPrice) &&
-          proposedPrice >= 0 &&
-          proposedPrice !== drug.price;
-        const currentStock = drug.totalStock ?? 0;
-        const hasValidStock =
-          proposedStock !== undefined &&
-          Number.isInteger(proposedStock) &&
-          proposedStock >= 0 &&
-          proposedStock !== currentStock &&
-          Boolean(drug.primaryInventoryItemId);
-
-        if (!hasValidPrice && !hasValidStock) {
-          return null;
-        }
-        return {
-          drug,
-          proposedPrice: hasValidPrice ? proposedPrice : undefined,
-          proposedStock: hasValidStock ? proposedStock : undefined,
-          reason: draft.reason.trim(),
-        };
-      })
-      .filter(Boolean) as Array<{
-      drug: DrugInventoryCatalogRow;
-      proposedPrice?: number;
-      proposedStock?: number;
-      reason: string;
-    }>;
-  }, [drafts]);
-
-  const fetchCatalog = useCallback(async () => {
+  const [error, setError] = useState('');
+  const [review, setReview] = useState<{ request: DrugInventoryChangeRequest; action: 'approve' | 'reject' } | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      setLoading(true);
-      const response = await apiClient.getDrugInventoryCatalog({
-        page: catalogPage,
-        limit: PAGE_SIZE,
-        search: debouncedSearchTerm || undefined,
-        isActive: true,
-        includeDiscontinued: false,
-        sortBy: 'name',
-        sortOrder: 'asc',
-      });
-      setDrugs(Array.isArray(response.data) ? response.data : []);
-      setCatalogPages(response.pagination?.pages || 1);
-      setCatalogTotal(response.pagination?.total || response.data?.length || 0);
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Catalog unavailable',
-        description: getApiErrorMessage(error, 'Failed to load drugs.'),
-      });
-      setDrugs([]);
-      setCatalogPages(1);
-      setCatalogTotal(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [catalogPage, debouncedSearchTerm, toast]);
-
-  const fetchPendingRequests = useCallback(async () => {
-    try {
-      setRequestsLoading(true);
-      const response = await apiClient.getDrugInventoryChangeRequests({
-        status: 'PENDING',
-        limit: 100,
-      });
-      setPendingRequests(response.data || []);
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Approval queue unavailable',
-        description: getApiErrorMessage(error, 'Failed to load inventory requests.'),
-      });
-      setPendingRequests([]);
-    } finally {
-      setRequestsLoading(false);
-    }
-  }, [toast]);
-
+      const response = await apiClient.getDrugInventoryChangeRequests({ status: 'PENDING', page, limit: 20 });
+      const lastPage = Math.max(1, response.pagination?.pages || 1);
+      if (page > lastPage) { setPage(lastPage); return; }
+      setRequests(response.data || []);
+      setPages(lastPage);
+      setTotal(response.pagination?.total ?? response.data.length);
+    } catch (e: any) {
+      setError(e.message || 'Approval queue unavailable. Try again.');
+    } finally { setLoading(false); }
+  }, [page]);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setCatalogPage(1);
-      setDebouncedSearchTerm(searchTerm);
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
+    void load();
+    const refresh = () => { void load(); };
+    window.addEventListener('inventory-workspace-refresh', refresh);
+    return () => window.removeEventListener('inventory-workspace-refresh', refresh);
+  }, [load]);
 
-  useEffect(() => {
-    void fetchCatalog();
-  }, [fetchCatalog]);
-
-  useEffect(() => {
-    void fetchPendingRequests();
-  }, [fetchPendingRequests]);
-
-  const refreshAll = async () => {
-    await Promise.all([fetchCatalog(), fetchPendingRequests()]);
-  };
-
-  const normalizeDraft = (drug: DrugInventoryCatalogRow, draft: DraftEdit) => {
-    const priceText = draft.proposedPrice?.trim() || '';
-    const stockText = draft.proposedStock?.trim() || '';
-    const priceNumber = priceText === '' ? undefined : Number(priceText);
-    const stockNumber = stockText === '' ? undefined : Number(stockText);
-    const priceChanged =
-      priceText !== '' && Number.isFinite(priceNumber) && priceNumber !== drug.price;
-    const stockChanged =
-      stockText !== '' &&
-      Number.isFinite(stockNumber) &&
-      stockNumber !== (drug.totalStock ?? 0);
-    return priceChanged || stockChanged || draft.reason.trim() ? draft : null;
-  };
-
-  const setDraftPrice = (drug: DrugInventoryCatalogRow, proposedPrice: string) => {
-    setDrafts((current) => {
-      const next = { ...current };
-      const draft = normalizeDraft(drug, {
-        drug,
-        proposedPrice,
-        proposedStock: next[drug.id]?.proposedStock,
-        reason: next[drug.id]?.reason || '',
-      });
-      if (!draft) {
-        delete next[drug.id];
-      } else {
-        next[drug.id] = draft;
-      }
-      return next;
-    });
-  };
-
-  const setDraftStock = (drug: DrugInventoryCatalogRow, proposedStock: string) => {
-    setDrafts((current) => {
-      const next = { ...current };
-      const draft = normalizeDraft(drug, {
-        drug,
-        proposedPrice: next[drug.id]?.proposedPrice,
-        proposedStock,
-        reason: next[drug.id]?.reason || '',
-      });
-      if (!draft) {
-        delete next[drug.id];
-      } else {
-        next[drug.id] = draft;
-      }
-      return next;
-    });
-  };
-
-  const setDraftReason = (drug: DrugInventoryCatalogRow, reason: string) => {
-    setDrafts((current) => {
-      const next = { ...current };
-      const draft = normalizeDraft(drug, {
-        drug,
-        proposedPrice: next[drug.id]?.proposedPrice,
-        proposedStock: next[drug.id]?.proposedStock,
-        reason,
-      });
-      if (!draft) {
-        delete next[drug.id];
-      } else {
-        next[drug.id] = draft;
-      }
-      return next;
-    });
-  };
-
-  const clearDraft = (drugId: string) => {
-    setDrafts((current) => {
-      const next = { ...current };
-      delete next[drugId];
-      return next;
-    });
-  };
-
-  const submitDrafts = async () => {
-    const invalidDraft = Object.values(drafts).some((draft) => {
-      const price = draft.proposedPrice?.trim();
-      const stock = draft.proposedStock?.trim();
-      return (
-        (Boolean(price) && (!Number.isFinite(Number(price)) || Number(price) < 0)) ||
-        (Boolean(stock) && (!Number.isInteger(Number(stock)) || Number(stock) < 0))
-      );
-    });
-    if (invalidDraft) {
-      toast({
-        variant: 'destructive',
-        title: 'Invalid inventory edits',
-        description: 'Prices must be non-negative numbers and stock must be a non-negative whole number. Correct your edits before submitting.',
-      });
-      return;
-    }
-    if (draftChanges.length === 0) {
-      toast({
-        variant: 'destructive',
-        title: 'No valid edits',
-        description: 'Change at least one price or stock value before submitting.',
-      });
-      return;
-    }
-
-    const blocked = draftChanges.filter(({ drug }) => pendingByDrugId.has(drug.id));
-    if (blocked.length > 0) {
-      toast({
-        variant: 'destructive',
-        title: 'Pending request exists',
-        description: `Clear rows already awaiting approval: ${blocked
-          .map(({ drug }) => drug.name)
-          .join(', ')}`,
-      });
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      const response = await apiClient.submitDrugInventoryChanges(
-        draftChanges.map(({ drug, proposedPrice, proposedStock, reason }) => ({
-          drugId: drug.id,
-          inventoryItemId:
-            proposedStock !== undefined
-              ? drug.primaryInventoryItemId || undefined
-              : undefined,
-          proposedPrice,
-          proposedStock,
-          reason: reason || undefined,
-        })),
-      );
-      toast({
-        title: 'Submitted for approval',
-        description: `${response.summary.submitted} inventory change${
-          response.summary.submitted === 1 ? '' : 's'
-        } sent to the doctor queue.`,
-      });
-      setDrafts((current) => {
-        const next = { ...current };
-        for (const { drug } of draftChanges) {
-          if (next[drug.id] === drafts[drug.id]) delete next[drug.id];
-        }
-        return next;
-      });
-      await refreshAll();
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Submission failed',
-        description: getApiErrorMessage(error, 'Failed to submit inventory edits.'),
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const openReview = (
-    request: DrugInventoryChangeRequest,
-    action: 'approve' | 'reject',
-  ) => {
-    setApprovalDialog({ request, action });
-    setReviewNote('');
-  };
-
+  /**
+   * @cc [owner:nareshshah139,label:product] approved-inventory-refresh-consumers
+   * A successful approval MUST notify mounted pharmacy stock and dashboard consumers;
+   * failed approvals and rejections MUST NOT announce a stock change.
+   */
   const submitReview = async () => {
-    if (!approvalDialog) return;
-    const { request, action } = approvalDialog;
+    if (!review || busy) return;
+    setBusy(true);
     try {
-      setReviewingId(request.id);
-      if (action === 'approve') {
-        await apiClient.approveDrugInventoryChangeRequest(request.id, reviewNote);
+      if (review.action === 'approve') {
+        await apiClient.approveDrugInventoryChangeRequest(review.request.id, note);
+        window.dispatchEvent(new CustomEvent('inventory-stock-refresh'));
+        window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'));
       } else {
-        await apiClient.rejectDrugInventoryChangeRequest(request.id, reviewNote);
+        await apiClient.rejectDrugInventoryChangeRequest(review.request.id, note);
       }
-      toast({
-        title: action === 'approve' ? 'Inventory change approved' : 'Inventory change rejected',
-        description:
-          action === 'approve'
-            ? `${request.drug.name} was updated.`
-            : `${request.drug.name} request closed.`,
-      });
-      setApprovalDialog(null);
-      setReviewNote('');
-      await refreshAll();
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Review failed',
-        description: getApiErrorMessage(error, 'Failed to review request.'),
-      });
-    } finally {
-      setReviewingId(null);
-    }
+      toast({ title: review.action === 'approve' ? 'Inventory change approved' : 'Inventory change rejected' });
+      setReview(null);
+      setNote('');
+      window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Review failed', description: e.body?.message || e.message });
+    } finally { setBusy(false); }
   };
-
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-[8px] bg-emerald-100 text-emerald-800">
-              <ClipboardCheck className="h-5 w-5" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-slate-950">
-                Inventory Updates
-              </h1>
-              <p className="text-sm text-slate-600">
-                Drug prices and stock edits with doctor approval.
-              </p>
-            </div>
-          </div>
+  return <section className="space-y-4">
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <div><h2 className="text-2xl font-semibold">Price / stock approval queue</h2>
+        <p className="text-muted-foreground">Changes take effect after doctor approval.</p></div>
+      <Button variant="outline" onClick={load} disabled={loading}>Refresh approvals</Button>
+    </header>
+    {error ? <p role="alert">{error} <Button variant="outline" onClick={load}>Retry queue</Button></p>
+      : loading ? <p role="status">Loading approval queue…</p>
+      : <>
+        <p role="status">{total} pending request{total === 1 ? '' : 's'}</p>
+        {requests.length === 0 ? <p className="border-y py-8">No pending price or stock edits.</p>
+          : <ul className="divide-y border-y">{requests.map(request => {
+            const batch = (request.stockSnapshot as { scope?: string } | undefined)?.scope === 'BATCH';
+            return <li key={request.id} className="space-y-3 py-5">
+              <div><h3 className="font-semibold">{request.inventoryItem?.name || request.drug?.name || 'Clinic item'}</h3>
+                <p className="text-sm text-muted-foreground">{batch ? `Batch: ${request.inventoryItem?.batchNumber || 'Unspecified'} · ${request.inventoryItem?.unit || 'stock units'}` : 'Legacy product-total edit'}</p></div>
+              <p>{request.proposedPrice != null && <>Selling price: {fmtMoney(request.currentPrice)} → {fmtMoney(request.proposedPrice)}<br /></>}
+                {request.proposedStock != null && <>{batch ? 'Batch physical stock' : 'Total physical stock'}: {request.currentStock} → {request.proposedStock}</>}</p>
+              <p><span className="font-medium">Reason: </span>{request.reason || 'No reason recorded (legacy request)'}</p>
+              <p className="text-sm text-muted-foreground">{[request.requestedBy?.firstName, request.requestedBy?.lastName].filter(Boolean).join(' ') || 'Staff'} · {new Date(request.createdAt).toLocaleString('en-IN')}</p>
+              {canApprove && <div className="flex gap-2">
+                <Button onClick={() => { setNote(''); setReview({ request, action: 'approve' }); }}>Approve</Button>
+                <Button variant="outline" onClick={() => { setNote(''); setReview({ request, action: 'reject' }); }}>Reject</Button>
+              </div>}
+            </li>;
+          })}</ul>}
+        <div className="flex items-center justify-between gap-3">
+          <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
+          <p>Page {page} of {pages}</p>
+          <Button variant="outline" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <div className="relative min-w-0 sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <Input
-              aria-label="Search drug updates"
-              className="pl-9"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search drug, manufacturer, salt"
-            />
-          </div>
-          <InventoryAction label="Refresh inventory updates" onClick={refreshAll} disabled={loading}>
-            <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-          </InventoryAction>
-          {canSubmit && (
-            <Button
-              onClick={submitDrafts}
-              disabled={submitting || draftChanges.length === 0}
-              className="min-w-36"
-            >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              Submit {draftChanges.length || ''}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_410px]">
-        <section className="min-w-0 rounded-[8px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-slate-950">Drug inventory catalog</p>
-              <p className="text-sm text-slate-600">
-                {catalogTotal.toLocaleString()} active drug
-                {catalogTotal === 1 ? '' : 's'}
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">
-                {draftChanges.length} draft
-                {draftChanges.length === 1 ? '' : 's'}
-              </Badge>
-              <Badge variant="secondary">
-                {pendingRequests.length} pending
-              </Badge>
-            </div>
-          </div>
-
-          <div className="max-h-[62vh] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-slate-50">
-                <TableRow>
-                  <TableHead className="min-w-[260px] px-4">Drug</TableHead>
-                  <TableHead className="min-w-32">Price</TableHead>
-                  <TableHead className="min-w-40">New Price</TableHead>
-                  <TableHead className="min-w-28">Stock</TableHead>
-                  <TableHead className="min-w-36">New Stock</TableHead>
-                  <TableHead className="min-w-[220px]">Reason</TableHead>
-                  <TableHead className="w-28 text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-36 text-center">
-                      <span className="inline-flex items-center gap-2 text-sm text-slate-600">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Loading catalog
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ) : drugs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-36 text-center text-sm text-slate-600">
-                      No drugs found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  drugs.map((drug) => {
-                    const pending = pendingByDrugId.get(drug.id);
-                    const draft = drafts[drug.id];
-                    const disabled = Boolean(pending) || !canSubmit;
-                    const currentStock = drug.totalStock ?? 0;
-                    const proposedPriceValue =
-                      draft?.proposedPrice ??
-                      (pending?.proposedPrice !== null &&
-                      pending?.proposedPrice !== undefined
-                        ? String(pending.proposedPrice)
-                        : String(drug.price));
-                    const proposedStockValue =
-                      draft?.proposedStock ??
-                      (pending?.proposedStock !== null &&
-                      pending?.proposedStock !== undefined
-                        ? String(pending.proposedStock)
-                        : drug.primaryInventoryItemId
-                          ? String(currentStock)
-                          : '');
-                    return (
-                      <TableRow key={drug.id}>
-                        <TableCell className="px-4">
-                          <div className="min-w-0">
-                            <p className="max-w-[320px] whitespace-normal break-words font-medium text-slate-950">
-                              {drug.name}
-                            </p>
-                            <p className="max-w-[320px] whitespace-normal break-words text-xs text-slate-600">
-                              {drug.manufacturerName} · {drug.packSizeLabel}
-                            </p>
-                            <p className="max-w-[320px] whitespace-normal break-words text-xs text-slate-500">
-                              {[drug.category, drug.dosageForm, drug.strength]
-                                .filter(Boolean)
-                                .join(' · ') || 'Uncategorized'}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-medium">
-                          {formatCurrency(drug.price)}
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            inputMode="decimal"
-                            min="0"
-                            step="0.01"
-                            disabled={disabled}
-                            aria-label={`Proposed price for ${drug.name}`}
-                            value={proposedPriceValue}
-                            onChange={(event) =>
-                              setDraftPrice(drug, event.target.value)
-                            }
-                            className="h-9 w-32"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium text-slate-950">
-                              {currentStock.toLocaleString('en-IN')}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {drug.primaryStockStatus || 'No stock row'}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            inputMode="numeric"
-                            min="0"
-                            step="1"
-                            disabled={disabled || !drug.primaryInventoryItemId}
-                            aria-label={`Proposed stock for ${drug.name}`}
-                            value={proposedStockValue}
-                            onChange={(event) =>
-                              setDraftStock(drug, event.target.value)
-                            }
-                            className="h-9 w-28"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            disabled={disabled}
-                            aria-label={`Reason for ${drug.name}`}
-                            value={draft?.reason ?? pending?.reason ?? ''}
-                            onChange={(event) =>
-                              setDraftReason(drug, event.target.value)
-                            }
-                            placeholder="Invoice or shelf count"
-                            className="h-9 min-w-52"
-                          />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {pending ? (
-                            <Badge variant="secondary">Pending</Badge>
-                          ) : draft ? (
-                            <InventoryAction
-                              label={`Clear changes for ${drug.name}`}
-                              variant="ghost"
-                              onClick={() => clearDraft(drug.id)}
-                            >
-                              <X className="h-4 w-4" />
-                            </InventoryAction>
-                          ) : (
-                            <Badge variant="outline">Current</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="flex items-center justify-between border-t border-slate-200 px-4 py-3">
-            <p className="text-sm text-slate-600">
-              Page {catalogPage} of {catalogPages}
-            </p>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={catalogPage <= 1 || loading}
-                onClick={() => setCatalogPage((page) => Math.max(1, page - 1))}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={catalogPage >= catalogPages || loading}
-                onClick={() =>
-                  setCatalogPage((page) => Math.min(catalogPages, page + 1))
-                }
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </section>
-
-        <section className="rounded-[8px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-            <div>
-              <p className="font-semibold text-slate-950">Approval queue</p>
-              <p className="text-sm text-slate-600">
-                {pendingRequests.length} pending request
-                {pendingRequests.length === 1 ? '' : 's'}
-              </p>
-            </div>
-            <ClipboardCheck className="h-5 w-5 text-slate-500" />
-          </div>
-          <div className="max-h-[62vh] overflow-auto p-3">
-            {requestsLoading ? (
-              <div className="flex h-36 items-center justify-center gap-2 text-sm text-slate-600">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading queue
-              </div>
-            ) : pendingRequests.length === 0 ? (
-              <div className="flex h-36 items-center justify-center rounded-[8px] border border-dashed border-slate-200 text-sm text-slate-600">
-                No pending inventory changes
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {pendingRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="rounded-[8px] border border-slate-200 p-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="break-words font-medium text-slate-950">
-                          {request.drug.name}
-                        </p>
-                        <p className="break-words text-xs text-slate-600">
-                          {request.drug.manufacturerName} ·{' '}
-                          {request.drug.packSizeLabel}
-                        </p>
-                      </div>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                    <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                      {request.proposedPrice !== null &&
-                        request.proposedPrice !== undefined && (
-                          <ChangeMetric
-                            label="Price"
-                            current={formatCurrency(request.currentPrice || 0)}
-                            proposed={formatCurrency(request.proposedPrice)}
-                          />
-                        )}
-                      {request.proposedStock !== null &&
-                        request.proposedStock !== undefined && (
-                          <ChangeMetric
-                            label="Stock"
-                            current={`${request.currentStock ?? 0}`}
-                            proposed={`${request.proposedStock}`}
-                          />
-                        )}
-                    </div>
-                    {request.reason && (
-                      <p className="mt-3 rounded-[8px] bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                        {request.reason}
-                      </p>
-                    )}
-                    <div className="mt-3 flex items-center justify-between gap-3 text-xs text-slate-500">
-                      <span>{staffName(request.requestedBy)}</span>
-                      <span>{formatDate(request.createdAt)}</span>
-                    </div>
-                    {canApprove && (
-                      <div className="mt-3 grid grid-cols-2 gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={reviewingId === request.id}
-                          onClick={() => openReview(request, 'reject')}
-                        >
-                          <X className="h-4 w-4" />
-                          Reject
-                        </Button>
-                        <Button
-                          size="sm"
-                          disabled={reviewingId === request.id}
-                          onClick={() => openReview(request, 'approve')}
-                        >
-                          <Check className="h-4 w-4" />
-                          Approve
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      <Dialog
-        open={Boolean(approvalDialog)}
-        onOpenChange={(open: boolean) => {
-          if (!open) {
-            setApprovalDialog(null);
-            setReviewNote('');
-          }
-        }}
-      >
-        <DialogContent className="inventory-surface">
-          <DialogHeader>
-            <DialogTitle>
-              {approvalDialog?.action === 'approve'
-                ? 'Approve inventory change'
-                : 'Reject inventory change'}
-            </DialogTitle>
-          </DialogHeader>
-          {approvalDialog && (
-            <div className="space-y-4">
-              <div className="rounded-[8px] border border-slate-200 p-3">
-                <p className="font-medium text-slate-950">
-                  {approvalDialog.request.drug.name}
-                </p>
-                <p className="mt-1 text-sm text-slate-600">
-                  {changeSummary(approvalDialog.request)}
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="review-note">Review note</Label>
-                <Textarea
-                  id="review-note"
-                  value={reviewNote}
-                  onChange={(event) => setReviewNote(event.target.value)}
-                  placeholder="Optional note"
-                />
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setApprovalDialog(null);
-                setReviewNote('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant={
-                approvalDialog?.action === 'reject' ? 'destructive' : 'default'
-              }
-              onClick={submitReview}
-              disabled={Boolean(reviewingId)}
-            >
-              {reviewingId ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : approvalDialog?.action === 'approve' ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <X className="h-4 w-4" />
-              )}
-              {approvalDialog?.action === 'approve' ? 'Approve' : 'Reject'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-}
-
-function ChangeMetric({
-  label,
-  current,
-  proposed,
-}: {
-  label: string;
-  current: string;
-  proposed: string;
-}) {
-  return (
-    <div className="rounded-[8px] bg-slate-50 px-3 py-2">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="font-semibold text-slate-950">
-        {current} to {proposed}
-      </p>
-    </div>
-  );
-}
-
-function changeSummary(request: DrugInventoryChangeRequest) {
-  const parts: string[] = [];
-  if (request.proposedPrice !== null && request.proposedPrice !== undefined) {
-    parts.push(
-      `Price ${formatCurrency(request.currentPrice || 0)} to ${formatCurrency(
-        request.proposedPrice,
-      )}`,
-    );
-  }
-  if (request.proposedStock !== null && request.proposedStock !== undefined) {
-    parts.push(`Stock ${request.currentStock ?? 0} to ${request.proposedStock}`);
-  }
-  return parts.join(' · ');
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 2,
-  }).format(value || 0);
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function staffName(staff?: { firstName?: string; lastName?: string; role?: string }) {
-  const name = `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim();
-  return name || staff?.role || 'Staff';
-}
-
-function getApiErrorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === 'object' && 'body' in error) {
-    const body = (error as { body?: { message?: string | string[] } }).body;
-    if (Array.isArray(body?.message)) return body.message.join(', ');
-    if (typeof body?.message === 'string') return body.message;
-  }
-  if (error instanceof Error && error.message) return error.message;
-  return fallback;
+      </>}
+    <Dialog open={!!review} onOpenChange={(open: boolean) => { if (!open && !busy) setReview(null); }}>
+      <DialogContent className="inventory-surface">
+        <DialogHeader><DialogTitle>{review?.action === 'approve' ? 'Approve inventory change' : 'Reject inventory change'}</DialogTitle>
+          <DialogDescription>{review?.request.inventoryItem?.name || review?.request.drug?.name}. {review?.action === 'approve' ? 'Apply the reviewed price or stock change.' : 'Close this request without changing stock or price.'}</DialogDescription></DialogHeader>
+        <label>Review note<textarea className={inputClass} value={note} onChange={e => setNote(e.target.value)} placeholder="Optional note" /></label>
+        <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setReview(null)}>Cancel</Button>
+          <Button disabled={busy} onClick={submitReview}>{busy ? 'Saving…' : review?.action === 'approve' ? 'Approve' : 'Reject'}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  </section>;
 }

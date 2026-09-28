@@ -13,6 +13,9 @@ describe('DrugService inventory change approvals', () => {
   const inventoryItem = {
     id: 'inventory-1',
     currentStock: 10,
+    heldStock: 0,
+    unit: 'TABLETS', packSize: 1, packUnit: 'TABLETS',
+    drugs: [{ id: 'drug-1' }],
     costPrice: 50,
     stockStatus: 'IN_STOCK',
     reorderLevel: 5,
@@ -35,6 +38,7 @@ describe('DrugService inventory change approvals', () => {
         update: jest.fn(),
       },
       inventoryItem: {
+        findFirst: jest.fn(async () => ({ ...inventoryItem })),
         findMany: jest.fn(),
         update: jest.fn(),
       },
@@ -98,7 +102,7 @@ describe('DrugService inventory change approvals', () => {
         id: 'drug-2',
         name: 'Deriva CMS Gel',
         price: 275,
-        inventoryItems: [{ ...inventoryItem, id: 'inventory-2', currentStock: 4 }],
+        inventoryItems: [{ ...inventoryItem, id: 'inventory-2', currentStock: 4, drugs: [{ id: 'drug-2' }] }],
       },
     ]);
     prisma.drugInventoryChangeRequest.findMany.mockResolvedValue([]);
@@ -184,6 +188,7 @@ describe('DrugService inventory change approvals', () => {
       proposedPrice: 82,
       currentStock: 10,
       proposedStock: 14,
+      stockSnapshot: [{ id: inventoryItem.id, currentStock: 10, heldStock: 0, unit: 'TABLETS', packSize: 1, packUnit: 'TABLETS', updatedAt: inventoryItem.updatedAt.toISOString(), drugId: 'drug-1' }],
       drug: { id: 'drug-1', name: 'Azithral 500 Tablet', price: 78 },
       inventoryItem,
     });
@@ -210,11 +215,11 @@ describe('DrugService inventory change approvals', () => {
     );
 
     expect(prisma.drug.update).toHaveBeenCalledWith({
-      where: { id: 'drug-1' },
+      where: { id: 'drug-1', branchId, price: 78 },
       data: { price: 82 },
     });
     expect(prisma.inventoryItem.update).toHaveBeenCalledWith({
-      where: { id: 'inventory-1' },
+      where: { id: 'inventory-1', branchId, currentStock: 10, heldStock: 0 },
       data: expect.objectContaining({
         currentStock: 14,
         stockStatus: 'IN_STOCK',
@@ -261,7 +266,7 @@ describe('DrugService inventory change approvals', () => {
     expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
     expect(prisma.drugInventoryChangeRequest.update).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'request-1' },
+        where: { id: 'request-1', branchId, status: 'PENDING' },
         data: expect.objectContaining({
           status: DrugInventoryChangeRequestStatus.REJECTED,
           reviewedById: doctorId,

@@ -18,6 +18,8 @@ import { ReplenishmentCenter } from "./ReplenishmentCenter";
 import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
+import { InventoryUpdates } from "./InventoryUpdates";
+import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
   fmtDate,
@@ -52,6 +54,7 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
+    ["approvals", "Price / stock approvals"],
     ["COUNT", "Counts & audit"],
     ["SUPPLIER_RETURN", "Supplier returns"],
     ["LOSS", "Loss & breakage"],
@@ -95,6 +98,8 @@ const menus: Record<string, string[][]> = {
  * scrollable within the workspace, without changing typography on unrelated routes.
  */
 export function InventoryWorkspace() {
+  const { user } = useDashboardUser();
+  const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
   const params = useSearchParams(),
     router = useRouter(),
     path = usePathname(),
@@ -255,7 +260,7 @@ export function InventoryWorkspace() {
               })
             }
           >
-            {menus[area].map(([id, label]) => (
+            {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
               <option key={id} value={id}>
                 {label}
               </option>
@@ -268,7 +273,7 @@ export function InventoryWorkspace() {
           aria-label={`${area} tasks`}
           className="hidden flex-wrap gap-2 md:flex print:hidden"
         >
-          {menus[area].map(([id, label]) => (
+          {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
             <Button
               key={id}
               size="sm"
@@ -319,6 +324,9 @@ export function InventoryWorkspace() {
               onDocument={open}
               onInvoice={invoice}
             />
+          )}
+          {area === "stock" && view === "approvals" && (
+            canReadEdits ? <InventoryUpdates /> : <p role="alert">You do not have access to price/stock approvals.</p>
           )}
           {area === "stock" && view === "opening" && (
             <>
@@ -530,6 +538,12 @@ function WorkspaceToday({ navigate, open }: any) {
       )
       .reduce((n: number, q: any) => n + q._count, 0) || 0;
   const rows = [
+    ...(data?.pendingEdits != null ? [{
+      label: `Price/stock edits awaiting approval (${data.pendingEdits})`,
+      count: data.pendingEdits,
+      detail: "Review the reason and proposed changes before updating clinic stock.",
+      target: { area: "stock", view: "approvals" },
+    }] : []),
     ...(data?.supplierOverdue
       ? [
           {

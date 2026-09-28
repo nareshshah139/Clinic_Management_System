@@ -1,0 +1,195 @@
+{
+  "browser": "Chrome",
+  "synthetic": true,
+  "database": "cr12_inventory_acceptance_20260928",
+  "checks": [
+    "One Inventory menu; clinic-only searchable stock, with linked and unlinked items and both batches.",
+    "Price waits for approval, Today links to the queue, pharmacist cannot review, and doctor approval updates stock selling price and billing drug price.",
+    "Batch count 10 → 17 commits once; second batch stays 4 and holds stay 2; Stock shows 17, Billing and Rx picker both show 19 available across batches (21 physical minus 2 held).",
+    "Old Inventory Updates bookmark redirects into approvals; mobile edit has no horizontal page overflow.",
+    "Unlinked clinic item count also approves and appears in the Rx picker without creating a catalog identity.",
+    "Concurrent duplicate proposals create one request; a stale approval creates no stock movement and can be rejected."
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/users/cmukx1i6b0002agaidd2mzdvx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/reports/alerts",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/overview",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/users/cmukx1i6f0004agai5r9cafna",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/reports/alerts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/drugs/inventory-change-requests/cmukx1mnx000cagaiouzki83i/approve",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/users/cmukx1i6b0002agaidd2mzdvx",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/reports/alerts",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/stock",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/inventory/workspace/capabilities",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/users/cmukx1i6f0004agai5r9cafna",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/reports/alerts",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/drugs/inventory-change-requests/cmukx1oov000eagaignaqsyaq/approve",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/drugs/inventory-change-requests",
+      "status": 200
+    }
+  ]
+}

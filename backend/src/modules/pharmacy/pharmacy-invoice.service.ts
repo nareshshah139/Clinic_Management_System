@@ -1,3 +1,4 @@
+import { resolvePrescriptionInventory } from './pharmacy-stock-identity';
 import {
   Injectable,
   NotFoundException,
@@ -302,6 +303,7 @@ export class PharmacyInvoiceService {
                   data: {
                     invoiceId: invoice.id,
                     drugId: item.drugId,
+                    inventoryItemId: item.inventoryItemId,
                     packageId: item.packageId,
                     itemType: item.itemType || 'DRUG',
                     quantity: item.quantity,
@@ -1063,6 +1065,7 @@ export class PharmacyInvoiceService {
               data: {
                 invoiceId: id,
                 drugId: bi.drugId,
+                inventoryItemId: bi.inventoryItemId,
                 packageId: bi.packageId,
                 itemType: bi.itemType,
                 quantity: bi.quantity,
@@ -1243,6 +1246,7 @@ export class PharmacyInvoiceService {
               data: {
                 itemId: op.inventoryItemId,
                 type: 'SALE',
+                reason: 'Pharmacy bill saved and confirmed',
                 quantity: op.quantity,
                 quantityDelta: -op.quantity,
                 unitPrice: op.unitPrice,
@@ -1392,6 +1396,7 @@ export class PharmacyInvoiceService {
       lineNumber,
       itemType: item.itemType,
       drugId: item.drugId,
+      inventoryItemId: item.inventoryItemId,
       packageId: item.packageId,
       name: itemName || 'Unnamed item',
       manufacturerName: item.drug?.manufacturerName,
@@ -1666,6 +1671,12 @@ export class PharmacyInvoiceService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] bill-stock-identity-and-units
+   * Saved inventory identity MUST constrain bill deductions to its branch product, unit and pack.
+   * Held or expired stock is unavailable; ambiguous links or mixed units MUST reject confirmation.
+   * Repeated lines MUST share an allocation budget so a batch cannot be spent twice.
+   */
   private async planConfirmedStockDeductions(
     tx: any,
     invoiceItems: any[],
@@ -1676,6 +1687,7 @@ export class PharmacyInvoiceService {
       {
         drugId: string;
         drugName: string;
+        inventoryItemId?: string;
         quantity: number;
         fallbackUnitPrice: number;
         taxableAmount: number;
@@ -1709,6 +1721,7 @@ export class PharmacyInvoiceService {
           item.drug.name,
           Number(item.totalAmount ?? item.quantity * item.unitPrice) - Number(item.taxAmount || 0),
           Number(item.taxAmount || 0),
+          item.inventoryItemId,
         );
         continue;
       }
@@ -1748,8 +1761,14 @@ export class PharmacyInvoiceService {
     const now = new Date();
     const stockOps: StockDeductionOp[] = [];
 
+    const allocated = new Map<string, number>();
     for (const requirement of requirements.values()) {
-      const batches = await tx.inventoryItem.findMany({
+      const linked = requirement.inventoryItemId ? await resolvePrescriptionInventory(tx, {
+        drugName: requirement.drugName, drugId: requirement.drugId, inventoryItemId: requirement.inventoryItemId,
+      }, branchId) : null;
+      if (requirement.inventoryItemId && (!linked || linked.drug?.id !== requirement.drugId))
+        throw new BadRequestException('Invoice inventory identity changed. Reload the prescription before billing.');
+      const batches = linked ? linked.batches : await tx.inventoryItem.findMany({
         where: {
           branchId,
           status: 'ACTIVE',
@@ -1764,6 +1783,8 @@ export class PharmacyInvoiceService {
           name: true,
           currentStock: true,
           heldStock: true,
+          unit: true, packSize: true, packUnit: true,
+          drugs: { select: { id: true } },
           costPrice: true,
           sellingPrice: true,
           minStockLevel: true,
@@ -1774,11 +1795,13 @@ export class PharmacyInvoiceService {
         },
       });
 
+      if (batches.some((b: any) => b.drugs && b.drugs.length !== 1) || new Set(batches.map((b: any) => JSON.stringify([b.unit, b.packSize, b.packUnit]))).size > 1)
+        throw new BadRequestException('Ambiguous stock units or product links. Select the inventory item before billing.');
       const eligibleBatches = batches
+        .map((b: any) => ({ ...b, currentStock: b.currentStock - (allocated.get(b.id) || 0) }))
         .filter(
           (batch: any) =>
             batch.currentStock - (batch.heldStock || 0) > 0 &&
-            batch.stockStatus !== 'EXPIRED' &&
             !this.isExpired(batch.expiryDate, now),
         )
         .sort((a: any, b: any) => {
@@ -1816,6 +1839,7 @@ export class PharmacyInvoiceService {
         const allocatedBefore=requirement.quantity-remaining;
         const taxableForBatch=money((allocatedBefore+quantity)*requirement.taxableAmount/requirement.quantity)-money(allocatedBefore*requirement.taxableAmount/requirement.quantity);
         const taxForBatch=money((allocatedBefore+quantity)*requirement.taxAmount/requirement.quantity)-money(allocatedBefore*requirement.taxAmount/requirement.quantity);
+        allocated.set(batch.id, (allocated.get(batch.id) || 0) + quantity);
         stockOps.push({
           inventoryItemId: batch.id,
           drugName: requirement.drugName,
@@ -1823,7 +1847,7 @@ export class PharmacyInvoiceService {
           unitPrice,
           batchNumber: batch.batchNumber,
           expiryDate: batch.expiryDate,
-          notes: JSON.stringify({text:`Pharmacy invoice confirmed: ${requirement.sourceNames.join(', ')}`,costPerStockUnit:money(batch.costPrice),accountingCategory:'SALE',saleTerms:{unitPrice:requirement.taxableAmount/requirement.quantity,discountPercent:0,gstRate:requirement.taxableAmount>0?requirement.taxAmount/requirement.taxableAmount*100:0,schemePerUnit:0,taxablePerUnit:taxableForBatch/quantity,taxPerUnit:taxForBatch/quantity}}),
+          notes: JSON.stringify({beforeStock:batch.currentStock,afterStock:batch.currentStock-quantity,quantityUnit:batch.unit,text:`Pharmacy invoice confirmed: ${requirement.sourceNames.join(', ')}`,costPerStockUnit:money(batch.costPrice),accountingCategory:'SALE',saleTerms:{unitPrice:requirement.taxableAmount/requirement.quantity,discountPercent:0,gstRate:requirement.taxableAmount>0?requirement.taxAmount/requirement.taxableAmount*100:0,schemePerUnit:0,taxablePerUnit:taxableForBatch/quantity,taxPerUnit:taxForBatch/quantity}}),
         });
         remaining -= quantity;
       }
@@ -1838,6 +1862,7 @@ export class PharmacyInvoiceService {
       {
         drugId: string;
         drugName: string;
+        inventoryItemId?: string;
         quantity: number;
         fallbackUnitPrice: number;
         taxableAmount: number;
@@ -1852,12 +1877,14 @@ export class PharmacyInvoiceService {
     sourceName: string,
     taxableAmount = quantity*fallbackUnitPrice,
     taxAmount = 0,
+    inventoryItemId?: string,
   ): void {
     if (!Number.isInteger(quantity) || quantity < 1) {
       throw new BadRequestException(`Invalid quantity for ${drugName}`);
     }
 
-    const existing = requirements.get(drugId);
+    const requirementKey = `${drugId}:${inventoryItemId || ''}`;
+    const existing = requirements.get(requirementKey);
     const safeFallbackUnitPrice = Number.isFinite(Number(fallbackUnitPrice))
       ? Number(fallbackUnitPrice)
       : 0;
@@ -1871,8 +1898,8 @@ export class PharmacyInvoiceService {
       return;
     }
 
-    requirements.set(drugId, {
-      drugId,
+    requirements.set(requirementKey, {
+      drugId, inventoryItemId,
       drugName,
       quantity,
       fallbackUnitPrice: safeFallbackUnitPrice,
@@ -1958,7 +1985,7 @@ export class PharmacyInvoiceService {
     now = new Date(),
   ): boolean {
     if (!expiryDate) return false;
-    return new Date(expiryDate).getTime() < now.getTime();
+    return new Date(expiryDate).getTime() < new Date(now.toISOString().slice(0, 10) + 'T00:00:00.000Z').getTime();
   }
 
   // Helper method to update inventory stock
@@ -2159,6 +2186,7 @@ export class PharmacyInvoiceService {
     packages: any[],
   ): Array<{
     drugId?: string;
+    inventoryItemId?: string;
     packageId?: string;
     itemType: 'DRUG' | 'PACKAGE';
     quantity: number;
@@ -2180,6 +2208,7 @@ export class PharmacyInvoiceService {
       const totalAmount = discountedAmount + taxAmount;
       return {
         drugId: item.drugId,
+        inventoryItemId: item.inventoryItemId,
         packageId: item.packageId,
         itemType: (item.itemType as any) || 'DRUG',
         quantity: item.quantity,

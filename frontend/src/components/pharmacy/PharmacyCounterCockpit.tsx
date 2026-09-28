@@ -170,6 +170,12 @@ const reasonOptions = [
 
 const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 
+/**
+ * @cc [owner:nareshshah139,label:product] counter-current-stock-refresh
+ * Refresh and pharmacy stock-change events MUST recheck the active prescription's stock.
+ * Obsolete responses MUST NOT replace a newer selection; failed reads MUST clear stale stock
+ * and show a retryable error rather than a successful availability result.
+ */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
@@ -189,6 +195,8 @@ export function PharmacyCounterCockpit({
     prefill?.prescriptionId || null,
   );
   const [stockItems, setStockItems] = useState<StockCheckItem[]>([]);
+  const [stockReloadKey, setStockReloadKey] = useState(0);
+  const [stockError, setStockError] = useState<string | null>(null);
   const [lineActions, setLineActions] = useState<Record<string, LineAction>>({});
   const [reasonType, setReasonType] = useState(reasonOptions[0]);
   const [reasonNote, setReasonNote] = useState('');
@@ -227,6 +235,7 @@ export function PharmacyCounterCockpit({
   );
 
   const loadQueue = useCallback(async () => {
+    setStockReloadKey(key => key + 1);
     try {
       setLoadingQueue(true);
       setError(null);
@@ -285,8 +294,23 @@ export function PharmacyCounterCockpit({
   }, [loadQueue]);
 
   useEffect(() => {
+    const refresh = () => { void loadQueue(); };
+    window.addEventListener('pharmacy-invoices-refresh', refresh);
+    window.addEventListener('inventory-stock-refresh', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.removeEventListener('pharmacy-invoices-refresh', refresh);
+      window.removeEventListener('inventory-stock-refresh', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadQueue]);
+
+  useEffect(() => {
+    let current = true;
+    setStockItems([]);
+    setStockError(null);
     if (!activeId) {
-      setStockItems([]);
+      setLoadingStock(false);
       return;
     }
 
@@ -296,6 +320,7 @@ export function PharmacyCounterCockpit({
         const response = await apiClient.get<StockCheckResponse>(
           `/pharmacy/prescription-queue/${activeId}/stock-check`,
         );
+        if (!current) return;
         setStockItems(response.items || []);
         setLineActions((current) => {
           const next = { ...current };
@@ -305,15 +330,18 @@ export function PharmacyCounterCockpit({
           return next;
         });
       } catch (err) {
+        if (!current) return;
         console.error('Failed to load pharmacy stock check:', err);
         setStockItems([]);
+        setStockError('Unable to check current stock. Use Refresh to retry.');
       } finally {
-        setLoadingStock(false);
+        if (current) setLoadingStock(false);
       }
     };
 
     void loadStock();
-  }, [activeId]);
+    return () => { current = false; };
+  }, [activeId, stockReloadKey]);
 
   const stockByDrug = useMemo(() => {
     return Object.fromEntries(stockItems.map((item) => [item.drugName, item]));
@@ -533,9 +561,9 @@ export function PharmacyCounterCockpit({
         </div>
       </div>
 
-      {error ? (
-        <div className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
-          {error}
+      {error || stockError ? (
+        <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
+          {error || stockError}
         </div>
       ) : null}
 
@@ -1144,7 +1172,7 @@ function FulfillmentColumn({
                       {line.medication.drugName}
                     </p>
                     <p className="text-xs text-slate-500">
-                      Pick {line.requiredQuantity} · {line.stock?.totalNonExpiredStock ?? 0} available
+                      Pick {line.requiredQuantity} · {line.stock?.totalNonExpiredStock ?? '—'} available
                     </p>
                   </div>
                   <Badge variant="outline" className="shrink-0 bg-white text-slate-700">

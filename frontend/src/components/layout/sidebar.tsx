@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   Users,
   Package,
-  PackageCheck,
   BarChart3,
   User as UserIcon,
   Stethoscope,
@@ -21,7 +20,6 @@ import {
   Activity,
   Pill,
   Receipt,
-  TrendingUp,
   Mic,
 } from "lucide-react";
 
@@ -35,6 +33,11 @@ type NavigationItem = {
   pharmacySection?: PharmacySidebarSection;
 };
 
+/**
+ * @cc [owner:nareshshah139,label:product] single-inventory-entry
+ * Inventory MUST be the only stock-work menu entry, including for doctors reviewing edits;
+ * price/stock approval and reorder targets MUST be reached inside that workspace.
+ */
 const navigation: NavigationItem[] = [
   {
     name: "Dashboard",
@@ -106,19 +109,7 @@ const navigation: NavigationItem[] = [
     name: "Inventory",
     href: "/dashboard/inventory",
     icon: Package,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "PHARMACIST", "RECEPTION"],
-  },
-  {
-    name: "Inventory Updates",
-    href: "/dashboard/inventory-updates",
-    icon: PackageCheck,
-    allowedRoles: ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
-  },
-  {
-    name: "Reorder targets",
-    href: "/dashboard/inventory?area=reorder&view=targets",
-    icon: TrendingUp,
-    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "PHARMACIST"],
+    allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
     name: "Reports",

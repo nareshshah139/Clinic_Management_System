@@ -44,6 +44,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
+import { PrescriptionInventoryLink } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
 import { sortDrugsByRelevance, calculateDrugRelevanceScore, getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -106,6 +107,9 @@ interface Doctor {
 }
 
 interface InvoiceItem {
+  inventoryItemId?: string;
+  prescriptionLineIndex?: number;
+  prescriptionVersion?: string;
   id: string;
   drugId?: string;
   packageId?: string;
@@ -130,6 +134,8 @@ interface InvoiceItem {
 }
 
 type PrescriptionStockItem = {
+  prescriptionVersion?: string;
+  inventoryItemId?: string;
   prescribedQuantity?: number | null;
   drugName: string;
   matchedDrug: Pick<Drug, 'id' | 'name'> | null;
@@ -436,6 +442,9 @@ export function PharmacyInvoiceBuilderFixed({
               const invoiceItem: InvoiceItem = {
                 id: invoiceItemId,
                 drugId: reviewedDrug?.id,
+                prescriptionLineIndex: index,
+                prescriptionVersion: stock?.prescriptionVersion,
+                inventoryItemId: substituted ? existingItem?.inventoryItemId : stock?.inventoryItemId,
                 itemType: 'DRUG',
                 drug: reviewedDrug || {
                     id: `temp_${prescriptionId}_${index}`,
@@ -873,6 +882,7 @@ export function PharmacyInvoiceBuilderFixed({
         const replacement: InvoiceItem = {
           ...item, drugId: drug.id, drug, unitPrice: getDrugUnitPrice(drug),
           taxPercent: getDrugGstRate(drug), availableStock: drug.totalStock,
+          inventoryItemId: undefined,
           substituted: true,
           stockStatus: drug.totalStock === undefined ? undefined : drug.totalStock > 0 ? 'IN_STOCK' : 'OUT_OF_STOCK',
         };
@@ -1145,6 +1155,7 @@ export function PharmacyInvoiceBuilderFixed({
         )
         .map((item) => ({
           drugId: item.drugId,
+          inventoryItemId: item.inventoryItemId,
           packageId: item.packageId,
           itemType: item.itemType,
           quantity: item.quantity,
@@ -1857,6 +1868,9 @@ export function PharmacyInvoiceBuilderFixed({
           <p>
             <strong>Items from prescription:</strong> {prescriptionItems.length}
           </p>
+          {prescriptionItems.filter(item => !item.drugId).map(item => <div key={item.id} className="mt-2">
+            {item.prescribedDrugName}: link inventory before billing. <PrescriptionInventoryLink prescriptionId={prescriptionData.id} lineIndex={item.prescriptionLineIndex!} prescriptionVersion={item.prescriptionVersion} name={item.prescribedDrugName || ''} onLinked={() => loadPrescriptionData(prescriptionData.id)} />
+          </div>)}
           <p className="mt-2 text-xs text-blue-600">
             Review stock warnings, substitute medicines, adjust quantities or remove items before billing.
             Changes here do not alter the doctor's prescription.

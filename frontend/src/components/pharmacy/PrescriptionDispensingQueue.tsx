@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { PrescriptionInventoryLink, type InventorySuggestion } from './PrescriptionInventoryLink';
 import { apiClient } from '@/lib/api';
 
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
@@ -70,6 +71,14 @@ type QueueResponse = {
 
 type StockCheckItem = {
   drugName: string;
+  prescriptionVersion?: string;
+  expiredStock?: number;
+  inventoryItemId?: string | null;
+  matchedDrug?: { id: string } | null;
+  unit?: string;
+  totalOnHandStock?: number;
+  heldStock?: number;
+  suggestions?: InventorySuggestion[];
   stockStatus: 'UNMATCHED' | 'OUT_OF_STOCK' | 'LOW_STOCK' | 'IN_STOCK';
   totalNonExpiredStock: number;
   lowStock: boolean;
@@ -123,11 +132,16 @@ export function PrescriptionDispensingQueue({
   const [stockByPrescription, setStockByPrescription] = useState<
     Record<string, StockCheckItem[]>
   >({});
+  const stockRequest = useRef(0);
+  const [stockErrors, setStockErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadStockChecks = useCallback(async (entries: QueueEntry[]) => {
+    const request = ++stockRequest.current;
+    setStockErrors({});
+    setStockByPrescription({});
     if (entries.length === 0) {
       setStockByPrescription({});
       return;
@@ -142,12 +156,14 @@ export function PrescriptionDispensingQueue({
           return [entry.prescriptionId, response.items || []] as const;
         } catch (err) {
           console.error('Failed to load prescription stock check:', err);
-          return [entry.prescriptionId, []] as const;
+          return [entry.prescriptionId, null] as const;
         }
       }),
     );
 
-    setStockByPrescription(Object.fromEntries(results));
+    if (request !== stockRequest.current) return;
+    setStockByPrescription(Object.fromEntries(results.filter(([, items]) => items !== null).map(([id, items]) => [id, items || []])));
+    setStockErrors(Object.fromEntries(results.filter(([, items]) => items === null).map(([id]) => [id, 'Stock check failed. Refresh to retry.'])));
   }, []);
 
   const loadQueue = useCallback(async () => {
@@ -164,7 +180,7 @@ export function PrescriptionDispensingQueue({
       );
       setQueue(response.data || []);
       setPagination(response.pagination);
-      void loadStockChecks(response.data || []);
+      await loadStockChecks(response.data || []);
     } catch (err) {
       console.error('Failed to load prescription dispensing queue:', err);
       setError('Unable to load prescription queue');
@@ -182,7 +198,11 @@ export function PrescriptionDispensingQueue({
   useEffect(() => {
     const refresh = () => { void loadQueue(); };
     window.addEventListener('pharmacy-invoices-refresh', refresh);
-    return () => window.removeEventListener('pharmacy-invoices-refresh', refresh);
+    window.addEventListener('inventory-stock-refresh', refresh);
+    return () => {
+      window.removeEventListener('pharmacy-invoices-refresh', refresh);
+      window.removeEventListener('inventory-stock-refresh', refresh);
+    };
   }, [loadQueue]);
 
   const handlePull = async (prescriptionId: string) => {
@@ -238,7 +258,7 @@ export function PrescriptionDispensingQueue({
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="icon" onClick={loadQueue}>
+          <Button variant="outline" size="icon" onClick={loadQueue} aria-label="Refresh prescription queue">
             <RefreshCw className={loading ? 'animate-spin' : ''} />
           </Button>
         </div>
@@ -324,15 +344,17 @@ export function PrescriptionDispensingQueue({
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-normal">
-                    <StockWarnings
+                    {stockErrors[entry.prescriptionId] ? <p role="alert" className="text-sm text-destructive">{stockErrors[entry.prescriptionId]}</p> : <StockWarnings
                       items={stockByPrescription[entry.prescriptionId] || []}
-                    />
+                      prescriptionId={entry.prescriptionId} onLinked={loadQueue}
+                    />}
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-2">
                       <Button
                         variant="outline"
                         size="icon"
+                        aria-label={`Refresh stock for ${entry.patient.name}`}
                         onClick={() => handlePull(entry.prescriptionId)}
                         disabled={refreshingId === entry.prescriptionId}
                       >
@@ -429,54 +451,22 @@ function StatusBadge({ status }: { status: QueueStatus }) {
   );
 }
 
-function StockWarnings({ items }: { items: StockCheckItem[] }) {
-  if (items.length === 0) {
-    return <span className="text-sm text-muted-foreground">Checking...</span>;
-  }
-
-  const warnings = items.filter(
-    (item) =>
-      item.stockStatus === 'UNMATCHED' ||
-      item.stockStatus === 'OUT_OF_STOCK' ||
-      item.lowStock ||
-      item.nearExpiry,
-  );
-
-  if (warnings.length === 0) {
-    return (
-      <Badge variant="outline" className="bg-emerald-50 text-emerald-700">
-        Stock available
-      </Badge>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      {warnings.slice(0, 3).map((item) => (
-        <div key={item.drugName} className="text-xs">
-          <Badge variant="outline" className="mr-2 text-amber-700">
-            {stockWarningLabel(item)}
-          </Badge>
-          <span className="text-muted-foreground">
-            {item.drugName} ({item.totalNonExpiredStock})
-          </span>
-          {item.alternatives.length > 0 ? (
-            <span className="ml-1 text-emerald-700">
-              {item.alternatives.length} alt
-            </span>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function stockWarningLabel(item: StockCheckItem) {
-  if (item.stockStatus === 'UNMATCHED') return 'No match';
-  if (item.stockStatus === 'OUT_OF_STOCK') return 'Out';
-  if (item.lowStock) return 'Low';
-  if (item.nearExpiry) return 'Expiry';
-  return 'OK';
+/**
+ * @cc [owner:nareshshah139,label:product] stock-column-all-prescribed-items
+ * Every checked prescription line MUST show its stock status and available quantity with unit.
+ * Unlinked quantities MUST be unknown, not zero; no healthy lines may be hidden or truncated.
+ */
+function StockWarnings({ items, prescriptionId, onLinked }: { items: StockCheckItem[]; prescriptionId: string; onLinked: () => Promise<void> }) {
+  if (!items.length) return <span className="text-sm text-muted-foreground">Checking…</span>;
+  return <div className="flex flex-col gap-2">{items.map((item, index) => <div key={`${index}-${item.drugName}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+    <Badge variant="outline" className={item.stockStatus === 'IN_STOCK' ? 'text-emerald-700' : 'text-amber-700'}>
+      {{ UNMATCHED: 'Not linked', OUT_OF_STOCK: 'Out', LOW_STOCK: 'Low', IN_STOCK: 'In stock' }[item.stockStatus]}
+    </Badge>
+    <span>{item.drugName} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
+    {!!(item.heldStock || item.expiredStock) && <span className="ml-1 text-muted-foreground">{item.totalOnHandStock} on hand · {item.heldStock || 0} held · {item.expiredStock || 0} expired</span>}
+    {item.nearExpiry && <span className="ml-1 text-amber-700">Near expiry</span>}
+    <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />
+  </div>)}</div>;
 }
 
 function formatCoverage(medication: QueueMedication) {

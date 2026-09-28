@@ -451,7 +451,7 @@ export interface DrugInventoryCatalogRow {
 
 export interface DrugInventoryChangeRequest {
   id: string;
-  drugId: string;
+  drugId: string | null;
   inventoryItemId?: string | null;
   requestedById: string;
   reviewedById?: string | null;
@@ -465,11 +465,13 @@ export interface DrugInventoryChangeRequest {
   reviewedAt?: string | null;
   createdAt: string;
   updatedAt: string;
-  drug: DrugInventoryCatalogRow;
+  drug: DrugInventoryCatalogRow | null;
+  stockSnapshot?: unknown;
   inventoryItem?: {
     id: string;
     name: string;
     currentStock: number;
+    unit?: string;
     stockStatus?: string | null;
     batchNumber?: string | null;
     expiryDate?: string | null;

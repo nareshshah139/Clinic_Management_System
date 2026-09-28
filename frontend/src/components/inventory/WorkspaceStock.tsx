@@ -8,6 +8,7 @@ import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InventoryRegimenFields } from "./InventoryRegimenFields";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
+import { StockEditDialog } from "./StockEditDialog";
 import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
   fmtMoney,
@@ -50,6 +51,11 @@ type Props = {
  * Acceptance: INV-39. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] clinic-stock-row-edits
+ * The stock list MUST use clinic inventory only and expose batch price/stock proposals to
+ * submitting staff. Proposals MUST wait for approval; refresh events MUST reload server balances.
+ */
 export function WorkspaceStock({
   query,
   navigate,
@@ -61,6 +67,8 @@ export function WorkspaceStock({
   onBack,
 }: Props) {
   const { user } = useDashboardUser();
+  const canSubmitEdits = ["OWNER", "ADMIN", "PHARMACIST"].includes(user?.role || "");
+  const [stockEdit, setStockEdit] = useState<{ item: any; field: 'price' | 'stock' } | null>(null);
   const stockQuery = stockPageQuery(query);
   const selectionScope = JSON.stringify(Object.entries(stockQuery)
     .filter(([key]) => !["page", "item", "return"].includes(key))
@@ -119,6 +127,13 @@ export function WorkspaceStock({
   };
   useEffect(() => {
     void load();
+    const refresh = () => { void load(); };
+    window.addEventListener('inventory-workspace-refresh', refresh);
+    window.addEventListener('inventory-stock-refresh', refresh);
+    return () => {
+      window.removeEventListener('inventory-workspace-refresh', refresh);
+      window.removeEventListener('inventory-stock-refresh', refresh);
+    };
   }, [itemId, JSON.stringify(query)]);
   useEffect(() => {
     setSearch(query.search || "");
@@ -233,6 +248,7 @@ export function WorkspaceStock({
       {notice && (
         <p role="status" className="rounded-md border p-3">
           {notice}
+          {notice === "Submitted for doctor approval." && <Button variant="link" onClick={() => navigate({ view: 'approvals', item: '', page: '1' })}>Open approval queue</Button>}
         </p>
       )}
       {itemId ? (
@@ -949,7 +965,7 @@ export function WorkspaceStock({
                 className={inputClass}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Product, generic, batch, barcode or SKU"
+                placeholder="Product, generic, old name, batch, barcode or SKU"
               />
             </label>
             <Button type="submit">
@@ -1150,10 +1166,11 @@ export function WorkspaceStock({
             Sort
             <select
               className={inputClass}
-              value={query.sortBy || "name"}
+              value={query.sortBy || (query.search?.trim() ? "relevance" : "name")}
               onChange={(e) => filter("sortBy", e.target.value)}
             >
               {[
+                ["relevance", "Best match"],
                 ["name", "Product name"],
                 ["expiryDate", "Expiry date"],
                 ["available", "Available stock"],
@@ -1318,7 +1335,9 @@ export function WorkspaceStock({
                     "Stock unit",
                     "PTR",
                     "MRP",
+                    "Selling price",
                     "Location",
+                    ...(canSubmitEdits ? ["Edit"] : []),
                   ].map((t) => (
                     <th key={t} className="whitespace-nowrap p-3">
                       {t}
@@ -1352,6 +1371,8 @@ export function WorkspaceStock({
                       </button>
                       {i.packLabel && <p className="text-sm">{i.packLabel}</p>}
                       {i.productName && i.productName !== i.name && <p className="text-xs text-muted-foreground">Recorded as: {i.name}</p>}
+                      {i.searchMatch?.kind === "fuzzy" && <p className="text-xs text-amber-800 dark:text-amber-200">Similar spelling: {i.searchMatch.corrections.join(", ")}</p>}
+                      {i.searchMatch?.kind === "alias" && <p className="text-xs text-muted-foreground">Matched earlier name: {i.searchMatch.matchedText}</p>}
                       <p className="text-xs text-muted-foreground">
                         {i.batchNumber || "Batch missing"}
                       </p>
@@ -1366,15 +1387,22 @@ export function WorkspaceStock({
                     <td className="p-3">{i.unit}</td>
                     <td className="p-3">{fmtMoney(i.costPrice)}</td>
                     <td className="p-3">{fmtMoney(i.mrp)}</td>
+                    <td className="p-3">{fmtMoney(i.sellingPrice)}</td>
                     <td className="p-3">
                       {i.storageLocation || "Not assigned"}
                     </td>
+                    {canSubmitEdits && <td className="p-3">
+                      <div className="flex flex-col items-start gap-2">
+                        <Button size="sm" variant="outline" onClick={() => setStockEdit({ item: i, field: 'price' })}>Edit price</Button>
+                        <Button size="sm" variant="outline" onClick={() => setStockEdit({ item: i, field: 'stock' })}>Edit stock</Button>
+                      </div>
+                    </td>}
                   </tr>
                 ))}
                 {!busy && !error && data && !data.rows?.length && (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={canSubmitEdits ? 13 : 12}
                       className="p-8 text-center text-muted-foreground"
                     >
                       No batches match these filters. Reset or change the
@@ -1411,6 +1439,8 @@ export function WorkspaceStock({
           />
         </>
       )}
+      {stockEdit && <StockEditDialog item={stockEdit.item} field={stockEdit.field}
+        onClose={() => setStockEdit(null)} onSubmitted={() => { setStockEdit(null); setNotice("Submitted for doctor approval."); }} />}
     </div>
   );
 }

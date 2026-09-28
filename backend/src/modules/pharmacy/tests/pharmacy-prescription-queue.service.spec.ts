@@ -192,18 +192,13 @@ describe('PharmacyPrescriptionQueueService', () => {
     });
   });
 
-  it('returns FEFO stock checks with low stock, near expiry, and alternatives', async () => {
+  it('returns FEFO available stock checks with low stock and near expiry', async () => {
     const futureExpiry = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
     const laterExpiry = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
     const expired = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     prisma.prescription.findFirst.mockResolvedValue(prescription());
-    prisma.drug.findFirst.mockResolvedValueOnce({
-      id: 'drug-1',
-      name: 'Azithral 500',
-      manufacturerName: 'Alembic',
-      minStockLevel: 10,
-      inventoryItems: [
+    const batches = [
         {
           id: 'batch-late',
           currentStock: 4,
@@ -237,8 +232,9 @@ describe('PharmacyPrescriptionQueueService', () => {
           stockStatus: 'LOW_STOCK',
           storageLocation: 'A1',
         },
-      ],
-    });
+      ].map(b => ({ ...b, minStockLevel: 10, status: 'ACTIVE', unit: 'TABLETS', branchId, heldStock: 0, drugs: [{ id: 'drug-1', isActive: true, isDiscontinued: false, name: 'Azithral 500', manufacturerName: 'Alembic', minStockLevel: 10, branchId }] }));
+    prisma.prescriptionInventoryLink = { findUnique: jest.fn().mockResolvedValue(null) };
+    prisma.inventoryItem = { findMany: jest.fn().mockResolvedValue(batches) };
     drugService.getAlternatives.mockResolvedValue([
       {
         id: 'alt-1',
@@ -261,21 +257,12 @@ describe('PharmacyPrescriptionQueueService', () => {
       totalNonExpiredStock: 7,
       lowStock: true,
       nearExpiry: true,
-      alternatives: [
-        {
-          id: 'alt-1',
-          name: 'Azithro 500',
-          totalStock: 12,
-        },
-      ],
+      alternatives: [],
     });
     expect(
       result.items[0].batches.map((batch: any) => batch.batchNumber),
     ).toEqual(['EARLY', 'LATE']);
-    expect(drugService.getAlternatives).toHaveBeenCalledWith(
-      'drug-1',
-      branchId,
-    );
+    expect(drugService.getAlternatives).not.toHaveBeenCalled();
   });
 
   it('throws not found for prescriptions outside the branch', async () => {

@@ -107,4 +107,21 @@ describe('stock batch views and name lookup', () => {
     await expect(service.saveItem(actor, original.id, { updatedAt: 'stale', name: 'Bad Name' })).rejects.toThrow('Batch details changed');
     expect(tx.inventoryItem.update).toHaveBeenCalledTimes(1);
   });
+  it('ranks before pagination while keeping batch filters, explicit sorts and exact IDs authoritative', async () => {
+    prisma.inventoryItem.findMany.mockResolvedValue([
+      row('fuzzy',3,{name:'Tyrobin Cream',drugs:[]}),
+      row('exact',2,{name:'Tyrodin Cream',drugs:[]}),
+      row('old',0,{name:'Tyrodin Cream',drugs:[]}),
+    ]);
+    const result=await service.stock(actor,{search:'tyrodin cream',limit:'1',batchView:'ON_HAND'});
+    expect(result.total).toBe(2);
+    expect(result.rows[0].id).toBe('exact');
+    expect(result.filterScope.sortBy).toBe('relevance');
+    expect(result.valuation.current.PTR).toBe(50);
+    const explicit=await service.stock(actor,{search:'tyrodin cream',sortBy:'name',batchView:'ON_HAND'});
+    expect(explicit.rows[0].id).toBe('fuzzy');
+    expect((explicit.rows[0] as any).searchMatch.kind).toBe('fuzzy');
+    expect((await service.stock(actor,{search:'inventory:excat'})).total).toBe(0);
+    expect((await service.stock(actor,{search:'inventory:old',batchView:'ON_HAND'})).total).toBe(0);
+  });
 });

@@ -528,8 +528,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [activeSearchRow, setActiveSearchRow] = useState<number | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
-  const [drugStockById, setDrugStockById] = useState<Record<string, number>>({});
-  const [drugStockLoading, setDrugStockLoading] = useState<Record<string, boolean>>({});
+  const [drugStockByKey, setDrugStockByKey] = useState<Record<string, number | null>>({});
+  const drugStockRequests = useRef(new Map<string, Promise<number | null>>());
   const [loadingTemplates, setLoadingTemplates] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const lastTemplateApplyRef = useRef<number>(0);
@@ -1489,48 +1489,48 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     );
   };
 
-  // Prefetch remaining stock for a drug by id (uses /drugs/:id, accessible to doctors)
-  const prefetchDrugStockById = async (drugId?: string) => {
-    if (!drugId) return;
-    if (drugStockById[drugId] !== undefined || drugStockLoading[drugId]) return;
-    setDrugStockLoading((prev) => ({ ...prev, [drugId]: true }));
-    try {
-      const detail: any = await apiClient.get(`/drugs/${drugId}`);
-      const inv = Array.isArray(detail?.inventoryItems) ? detail.inventoryItems : [];
-      const stock = inv.length > 0 ? inv.reduce((sum: number, it: any) => sum + (Number(it?.currentStock || 0) || 0), 0) : 20;
-      setDrugStockById((prev) => ({ ...prev, [drugId]: stock }));
-    } catch {
-      // If inventory not configured or error, default to 20
-      setDrugStockById((prev) => ({ ...prev, [drugId]: 20 }));
-    } finally {
-      setDrugStockLoading((prev) => ({ ...prev, [drugId]: false }));
-    }
-  };
+  // Share the fetched value (including an in-flight request), not a stale React
+  // state snapshot. Unknown stock stays null and can be retried on the next hover.
+  const loadDrugStock = useCallback((key: string, load: () => Promise<number | null>) => {
+    const existing = drugStockRequests.current.get(key);
+    if (existing) return existing;
+    const request = Promise.resolve().then(load).catch(() => null).then((stock) => {
+      // An explicit selection can replace an older name lookup while it loads.
+      if (drugStockRequests.current.get(key) !== request) return stock;
+      if (stock === null) drugStockRequests.current.delete(key);
+      setDrugStockByKey((prev) => ({ ...prev, [key]: stock }));
+      return stock;
+    });
+    drugStockRequests.current.set(key, request);
+    return request;
+  }, []);
 
-  // Prefetch remaining stock for a drug by name (used in treatment table rows)
+  const prefetchDrugStockById = useCallback((drugId?: string, inventoryItemId?: string): Promise<number | null> => {
+    if (inventoryItemId) return loadDrugStock(`inventory:${inventoryItemId}`, async () => {
+      const result = await apiClient.get<any>(`/pharmacy/prescription-queue/inventory-stock/${encodeURIComponent(inventoryItemId)}`);
+      return result.stockStatus === 'UNMATCHED' || !Number.isFinite(result.totalNonExpiredStock) ? null : result.totalNonExpiredStock;
+    });
+    if (!drugId) return Promise.resolve(null);
+    return loadDrugStock(`id:${drugId}`, async () => {
+      const detail: any = await apiClient.get(`/drugs/${drugId}`);
+      const inventory = detail?.inventoryItems;
+      if (!Array.isArray(inventory) || inventory.length === 0) return null;
+      const units = new Set(inventory.map((i: any) => JSON.stringify([i.unit, i.packSize, i.packUnit])));
+      if (units.size !== 1) return null;
+      const day = new Date(new Date().toISOString().slice(0, 10));
+      return inventory.reduce((sum: number, item: any) => sum + (item.status !== 'ACTIVE' || (item.expiryDate && new Date(item.expiryDate) < day) ? 0 : Math.max(0, item.currentStock - (item.heldStock || 0))), 0);
+    });
+  }, [loadDrugStock]);
+
   const prefetchDrugStockByName = async (name?: string) => {
     const query = (name || '').trim();
     if (!query) return;
-    const key = query.toLowerCase();
-    if (drugStockById[key] !== undefined || drugStockLoading[key]) return;
-    setDrugStockLoading((prev) => ({ ...prev, [key]: true }));
-    try {
-      const res: any = await apiClient.get('/drugs', { search: query, limit: 1, isActive: true });
-      const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
-      const first = list?.[0];
-      if (!first?.id) {
-        // No match found; assume default stock
-        setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
-      } else {
-        await prefetchDrugStockById(first.id);
-        const val = (typeof drugStockById[first.id] === 'number') ? drugStockById[first.id] : 20;
-        setDrugStockById((prev) => ({ ...prev, [key]: val }));
-      }
-    } catch {
-      setDrugStockById((prev) => ({ ...prev, [key]: 20 }));
-    } finally {
-      setDrugStockLoading((prev) => ({ ...prev, [key]: false }));
-    }
+    const normalizedName = query.toLowerCase();
+    return loadDrugStock(`name:${normalizedName}`, async () => {
+      const list = await apiClient.get<any[]>('/prescriptions/drugs/autocomplete', { q: query, limit: 30 });
+      const matches = (Array.isArray(list) ? list : []).filter((drug: any) => String(drug?.name || '').trim().toLowerCase() === normalizedName);
+      return matches.length === 1 ? matches[0].totalStock ?? null : null;
+    });
   };
 
   // Get relevance badge for search results
@@ -1698,6 +1698,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return {
       drugName: name,
       drugId: raw?.drugId || undefined,
+      inventoryItemId: raw?.inventoryItemId || undefined,
       genericName: raw?.genericName ? String(raw.genericName) : undefined,
       brandName: raw?.brandName ? String(raw.brandName) : undefined,
       dosePattern: dosePattern || '',
@@ -2180,6 +2181,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const regimenContext = JSON.stringify([patientId, doctorId, visitId]);
   const regimenContextRef = useRef(regimenContext);
   regimenContextRef.current = regimenContext;
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-selection-retains-inventory
+   * Choosing clinic stock MUST retain its inventory item ID through prescription save and reload.
+   * Typing another medicine name MUST invalidate the prior item and drug IDs.
+   */
   const applyDrugSelectionToRow = (rowIdx: number, drug: any, options?: {
     clearSearch?: boolean;
     showToast?: boolean;
@@ -2188,7 +2194,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const drugName = String(drug?.name || '');
     setItems(prev => {
       const next = prev.map((item, index) => index === rowIdx ? {
-        ...beginRegimenSelection(item, selection), drugId: drug.id, drugName, genericName: drug.genericName,
+        ...beginRegimenSelection(item, selection), drugId: drug.id, inventoryItemId: drug.inventoryItemId, drugName, genericName: drug.genericName,
         dosageUnit: item.dosage ? item.dosageUnit : inferDosageUnitFromDosageForm(drug.dosageForm),
       } : item);
       if (!hasTrailingBlank(next)) next.push(createBlankItem());
@@ -2199,7 +2205,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       try {
         let drugId = drug.id;
         if (!drugId) {
-          const res: any = await apiClient.get('/drugs', { search: drugName, limit: 30, isActive: true });
+          const res: any = await apiClient.get('/prescriptions/drugs/autocomplete', { q: drugName, limit: 30 });
           const matches = (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [])
             .filter((candidate: any) => candidate.name?.trim().toLowerCase() === drugName.trim().toLowerCase());
           if (matches.length === 1) drugId = matches[0].id;
@@ -2224,6 +2230,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           ? { ...item, regimenState: { ...item.regimenState, loading: false, failed: true } } : item));
       }
     })();
+    if (drug?.id && drugName) {
+      const key = `name:${drugName.trim().toLowerCase()}`;
+      drugStockRequests.current.delete(key);
+      void loadDrugStock(key, () => prefetchDrugStockById(drug.id, drug.inventoryItemId));
+    }
     if (options?.clearSearch) {
       setRowDrugResults(prev => ({ ...prev, [rowIdx]: [] }));
       setRowDrugQueries(prev => ({ ...prev, [rowIdx]: '' }));
@@ -2409,6 +2420,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const prescriptionItemsPayload = useMemo(() => validItems.map(it => ({
           drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
           genericName: it.genericName || undefined,
           brandName: it.brandName || undefined,
           dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
@@ -2664,6 +2676,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     try {
       const tItems = Array.isArray(tpl.items) ? tpl.items : JSON.parse(tpl.items || '[]');
       const mapped: PrescriptionItemForm[] = tItems.map((x: any) => ({
+        drugId: x.drugId || undefined,
+        inventoryItemId: x.inventoryItemId || undefined,
         drugName: x.drugName,
         genericName: x.genericName,
         brandName: x.brandName,
@@ -2988,6 +3002,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         items: validItems.map(it => ({
           drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
           genericName: it.genericName,
           brandName: it.brandName,
           dosage: it.dosage === '' || it.dosage === undefined || it.dosage === null ? undefined : Number(it.dosage),
@@ -3051,6 +3066,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             items: validItems.map(it => ({
               drugName: it.drugName,
           drugId: it.drugId || undefined,
+          inventoryItemId: it.inventoryItemId || undefined,
               genericName: it.genericName,
               brandName: it.brandName,
               dosage: it.dosage === '' || it.dosage == null ? undefined : Number(it.dosage),
@@ -5000,7 +5016,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       )}
                       {items.map((it, idx) => (
                         <tr key={idx} className="border-t">
-                          <td className="px-3 py-2 align-top" onMouseEnter={() => prefetchDrugStockByName(it.drugName)} title={(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; if (stock === undefined) return 'Remaining stock: —'; return `Remaining stock: ${stock}`; })()}>
+                          <td className="px-3 py-2 align-top" onMouseEnter={() => it.inventoryItemId ? prefetchDrugStockById(it.drugId, it.inventoryItemId) : prefetchDrugStockByName(it.drugName)} title={(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return `Remaining stock: ${stock ?? '—'}`; })()}>
                             <div className="flex items-center gap-2">
                               <Input 
                                 ref={(el) => { inputRefs.current[idx] = el; }}
@@ -5045,7 +5061,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               />
                               <span className="text-xs text-gray-500 whitespace-nowrap">
                                 Stock:{' '}
-                                {(() => { const key = (it.drugName || '').trim().toLowerCase(); const stock = drugStockById[key]; return stock !== undefined ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
+                                {(() => { const key = it.inventoryItemId ? `inventory:${it.inventoryItemId}` : `name:${(it.drugName || '').trim().toLowerCase()}`; const stock = drugStockByKey[key]; return stock != null ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span> : <span className="text-gray-400">—</span>; })()}
                               </span>
                             </div>
                             {it.regimenState?.loading && <p className="mt-1 text-xs text-slate-500" role="status">Loading usual values…</p>}
@@ -6350,7 +6366,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                                 index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
                                 index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                               }`}
-                              onMouseEnter={() => prefetchDrugStockById(d.id)}
+                              onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                             >
                               <div className="flex-1">
                                 <div className="font-medium">{d.name}</div>
@@ -6732,12 +6748,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     index === 0 ? 'bg-green-50 border-l-4 border-l-green-500' : 
                     index < 3 ? 'bg-blue-50 border-l-4 border-l-blue-500' : ''
                   }`}
-                  onMouseEnter={() => prefetchDrugStockById(d.id)}
+                  onMouseEnter={() => prefetchDrugStockById(d.id, d.inventoryItemId)}
                   onClick={() => { addItemFromDrugToRow(activeSearchRow, d); }}
                   title={((): string => {
-                    const stock = drugStockById[d.id];
+                    const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
                     if (stock === undefined) return 'Checking stock…';
-                    return `Remaining stock: ${stock}`;
+                    return `Remaining stock: ${stock ?? '—'}`;
                   })()}
                 >
                   <div className="flex-1">
@@ -6753,13 +6769,12 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     </div>
                     <div className="text-xs mt-0.5">
                       <span className="text-gray-500">Stock:</span>{' '}
-                      {drugStockById[d.id] !== undefined ? (
-                        <span className={drugStockById[d.id] <= 5 ? 'text-red-600' : 'text-gray-700'}>
-                          {drugStockById[d.id]}
-                        </span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                      {(() => {
+                        const stock = drugStockByKey[d.inventoryItemId ? `inventory:${d.inventoryItemId}` : `id:${d.id}`] ?? d.totalStock;
+                        return stock != null
+                          ? <span className={stock <= 5 ? 'text-red-600' : 'text-gray-700'}>{stock}</span>
+                          : <span className="text-gray-400">—</span>;
+                      })()}
                     </div>
                   </div>
                   <Button

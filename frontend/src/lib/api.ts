@@ -631,8 +631,10 @@ export class ApiClient {
 
   async submitDrugInventoryChanges(
     changes: Array<{
-      drugId: string;
+      drugId?: string;
       inventoryItemId?: string;
+      scope?: 'BATCH';
+      expectedUpdatedAt?: string;
       proposedPrice?: number;
       proposedStock?: number;
       reason?: string;

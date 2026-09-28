@@ -1,13 +1,9 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import "@/components/inventory/inventory-readability.css";
-
-import { InventoryUpdates } from '@/components/inventory/InventoryUpdates';
-
+/**
+ * @cc [owner:nareshshah139,label:product] legacy-inventory-updates-destination
+ * Existing Inventory Updates bookmarks MUST open the approval queue inside Inventory.
+ */
 export default function InventoryUpdatesPage() {
-  return (
-    <main className="inventory-surface min-w-0 flex-1 space-y-6 py-4 sm:py-6">
-      <InventoryUpdates />
-    </main>
-  );
+  redirect('/dashboard/inventory?area=stock&view=approvals');
 }
