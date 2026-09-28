@@ -1,6 +1,6 @@
 # CR-12 — Unified Inventory
 
-Release candidate prepared from current GitHub main on 2026-09-28. Production deployment is recorded separately after verification.
+Deployed to production on 2026-09-28 at application commit `4cd85cba5ccd2abca34756e337b4f73ab86e5a32`. See [deployment verification](cr-12-railway-deployment-2026-09-28.md).
 
 Inventory is the single sidebar destination for stock work. Inventory Updates and Reorder targets no longer appear separately. Reorder targets remain in Inventory → Reorder → Manual targets & exclusions. Doctors now have the Inventory entry needed to review edits. Existing `/dashboard/inventory-updates` bookmarks redirect to `/dashboard/inventory?area=stock&view=approvals`.
 

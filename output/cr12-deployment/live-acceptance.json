@@ -1,0 +1,20 @@
+{
+  "startedAt": "2026-09-28T07:23:06.218Z",
+  "run": "c85bc77d-904f-49b1-a02f-858ce1975c2f",
+  "branchId": "cr12-qa-c85bc77d-904f-49b1-a02f-858ce1975c2f",
+  "checks": [
+    "Normal pharmacist and doctor authentication through the live frontend proxy",
+    "Live Stock API returns only the synthetic clinic inventory",
+    "Proposal leaves live price unchanged, appears in Today, and pharmacist approval is forbidden",
+    "Deployed browser shows one Inventory menu and stock-row editing",
+    "Today opens the integrated approval queue without pharmacist approval controls",
+    "Doctor approval updates the selected batch price and linked billing drug price",
+    "Approved stock is consistent: selected batch 17, other batch 4, holds 2, Billing and Rx available 19",
+    "Unlinked clinic items use the same approval path and clear the Today count after approval",
+    "Old Inventory Updates bookmark redirects into Inventory",
+    "Temporary branch, accounts, stock, requests and request logs removed"
+  ],
+  "passed": true,
+  "syntheticRecordsRemoved": true,
+  "finishedAt": "2026-09-28T07:23:21.946Z"
+}
