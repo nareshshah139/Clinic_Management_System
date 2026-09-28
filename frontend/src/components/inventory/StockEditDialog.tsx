@@ -42,7 +42,7 @@ export function StockEditDialog({ item, field, onClose, onSubmitted }: {
     <DialogContent className="inventory-surface">
       <form onSubmit={submit} className="space-y-4">
         <DialogHeader><DialogTitle>Edit {field === 'price' ? 'price' : 'stock'}</DialogTitle>
-          <DialogDescription>{item.productName || item.name} · Batch {item.batchNumber || 'unspecified'}. The change takes effect after doctor approval.</DialogDescription></DialogHeader>
+          <DialogDescription>{item.productName || item.name} · Batch {item.batchNumber || 'unspecified'}. The change takes effect after doctor or admin approval.</DialogDescription></DialogHeader>
         <p>Current {field === 'price' ? `selling price: ${fmtMoney(current)}` : `physical stock: ${current} ${item.unit}`}</p>
         <label className="block">{field === 'price' ? 'New selling price (₹ per stock unit)' : `Counted physical stock (${item.unit})`}
           <input autoFocus required type="number" min={field === 'stock' ? item.heldStock : 0} step={field === 'price' ? '0.01' : '1'} inputMode={field === 'price' ? 'decimal' : 'numeric'} className={inputClass} value={value} onChange={e => setValue(e.target.value)} />

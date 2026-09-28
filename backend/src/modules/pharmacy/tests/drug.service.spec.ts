@@ -232,7 +232,7 @@ describe('DrugService inventory change approvals', () => {
         userId: doctorId,
         type: 'ADJUSTMENT',
         quantity: 4,
-        reason: 'Doctor-approved inventory update',
+        reason: 'Approved inventory update',
       }),
     });
     expect(result.status).toBe(DrugInventoryChangeRequestStatus.APPROVED);

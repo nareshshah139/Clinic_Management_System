@@ -248,7 +248,7 @@ export function WorkspaceStock({
       {notice && (
         <p role="status" className="rounded-md border p-3">
           {notice}
-          {notice === "Submitted for doctor approval." && <Button variant="link" onClick={() => navigate({ view: 'approvals', item: '', page: '1' })}>Open approval queue</Button>}
+          {notice === "Submitted for doctor or admin approval." && <Button variant="link" onClick={() => navigate({ view: 'approvals', item: '', page: '1' })}>Open approval queue</Button>}
         </p>
       )}
       {itemId ? (
@@ -1440,7 +1440,7 @@ export function WorkspaceStock({
         </>
       )}
       {stockEdit && <StockEditDialog item={stockEdit.item} field={stockEdit.field}
-        onClose={() => setStockEdit(null)} onSubmitted={() => { setStockEdit(null); setNotice("Submitted for doctor approval."); }} />}
+        onClose={() => setStockEdit(null)} onSubmitted={() => { setStockEdit(null); setNotice("Submitted for doctor or admin approval."); }} />}
     </div>
   );
 }

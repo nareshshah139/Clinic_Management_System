@@ -51,8 +51,8 @@ it('distinguishes a queue failure from no pending edits', async () => {
   expect(screen.queryByText('No pending price or stock edits.')).not.toBeInTheDocument();
 });
 
-it.each(['approve', 'reject', 'failure'])('announces stock changes only for successful approval: %s', async outcome => {
-  mockRole = 'DOCTOR';
+it.each(['DOCTOR', 'ADMIN', 'OWNER'].flatMap(role => ['approve', 'reject', 'failure'].map(outcome => [role, outcome])))('lets %s review and announces stock changes only for successful approval: %s', async (role, outcome) => {
+  mockRole = role;
   const listener = jest.fn();
   window.addEventListener('inventory-stock-refresh', listener);
   (apiClient.getDrugInventoryChangeRequests as jest.Mock).mockResolvedValue({ data: [{

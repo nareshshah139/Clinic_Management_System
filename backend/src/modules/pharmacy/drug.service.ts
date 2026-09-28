@@ -339,7 +339,7 @@ export class DrugService {
         updateDrugDto.price !== existingDrug.price
       ) {
         throw new BadRequestException(
-          'Pharmacist price edits must be submitted through Inventory Updates for doctor approval.',
+          'Pharmacist price edits must be submitted from Inventory Stock for doctor or admin approval.',
         );
       }
 
@@ -1170,7 +1170,7 @@ export class DrugService {
       if (delta) await writeStockMovement(tx, {
         itemId: item.id, branchId, userId: reviewedById, type: TransactionType.ADJUSTMENT, delta,
         reason: request.reason, reference: `INVENTORY-APPROVAL-${request.id}`,
-        notes: `Doctor-approved batch count ${request.id}`,
+        notes: `Approved batch count ${request.id}`,
       });
     }
     if (request.proposedPrice != null) {
@@ -1307,7 +1307,7 @@ export class DrugService {
     await writeStockMovement(tx, {
       itemId: targetItem.id, branchId, userId: reviewedById,
       type: TransactionType.ADJUSTMENT, delta: stockDelta,
-      reason: 'Doctor-approved inventory update',
+      reason: 'Approved inventory update',
       reference: `INVENTORY-APPROVAL-${request.id}`,
       notes: `Inventory change request ${request.id}`,
     });

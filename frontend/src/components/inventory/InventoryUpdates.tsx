@@ -76,7 +76,7 @@ export function InventoryUpdates() {
   return <section className="space-y-4">
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="text-2xl font-semibold">Price / stock approval queue</h2>
-        <p className="text-muted-foreground">Changes take effect after doctor approval.</p></div>
+        <p className="text-muted-foreground">Changes take effect after doctor or admin approval.</p></div>
       <Button variant="outline" onClick={load} disabled={loading}>Refresh approvals</Button>
     </header>
     {error ? <p role="alert">{error} <Button variant="outline" onClick={load}>Retry queue</Button></p>

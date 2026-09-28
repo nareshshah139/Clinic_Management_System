@@ -156,6 +156,11 @@ export class DrugController {
     );
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] inventory-edit-review-roles
+   * Doctors, admins and owners MUST be allowed to approve a pending branch edit.
+   * Pharmacists MUST be denied approval even when they can submit and read requests.
+   */
   @Post('inventory-change-requests/:id/approve')
   @Roles(UserRole.ADMIN, UserRole.DOCTOR)
   @Permissions('pharmacy:drug:inventory-change:approve')
