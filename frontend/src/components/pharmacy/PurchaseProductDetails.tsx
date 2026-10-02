@@ -19,6 +19,11 @@ type CatalogProduct = {
   requiresPrescription?: boolean | null;
 };
 
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-product-kind-explanation
+ * Medicine-only requirements MUST be explained beside the product kind. Classification changes
+ * MUST remain an explicit user choice; the interface MUST NOT suggest inventing clinical values.
+ */
 export function PurchaseProductDetails({ id, product, disabled, onSave, createLabel = 'Save new product', onKindChange }: {
   id: string;
   product?: CatalogProduct;
@@ -66,6 +71,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
         </select>
       </div>
       {!!kind && <>
+        {medicine && <p className="max-w-prose text-muted-foreground">This product is classified as a medicine, so composition, dosage form and strength are required. Check the packaging first. If it is a cosmetic or consumable, correct the product kind instead of inventing clinical details.</p>}
         {!medicine && <p>Composition, strength and form are optional. Unknown values stay blank. This product will be stocked as a non-prescription consumable.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           {(['category', 'composition1', 'dosageForm', 'strength'] as const).map(field => <div key={field}>

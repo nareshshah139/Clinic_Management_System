@@ -34,6 +34,7 @@ import {
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
+  CorrectPharmacyPurchaseSupplierGstinDto,
   PurchaseProductCatalogDto,
 } from './dto/pharmacy-purchase-invoice.dto';
 
@@ -116,14 +117,72 @@ export class PharmacyPurchaseInvoiceService {
     const commit = has('pharmacy:purchase-invoice:commit-stock', 'inventory:transaction:create');
     return { read, create, review, commit, automate: create && review && commit,
       saveSupplier: create && has('inventory:supplier:create'),
+      editSupplier: create && has('inventory:supplier:update'),
       sourceHighlights: true, catalogDetails: true, editProduct: create && has('pharmacy:drug:update') };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] supplier-directory-revision
+   * Invoice supplier choices MUST include only active records in the requested branch and their
+   * saved revision so corrections can detect intervening edits.
+   */
   async purchaseSuppliers(branchId: string) {
     return this.prisma.supplier.findMany({ where: { branchId, isActive: true },
-      select: { id: true, name: true, gstNumber: true }, orderBy: { name: 'asc' } });
+      select: { id: true, name: true, gstNumber: true, updatedAt: true }, orderBy: { name: 'asc' } });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security;product] supplier-gstin-correction-boundary
+   * A verified correction MUST affect only the active supplier in the authenticated branch.
+   * Stale revisions and GSTINs assigned to another branch-local supplier MUST fail before writes.
+   * Retrying an already-applied GSTIN MUST NOT write another correction.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-gstin-correction-audit
+   * The supplier GSTIN and its actor, reason, previous value and new value audit MUST commit
+   * atomically. Existing invoices, payments, balances and stock MUST remain unchanged.
+   */
+  async correctPurchaseSupplierGstin(id: string, dto: CorrectPharmacyPurchaseSupplierGstinDto, branchId: string, userId: string) {
+    const gstNumber = dto.gstNumber?.trim().toUpperCase();
+    const reason = dto.reason?.trim();
+    const expectedAt = new Date(dto.expectedUpdatedAt);
+    if (!userId || !branchId || dto.verified !== true || typeof dto.expectedGstNumber !== 'string' ||
+        !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gstNumber || '') ||
+        !reason || reason.length < 3 || reason.length > 300 || !Number.isFinite(expectedAt.getTime())) {
+      throw new BadRequestException('Enter a valid GSTIN and correction reason, then verify the new value against the original invoice.');
+    }
+    return this.prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`purchase-supplier:${branchId}`}))`;
+      const supplier = await tx.supplier.findFirst({ where: { id, branchId, isActive: true },
+        select: { id: true, name: true, gstNumber: true, updatedAt: true } });
+      if (!supplier) throw new NotFoundException('Active supplier not found in this branch.');
+      if (supplier.gstNumber === gstNumber) return supplier;
+      if (supplier.updatedAt.getTime() !== expectedAt.getTime() || (supplier.gstNumber || '') !== dto.expectedGstNumber) {
+        throw new ConflictException('The saved supplier changed. Reload the supplier list and verify the correction again.');
+      }
+      const suppliers = await tx.supplier.findMany({ where: { branchId, id: { not: id } }, select: { gstNumber: true } });
+      if (suppliers.some(other => other.gstNumber?.trim().toUpperCase() === gstNumber)) {
+        throw new ConflictException('Another supplier already uses this GSTIN. Select the correct supplier or resolve the duplicate before correcting it.');
+      }
+      const claim = await tx.supplier.updateMany({
+        where: { id, branchId, isActive: true, updatedAt: expectedAt, gstNumber: supplier.gstNumber },
+        data: { gstNumber },
+      });
+      if (claim.count !== 1) throw new ConflictException('The saved supplier changed. Reload the supplier list and verify the correction again.');
+      await tx.auditLog.create({ data: {
+        entity: 'Supplier', entityId: id, userId, action: 'GSTIN_CORRECTED',
+        oldValues: JSON.stringify({ branchId, name: supplier.name, gstNumber: supplier.gstNumber }),
+        newValues: JSON.stringify({ branchId, name: supplier.name, gstNumber, reason, verified: true }),
+      } });
+      return tx.supplier.findFirstOrThrow({ where: { id, branchId }, select: { id: true, name: true, gstNumber: true, updatedAt: true } });
+    });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] verified-supplier-save
+   * A verified supplier save MUST reuse one exact active identity or create a new branch-local
+   * identity, returning its revision. Conflicting or inactive identities MUST fail without writes.
+   */
   async savePurchaseSupplier(dto: SavePharmacyPurchaseSupplierDto, branchId: string) {
     const name = dto.name?.trim();
     const gstNumber = dto.gstNumber?.trim().toUpperCase();
@@ -136,19 +195,19 @@ export class PharmacyPurchaseInvoiceService {
       // reuse the supplier rather than creating ambiguous duplicate matches.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`purchase-supplier:${branchId}`}))`;
       const suppliers = await tx.supplier.findMany({ where: { branchId },
-        select: { id: true, name: true, gstNumber: true, isActive: true } });
+        select: { id: true, name: true, gstNumber: true, isActive: true, updatedAt: true } });
       const related = suppliers.filter(supplier => normalizedIdentity(supplier.name) === normalizedIdentity(name) ||
         supplier.gstNumber?.trim().toUpperCase() === gstNumber);
       const exact = related.filter(supplier => supplier.isActive && normalizedIdentity(supplier.name) === normalizedIdentity(name) &&
         supplier.gstNumber?.trim().toUpperCase() === gstNumber);
       if (exact.length === 1) {
-        const { id, name, gstNumber } = exact[0];
-        return { id, name, gstNumber };
+        const { id, name, gstNumber, updatedAt } = exact[0];
+        return { id, name, gstNumber, updatedAt };
       }
       if (related.length) throw new ConflictException(
         'A supplier with this name or GSTIN already exists. Select the matching active supplier here, or ask a supplier administrator to correct or reactivate its record. You can still verify this invoice through manual review.');
       return tx.supplier.create({ data: { branchId, name, gstNumber, isActive: true },
-        select: { id: true, name: true, gstNumber: true } });
+        select: { id: true, name: true, gstNumber: true, updatedAt: true } });
     });
   }
 

@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { PurchaseSupplierReview } from '@/components/pharmacy/PurchaseSupplierReview';
 import { apiClient } from '@/lib/api';
 
-jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn() } }));
+jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), post: jest.fn(), patch: jest.fn() } }));
 const api = apiClient as jest.Mocked<typeof apiClient>;
 const supplier = { id: 'supplier-1', name: 'Apex Distributors', gstNumber: '36ABCDE1234F1Z5' };
 const props = () => ({ name: supplier.name, gstNumber: supplier.gstNumber, canLoad: true, canSave: true,
@@ -82,4 +82,84 @@ it('keeps values and verification on a failed save so an idempotent retry is ava
   fireEvent.click(screen.getByRole('button', { name: 'Save verified supplier' }));
   await screen.findByText(/Supplier saved/);
   expect(api.post).toHaveBeenCalledTimes(2);
+});
+
+const savedWrong = { ...supplier, gstNumber: '36ABCDE1234F2Z5', updatedAt: '2026-10-01T10:00:00.000Z' };
+async function startCorrection() {
+  fireEvent.click(await screen.findByRole('button', { name: `Correct saved GSTIN ${savedWrong.gstNumber}` }));
+}
+function verifyCorrection() {
+  fireEvent.change(screen.getByLabelText('Reason for correction'), { target: { value: 'Checked original invoice' } });
+  fireEvent.click(screen.getByRole('checkbox', { name: /I checked the new GSTIN/ }));
+}
+
+it('corrects a verified saved GSTIN once without changing invoice fields or stock', async () => {
+  api.get.mockResolvedValue([savedWrong]);
+  let finish!: (value: unknown) => void;
+  api.patch.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const callbacks = props();
+  render(<PurchaseSupplierReview {...callbacks} canEdit />);
+  await startCorrection();
+  expect(screen.getByText(/Earlier invoices, payments and stock stay unchanged/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Update saved GSTIN' })).toBeDisabled();
+  verifyCorrection();
+  const save = screen.getByRole('button', { name: 'Update saved GSTIN' });
+  fireEvent.click(save); fireEvent.click(save);
+  expect(api.patch).toHaveBeenCalledTimes(1);
+  expect(api.patch).toHaveBeenCalledWith('/pharmacy/purchase-invoices/suppliers/supplier-1/gstin', {
+    gstNumber: supplier.gstNumber, expectedGstNumber: savedWrong.gstNumber, expectedUpdatedAt: savedWrong.updatedAt,
+    reason: 'Checked original invoice', verified: true,
+  });
+  await act(async () => finish({ ...supplier, updatedAt: '2026-10-02T10:00:00.000Z' }));
+  expect(screen.getByText(/Saved supplier GSTIN corrected/)).toBeVisible();
+  expect(callbacks.onSaved).toHaveBeenCalledTimes(1);
+  expect(callbacks.onBusy.mock.calls).toEqual([[true], [false]]);
+  expect(callbacks.onChange).not.toHaveBeenCalled();
+  expect(api.post).not.toHaveBeenCalled();
+});
+
+it('keeps correction unavailable without update permission', async () => {
+  api.get.mockResolvedValue([savedWrong]);
+  render(<PurchaseSupplierReview {...props()} />);
+  await screen.findByText('Supplier GSTIN differs');
+  expect(screen.getByText(/requires supplier-update permission/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: /Correct saved GSTIN/ })).not.toBeInTheDocument();
+});
+
+it('invalidates confirmation when the reason or invoice GSTIN changes', async () => {
+  api.get.mockResolvedValue([savedWrong]);
+  const callbacks = props();
+  const view = render(<PurchaseSupplierReview {...callbacks} canEdit />);
+  await startCorrection(); verifyCorrection();
+  fireEvent.change(screen.getByLabelText('Reason for correction'), { target: { value: 'A different reason' } });
+  expect(screen.getByRole('checkbox', { name: /I checked the new GSTIN/ })).not.toBeChecked();
+  view.rerender(<PurchaseSupplierReview {...callbacks} canEdit gstNumber="36ABCDE1234F3Z5" />);
+  expect(screen.queryByRole('button', { name: 'Update saved GSTIN' })).not.toBeInTheDocument();
+  expect(api.patch).not.toHaveBeenCalled();
+});
+
+it('preserves invoice details on conflict and requires fresh verification after reloading suppliers', async () => {
+  api.get.mockResolvedValue([savedWrong]);
+  api.patch.mockRejectedValue(new Error('The saved supplier changed. Reload the supplier list and verify the correction again.'));
+  const callbacks = props();
+  render(<PurchaseSupplierReview {...callbacks} canEdit />);
+  await startCorrection(); verifyCorrection();
+  fireEvent.click(screen.getByRole('button', { name: 'Update saved GSTIN' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('saved supplier changed');
+  expect(callbacks.onSaved).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('GSTIN')).toHaveValue(supplier.gstNumber);
+  fireEvent.click(screen.getByRole('button', { name: 'Reload saved suppliers' }));
+  await startCorrection();
+  expect(screen.getByRole('checkbox', { name: /I checked the new GSTIN/ })).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Update saved GSTIN' })).toBeDisabled();
+});
+
+it('does not accept an unconfirmed correction response', async () => {
+  api.get.mockResolvedValue([savedWrong]); api.patch.mockResolvedValue(savedWrong);
+  const callbacks = props();
+  render(<PurchaseSupplierReview {...callbacks} canEdit />);
+  await startCorrection(); verifyCorrection();
+  fireEvent.click(screen.getByRole('button', { name: 'Update saved GSTIN' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('response could not be confirmed');
+  expect(callbacks.onSaved).not.toHaveBeenCalled();
 });

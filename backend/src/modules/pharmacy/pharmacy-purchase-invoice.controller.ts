@@ -38,6 +38,7 @@ import {
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
+  CorrectPharmacyPurchaseSupplierGstinDto,
   PurchaseProductCatalogDto,
   SuggestPharmacyPurchaseMasterMatchesDto,
 } from './dto/pharmacy-purchase-invoice.dto';
@@ -99,6 +100,14 @@ export class PharmacyPurchaseInvoiceController {
   @ApiOperation({ summary: 'Save a verified supplier from invoice review without changing invoices or stock' })
   saveSupplier(@Body() dto: SavePharmacyPurchaseSupplierDto, @Request() req: any) {
     return this.purchaseInvoiceService.savePurchaseSupplier(dto, req.user.branchId);
+  }
+
+  @Patch('suppliers/:id/gstin')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:supplier:update', ['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  @ApiOperation({ summary: 'Correct a verified saved supplier GSTIN without rewriting historical invoices' })
+  correctSupplierGstin(@Param('id') id: string, @Body() dto: CorrectPharmacyPurchaseSupplierGstinDto, @Request() req: any) {
+    return this.purchaseInvoiceService.correctPurchaseSupplierGstin(id, dto, req.user.branchId, req.user.id);
   }
 
   @Patch('master-records/:id')

@@ -45,6 +45,7 @@ import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import {
   groupPurchaseOcrFlags,
   purchaseBlockingIssues,
+  purchaseInvoiceStatusLabel,
   purchaseReviewIssue,
   uniquePurchaseReviewIssues,
 } from "@/lib/purchase-invoice-review";
@@ -903,10 +904,6 @@ function formatDate(value?: string | null) {
     month: "short",
     year: "numeric",
   });
-}
-
-function statusLabel(status?: string) {
-  return String(status || "DRAFT").replaceAll("_", " ");
 }
 
 function manualReviewOnlyIssue(raw: string) {
@@ -1950,7 +1947,7 @@ function PurchaseInvoiceEditor({
       setSourceDocument(created.documents?.[0] || sourceDocument);
       void loadUnlinkedUploads();
       setNotice(
-        `Purchase invoice ${created.invoiceNumber} saved as ${statusLabel(created.status)}.`,
+        `Purchase invoice ${created.invoiceNumber} saved. ${purchaseInvoiceStatusLabel(created)}.`,
       );
       return created;
     } catch (err) {
@@ -2405,6 +2402,7 @@ function PurchaseInvoiceEditor({
     activeInvoice?.reconciliationIssues || [],
   );
   const activeOcrFlags = activeInvoice?.unresolvedOcrFlags || 0;
+  const historicalStockHold = activeIssues.some(issue => purchaseReviewIssue(issue).category === "historical");
   const awaitingManualReview =
     !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
   const canReview =
@@ -2634,7 +2632,7 @@ function PurchaseInvoiceEditor({
         </h4>
         <p className="mt-1 text-sm text-muted-foreground">
           {editingChecks
-            ? `${confirmationCount} field confirmation${confirmationCount === 1 ? "" : "s"} remaining. Check the original, correct the value, then confirm it here.`
+            ? `${confirmationCount} field checks · ${correctionIssues.length} corrections${manualConfidenceLines.length ? ` · ${manualConfidenceLines.length} manual review${manualConfidenceLines.length === 1 ? '' : 's'}` : ''}`
             : "Choose Review issues to open the invoice fields and confirmation controls."}
         </p>
       </div>
@@ -2651,6 +2649,7 @@ function PurchaseInvoiceEditor({
         }
         canLoad={access.create || access.read}
         canSave={!!access.saveSupplier}
+        canEdit={!!access.editSupplier}
         readOnly={!editingChecks}
         disabled={busy}
         nextAction={
@@ -2747,15 +2746,15 @@ function PurchaseInvoiceEditor({
                 <p className="max-w-prose text-muted-foreground">
                   {issue.help}
                 </p>
-                <p className="font-medium">
+                {issue.category !== "historical" && <p className="font-medium">
                   {issue.requiresUpload
                     ? "Upload the complete invoice to resolve this check."
                     : "Correct the value, then Save & Process. This check cannot be dismissed with a confirmation."}
-                </p>
-                {editingChecks && (
+                </p>}
+                {editingChecks && target && (
                   <a
                     className="inline-block underline underline-offset-4"
-                    href={`#${target || "distributor-name"}`}
+                    href={`#${target}`}
                   >
                     Go to {issue.label}
                   </a>
@@ -2768,6 +2767,11 @@ function PurchaseInvoiceEditor({
       {manualConfidenceLines.length > 0 && (
         <div className="space-y-2 border-t pt-3 text-sm">
           <p className="font-semibold">Manual review required</p>
+          {manualConfidenceLines.map(lineNumber => {
+            const confidence = activeInvoice?.items?.[lineNumber - 1]?.ocrConfidence;
+            return typeof confidence === 'number' && Number.isFinite(confidence) && confidence >= 0 && confidence <= 1
+              ? <p key={lineNumber}>Line {lineNumber}: {numberFormat.format(Math.floor(confidence * 10000) / 100)}% reading confidence; automatic intake requires at least 98%.</p> : null;
+          })}
           {manualConfidenceLines.length > 0 && (
             <p>
               Check the OCR reading on line
@@ -2777,9 +2781,8 @@ function PurchaseInvoiceEditor({
             </p>
           )}
           <p className="font-medium">
-            After resolving the fields above, confirm your review below and
-            choose Save & Process. This records your review and commits stock
-            together from this screen.
+            Retrying keeps the same confidence score. Resolve the corrections above,
+            then confirm the final review to continue.
           </p>
         </div>
       )}
@@ -2941,7 +2944,7 @@ function PurchaseInvoiceEditor({
                     </p>
                   </div>
                   <Badge variant={statusVariant(invoice.status)}>
-                    {statusLabel(invoice.status)}
+                    {purchaseInvoiceStatusLabel(invoice)}
                   </Badge>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
@@ -3285,9 +3288,7 @@ function PurchaseInvoiceEditor({
                     </p>
                   </div>
                   <Badge variant={statusVariant(activeInvoice.status)}>
-                    {canResumeManualReview(activeInvoice)
-                      ? "MANUAL REVIEW NEEDED"
-                      : statusLabel(activeInvoice.status)}
+                    {purchaseInvoiceStatusLabel(activeInvoice)}
                   </Badge>
                 </div>
                 {activeInvoice.status === "STOCK_COMMITTED" ? (
@@ -3307,6 +3308,8 @@ function PurchaseInvoiceEditor({
                         ? "The request was interrupted. Refresh stock status to confirm the saved outcome before continuing."
                         : activeInvoice.status === "REVIEWED"
                           ? "Next: Commit Stock. Review is complete; stock has not been added yet."
+                          : historicalStockHold
+                            ? "Check this bill against opening stock with an inventory administrator before proceeding."
                           : awaitingManualReview
                             ? "Next: confirm your review below, then Save & Process to add stock. Your corrections are saved."
                             : editingSelectedInvoice && access.automate

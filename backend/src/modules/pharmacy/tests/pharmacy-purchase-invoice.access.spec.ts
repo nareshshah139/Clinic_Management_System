@@ -19,6 +19,7 @@ describe('Purchase invoice access through HTTP', () => {
   let rolePermissions: string[];
   const service = {
     capabilities: jest.fn().mockResolvedValue({read:false,create:false,review:false,commit:false,automate:false}),
+    correctPurchaseSupplierGstin: jest.fn().mockResolvedValue({}),
     purchaseSuppliers: jest.fn().mockResolvedValue([]),
     extractDraftFromDocument: jest.fn().mockResolvedValue({ draft: { items: [] } }),
     findAll: jest.fn().mockResolvedValue({ data: [] }),
@@ -86,6 +87,19 @@ describe('Purchase invoice access through HTTP', () => {
     userPermissions = ['inventory:po:create'];
     await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/suppliers').expect(200);
     expect(service.purchaseSuppliers).toHaveBeenCalledWith('branch-1');
+  });
+
+  it.each([[[]], [['inventory:supplier:update']], [['inventory:po:create']]])('denies supplier correction without both permissions: %j', async permissions => {
+    userPermissions = permissions;
+    await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/suppliers/supplier-1/gstin').send({}).expect(403);
+    expect(service.correctPurchaseSupplierGstin).not.toHaveBeenCalled();
+  });
+
+  it.each(['inventory:po:create', 'pharmacy:purchase-invoice:create'])('allows supplier correction with update and %s access, scoped to the authenticated branch and actor', async permission => {
+    userPermissions = ['inventory:supplier:update', permission];
+    const body = { gstNumber: '36ABCDE1234F2Z5', expectedGstNumber: '36ABCDE1234F1Z5', expectedUpdatedAt: '2026-10-01T10:00:00Z', reason: 'Original verified', verified: true };
+    await request(app.getHttpServer()).patch('/pharmacy/purchase-invoices/suppliers/supplier-1/gstin').send(body).expect(200);
+    expect(service.correctPurchaseSupplierGstin).toHaveBeenCalledWith('supplier-1', body, 'branch-1', 'staff-1');
   });
 
   it('lets Reception with explicit purchase permission reach OCR', async () => {

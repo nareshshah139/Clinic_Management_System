@@ -108,6 +108,39 @@ describe('PurchaseInvoiceWorkbench', () => {
     (global as any).fetch = jest.fn();
   });
 
+  it('explains the recent supplier, catalogue and confidence blockers without enabling stock approval', async () => {
+    const invoice = { ...draftInvoice, status: 'RECONCILIATION_FAILED', reconciliationIssues: [
+      'AUTO: Supplier GSTIN does not match the saved supplier (36AAYCV6140M1ZW). Check the original and select the correct saved supplier.',
+      'AUTO: Line 1: product master is incomplete for Moisturex Hydra Gel Cream; missing composition1, strength',
+      'AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.',
+    ], items: [{ ...draftInvoice.items[0], packUnitType: 'Tube', ocrConfidence: 0.97 }] };
+    api.getPharmacyPurchaseInvoices.mockResolvedValue({ data: [invoice] });
+    renderSavedInvoice(invoice);
+    await editSelectedInvoice();
+    expect(screen.getAllByText('Needs corrections').length).toBeGreaterThan(0);
+    const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
+    expect(within(checklist).getByText('Invoice GSTIN differs from the saved supplier.')).toBeVisible();
+    expect(within(checklist).getByText('Line 1: Saved product is missing composition, strength.')).toBeVisible();
+    expect(within(checklist).getByText(/97% reading confidence; automatic intake requires at least 98%/)).toBeVisible();
+    expect(within(checklist).getByText(/Retrying keeps the same confidence score/)).toBeVisible();
+    expect(within(checklist).getByText(/Do not change a verified GSTIN just to make it match/)).toBeVisible();
+    expect(screen.queryByRole('checkbox', { name: /I checked the supplier, product matches, batches/ })).not.toBeInTheDocument();
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('gives historical invoices a stock-backfill check instead of retry instructions', async () => {
+    renderSavedInvoice({ ...draftInvoice, status: 'RECONCILIATION_FAILED', reconciliationIssues: [
+      'This historical invoice predates the 14-Sep-2026 eVitalRx stock snapshot. Its stock may already be included in the inventory backfill.',
+    ], items: [{ ...draftInvoice.items[0], packUnitType: 'Tube' }], distributorDlNo: 'verified-license' });
+    await editSelectedInvoice();
+    expect(screen.getByText('Historical stock check')).toBeVisible();
+    const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
+    expect(within(checklist).getByText(/Do not add it as a new receipt/)).toBeVisible();
+    expect(within(checklist).queryByText('Correct, then Save & Process.')).not.toBeInTheDocument();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it.each([false, true])('CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (%s)', async (acknowledge) => {
     mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true } as typeof mockPurchaseAccess;
     const invoice = { ...draftInvoice, items: [{ ...draftInvoice.items[0], productName: 'Moisturex Hydra Gel Cream', packSize: '50 ml' }] };

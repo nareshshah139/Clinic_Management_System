@@ -7,6 +7,7 @@ import { InventoryAction } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
+import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
 import { ComplianceCenter } from "@/components/pharmacy/ComplianceCenter";
@@ -818,7 +819,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
               "STOCK_COMMITTED",
               "CANCELLED",
             ].map((s) => (
-              <option key={s}>{s}</option>
+              <option key={s} value={s}>{s === "UNPOSTED" ? "Stock not added" : s === "OCR_REVIEW_REQUIRED" ? "OCR checks needed" : s === "RECONCILIATION_FAILED" ? "Corrections or manual review needed" : purchaseInvoiceStatusLabel({ status: s })}</option>
             ))}
           </select>
         </label>
@@ -889,9 +890,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
                 </td>
                 <td className="p-3">{fmtDate(d.invoiceDate)}</td>
                 <td className="p-3">
-                  {d.status === "STOCK_COMMITTED"
-                    ? "Stock added"
-                    : d.status.replaceAll("_", " ").toLowerCase()}
+                  {purchaseInvoiceStatusLabel(d)}
                 </td>
                 <td className="p-3">{fmtMoney(d.netPayable)}</td>
                 <td className="p-3">
