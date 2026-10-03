@@ -1,4 +1,4 @@
-import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from '@/components/inventory/stock-batch-view';
+import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from '@/components/inventory/stock-batch-view';
 const now = new Date('2026-09-16T10:00:00Z');
 const item = { currentStock: 2, heldStock: 0, status: 'ACTIVE', expiryDate: '2028-05-31T23:59:59.999Z' };
 it('shows all batches by default and preserves an explicit view', () => {
@@ -20,4 +20,13 @@ it('formats month-end expiry as the stored UTC calendar date, including in India
   expect(fmtStockExpiry('2027-05-31T23:59:59.999Z')).toBe('31/5/2027');
   expect(fmtStockExpiry('bad')).toBe('Unverified');
   expect(fmtStockExpiry(null)).toBe('Unverified');
+});
+
+it('reserves green for current available stock and flags expired, negative, held and unknown states', () => {
+  expect(batchReviewTone(item, now)).toBe('success');
+  expect(batchReviewTone({ ...item, currentStock: 0 }, now)).toBe('neutral');
+  expect(batchReviewTone({ ...item, currentStock: -1 }, now)).toBe('error');
+  expect(batchReviewTone({ ...item, expiryDate: '2026-09-15' }, now)).toBe('error');
+  expect(batchReviewTone({ ...item, expiryDate: null }, now)).toBe('warning');
+  expect(batchReviewTone({ ...item, heldStock: 2 }, now)).toBe('warning');
 });

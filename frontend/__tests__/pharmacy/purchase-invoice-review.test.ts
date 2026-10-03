@@ -1,3 +1,4 @@
+import { purchaseInvoiceReviewTone } from '@/lib/purchase-invoice-review';
 import { purchaseInvoiceStatusLabel, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
 
 const confidence = 'AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.';
@@ -26,4 +27,13 @@ describe('purchase failure explanations', () => {
     expect(purchaseInvoiceStatusLabel({ status: 'STOCK_COMMITTED', reconciliationIssues: [confidence] })).toBe('Stock added');
     expect(purchaseInvoiceStatusLabel({ status: 'STOCK_COMMITTED', workflowReceiptId: 'receipt' })).toBe('Invoice posted');
   });
+});
+
+it('distinguishes verified invoices from failed, unchecked and cancelled states', () => {
+  expect(purchaseInvoiceReviewTone({ status: 'DRAFT' })).toBe('warning');
+  expect(purchaseInvoiceReviewTone({ status: 'RECONCILIATION_FAILED', reconciliationIssues: ['Net payable total mismatch'] })).toBe('error');
+  expect(purchaseInvoiceReviewTone({ status: 'RECONCILIATION_FAILED', reconciliationIssues: ['OCR confidence requires manual review'] })).toBe('warning');
+  expect(purchaseInvoiceReviewTone({ status: 'REVIEWED' })).toBe('success');
+  expect(purchaseInvoiceReviewTone({ status: 'STOCK_COMMITTED' })).toBe('success');
+  expect(purchaseInvoiceReviewTone({ status: 'CANCELLED' })).toBe('neutral');
 });

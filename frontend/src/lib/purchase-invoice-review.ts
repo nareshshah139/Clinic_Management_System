@@ -168,3 +168,19 @@ export function groupPurchaseOcrFlags(flags:string[],lineIndex?:number) {
   }
   return [...groups.values()];
 }
+
+/**
+ * @cc [owner:nareshshah139,label:product] invoice-status-color-evidence
+ * Only reviewed or stock-committed invoices MAY use success color. Failed invoices with
+ * correction blockers MUST use error; manual-review-only or unknown outcomes MUST use review.
+ * Cancelled invoices MUST remain neutral rather than appearing verified.
+ */
+export function purchaseInvoiceReviewTone(invoice: Parameters<typeof purchaseInvoiceStatusLabel>[0]): 'success' | 'error' | 'warning' | 'neutral' {
+  if (['REVIEWED', 'STOCK_COMMITTED'].includes(invoice.status || '')) return 'success';
+  if (invoice.status === 'CANCELLED') return 'neutral';
+  if (['RECONCILIATION_FAILED', 'OCR_REVIEW_REQUIRED'].includes(invoice.status || '')) {
+    const issues = uniquePurchaseReviewIssues(invoice.reconciliationIssues || []);
+    if (issues.some(issue => issue.category !== 'manual' && issue.category !== 'historical' && issue.key !== 'header:supplier-match')) return 'error';
+  }
+  return 'warning';
+}

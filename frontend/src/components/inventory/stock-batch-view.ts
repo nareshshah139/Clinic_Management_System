@@ -27,15 +27,16 @@ export function batchState(item: any, now = new Date()) {
 
 /**
  * @cc [owner:nareshshah139,label:product] batch-color-has-label
- * Depleted rows MUST remain readable and distinct from positive-stock rows. Expired, inactive,
- * negative or unverified positive stock MUST use the attention treatment, not the current-stock
- * treatment. Consumers MUST display batchState alongside color so color is never the only cue.
+ * Depleted rows MUST remain readable and distinct from positive-stock rows. Expired
+ * or negative stock MUST use error treatment; held, inactive or unverified stock MUST use review
+ * treatment. Only available current stock MAY use success treatment. Consumers MUST display batchState alongside color so color is never the only cue.
  */
 export function batchRowClass(item: any, now = new Date()) {
-  const state = batchState(item, now);
-  if (item.currentStock === 0) return 'bg-muted/60 text-foreground [&_.text-muted-foreground]:text-foreground/80';
-  if (state === 'Current / on hand' || state === 'Held, on hand') return 'bg-emerald-50/60 dark:bg-emerald-950/20';
-  return 'bg-amber-50/70 dark:bg-amber-950/20';
+  const tone = batchReviewTone(item, now);
+  if (tone === 'neutral') return 'bg-muted/60 text-foreground [&_.text-muted-foreground]:text-foreground/80';
+  if (tone === 'error') return 'bg-red-50 dark:bg-red-950/30';
+  if (tone === 'warning') return 'bg-amber-50 dark:bg-amber-950/30';
+  return 'bg-emerald-50 dark:bg-emerald-950/30';
 }
 
 /**
@@ -47,4 +48,16 @@ export function fmtStockExpiry(value: string | Date | null | undefined) {
   if (!value) return 'Unverified';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Unverified' : date.toLocaleDateString('en-IN', { timeZone: 'UTC' });
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] batch-review-evidence
+ * Expired or negative on-hand stock MUST be red; held, inactive or unverified stock MUST be
+ * amber. Depleted stock MUST be neutral. Green means current stock on hand, not human verification.
+ */
+export function batchReviewTone(item: any, now = new Date()): 'error' | 'warning' | 'success' | 'neutral' {
+  const state = batchState(item, now);
+  if (state === 'Previous / depleted') return 'neutral';
+  if (state === 'Negative stock — count needed' || state === 'Expired, on hand') return 'error';
+  return state === 'Current / on hand' ? 'success' : 'warning';
 }

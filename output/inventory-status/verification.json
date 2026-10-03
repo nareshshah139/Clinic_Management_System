@@ -1,0 +1,56 @@
+{
+  "synthetic": true,
+  "checks": [
+    "Line check state: warning",
+    "Line check state: error",
+    "Line check state: warning",
+    "Line check state: success",
+    "Line check state: warning"
+  ],
+  "contrast": [
+    {
+      "state": "needs-correction",
+      "width": 1440,
+      "dark": false,
+      "minText": 8.73487364267831,
+      "minBorder": 3.0852921342363753
+    },
+    {
+      "state": "needs-correction",
+      "width": 390,
+      "dark": false,
+      "minText": 8.73487364267831,
+      "minBorder": 3.0852921342363753
+    },
+    {
+      "state": "checked",
+      "width": 1440,
+      "dark": false,
+      "minText": 8.73487364267831,
+      "minBorder": 3.0852921342363753
+    },
+    {
+      "state": "checked",
+      "width": 390,
+      "dark": false,
+      "minText": 8.73487364267831,
+      "minBorder": 3.0852921342363753
+    },
+    {
+      "state": "checked",
+      "width": 390,
+      "dark": true,
+      "minText": 13.26209850270222,
+      "minBorder": 5.596755573468945
+    },
+    {
+      "state": "changed",
+      "width": 390,
+      "dark": true,
+      "minText": 13.26209850270222,
+      "minBorder": 5.596755573468945
+    }
+  ],
+  "errors": [],
+  "passed": true
+}

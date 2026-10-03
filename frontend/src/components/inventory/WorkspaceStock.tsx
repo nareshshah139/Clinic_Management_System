@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { StockDetailsEditor } from "./StockDetailsEditor";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { StockEditDialog } from "./StockEditDialog";
-import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
+import { ReviewStatus } from "@/components/ui/ReviewStatus";
+import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
   fmtMoney,
   fmtDate,
@@ -267,7 +268,7 @@ export function WorkspaceStock({
                 <div>
                   <h2 className="text-2xl font-semibold">{item.productName || item.name}</h2>
                   {item.packLabel && <p>{item.packLabel} · Stock counted in {item.unit}</p>}
-                  <p className="text-sm">{batchState(item)}</p>
+                  <p className="text-sm"><ReviewStatus tone={batchReviewTone(item)}>{batchState(item)}</ReviewStatus></p>
                   <p className="text-muted-foreground">
                     {item.batchNumber || "Batch unspecified"} · Expiry{" "}
                     {fmtStockExpiry(item.expiryDate)} ·{" "}
@@ -461,7 +462,7 @@ export function WorkspaceStock({
                                   {b.batchNumber || "No batch"}
                                 </button>
                               </td>
-                              <td>{batchState(b)}</td>
+                              <td><ReviewStatus tone={batchReviewTone(b)}>{batchState(b)}</ReviewStatus></td>
                               <td>{fmtStockExpiry(b.expiryDate)}</td>
                               <td>{b.currentStock}</td>
                               <td>{b.heldStock}</td>
@@ -1280,7 +1281,7 @@ export function WorkspaceStock({
                         {i.batchNumber || "Batch missing"}
                       </p>
                     </td>
-                    <td className="p-3">{batchState(i)}</td>
+                    <td className="p-3"><ReviewStatus tone={batchReviewTone(i)}>{batchState(i)}</ReviewStatus></td>
                     <td className="whitespace-nowrap p-3">
                       {fmtStockExpiry(i.expiryDate)}
                     </td>

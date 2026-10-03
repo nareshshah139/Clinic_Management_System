@@ -1,6 +1,7 @@
 "use client";
 
 import { AlertTriangle, CheckCircle2, Circle, FileSearch } from "lucide-react";
+import { ReviewStatus, reviewColors } from "@/components/ui/ReviewStatus";
 import { focusPurchaseField } from "@/lib/purchase-invoice-review";
 
 const money = (value: number) =>
@@ -40,7 +41,7 @@ export function PurchaseReviewSummary({
     printed !== undefined &&
     printed !== "" &&
     Number.isFinite(Number(printed));
-  const difference = hasPrinted
+  const difference = hasPrinted && Number.isFinite(calculated)
     ? Math.round((calculated - Number(printed)) * 100) / 100
     : null;
   const current = committed && !unknown ? 3 : saved ? 2 : hasContent ? 1 : 0;
@@ -59,7 +60,7 @@ export function PurchaseReviewSummary({
             <li
               key={label}
               aria-current={!paused && current === index ? "step" : undefined}
-              className={`flex items-center gap-2 ${complete ? "text-emerald-800 dark:text-emerald-300" : "text-foreground"}`}
+              className={`flex items-center gap-2 rounded-md border p-2 ${complete ? reviewColors.success : current === index && !paused ? reviewColors.warning : reviewColors.neutral}`}
             >
               <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
               <span>
@@ -122,14 +123,14 @@ export function PurchaseReviewSummary({
           </div>
           <div>
             <dt className="text-muted-foreground">Difference</dt>
-            <dd
-              className={`font-semibold ${difference !== null && Math.abs(difference) > 0.01 ? "text-amber-800 dark:text-amber-300" : ""}`}
-            >
-              {difference === null
-                ? "Enter bill total to compare"
-                : Math.abs(difference) <= 0.01
-                  ? "Totals match"
-                  : `${money(difference)} — check amounts`}
+            <dd className="mt-1">
+              <ReviewStatus tone={difference === null ? "warning" : Math.abs(difference) <= 0.01 ? "success" : "error"}>
+                {difference === null
+                  ? "Enter bill total to compare"
+                  : Math.abs(difference) <= 0.01
+                    ? "Totals match"
+                    : `${money(difference)} — check amounts`}
+              </ReviewStatus>
             </dd>
           </div>
         </dl>

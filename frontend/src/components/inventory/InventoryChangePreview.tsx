@@ -1,3 +1,4 @@
+import { ReviewStatus, reviewColors } from "@/components/ui/ReviewStatus";
 import { ArrowRight } from "lucide-react";
 
 /**
@@ -17,7 +18,7 @@ export function InventoryChangePreview({
       aria-label="Check your changes"
       className="space-y-2 border-y py-3"
     >
-      <h4 className="font-medium">Check your changes</h4>
+      <div className="flex flex-wrap items-center gap-2"><h4 className="font-medium">Check your changes</h4><ReviewStatus tone="warning">Not saved yet</ReviewStatus></div>
       <ul className="divide-y text-sm">
         {changes.map((change) => (
           <li
@@ -31,7 +32,7 @@ export function InventoryChangePreview({
                 {change.before || "Not entered"}
               </span>
               <ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
-              <strong>
+              <strong className={`rounded-md border px-2 py-1 ${reviewColors.warning}`}>
                 <span className="sr-only">Change to: </span>
                 {change.after || "Not entered"}
               </strong>

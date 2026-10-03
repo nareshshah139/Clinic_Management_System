@@ -14,7 +14,7 @@ it('defaults to all batches, colors depleted history and keeps the existing sear
   expect(apiClient.get).toHaveBeenCalledWith(expect.stringContaining('batchView=ALL'));
   expect(screen.getAllByText('100 Gm')).toHaveLength(2);
   expect(screen.getByText('Old batch').closest('tr')).toHaveClass('bg-muted/60');
-  expect(screen.getByText('Max Rich Yu Cream').closest('tr')).toHaveClass('bg-emerald-50/60');
+  expect(screen.getByText('Max Rich Yu Cream').closest('tr')).toHaveClass('bg-emerald-50');
   fireEvent.click(screen.getByRole('button', { name: 'Previous / depleted' }));
   expect(props.navigate).toHaveBeenCalledWith(expect.objectContaining({ batchView: 'EMPTY', page: '1' }));
   expect(props.navigate.mock.calls[0][0]).not.toHaveProperty('search');

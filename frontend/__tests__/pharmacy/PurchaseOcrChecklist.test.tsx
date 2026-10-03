@@ -67,3 +67,31 @@ describe('Purchase OCR review controls', () => {
     expect(screen.getByRole('button', { name: 'Confirm stock unit checked' })).toBeDisabled();
   });
 });
+
+it('moves from correction to checking to checked, then requires another check after editing', () => {
+  const props = { flags: ['missing_batchNumber'], lineIndex: 0, lineId: 'line', disabled: false, onResolve: jest.fn() };
+  const view = render(<PurchaseOcrChecklist {...props} values={{ batchNumber: '' }} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'error');
+  view.rerender(<PurchaseOcrChecklist {...props} values={{ batchNumber: 'B1' }} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'warning');
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
+  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} values={{ batchNumber: 'B1' }} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'success');
+  expect(screen.getByText('Checked')).toBeVisible();
+  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} values={{ batchNumber: 'B2' }} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'warning');
+  expect(screen.getByText('Changed — check again')).toBeVisible();
+  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
+});
+
+it('does not infer a checked state from empty flags and invalidates dependent expiry values', () => {
+  const props = { flags: [], disabled: false, onResolve: jest.fn() };
+  const view = render(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
+  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
+  view.rerender(<PurchaseOcrChecklist {...props} flags={['uncertain_expiry']} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm expiry checked' }));
+  view.rerender(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
+  expect(screen.getByText('Checked')).toBeVisible();
+  view.rerender(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2029' }} />);
+  expect(screen.getByText('Changed — check again')).toBeVisible();
+});

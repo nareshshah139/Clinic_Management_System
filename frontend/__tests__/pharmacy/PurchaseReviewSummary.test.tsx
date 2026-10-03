@@ -13,13 +13,13 @@ const props = {
 };
 it("distinguishes missing totals, mismatches and matched totals without claiming human verification", () => {
   const view = render(<PurchaseReviewSummary {...props} />);
-  expect(screen.getByText("Enter bill total to compare")).toBeVisible();
+  expect(screen.getByText("Enter bill total to compare").closest("[data-review-state]")).toHaveAttribute("data-review-state", "warning");
   expect(screen.getByText("Compare every item with the bill")).toBeVisible();
   expect(screen.queryByText(/Add stock complete/)).not.toBeInTheDocument();
   view.rerender(<PurchaseReviewSummary {...props} printed={110} />);
-  expect(screen.getByText(/₹2.00 — check amounts/)).toBeVisible();
+  expect(screen.getByText(/₹2.00 — check amounts/).closest("[data-review-state]")).toHaveAttribute("data-review-state", "error");
   view.rerender(<PurchaseReviewSummary {...props} printed={112} />);
-  expect(screen.getByText("Totals match")).toBeVisible();
+  expect(screen.getByText("Totals match").closest("[data-review-state]")).toHaveAttribute("data-review-state", "success");
 });
 it("opens a collapsed correction target and moves keyboard focus to it", () => {
   render(

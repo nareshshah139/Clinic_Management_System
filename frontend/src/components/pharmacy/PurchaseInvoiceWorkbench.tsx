@@ -42,12 +42,15 @@ import { PurchaseManualMatchSearch } from "./PurchaseManualMatchSearch";
 import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
+import { ReviewStatus, ReviewLegend, reviewColors, type ReviewTone } from "@/components/ui/ReviewStatus";
+import { PurchaseFieldReviewContext, PurchaseFieldStatus, usePurchaseFieldTone, purchaseCheckInvalid } from "./PurchaseFieldReview";
 import { PurchaseHelp, PurchaseStatusCue } from "./PurchaseHelp";
 import {
   focusPurchaseField,
   groupPurchaseOcrFlags,
   purchaseBlockingIssues,
   purchaseInvoiceStatusLabel,
+  purchaseInvoiceReviewTone,
   purchaseReviewIssue,
   uniquePurchaseReviewIssues,
 } from "@/lib/purchase-invoice-review";
@@ -1007,6 +1010,12 @@ export function PurchaseInvoiceWorkbench({
  * Adding stock MUST be a separately labelled action; automatic processing MUST stay an explicit
  * secondary choice. Editing reviewed values MUST clear the final human confirmation.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] invoice-field-color-evidence
+ * Unresolved field errors MUST override green verification. Empty OCR flags MUST NOT make fields
+ * green; success requires final human confirmation or a server-reviewed/committed invoice.
+ * Unknown stock outcome or a stale revision MUST suppress that global success state.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -1323,6 +1332,7 @@ function PurchaseInvoiceEditor({
   const removeLine = (localId: string) => {
     setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
+    setReviewAccepted(false);
     const removedIndex = lines.findIndex((line) => line.localId === localId);
     setMasterMatches([]);
     setMasterStatuses({});
@@ -2613,9 +2623,16 @@ function PurchaseInvoiceEditor({
         ),
       ]
     : [];
+  const flaggedFields = new Set([
+    ...currentHeaderFlags.map(flag => purchaseReviewIssue(flag)),
+    ...currentLineFlags.flatMap((flags, index) => flags.map(flag => purchaseReviewIssue(flag, index))),
+  ].filter(issue => issue.field).map(issue => `${issue.lineIndex ?? "header"}:${issue.field}`));
   const otherReviewIssues = uniquePurchaseReviewIssues([
     ...activeIssues,
-    ...missingStockFields,
+    ...missingStockFields.filter(raw => {
+      const issue = purchaseReviewIssue(raw);
+      return !flaggedFields.has(`${issue.lineIndex ?? "header"}:${issue.field}`);
+    }),
   ]).filter((issue) => !coveredOcrKeys.has(issue.key));
   const manualIssueKeys = new Set(
     activeIssues
@@ -2639,6 +2656,25 @@ function PurchaseInvoiceEditor({
         0,
       )
     : activeOcrFlags;
+  // Evidence wins over a previous confirmation: unresolved corrections stay red or amber.
+  const fieldTones: Record<string, ReviewTone> = {};
+  const invoiceVerified = !stockStatusUnknown && !draftWriteBlocked &&
+    (reviewAccepted || activeInvoice?.status === "REVIEWED" || stockAdded);
+  if (invoiceVerified) sourceTargets.forEach(target => { fieldTones[target.id] = "success"; });
+  const markField = (issue: ReturnType<typeof purchaseReviewIssue>, tone: ReviewTone) => {
+    if (!issue.target) return;
+    const lineId = issue.lineIndex === undefined ? undefined : lines[issue.lineIndex]?.localId;
+    const id = lineId && issue.field ? `${lineId}-${issue.target}` : issue.target;
+    if (fieldTones[id] !== "error") fieldTones[id] = tone;
+    if (issue.field === "expiryMonth" && lineId) fieldTones[`${lineId}-expiry-year`] = tone;
+  };
+  if (editingChecks) {
+    currentHeaderFlags.forEach(flag => { const issue = purchaseReviewIssue(flag); markField(issue, purchaseCheckInvalid(issue, header) ? "error" : "warning"); });
+    currentLineFlags.forEach((flags, index) => flags.forEach(flag => { const issue = purchaseReviewIssue(flag, index); markField(issue, purchaseCheckInvalid(issue, lines[index]) ? "error" : "warning"); }));
+  }
+  correctionIssues.forEach(issue => markField(issue, issue.category === "historical" || issue.category === "manual" ? "warning" : "error"));
+  const checkSession = `${previewDocument?.id || "manual"}:${activeInvoice?.id || "new"}`;
+  const checksRemaining = confirmationCount + correctionIssues.length + manualConfidenceLines.length;
   const reviewChecklist = (
     <section
       id="purchase-review-checklist"
@@ -2650,8 +2686,8 @@ function PurchaseInvoiceEditor({
           Check before adding stock
         </h4>
         <div className="mt-1 flex items-center gap-1">
-          <PurchaseStatusCue tone={confirmationCount || otherReviewIssues.length ? "warning" : "success"}>
-            {editingChecks ? `${confirmationCount + correctionIssues.length + manualConfidenceLines.length} checks to finish` : "Open Review issues to continue"}
+          <PurchaseStatusCue tone={Object.values(fieldTones).includes("error") || correctionIssues.some(issue => issue.category !== "historical") ? "error" : confirmationCount || otherReviewIssues.length || !invoiceVerified ? "warning" : "success"}>
+            {editingChecks ? checksRemaining > 0 ? `${checksRemaining} check${checksRemaining === 1 ? "" : "s"} to finish` : invoiceVerified ? "Review confirmed" : "Ready for your final check" : "Open Review issues to continue"}
           </PurchaseStatusCue>
           <PurchaseHelp label="Review checks">Compare flagged values with the original, correct them if needed, then confirm each check. Corrections and field confirmations are separate from the final stock review.</PurchaseHelp>
         </div>
@@ -2695,6 +2731,7 @@ function PurchaseInvoiceEditor({
       {editingChecks && (
         <>
           <PurchaseOcrChecklist
+            key={checkSession}
             flags={currentHeaderFlags}
             values={header}
             disabled={busy}
@@ -2717,7 +2754,7 @@ function PurchaseInvoiceEditor({
           />
           {lines.map((line, index) => (
             <PurchaseOcrChecklist
-              key={line.localId}
+              key={`${checkSession}:${line.localId}`}
               flags={currentLineFlags[index]}
               lineIndex={index}
               lineId={line.localId}
@@ -2746,7 +2783,7 @@ function PurchaseInvoiceEditor({
         </>
       )}
       {correctionIssues.length > 0 && (
-        <ul className="divide-y text-sm">
+        <ul className="space-y-2 text-sm">
           {correctionIssues.map((issue) => {
             const lineId =
               issue.lineIndex === undefined
@@ -2758,8 +2795,8 @@ function PurchaseInvoiceEditor({
                 ? `${lineId}-${issue.target}`
                 : issue.target);
             return (
-              <li key={issue.key} className="space-y-2 py-3 first:pt-0">
-                <div className="flex items-start gap-1"><PurchaseStatusCue tone="warning">{issue.message}</PurchaseStatusCue><PurchaseHelp label={`${issue.lineIndex === undefined ? '' : `Line ${issue.lineIndex + 1} `}${issue.label} correction`}>This check needs a correction and cannot be dismissed with a confirmation.</PurchaseHelp></div>
+              <li key={issue.key} className={`space-y-2 rounded-md border p-3 ${reviewColors[issue.category === "historical" ? "warning" : "error"]}`}>
+                <div className="flex items-start gap-1"><PurchaseStatusCue tone={issue.category === "historical" ? "warning" : "error"}>{issue.message}</PurchaseStatusCue><PurchaseHelp label={`${issue.lineIndex === undefined ? '' : `Line ${issue.lineIndex + 1} `}${issue.label} correction`}>This check needs a correction and cannot be dismissed with a confirmation.</PurchaseHelp></div>
                 {issue.category === "historical" ? <p className="max-w-prose text-muted-foreground">{issue.help}</p> : <details><summary className="cursor-pointer text-muted-foreground">How to fix</summary><p className="mt-2 max-w-prose text-muted-foreground">{issue.help}</p></details>}
                 {editingChecks && target && (
                   <a
@@ -2801,6 +2838,7 @@ function PurchaseInvoiceEditor({
               onChange={(e) => setReviewAccepted(e.target.checked)}
             />
             <span>
+              <span className="mb-2 block"><ReviewStatus tone={reviewAccepted ? "success" : "warning"}>{reviewAccepted ? "Verified by you" : "Final check needed"}</ReviewStatus></span>
               I verified the invoice against the original. {activeInvoice?.workflowReceiptId || workflowReceiptId ? "I approve posting this bill against the earlier stock receipt." : "I approve adding the received quantities to stock."}
             </span>
           </label>
@@ -2812,7 +2850,7 @@ function PurchaseInvoiceEditor({
       {editingChecks &&
         confirmationCount === 0 &&
         otherReviewIssues.length === 0 && (
-          <PurchaseStatusCue tone="success">No outstanding OCR checks</PurchaseStatusCue>
+          <PurchaseStatusCue tone={reviewAccepted ? "success" : "warning"}>No outstanding OCR checks — compare with the bill</PurchaseStatusCue>
         )}
     </section>
   );
@@ -2946,9 +2984,7 @@ function PurchaseInvoiceEditor({
                       {invoice.distributorName}
                     </p>
                   </div>
-                  <Badge variant={statusVariant(invoice.status)}>
-                    {purchaseInvoiceStatusLabel(invoice)}
-                  </Badge>
+                  <ReviewStatus tone={purchaseInvoiceReviewTone(invoice)}>{purchaseInvoiceStatusLabel(invoice)}</ReviewStatus>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                   <span>{formatDate(invoice.invoiceDate)}</span>
@@ -2963,6 +2999,7 @@ function PurchaseInvoiceEditor({
   );
 
   return (
+    <PurchaseFieldReviewContext.Provider value={fieldTones}>
     <PurchaseSourceContext.Provider
       value={{
         enabled: showSourcePreview,
@@ -3034,7 +3071,7 @@ function PurchaseInvoiceEditor({
             <div
               role="status"
               aria-label="Stock status"
-              className="min-w-0 text-sm"
+              className={`min-w-0 rounded-md border px-3 py-2 text-sm ${reviewColors[stockStatusUnknown ? "warning" : stockAdded ? "success" : "neutral"]}`}
             >
               <p className="font-semibold">
                 {stockStatusUnknown
@@ -3207,10 +3244,11 @@ function PurchaseInvoiceEditor({
         )}
 
         {!showIntakeHome && !activeInvoice && recentInvoices}
+        {!showIntakeHome && <ReviewLegend />}
         {!showIntakeHome && <PurchaseReviewSummary
           hasContent={hasDraftContent}
           saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
-          checks={confirmationCount + correctionIssues.length + manualConfidenceLines.length} lines={sourceLines.length}
+          checks={checksRemaining} lines={sourceLines.length}
           calculated={viewingSavedInvoice ? calculateTotals(sourceHeader as HeaderForm, sourceLines).netPayable : totals.netPayable}
           printed={sourceAmounts?.netPayable} />}
 
@@ -3286,9 +3324,7 @@ function PurchaseInvoiceEditor({
                       {activeInvoice.distributorName}
                     </p>
                   </div>
-                  <Badge variant={statusVariant(activeInvoice.status)}>
-                    {purchaseInvoiceStatusLabel(activeInvoice)}
-                  </Badge>
+                  <ReviewStatus tone={stockStatusUnknown ? "warning" : purchaseInvoiceReviewTone(activeInvoice)}>{purchaseInvoiceStatusLabel(activeInvoice)}</ReviewStatus>
                 </div>
                 {activeInvoice.status === "STOCK_COMMITTED" ? (
                   <p className="text-sm">
@@ -3903,20 +3939,14 @@ function PurchaseInvoiceEditor({
                                       </p>
                                     </div>
                                     {status ? (
-                                      <Badge variant="default">
+                                      <ReviewStatus tone="success">
                                         {masterActionLabel(status.action)}{" "}
                                         {status.drug.name}
-                                      </Badge>
+                                      </ReviewStatus>
                                     ) : best ? (
-                                      <Badge
-                                        variant={
-                                          best.confidence === "LOW"
-                                            ? "outline"
-                                            : "secondary"
-                                        }
-                                      >
-                                        {match.matchLabel || "Possible match"}
-                                      </Badge>
+                                      <ReviewStatus tone="warning">
+                                        {match.matchLabel || "Possible match"} · confirm
+                                      </ReviewStatus>
                                     ) : (
                                       <Badge variant="outline">
                                         Not in inventory
@@ -5045,6 +5075,7 @@ function PurchaseInvoiceEditor({
         </div>
       </div>
     </PurchaseSourceContext.Provider>
+    </PurchaseFieldReviewContext.Provider>
   );
 }
 
@@ -5114,20 +5145,20 @@ function ReportedAmountsEditor({
 
 function Field({ id, label, className, ...props }: FieldProps) {
   const source = useContext(PurchaseSourceContext);
+  const tone = usePurchaseFieldTone(id);
   return (
     <div className={className}>
-      <div className="flex items-center">
+      <div className="flex flex-wrap items-center gap-2">
         <Label htmlFor={id}>{label}</Label>
+        <PurchaseFieldStatus id={id} />
         <SourceFieldLink id={id} label={label} />
       </div>
       <Input
         id={id}
         {...props}
-        className={
-          source.enabled && source.selectedId === id
-            ? "outline-2 outline-amber-600 bg-amber-50 dark:bg-amber-950"
-            : undefined
-        }
+        aria-invalid={tone === "error" || undefined}
+        aria-describedby={tone ? `${id}-review-state` : undefined}
+        className={`${tone ? reviewColors[tone] : ""} ${source.enabled && source.selectedId === id ? "outline-2 outline-sky-700 dark:outline-sky-300" : ""}`}
       />
     </div>
   );

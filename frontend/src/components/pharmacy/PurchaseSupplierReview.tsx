@@ -1,5 +1,7 @@
 'use client';
 
+import { ReviewStatus, reviewColors } from '@/components/ui/ReviewStatus';
+import { PurchaseFieldStatus, usePurchaseFieldTone } from './PurchaseFieldReview';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { SourceFieldLink } from './PurchaseSourcePreview';
@@ -39,6 +41,8 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
   onBusy: (busy: boolean) => void;
   onEdit?: () => void;
 }) {
+  const nameTone = usePurchaseFieldTone('distributor-name');
+  const gstinTone = usePurchaseFieldTone('distributor-gstin');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -120,8 +124,8 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
     <h5 id="purchase-supplier-title" className="font-semibold">Supplier</h5>
     <p className="text-sm text-muted-foreground">Match the supplier by name and GSTIN, or save verified details here.</p>
     <div className="grid gap-3 md:grid-cols-2">
-      <div><div className="flex items-center"><Label htmlFor="distributor-name">Distributor</Label><SourceFieldLink id="distributor-name" label="Distributor"/></div><Input id="distributor-name" value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
-      <div><div className="flex items-center"><Label htmlFor="distributor-gstin">GSTIN</Label><SourceFieldLink id="distributor-gstin" label="GSTIN"/></div><Input id="distributor-gstin" value={gstNumber} disabled={locked} onChange={event => onChange(name, event.target.value.toUpperCase())} placeholder="36ABCDE1234F1Z5" /></div>
+      <div><div className="flex items-center"><Label htmlFor="distributor-name">Distributor</Label><SourceFieldLink id="distributor-name" label="Distributor"/><PurchaseFieldStatus id="distributor-name"/></div><Input id="distributor-name" className={nameTone ? reviewColors[nameTone] : undefined} aria-invalid={nameTone === 'error' || undefined} aria-describedby={nameTone ? 'distributor-name-review-state' : undefined} value={name} disabled={locked} onChange={event => onChange(event.target.value, gstNumber)} /></div>
+      <div><div className="flex items-center"><Label htmlFor="distributor-gstin">GSTIN</Label><SourceFieldLink id="distributor-gstin" label="GSTIN"/><PurchaseFieldStatus id="distributor-gstin"/></div><Input id="distributor-gstin" className={gstinTone ? reviewColors[gstinTone] : undefined} aria-invalid={gstinTone === 'error' || undefined} aria-describedby={gstinTone ? 'distributor-gstin-review-state' : undefined} value={gstNumber} disabled={locked} onChange={event => onChange(name, event.target.value.toUpperCase())} placeholder="36ABCDE1234F1Z5" /></div>
     </div>
     {canLoad && <>
       <div>
@@ -133,10 +137,10 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
         </select>
       </div>
       {loadError ? <div role="alert" className="space-y-2 text-sm"><p>Could not load saved suppliers. Retry to check for an existing record. Your invoice details are kept.</p><Button type="button" variant="outline" size="sm" disabled={disabled || loading} onClick={load}>Retry supplier list</Button></div>
-        : !loading && differentGstins.length === 0 && <p role="status" className="text-sm">{matches.length === 1 ? 'Matching saved supplier found. Continue with invoice review.' : matches.length > 1 ? 'More than one saved record matches. Ask a supplier administrator to remove the duplicate; manual invoice review remains available.' : related ? 'A saved supplier has this name or GSTIN with different details. Check the original and select the correct record above.' : suppliers.length ? 'No saved supplier matches these details.' : canSave && !readOnly ? 'Your supplier directory is empty. You can add this supplier below.' : 'Your supplier directory is empty.'}</p>}
+        : !loading && differentGstins.length === 0 && <p role="status" className="text-sm"><ReviewStatus tone={matches.length === 1 ? 'success' : 'warning'}>{matches.length === 1 ? 'Matching saved supplier found. Continue with invoice review.' : matches.length > 1 ? 'More than one saved record matches. Ask a supplier administrator to remove the duplicate; manual invoice review remains available.' : related ? 'A saved supplier has this name or GSTIN with different details. Check the original and select the correct record above.' : suppliers.length ? 'No saved supplier matches these details.' : canSave && !readOnly ? 'Your supplier directory is empty. You can add this supplier below.' : 'Your supplier directory is empty.'}</ReviewStatus></p>}
     </>}
-    {canLoad && !loading && !loadError && differentGstins.length > 0 && <div className="space-y-3 text-sm">
-      <h6 className="font-semibold">Supplier GSTIN differs</h6>
+    {canLoad && !loading && !loadError && differentGstins.length > 0 && <div className={`space-y-3 rounded-md border p-3 text-sm ${reviewColors.error}`}>
+      <h6 className="font-semibold"><ReviewStatus tone="error">Supplier GSTIN differs</ReviewStatus></h6>
       <p>On this invoice: <strong className="break-all">{gstNumber || 'Not entered'}</strong></p>
       {differentGstins.map(supplier => <div key={supplier.id} className="space-y-2">
         <p>Saved supplier: <strong className="break-all">{supplier.gstNumber || 'Not entered'}</strong></p>
@@ -144,7 +148,7 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
           aria-label={`Correct saved GSTIN ${supplier.gstNumber || 'not entered'}`}
           onClick={() => { setCorrectionId(supplier.id); setCorrectionReason(''); setCorrectionVerified(false); setError(''); setMessage(''); }}>Correct saved GSTIN</Button>}
       </div>)}
-      <p className="max-w-prose text-muted-foreground">Compare both with the original. If the saved GSTIN is wrong, {canEdit ? 'use Correct saved GSTIN' : 'ask an authorised staff member to correct the supplier record'}. If the invoice was misread, correct the invoice field instead. Selecting a supplier replaces the invoice name and GSTIN.</p>
+      <p className="max-w-prose">Compare both with the original. If the saved GSTIN is wrong, {canEdit ? 'use Correct saved GSTIN' : 'ask an authorised staff member to correct the supplier record'}. If the invoice was misread, correct the invoice field instead. Selecting a supplier replaces the invoice name and GSTIN.</p>
       {!canEdit && <p>Correcting saved supplier details requires supplier-update permission. Ask an authorised staff member.</p>}
       {correcting && <div className="space-y-3 rounded-md border p-3" aria-label="Saved GSTIN correction">
         <p className="font-medium">Update {correcting.name}</p>
@@ -164,7 +168,7 @@ export function PurchaseSupplierReview({ name, gstNumber, canLoad, canSave, canE
     {!readOnly && !canSave && <p className="text-sm text-muted-foreground">Your permissions allow invoice entry but not saving suppliers. A staff member with supplier creation permission can save it here.</p>}
     {readOnly && onEdit && <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onEdit}>Edit supplier details</Button>}
     {matches.length !== 1 && differentGstins.length === 0 && !loading && !loadError && <p className="text-sm text-muted-foreground">You can also continue without saving a supplier: verify these details, resolve the other checks, then confirm your review and choose Save &amp; Process.</p>}
-    {message && <p role="status" className="text-sm font-medium">{message}</p>}
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {message && <p role="status"><ReviewStatus tone="success">{message}</ReviewStatus></p>}
+    {error && <p role="alert"><ReviewStatus tone="error">{error}</ReviewStatus></p>}
   </section>;
 }

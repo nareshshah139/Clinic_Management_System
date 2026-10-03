@@ -144,9 +144,23 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     fireEvent.click(reviewConfirmation());
     expect(reviewConfirmation()).toBeChecked();
+    expect(screen.getByLabelText('Batch')).toHaveAttribute('aria-describedby', expect.stringContaining('review-state'));
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
     fireEvent.change(screen.getByLabelText('Reported Net payable'), { target: { value: '113' } });
     expect(reviewConfirmation()).not.toBeChecked();
+    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
     expect(screen.queryByRole('button', { name: 'Review & Add stock' })).not.toBeInTheDocument();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('clears final green verification when a product line is removed', async () => {
+    renderSavedInvoice({ ...draftInvoice, items: [...draftInvoice.items, { ...draftInvoice.items[0], id: 'line-2', lineNumber: 2 }] });
+    await editSelectedInvoice();
+    fireEvent.click(reviewConfirmation());
+    expect(reviewConfirmation()).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove line 2' }));
+    expect(reviewConfirmation()).not.toBeChecked();
+    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 

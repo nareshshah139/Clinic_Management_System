@@ -207,7 +207,7 @@ export function InventoryWorkspace() {
     setInitial(null);
   };
   return (
-    <main className="inventory-surface min-w-0 space-y-5 pb-12">
+    <main className="inventory-surface min-w-0 space-y-5 pb-12 dark:bg-background dark:text-foreground">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Inventory</h1>
