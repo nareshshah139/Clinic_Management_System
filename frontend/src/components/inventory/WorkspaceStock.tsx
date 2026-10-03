@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/api";
 import { InventoryAction, InventoryHelp } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { InventoryRegimenFields } from "./InventoryRegimenFields";
+import { StockDetailsEditor } from "./StockDetailsEditor";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { StockEditDialog } from "./StockEditDialog";
 import { batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
@@ -79,6 +79,7 @@ export function WorkspaceStock({
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [filters, setFilters] = useState(false),
+    [moreColumns, setMoreColumns] = useState(false),
     [search, setSearch] = useState(query.search || ""),
     [add, setAdd] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
@@ -275,9 +276,9 @@ export function WorkspaceStock({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {capabilities?.itemWrite && (
-                    <InventoryAction label="Edit product details" onClick={() => setEdit({ ...item, ...item.metadata })}>
-                      <Pencil className="h-4 w-4" />
-                    </InventoryAction>
+                    <Button variant="outline" onClick={() => setEdit({ ...item, ...item.metadata, expiryDate: item.expiryDate?.slice(0, 10) || "", reason: "" })}>
+                      <Pencil className="h-4 w-4" /> Edit product details
+                    </Button>
                   )}
                   <InventoryAction
                     label="Print batch label"
@@ -341,6 +342,10 @@ export function WorkspaceStock({
                 {item.priceBasis}.
               </p>
               <div className="flex flex-wrap gap-2 print:hidden">
+                {canSubmitEdits && <>
+                  <Button variant="outline" onClick={() => setStockEdit({ item, field: 'stock' })}>Edit stock</Button>
+                  <Button variant="outline" onClick={() => setStockEdit({ item, field: 'price' })}>Edit price</Button>
+                </>}
                 {["HOLD", "LOSS", "SUPPLIER_RETURN"]
                   .filter((k) => capabilities?.kinds?.[k]?.write)
                   .map((k) => (
@@ -371,96 +376,18 @@ export function WorkspaceStock({
                   </Button>
                 )}
               </div>
-              {edit && (
-                <form
-                  className="space-y-4 border-y py-5"
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    setBusy(true);
-                    try {
-                      await apiClient.patch(
-                        `/inventory/workspace/stock/${item.id}`,
-                        edit,
-                      );
-                      sessionStorage.removeItem(editKey);
-                      await load();
-                      setNotice(
-                        "Product details saved. Physical stock unchanged.",
-                      );
-                    } catch (e: any) {
-                      setError(e.message);
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  <h3 className="text-lg font-semibold">Product details</h3>
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      ["name", "Product name"],
-                      ["manufacturer", "Manufacturer (optional)"],
-                      ["category", "Category"],
-                      ["subCategory", "Subcategory"],
-                      ["genericName", "Composition / generic"],
-                      ["dosageForm", "Dosage form"],
-                      ["schedule", "Schedule"],
-                      ["hsnCode", "HSN"],
-                      ["gstRate", "GST %"],
-                      ["storageLocation", "Rack / shelf / bin"],
-                      ["minStockLevel", `Minimum (${item.unit})`],
-                      ["maxStockLevel", `Maximum (${item.unit})`],
-                      ["reorderLevel", `Reorder at (${item.unit})`],
-                      ["reason", "Reason for target / metadata change"],
-                      ["barcode", "Barcode"],
-                      ["sku", "SKU"],
-                    ].map(([key, label]) => (
-                      <label key={key} className="text-sm">
-                        {label}
-                        <input
-                          className={inputClass}
-                          value={edit[key] ?? ""}
-                          onChange={(e) =>
-                            setEdit({ ...edit, [key]: e.target.value })
-                          }
-                        />
-                      </label>
-                    ))}
-                    <label className="text-sm">
-                      Availability
-                      <select
-                        className={inputClass}
-                        value={edit.status}
-                        onChange={(e) =>
-                          setEdit({ ...edit, status: e.target.value })
-                        }
-                      >
-                        <option>ACTIVE</option>
-                        <option>INACTIVE</option>
-                        <option>DISCONTINUED</option>
-                      </select>
-                    </label>
-                  </div>
-                  {(item.type === 'MEDICINE' || item.drugs?.length > 0) && <InventoryRegimenFields value={edit} onChange={patch => setEdit({ ...edit, ...patch })} />}
-                  <p className="text-sm text-muted-foreground">
-                    Manual min/max edits are protected from automatic target
-                    changes. Batch units and historical prices remain on their
-                    original receipts.
-                  </p>
-                  <div className="flex gap-2">
-                    <Button disabled={busy}>Save product details</Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        sessionStorage.removeItem(editKey);
-                        setEdit(null);
-                      }}
-                    >
-                      Discard edits
-                    </Button>
-                  </div>
-                </form>
-              )}
+              {edit && <StockDetailsEditor item={item} value={edit} onChange={setEdit} busy={busy}
+                onCancel={() => { sessionStorage.removeItem(editKey); setEdit(null); }}
+                onSave={async () => {
+                  setBusy(true); setError("");
+                  try {
+                    await apiClient.patch(`/inventory/workspace/stock/${item.id}`, { ...edit, batchNumber: edit.batchNumber || undefined, expiryDate: edit.expiryDate || undefined });
+                    sessionStorage.removeItem(editKey);
+                    await load();
+                    setNotice("Corrected details saved. Stock quantity unchanged.");
+                  } catch (e: any) { setError(e.message); }
+                  finally { setBusy(false); }
+                }} />}
               <nav
                 aria-label="Item history"
                 className="flex flex-wrap gap-2 border-b pb-3"
@@ -965,7 +892,7 @@ export function WorkspaceStock({
                 className={inputClass}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Product, generic, old name, batch, barcode or SKU"
+                placeholder="Type a product name or scan a barcode"
               />
             </label>
             <Button type="submit">
@@ -1008,45 +935,24 @@ export function WorkspaceStock({
               ))}
             </nav>
             <p className="text-sm text-muted-foreground">
-              {stockQuery.batchView === "ON_HAND" ? "Batches with physical stock, including held or expired units. Multiple batches can be on hand at once."
-                : stockQuery.batchView === "EMPTY" ? "Depleted batches have zero stock and remain available for history. Open a batch's ledger to see sales and other movements."
-                : "All batches stay visible. Current stock is green, depleted batches are grey, and stock needing attention is amber. Multiple batches can hold current stock."}
+              {stockQuery.batchView === "ON_HAND" ? "Stock on the shelf, including units set aside or expired."
+                : stockQuery.batchView === "EMPTY" ? "Empty batches are kept for history."
+                : "One row per batch. Open a product to check its history or correct details."}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {[
-              ["", "Any stock level"],
-              ["LOW", "Low stock"],
-              ["HIGH", "Above maximum"],
-              ["POSITIVE", "Positive"],
-              ["ZERO", "Out of stock"],
-              ["NEGATIVE", "Negative"],
-              ["HELD", "Held"],
-              ["EXPIRED", "Expired"],
-            ].map(([v, t]) => (
-              <Button
-                size="sm"
-                key={v}
-                variant={(query.stock || "") === v ? "default" : "outline"}
-                onClick={() => navigate({ stock: v, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}
-              >
-                {t}
-              </Button>
-            ))}
-            {[1, 2, 3, 6].map((n) => (
-              <Button
-                size="sm"
-                key={n}
-                variant={
-                  query.expiryMonths === String(n) ? "default" : "outline"
-                }
-                onClick={() =>
-                  navigate({ expiryMonths: String(n), stock: "", batchView: "ALL", page: "1" })
-                }
-              >
-                Expires in {n} {n === 1 ? "month" : "months"}
-              </Button>
-            ))}
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="text-sm">Stock level
+              <select className={inputClass} value={query.stock || ""} onChange={event => navigate({ stock: event.target.value, batchView: "ALL", expiryMonths: "", page: "1", item: "" })}>
+                {[["", "Any stock level"], ["LOW", "Low stock"], ["HIGH", "Above maximum"], ["POSITIVE", "Stock on shelf"], ["ZERO", "Out of stock"], ["NEGATIVE", "Negative — count needed"], ["HELD", "Set aside / held"], ["EXPIRED", "Expired"]].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </label>
+            <label className="text-sm">Expiry
+              <select className={inputClass} value={query.expiryMonths || ""} onChange={event => navigate({ expiryMonths: event.target.value, stock: "", batchView: "ALL", page: "1", item: "" })}>
+                <option value="">Any expiry date</option>
+                {[1, 2, 3, 6].map(months => <option key={months} value={months}>Within {months} {months === 1 ? 'month' : 'months'}</option>)}
+              </select>
+            </label>
+            <label className="flex min-h-10 items-center gap-2 text-sm"><input type="checkbox" checked={moreColumns} onChange={event => setMoreColumns(event.target.checked)} /> Show cost &amp; stock details</label>
           </div>
           {filters && (
             <fieldset className="grid gap-3 border-y py-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -1227,12 +1133,12 @@ export function WorkspaceStock({
               </table>
             </div>
           )}
-          <p className="text-xs text-muted-foreground">
+          {moreColumns && (          <p className="text-xs text-muted-foreground">
             Current branch. {data?.filterScope?.expiryBoundary}{" "}
             {data?.filterScope?.asOf &&
               `As of ${fmtDate(data.filterScope.asOf)}; expiry window through ${fmtDate(data.filterScope.expiryEnd)}.`}{" "}
             PTR and landing price exclude recoverable GST.
-          </p>
+          </p>)}
           {capabilities?.itemWrite && selected.length > 0 && (
             <Button
               variant="outline"
@@ -1329,12 +1235,9 @@ export function WorkspaceStock({
                     "Product / batch",
                     "Batch state",
                     "Expiry",
-                    "Physical",
-                    "Held",
+                    ...(moreColumns ? ["Physical", "Held"] : []),
                     "Available",
-                    "Stock unit",
-                    "PTR",
-                    "MRP",
+                    ...(moreColumns ? ["Stock unit", "Purchase cost", "MRP"] : []),
                     "Selling price",
                     "Location",
                     ...(canSubmitEdits ? ["Edit"] : []),
@@ -1381,12 +1284,9 @@ export function WorkspaceStock({
                     <td className="whitespace-nowrap p-3">
                       {fmtStockExpiry(i.expiryDate)}
                     </td>
-                    <td className="p-3">{i.currentStock}</td>
-                    <td className="p-3">{i.heldStock}</td>
-                    <td className="p-3 font-semibold">{i.available}</td>
-                    <td className="p-3">{i.unit}</td>
-                    <td className="p-3">{fmtMoney(i.costPrice)}</td>
-                    <td className="p-3">{fmtMoney(i.mrp)}</td>
+                    {moreColumns && <><td className="p-3">{i.currentStock}</td><td className="p-3">{i.heldStock}</td></>}
+                    <td className="p-3"><strong className="whitespace-nowrap">{i.available} {!moreColumns && i.unit}</strong>{!moreColumns && i.heldStock > 0 && <p className="text-sm text-muted-foreground">{i.heldStock} set aside</p>}</td>
+                    {moreColumns && <><td className="p-3">{i.unit}</td><td className="p-3">{fmtMoney(i.costPrice)}</td><td className="p-3">{fmtMoney(i.mrp)}</td></>}
                     <td className="p-3">{fmtMoney(i.sellingPrice)}</td>
                     <td className="p-3">
                       {i.storageLocation || "Not assigned"}
@@ -1402,7 +1302,7 @@ export function WorkspaceStock({
                 {!busy && !error && data && !data.rows?.length && (
                   <tr>
                     <td
-                      colSpan={canSubmitEdits ? 13 : 12}
+                      colSpan={(canSubmitEdits ? 8 : 7) + (moreColumns ? 5 : 0)}
                       className="p-8 text-center text-muted-foreground"
                     >
                       No batches match these filters. Reset or change the

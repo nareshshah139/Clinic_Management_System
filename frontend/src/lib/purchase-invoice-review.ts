@@ -10,6 +10,21 @@ export type PurchaseReviewIssue = {
   category?: 'manual' | 'supplier' | 'product' | 'totals' | 'historical';
 };
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] purchase-correction-target-visible
+ * Jumping to a correction MUST open enclosing disclosures and focus the field or section.
+ * Missing targets MUST remain a no-op and MUST NOT change invoice data.
+ */
+export function focusPurchaseField(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  for (let parent = target.parentElement; parent; parent = parent.parentElement)
+    if (parent instanceof HTMLDetailsElement) parent.open = true;
+  if (!target.matches('input, select, textarea, button, a, [tabindex]')) target.tabIndex = -1;
+  target.focus({ preventScroll: true });
+  target.scrollIntoView?.({ block: 'center', behavior: 'instant' });
+}
+
 export function purchaseBlockingIssues(issues: string[]) {
   return issues.filter(raw => {
     const body = raw.trim().replace(/^(?:(?:AUTO|OCR):\s*|Line \d+:\s*)+/i, '');

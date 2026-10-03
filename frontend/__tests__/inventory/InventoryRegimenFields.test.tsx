@@ -28,9 +28,11 @@ it('loads, edits and clears defaults on a legacy consumable linked to a medicine
   (apiClient.patch as jest.Mock).mockResolvedValue({});
   render(<WorkspaceStock query={{}} itemId="item" capabilities={{ itemWrite: true }} navigate={jest.fn()} onTask={jest.fn()} onDocument={jest.fn()} onInvoice={jest.fn()} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Edit product details' }));
+  fireEvent.click(screen.getByText('More details: tax, stock limits & codes'));
   expect(screen.getByLabelText('Default duration', { exact: true })).toHaveValue(3);
   fireEvent.change(screen.getByLabelText('Default duration', { exact: true }), { target: { value: '' } });
   fireEvent.change(screen.getByLabelText('Default instructions'), { target: { value: 'new instruction' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Save product details' }));
+  fireEvent.change(screen.getByLabelText('Why are you changing it?'), { target: { value: 'Corrected prescription default' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Save corrected details' }));
   await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith('/inventory/workspace/stock/item', expect.objectContaining({ defaultDuration: '', defaultInstructions: 'new instruction' })));
 });

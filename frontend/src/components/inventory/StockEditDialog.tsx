@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { apiClient } from '@/lib/api';
 import { fmtMoney, inputClass } from './workspace-model';
+import { InventoryChangePreview } from './InventoryChangePreview';
 
 /**
  * @cc [owner:nareshshah139,label:product] stock-row-edit-proposal
@@ -43,13 +44,19 @@ export function StockEditDialog({ item, field, onClose, onSubmitted }: {
       <form onSubmit={submit} className="space-y-4">
         <DialogHeader><DialogTitle>Edit {field === 'price' ? 'price' : 'stock'}</DialogTitle>
           <DialogDescription>{item.productName || item.name} · Batch {item.batchNumber || 'unspecified'}. The change takes effect after doctor or admin approval.</DialogDescription></DialogHeader>
-        <p>Current {field === 'price' ? `selling price: ${fmtMoney(current)}` : `physical stock: ${current} ${item.unit}`}</p>
+        <p>Current {field === 'price' ? `selling price: ${fmtMoney(current)}` : `stock on shelf: ${current} ${item.unit}`}</p>
         <label className="block">{field === 'price' ? 'New selling price (₹ per stock unit)' : `Counted physical stock (${item.unit})`}
           <input autoFocus required type="number" min={field === 'stock' ? item.heldStock : 0} step={field === 'price' ? '0.01' : '1'} inputMode={field === 'price' ? 'decimal' : 'numeric'} className={inputClass} value={value} onChange={e => setValue(e.target.value)} />
         </label>
-        {field === 'stock' && <p className="text-sm text-muted-foreground">Count only this batch. {item.heldStock} held units must remain included.</p>}
-        <label className="block">Reason (invoice or shelf count)
-          <textarea required className={inputClass} value={reason} onChange={e => setReason(e.target.value)} placeholder="Invoice number or shelf-count details" />
+        {field === 'stock' && <p className="text-sm text-muted-foreground">Count this batch only. Include the {item.heldStock} units set aside.</p>}
+        {value.trim() && Number.isFinite(proposed) && proposed !== current && proposed >= 0 && <InventoryChangePreview changes={[{
+          label: field === 'price' ? 'Selling price' : `Stock (${item.unit})`,
+          before: field === 'price' ? fmtMoney(current) : String(current),
+          after: field === 'price' ? fmtMoney(proposed) : String(proposed),
+        }]} />}
+        {field === 'stock' && value.trim() && (!Number.isSafeInteger(proposed) || proposed < item.heldStock) && <p role="alert" className="text-sm text-destructive">Enter a whole number of at least {item.heldStock}. Include stock set aside.</p>}
+        <label className="block">Why are you changing it?
+          <textarea required className={inputClass} value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Counted 8 tubes on the shelf today" />
         </label>
         {error && <p role="alert" className="text-destructive">{error}</p>}
         <DialogFooter><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancel</Button>

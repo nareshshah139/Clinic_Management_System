@@ -1,7 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { groupPurchaseOcrFlags, purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
+import { AlertTriangle, Check } from 'lucide-react';
+import { PurchaseHelp } from './PurchaseHelp';
+import { focusPurchaseField, groupPurchaseOcrFlags, purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
 
 export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve, onResolveMany }: {
   flags: string[];
@@ -15,7 +17,6 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
   flags = purchaseBlockingIssues(flags);
   if (!flags.length) return null;
   return <div className="space-y-3" aria-label={lineIndex === undefined ? 'Invoice checks' : `Line ${lineIndex + 1} checks`}>
-    {lineIndex === undefined && <p className="text-sm text-muted-foreground">Check against the original, then confirm each correction.</p>}
     <ul className="divide-y">
       {groupPurchaseOcrFlags(flags,lineIndex).map((group, index) => {
         const flag=group[0];
@@ -26,18 +27,20 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
         const invalidGstin = issue.field === 'distributorGstin' && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value || '');
         const missingDueDate = issue.field === 'billType' && values.billType === 'CREDIT' && !values.dueDate;
         const label = `${lineIndex === undefined ? '' : `line ${lineIndex + 1} `}${issue.label}`;
-        return <li key={`${flag}-${index}`} className="space-y-2 py-3 first:pt-0 last:pb-0">
-          <p className="text-sm font-medium">{issue.message}</p>
-          {issue.field && <p className="text-sm">Entered {issue.label}: <strong>{value || (issue.field === 'manufacturer' ? 'Not provided (optional)' : 'Not entered')}</strong></p>}
-          <p className="max-w-prose text-sm text-muted-foreground">{issue.help}</p>
-          <div className="flex flex-wrap items-center gap-3">
-            {target && <a className="text-sm text-primary underline underline-offset-4" href={`#${target}`}>Go to {issue.label}</a>}
+        return <li key={`${flag}-${index}`} className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 py-3 first:pt-0 last:pb-0">
+          <div className="min-w-0 flex-1 basis-48">
+            <div className="flex items-center gap-2"><AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-300"/><p className="text-sm font-medium">{issue.message}</p><PurchaseHelp label={`${label} check`}>{issue.help}</PurchaseHelp></div>
+            {issue.field && <p className="pl-6 text-sm text-muted-foreground">{value || (issue.field === 'manufacturer' ? 'Not provided (optional)' : 'Not entered')}</p>}
+            {(missingValue || invalidGstin || missingDueDate) && <p className="pl-6 text-sm text-destructive">Enter a valid {missingDueDate ? 'due date' : issue.label} to confirm.</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            {target && <a aria-label={issue.requiresUpload ? 'Upload pages for complete invoice' : `Edit ${label}`} className="inline-flex min-h-8 items-center text-sm text-primary underline underline-offset-4" href={`#${target}`} onClick={() => focusPurchaseField(target)}>{issue.requiresUpload ? 'Upload pages' : 'Correct'}</a>}
             {!issue.requiresUpload && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left"
+              aria-label={`Confirm ${label} checked`}
               disabled={disabled || missingValue || invalidGstin || missingDueDate} onClick={() => onResolveMany ? onResolveMany(group) : group.forEach(flag=>onResolve(flag))}>
-              Confirm {label} checked
+              <Check aria-hidden="true" className="h-4 w-4"/> Checked
             </Button>}
           </div>
-          {(missingValue || invalidGstin || missingDueDate) && <p className="text-sm text-muted-foreground">Enter a valid {missingDueDate ? 'due date' : issue.label} before confirming this check.</p>}
         </li>;
       })}
     </ul>

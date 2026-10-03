@@ -186,6 +186,12 @@ export class InventoryWorkspaceService {
       history:effects.map(e=>({...e,document:{...e.document,totalAmount:Number(e.document.totalAmount)}})),purchases};
   }
   /**
+   * @cc [owner:nareshshah139,label:product] batch-label-correction
+   * Changing a batch number or expiry MUST require a reason, the current revision and item-update
+   * permission. Expiry MUST be a real YYYY-MM-DD date and remain valid through that UTC day.
+   * Corrections MUST be audited atomically without changing quantities or original invoice rows.
+   */
+  /**
    * @cc [owner:nareshshah139,label:product] workspace-item-metadata-audit
    * Metadata edits MUST compare the saved revision, reject conflicting SKU/barcode assignments,
    * and commit an actor/reason/before-after audit atomically. Quantity, pack and historic cost
@@ -204,6 +210,19 @@ export class InventoryWorkspaceService {
       const item=await tx.inventoryItem.findFirst({where:{id,branchId:actor.branchId}});if(!item)throw new NotFoundException('Batch not found');
       if(input.updatedAt!==item.updatedAt.toISOString())throw new ConflictException('Batch details changed. Reload before saving.');
       const data:any=inventoryRegimenDefaults(input,item),meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
+      if (input.batchNumber !== undefined) {
+        const batch = String(input.batchNumber).trim();
+        if (!batch) throw new BadRequestException('Enter the batch number shown on the pack');
+        if (batch !== item.batchNumber) data.batchNumber = batch;
+      }
+      if (input.expiryDate !== undefined) {
+        const date = String(input.expiryDate), parsed = new Date(`${date}T23:59:59.999Z`);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0,10) !== date)
+          throw new BadRequestException('Enter a valid expiry date shown on the pack');
+        if (date !== item.expiryDate?.toISOString().slice(0,10)) data.expiryDate = parsed;
+      }
+      if ((data.batchNumber !== undefined || data.expiryDate !== undefined) && !reason)
+        throw new BadRequestException('Enter a reason for correcting the batch number or expiry');
       for(const f of ['name','genericName','brandName','category','subCategory','manufacturer','supplier','hsnCode','storageLocation','storageConditions','barcode','sku'])if(input[f]!==undefined)data[f]=String(input[f]).trim()||null;
       if(input.name!==undefined&&!data.name)throw new BadRequestException('Product name is required');
       if(data.name && data.name!==item.name)retainPreviousInventoryName(meta,item.name);

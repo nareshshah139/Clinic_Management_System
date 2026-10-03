@@ -1,0 +1,43 @@
+{
+  "synthetic": true,
+  "browser": "Chrome (Obscura Next.js navigation stalled)",
+  "checks": [
+    "Type instead exposes supplier entry",
+    "Scan calls extract only and preserves original",
+    "Correct and save retains draft without stock writes",
+    "Explicit final review adds stock once",
+    "Saved expiry correction persists after server reload; before/after shown",
+    "Stock count submits an approval request, keeping balance unchanged"
+  ],
+  "requests": [
+    {
+      "method": "POST",
+      "path": "/api/pharmacy/purchase-invoices/ocr/extract"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pharmacy/purchase-invoices/drafts"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/pharmacy/purchase-invoices/drafts/bill-1"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/pharmacy/purchase-invoices/bill-1/review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/pharmacy/purchase-invoices/bill-1/commit-stock"
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/inventory/workspace/stock/batch-1"
+    },
+    {
+      "method": "POST",
+      "path": "/api/drugs/inventory-change-requests"
+    }
+  ],
+  "errors": []
+}

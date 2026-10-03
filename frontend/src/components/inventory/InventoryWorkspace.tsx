@@ -41,8 +41,8 @@ const areas = [
 const menus: Record<string, string[][]> = {
   today: [],
   purchases: [
-    ["intake", "Scan / enter invoice"],
-    ["register", "Purchase register"],
+    ["intake", "Scan or enter bill"],
+    ["register", "Saved bills"],
     ["csv", "Import CSV"],
     ["gmail", "Gmail intake"],
     ["suppliers", "Suppliers"],
@@ -55,7 +55,7 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
-    ["approvals", "Price / stock approvals"],
+    ["approvals", "Approve corrections"],
     ["COUNT", "Counts & audit"],
     ["SUPPLIER_RETURN", "Supplier returns"],
     ["LOSS", "Loss & breakage"],
@@ -198,6 +198,10 @@ export function InventoryWorkspace() {
       .then(setCaps)
       .catch((e: any) => setError(e.message));
   }, []);
+  const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
+  const primaryTasks = availableTasks.slice(0, 3);
+  const moreTasks = availableTasks.slice(3);
+  const switchTask = (id: string) => navigate({ view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
@@ -274,30 +278,15 @@ export function InventoryWorkspace() {
           aria-label={`${area} tasks`}
           className="hidden flex-wrap gap-2 md:flex print:hidden"
         >
-          {menus[area].filter(([id]) => id !== "approvals" || canReadEdits).map(([id, label]) => (
-            <Button
-              key={id}
-              size="sm"
-              variant={view === id ? "secondary" : "ghost"}
-              aria-current={view === id ? "page" : undefined}
-              onClick={() =>
-                navigate({
-                  view: id,
-                  document: "",
-                  new: "",
-                  invoice: "",
-                  item: "",
-                  receipt: "",
-                  intake: "",
-                  return: "",
-                  status: "",
-                  page: "1",
-                })
-              }
-            >
-              {label}
-            </Button>
+          {primaryTasks.map(([id, label]) => (
+            <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
+              aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
           ))}
+          {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
+            value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
+            <option value="" disabled>More tasks…</option>
+            {moreTasks.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          </select>}
         </nav>
       )}
       {error && (
@@ -606,6 +595,10 @@ function WorkspaceToday({ navigate, open }: any) {
   ];
   return (
     <section className="space-y-5">
+      <div className="flex flex-wrap gap-3" aria-label="Everyday inventory tasks">
+        <Button onClick={() => navigate({ area: "purchases", view: "intake" })}><Plus className="h-4 w-4" /> Scan or enter bill</Button>
+        <Button variant="outline" onClick={() => navigate({ area: "stock", view: "list" })}>Find or correct stock <ArrowRight className="h-4 w-4" /></Button>
+      </div>
       <header>
         <h2 className="text-2xl font-semibold">What needs attention</h2>
         <p className="text-muted-foreground">
@@ -641,7 +634,8 @@ function WorkspaceToday({ navigate, open }: any) {
             {rows.map((r) => (
               <li key={r.label}>
                 <button
-                  className="flex w-full items-center gap-4 py-5 text-left hover:bg-muted/50"
+                  className="flex w-full items-center gap-4 py-4 text-left hover:bg-muted/50"
+                  title={r.detail}
                   onClick={() => navigate(r.target)}
                 >
                   <span className="min-w-10 text-2xl font-semibold">
@@ -649,9 +643,6 @@ function WorkspaceToday({ navigate, open }: any) {
                   </span>
                   <span className="flex-1">
                     <strong>{r.label}</strong>
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      {r.detail}
-                    </span>
                   </span>
                   <ArrowRight className="h-5 w-5" />
                 </button>
