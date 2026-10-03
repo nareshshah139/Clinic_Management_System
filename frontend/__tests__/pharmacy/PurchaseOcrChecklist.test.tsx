@@ -95,3 +95,26 @@ it('does not infer a checked state from empty flags and invalidates dependent ex
   view.rerender(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2029' }} />);
   expect(screen.getByText('Changed — check again')).toBeVisible();
 });
+
+
+it.each([
+  ['13', '2028'], ['0', '2028'], ['1.5', '2028'], ['', '2028'],
+  ['12', ''], ['12', '2019'], ['12', '2101'], ['12', '2028.5'], ['NaN', '2028'],
+])('rejects invalid expiry %s/%s before confirmation', (expiryMonth, expiryYear) => {
+  const onResolve = jest.fn();
+  render(<PurchaseOcrChecklist flags={['uncertain_expiry']} values={{ expiryMonth, expiryYear }} disabled={false} onResolve={onResolve} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'error');
+  const confirm = screen.getByRole('button', { name: 'Confirm expiry checked' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(confirm);
+  expect(onResolve).not.toHaveBeenCalled();
+  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
+});
+
+it.each([['1', '2020'], ['12', '2100']])('allows valid expiry boundary %s/%s to be checked', (expiryMonth, expiryYear) => {
+  const props = { flags: ['uncertain_expiry'], values: { expiryMonth, expiryYear }, disabled: false, onResolve: jest.fn() };
+  const view = render(<PurchaseOcrChecklist {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirm expiry checked' }));
+  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} />);
+  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'success');
+});

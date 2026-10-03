@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Check } from 'lucide-react';
 import { ReviewStatus, reviewColors } from '@/components/ui/ReviewStatus';
 import { PurchaseHelp } from './PurchaseHelp';
-import { purchaseCheckInvalid, purchaseCheckSnapshot } from './PurchaseFieldReview';
+import { purchaseCheckInvalid, purchaseCheckSnapshot, type PurchaseCheckedFields } from './PurchaseFieldReview';
 import { focusPurchaseField, groupPurchaseOcrFlags, purchaseBlockingIssues, purchaseReviewIssue } from '@/lib/purchase-invoice-review';
 
 /**
@@ -14,7 +14,7 @@ import { focusPurchaseField, groupPurchaseOcrFlags, purchaseBlockingIssues, purc
  * review state. Green Checked MUST follow an explicit confirmation of the current values in this
  * editor session. Changed values or reintroduced flags MUST remove that success state.
  */
-export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve, onResolveMany }: {
+export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve, onResolveMany, checked: controlledChecked, onChecked }: {
   flags: string[];
   lineIndex?: number;
   lineId?: string;
@@ -22,8 +22,11 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
   disabled: boolean;
   onResolve: (flag: string) => void;
   onResolveMany?: (flags:string[]) => void;
+  checked?: PurchaseCheckedFields;
+  onChecked?: (checked: PurchaseCheckedFields) => void;
 }) {
-  const [checked, setChecked] = useState<Record<string, { flags: string[]; snapshot: string }>>({});
+  const [localChecked, setLocalChecked] = useState<PurchaseCheckedFields>({});
+  const checked = controlledChecked ?? localChecked;
   const pending = groupPurchaseOcrFlags(purchaseBlockingIssues(flags), lineIndex);
   const keyFor = (group: string[]) => { const issue = purchaseReviewIssue(group[0], lineIndex); return issue.field || issue.key; };
   const activeKeys = new Set(pending.map(keyFor));
@@ -55,7 +58,8 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
             {target && <a aria-label={issue.requiresUpload ? 'Upload pages for complete invoice' : `Edit ${label}`} className="inline-flex min-h-8 items-center text-sm underline underline-offset-4" href={`#${target}`} onClick={() => focusPurchaseField(target)}>{issue.requiresUpload ? 'Upload pages' : 'Correct'}</a>}
             {!issue.requiresUpload && !verified && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left text-foreground"
               aria-label={`Confirm ${label} checked`} disabled={disabled || invalid} onClick={() => {
-                setChecked(current => ({ ...current, [key]: { flags: group, snapshot } }));
+                const next = { ...checked, [key]: { flags: group, snapshot } };
+                if (onChecked) onChecked(next); else setLocalChecked(next);
                 if (onResolveMany) onResolveMany(group); else group.forEach(flag => onResolve(flag));
               }}><Check aria-hidden="true" className="h-4 w-4"/> Mark checked</Button>}
           </div>

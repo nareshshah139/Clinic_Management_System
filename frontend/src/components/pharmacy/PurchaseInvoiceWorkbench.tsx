@@ -43,7 +43,7 @@ import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
 import { ReviewStatus, ReviewLegend, reviewColors, type ReviewTone } from "@/components/ui/ReviewStatus";
-import { PurchaseFieldReviewContext, PurchaseFieldStatus, usePurchaseFieldTone, purchaseCheckInvalid } from "./PurchaseFieldReview";
+import { PurchaseFieldReviewContext, PurchaseFieldStatus, usePurchaseFieldTone, purchaseCheckInvalid, purchaseExpiryInvalid, pendingPurchaseOcrFlags, type PurchaseCheckedFields } from "./PurchaseFieldReview";
 import { PurchaseHelp, PurchaseStatusCue } from "./PurchaseHelp";
 import {
   focusPurchaseField,
@@ -699,16 +699,7 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
     if (numeric(line.purchaseRate) < 0 || numeric(line.mrp) < 0) {
       errors.push(`${prefix}: purchase rate and MRP cannot be negative`);
     }
-    const expiryMonth = numeric(line.expiryMonth);
-    const expiryYear = numeric(line.expiryYear);
-    if (
-      !Number.isInteger(expiryMonth) ||
-      expiryMonth < 1 ||
-      expiryMonth > 12 ||
-      !Number.isInteger(expiryYear) ||
-      expiryYear < 2020 ||
-      expiryYear > 2100
-    ) {
+    if (purchaseExpiryInvalid(line.expiryMonth, line.expiryYear)) {
       errors.push(`${prefix}: expiry month/year is invalid`);
     }
     if (numeric(line.schemeAmount) < 0 || calculateLine(line).taxable < 0)
@@ -1014,7 +1005,9 @@ export function PurchaseInvoiceWorkbench({
  * @cc [owner:nareshshah139,label:product] invoice-field-color-evidence
  * Unresolved field errors MUST override green verification. Empty OCR flags MUST NOT make fields
  * green; success requires final human confirmation or a server-reviewed/committed invoice.
- * Unknown stock outcome or a stale revision MUST suppress that global success state.
+ * Changed OCR checks MUST restore pending counts and field colors and block final approval,
+ * including after saving or recovering a draft. Unknown stock outcome or a stale revision
+ * MUST suppress that global success state.
  */
 function PurchaseInvoiceEditor({
   recoveryKey,
@@ -1047,6 +1040,7 @@ function PurchaseInvoiceEditor({
   } = usePurchasePermissions(user?.id);
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [reviewAccepted, setReviewAccepted] = useState(false);
+  const [checkedOcr, setCheckedOcr] = useState<Record<string, PurchaseCheckedFields>>({});
   const [serverDraft, setServerDraft] = useState<any>(null);
   const [serverDrafts, setServerDrafts] = useState<any[]>([]);
   const [workflowReceiptId, setWorkflowReceiptId] = useState("");
@@ -1128,6 +1122,14 @@ function PurchaseInvoiceEditor({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const currentHeaderFlags = useMemo(() => pendingPurchaseOcrFlags(splitFlags(headerFlags) || [], header, checkedOcr.header), [headerFlags, header, checkedOcr]);
+  const currentLineFlags = useMemo(() => lines.map((line, index) => pendingPurchaseOcrFlags(splitFlags(line.ocrFlags) || [], line, checkedOcr[line.localId], index)), [lines, checkedOcr]);
+  const pendingHeaderFlags = currentHeaderFlags.join(", ");
+  const linesWithPendingChecks = useMemo(() => lines.map((line, index) => ({ ...line, ocrFlags: currentLineFlags[index].join(", ") })), [lines, currentLineFlags]);
+  const rememberOcrCheck = (scope: string, checked: PurchaseCheckedFields) => {
+    setReviewAccepted(false);
+    setCheckedOcr(current => ({ ...current, [scope]: checked }));
+  };
   const recoveredInvoiceId = useRef<string | null>(null);
   const draftSelection = useRef({ editingId, hasContent: false });
   draftSelection.current = {
@@ -1192,10 +1194,10 @@ function PurchaseInvoiceEditor({
         JSON.stringify({
           version: 1,
           header,
-          lines,
+          lines: linesWithPendingChecks,
           editingId,
           draftServerRevision,
-          headerFlags,
+          headerFlags: pendingHeaderFlags,
           ocrSummary,
           originalAmounts,
           sourceDocument,
@@ -1214,9 +1216,9 @@ function PurchaseInvoiceEditor({
     recoveryKey,
     recoveryReady,
     header,
-    lines,
+    linesWithPendingChecks,
     editingId,
-    headerFlags,
+    pendingHeaderFlags,
     ocrSummary,
     originalAmounts,
     sourceDocument,
@@ -1374,6 +1376,7 @@ function PurchaseInvoiceEditor({
   };
 
   const resetDraft = () => {
+    setCheckedOcr({});
     setShowIntakeHome(false);
     setManualEntry(false);
     setManualReviewCandidateId(null);
@@ -1415,6 +1418,8 @@ function PurchaseInvoiceEditor({
     extraction?: OcrExtractionResponse["extraction"],
     matches?: MasterMatchResponse,
   ) => {
+    setCheckedOcr({});
+    setReviewAccepted(false);
     const defaults = defaultHeader();
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
@@ -1932,13 +1937,13 @@ function PurchaseInvoiceEditor({
     try {
       const payload = {
         ...preserveInvoiceTotals(
-          buildDraftPayload(header, lines),
+          buildDraftPayload(header, linesWithPendingChecks),
           originalAmounts,
         ),
         expectedUpdatedAt: editingId
           ? draftServerRevision || undefined
           : undefined,
-        ocrFlags: splitFlags(headerFlags) || [],
+        ocrFlags: currentHeaderFlags,
         sourceDocumentId: sourceDocument?.id,
         sourceDocumentIds: additionalSourceIds,
         workflowReceiptId: workflowReceiptId || undefined,
@@ -2157,10 +2162,10 @@ function PurchaseInvoiceEditor({
         channel: header.source,
         payload: {
           header,
-          lines,
+          lines: linesWithPendingChecks,
           editingId,
           draftServerRevision,
-          headerFlags,
+          headerFlags: pendingHeaderFlags,
           ocrSummary,
           originalAmounts,
           sourceDocument,
@@ -2183,6 +2188,8 @@ function PurchaseInvoiceEditor({
     }
   };
   const restoreServerDraft = (saved: any) => {
+    setCheckedOcr({});
+    setReviewAccepted(false);
     const p = saved.payload;
     const revision =
       p.draftServerRevision || p.originalAmounts?.updatedAt || null;
@@ -2446,8 +2453,8 @@ function PurchaseInvoiceEditor({
         ))) &&
     activeOcrFlags === 0 &&
     (editingId !== activeInvoice.id ||
-      (!splitFlags(headerFlags)?.length &&
-        lines.every((line) => !splitFlags(line.ocrFlags)?.length))) &&
+      (!currentHeaderFlags.length &&
+        currentLineFlags.every(flags => !flags.length))) &&
     !!reviewDate;
   const canCommit =
     access.commit &&
@@ -2570,8 +2577,6 @@ function PurchaseInvoiceEditor({
     (!stockAdded && !["REVIEWED", "CANCELLED"].includes(activeInvoice.status));
   const editingChecks =
     !savedFormLocked && (!activeInvoice || editingSelectedInvoice);
-  const currentHeaderFlags = splitFlags(headerFlags) || [];
-  const currentLineFlags = lines.map((line) => splitFlags(line.ocrFlags) || []);
   const coveredOcrKeys = new Set([
     ...(editingChecks
       ? currentHeaderFlags.map((flag) => purchaseReviewIssue(flag).key)
@@ -2659,7 +2664,7 @@ function PurchaseInvoiceEditor({
   // Evidence wins over a previous confirmation: unresolved corrections stay red or amber.
   const fieldTones: Record<string, ReviewTone> = {};
   const invoiceVerified = !stockStatusUnknown && !draftWriteBlocked &&
-    (reviewAccepted || activeInvoice?.status === "REVIEWED" || stockAdded);
+    ((reviewAccepted && confirmationCount === 0) || activeInvoice?.status === "REVIEWED" || stockAdded);
   if (invoiceVerified) sourceTargets.forEach(target => { fieldTones[target.id] = "success"; });
   const markField = (issue: ReturnType<typeof purchaseReviewIssue>, tone: ReviewTone) => {
     if (!issue.target) return;
@@ -2733,6 +2738,8 @@ function PurchaseInvoiceEditor({
           <PurchaseOcrChecklist
             key={checkSession}
             flags={currentHeaderFlags}
+            checked={checkedOcr.header || {}}
+            onChecked={checked => rememberOcrCheck("header", checked)}
             values={header}
             disabled={busy}
             onResolveMany={(flags) => {
@@ -2756,6 +2763,8 @@ function PurchaseInvoiceEditor({
             <PurchaseOcrChecklist
               key={`${checkSession}:${line.localId}`}
               flags={currentLineFlags[index]}
+              checked={checkedOcr[line.localId] || {}}
+              onChecked={checked => rememberOcrCheck(line.localId, checked)}
               lineIndex={index}
               lineId={line.localId}
               values={line}
@@ -4271,16 +4280,16 @@ function PurchaseInvoiceEditor({
                                   </span>
                                 </span>
                                 <span className="flex items-center gap-3">
-                                  {line.ocrFlags && (
+                                  {currentLineFlags[index].length > 0 && (
                                     <span className="text-destructive">
                                       {
                                         groupPurchaseOcrFlags(
-                                          splitFlags(line.ocrFlags) || [],
+                                          currentLineFlags[index],
                                           index,
                                         ).length
                                       }{" "}
                                       {groupPurchaseOcrFlags(
-                                        splitFlags(line.ocrFlags) || [],
+                                        currentLineFlags[index],
                                         index,
                                       ).length === 1
                                         ? "check"
@@ -4307,7 +4316,7 @@ function PurchaseInvoiceEditor({
                             </div>
                             <div className="space-y-4 px-4 pb-4">
                               <div className="md:col-span-2">
-                                {line.ocrFlags && (
+                                {currentLineFlags[index].length > 0 && (
                                   <details className="mt-2">
                                     <summary className="cursor-pointer text-sm text-muted-foreground">
                                       Advanced line OCR flags
@@ -4319,7 +4328,7 @@ function PurchaseInvoiceEditor({
                                     </Label>
                                     <Input
                                       id={`${line.localId}-ocr-flags`}
-                                      value={line.ocrFlags}
+                                      value={currentLineFlags[index].join(", ")}
                                       onChange={(event) =>
                                         updateLine(
                                           line.localId,

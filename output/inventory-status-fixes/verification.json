@@ -1,0 +1,15 @@
+{
+  "synthetic": true,
+  "passed": true,
+  "checks": [
+    "expiry: error",
+    "expiry: success",
+    "expiry: error",
+    "expiry: success",
+    "batch: warning",
+    "batch: warning",
+    "Pending batch check survives save and reload"
+  ],
+  "errors": [],
+  "stockWrites": 0
+}

@@ -1343,4 +1343,77 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1'));
   });
 
+  it('restores edited OCR checks in field colors, counts, saved drafts and final approval', async () => {
+    const saved = { ...draftInvoice, distributorDlNo: 'DL-TEST', items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', ocrFlags: [] }] };
+    const flagged = { ...saved, unresolvedOcrFlags: 1, items: [{ ...saved.items[0], ocrFlags: ['uncertain_batchNumber'] }] };
+    api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async (_id, payload: any) => ({ ...saved, ...payload, items: payload.items.map((item: any, index: number) => ({ ...item, id: saved.items[index].id })), unresolvedOcrFlags: payload.items.reduce((sum: number, item: any) => sum + item.ocrFlags.length, 0) }));
+    const view = renderSavedInvoice(flagged);
+    await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
+    saveCurrentInvoice();
+    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
+    fireEvent.click(reviewConfirmation());
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'NEW-UNCHECKED-BATCH' } });
+    expect(screen.getByText('Changed — check again')).toBeInTheDocument();
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-amber-600');
+    expect(screen.getByText('1 check to finish')).toBeInTheDocument();
+    expect(screen.queryByText('No outstanding OCR checks — compare with the bill')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Review & Add stock' })).not.toBeInTheDocument();
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'NEW-UNCHECKED-BATCH', ocrFlags: ['uncertain_batchNumber'] })] })));
+    const recovery = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:pinv-1')!);
+    expect(recovery.lines[0].ocrFlags).toBe('uncertain_batchNumber');
+    view.unmount();
+    render(<PurchaseInvoiceWorkbench invoiceId="pinv-1" />);
+    await screen.findByDisplayValue('NEW-UNCHECKED-BATCH');
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-amber-600');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
+    saveCurrentInvoice();
+    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
+    fireEvent.click(reviewConfirmation());
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
+    expect(screen.getByText('Review confirmed')).toBeInTheDocument();
+    expect(screen.queryByText('Changed — check again')).not.toBeInTheDocument();
+    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('restores a checked supplier GSTIN when its dependent supplier name changes', async () => {
+    const saved = { ...draftInvoice, distributorDlNo: 'DL-TEST', items: [{ ...draftInvoice.items[0], packUnitType: 'Strip' }] };
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(saved);
+    renderSavedInvoice({ ...saved, unresolvedOcrFlags: 1, ocrFlags: ['uncertain_distributorGstin'] });
+    await editSelectedInvoice();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' }));
+    saveCurrentInvoice();
+    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
+    fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Corrected supplier' } });
+    expect(screen.getByLabelText('GSTIN')).toHaveClass('border-amber-600');
+    expect(screen.getByText('1 check to finish')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
+    const recovery = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:pinv-1')!);
+    expect(recovery.headerFlags).toBe('uncertain_distributorGstin');
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ ocrFlags: ['uncertain_distributorGstin'] })));
+  });
+
+  it('keeps invalid expiry red and unconfirmable while preserving the save validation', async () => {
+    renderSavedInvoice({ ...draftInvoice, distributorDlNo: 'DL-TEST', unresolvedOcrFlags: 1, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', expiryMonth: 13, ocrFlags: ['uncertain_expiry'] }] });
+    await editSelectedInvoice();
+    expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Exp. Year')).toHaveClass('border-red-600');
+    expect(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' })).toBeDisabled();
+    saveCurrentInvoice();
+    expect(screen.getByText('Line 1: expiry month/year is invalid')).toBeInTheDocument();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Exp. Month'), { target: { value: '12' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' }));
+    expect(screen.getByText('Checked').closest('li')).toHaveAttribute('data-review-state', 'success');
+    fireEvent.change(screen.getByLabelText('Exp. Year'), { target: { value: '' } });
+    expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' })).toBeDisabled();
+    expect(screen.getByText('1 check to finish')).toBeInTheDocument();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
 });
