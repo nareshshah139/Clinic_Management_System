@@ -18,6 +18,7 @@ interface Props {
   patientId?: string; // required for draft uploads when visitId is temp
   allowDelete?: boolean; // doctor-only delete control
   onVisitVersion?: (version: number) => void;
+  onClinicalConflict?: () => void;
   onChangeCount?: (count: number) => void; // notify parent of photo count changes
 }
 
@@ -30,7 +31,12 @@ interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoP
  * Successful photo uploads and deletions MUST forward their acknowledged visitVersion
  * to the editor. Photo list reads MUST NOT advance the editor's save version.
  */
-export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion }: Props) {
+/**
+ * @cc [owner:nareshshah139,label:product] photo-conflict-propagation
+ * An upload or deletion 409 MUST notify the parent conflict gate immediately,
+ * including legacy and draft routes, before another batch can acknowledge success.
+ */
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion, onClinicalConflict }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [photoLoading, setPhotoLoading] = useState(true);
@@ -414,7 +420,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                 try { acknowledgeVersion(JSON.parse(xhr.responseText)); } catch {}
                 resolve();
               }
-              else reject(new Error(`HTTP ${xhr.status}`));
+              else {
+                if (xhr.status === 409) onClinicalConflict?.();
+                reject(new Error(`HTTP ${xhr.status}`));
+              }
             }
           };
           xhr.ontimeout = () => reject(new Error('Timeout'));
@@ -561,7 +570,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         const draftUrl = active.url.startsWith('/visits/photos/draft/') ? `${baseUrl}${active.url}` : active.url;
         const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
         if (resp.status === 401) handleUnauthorizedRedirect(resp);
-        if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+        if (!resp.ok) {
+          if (resp.status === 409) onClinicalConflict?.();
+          throw new Error(`Delete failed: ${resp.status}`);
+        }
         try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
         catch { await load(); }
       } else {
@@ -570,7 +582,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           const target = active.url.startsWith('http') ? active.url : `${baseUrl}${active.url}`;
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
-          if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+          if (!resp.ok) {
+            if (resp.status === 409) onClinicalConflict?.();
+            throw new Error(`Delete failed: ${resp.status}`);
+          }
           try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
           catch { await load(); }
         } else if (/\/uploads\//i.test(active.url)) {
@@ -581,7 +596,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             credentials: 'include',
           });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
-          if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
+          if (!resp.ok) {
+            if (resp.status === 409) onClinicalConflict?.();
+            throw new Error(`Delete failed: ${resp.status}`);
+          }
           try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
           catch { await load(); }
         } else {

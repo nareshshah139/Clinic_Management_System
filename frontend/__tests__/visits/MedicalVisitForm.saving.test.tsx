@@ -156,7 +156,7 @@ it('keeps a manual conflict draft without retrying automatically or rebasing aft
   fireEvent.mouseDown(screen.getByRole('tab', { name: 'Photos' }), { button: 0, ctrlKey: false });
   await act(async () => { mockPhotoVersion!(5); mockRxSaved!({ version: 4 }); });
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
-  expect(apiClient.updateVisit).toHaveBeenCalledTimes(2);
+  expect(apiClient.updateVisit).toHaveBeenCalledTimes(1);
   expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ version: 3 }), expect.anything());
 });
 

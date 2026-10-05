@@ -9,10 +9,12 @@ jest.mock('@/lib/api', () => ({ apiClient: {
   getAllPatientVisitHistory: jest.fn().mockResolvedValue([]), getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
   getVisits: jest.fn().mockResolvedValue({ visits: [] }), getPrescriptions: jest.fn().mockResolvedValue({ prescriptions: [] }),
   getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }), getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),
-  autocompletePrescriptionField: jest.fn().mockResolvedValue([]), updateVisit: jest.fn(), completeVisit: jest.fn(),
+  autocompletePrescriptionField: jest.fn().mockResolvedValue([]), updateVisit: jest.fn(), createVisit: jest.fn(), completeVisit: jest.fn(), createPrescription: jest.fn(), updatePrescription: jest.fn(),
 } }));
-jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
-jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
+const mockToast = jest.fn();
+jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }));
+let mockPhotoVersion: ((version: number) => void) | undefined;
+jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
 jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
 
 let saved: Record<string, any>;
@@ -176,4 +178,89 @@ it('retains the conflicting draft when loading the saved visit fails', async () 
   expect(screen.getByLabelText('Past history')).toHaveValue('Keep until reload succeeds');
   expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
   expect(localStorage.getItem('clinic:visit-draft:d:p:visit-v')).toContain('Keep until reload succeeds');
+});
+
+
+it.each(['create', 'update'])('blocks autosave after an Rx %s conflict despite later photo receipts, until explicit recovery', async mode => {
+  jest.useFakeTimers();
+  try {
+    localStorage.setItem('rxDraft:p:v', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
+    if (mode === 'update') saved.prescription = { id: 'rx' };
+    const saveRx = (mode === 'update' ? apiClient.updatePrescription : apiClient.createPrescription) as jest.Mock;
+    saveRx.mockRejectedValue(Object.assign(new Error('Visit changed; reload before saving'), { status: 409 }));
+    await openForm();
+    fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Stale Rx edit' } });
+    saved.version = 4;
+    saved.history.pastHistory = 'Saved externally';
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })));
+    expect(saveRx.mock.calls.at(-1)[mode === 'update' ? 1 : 0].clinicalData.version).toBe(3);
+    expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Visit changed elsewhere' }));
+    expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
+    expect(localStorage.getItem('rxDraft:p:v')).toContain('Stale Rx edit');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Photos' }), { button: 0, ctrlKey: false });
+    saved.version = 5;
+    await act(async () => mockPhotoVersion!(5));
+    await act(async () => jest.advanceTimersByTime(40000));
+    expect(apiClient.updateVisit).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
+    expect(localStorage.getItem('rxDraft:p:v')).toContain('Stale Rx edit');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Saved externally'));
+    fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Reviewed edit' } });
+    await act(async () => jest.advanceTimersByTime(8100));
+    expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ version: 5, history: expect.objectContaining({ pastHistory: 'Reviewed edit' }) }), expect.anything());
+  } finally { jest.useRealTimers(); }
+});
+
+
+it('identifies a duplicate prescription while preserving its clinical draft for reconciliation', async () => {
+  localStorage.setItem('rxDraft:p:v', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
+  (apiClient.createPrescription as jest.Mock).mockRejectedValue(Object.assign(new Error('Prescription already exists for this visit'), { status: 409 }));
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Keep duplicate attempt detail' } });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })));
+  expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Prescription already exists' }));
+  expect(screen.getByLabelText('Past history')).toHaveValue('Keep duplicate attempt detail');
+  expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+});
+
+
+it.each(['manual', 'Rx'])('requires explicit recovery when an appointment visit appears during %s creation', async mode => {
+  jest.useFakeTimers();
+  try {
+    let appeared = false;
+    saved.version = 4;
+    saved.appointmentId = 'appointment';
+    saved.history.pastHistory = 'Concurrent saved history';
+    (apiClient.getVisits as jest.Mock).mockImplementation(async () => ({ visits: appeared ? [saved] : [] }));
+    (apiClient.createVisit as jest.Mock).mockImplementation(async () => {
+      appeared = true;
+      throw Object.assign(new Error('Visit already exists for this appointment'), { status: 409 });
+    });
+    localStorage.setItem('rxDraft:p:standalone', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
+    render(<MedicalVisitForm patientId="p" doctorId="d" appointmentId="appointment" userRole="ADMIN" />);
+    await act(async () => {});
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Unsaved new-visit history' } });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: mode === 'manual' ? 'Save Draft' : 'Create Prescription' })));
+    expect(apiClient.createVisit).toHaveBeenCalled();
+    expect(apiClient.updateVisit).not.toHaveBeenCalled();
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    expect(screen.getByLabelText('Past history')).toHaveValue('Unsaved new-visit history');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Create Prescription' })));
+    await act(async () => jest.advanceTimersByTime(40000));
+    expect(apiClient.updateVisit).not.toHaveBeenCalled();
+    expect(apiClient.createPrescription).not.toHaveBeenCalled();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+    await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Concurrent saved history'));
+    fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Reviewed appointment edit' } });
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+    expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ version: 4 }), expect.anything());
+  } finally { jest.useRealTimers(); }
 });

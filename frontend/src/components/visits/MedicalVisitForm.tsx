@@ -802,6 +802,31 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const latestDraftWriter = useRef(persistDraftToStorage);
   latestDraftWriter.current = persistDraftToStorage;
 
+  /**
+   * @cc [owner:nareshshah139,label:product] shared-clinical-conflict-gate
+   * A conflict from any clinical mutation MUST immediately freeze this draft's
+   * version, cancel autosave, and persist its conflict state before later receipts.
+   */
+  const blockAutomaticSave = useCallback(() => {
+    automaticSaveBlocked.current = true;
+    clearAutoSaveTimer();
+    setSaveConflict(true);
+    setSaveStatus('error');
+    latestDraftWriter.current();
+  }, [clearAutoSaveTimer]);
+
+  /**
+   * @cc [owner:nareshshah139,label:product] conflict-requires-reconciliation
+   * Further visit and prescription saves MUST be rejected after a known conflict
+   * until explicit recovery, including creation races with no acknowledged version.
+   */
+  const getClinicalSavePatch = useCallback(() => {
+    if (automaticSaveBlocked.current) {
+      throw Object.assign(new Error('Visit changed; reconcile the saved visit before saving'), { status: 409 });
+    }
+    return latestPayload.current();
+  }, []);
+
   const runAutoSave = useCallback(async () => {
     if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {
       return;
@@ -850,11 +875,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         setSaveStatus('error');
         // If unauthorized, prompt sign-in and do not retry
         if ((error as any)?.status === 409) {
-          automaticSaveBlocked.current = true;
-          setSaveConflict(true);
-          latestDraftWriter.current();
+          blockAutomaticSave();
           retryAllowed = false;
-          clearAutoSaveTimer();
           toast({ variant: 'warning', title: 'Visit changed elsewhere', description: 'Your draft is retained and autosave is paused. Use the conflict notice to discard it and reload the saved visit.' });
         } else if ((error as any)?.status === 401) {
           retryAllowed = false;
@@ -886,7 +908,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         }
       }
     })();
-  }, [buildPayload, clearAutoSaveTimer, persistDraftToStorage, toast, visitId]);
+  }, [blockAutomaticSave, buildPayload, clearAutoSaveTimer, persistDraftToStorage, toast, visitId]);
 
   autoSaveRunner.current = runAutoSave;
 
@@ -1015,12 +1037,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       try {
         const res: any = initialVisitSnapshot ?? await apiClient.get<VisitDetails>(`/visits/${visitId}`);
         if (restoredDraftVersion.current !== undefined && res.version !== undefined && restoredDraftVersion.current !== res.version) {
-          automaticSaveBlocked.current = true;
-          setSaveConflict(true);
-          clearAutoSaveTimer();
-          latestDraftWriter.current();
+          blockAutomaticSave();
         }
-        if (visitVersionRef.current === undefined) visitVersionRef.current = res.version;
+        if (visitVersionRef.current === undefined && !automaticSaveBlocked.current) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
@@ -1480,7 +1499,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       await autoSavePromiseRef.current;
       latestDraftWriter.current();
       setSaveStatus('saving');
-      const payload = latestPayload.current();
+      const payload = getClinicalSavePatch();
       
       let visit;
       if (visitId) {
@@ -1493,25 +1512,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           setVisitId((visit as VisitDetails).id);
         } catch (err: any) {
           const status = (err && typeof err === 'object' && 'status' in err) ? (err as any).status : undefined;
-          // If a visit already exists for the appointment, resume it instead of failing
           if (status === 409 && appointmentId) {
-            try {
-              const res: any = await apiClient.getVisits({ appointmentId });
-              const list = (res?.visits || res?.data || []) as any[];
-              const existingId = list.find(v => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId))?.id;
-              if (existingId && typeof existingId === 'string') {
-                setVisitId(existingId);
-                const patchKey = buildIdempotencyKey('PATCH', existingId, payload as any);
-                visit = await apiClient.updateVisit(existingId, payload, { idempotencyKey: patchKey });
-              } else {
-                throw err;
-              }
-            } catch (e2) {
-              throw e2;
-            }
-          } else {
-            throw err;
+            blockAutomaticSave();
+            const res: any = await apiClient.getVisits({ appointmentId });
+            const list = (res?.visits || res?.data || []) as any[];
+            const existingId = list.find(v => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId))?.id;
+            if (existingId && typeof existingId === 'string') setVisitId(existingId);
           }
+          throw err;
         }
       }
       
@@ -1559,10 +1567,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     } catch (e) {
       console.error('Save failed:', e);
       if ((e as { status?: number })?.status === 409) {
-        automaticSaveBlocked.current = true;
-        setSaveConflict(true);
-        latestDraftWriter.current();
-        clearAutoSaveTimer();
+        blockAutomaticSave();
       }
       setSaveStatus('error');
       toast({
@@ -2267,6 +2272,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   patientId={patientId}
                   allowDelete={hasPermission('photos') || hasPermission('all')}
                   onChangeCount={(c) => { setPhotoCount(c); }}
+                  onClinicalConflict={blockAutomaticSave}
                   onVisitVersion={(version) => {
                     acknowledgeMutationVersion(version);
                     latestDraftWriter.current();
@@ -2274,7 +2280,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   onVisitNeeded={async () => {
                     if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (!visitId) {
-                      const minimalPayload = buildPayload();
+                      const minimalPayload = getClinicalSavePatch();
                       const newVisit = await apiClient.createVisit(minimalPayload);
                       const newVisitId = (newVisit as VisitDetails).id;
                       acknowledgeMutationVersion((newVisit as VisitDetails).version);
@@ -2302,9 +2308,10 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   consultationType={consultationType}
                   teleVideoConsent={teleVideoConsent}
                   onClinicalDataChange={receiveClinicalData}
-                  getClinicalSavePatch={() => latestPayload.current()}
+                  getClinicalSavePatch={getClinicalSavePatch}
                   shouldPersistDraft={() => !discardDraftRef.current}
                   initialVisitSnapshot={initialVisitSnapshot}
+                  onClinicalConflict={blockAutomaticSave}
                   onVisitSaved={(saved) => {
                     acknowledgeMutationVersion(saved.version);
                     if (saved.status) setVisitStatus(saved.status);
@@ -2330,15 +2337,17 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       });
                       throw new Error('Missing IDs');
                     }
-                    const minimalPayload = buildPayload();
+                    const minimalPayload = getClinicalSavePatch();
                     let newVisit: any;
                     try {
                       newVisit = await apiClient.createVisit(minimalPayload);
                     } catch (error: any) {
                       if (error?.status !== 409 || !appointmentId) throw error;
+                      blockAutomaticSave();
                       const response: any = await apiClient.getVisits({ appointmentId });
-                      newVisit = (response.visits || response.data || []).find((v: any) => v.appointmentId === appointmentId || v.appointment?.id === appointmentId);
-                      if (!newVisit?.id) throw error;
+                      const existing = (response.visits || response.data || []).find((v: any) => v.patientId === patientId && (v.appointmentId === appointmentId || v.appointment?.id === appointmentId));
+                      if (existing?.id) setVisitId(existing.id);
+                      throw error;
                     }
                     const newVisitId = (newVisit as VisitDetails).id;
                     acknowledgeMutationVersion((newVisit as VisitDetails).version);

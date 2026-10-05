@@ -89,6 +89,7 @@ interface Props {
   onClinicalDataChange?: (patch: Record<string, unknown>) => void;
   getClinicalSavePatch?: () => Record<string, unknown>;
   onVisitSaved?: (visit: Partial<VisitDetails>) => void;
+  onClinicalConflict?: () => void;
   shouldPersistDraft?: () => boolean;
   initialVisitSnapshot?: VisitDetails;
   onBeforeExport?: () => Promise<string>;
@@ -197,7 +198,7 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onClinicalConflict, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
   const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
@@ -1084,10 +1085,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     const msg = getErrorMessage(error);
     const lower = (msg || '').toLowerCase();
 
-    if (status === 409 || lower.includes('already exists')) {
+    if (lower.includes('prescription already exists')) {
       return {
         title: 'Prescription already exists',
         description: 'A prescription is already linked to this visit. Open the existing Rx from the visit or Pharmacy tab instead of creating a new one.',
+      };
+    }
+    if (status === 409) {
+      return {
+        title: lower.includes('visit changed') ? 'Visit changed elsewhere' : 'Clinical save conflict',
+        description: onClinicalConflict
+          ? 'Your draft is retained and autosave is paused. Use the conflict notice to reload the saved visit.'
+          : 'Your draft is retained. Reopen the visit and reconcile your changes before saving again.',
+        variant: 'warning',
       };
     }
     if (status === 404 && lower.includes('visit not found')) {
@@ -2469,6 +2479,19 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-conflict-propagation
+   * Every 409 from a prescription mutation or its prerequisite visit save MUST
+   * notify the parent conflict gate and preserve the Rx draft before returning.
+   * A rejected save MUST prevent print, PDF, email, and WhatsApp output.
+   */
+  const reportClinicalConflict = useCallback((error: unknown) => {
+    if ((error as { status?: number })?.status !== 409) return false;
+    onClinicalConflict?.();
+    latestDraftWriter.current();
+    return true;
+  }, [onClinicalConflict]);
+
   const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
     if (prescriptionSaveInFlight.current) return;
     if (consultationType === 'TELE_VIDEO' && !teleVideoConsent) {
@@ -2589,6 +2612,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       // Keep saved clinical details and medication items available for subsequent edits.
       return res.id as string;
     } catch (e: any) {
+      reportClinicalConflict(e);
       const { title, description, variant } = mapCreateErrorToToast(e);
       toast({
         variant: variant || 'destructive',
@@ -2599,7 +2623,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [reportClinicalConflict, getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
@@ -2628,13 +2652,14 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       }
       return { prescriptionId, documentId: prescriptionId || savedVisitId };
     } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Save required before export', description: getErrorMessage(error) });
+      if (reportClinicalConflict(error)) toast(mapCreateErrorToToast(error));
+      else toast({ variant: 'destructive', title: 'Save required before export', description: getErrorMessage(error) });
       return null;
     } finally {
       exportSaveInFlight.current = false;
       setSavingForExport(false);
     }
-  }, [visitId, standalone, onBeforeExport, ensureVisitId, clinicalData, validItems.length, create, toast]);
+  }, [reportClinicalConflict, visitId, standalone, onBeforeExport, onVisitSaved, ensureVisitId, clinicalData, validItems.length, create, toast]);
 
   const applyTemplateToBuilder = (tpl: any) => {
     const nowTs = Date.now();
