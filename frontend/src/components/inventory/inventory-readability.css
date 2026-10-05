@@ -1,12 +1,12 @@
-/* Inventory-only scale: secondary 14px, dense UI 15px, body/mobile entry 16px.
+/* Inventory-only scale: secondary 16px, dense UI 17px, body/mobile entry 18px.
    Keep rem units so browser text enlargement remains effective. */
 .inventory-surface {
-  --text-xs: 0.875rem;
+  --text-xs: calc(0.875rem + var(--app-text-increase, 0rem));
   --text-xs--line-height: 1.45;
-  --text-sm: 0.9375rem;
+  --text-sm: calc(0.9375rem + var(--app-text-increase, 0rem));
   --text-sm--line-height: 1.5;
   min-width: 0;
-  font-size: 1rem;
+  font-size: calc(1rem + var(--app-text-increase, 0rem));
   line-height: 1.5;
   overflow-wrap: break-word;
 }
@@ -49,6 +49,6 @@
 
 @media (max-width: 639px) {
   .inventory-surface :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea, [role="combobox"]) {
-    font-size: 1rem;
+    font-size: calc(1rem + var(--app-text-increase, 0rem));
   }
 }

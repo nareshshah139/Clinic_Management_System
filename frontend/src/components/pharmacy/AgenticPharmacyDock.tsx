@@ -1169,8 +1169,8 @@ function AgentChart({ chart }: { chart: ChartSpec }) {
           {chart.type === "line" ? (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <XAxis dataKey={xKey} tick={{ fontSize: 'calc(11px + var(--app-text-increase, 0rem))' }} />
+              <YAxis tick={{ fontSize: 'calc(11px + var(--app-text-increase, 0rem))' }} />
               <Tooltip />
               {yKeys.map((key, index) => (
                 <Line
@@ -1203,8 +1203,8 @@ function AgentChart({ chart }: { chart: ChartSpec }) {
           ) : (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={xKey} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <XAxis dataKey={xKey} tick={{ fontSize: 'calc(11px + var(--app-text-increase, 0rem))' }} />
+              <YAxis tick={{ fontSize: 'calc(11px + var(--app-text-increase, 0rem))' }} />
               <Tooltip />
               {yKeys.map((key, index) => (
                 <Bar

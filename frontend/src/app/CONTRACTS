@@ -1,0 +1,7 @@
+@cc [owner:nareshshah139,label:accessibility] app-screen-text-increase
+At default text preferences, app screen text MUST increase by 0.125rem from its original size,
+without changing the root rem size, spacing scale, font families or weights.
+
+@cc [owner:nareshshah139,label:product] preserve-document-typography
+The app text increase MUST NOT change prescription preview, print or PDF typography.
+Prescription source, paginated preview and browser-print roots MUST retain their original text scale.

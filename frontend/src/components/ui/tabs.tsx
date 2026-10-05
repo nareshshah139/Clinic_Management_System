@@ -101,6 +101,11 @@ function TabsList({
   )
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] scaled-tab-text
+ * Tab labels MUST apply the saved user scale to the enlarged screen text size.
+ * The app text increase MUST NOT reset the user's tab scale.
+ */
 function TabsTrigger({
   className,
   ...props
@@ -110,8 +115,7 @@ function TabsTrigger({
       data-slot="tabs-trigger"
       className={cn(
         "data-[state=active]:bg-background dark:data-[state=active]:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 text-foreground dark:text-muted-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 data-[state=active]:shadow-sm [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // Scale text consistently using CSS variable; 0.875rem is Tailwind text-sm
-        "text-[calc(var(--tabs-font-scale,1)*0.875rem)]",
+        "text-[calc(var(--tabs-font-scale,1)*(0.875rem+var(--app-text-increase,0rem)))]",
         className
       )}
       {...props}

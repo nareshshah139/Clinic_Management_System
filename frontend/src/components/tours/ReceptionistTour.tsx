@@ -62,7 +62,7 @@ function injectTourStyles() {
       
       .introjs-tooltiptext {
         padding: 20px !important;
-        font-size: 14px !important;
+        font-size: calc(14px + var(--app-text-increase, 0rem)) !important;
         line-height: 1.6 !important;
       }
       
@@ -73,7 +73,7 @@ function injectTourStyles() {
         font-weight: 600 !important;
         text-shadow: none !important;
         transition: all 0.2s !important;
-        font-size: 14px !important;
+        font-size: calc(14px + var(--app-text-increase, 0rem)) !important;
         margin: 0 4px !important;
       }
       
@@ -150,7 +150,7 @@ function injectTourStyles() {
       .introjs-skipbutton:before {
         content: "✕" !important;
         font-weight: 700 !important;
-        font-size: 20px !important;
+        font-size: calc(20px + var(--app-text-increase, 0rem)) !important;
         line-height: 1 !important;
         position: absolute !important;
         left: 50% !important;
@@ -220,7 +220,7 @@ function injectTourStyles() {
         
         .introjs-tooltiptext {
           padding: 15px !important;
-          font-size: 13px !important;
+          font-size: calc(13px + var(--app-text-increase, 0rem)) !important;
         }
         
         .introjs-tooltipbuttons {
@@ -232,7 +232,7 @@ function injectTourStyles() {
         
         .introjs-button {
           padding: 8px 16px !important;
-          font-size: 13px !important;
+          font-size: calc(13px + var(--app-text-increase, 0rem)) !important;
           margin: 4px 2px !important;
           max-width: calc(50% - 8px) !important;
         }

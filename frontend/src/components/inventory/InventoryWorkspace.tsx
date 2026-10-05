@@ -95,7 +95,7 @@ const menus: Record<string, string[][]> = {
 /**
  * @cc [owner:nareshshah139,label:accessibility] inventory-readable-scope
  * Inventory content MUST use scalable text of at least 14px at the default root size,
- * with 16px phone inputs. Increasing text size MUST leave actions reachable and wide tables
+ * with 18px phone inputs. Increasing text size MUST leave actions reachable and wide tables
  * scrollable within the workspace, without changing typography on unrelated routes.
  */
 export function InventoryWorkspace() {

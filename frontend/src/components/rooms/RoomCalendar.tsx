@@ -513,7 +513,7 @@ export default function RoomCalendar() {
                               }
                             }}
                           >
-                            <div className="font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: '0.75rem', lineHeight: '1.2' }}>
+                            <div className="font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
                               <div className="truncate font-semibold">
                                 {apt.patient.name}
                                 {apt.visitType === 'PROCEDURE' && apt.notes && (

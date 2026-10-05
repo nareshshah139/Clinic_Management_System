@@ -44,6 +44,7 @@
 }
 
 :root {
+  --app-text-increase: 0rem;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.129 0.042 264.695);
@@ -207,11 +208,47 @@
 }
 
 @layer base {
+  :root,
+  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host) {
+    --text-xs: calc(0.75rem + var(--app-text-increase));
+    --text-sm: calc(0.875rem + var(--app-text-increase));
+    --text-base: calc(1rem + var(--app-text-increase));
+    --text-lg: calc(1.125rem + var(--app-text-increase));
+    --text-xl: calc(1.25rem + var(--app-text-increase));
+    --text-2xl: calc(1.5rem + var(--app-text-increase));
+    --text-3xl: calc(1.875rem + var(--app-text-increase));
+    --text-4xl: calc(2.25rem + var(--app-text-increase));
+  }
+  :where(#prescription-print-root, #pagedjs-container, #prescription-print-host) {
+    --app-text-increase: 0rem;
+    font-size: 14px;
+  }
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@media screen {
+  :root {
+    --app-text-increase: 0.125rem;
+  }
+  body {
+    font-size: var(--text-base);
+  }
+}
+
+@layer utilities {
+  .text-\[10px\] {
+    font-size: calc(10px + var(--app-text-increase));
+  }
+  .text-\[11px\] {
+    font-size: calc(11px + var(--app-text-increase));
+  }
+  .text-\[0\.8rem\] {
+    font-size: calc(0.8rem + var(--app-text-increase));
   }
 }
 
