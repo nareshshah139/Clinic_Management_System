@@ -1170,6 +1170,8 @@ model PharmacyInvoice {
   patientId      String
   doctorId       String?
   prescriptionId String?
+  checkoutRequestKey String?
+  checkoutPayloadHash String?
   branchId       String
 
   // Invoice Details
@@ -1211,6 +1213,7 @@ model PharmacyInvoice {
   items        PharmacyInvoiceItem[]
   payments     PharmacyPayment[]
 
+  @@unique([branchId, checkoutRequestKey])
   @@index([patientId])
   @@index([doctorId])
   @@index([branchId])
@@ -1266,6 +1269,8 @@ model PharmacyInvoiceItem {
 model PharmacyPayment {
   id        String @id @default(cuid())
   invoiceId String
+  requestKey String?
+  payloadHash String?
 
   // Payment Details
   amount    Float
@@ -1282,6 +1287,7 @@ model PharmacyPayment {
   // Relations
   invoice PharmacyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  @@unique([invoiceId, requestKey])
   @@index([invoiceId])
   @@index([status])
   @@index([paymentDate])

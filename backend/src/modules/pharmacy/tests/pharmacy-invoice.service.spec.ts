@@ -61,6 +61,8 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
       ),
     };
 
+    tx.$queryRaw = jest.fn().mockResolvedValue([{ id: 'invoice-1' }]);
+    tx.pharmacyInvoice.findFirst = prisma.pharmacyInvoice.findFirst;
     service = new PharmacyInvoiceService(prisma, {
       reserve: jest.fn(),
     } as any);
@@ -200,7 +202,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
     });
   });
 
-  it('rejects invalid backwards status transitions before opening a transaction', async () => {
+  it('rejects invalid backwards status transitions without changing the invoice', async () => {
     prisma.pharmacyInvoice.findFirst.mockResolvedValue(
       makeInvoice(1, 'COMPLETED'),
     );
@@ -209,7 +211,7 @@ describe('PharmacyInvoiceService defensive stock confirmation', () => {
       service.updateStatus('invoice-1', 'CONFIRMED', branchId, userId),
     ).rejects.toThrow(BadRequestException);
 
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.pharmacyInvoice.update).not.toHaveBeenCalled();
   });
 
   it('builds standardized print data with GST slab and batch allocations', async () => {

@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Max,
+  Length,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -206,6 +207,16 @@ export class CreatePharmacyInvoiceDto {
   @ValidateNested({ each: true })
   @Type(() => PharmacyInvoiceItemDto)
   items: PharmacyInvoiceItemDto[];
+}
+
+export class CheckoutPharmacyInvoiceDto extends CreatePharmacyInvoiceDto {
+  @ApiProperty({
+    description:
+      'Stable checkout attempt key. Reuse after an uncertain response.',
+  })
+  @IsString()
+  @Length(1, 128)
+  requestKey: string;
 }
 
 export class UpdatePharmacyInvoiceDto {
@@ -456,6 +467,14 @@ export class QueryPharmacyInvoiceDto {
 }
 
 export class PharmacyPaymentDto {
+  @ApiProperty({
+    description:
+      'Stable payment attempt key. Reuse after an uncertain response.',
+  })
+  @IsString()
+  @Length(1, 128)
+  requestKey: string;
+
   @ApiProperty({ description: 'Payment amount', example: 500.0 })
   @Transform(({ value }) => {
     if (typeof value === 'string') {
