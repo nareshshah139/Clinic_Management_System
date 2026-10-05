@@ -542,7 +542,9 @@ it.each(['', null, undefined, 0, '0'])('restores an unentered legacy dosage (%s)
   }));
 
   render(<PrescriptionBuilder patientId="legacy-draft" visitId="visit" doctorId="doctor" onBeforeExport={async () => 'visit'} />);
-  expect(await screen.findByRole('spinbutton', { name: 'Numeric dosage for Legacy medicine' })).toHaveValue(null);
+  await screen.findByRole('spinbutton', { name: 'Duration for Legacy medicine' });
+  expect(screen.queryByRole('spinbutton', { name: /Numeric dosage/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: /Dosage unit/ })).not.toBeInTheDocument();
   await openPreview();
   await settlePreviewPagination();
   fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
@@ -564,7 +566,7 @@ it.each(['', null, undefined, 0, '0'])('restores an unentered legacy dosage (%s)
   localStorage.removeItem('rxDraft:legacy-draft:visit');
 });
 
-it('reopens a saved prescription with optional dosage and preserves a recorded positive dose on update', async () => {
+it('hides dose controls and preserves a saved dose when duration changes', async () => {
   const get = jest.spyOn(apiClient, 'get').mockImplementation(async (endpoint) => endpoint === '/visits/saved-dose' ? {
     prescription: { id: 'existing-rx', items: [
       { drugName: 'No numeric dose', dosage: 0, dosageUnit: 'MG', frequency: 'TWICE_DAILY', dosePattern: '1-0-1', duration: 7, durationUnit: 'DAYS', instructions: 'Original instruction' },
@@ -576,15 +578,17 @@ it('reopens a saved prescription with optional dosage and preserves a recorded p
   mockPdfOutput.mockClear();
   try {
     render(<PrescriptionBuilder patientId="stored-patient" visitId="saved-dose" doctorId="doctor" onBeforeExport={async () => 'saved-dose'} />);
-    expect(await screen.findByRole('spinbutton', { name: 'Numeric dosage for No numeric dose' })).toHaveValue(null);
-    expect(screen.getByRole('spinbutton', { name: 'Numeric dosage for Recorded numeric dose' })).toHaveValue(2.5);
+    const duration = await screen.findByRole('spinbutton', { name: 'Duration for Recorded numeric dose' });
+    expect(screen.queryByRole('spinbutton', { name: /Numeric dosage/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /Dosage unit/ })).not.toBeInTheDocument();
+    fireEvent.change(duration, { target: { value: '8' } });
     await openPreview();
     await settlePreviewPagination();
     fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
     await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
     expect(patch).toHaveBeenCalledWith('/prescriptions/existing-rx', expect.objectContaining({ items: [
       expect.objectContaining({ drugName: 'No numeric dose', dosage: undefined, instructions: 'Original instruction', dosePattern: '1-0-1' }),
-      expect.objectContaining({ drugName: 'Recorded numeric dose', dosage: 2.5, dosageUnit: 'MG' }),
+      expect.objectContaining({ drugName: 'Recorded numeric dose', dosage: 2.5, dosageUnit: 'MG', duration: 8 }),
     ] }), expect.objectContaining({ idempotencyKey: expect.any(String) }));
   } finally {
     get.mockRestore();
@@ -594,13 +598,10 @@ it('reopens a saved prescription with optional dosage and preserves a recorded p
   }
 });
 
-it('retains an explicitly entered zero in a current draft, shows validation, and saves after correction', async () => {
+it('retains an explicitly entered zero in a current draft and reports validation without changing it', async () => {
   const messages = ['items.0.dosage must not be less than 0.01'];
   const failure = Object.assign(new Error(messages.join(', ')), { status: 400, body: { message: messages } });
-  const createRx = jest.spyOn(apiClient, 'createPrescription')
-    .mockRejectedValueOnce(failure)
-    .mockResolvedValueOnce({ id: 'retried-rx' } as any);
-  const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockRejectedValueOnce(failure);
   mockPdfOutput.mockClear();
   localStorage.setItem('rxDraft:validation-patient:visit', JSON.stringify({ dosageSchemaVersion: 1, items: [{
     drugName: 'Synthetic medicine', dosage: 0, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS',
@@ -612,19 +613,12 @@ it('retains an explicitly entered zero in a current draft, shows validation, and
     fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
     await waitFor(() => expect(screen.getByTestId('toast-message')).toHaveTextContent(messages[0]));
     expect(mockPdfOutput).not.toHaveBeenCalled();
-    expect(localStorage.getItem('rxDraft:validation-patient:visit')).toContain('Synthetic medicine');
-    fireEvent.click(screen.getByText('Close', { selector: 'button' }));
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Numeric dosage for Synthetic medicine' }), { target: { value: '' } });
-    await openPreview();
-    await settlePreviewPagination();
-    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
-    await waitFor(() => expect(mockPdfOutput).toHaveBeenCalledTimes(1));
-    expect(click).toHaveBeenCalledTimes(1);
-    expect(createRx).toHaveBeenCalledTimes(2);
-    expect(createRx).toHaveBeenLastCalledWith(expect.objectContaining({ items: [expect.objectContaining({ dosage: undefined, duration: 7 })] }));
+    const draft = JSON.parse(localStorage.getItem('rxDraft:validation-patient:visit') || '{}');
+    expect(draft.items[0]).toEqual(expect.objectContaining({ drugName: 'Synthetic medicine', dosage: 0, dosageUnit: 'MG' }));
+    expect(createRx).toHaveBeenCalledTimes(1);
+    expect(createRx).toHaveBeenCalledWith(expect.objectContaining({ items: [expect.objectContaining({ dosage: 0, dosageUnit: 'MG', duration: 7 })] }));
   } finally {
     createRx.mockRestore();
-    click.mockRestore();
     localStorage.removeItem('rxDraft:validation-patient:visit');
   }
 });
