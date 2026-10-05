@@ -38,8 +38,9 @@ it('scopes catalog, history, date window and current-visit exclusion on the serv
   const prisma = db(); await get(prisma);
   expect(prisma.drug.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'fucibet', branchId: 'clinic' } }));
   expect(prisma.prescription.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: {
+    status: { not: 'CANCELLED' },
     createdAt: { gte: new Date('2025-09-27T12:00:00Z'), lte: now },
-    visit: { patient: { branchId: 'clinic' }, id: { not: 'current-visit' } },
+    visit: { deletedAt: null, patient: { branchId: 'clinic' }, id: { not: 'current-visit' } },
   } }));
 });
 

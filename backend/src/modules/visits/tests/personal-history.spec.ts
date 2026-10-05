@@ -41,7 +41,7 @@ it('saves personal history, exposes it for new visits and snapshots it into the 
   expect((await service.findOne(first.id, 'branch')).history).toEqual({ personalHistory, pastHistory: 'Retained history' });
   const history = await service.getPatientVisitHistory({ patientId: 'patient' }, 'branch');
   expect(history.visits.find(visit => visit.id === next.id)?.historySummary.personalHistory).toBe(personalHistory);
-  expect(db.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { patientId: 'patient', patient: { branchId: 'branch' }, history: { contains: '"personalHistory":' } } }));
+  expect(db.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { patientId: 'patient', deletedAt: null, patient: { branchId: 'branch' }, history: { contains: '"personalHistory":' } } }));
 });
 
 it.each(['', '  \n  '])('persists an explicit clear %j and carries it forward without reviving older text', async personalHistory => {

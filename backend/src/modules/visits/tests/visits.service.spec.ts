@@ -10,7 +10,7 @@ import { Language } from '@prisma/client';
 
 type PrismaServiceMock = {
   $transaction: jest.Mock;
-  $queryRawUnsafe: jest.Mock;
+  $queryRaw: jest.Mock;
   patient: {
     findFirst: jest.Mock;
   };
@@ -40,7 +40,7 @@ type PrismaServiceMock = {
 
 const createPrismaMock = (): PrismaServiceMock => ({
   $transaction: jest.fn(async callback => callback(createPrismaMockInstance)),
-  $queryRawUnsafe: jest.fn().mockResolvedValue([
+  $queryRaw: jest.fn().mockResolvedValue([
     { day: new Date('2024-12-01'), count: 5 },
     { day: new Date('2024-12-02'), count: 6 },
   ]),
@@ -458,6 +458,7 @@ describe('VisitsService', () => {
       expect(prismaMock.visit.findFirst).toHaveBeenCalledWith(expect.objectContaining({
         where: {
           id: 'visit-123',
+          deletedAt: null,
           patient: {
             branchId: mockBranchId,
           },
@@ -546,7 +547,7 @@ describe('VisitsService', () => {
       });
       expect(result.vitals).toEqual(JSON.stringify(updateDto.vitals));
       expect(prismaMock.visit.update).toHaveBeenCalledWith({
-        where: { id: 'visit-123' },
+        where: { id: 'visit-123', version: undefined, deletedAt: null },
         data: expect.objectContaining({
           plan: expect.stringMatching(/notes/),
         }),
@@ -566,71 +567,13 @@ describe('VisitsService', () => {
   });
 
   describe('complete', () => {
-    it('should complete visit successfully', async () => {
-      const mockVisit = {
-        id: 'visit-123',
-        appointmentId: 'appointment-123',
-        plan: JSON.stringify({ medications: 'Paracetamol' }),
-        patient: mockPatient,
-        doctor: mockDoctor,
-        appointment: mockAppointment,
-      };
-
-      const completeDto = {
-        finalNotes: 'Visit completed successfully',
-        followUpDate: '2024-12-30',
-        followUpInstructions: 'Return in 1 week',
-      };
-
-      const completedPlan = { finalNotes: completeDto.finalNotes };
-
-      prismaMock.visit.findFirst.mockResolvedValue(mockVisit);
-      prismaMock.visit.update.mockResolvedValue({
-        ...mockVisit,
-        plan: JSON.stringify(completedPlan),
-        doctor: { ...mockDoctor },
-      });
-      prismaMock.appointment.update.mockResolvedValue({
-        ...mockAppointment,
-        status: 'COMPLETED',
-      });
-
-      const result = await service.complete(
-        'visit-123',
-        completeDto,
-        mockBranchId,
-      );
-
-      expect(result).toMatchObject({
-        ...mockVisit,
-        doctor: {
-          ...mockDoctor,
-          name: 'Dr. Smith',
-        },
-        notes: completeDto.finalNotes,
-        plan: JSON.stringify(completedPlan),
-      });
-      expect(prismaMock.appointment.update).toHaveBeenCalledWith({
-        where: { id: 'appointment-123' },
-        data: { status: 'COMPLETED' },
-      });
-      expect(prismaMock.visit.update).toHaveBeenCalledWith({
-        where: { id: 'visit-123' },
-        data: expect.objectContaining({
-          plan: expect.stringContaining('finalNotes'),
-        }),
-        include: {
-          patient: {
-            select: { id: true, name: true, phone: true },
-          },
-          doctor: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-          appointment: {
-            select: { id: true, date: true, slot: true },
-          },
-        },
-      });
+    it('returns the stored completion and retains other plan fields', async () => {
+      let stored: any = { id: 'visit-123', version: 0, status: 'IN_PROGRESS', appointmentId: 'appointment-123', plan: '{"medications":"Paracetamol"}', patient: mockPatient, doctor: mockDoctor, appointment: { ...mockAppointment } };
+      prismaMock.visit.findFirst.mockImplementation(async () => stored);
+      prismaMock.visit.update.mockImplementation(async ({ data }) => (stored = { ...stored, ...data, version: 1 }));
+      prismaMock.appointment.update.mockImplementation(async ({ data }) => Object.assign(stored.appointment, data));
+      const result = await service.complete('visit-123', { finalNotes: 'Finished', followUpInstructions: 'Review' }, mockBranchId);
+      expect(result).toMatchObject({ status: 'COMPLETED', version: 1, completedAt: expect.any(Date), appointment: { status: 'COMPLETED' }, plan: { medications: 'Paracetamol', finalNotes: 'Finished', followUpInstructions: 'Review' } });
     });
   });
 
@@ -658,9 +601,9 @@ describe('VisitsService', () => {
 
       expect(result).toEqual({ message: 'Visit deleted successfully' });
       expect(prismaMock.visit.update).toHaveBeenCalledWith({
-        where: { id: 'visit-123' },
+        where: { id: 'visit-123', version: undefined, deletedAt: null },
         data: {
-          plan: expect.stringMatching(/"deleted":true/),
+          deletedAt: expect.any(Date), version: { increment: 1 },
         },
       });
     });

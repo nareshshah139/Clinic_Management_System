@@ -11,6 +11,7 @@ import {
   IsEnum,
   IsDateString,
   IsNumber,
+  IsInt,
   Min,
   Max,
 } from 'class-validator';
@@ -272,6 +273,11 @@ export class CreateVisitDto {
 
 export class UpdateVisitDto {
   @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
+
+  @IsOptional()
   @IsEnum(ConsultationType)
   consultationType?: ConsultationType;
 
@@ -325,6 +331,11 @@ export class UpdateVisitDto {
 }
 
 export class CompleteVisitDto {
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  version?: number;
+
   @IsOptional()
   @IsString()
   finalNotes?: string;

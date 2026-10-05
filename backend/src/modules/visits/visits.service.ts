@@ -4,23 +4,32 @@ import { Injectable, BadRequestException, NotFoundException, ConflictException }
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateVisitDto, UpdateVisitDto, CompleteVisitDto } from './dto/create-visit.dto';
 import { QueryVisitsDto, PatientVisitHistoryDto, DoctorVisitsDto } from './dto/query-visit.dto';
-import { Language } from '@prisma/client';
+import { Language, Prisma } from '@prisma/client';
 import { join, posix as pathPosix } from 'path';
 import { randomBytes } from 'crypto';
 import * as fs from 'fs';
 
+/**
+ * @cc [owner:nareshshah139,label:product;security] active-visit-reads
+ * Normal visit reads, history, personal-history carry-forward, statistics and
+ * attachment reads MUST exclude deletedAt records and remain branch scoped.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] read-without-mutation
+ * Read operations MUST NOT rewrite clinical documents or advance updatedAt.
+ */
 @Injectable()
 export class VisitsService {
   constructor(private prisma: PrismaService) {}
 
   /**
    * @cc [owner:nareshshah139,label:product;security] personal-history-source
-   * Carry-forward MUST use only this patient's visits in this branch. An empty
+   * Carry-forward MUST use only this patient's active visits in this branch. An empty
    * saved personalHistory MUST stop fallback to older nonempty values.
    */
   private async latestPersonalHistory(patientId: string, branchId: string): Promise<string | undefined> {
     const visit = await this.prisma.visit.findFirst({
-      where: { patientId, patient: { branchId }, history: { contains: '"personalHistory":' } },
+      where: { patientId, deletedAt: null, patient: { branchId }, history: { contains: '"personalHistory":' } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       select: { history: true },
     });
@@ -230,6 +239,7 @@ export class VisitsService {
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {
+      deletedAt: null,
       patient: {
         branchId,
       },
@@ -255,16 +265,6 @@ export class VisitsService {
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
-
-    // Exclude soft-deleted visits (encoded in plan JSON)
-    where.AND = [
-      {
-        OR: [
-          { plan: null },
-          { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
-        ],
-      },
-    ];
 
     // Search filter (search notes inside plan JSON to preserve notes feature)
     if (search) {
@@ -357,6 +357,7 @@ export class VisitsService {
     const visit = await this.prisma.visit.findFirst({
       where: { 
         id,
+        deletedAt: null,
         patient: {
           branchId,
         },
@@ -392,6 +393,7 @@ export class VisitsService {
         prescription: {
           select: {
             id: true,
+            status: true,
             language: true,
             items: true,
             instructions: true,
@@ -471,8 +473,16 @@ export class VisitsService {
    * Every visit update MUST validate the resulting consultation against its saved
    * consent receipt before writing, including clinical updates from prescriptions.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] clinical-save-fence
+   * Omitted fields MUST remain unchanged; explicit empty or null values clear
+   * the supplied field. A concurrent or stale version save MUST fail with 409.
+   */
   async update(id: string, updateVisitDto: UpdateVisitDto, branchId: string, actorId?: string) {
     const visit = await this.findOne(id, branchId);
+    if (updateVisitDto.version !== undefined && updateVisitDto.version !== visit.version) {
+      throw new ConflictException('Visit changed; reload before saving');
+    }
 
     // Prepare update data
     const updateData: any = consultationPatch(updateVisitDto, visit, actorId);
@@ -497,13 +507,13 @@ export class VisitsService {
       updateData.diagnosis = JSON.stringify(mergeClinicalEntries(visit.diagnosis, updateVisitDto.diagnosis || [], 'diagnosis'));
     }
 
-    if (updateVisitDto.treatmentPlan || updateVisitDto.notes !== undefined) {
+    if (updateVisitDto.treatmentPlan !== undefined || updateVisitDto.notes !== undefined) {
       const currentPlan = visit.plan || {};
       const updatedPlan = {
         ...mergeClinicalData(currentPlan, updateVisitDto.treatmentPlan || {}),
         ...(updateVisitDto.notes !== undefined ? { notes: updateVisitDto.notes } : {}),
       };
-      updateData.plan = JSON.stringify(updatedPlan);
+      updateData.plan = updateVisitDto.treatmentPlan === null && updateVisitDto.notes === undefined ? null : JSON.stringify(updatedPlan);
     }
 
     if (updateVisitDto.attachments !== undefined) {
@@ -514,6 +524,7 @@ export class VisitsService {
       updateData.scribeJson = updateVisitDto.scribeJson ? JSON.stringify(mergeClinicalData(visit.scribeJson, updateVisitDto.scribeJson)) : null;
     }
 
+    if (updateVisitDto.treatmentPlan === null) updateData.followUp = null;
     if (updateVisitDto.treatmentPlan?.followUpDate !== undefined) {
       updateData.followUp = updateVisitDto.treatmentPlan.followUpDate ? new Date(updateVisitDto.treatmentPlan.followUpDate) : null;
     }
@@ -525,8 +536,8 @@ export class VisitsService {
     }
 
     const updatedVisit = await this.prisma.visit.update({
-      where: { id },
-      data: updateData,
+      where: { id, version: visit.version, deletedAt: null },
+      data: { ...updateData, version: { increment: 1 } },
       include: {
         patient: {
           select: { id: true, name: true, phone: true },
@@ -538,6 +549,11 @@ export class VisitsService {
           select: { id: true, date: true, slot: true },
         },
       },
+    }).catch(error => {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new ConflictException('Visit changed; reload before saving');
+      }
+      throw error;
     });
 
     return {
@@ -559,123 +575,59 @@ export class VisitsService {
     };
   }
 
-  async complete(id: string, completeVisitDto: CompleteVisitDto, branchId: string) {
-    const visit = await this.findOne(id, branchId);
-
-    // Update visit with completion data
-    const updateData: any = {};
-
-    if (completeVisitDto.finalNotes || completeVisitDto.followUpInstructions) {
-      const currentPlan = visit.plan || {};
-      const updatedPlan = {
-        ...mergeClinicalData(currentPlan, {}),
-        ...(completeVisitDto.finalNotes ? { finalNotes: completeVisitDto.finalNotes } : {}),
-        ...(completeVisitDto.followUpInstructions ? { followUpInstructions: completeVisitDto.followUpInstructions } : {}),
-      };
-      updateData.plan = JSON.stringify(updatedPlan);
-    }
-
-    if (completeVisitDto.followUpDate) {
-      updateData.followUp = new Date(completeVisitDto.followUpDate);
-    }
-
-    // Idempotency: if appointment already completed, return current state without changing
-    if (visit.appointment?.status === 'COMPLETED') {
-      return {
-        ...visit,
-        notes: completeVisitDto.finalNotes ?? visit.notes ?? null,
-      };
-    }
-
-    // Update visit and appointment status atomically
-    const completedVisit = await this.prisma.$transaction(async tx => {
-      const updated = await tx.visit.update({
-        where: { id },
-        data: updateData,
-        include: {
-          patient: {
-            select: { id: true, name: true, phone: true },
-          },
-          doctor: {
-            select: { id: true, firstName: true, lastName: true },
-          },
-          appointment: {
-            select: { id: true, date: true, slot: true },
-          },
+  /**
+   * @cc [owner:nareshshah139,label:product] persistent-visit-completion
+   * Completion MUST atomically persist COMPLETED and completedAt on the visit and
+   * its linked appointment. Repeating completion MUST preserve the original time
+   * and notes. Deleted visits MUST not complete.
+   */
+  async complete(id: string, input: CompleteVisitDto, branchId: string) {
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      const service = new VisitsService(tx as PrismaService);
+      const visit = await service.findOne(id, branchId);
+      if (visit.status === 'COMPLETED') return visit;
+      if (input.version !== undefined && input.version !== visit.version) {
+        throw new ConflictException('Visit changed; reload before completing');
+      }
+      const plan = mergeClinicalData(visit.plan, {
+        ...(input.finalNotes !== undefined ? { finalNotes: input.finalNotes } : {}),
+        ...(input.followUpInstructions !== undefined ? { followUpInstructions: input.followUpInstructions } : {}),
+      });
+      await tx.visit.update({
+        where: { id, version: visit.version, deletedAt: null },
+        data: {
+          status: 'COMPLETED', completedAt: new Date(), version: { increment: 1 },
+          plan: JSON.stringify(plan),
+          ...(input.followUpDate !== undefined ? { followUp: input.followUpDate ? new Date(input.followUpDate) : null } : {}),
         },
       });
-
       if (visit.appointmentId) {
-        await tx.appointment.update({
-          where: { id: visit.appointmentId },
-          data: { status: 'COMPLETED' },
-        });
+        await tx.appointment.update({ where: { id: visit.appointmentId }, data: { status: 'COMPLETED' } });
       }
-
-      return updated;
+      return service.findOne(id, branchId);
     });
-
-    return {
-      ...completedVisit,
-      doctor: completedVisit.doctor
-        ? {
-            ...completedVisit.doctor,
-            name: `${(completedVisit.doctor as any).firstName} ${(completedVisit.doctor as any).lastName}`.trim(),
-          }
-        : completedVisit.doctor,
-      notes: completeVisitDto.finalNotes ?? (() => {
-        try {
-          const p = completedVisit.plan ? JSON.parse(completedVisit.plan as unknown as string) : null;
-          return p?.finalNotes ?? p?.notes ?? null;
-        } catch {
-          return null;
-        }
-      })(),
-    };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] durable-visit-deletion
+   * Deletion MUST persist deletedAt without rewriting plan. A visit with a
+   * prescription or an attachment MUST fail deletion without changing the visit.
+   */
   async remove(id: string, branchId: string) {
-    const visit = await this.findOne(id, branchId);
-
-    // Check if visit has associated prescriptions or other records
-    const prescription = await this.prisma.prescription.findFirst({
-      where: { visitId: id },
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
+      const visit = await new VisitsService(tx as PrismaService).findOne(id, branchId);
+      if (await tx.prescription.findFirst({ where: { visitId: id } })) {
+        throw new BadRequestException('Cannot delete visit with associated prescription');
+      }
+      const count = await tx.visitAttachment.count({ where: { visitId: id } });
+      if (count > 0 || visit.attachments.length > 0) {
+        throw new BadRequestException('Cannot delete visit with attachments. Delete attachments first.');
+      }
+      await tx.visit.update({ where: { id, version: visit.version, deletedAt: null }, data: { deletedAt: new Date(), version: { increment: 1 } } });
+      return { message: 'Visit deleted successfully' };
     });
-
-    if (prescription) {
-      throw new BadRequestException('Cannot delete visit with associated prescription');
-    }
-
-    // Block delete if attachments exist (DB-backed or legacy JSON)
-    const [dbAttachmentCount, legacyAttachments] = await Promise.all([
-      (this.prisma as any).visitAttachment.count({ where: { visitId: id } }),
-      (async () => {
-        try {
-          const arr = this.safeParse<string[]>(visit.attachments as any, []);
-          return Array.isArray(arr) ? arr.length : 0;
-        } catch { return 0; }
-      })(),
-    ]);
-    if (dbAttachmentCount > 0 || (legacyAttachments as any) > 0) {
-      throw new BadRequestException('Cannot delete visit with attachments. Delete attachments first.');
-    }
-
-    // Soft delete by updating plan to mark deleted (preserving notes semantics)
-    const currentPlan = visit.plan || {};
-    const updatedPlan = {
-      ...currentPlan,
-      deleted: true,
-      deletedAt: new Date().toISOString(),
-    };
-
-    await this.prisma.visit.update({
-      where: { id },
-      data: {
-        plan: JSON.stringify(updatedPlan),
-      },
-    });
-
-    return { message: 'Visit deleted successfully' };
   }
 
   async getPatientVisitHistory(query: PatientVisitHistoryDto, branchId: string) {
@@ -688,7 +640,7 @@ export class VisitsService {
     // Page encounter identities first: appointment date is the clinical day; createdAt is audit time.
     // No clinical documents are loaded for records outside this page.
     const identities = await this.prisma.visit.findMany({
-      where: { patientId, patient: { branchId } },
+      where: { patientId, deletedAt: null, patient: { branchId } },
       select: { id: true, createdAt: true, appointment: { select: { date: true } } },
     });
     const appointments = includeAppointments ? await this.prisma.appointment.findMany({
@@ -704,14 +656,14 @@ export class VisitsService {
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id));
     const page = entries.slice(offset, offset + take);
     const visits = await this.prisma.visit.findMany({
-      where: { id: { in: page.filter(e => e.kind === 'visit').map(e => e.id) }, patientId, patient: { branchId } },
+      where: { id: { in: page.filter(e => e.kind === 'visit').map(e => e.id) }, patientId, deletedAt: null, patient: { branchId } },
       include: {
         doctor: { select: { id: true, firstName: true, lastName: true } },
         appointment: { select: { id: true, date: true, slot: true, tokenNumber: true, status: true, visitType: true, notes: true } },
         consents: { select: { consentType: true, language: true, text: true, signedAt: true, signer: true, method: true } },
         labOrders: { select: { tests: true, partner: true, status: true, resultsRef: true } },
         deviceLogs: { select: { deviceModel: true, serialNo: true, parameters: true, photoRefs: true, operatorId: true } },
-        prescription: { select: { id: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true } },
+        prescription: { select: { id: true, status: true, validUntil: true, maxRefills: true, createdAt: true, items: true, instructions: true, pharmacistNotes: true, language: true } },
       },
     });
 
@@ -745,7 +697,7 @@ export class VisitsService {
         name: patient.name,
         phone: patient.phone,
       },
-      visits: page.map(entry => {
+      visits: page.filter(entry => entry.kind === 'appointment' || visits.some(visit => visit.id === entry.id)).map(entry => {
         if (entry.kind === 'appointment') {
           const appointment = appointments.find(a => a.id === entry.id)!;
           return { id: `appointment:${appointment.id}`, entryType: 'appointment', encounterDate: appointment.date, createdAt: appointment.createdAt, appointment, doctor: appointment.doctor, status: appointment.status, visitType: appointment.visitType, complaints: [], diagnosis: [], appointmentNotes: appointment.notes };
@@ -767,7 +719,7 @@ export class VisitsService {
           entryType: 'visit',
           appointmentNotes: visit.appointment?.notes,
           encounterDate: visit.appointment?.date || visit.createdAt,
-          status: visit.appointment?.status,
+          status: visit.status,
           visitType: visit.appointment?.visitType,
           history: this.safeParse<any>(visit.history, visit.history),
           scribeJson: this.safeParse<any>(visit.scribeJson, visit.scribeJson),
@@ -862,6 +814,7 @@ export class VisitsService {
           prescription: visit.prescription
             ? {
                 id: visit.prescription.id,
+                status: visit.prescription.status,
                 createdAt:
                   visit.prescription.createdAt instanceof Date
                     ? visit.prescription.createdAt.toISOString()
@@ -886,6 +839,8 @@ export class VisitsService {
     }
 
     const where: any = {
+      deletedAt: null,
+      patient: { branchId },
       doctorId,
       doctor: {
         branchId,
@@ -905,16 +860,6 @@ export class VisitsService {
       if (startDate) where.createdAt.gte = new Date(startDate);
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
-
-    // Exclude soft-deleted
-    where.AND = [
-      {
-        OR: [
-          { plan: null },
-          { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
-        ],
-      },
-    ];
 
     const visits = await this.prisma.visit.findMany({
       where,
@@ -947,19 +892,7 @@ export class VisitsService {
   }
 
   async getVisitStatistics(branchId: string, startDate?: string, endDate?: string) {
-    const where: any = { 
-      patient: {
-        branchId,
-      },
-      AND: [
-        {
-          OR: [
-            { plan: null },
-            { NOT: { plan: { contains: '"deleted": true', mode: 'insensitive' } } },
-          ],
-        },
-      ],
-    };
+    const where: any = { patient: { branchId }, deletedAt: null };
 
     if (startDate || endDate) {
       where.createdAt = {};
@@ -986,20 +919,13 @@ export class VisitsService {
           followUp: { not: null },
         },
       }),
-      // Use raw SQL to group by date (truncated day) for accurate average/day
-      this.prisma.$queryRawUnsafe<any[]>(
-        `SELECT DATE_TRUNC('day', "createdAt") AS day, COUNT(*)::int AS count
-         FROM "visits"
-         WHERE 1=1
-           AND ${branchId ? 'EXISTS (SELECT 1 FROM "patients" p WHERE p.id = "visits"."patientId" AND p."branchId" = $1)' : '1=1'}
-           ${where.createdAt?.gte ? 'AND "createdAt" >= $2' : ''}
-           ${where.createdAt?.lte ? 'AND "createdAt" <= $3' : ''}
-           AND ("plan" IS NULL OR POSITION('"deleted": true' IN "plan") = 0)
-         GROUP BY 1`,
-        ...(branchId ? [branchId] : []),
-        ...(where.createdAt?.gte ? [where.createdAt.gte] : []),
-        ...(where.createdAt?.lte ? [where.createdAt.lte] : []),
-      ),
+      this.prisma.$queryRaw<{ day: Date; count: number }[]>`
+        SELECT DATE_TRUNC('day', v."createdAt") AS day, COUNT(*)::int AS count
+        FROM visits v JOIN patients p ON p.id = v."patientId"
+        WHERE p."branchId" = ${branchId} AND v."deletedAt" IS NULL
+          ${startDate ? Prisma.sql`AND v."createdAt" >= ${new Date(startDate)}` : Prisma.empty}
+          ${endDate ? Prisma.sql`AND v."createdAt" <= ${new Date(endDate)}` : Prisma.empty}
+        GROUP BY 1`,
     ]);
 
     const days = Array.isArray(grouped) ? grouped.length : 0;
@@ -1068,9 +994,19 @@ export class VisitsService {
     return Array.from(results);
   }
 
-  async listAllDraftAttachments(patientId: string, branchId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:security] draft-patient-authorization
+   * Missing branch identity or a patient outside the authenticated branch MUST
+   * fail before draft attachment storage or filesystem access.
+   */
+  async authorizeDraftPatient(patientId: string, branchId: string) {
+    if (!branchId) throw new NotFoundException('Patient not found in this branch');
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, branchId }, select: { id: true } });
     if (!patient) throw new NotFoundException('Patient not found in this branch');
+  }
+
+  async listAllDraftAttachments(patientId: string, branchId: string) {
+    await this.authorizeDraftPatient(patientId, branchId);
     const photos = await this.prisma.draftAttachment.findMany({
       where: { patientId },
       orderBy: [{ dateStr: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
@@ -1083,7 +1019,8 @@ export class VisitsService {
     return { attachments: items.map(item => item.url), items };
   }
 
-  async listDraftAttachments(patientId: string, dateStr: string) {
+  async listDraftAttachments(patientId: string, dateStr: string, branchId: string) {
+    await this.authorizeDraftPatient(patientId, branchId);
     // DB-backed attachments
     const dbItems = await (this.prisma as any).draftAttachment.findMany({
       where: { patientId, dateStr },
@@ -1121,7 +1058,7 @@ export class VisitsService {
   }
 
   async addAttachments(visitId: string, relPaths: string[], branchId: string) {
-    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId, deletedAt: null }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
     // Scope by branch via patient and doctor
     if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
@@ -1133,12 +1070,12 @@ export class VisitsService {
     const sanitizedIncoming = this.sanitizeAttachmentPaths(relPaths);
     const merged = Array.from(new Set([...(sanitizedExisting || []), ...(sanitizedIncoming || [])]));
 
-    await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(merged) } });
-    return { attachments: merged };
+    const updated = await this.prisma.visit.update({ where: { id: visitId, version: visit.version, deletedAt: null }, data: { attachments: JSON.stringify(merged), version: { increment: 1 } } });
+    return { attachments: merged, visitVersion: updated.version };
   }
 
   async listAttachments(visitId: string, branchId: string) {
-    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId, deletedAt: null }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
     if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
       throw new NotFoundException('Visit not found in this branch');
@@ -1154,11 +1091,7 @@ export class VisitsService {
     // Legacy filesystem
     const files = this.safeParse<string[]>(visit.attachments as any, []);
     const sanitized = this.sanitizeAttachmentPaths(files);
-    if (sanitized.length !== files.length) {
-      try {
-        await this.prisma.visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(sanitized) } });
-      } catch {}
-    }
+
 
     const items = [
       ...dbItems.map((i: any) => ({ url: `/visits/${visitId}/photos/${i.id}`, uploadedAt: (i.createdAt as Date).toISOString(), position: i.position ?? 'OTHER', displayOrder: i.displayOrder ?? 0 })),
@@ -1172,7 +1105,7 @@ export class VisitsService {
       return at - bt;
     });
 
-    return { attachments: items.map(i => i.url), items };
+    return { attachments: items.map(i => i.url), items, visitVersion: visit.version };
   }
 
   private generateFilename(preferredExt: string): string {
@@ -1192,39 +1125,36 @@ export class VisitsService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] attachment-version-acknowledgement
+   * A visit attachment mutation MUST return visitVersion from its committed
+   * update, not a later read, so an editor can acknowledge its own mutation.
+   */
   async createVisitAttachment(
     visitId: string,
     branchId: string,
     params: { preferredExt: string; contentType: string; buffer: Buffer; position?: string; displayOrder?: number },
   ) {
-    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
-    if (!visit) throw new NotFoundException('Visit not found');
-    if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
-      throw new NotFoundException('Visit not found in this branch');
-    }
-    const filename = this.generateFilename(params.preferredExt);
-    const created = await (this.prisma as any).visitAttachment.create({
-      data: {
-        visitId,
-        filename,
-        contentType: params.contentType || 'image/jpeg',
-        sizeBytes: params.buffer.length,
-        data: params.buffer,
-        position: (params.position as any) ?? 'OTHER',
-        displayOrder: Number.isFinite(params.displayOrder as any) ? (params.displayOrder as any) : this.positionOrderValue(params.position),
-      },
-      select: { id: true },
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
+      const visit = await tx.visit.findFirst({ where: { id: visitId, deletedAt: null, patient: { branchId }, doctor: { branchId } } });
+      if (!visit) throw new NotFoundException('Visit not found in this branch');
+      const created = await tx.visitAttachment.create({
+        data: { visitId, filename: this.generateFilename(params.preferredExt), contentType: params.contentType || 'image/jpeg', sizeBytes: params.buffer.length, data: new Uint8Array(params.buffer), position: (params.position as any) ?? 'OTHER', displayOrder: params.displayOrder ?? this.positionOrderValue(params.position) },
+        select: { id: true },
+      });
+      const updated = await tx.visit.update({ where: { id: visitId }, data: { version: { increment: 1 } }, select: { version: true } });
+      return { id: created.id, visitVersion: updated.version, url: `/visits/${visitId}/photos/${created.id}` };
     });
-    return { id: created.id, url: `/visits/${visitId}/photos/${created.id}` };
   }
 
   async createDraftAttachment(
     patientId: string,
     dateStr: string,
+    branchId: string,
     params: { preferredExt: string; contentType: string; buffer: Buffer; position?: string; displayOrder?: number },
   ) {
-    const patient = await this.prisma.patient.findFirst({ where: { id: patientId } });
-    if (!patient) throw new NotFoundException('Patient not found');
+    await this.authorizeDraftPatient(patientId, branchId);
     const filename = this.generateFilename(params.preferredExt);
     const created = await (this.prisma as any).draftAttachment.create({
       data: {
@@ -1244,20 +1174,15 @@ export class VisitsService {
 
   async getVisitAttachmentBinary(visitId: string, attachmentId: string, branchId: string) {
     const att = await (this.prisma as any).visitAttachment.findFirst({
-      where: { id: attachmentId, visitId },
+      where: { id: attachmentId, visitId, visit: { deletedAt: null, patient: { branchId } } },
       select: { data: true, contentType: true, visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } } },
     });
     if (!att) throw new NotFoundException('Attachment not found');
-    // Optional bypass for single-branch deployments
-    if (String(process.env.DISABLE_BRANCH_ENFORCEMENT).toLowerCase() !== 'true') {
-      const pBranch = (att.visit as any).patient.branchId;
-      const dBranch = (att.visit as any).doctor.branchId;
-      if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
-    }
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
 
-  async getDraftAttachmentBinary(patientId: string, dateStr: string, attachmentId: string) {
+  async getDraftAttachmentBinary(patientId: string, dateStr: string, attachmentId: string, branchId: string) {
+    await this.authorizeDraftPatient(patientId, branchId);
     const att = await (this.prisma as any).draftAttachment.findFirst({
       where: { id: attachmentId, patientId, dateStr },
       select: { data: true, contentType: true },
@@ -1266,7 +1191,8 @@ export class VisitsService {
     return { data: Buffer.from(att.data as unknown as ArrayBuffer), contentType: att.contentType };
   }
   
-  async deleteDraftAttachment(patientId: string, dateStr: string, attachmentId: string) {
+  async deleteDraftAttachment(patientId: string, dateStr: string, attachmentId: string, branchId: string) {
+    await this.authorizeDraftPatient(patientId, branchId);
     const att = await (this.prisma as any).draftAttachment.findFirst({ where: { id: attachmentId, patientId, dateStr }, select: { id: true } });
     if (!att) throw new NotFoundException('Attachment not found');
     await (this.prisma as any).draftAttachment.delete({ where: { id: attachmentId } });
@@ -1274,23 +1200,20 @@ export class VisitsService {
   }
   
   async deleteVisitAttachment(visitId: string, attachmentId: string, branchId: string) {
-    const att = await (this.prisma as any).visitAttachment.findFirst({
-      where: { id: attachmentId, visitId },
-      select: {
-        id: true,
-        visit: { select: { patient: { select: { branchId: true } }, doctor: { select: { branchId: true } } } },
-      },
+    return this.prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM visits WHERE id = ${visitId} FOR UPDATE`;
+      const attachment = await tx.visitAttachment.findFirst({ where: {
+        id: attachmentId, visitId, visit: { deletedAt: null, patient: { branchId }, doctor: { branchId } },
+      }, select: { id: true } });
+      if (!attachment) throw new NotFoundException('Attachment not found');
+      await tx.visitAttachment.delete({ where: { id: attachmentId } });
+      const updated = await tx.visit.update({ where: { id: visitId }, data: { version: { increment: 1 } }, select: { version: true } });
+      return { ok: true, visitVersion: updated.version };
     });
-    if (!att) throw new NotFoundException('Attachment not found');
-    const pBranch = (att.visit as any).patient.branchId;
-    const dBranch = (att.visit as any).doctor.branchId;
-    if (pBranch !== branchId || dBranch !== branchId) throw new NotFoundException('Attachment not found');
-    await (this.prisma as any).visitAttachment.delete({ where: { id: attachmentId } });
-    return { ok: true };
   }
 
   async deleteLegacyAttachment(visitId: string, url: string, branchId: string) {
-    const visit = await this.prisma.visit.findFirst({ where: { id: visitId }, include: { patient: true, doctor: true } });
+    const visit = await this.prisma.visit.findFirst({ where: { id: visitId, deletedAt: null }, include: { patient: true, doctor: true } });
     if (!visit) throw new NotFoundException('Visit not found');
     if (visit.patient.branchId !== branchId || visit.doctor.branchId !== branchId) {
       throw new NotFoundException('Visit not found in this branch');
@@ -1311,7 +1234,9 @@ export class VisitsService {
       throw new NotFoundException('Attachment not found');
     }
 
-    // Attempt filesystem delete best-effort
+    const updated = await this.prisma.visit.update({ where: { id: visitId, version: visit.version, deletedAt: null }, data: { attachments: JSON.stringify(next), version: { increment: 1 } } });
+
+    // The database change must commit before deleting the legacy file.
     try {
       const absolutePath = join(process.cwd(), target.replace(/^\//, ''));
       try {
@@ -1322,8 +1247,7 @@ export class VisitsService {
       } catch {}
     } catch {}
 
-    await (this.prisma as any).visit.update({ where: { id: visitId }, data: { attachments: JSON.stringify(next) } });
-    return { ok: true };
+    return { ok: true, visitVersion: updated.version };
   }
 
   private safeParse<T>(value: string | null | undefined, fallback: T): T {

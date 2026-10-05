@@ -285,6 +285,7 @@ describe('PrescriptionsController', () => {
         prescriptionId,
         mockRequest.user.branchId,
         reason,
+        mockRequest.user.id,
       );
     });
   });
@@ -313,6 +314,12 @@ describe('PrescriptionsController', () => {
   });
 
   describe('approveRefill', () => {
+    it('approves the route ID when a different refill ID is supplied in the body', async () => {
+      mockPrescriptionsService.approveRefill.mockImplementation(async input => ({ id: input.refillId, status: 'APPROVED' }));
+      const result = await controller.approveRefill('route-refill', { refillId: 'body-refill' }, { ...mockRequest, headers: { 'idempotency-key': 'test-key' } } as any);
+      expect(result).toEqual({ id: 'route-refill', status: 'APPROVED' });
+    });
+
     it('should approve refill', async () => {
       const refillId = 'refill-123';
       const approveDto = {

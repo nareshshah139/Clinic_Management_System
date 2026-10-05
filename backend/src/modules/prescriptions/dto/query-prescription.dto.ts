@@ -1,7 +1,6 @@
 import {
   IsOptional,
   IsString,
-  IsUUID,
   IsDateString,
   IsInt,
   Min,
@@ -10,23 +9,28 @@ import {
   IsBoolean,
   Matches,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 import { PrescriptionStatus, PrescriptionLanguage, RefillStatus } from './prescription.dto';
 
 // Accept either UUID (v1-5) or CUID (e.g., cxxxxxxxxxxxxxxxxxxxxxxx) for patient identifiers
 const UUID_OR_CUID_REGEX = /(^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$)|(^c[0-9a-z]{24}$)/i;
 
+/**
+ * @cc [owner:nareshshah139,label:product] literal-lifecycle-filters
+ * Query strings "false" and "true" MUST become their boolean values for expiry
+ * and refill filters; other strings MUST fail boolean validation.
+ */
 export class QueryPrescriptionsDto {
   @IsOptional()
   @Matches(UUID_OR_CUID_REGEX, { message: 'patientId must be a UUID or CUID' })
   patientId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'identifier must be a UUID or CUID' })
   visitId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'identifier must be a UUID or CUID' })
   doctorId?: string;
 
   @IsOptional()
@@ -58,12 +62,12 @@ export class QueryPrescriptionsDto {
   drugName?: string; // Filter by specific drug
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
   @IsBoolean()
   isExpired?: boolean;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
   @IsBoolean()
   hasRefills?: boolean;
 
@@ -91,7 +95,7 @@ export class QueryPrescriptionsDto {
 
 export class QueryRefillsDto {
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'identifier must be a UUID or CUID' })
   prescriptionId?: string;
 
   @IsOptional()
@@ -142,7 +146,7 @@ export class PrescriptionHistoryDto {
   patientId?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'identifier must be a UUID or CUID' })
   doctorId?: string;
 
   @IsOptional()
@@ -170,7 +174,7 @@ export class DrugSearchDto {
   query: string;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
   @IsBoolean()
   isGeneric?: boolean;
 
@@ -196,7 +200,7 @@ export class PrescriptionStatisticsDto {
   endDate?: string;
 
   @IsOptional()
-  @IsUUID()
+  @Matches(UUID_OR_CUID_REGEX, { message: 'identifier must be a UUID or CUID' })
   doctorId?: string;
 
   @IsOptional()
@@ -239,7 +243,7 @@ export class PrescriptionTemplateQueryDto {
   specialty?: string;
 
   @IsOptional()
-  @Type(() => Boolean)
+  @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value)
   @IsBoolean()
   isPublic?: boolean;
 

@@ -121,6 +121,10 @@ export class PrescriptionsController {
     return this.prescriptionsService.requestRefill(refillDto, req.user.branchId);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] authoritative-refill-path
+   * Approval MUST target the refill ID in the route, regardless of a body ID.
+   */
   @Post('refills/:id/approve')
   approveRefill(
     @Param('id') id: string,
@@ -128,7 +132,7 @@ export class PrescriptionsController {
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.approveRefill(approveDto, req.user.branchId, req.user.id);
+    return this.prescriptionsService.approveRefill({ ...approveDto, refillId: id }, req.user.branchId, req.user.id);
   }
 
   @Post('refills/:id/reject')
@@ -530,6 +534,6 @@ export class PrescriptionsController {
     @Query('reason') reason?: string,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason);
+    return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason, req.user.id);
   }
 }

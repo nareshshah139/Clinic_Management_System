@@ -16,13 +16,8 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
-export enum PrescriptionStatus {
-  DRAFT = 'DRAFT',
-  ACTIVE = 'ACTIVE',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
-  EXPIRED = 'EXPIRED',
-}
+import { PrescriptionStatus, RefillStatus } from '@prisma/client';
+export { PrescriptionStatus, RefillStatus };
 
 export enum PrescriptionLanguage {
   EN = 'EN',
@@ -64,14 +59,6 @@ export enum DurationUnit {
   YEARS = 'YEARS',
 }
 
-export enum RefillStatus {
-  NONE = 'NONE',
-  PENDING = 'PENDING',
-  APPROVED = 'APPROVED',
-  REJECTED = 'REJECTED',
-  COMPLETED = 'COMPLETED',
-}
-
 export class PrescriptionItemDto {
   @IsOptional()
   @IsString()
@@ -80,10 +67,6 @@ export class PrescriptionItemDto {
   @IsOptional()
   @IsString()
   drugId?: string;
-
-  @IsOptional()
-  @IsString()
-  notes?: string;
 
   @IsOptional()
   @IsString()
@@ -316,7 +299,7 @@ export class UpdatePrescriptionDto {
 }
 
 export class RefillPrescriptionDto {
-  @IsUUID()
+  @IsString()
   prescriptionId: string;
 
   @IsOptional()
@@ -337,8 +320,9 @@ export class RefillPrescriptionDto {
 }
 
 export class ApproveRefillDto {
-  @IsUUID()
-  refillId: string;
+  @IsOptional()
+  @IsString()
+  refillId?: string;
 
   @IsOptional()
   @IsString()

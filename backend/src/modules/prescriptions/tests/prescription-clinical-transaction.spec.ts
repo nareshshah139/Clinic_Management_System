@@ -6,10 +6,11 @@ import { CreatePrescriptionDto, UpdatePrescriptionDto } from '../dto/prescriptio
 function database(fail = false) {
   let committed: any = { visit: { id: 'v', patientId: 'p', doctorId: 'd', history: JSON.stringify({ pastHistory: 'Preserve existing' }), exam: JSON.stringify({ dermatology: { morphology: ['Keep morphology'] } }), plan: JSON.stringify({ dermatology: { labResults: { CBC: 'Keep result' } } }), diagnosis: '[]', complaints: '[]' }, prescriptions: [] };
   const client = (state: any): any => ({
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]),
     patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }) },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'd' }) },
     visit: { findFirst: jest.fn(async () => state.visit), update: jest.fn(async ({ data }) => (state.visit = { ...state.visit, ...data })) },
-    prescription: { findFirst: jest.fn(async () => state.prescriptions[0] || null), update: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic update failure'); state.prescriptions[0] = { ...state.prescriptions[0], ...data }; return state.prescriptions[0]; }), create: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic insert failure'); const rx = { id: 'rx', ...data }; state.prescriptions.push(rx); return rx; }) },
+    prescription: { findUnique: jest.fn(async () => state.prescriptions[0] ? { status: 'ACTIVE', refills: [], ...state.prescriptions[0] } : null), findFirst: jest.fn(async () => state.prescriptions[0] || null), update: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic update failure'); state.prescriptions[0] = { ...state.prescriptions[0], ...data }; return state.prescriptions[0]; }), create: jest.fn(async ({ data }) => { if (fail) throw new Error('Synthetic insert failure'); const rx = { id: 'rx', ...data }; state.prescriptions.push(rx); return rx; }) },
   });
   const db = client(committed);
   db.$transaction = jest.fn(async (callback: any) => { const draft = structuredClone(committed); const result = await callback(client(draft)); committed = draft; return result; });

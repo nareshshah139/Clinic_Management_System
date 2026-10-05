@@ -13,6 +13,7 @@ const validate = (body: unknown, metatype: any = CreateVisitDto) => pipe.transfo
 function fixture() {
   let visit: any = { id: 'v', patientId: 'p', doctorId: 'doctor', complaints: '[]', consultationType: person };
   const db: any = {
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx' }]),
     patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }) },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'doctor' }) },
     visit: {
@@ -21,7 +22,7 @@ function fixture() {
       update: jest.fn(async ({ data }) => (visit = { ...visit, ...data })),
       findMany: jest.fn(async () => [visit]), count: jest.fn().mockResolvedValue(1),
     },
-    prescription: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn(async ({ data }) => ({ id: 'rx', ...data })), update: jest.fn(async ({ data }) => ({ id: 'rx', ...data })) },
+    prescription: { findUnique: jest.fn(async () => ({ status: 'ACTIVE', refills: [], ...(await db.prescription.findFirst()) })), findFirst: jest.fn().mockResolvedValue(null), create: jest.fn(async ({ data }) => ({ id: 'rx', ...data })), update: jest.fn(async ({ data }) => ({ id: 'rx', ...data })) },
     $transaction: jest.fn(async fn => fn(db)),
   };
   return { db, service: new VisitsService(db), read: () => visit };

@@ -1,4 +1,4 @@
-// @ts-nocheck
+import { Prisma } from '@prisma/client';
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
 import { mergeClinicalData } from '../visits/clinical-data';
@@ -30,6 +30,12 @@ import {
   PrescriptionTemplateQueryDto,
 } from './dto/query-prescription.dto';
 
+/**
+ * @cc [owner:nareshshah139,label:product;security] prescription-source-state
+ * Prescription reads MUST expose stored lifecycle status and remain scoped through
+ * an undeleted Visit and its patient branch. Consumers MUST check ACTIVE status
+ * and any explicit validity date before offering dispensing or refills.
+ */
 @Injectable()
 export class PrescriptionsService {
   constructor(
@@ -38,6 +44,12 @@ export class PrescriptionsService {
     @Optional() private pharmacyQueue?: PharmacyPrescriptionQueueService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] explicit-prescription-lifecycle
+   * New prescriptions MUST be ACTIVE with zero refills unless allowance is
+   * explicitly supplied. Only validUntil establishes expiry; visit review dates
+   * MUST NOT set expiry. Clinical and prescription inserts MUST commit together.
+   */
   async createPrescription(createPrescriptionDto: CreatePrescriptionDto, branchId: string, actorId?: string) {
     const {
       patientId,
@@ -62,6 +74,7 @@ export class PrescriptionsService {
     const visit = await this.prisma.visit.findFirst({
       where: {
         id: visitId,
+        deletedAt: null,
         patient: { branchId },
       },
     });
@@ -102,13 +115,12 @@ export class PrescriptionsService {
     const prescription = await this.prisma.$transaction(async tx => {
       const metadata = createPrescriptionDto.metadata || {};
       const patch = mergeClinicalData({
-        ...(diagnosis ? { diagnosis: [{ diagnosis }] } : {}),
+        ...(diagnosis !== undefined ? { diagnosis: diagnosis ? [{ diagnosis }] : [] } : {}),
         ...(metadata.histories || metadata.familyHistory ? { history: {
           ...metadata.histories, ...(metadata.familyHistory ? { familyHistory: metadata.familyHistory } : {}),
         } } : {}),
         treatmentPlan: {
-          ...(followUpInstructions ? { followUpInstructions } : {}),
-          ...(createPrescriptionDto.validUntil ? { followUpDate: createPrescriptionDto.validUntil } : {}),
+          ...(followUpInstructions !== undefined ? { followUpInstructions } : {}),
           ...(metadata.investigations ? { investigations: metadata.investigations } : {}),
           ...(metadata.procedurePlanned ? { procedurePlanned: metadata.procedurePlanned } : {}),
           ...(metadata.procedures ? { dermatology: { procedures: [{ type: metadata.procedures }] } } : {}),
@@ -120,7 +132,9 @@ export class PrescriptionsService {
         visitId,
         language: language as unknown as any,
         items: JSON.stringify(items),
-        // Store textual guidance in instructions/pharmacistNotes for now
+        validUntil: createPrescriptionDto.validUntil ? new Date(createPrescriptionDto.validUntil) : null,
+        maxRefills: this.refillLimit(createPrescriptionDto.maxRefills ?? 0),
+        metadata: createPrescriptionDto.metadata ? JSON.stringify(createPrescriptionDto.metadata) : null,
         instructions: followUpInstructions || undefined,
         pharmacistNotes: notes || (diagnosis ? `Dx: ${diagnosis}` : undefined),
         genericFirst: true,
@@ -130,6 +144,9 @@ export class PrescriptionsService {
           select: {
             id: true,
             createdAt: true,
+            version: true,
+            status: true,
+            completedAt: true,
             doctor: { select: { id: true, firstName: true, lastName: true } },
             patient: { select: { id: true, name: true, phone: true } },
           },
@@ -175,23 +192,12 @@ export class PrescriptionsService {
     const normalizedLimit = Math.min(this.toPositiveInt(limit, 20), 100);
     const skip = (normalizedPage - 1) * normalizedLimit;
     const normalizedStatus = typeof status === 'string' ? status.trim() : status;
-    const safeSortBy = ['createdAt', 'updatedAt', 'language'].includes(String(sortBy)) ? String(sortBy) : 'createdAt';
+    const safeSortBy = ['createdAt', 'updatedAt', 'language', 'validUntil'].includes(String(sortBy)) ? String(sortBy) : 'createdAt';
     const safeSortOrder = sortOrder === 'asc' ? 'asc' : 'desc';
-
-    if (normalizedStatus && normalizedStatus !== PrescriptionStatus.ACTIVE) {
-      return {
-        prescriptions: [],
-        pagination: {
-          total: 0,
-          page: normalizedPage,
-          limit: normalizedLimit,
-          pages: 0,
-        },
-      };
-    }
 
     const where: any = {
       visit: {
+        deletedAt: null,
         patient: { branchId },
       },
     };
@@ -201,6 +207,7 @@ export class PrescriptionsService {
     if (visitId) where.visitId = visitId;
     if (doctorId) where.visit = { ...(where.visit || {}), doctorId };
     if (language) where.language = language;
+    if (normalizedStatus) where.status = normalizedStatus;
 
     // Date filters
     if (startDate || endDate) {
@@ -209,10 +216,7 @@ export class PrescriptionsService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    if (validUntil) {
-      // The current prescription table does not carry a validity date.
-      // Keep the API tolerant of older callers without adding invalid Prisma filters.
-    }
+    if (validUntil) where.validUntil = { lte: new Date(validUntil) };
 
     // Search filter
     if (search) {
@@ -256,18 +260,19 @@ export class PrescriptionsService {
 
     // Expired filter
     if (isExpired !== undefined) {
-      // Unsupported by the current schema; leave the request non-fatal.
+      where.AND = [isExpired
+        ? { validUntil: { lt: new Date() } }
+        : { OR: [{ validUntil: null }, { validUntil: { gte: new Date() } }] }];
     }
 
     // Refills filter
-    if (hasRefills !== undefined) {
-      // Unsupported by the current schema; leave the request non-fatal.
-    }
+    if (hasRefills !== undefined) where.refills = hasRefills ? { some: {} } : { none: {} };
 
     const [prescriptions, total] = await Promise.all([
       this.prisma.prescription.findMany({
         where,
         include: {
+          refills: true,
           visit: {
             select: {
               id: true,
@@ -324,8 +329,8 @@ export class PrescriptionsService {
         diagnosis: this.extractPrescriptionDiagnosis(prescription, metadata),
         notes: prescription.pharmacistNotes,
         followUpInstructions: prescription.instructions,
-        status: PrescriptionStatus.ACTIVE,
-        refills: [],
+        status: prescription.status,
+        refills: prescription.refills,
       };
     });
 
@@ -345,10 +350,12 @@ export class PrescriptionsService {
       where: {
         id,
         visit: {
+          deletedAt: null,
           patient: { branchId },
         },
       },
       include: {
+        refills: true,
         visit: {
           include: {
             patient: {
@@ -404,341 +411,170 @@ export class PrescriptionsService {
       doctor,
       doctorId: doctor?.id,
       interactions,
-    } as any;
+      metadata: this.safeParse<Record<string, unknown> | null>(prescription.metadata, null),
+      notes: prescription.pharmacistNotes,
+      followUpInstructions: prescription.instructions,
+    };
   }
 
-  async updatePrescription(id: string, updatePrescriptionDto: UpdatePrescriptionDto, branchId: string, actorId?: string) {
-    const prescription = await this.findPrescriptionById(id, branchId);
+  private refillLimit(value: number): number {
+    if (!Number.isInteger(value) || value < 0 || value > 5) throw new BadRequestException('maxRefills must be an integer from 0 to 5');
+    return value;
+  }
 
-    // Check if prescription can be updated
-    if (prescription.status === PrescriptionStatus.COMPLETED) {
-      throw new BadRequestException('Cannot update completed prescription');
-    }
+  /**
+   * @cc [owner:nareshshah139,label:product;security] prescription-command-lock
+   * Every existing prescription lifecycle or allowance writer MUST hold this
+   * prescription row lock until commit and re-read state after locking. Foreign
+   * branch and deleted-visit prescriptions MUST fail without mutation.
+   */
+  private async lockPrescription(tx: Prisma.TransactionClient, id: string, branchId: string) {
+    if (!branchId) throw new NotFoundException('Prescription not found');
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT r.id FROM prescriptions r JOIN visits v ON v.id = r."visitId"
+      JOIN patients p ON p.id = v."patientId"
+      WHERE r.id = ${id} AND p."branchId" = ${branchId} AND v."deletedAt" IS NULL
+      FOR UPDATE OF r`;
+    if (!locked.length) throw new NotFoundException('Prescription not found');
+    const prescription = await tx.prescription.findUnique({ where: { id }, include: { refills: true } });
+    if (!prescription) throw new NotFoundException('Prescription not found');
+    return prescription;
+  }
 
-    if (prescription.status === PrescriptionStatus.CANCELLED) {
-      throw new BadRequestException('Cannot update cancelled prescription');
-    }
+  private requireRefillEligibility(prescription: { status: PrescriptionStatus; validUntil: Date | null; maxRefills: number; refills: { status: RefillStatus }[] }) {
+    if (prescription.status !== PrescriptionStatus.ACTIVE) throw new BadRequestException('Can only refill active prescriptions');
+    if (prescription.validUntil && prescription.validUntil < new Date()) throw new BadRequestException('Cannot refill expired prescription');
+    const used = prescription.refills.filter(r => r.status === RefillStatus.APPROVED || r.status === RefillStatus.COMPLETED).length;
+    if (used >= prescription.maxRefills) throw new BadRequestException('Maximum refills exceeded');
+  }
 
-    // Only write columns in the existing production schema. Clinical documents live on Visit.
-    const updateData: any = {};
-    if (updatePrescriptionDto.items !== undefined) {
-      if (!updatePrescriptionDto.items.length) throw new BadRequestException('At least one prescription item is required');
-      updateData.items = JSON.stringify(updatePrescriptionDto.items);
-    }
-    if (updatePrescriptionDto.language !== undefined) updateData.language = updatePrescriptionDto.language;
-    if (updatePrescriptionDto.notes !== undefined) updateData.pharmacistNotes = updatePrescriptionDto.notes;
-    if (updatePrescriptionDto.followUpInstructions !== undefined) updateData.instructions = updatePrescriptionDto.followUpInstructions;
-    const updatedPrescription = await this.prisma.$transaction(async tx => {
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-clinical-atomicity
+   * Clinical and prescription edits MUST commit together. Terminal prescriptions
+   * MUST reject edits; cancellation MUST use the audited cancellation command.
+   * Validity MUST be stored independently of the visit's review date.
+   */
+  async updatePrescription(id: string, input: UpdatePrescriptionDto, branchId: string, actorId?: string) {
+    const updated = await this.prisma.$transaction(async tx => {
+      const prescription = await this.lockPrescription(tx, id, branchId);
+      if (prescription.status !== PrescriptionStatus.DRAFT && prescription.status !== PrescriptionStatus.ACTIVE) {
+        throw new BadRequestException('Cannot update a completed, cancelled or expired prescription');
+      }
+      if (input.status !== undefined && input.status !== PrescriptionStatus.ACTIVE && input.status !== PrescriptionStatus.COMPLETED) {
+        throw new BadRequestException('Use cancellation to cancel a prescription');
+      }
+      const data: Prisma.PrescriptionUpdateInput = {};
+      if (input.items !== undefined) {
+        if (!input.items?.length) throw new BadRequestException('At least one prescription item is required');
+        data.items = JSON.stringify(input.items);
+      }
+      if (input.language !== undefined) data.language = input.language;
+      if (input.notes !== undefined) data.pharmacistNotes = input.notes;
+      if (input.followUpInstructions !== undefined) data.instructions = input.followUpInstructions;
+      if (input.validUntil !== undefined) data.validUntil = input.validUntil ? new Date(input.validUntil) : null;
+      if (input.metadata !== undefined) data.metadata = input.metadata === null ? null : JSON.stringify(input.metadata);
+      if (input.status !== undefined) data.status = input.status;
+      if (input.maxRefills !== undefined) {
+        data.maxRefills = this.refillLimit(input.maxRefills);
+        const reserved = prescription.refills.filter(r => r.status === RefillStatus.PENDING || r.status === RefillStatus.APPROVED || r.status === RefillStatus.COMPLETED).length;
+        if (data.maxRefills < reserved) throw new BadRequestException('Refill limit cannot be less than existing requests and approvals');
+      }
       const patch = mergeClinicalData({
-        ...(updatePrescriptionDto.diagnosis ? { diagnosis: [{ diagnosis: updatePrescriptionDto.diagnosis }] } : {}),
-        treatmentPlan: {
-          ...(updatePrescriptionDto.validUntil ? { followUpDate: updatePrescriptionDto.validUntil } : {}),
-          ...(updatePrescriptionDto.followUpInstructions !== undefined ? { followUpInstructions: updatePrescriptionDto.followUpInstructions } : {}),
-        },
-      }, updatePrescriptionDto.clinicalData);
-      await new VisitsService(tx as any).update(prescription.visitId || prescription.visit.id, patch, branchId, actorId);
-      return tx.prescription.update({
-        where: { id }, data: updateData,
-        include: { visit: { include: { patient: { select: { id: true, name: true, phone: true } }, doctor: { select: { id: true, firstName: true, lastName: true } } } } },
-      });
+        ...(input.diagnosis !== undefined ? { diagnosis: input.diagnosis ? [{ diagnosis: input.diagnosis }] : [] } : {}),
+        ...(input.followUpInstructions !== undefined ? { treatmentPlan: { followUpInstructions: input.followUpInstructions } } : {}),
+      }, input.clinicalData);
+      await new VisitsService(tx as PrismaService).update(prescription.visitId, patch, branchId, actorId);
+      return tx.prescription.update({ where: { id }, data, include: { refills: true, visit: { include: { patient: true, doctor: { select: { id: true, firstName: true, lastName: true } } } } } });
     });
-    return { ...updatedPrescription, items: this.safeParse<any[]>(updatedPrescription.items, []) };
+    return { ...updated, items: this.safeParse<unknown[]>(updated.items, []) };
   }
 
-  async cancelPrescription(id: string, branchId: string, reason?: string) {
-    const prescription = await this.findPrescriptionById(id, branchId);
-
-    if (prescription.status === PrescriptionStatus.CANCELLED) {
-      throw new BadRequestException('Prescription is already cancelled');
-    }
-
-    const cancelledPrescription = await this.prisma.prescription.update({
-      where: { id },
-      data: {
-        status: PrescriptionStatus.CANCELLED,
-        notes: reason ? `${prescription.notes || ''}\nCancelled: ${reason}`.trim() : prescription.notes,
-      },
+  /**
+   * @cc [owner:nareshshah139,label:product] audited-prescription-cancellation
+   * Cancellation MUST persist CANCELLED plus server cancellation time, actor and
+   * reason, and reject pending refills atomically. A retry MUST preserve the first
+   * cancellation audit. No subsequent edit or refill may reactivate it.
+   */
+  async cancelPrescription(id: string, branchId: string, reason?: string, actorId?: string) {
+    return this.prisma.$transaction(async tx => {
+      const prescription = await this.lockPrescription(tx, id, branchId);
+      if (prescription.status === PrescriptionStatus.CANCELLED) return prescription;
+      const now = new Date();
+      await tx.prescriptionRefill.updateMany({ where: { prescriptionId: id, status: RefillStatus.PENDING }, data: {
+        status: RefillStatus.REJECTED, rejectedAt: now, rejectedBy: actorId ?? null, rejectionReason: 'Prescription cancelled',
+      } });
+      return tx.prescription.update({ where: { id }, data: {
+        status: PrescriptionStatus.CANCELLED, cancelledAt: now, cancelledBy: actorId ?? null, cancellationReason: reason ?? null,
+      } });
     });
-
-    return cancelledPrescription;
   }
 
-  async requestRefill(refillDto: RefillPrescriptionDto, branchId: string) {
-    const { prescriptionId, reason, notes, requestedDate, metadata } = refillDto;
-
-    const prescription = await this.findPrescriptionById(prescriptionId, branchId);
-
-    if (prescription.status !== PrescriptionStatus.ACTIVE) {
-      throw new BadRequestException('Can only request refill for active prescriptions');
-    }
-
-    if (prescription.validUntil && prescription.validUntil < new Date()) {
-      throw new BadRequestException('Cannot request refill for expired prescription');
-    }
-
-    // Check if refills are allowed
-    const usedRefills = prescription.refills.filter(refill => 
-      refill.status === RefillStatus.COMPLETED || refill.status === RefillStatus.APPROVED
-    ).length;
-
-    if (usedRefills >= prescription.maxRefills) {
-      throw new BadRequestException('Maximum refills exceeded');
-    }
-
-    // Check for pending refills
-    const pendingRefill = prescription.refills.find(refill => 
-      refill.status === RefillStatus.PENDING
-    );
-
-    if (pendingRefill) {
-      throw new ConflictException('Refill request already pending');
-    }
-
-    // Create refill request
-    const refill = await this.prisma.prescriptionRefill.create({
-      data: {
-        prescriptionId,
-        reason,
-        notes,
-        status: RefillStatus.PENDING,
-        requestedDate: requestedDate ? new Date(requestedDate) : new Date(),
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        branchId,
-      },
-      include: {
-        prescription: {
-          select: {
-            id: true,
-            prescriptionNumber: true,
-            patient: {
-              select: { id: true, name: true },
-            },
-            doctor: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
+  /**
+   * @cc [owner:nareshshah139,label:product] refill-allowance-serialization
+   * A refill request or approval MUST require an ACTIVE, unexpired prescription
+   * with unused explicit allowance. Concurrent requests MUST not create multiple
+   * pending requests; approvals MUST not exceed maxRefills under the parent lock.
+   */
+  async requestRefill(input: RefillPrescriptionDto, branchId: string) {
+    return this.prisma.$transaction(async tx => {
+      const prescription = await this.lockPrescription(tx, input.prescriptionId, branchId);
+      this.requireRefillEligibility(prescription);
+      if (prescription.refills.some(r => r.status === RefillStatus.PENDING)) throw new ConflictException('Refill request already pending');
+      return tx.prescriptionRefill.create({ data: {
+        prescriptionId: input.prescriptionId, reason: input.reason, notes: input.notes,
+        requestedDate: input.requestedDate ? new Date(input.requestedDate) : new Date(),
+        metadata: input.metadata ? JSON.stringify(input.metadata) : null,
+      } });
     });
-
-    return refill;
   }
 
-  async approveRefill(approveDto: ApproveRefillDto, branchId: string, approvedBy: string) {
-    const { refillId, notes, approvedDate, metadata } = approveDto;
-
-    const refill = await this.prisma.prescriptionRefill.findFirst({
-      where: { id: refillId, branchId },
-      include: {
-        prescription: {
-          select: {
-            id: true,
-            status: true,
-            validUntil: true,
-          },
-        },
-      },
+  async approveRefill(input: ApproveRefillDto & { refillId: string }, branchId: string, approvedBy: string) {
+    return this.prisma.$transaction(async tx => {
+      const refill = await tx.prescriptionRefill.findFirst({ where: { id: input.refillId, prescription: { visit: { deletedAt: null, patient: { branchId } } } } });
+      if (!refill) throw new NotFoundException('Refill request not found');
+      const prescription = await this.lockPrescription(tx, refill.prescriptionId, branchId);
+      const current = prescription.refills.find(r => r.id === input.refillId)!;
+      if (current.status !== RefillStatus.PENDING) throw new BadRequestException('Can only approve pending refill requests');
+      this.requireRefillEligibility(prescription);
+      return tx.prescriptionRefill.update({ where: { id: current.id }, data: {
+        status: RefillStatus.APPROVED, approvedAt: new Date(), approvedBy,
+        ...(input.notes !== undefined ? { notes: input.notes } : {}),
+        ...(input.metadata !== undefined ? { metadata: input.metadata === null ? null : JSON.stringify(input.metadata) } : {}),
+      } });
     });
-
-    if (!refill) {
-      throw new NotFoundException('Refill request not found');
-    }
-
-    if (refill.status !== RefillStatus.PENDING) {
-      throw new BadRequestException('Can only approve pending refill requests');
-    }
-
-    // Check if prescription is still valid
-    if (refill.prescription.validUntil && refill.prescription.validUntil < new Date()) {
-      throw new BadRequestException('Cannot approve refill for expired prescription');
-    }
-
-    const approvedRefill = await this.prisma.prescriptionRefill.update({
-      where: { id: refillId },
-      data: {
-        status: RefillStatus.APPROVED,
-        notes: notes ? `${refill.notes || ''}\nApproved: ${notes}`.trim() : refill.notes,
-        approvedAt: approvedDate ? new Date(approvedDate) : new Date(),
-        approvedBy,
-        metadata: metadata ? JSON.stringify(metadata) : refill.metadata,
-      },
-    });
-
-    return approvedRefill;
   }
 
   async rejectRefill(refillId: string, branchId: string, reason: string, rejectedBy: string) {
-    const refill = await this.prisma.prescriptionRefill.findFirst({
-      where: { id: refillId, branchId },
+    return this.prisma.$transaction(async tx => {
+      const refill = await tx.prescriptionRefill.findFirst({ where: { id: refillId, prescription: { visit: { deletedAt: null, patient: { branchId } } } } });
+      if (!refill) throw new NotFoundException('Refill request not found');
+      const prescription = await this.lockPrescription(tx, refill.prescriptionId, branchId);
+      if (prescription.refills.find(r => r.id === refillId)?.status !== RefillStatus.PENDING) throw new BadRequestException('Can only reject pending refill requests');
+      return tx.prescriptionRefill.update({ where: { id: refillId }, data: { status: RefillStatus.REJECTED, rejectedAt: new Date(), rejectedBy, rejectionReason: reason } });
     });
-
-    if (!refill) {
-      throw new NotFoundException('Refill request not found');
-    }
-
-    if (refill.status !== RefillStatus.PENDING) {
-      throw new BadRequestException('Can only reject pending refill requests');
-    }
-
-    const rejectedRefill = await this.prisma.prescriptionRefill.update({
-      where: { id: refillId },
-      data: {
-        status: RefillStatus.REJECTED,
-        notes: `${refill.notes || ''}\nRejected: ${reason}`.trim(),
-        approvedAt: new Date(),
-        approvedBy: rejectedBy,
-      },
-    });
-
-    return rejectedRefill;
   }
 
   async findAllRefills(query: QueryRefillsDto, branchId: string) {
-    const {
-      prescriptionId,
-      patientId,
-      status,
-      startDate,
-      endDate,
-      search,
-      page = 1,
-      limit = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'desc',
-    } = query;
-
-    const skip = (page - 1) * limit;
-
-    const where: any = {
-      branchId,
+    const page = this.toPositiveInt(query.page, 1);
+    const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
+    const where: Prisma.PrescriptionRefillWhereInput = {
+      prescription: { visit: { deletedAt: null, patient: { branchId }, ...(query.patientId ? { patientId: query.patientId } : {}) } },
+      ...(query.prescriptionId ? { prescriptionId: query.prescriptionId } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.startDate || query.endDate ? { createdAt: { ...(query.startDate ? { gte: new Date(query.startDate) } : {}), ...(query.endDate ? { lte: new Date(query.endDate) } : {}) } } : {}),
+      ...(query.search ? { OR: [{ reason: { contains: query.search, mode: 'insensitive' } }, { notes: { contains: query.search, mode: 'insensitive' } }] } : {}),
     };
-
-    // Apply filters
-    if (prescriptionId) where.prescriptionId = prescriptionId;
-    if (status) where.status = status;
-
-    // Date filters
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
-
-    // Search filter
-    if (search) {
-      where.OR = [
-        {
-          reason: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-        {
-          notes: {
-            contains: search,
-            mode: 'insensitive',
-          },
-        },
-      ];
-    }
-
-    // Patient filter
-    if (patientId) {
-      where.prescription = {
-        patientId,
-      };
-    }
-
+    const sortBy = ['createdAt', 'requestedDate', 'approvedAt', 'status'].includes(query.sortBy || '') ? query.sortBy! : 'createdAt';
     const [refills, total] = await Promise.all([
-      this.prisma.prescriptionRefill.findMany({
-        where,
-        include: {
-          prescription: {
-            select: {
-              id: true,
-              prescriptionNumber: true,
-              patient: {
-                select: { id: true, name: true, phone: true },
-              },
-              doctor: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
-        skip,
-        take: limit,
-        orderBy: {
-          [sortBy]: sortOrder,
-        },
-      }),
+      this.prisma.prescriptionRefill.findMany({ where, include: { prescription: { include: { visit: { select: { patient: { select: { id: true, name: true, phone: true } }, doctor: { select: { id: true, firstName: true, lastName: true } } } } } } }, skip: (page - 1) * limit, take: limit, orderBy: { [sortBy]: query.sortOrder === 'asc' ? 'asc' : 'desc' } }),
       this.prisma.prescriptionRefill.count({ where }),
     ]);
-
-    return {
-      refills,
-      pagination: {
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-      },
-    };
+    return { refills: refills.map(r => ({ ...r, prescription: { ...r.prescription, patient: r.prescription.visit.patient, doctor: r.prescription.visit.doctor } })), pagination: { total, page, limit, pages: Math.ceil(total / limit) } };
   }
 
   async getPrescriptionHistory(query: PrescriptionHistoryDto, branchId: string) {
-    const { patientId, doctorId, startDate, endDate, drugName, limit = 50 } = query;
-
-    const where: any = {
-      branchId,
-    };
-
-    if (patientId) where.patientId = patientId;
-    if (doctorId) where.doctorId = doctorId;
-
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
-    }
-
-    if (drugName) {
-      where.items = {
-        contains: drugName,
-        mode: 'insensitive',
-      };
-    }
-
-    const prescriptions = await this.prisma.prescription.findMany({
-      where,
-      include: {
-        patient: {
-          select: { id: true, name: true },
-        },
-        doctor: {
-          select: { id: true, name: true },
-        },
-        visit: {
-          select: { id: true, createdAt: true },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: limit,
-    });
-
-    // Parse JSON fields and extract drug information
-    const history = prescriptions.map(prescription => {
-      const items = this.safeParse<any[]>(prescription.items as string, []);
-      return {
-        ...prescription,
-        items,
-        drugNames: items.map((item: any) => item.drugName),
-      };
-    });
-
-    return history;
+    const result = await this.findAllPrescriptions({ ...query, page: 1, sortBy: 'createdAt', sortOrder: 'desc', limit: query.limit ?? 50 }, branchId);
+    return result.prescriptions.map(prescription => ({ ...prescription, drugNames: prescription.items.map(item => item.drugName) }));
   }
 
   async searchDrugs(query: DrugSearchDto) {
@@ -792,67 +628,40 @@ export class PrescriptionsService {
     return filteredDrugs.slice(0, limit);
   }
 
-  // Bulk import India-focused drug data into local Drug table
-  async importDrugs(drugs: Array<Record<string, any>>, _branchId: string) {
-    if (!Array.isArray(drugs) || drugs.length === 0) {
-      return { imported: 0, upserts: 0, errors: 0 };
-    }
-
+  /**
+   * @cc [owner:nareshshah139,label:security;product] drug-import-branch-identity
+   * Imports MUST use real Drug columns in the requested branch. Missing required
+   * catalog values or ambiguous identities MUST count as errors without mutation.
+   * Repeated imports of the same branch, name, strength and dosage form MUST reuse
+   * the existing drug and MUST NOT create stock.
+   */
+  async importDrugs(drugs: Array<Record<string, unknown>>, branchId: string) {
+    if (!Array.isArray(drugs) || !drugs.length) return { imported: 0, upserts: 0, errors: 0 };
     let upserts = 0;
     let errors = 0;
-
-    const tasks = drugs.map((raw) => {
+    for (const raw of drugs) {
       const name = String(raw.name || raw.brand || raw.tradeName || '').trim();
-      if (!name) {
-        errors += 1;
-        return Promise.resolve(null);
-      }
-
-      const strength = raw.strength ? String(raw.strength) : null;
-      const form = raw.form ? String(raw.form) : null;
-
-      return this.prisma.drug.upsert({
-        where: {
-          // Composite unique: name+strength+form
-          name_strength_form: {
-            name,
-            strength: strength ?? '',
-            form: form ?? '',
-          } as any,
-        },
-        update: {
-          genericName: raw.genericName ? String(raw.genericName) : null,
-          route: raw.route ? String(raw.route) : null,
-          manufacturer: raw.manufacturer ? String(raw.manufacturer) : null,
-          composition: raw.composition ? String(raw.composition) : null,
-          brandNames: raw.brandNames ? JSON.stringify(raw.brandNames) : (raw.brand ? JSON.stringify([raw.brand]) : null),
-          aliases: raw.aliases ? JSON.stringify(raw.aliases) : null,
-          hsnCode: raw.hsnCode ? String(raw.hsnCode) : null,
-          rxRequired: typeof raw.rxRequired === 'boolean' ? raw.rxRequired : true,
-          isGeneric: typeof raw.isGeneric === 'boolean' ? raw.isGeneric : false,
-          metadata: raw.metadata ? JSON.stringify(raw.metadata) : null,
-        },
-        create: {
-          name,
-          strength: strength,
-          form: form,
-          genericName: raw.genericName ? String(raw.genericName) : null,
-          route: raw.route ? String(raw.route) : null,
-          manufacturer: raw.manufacturer ? String(raw.manufacturer) : null,
-          composition: raw.composition ? String(raw.composition) : null,
-          brandNames: raw.brandNames ? JSON.stringify(raw.brandNames) : (raw.brand ? JSON.stringify([raw.brand]) : null),
-          aliases: raw.aliases ? JSON.stringify(raw.aliases) : null,
-          hsnCode: raw.hsnCode ? String(raw.hsnCode) : null,
-          rxRequired: typeof raw.rxRequired === 'boolean' ? raw.rxRequired : true,
-          isGeneric: typeof raw.isGeneric === 'boolean' ? raw.isGeneric : false,
-          metadata: raw.metadata ? JSON.stringify(raw.metadata) : null,
-        },
-      })
-      .then((res) => { upserts += 1; return res; })
-      .catch(() => { errors += 1; return null; });
-    });
-
-    await Promise.allSettled(tasks);
+      const manufacturerName = String(raw.manufacturerName || raw.manufacturer || '').trim();
+      const packSizeLabel = String(raw.packSizeLabel || '').trim();
+      const price = raw.price;
+      if (!name || !manufacturerName || !packSizeLabel || typeof price !== 'number' || !Number.isFinite(price) || price < 0 || !branchId) { errors++; continue; }
+      try {
+        await this.prisma.$transaction(async tx => {
+          await tx.$queryRaw`SELECT id FROM branches WHERE id = ${branchId} FOR UPDATE`;
+          const identity = { branchId, name, strength: raw.strength ? String(raw.strength) : null, dosageForm: raw.dosageForm || raw.form ? String(raw.dosageForm || raw.form) : null };
+          const matches = await tx.drug.findMany({ where: identity, select: { id: true }, take: 2 });
+          if (matches.length > 1) throw new ConflictException('Ambiguous drug identity');
+          const data = { ...identity, price, manufacturerName, packSizeLabel,
+            composition1: raw.composition1 || raw.composition ? String(raw.composition1 || raw.composition) : null,
+            composition2: raw.composition2 ? String(raw.composition2) : null,
+            ...(typeof raw.rxRequired === 'boolean' ? { requiresPrescription: raw.rxRequired } : {}),
+          };
+          if (matches[0]) await tx.drug.update({ where: { id: matches[0].id }, data });
+          else await tx.drug.create({ data });
+        });
+        upserts++;
+      } catch { errors++; }
+    }
     return { imported: drugs.length, upserts, errors };
   }
 
@@ -879,6 +688,7 @@ export class PrescriptionsService {
     const visits = await this.prisma.visit.findMany({
       where: {
         patientId,
+        deletedAt: null,
         patient: { branchId },
         ...(visitId ? { id: visitId } : {}),
       },
@@ -997,128 +807,40 @@ export class PrescriptionsService {
 
   async getPrescriptionStatistics(query: PrescriptionStatisticsDto, branchId: string) {
     const { startDate, endDate, doctorId, drugName, groupBy = 'day' } = query;
-
-    const where: any = {
-      branchId,
-    };
-
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) where.createdAt.gte = new Date(startDate);
-      if (endDate) where.createdAt.lte = new Date(endDate);
+    const prescriptions = await this.prisma.prescription.findMany({
+      where: { visit: { deletedAt: null, patient: { branchId }, ...(doctorId ? { doctorId } : {}) },
+        ...(startDate || endDate ? { createdAt: { ...(startDate ? { gte: new Date(startDate) } : {}), ...(endDate ? { lte: new Date(endDate) } : {}) } } : {}),
+        ...(drugName ? { items: { contains: drugName, mode: 'insensitive' } } : {}),
+      }, select: { items: true, createdAt: true, visit: { select: { doctorId: true } } },
+    });
+    const drugs = new Map<string, number>();
+    const doctors = new Map<string, number>();
+    const dates = new Map<string, number>();
+    for (const prescription of prescriptions) {
+      drugs.set(prescription.items, (drugs.get(prescription.items) ?? 0) + 1);
+      doctors.set(prescription.visit.doctorId, (doctors.get(prescription.visit.doctorId) ?? 0) + 1);
+      const date = new Date(prescription.createdAt);
+      if (groupBy === 'year') date.setUTCMonth(0, 1);
+      if (groupBy === 'month') date.setUTCDate(1);
+      if (groupBy === 'week') date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+      const key = date.toISOString().slice(0, 10);
+      dates.set(key, (dates.get(key) ?? 0) + 1);
     }
-
-    if (doctorId) where.doctorId = doctorId;
-
-    if (drugName) {
-      where.items = {
-        contains: drugName,
-        mode: 'insensitive',
-      };
-    }
-
-    const [
-      totalPrescriptions,
-      prescriptionCount,
-      drugBreakdown,
-      doctorBreakdown,
-      dailyBreakdown,
-    ] = await Promise.all([
-      this.prisma.prescription.aggregate({
-        where,
-        _count: { id: true },
-      }),
-      this.prisma.prescription.count({ where }),
-      this.prisma.prescription.groupBy({
-        by: ['items'],
-        where,
-        _count: { id: true },
-      }),
-      this.prisma.prescription.groupBy({
-        by: ['doctorId'],
-        where,
-        _count: { id: true },
-      }),
-      this.prisma.prescription.groupBy({
-        by: ['createdAt'],
-        where,
-        _count: { id: true },
-      }),
-    ]);
-
-    return {
-      totalPrescriptions: prescriptionCount,
-      drugBreakdown: drugBreakdown.map(item => ({
-        drug: item.items,
-        count: item._count.id,
-      })),
-      doctorBreakdown: doctorBreakdown.map(item => ({
-        doctorId: item.doctorId,
-        count: item._count.id,
-      })),
-      dailyBreakdown: dailyBreakdown.map(item => ({
-        date: item.createdAt,
-        count: item._count.id,
-      })),
-      period: {
-        startDate: startDate || null,
-        endDate: endDate || null,
-        groupBy,
-      },
+    return { totalPrescriptions: prescriptions.length,
+      drugBreakdown: [...drugs].map(([drug, count]) => ({ drug, count })),
+      doctorBreakdown: [...doctors].map(([doctorId, count]) => ({ doctorId, count })),
+      dailyBreakdown: [...dates].map(([date, count]) => ({ date, count })),
+      period: { startDate: startDate || null, endDate: endDate || null, groupBy },
     };
   }
 
   async getExpiringPrescriptions(query: ExpiringPrescriptionsDto, branchId: string) {
-    const { expireBefore, patientId, limit = 50 } = query;
-
-    const where: any = {
-      branchId,
-      status: PrescriptionStatus.ACTIVE,
-    };
-
-    if (patientId) where.patientId = patientId;
-
-    if (expireBefore) {
-      where.validUntil = {
-        lte: new Date(expireBefore),
-      };
-    } else {
-      // Default to prescriptions expiring in next 7 days
-      const nextWeek = new Date();
-      nextWeek.setDate(nextWeek.getDate() + 7);
-      where.validUntil = {
-        lte: nextWeek,
-      };
-    }
-
-    const prescriptions = await this.prisma.prescription.findMany({
-      where,
-      include: {
-        patient: {
-          select: { id: true, name: true, phone: true },
-        },
-        doctor: {
-          select: { id: true, name: true },
-        },
-      },
-      orderBy: {
-        validUntil: 'asc',
-      },
-      take: limit,
-    });
-
-    // Parse JSON fields
-    const expiringPrescriptions = prescriptions.map(prescription => ({
-      ...prescription,
-      items: this.safeParse<any[]>(prescription.items as string, []),
-      daysUntilExpiry: prescription.validUntil ? 
-        Math.ceil((prescription.validUntil.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null,
+    const end = query.expireBefore || new Date(Date.now() + 7 * 86400000).toISOString();
+    const result = await this.findAllPrescriptions({ patientId: query.patientId, status: PrescriptionStatus.ACTIVE, validUntil: end, sortBy: 'validUntil', sortOrder: 'asc', limit: query.limit ?? 50 }, branchId);
+    const prescriptions = result.prescriptions.map(prescription => ({ ...prescription,
+      daysUntilExpiry: prescription.validUntil ? Math.ceil((prescription.validUntil.getTime() - Date.now()) / 86400000) : null,
     }));
-
-    return {
-      prescriptions: expiringPrescriptions,
-      totalExpiring: expiringPrescriptions.length,
-    };
+    return { prescriptions, totalExpiring: result.pagination.total };
   }
 
   async createPrescriptionTemplate(templateDto: PrescriptionTemplateDto, branchId: string, createdBy: string) {
@@ -1370,65 +1092,6 @@ export class PrescriptionsService {
       return i;
     });
   }
-  private async generatePrescriptionNumber(branchId: string): Promise<string> {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-
-    // Get the last prescription number for today
-    const lastPrescription = await this.prisma.prescription.findFirst({
-      where: {
-        branchId,
-        createdAt: {
-          gte: new Date(today.setHours(0, 0, 0, 0)),
-          lte: new Date(today.setHours(23, 59, 59, 999)),
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
-
-    let sequence = 1;
-    if (lastPrescription) {
-      const lastSequence = parseInt(lastPrescription.prescriptionNumber.split('-').pop() || '0');
-      sequence = lastSequence + 1;
-    }
-
-    return `RX-${year}${month}${date}-${String(sequence).padStart(3, '0')}`;
-  }
-
-  private calculateValidityPeriod(items: any[]): Date {
-    // Calculate validity based on the longest duration in the prescription
-    let maxDays = 0;
-
-    items.forEach(item => {
-      let days = 0;
-      switch (item.durationUnit) {
-        case 'DAYS':
-          days = item.duration;
-          break;
-        case 'WEEKS':
-          days = item.duration * 7;
-          break;
-        case 'MONTHS':
-          days = item.duration * 30;
-          break;
-        case 'YEARS':
-          days = item.duration * 365;
-          break;
-      }
-      maxDays = Math.max(maxDays, days);
-    });
-
-    // Add 30 days buffer to the validity period
-    const validityDate = new Date();
-    validityDate.setDate(validityDate.getDate() + maxDays + 30);
-
-    return validityDate;
-  }
-
   private async checkDrugInteractions(items: any[]): Promise<any[]> {
     // This would typically integrate with a drug interaction database
     // For now, we'll return mock interactions
@@ -1669,7 +1332,7 @@ export class PrescriptionsService {
     body?: { profileId?: string; includeAssets?: boolean; grayscale?: boolean; showSignature?: boolean },
   ): Promise<{ pdfBuffer: Buffer; fileName: string }> {
     const prescription = await this.prisma.prescription.findFirst({
-      where: { id: prescriptionId, visit: { patient: { branchId } } },
+      where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } },
       include: { visit: { include: { patient: true, doctor: true } } },
     });
     if (!prescription) throw new NotFoundException('Prescription not found');
@@ -1771,7 +1434,7 @@ export class PrescriptionsService {
     if (!['EMAIL', 'WHATSAPP'].includes(body.channel) || typeof body.to !== 'string' || !body.to.trim()) {
       throw new BadRequestException('Choose a sharing channel and recipient.');
     }
-    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } }, select: { id: true } });
+    const prescription = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } }, select: { id: true } });
     if (!prescription) throw new NotFoundException('Prescription not found');
   }
 
@@ -1889,7 +1552,7 @@ export class PrescriptionsService {
     body: { eventType: string; channel?: string; count?: number; metadata?: any },
   ) {
     // Validate prescription belongs to branch
-    const exists = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
+    const exists = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } } });
     if (!exists) throw new NotFoundException('Prescription not found');
     const created = await this.prisma.prescriptionPrintEvent.create({
       data: {
@@ -1904,7 +1567,7 @@ export class PrescriptionsService {
   }
 
   async getPrintEvents(prescriptionId: string, branchId: string) {
-    const exists = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
+    const exists = await this.prisma.prescription.findFirst({ where: { id: prescriptionId, visit: { deletedAt: null, patient: { branchId } } } });
     if (!exists) throw new NotFoundException('Prescription not found');
     const events = await this.prisma.prescriptionPrintEvent.findMany({ where: { prescriptionId }, orderBy: { createdAt: 'desc' } });
     const counts = events.reduce((acc: Record<string, number>, e: any) => {
@@ -2099,10 +1762,7 @@ export class PrescriptionsService {
       return {
         ...prescription,
         visitId: autoVisit.id,
-        visit: {
-          id: autoVisit.id,
-          createdAt: autoVisit.createdAt,
-        },
+
       };
     } catch (err) {
       await this.prisma.prescription.deleteMany({ where: { visitId: autoVisit.id } }).catch(() => undefined);
