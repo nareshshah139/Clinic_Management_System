@@ -1,5 +1,15 @@
 import { PrismaClient, Visit, User, Patient } from '@prisma/client';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import { Reflector } from '@nestjs/core';
+import requestHttp from 'supertest';
+import { PatientsController } from '../../patients/patients.controller';
+import { PatientsService } from '../../patients/patients.service';
+import { AppointmentsService } from '../../appointments/appointments.service';
+import { PrescriptionsController } from '../../prescriptions/prescriptions.controller';
+import { JwtAuthGuard } from '../../../shared/guards/jwt-auth.guard';
+import { RolesGuard } from '../../../shared/guards/roles.guard';
+import { PermissionsGuard } from '../../../shared/guards/permissions.guard';
 import { randomUUID } from 'crypto';
 import { execFileSync } from 'child_process';
 import { resolve } from 'path';
@@ -15,6 +25,7 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
   let admin: PrismaClient;
   let db: PrismaClient;
   let created = false;
+  let app: INestApplication;
   let branchId: string;
   let otherBranchId: string;
   let patient: Patient;
@@ -39,11 +50,25 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
     foreignPatient = await db.patient.create({ data: { branchId: otherBranchId, name: 'SYNTHETIC Foreign', phone: '0000000000', gender: 'FEMALE' } });
     visits = new VisitsService(db as PrismaService);
     prescriptions = new PrescriptionsService(db as PrismaService, {} as NotificationsService);
+    const module = await Test.createTestingModule({
+      controllers: [PatientsController, PrescriptionsController],
+      providers: [
+        { provide: PatientsService, useValue: new PatientsService(db as PrismaService, {} as any, {} as any) },
+        { provide: PrescriptionsService, useValue: prescriptions },
+      ],
+    }).overrideGuard(JwtAuthGuard).useValue({ canActivate: () => true }).compile();
+    app = module.createNestApplication();
+    app.use((req: any, _res: any, next: () => void) => { req.user = { id: doctor.id, branchId, role: req.headers['x-test-role'] || 'DOCTOR' }; next(); });
+    const reflector = new Reflector();
+    app.useGlobalGuards(new RolesGuard(reflector), new PermissionsGuard(reflector, db as PrismaService));
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+    await app.init();
   }, 60000);
   beforeEach(async () => {
     patient = await db.patient.create({ data: { branchId, name: 'SYNTHETIC Patient', phone: '0000000000', gender: 'FEMALE' } });
   });
   afterAll(async () => {
+    await app?.close();
     await db?.$disconnect();
     if (created) await admin.$executeRawUnsafe(`DROP SCHEMA "${schema}" CASCADE`);
     await admin?.$disconnect();
@@ -51,6 +76,85 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
   const visit = (data: Partial<Visit> = {}) => db.visit.create({ data: { patientId: patient.id, doctorId: doctor.id, complaints: '[]', ...data } });
   const rx = async (maxRefills = 0) => db.prescription.create({ data: { visitId: (await visit()).id, items: '[]', maxRefills } });
   const draft = (patientId: string, scope: string) => visits.createDraftAttachment(patientId, '20261005', scope, { preferredExt: 'png', contentType: 'image/png', buffer: Buffer.from('SYNTHETIC') });
+
+  it.each(['NURSE', 'RECEPTION', 'PHARMACIST'])('denies %s refill decisions through the real HTTP role guards', async role => {
+    const p = await rx(1);
+    const refill = await prescriptions.requestRefill({ prescriptionId: p.id }, branchId);
+    for (const action of ['approve', 'reject']) {
+      await requestHttp(app.getHttpServer()).post(`/prescriptions/refills/${refill.id}/${action}`)
+        .set('x-test-role', role).set('Idempotency-Key', randomUUID()).send({ reason: 'Not allowed' }).expect(403);
+      expect((await db.prescriptionRefill.findUniqueOrThrow({ where: { id: refill.id } })).status).toBe('PENDING');
+    }
+  });
+
+  it.each(['DOCTOR', 'ADMIN', 'OWNER'])('allows %s refill decisions through the real HTTP role guards', async role => {
+    for (const action of ['approve', 'reject']) {
+      const p = await rx(1);
+      const refill = await prescriptions.requestRefill({ prescriptionId: p.id }, branchId);
+      const response = await requestHttp(app.getHttpServer()).post(`/prescriptions/refills/${refill.id}/${action}`)
+        .set('x-test-role', role).set('Idempotency-Key', randomUUID()).send({ reason: 'Clinical review', notes: 'Reviewed' }).expect(201);
+      expect(response.body.status).toBe(action === 'approve' ? 'APPROVED' : 'REJECTED');
+    }
+  });
+
+  it('preserves a deleted encounter while atomically reopening its appointment for exactly one restart', async () => {
+    const appointment = await db.appointment.create({ data: { patientId: patient.id, doctorId: doctor.id, branchId, date: new Date('2026-10-05'), slot: '11:00', status: 'COMPLETED' } });
+    const v = await visit({ appointmentId: appointment.id, status: 'COMPLETED', completedAt: new Date(), plan: '{"finalNotes":"Original encounter"}' });
+    await visits.remove(v.id, branchId);
+    const saved = await db.visit.findUniqueOrThrow({ where: { id: v.id } });
+    expect(saved).toMatchObject({ deletedAt: expect.any(Date), appointmentId: null, deletedAppointmentId: appointment.id, plan: v.plan, completedAt: v.completedAt });
+    const appointments = new AppointmentsService(db as PrismaService);
+    expect(await appointments.findOne(appointment.id, branchId)).toMatchObject({ status: 'CHECKED_IN', visit: null });
+    const schedule = await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId);
+    expect(schedule.appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
+    const input = { patientId: patient.id, doctorId: doctor.id, appointmentId: appointment.id, complaints: [{ complaint: 'Replacement encounter' }] };
+    const attempts = await Promise.allSettled([visits.create(input, branchId), visits.create(input, branchId)]);
+    expect(attempts.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.filter(result => result.status === 'rejected')).toHaveLength(1);
+    const replacement = await db.visit.findFirstOrThrow({ where: { appointmentId: appointment.id } });
+    expect(replacement.id).not.toBe(v.id);
+    expect((await appointments.findOne(appointment.id, branchId)).visit?.id).toBe(replacement.id);
+    expect((await visits.getPatientVisitHistory({ patientId: patient.id }, branchId)).visits.map(row => row.id)).toEqual([replacement.id]);
+  });
+
+  it('rolls back deletion and detachment if appointment reopening fails', async () => {
+    const appointment = await db.appointment.create({ data: { patientId: patient.id, doctorId: doctor.id, branchId, date: new Date(), slot: '12:00', status: 'IN_PROGRESS' } });
+    const v = await visit({ appointmentId: appointment.id });
+    await db.$executeRawUnsafe(`ALTER TABLE appointments ADD CONSTRAINT synthetic_restart_failure CHECK (id <> '${appointment.id}' OR status <> 'CHECKED_IN')`);
+    try {
+      await expect(visits.remove(v.id, branchId)).rejects.toThrow();
+      expect(await db.visit.findUnique({ where: { id: v.id } })).toEqual(v);
+      expect((await db.appointment.findUniqueOrThrow({ where: { id: appointment.id } })).status).toBe('IN_PROGRESS');
+    } finally { await db.$executeRawUnsafe('ALTER TABLE appointments DROP CONSTRAINT synthetic_restart_failure'); }
+  });
+
+  it('omits stale deleted visit links from appointment reads even before legacy links are detached', async () => {
+    const room = await db.room.create({ data: { name: 'Synthetic Room', type: 'CONSULTATION', branchId } });
+    const appointment = await db.appointment.create({ data: { patientId: patient.id, doctorId: doctor.id, roomId: room.id, branchId, date: new Date('2026-10-05'), slot: '13:00' } });
+    await visit({ appointmentId: appointment.id, deletedAt: new Date() });
+    const appointments = new AppointmentsService(db as PrismaService);
+    expect((await appointments.findOne(appointment.id, branchId)).visit).toBeNull();
+    expect((await appointments.getDoctorSchedule(doctor.id, '2026-10-05', branchId)).appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
+    expect((await appointments.getRoomSchedule(room.id, '2026-10-05', branchId)).appointments.find(a => a.id === appointment.id)?.visit).toBeNull();
+  });
+
+  it('filters deleted visits before selecting the latest five on the patient HTTP endpoint', async () => {
+    const active = [];
+    for (let i = 0; i < 5; i++) active.push(await visit({ createdAt: new Date(`2020-01-0${i + 1}`) }));
+    for (let i = 0; i < 6; i++) await visit({ deletedAt: new Date() });
+    const response = await requestHttp(app.getHttpServer()).get(`/patients/${patient.id}`).expect(200);
+    expect(response.body.visits.map((row: { id: string }) => row.id)).toEqual(active.reverse().map(row => row.id));
+  });
+
+  it('excludes deleted encounters from both results and totals of recent-patient HTTP queries', async () => {
+    const inactive = await db.patient.create({ data: { branchId, name: 'SYNTHETIC RECENCY Deleted', phone: '0000000000', gender: 'FEMALE', createdAt: new Date('2020-01-01') } });
+    const active = await db.patient.create({ data: { branchId, name: 'SYNTHETIC RECENCY Active', phone: '0000000000', gender: 'FEMALE', createdAt: new Date('2020-01-01') } });
+    await visit({ patientId: inactive.id, deletedAt: new Date() });
+    await visit({ patientId: active.id });
+    const response = await requestHttp(app.getHttpServer()).get('/patients').query({ search: 'SYNTHETIC RECENCY', dateRange: 'LAST_1_WEEK' }).expect(200);
+    expect(response.body.data.map((row: { id: string }) => row.id)).toEqual([active.id]);
+    expect(response.body.meta.total).toBe(1);
+  });
 
   it('persists walk-in completion and preserves the first timestamp and notes on retry', async () => {
     const v = await visit();
@@ -68,7 +172,7 @@ databaseTests('Visit and prescription lifecycle against PostgreSQL', () => {
   it('commits appointment completion with the visit and rolls both back on a database failure', async () => {
     const appointment = await db.appointment.create({ data: { patientId: patient.id, doctorId: doctor.id, branchId, date: new Date(), slot: '10:00', status: 'IN_PROGRESS' } });
     const v = await visit({ appointmentId: appointment.id });
-    await db.$executeRawUnsafe(`ALTER TABLE appointments ADD CONSTRAINT synthetic_completion_failure CHECK (status <> 'COMPLETED')`);
+    await db.$executeRawUnsafe(`ALTER TABLE appointments ADD CONSTRAINT synthetic_completion_failure CHECK (id <> '${appointment.id}' OR status <> 'COMPLETED')`);
     try {
       await expect(visits.complete(v.id, {}, branchId)).rejects.toThrow();
       expect(await db.visit.findUnique({ where: { id: v.id } })).toEqual(v);

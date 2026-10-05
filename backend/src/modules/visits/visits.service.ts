@@ -60,6 +60,11 @@ export class VisitsService {
    * Tele-video visits MUST pass consent validation before any visit or appointment
    * write; the receipt MUST be derived from the authenticated actor, not the DTO.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] appointment-start-serialization
+   * Appointment validation and visit creation MUST commit atomically. Concurrent
+   * starts MUST create at most one linked visit.
+   */
   async create(createVisitDto: CreateVisitDto, branchId: string, actorId?: string) {
     const consultation = consultationPatch(createVisitDto, undefined, actorId);
     const {
@@ -83,7 +88,6 @@ export class VisitsService {
       throw new BadRequestException('At least one complaint is required');
     }
 
-    // Validate patient exists and belongs to branch
     const patient = await this.prisma.patient.findFirst({
       where: { id: patientId, branchId },
     });
@@ -91,45 +95,11 @@ export class VisitsService {
       throw new NotFoundException('Patient not found in this branch');
     }
 
-    // Validate doctor exists and belongs to branch
     const doctor = await this.prisma.user.findFirst({
       where: { id: doctorId, branchId, role: 'DOCTOR' },
     });
     if (!doctor) {
       throw new NotFoundException('Doctor not found in this branch');
-    }
-
-    // Validate appointment if provided
-    if (appointmentId) {
-      const appointment = await this.prisma.appointment.findFirst({
-        where: { 
-          id: appointmentId, 
-          branchId,
-          patientId,
-          doctorId,
-        },
-      });
-      if (!appointment) {
-        throw new NotFoundException('Appointment not found or does not match patient/doctor');
-      }
-
-      // Block visits starting from CANCELLED/COMPLETED appointments
-      if (['CANCELLED', 'COMPLETED'].includes((appointment as any).status)) {
-        throw new BadRequestException('Cannot create a visit from a cancelled or completed appointment');
-      }
-
-      // Check if visit already exists for this appointment
-      const existingVisit = await this.prisma.visit.findFirst({
-        where: { appointmentId },
-      });
-      if (existingVisit) {
-        throw new ConflictException('Visit already exists for this appointment');
-      }
-    }
-
-    // Validate complaints are provided
-    if (!complaints || complaints.length === 0) {
-      throw new BadRequestException('At least one complaint is required');
     }
 
     // Merge top-level notes into plan JSON to preserve the field semantically
@@ -150,6 +120,17 @@ export class VisitsService {
 
     // Create visit and update appointment status atomically
     const visit = await this.prisma.$transaction(async tx => {
+      if (appointmentId) {
+        await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${appointmentId} FOR UPDATE`;
+        const appointment = await tx.appointment.findFirst({ where: { id: appointmentId, branchId, patientId, doctorId } });
+        if (!appointment) throw new NotFoundException('Appointment not found or does not match patient/doctor');
+        if (appointment.status === 'CANCELLED' || appointment.status === 'COMPLETED') {
+          throw new BadRequestException('Cannot create a visit from a cancelled or completed appointment');
+        }
+        if (await tx.visit.findFirst({ where: { appointmentId } })) {
+          throw new ConflictException('Visit already exists for this appointment');
+        }
+      }
       const createdVisit = await tx.visit.create({
         data: {
           ...consultation,
@@ -614,6 +595,13 @@ export class VisitsService {
    * Deletion MUST persist deletedAt without rewriting plan. A visit with a
    * prescription or an attachment MUST fail deletion without changing the visit.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] deleted-appointment-restart
+   * Deleting an appointment visit MUST atomically move its appointmentId into
+   * deletedAppointmentId and detach the live link. IN_PROGRESS and COMPLETED
+   * appointments return to CHECKED_IN; other statuses stay unchanged. The deleted
+   * encounter's clinical data and completion evidence MUST remain intact.
+   */
   async remove(id: string, branchId: string) {
     return this.prisma.$transaction(async tx => {
       await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
@@ -625,7 +613,19 @@ export class VisitsService {
       if (count > 0 || visit.attachments.length > 0) {
         throw new BadRequestException('Cannot delete visit with attachments. Delete attachments first.');
       }
-      await tx.visit.update({ where: { id, version: visit.version, deletedAt: null }, data: { deletedAt: new Date(), version: { increment: 1 } } });
+      await tx.visit.update({
+        where: { id, version: visit.version, deletedAt: null },
+        data: {
+          deletedAt: new Date(), version: { increment: 1 },
+          ...(visit.appointmentId ? { deletedAppointmentId: visit.appointmentId, appointmentId: null } : {}),
+        },
+      });
+      if (visit.appointmentId) {
+        await tx.appointment.updateMany({
+          where: { id: visit.appointmentId, branchId, status: { in: ['IN_PROGRESS', 'COMPLETED'] } },
+          data: { status: 'CHECKED_IN' },
+        });
+      }
       return { message: 'Visit deleted successfully' };
     });
   }
@@ -1236,7 +1236,6 @@ export class VisitsService {
 
     const updated = await this.prisma.visit.update({ where: { id: visitId, version: visit.version, deletedAt: null }, data: { attachments: JSON.stringify(next), version: { increment: 1 } } });
 
-    // The database change must commit before deleting the legacy file.
     try {
       const absolutePath = join(process.cwd(), target.replace(/^\//, ''));
       try {

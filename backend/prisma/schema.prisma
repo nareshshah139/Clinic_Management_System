@@ -290,6 +290,7 @@ model Visit {
   patientId        String
   doctorId         String
   appointmentId    String?           @unique
+  deletedAppointmentId String?
   consultationType ConsultationType @default(IN_PERSON)
   teleVideoConsentById String?
   teleVideoConsentAt DateTime?

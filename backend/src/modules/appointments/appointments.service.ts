@@ -29,6 +29,11 @@ type WhatsAppTemplateComponent = {
   parameters: { type: 'text'; text: string }[];
 };
 
+/**
+ * @cc [owner:nareshshah139,label:product] appointment-active-visit-link
+ * Appointment detail and schedule reads MUST expose only undeleted visit links.
+ * A deleted encounter MUST NOT produce a Continue Visit target.
+ */
 @Injectable()
 export class AppointmentsService {
   constructor(
@@ -402,7 +407,8 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true, capacity: true },
         },
         visit: {
-          select: { id: true },
+          where: { deletedAt: null },
+          select: { id: true, status: true },
         },
       },
     });
@@ -792,7 +798,8 @@ export class AppointmentsService {
           select: { id: true, name: true, type: true },
         },
         visit: {
-          select: { id: true },
+          where: { deletedAt: null },
+          select: { id: true, status: true },
         },
       },
       orderBy: {
@@ -838,7 +845,8 @@ export class AppointmentsService {
           select: { id: true, firstName: true, lastName: true },
         },
         visit: {
-          select: { id: true },
+          where: { deletedAt: null },
+          select: { id: true, status: true },
         },
       },
       orderBy: {
