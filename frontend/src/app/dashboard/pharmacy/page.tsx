@@ -390,7 +390,7 @@ function PharmacyDeskPanel({
         <AgenticPharmacyLauncher onOpen={onOpenAgent} />
       )}
 
-      <div className="grid gap-3 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <PartnerDailySync />
         <PackagesPanel />
       </div>
@@ -646,7 +646,7 @@ function PackagesPanel() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5" />
             <CardTitle className="flex items-center gap-2">Treatment Packages</CardTitle>

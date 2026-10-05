@@ -353,7 +353,7 @@ export function PartnerDailySync() {
         </Card>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Manual Daily Entry</CardTitle>

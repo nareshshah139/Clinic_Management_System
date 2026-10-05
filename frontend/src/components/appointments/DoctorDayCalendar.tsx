@@ -467,7 +467,7 @@ export default function DoctorDayCalendar({
                         color: '#000000',
                         background: 'transparent',
                         maxWidth: '70%',
-                        fontSize: '0.875rem',
+                        fontSize: 'calc(0.875rem + var(--app-text-increase, 0rem))',
                         pointerEvents: 'none',
                       }}
                     >

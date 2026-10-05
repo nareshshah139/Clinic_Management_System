@@ -95,7 +95,7 @@ const menus: Record<string, string[][]> = {
 /**
  * @cc [owner:nareshshah139,label:accessibility] inventory-readable-scope
  * Inventory content MUST use scalable text of at least 14px at the default root size,
- * with 16px phone inputs. Increasing text size MUST leave actions reachable and wide tables
+ * with 18px phone inputs. Increasing text size MUST leave actions reachable and wide tables
  * scrollable within the workspace, without changing typography on unrelated routes.
  */
 export function InventoryWorkspace() {
@@ -229,12 +229,12 @@ export function InventoryWorkspace() {
       </header>
       <nav
         aria-label="Inventory areas"
-        className="flex gap-1 overflow-x-auto border-b pb-2 print:hidden"
+        className="flex flex-wrap gap-1 border-b pb-2 print:hidden"
       >
         {areas.map(([id, label]) => (
           <Button
             key={id}
-            className="min-w-0 flex-1 px-1 text-xs sm:min-w-24 sm:flex-none sm:px-2 sm:text-sm"
+            className="min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"
             aria-current={area === id ? "page" : undefined}
             variant={area === id ? "default" : "ghost"}
             onClick={() => switchArea(id)}

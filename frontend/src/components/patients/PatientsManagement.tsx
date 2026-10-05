@@ -39,6 +39,10 @@ interface PatientFormState {
   walkinRoomId?: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] patient-search-hint-layout
+ * Search hints MUST reserve their full wrapped height above the next filter.
+ */
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
@@ -726,7 +730,7 @@ export default function PatientsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Patients</h2>
           <p className="text-gray-600">Search, add, and manage patient records</p>
@@ -899,7 +903,7 @@ export default function PatientsManagement() {
             </div>
           </DialogContent>
         </Dialog>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
           <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         </div>
@@ -907,9 +911,9 @@ export default function PatientsManagement() {
 
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="relative w-full sm:flex-1" data-tour="search-patients">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-4.5 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 id="patients-search"
                 className="pl-10" 
@@ -918,17 +922,17 @@ export default function PatientsManagement() {
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search.length > 0 && search.length < 2 && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-gray-500">
                   Enter at least 2 characters to search
                 </div>
               )}
               {search.length === 0 && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-gray-400">
+                <div className="mt-1 text-xs text-gray-400">
                   Try: 9xxx… (phone), abha…, @email
                 </div>
               )}
               {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
-                <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
+                <div className="absolute left-0 top-full z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
                   <div className="text-xs text-gray-600 mb-1">Did you mean</div>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.map((s) => (
@@ -1158,11 +1162,11 @@ export default function PatientsManagement() {
           
           {/* Pagination Controls */}
           {!listLoading && patients.length > 0 && totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
               <div className="text-sm text-gray-500">
                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"

@@ -754,7 +754,7 @@ function VisitsPageInner() {
     return (
       <div className="space-y-6">
         {/* Header with Guide */}
-        <div className="flex justify-between items-start">
+        <div className="flex flex-wrap justify-between items-start gap-3">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Visit Documentation</h1>
             <p className="text-gray-600">Create and manage patient visits with role-based documentation</p>
