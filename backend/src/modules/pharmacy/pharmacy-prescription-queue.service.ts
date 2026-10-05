@@ -1,3 +1,4 @@
+import { queueStatusPage, queueFrequencyPerDay, queueDurationDays } from './pharmacy-prescription-queue-query';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -222,46 +223,51 @@ export class PharmacyPrescriptionQueueService {
     private readonly drugService: DrugService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-read-only-page
+   * Listing MUST count and filter the complete branch queue before pagination and hydrate
+   * only that page. Reads MUST NOT create tasks or change workflow timestamps.
+   */
   async findAll(query: QueryPrescriptionQueueDto, branchId: string) {
     const page = this.toPositiveInt(query.page, 1);
     const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
-    const prescriptions = (await this.prisma.prescription.findMany({
-      where: {
-        visit: {
-          patient: {
-            branchId,
-          },
-        },
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      include: this.prescriptionInclude(branchId),
-    })) as LoadedPrescription[];
-
-    const entriesWithTasks = await Promise.all(
-      prescriptions.map((prescription) =>
-        this.withPersistedTask(this.toQueueEntry(prescription), branchId),
-      ),
-    );
-    const entries = entriesWithTasks.filter(
-      (entry) => !query.status || entry.status === query.status,
-    );
-    const start = (page - 1) * limit;
-    const data = entries.slice(start, start + limit);
-
-    return {
-      data,
-      pagination: {
-        page,
-        limit,
-        total: entries.length,
-        pages: Math.ceil(entries.length / limit),
-      },
-    };
+    const now = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number }[]>(
+        queueStatusPage(branchId, query.status, page, limit, now),
+      );
+      const prescriptions = await tx.prescription.findMany({
+        where: { id: { in: selection.ids } },
+        include: this.prescriptionInclude(branchId),
+      });
+      const tasks = await tx.pharmacyDispenseTask.findMany({
+        where: { branchId, prescriptionId: { in: selection.ids } },
+        include: { lines: true },
+      });
+      const taskByPrescription = new Map(tasks.map(task => [task.prescriptionId, task]));
+      const entryById = new Map(prescriptions.map(prescription => [prescription.id,
+        this.mergeTask(this.toQueueEntry(prescription, now.getTime()), taskByPrescription.get(prescription.id)),
+      ]));
+      return {
+        data: selection.ids.map(id => entryById.get(id)!),
+        pagination: { page, limit, total: selection.total, pages: Math.ceil(selection.total / limit) },
+      };
+    }, { isolationLevel: 'RepeatableRead' });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-detail-read-only
+   * Detail reads MUST preserve stored task and line state, including all timestamps.
+   * Cancelled prescriptions, deleted visits and prescriptions outside the branch MUST return not found.
+   */
   async findOne(prescriptionId: string, branchId: string) {
+    const active = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT p.id FROM prescriptions p JOIN visits v ON v.id = p."visitId"
+      JOIN patients patient ON patient.id = v."patientId"
+      WHERE p.id = ${prescriptionId} AND patient."branchId" = ${branchId}
+        AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') <> 'CANCELLED'
+        AND to_jsonb(v)->>'deletedAt' IS NULL`;
+    if (!active.length) throw new NotFoundException('Prescription not found in this branch');
     const prescription = (await this.prisma.prescription.findFirst({
       where: {
         id: prescriptionId,
@@ -274,24 +280,37 @@ export class PharmacyPrescriptionQueueService {
       include: this.prescriptionInclude(branchId),
     })) as LoadedPrescription | null;
 
-    if (!prescription) {
+    if (!prescription || (prescription as LoadedPrescription & { status?: string }).status === 'CANCELLED') {
       throw new NotFoundException('Prescription not found in this branch');
     }
 
-    return this.withPersistedTask(this.toQueueEntry(prescription), branchId);
+    const task = await this.taskDelegate()?.findFirst({
+      where: { branchId, prescriptionId }, include: { lines: true },
+    });
+    return this.mergeTask(this.toQueueEntry(prescription), task);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-explicit-task-refresh
+   * Explicit pull MAY create or refresh a branch task and stock annotations, but MUST NOT
+   * move stock or change invoices. Refreshing an unchanged task status MUST preserve its timestamp.
+   */
   async pull(prescriptionId: string, branchId: string) {
-    return {
-      recomputedAt: new Date(),
-      data: await this.findOne(prescriptionId, branchId),
-    };
+    const entry = await this.findOne(prescriptionId, branchId);
+    await this.withPersistedTask(entry, branchId);
+    const stock = await this.stockCheck(prescriptionId, branchId);
+    await this.persistStockCheck(prescriptionId, branchId, stock.items);
+    return { recomputedAt: new Date(), data: await this.findOne(prescriptionId, branchId) };
   }
 
   /**
    * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
    * Stock checks MUST return each line's prescribed quantity, including the queue's
    * duration/frequency inference when no explicit quantity was recorded.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] queue-stock-check-read-only
+   * Stock-check GETs MUST return live stock without creating tasks or persisting annotations.
    */
   async stockCheck(prescriptionId: string, branchId: string) {
     const entry = await this.findOne(prescriptionId, branchId);
@@ -301,7 +320,6 @@ export class PharmacyPrescriptionQueueService {
         prescribedQuantity: item.prescribedQuantity,
       })),
     );
-    await this.persistStockCheck(prescriptionId, branchId, items);
 
     return {
       prescriptionId,
@@ -310,6 +328,11 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] task-status-timestamp-transition
+   * Repeating the saved workflow status MUST preserve its lifecycle timestamp. A transition
+   * MUST stamp the destination status without overwriting timestamps for other stages.
+   */
   async updateTaskStatus(
     taskId: string,
     body: UpdateDispenseTaskStatusDto,
@@ -342,7 +365,7 @@ export class PharmacyPrescriptionQueueService {
             : null,
         statusReasonType: body.reasonType || task.statusReasonType || null,
         statusReasonNote: body.reasonNote || task.statusReasonNote || null,
-        ...this.statusTimestampPatch(body.status, now),
+        ...(body.status !== task.status ? this.statusTimestampPatch(body.status, now) : {}),
       },
     });
 
@@ -403,7 +426,7 @@ export class PharmacyPrescriptionQueueService {
         status: nextStatus,
         assignedToId: task.assignedToId || userId,
         exceptionCount: this.taskExceptionCount(refreshed),
-        ...this.statusTimestampPatch(nextStatus, new Date()),
+        ...(nextStatus !== task.status ? this.statusTimestampPatch(nextStatus, new Date()) : {}),
       },
     });
 
@@ -504,7 +527,7 @@ export class PharmacyPrescriptionQueueService {
         doctorName: entry.doctor.name,
         linkedInvoiceIds,
         status,
-        ...this.statusTimestampPatch(status, new Date()),
+        ...(status !== existing.status ? this.statusTimestampPatch(status, new Date()) : {}),
       },
       include: { lines: true },
     })) as DispenseTask;
@@ -551,7 +574,9 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
-  private mergeTask(entry: QueueEntry, task: DispenseTask): QueueEntry {
+  private mergeTask(entry: QueueEntry, task?: DispenseTask | null): QueueEntry {
+    if (!task) return { ...entry, dispenseStatus: this.taskStatusFromQueue(entry.status), source: 'VISIT' };
+    const status = this.syncedTaskStatus(task.status, entry.status);
     const linesByName = new Map(
       (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
     );
@@ -559,8 +584,8 @@ export class PharmacyPrescriptionQueueService {
     return {
       ...entry,
       dispenseTaskId: task.id,
-      status: this.queueStatusFromTask(task.status, entry.status),
-      dispenseStatus: task.status,
+      status: this.queueStatusFromTask(status, entry.status),
+      dispenseStatus: status,
       source: task.source,
       assignedToId: task.assignedToId,
       statusReasonType: task.statusReasonType,
@@ -914,8 +939,7 @@ export class PharmacyPrescriptionQueueService {
    * Draft/pending invoices alone MUST leave the prescription pending (or age-expired),
    * including after a failed stock confirmation; linked invoice IDs remain available for review.
    */
-  private toQueueEntry(prescription: LoadedPrescription): QueueEntry {
-    const nowMs = Date.now();
+  private toQueueEntry(prescription: LoadedPrescription, nowMs = Date.now()): QueueEntry {
     const pendingHours = Math.max(
       0,
       (nowMs - prescription.createdAt.getTime()) / (60 * 60 * 1000),
@@ -1134,26 +1158,7 @@ export class PharmacyPrescriptionQueueService {
 
   private frequencyToPerDay(frequency?: string | null): number | null {
     const normalized = this.normalizeName(frequency || '');
-    const map: Record<string, number> = {
-      once_daily: 1,
-      od: 1,
-      daily: 1,
-      twice_daily: 2,
-      bid: 2,
-      bd: 2,
-      three_times_daily: 3,
-      tid: 3,
-      tds: 3,
-      four_times_daily: 4,
-      qid: 4,
-      qds: 4,
-      every_12_hours: 2,
-      every_8_hours: 3,
-      every_6_hours: 4,
-      every_4_hours: 6,
-      weekly: 1 / 7,
-      monthly: 1 / 30,
-    };
+    const map = queueFrequencyPerDay;
 
     return map[normalized] ?? null;
   }
@@ -1162,16 +1167,7 @@ export class PharmacyPrescriptionQueueService {
     durationUnit?: string | null,
   ): number | null {
     const normalized = this.normalizeName(durationUnit || 'days');
-    const map: Record<string, number> = {
-      day: 1,
-      days: 1,
-      week: 7,
-      weeks: 7,
-      month: 30,
-      months: 30,
-      year: 365,
-      years: 365,
-    };
+    const map = queueDurationDays;
 
     return map[normalized] ?? null;
   }

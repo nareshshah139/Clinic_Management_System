@@ -1,3 +1,4 @@
+import { exposeTestTrigramOperator } from '../../../shared/testing/local-database';
 import {normalizePurchaseSource} from '../purchase-invoice-source';
 import { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'crypto';
@@ -28,6 +29,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) throw new Error('Database tests require local PostgreSQL');
     url.searchParams.set('schema', 'public');
     admin = new PrismaClient({ datasourceUrl: url.toString() });
+    await admin.$executeRawUnsafe('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public');
     await admin.$executeRawUnsafe(`CREATE SCHEMA "${schema}"`);
     schemaCreated = true;
     url.searchParams.set('schema', schema);
@@ -35,6 +37,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
       env: { ...process.env, DATABASE_URL: url.toString() }, stdio: 'pipe',
     });
     prisma = new PrismaClient({ datasourceUrl: url.toString() });
+    await exposeTestTrigramOperator(prisma);
     // Exercise the additive deployment migration, rather than relying only on db push.
     await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_invoice_documents"');
     const migration = readFileSync(path.resolve('prisma/migrations/20260912_add_purchase_invoice_documents/migration.sql'), 'utf8');

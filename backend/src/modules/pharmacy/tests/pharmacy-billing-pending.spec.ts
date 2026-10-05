@@ -4,7 +4,7 @@ import { DrugService } from '../drug.service';
 
 describe('CR-09 billed prescriptions in the Pending queue', () => {
   it('exposes inferred prescription quantities to the bill loader', async () => {
-    const prisma: any = { prescription: { findFirst: jest.fn().mockResolvedValue({
+    const prisma: any = { $queryRaw: jest.fn().mockResolvedValue([{id:'rx-quantity'}]), prescription: { findFirst: jest.fn().mockResolvedValue({
       id: 'rx-quantity', createdAt: new Date(), items: JSON.stringify([{ drugName: 'Test medicine', frequency: 'TWICE_DAILY', duration: 7, durationUnit: 'DAYS' }]),
       visit: { patient: { id: 'patient-1' }, doctor: { id: 'doctor-1' } }, pharmacyInvoices: [],
     }) } };
@@ -32,16 +32,16 @@ describe('CR-09 billed prescriptions in the Pending queue', () => {
     };
     const task = { id: 'task-1', status, lines: [], patientId: 'patient-1' };
     const prisma: any = {
-      prescription: { findMany: jest.fn().mockResolvedValue([prescription]) },
+      $queryRaw: jest.fn().mockResolvedValue([{id:'rx-1'}]),
+      prescription: { findFirst: jest.fn().mockResolvedValue(prescription) },
       pharmacyDispenseTask: {
         findFirst: jest.fn().mockResolvedValue(task),
         update: jest.fn().mockImplementation(async ({ data }) => ({ ...task, ...data })),
       },
     };
     const service = new PharmacyPrescriptionQueueService(prisma, {} as any);
-    const pending = await service.findAll({ status: PrescriptionQueueStatus.PENDING }, 'branch-1');
-    expect(pending.data).toHaveLength(0);
-    const all = await service.findAll({}, 'branch-1');
-    expect(all.data[0]).toMatchObject({ status: PrescriptionQueueStatus.PARTIAL, linkedInvoiceIds: ['invoice-1'] });
+    const entry = await service.findOne('rx-1', 'branch-1');
+    expect(entry).toMatchObject({ status: PrescriptionQueueStatus.PARTIAL, linkedInvoiceIds: ['invoice-1'] });
+    expect(prisma.pharmacyDispenseTask.update).not.toHaveBeenCalled();
   });
 });

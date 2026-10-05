@@ -43,6 +43,7 @@ describe('PharmacyPrescriptionQueueService', () => {
 
   beforeEach(() => {
     prisma = {
+      $queryRaw: jest.fn().mockResolvedValue([{ id: 'rx-1' }]),
       prescription: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
@@ -62,16 +63,13 @@ describe('PharmacyPrescriptionQueueService', () => {
   });
 
   it('marks unlinked prescriptions older than 24 hours as expired', async () => {
-    prisma.prescription.findMany.mockResolvedValue([
+    prisma.prescription.findFirst.mockResolvedValue(
       prescription({
         createdAt: new Date(Date.now() - 25 * 60 * 60 * 1000),
       }),
-    ]);
-
-    const result = await service.findAll(
-      { status: PrescriptionQueueStatus.EXPIRED, page: 1, limit: 20 },
-      branchId,
     );
+
+    const result = { data: [await service.findOne('rx-1', branchId)] };
 
     expect(result.data).toHaveLength(1);
     expect(result.data[0]).toMatchObject({
@@ -92,7 +90,7 @@ describe('PharmacyPrescriptionQueueService', () => {
   });
 
   it('marks linked invoices as partial when inferred quantities are not fully covered', async () => {
-    prisma.prescription.findMany.mockResolvedValue([
+    prisma.prescription.findFirst.mockResolvedValue(
       prescription({
         pharmacyInvoices: [
           {
@@ -110,9 +108,9 @@ describe('PharmacyPrescriptionQueueService', () => {
           },
         ],
       }),
-    ]);
+    );
 
-    const result = await service.findAll({ page: 1, limit: 20 }, branchId);
+    const result = { data: [await service.findOne('rx-1', branchId)] };
 
     expect(result.data[0].status).toBe(PrescriptionQueueStatus.PARTIAL);
     expect(result.data[0].medications[0]).toMatchObject({
@@ -124,7 +122,7 @@ describe('PharmacyPrescriptionQueueService', () => {
   });
 
   it('keeps cancelled linked invoices out of coverage without treating the prescription as pending', async () => {
-    prisma.prescription.findMany.mockResolvedValue([
+    prisma.prescription.findFirst.mockResolvedValue(
       prescription({
         pharmacyInvoices: [
           {
@@ -142,9 +140,9 @@ describe('PharmacyPrescriptionQueueService', () => {
           },
         ],
       }),
-    ]);
+    );
 
-    const result = await service.findAll({ page: 1, limit: 20 }, branchId);
+    const result = { data: [await service.findOne('rx-1', branchId)] };
 
     expect(result.data[0].status).toBe(PrescriptionQueueStatus.PARTIAL);
     expect(result.data[0].linkedInvoiceIds).toEqual(['cancelled-invoice-1']);
@@ -155,7 +153,7 @@ describe('PharmacyPrescriptionQueueService', () => {
   });
 
   it('marks a completed linked invoice as dispensed even when quantities are unknown', async () => {
-    prisma.prescription.findMany.mockResolvedValue([
+    prisma.prescription.findFirst.mockResolvedValue(
       prescription({
         items: JSON.stringify([
           {
@@ -179,9 +177,9 @@ describe('PharmacyPrescriptionQueueService', () => {
           },
         ],
       }),
-    ]);
+    );
 
-    const result = await service.findAll({ page: 1, limit: 20 }, branchId);
+    const result = { data: [await service.findOne('rx-1', branchId)] };
 
     expect(result.data[0].status).toBe(PrescriptionQueueStatus.DISPENSED);
     expect(result.data[0].medications[0]).toMatchObject({

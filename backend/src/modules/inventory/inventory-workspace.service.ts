@@ -1,3 +1,4 @@
+import { readStockPage } from './inventory-stock-query';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -6,8 +7,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
-import { inventoryNameAliases, inventoryProductName, retainPreviousInventoryName } from './inventory-names';
-import { checkedProductQuery, matchProductSearch } from '../../shared/search/product-search';
+import { inventoryProductName, retainPreviousInventoryName } from './inventory-names';
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -79,80 +79,12 @@ export class InventoryWorkspaceService {
    */
   async stock(actor: WorkflowActor, q: Record<string, any> = {}) {
     await this.require(actor, 'inventory:item:read');
-    const batchView = q.batchView || 'ALL';
-    if (!['ALL','ON_HAND','EMPTY'].includes(batchView)) throw new BadRequestException('Unknown batch view');
-    const search = checkedProductQuery(q.search);
-    const all = (await this.prisma.inventoryItem.findMany({where:{branchId:actor.branchId},include:{drugs:{select:{id:true,name:true,packSizeLabel:true,composition1:true,composition2:true,manufacturerName:true,strength:true,dosageForm:true}},_count:{select:{drugs:true}}},orderBy:[{name:'asc'},{expiryDate:'asc'},{id:'asc'}]})).map(i=>this.present(i));
-    const text = (s:any)=>String(s||'').toLowerCase();
-    const now = new Date(), expiryStart = new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())), future = new Date(expiryStart);
-    const months = Number(q.expiryMonths||0); if (![0,1,2,3,6].includes(months)) throw new BadRequestException('Expiry window must be 1, 2, 3 or 6 months');
-    const day=future.getUTCDate(); future.setUTCDate(1);future.setUTCMonth(future.getUTCMonth()+months);future.setUTCDate(Math.min(day,new Date(Date.UTC(future.getUTCFullYear(),future.getUTCMonth()+1,0)).getUTCDate())); future.setUTCHours(23,59,59,999);
-    const priceBasis = q.priceBasis || 'PTR';
-    if (!['PTR','MRP','SELLING','LANDING'].includes(priceBasis)) throw new BadRequestException('Unknown price basis');
-    for (const key of ['minPrice','maxPrice','minMargin','maxMargin']) if(q[key]!==undefined && q[key]!=='' && (!Number.isFinite(Number(q[key])) || Number(q[key])<0)) throw new BadRequestException(`${key} must be a nonnegative number`);
-    if(q.audit && ['PENDING','COMPLETED','BLOCKED'].includes(q.audit)) {
-      const counts = await this.prisma.inventoryWorkflowDocument.findMany({where:{branchId:actor.branchId,kind:'COUNT'},orderBy:[{createdAt:'desc'},{id:'desc'}]});
-      const states = new Map<string,string>();
-      for(const doc of counts) for(const line of (doc.payload as any).lines||[]) if(!states.has(line.inventoryId)) states.set(line.inventoryId,doc.status==='POSTED'?'COMPLETED':['AWAITING_APPROVAL','REJECTED'].includes(doc.status)?'BLOCKED':['CANCELLED','REVERSED'].includes(doc.status)?'NONE':'PENDING');
-      for(const row of all) (row as any).auditState=states.get(row.id)||'NONE';
-    }
-    const fields = ['category','subCategory','manufacturer','supplier','type','unit','storageLocation','status'];
-    const rows = all.filter(i=> {
-      if (batchView === 'ON_HAND' && i.currentStock <= 0) return false;
-      if (batchView === 'EMPTY' && i.currentStock !== 0) return false;
-      if (q.saleEligible==='true' && (i.status!=='ACTIVE'||i.available<=0||!!i.expiryDate&&i.expiryDate<expiryStart)) return false;
-      if (search.startsWith('inventory:')) {
-        if (i.id !== search.slice('inventory:'.length)) return false;
-      } else if (search) {
-        const drugs = i.drugs || [];
-        const match = matchProductSearch(search, {
-          names: [i.name, i.productName, i.brandName, ...drugs.map((d:any)=>d.name)].filter(Boolean),
-          aliases: inventoryNameAliases(i.metadata), ingredients: [i.genericName, ...drugs.flatMap((d:any)=>[d.composition1,d.composition2])].filter(Boolean),
-          manufacturer: i.manufacturer || drugs[0]?.manufacturerName, category: i.category,
-          strength: drugs.length===1?drugs[0].strength:undefined,
-          details: [i.packLabel, ...drugs.flatMap((d:any)=>[d.packSizeLabel,d.strength,d.dosageForm])],
-          codes: [i.id,i.batchNumber,i.barcode,i.sku,i.metadata.sourceItemCode],
-        });
-        if (!match) return false;
-        (i as any).searchMatch = match;
-      }
-      if (fields.some(f=>q[f] && text((i as any)[f])!==text(q[f]))) return false;
-      if (q.dosageForm && text(i.metadata.dosageForm)!==text(q.dosageForm)) return false;
-      if (q.schedule && text(i.metadata.schedule)!==text(q.schedule)) return false;
-      if (q.gst && (q.gst==='MISSING' ? i.gstRate!=null : Number(q.gst)!==i.gstRate)) return false;
-      if (q.hsn && (q.hsn==='MISSING' ? !!i.hsnCode : !text(i.hsnCode).includes(text(q.hsn)))) return false;
-      if (q.stock==='LOW' && !(i.available<=(i.minStockLevel??i.reorderLevel??-1))) return false;
-      if (q.stock==='ZERO' && i.currentStock!==0) return false;
-      if (q.stock==='AVAILABLE' && i.available<=0) return false;
-      if (q.stock==='HIGH' && !(i.maxStockLevel!=null && i.currentStock>i.maxStockLevel)) return false;
-      if (q.stock==='POSITIVE' && i.currentStock<=0) return false;
-      if (q.stock==='NEGATIVE' && i.currentStock>=0) return false;
-      if (q.stock==='HELD' && !i.heldStock) return false;
-      if (q.stock==='EXPIRED' && !(i.expiryDate && i.expiryDate<expiryStart)) return false;
-      if (q.expiryMonths && !(i.currentStock>0 && i.expiryDate && i.expiryDate>=expiryStart && i.expiryDate<=future)) return false;
-      if (q.mapping && i.mappingStatus!==q.mapping) return false;
-      if (q.missing && !i.issues.some((v:any)=>text(v).includes(text(q.missing)))) return false;
-      const price = priceBasis==='PTR'?i.costPrice:priceBasis==='MRP'?i.mrp:priceBasis==='SELLING'?i.sellingPrice:i.metadata.landingCostPerStockUnit;
-      if (q.minPrice!==undefined && q.minPrice!=='' && (price==null || price<Number(q.minPrice))) return false;
-      if (q.maxPrice!==undefined && q.maxPrice!=='' && (price==null || price>Number(q.maxPrice))) return false;
-      if (q.audit && ['PENDING','COMPLETED','BLOCKED'].includes(q.audit) && (i as any).auditState!==q.audit) return false;
-      if (q.minMargin!==undefined && q.minMargin!=='' && (i.margin==null || i.margin<Number(q.minMargin))) return false;
-      if (q.maxMargin!==undefined && q.maxMargin!=='' && (i.margin==null || i.margin>Number(q.maxMargin))) return false;
-      if (q.audit==='MISSING' && i.metadata.lastCountAt) return false;
-      if (q.audit==='COUNTED' && !i.metadata.lastCountAt) return false;
-      return true;
-    });
-    const sortBy=q.sortBy||(search?'relevance':'name'); const sorts=['relevance','name','currentStock','available','costPrice','mrp','expiryDate','storageLocation','updatedAt'];
-    if(!sorts.includes(sortBy)|| (q.sortOrder&&!['asc','desc'].includes(q.sortOrder))) throw new BadRequestException('Invalid stock sort');
-    const sortOrder=q.sortOrder||(sortBy==='relevance'?'desc':'asc');
-    rows.sort((a:any,b:any)=>{const av=sortBy==='relevance'?a.searchMatch?.score||0:a[sortBy],bv=sortBy==='relevance'?b.searchMatch?.score||0:b[sortBy]; const cmp=av==null?(bv==null?0:1):bv==null?-1:typeof av==='number'?av-bv:av instanceof Date?av.getTime()-new Date(bv).getTime():String(av).localeCompare(String(bv));return (sortOrder==='desc'?-cmp:cmp)||(sortBy==='relevance'?a.name.localeCompare(b.name):0)||a.id.localeCompare(b.id);});
-    const page=Math.max(1,Number(q.page)||1),limit=Math.min(100,Math.max(1,Number(q.limit)||30));
-    const totals = (list:any[])=>({batches:list.length,units:list.reduce((n,i)=>n+i.currentStock,0),PTR:money(list.reduce((n,i)=>n+i.currentStock*i.costPrice,0)),MRP:money(list.reduce((n,i)=>n+i.currentStock*(i.mrp??i.sellingPrice),0)),MRPExcludingTax:money(list.reduce((n,i)=>n+(i.gstRate!=null?i.currentStock*(i.mrp??i.sellingPrice)/(1+i.gstRate/100):0),0)),MRPTaxUnknownBatches:list.filter(i=>i.gstRate==null).length,landingKnown:money(list.reduce((n,i)=>n+(i.metadata.landingCostPerStockUnit!=null?i.currentStock*i.metadata.landingCostPerStockUnit:0),0)),landingUnknownBatches:list.filter(i=>i.currentStock>0&&i.metadata.landingCostPerStockUnit==null).length});
-    return {filterScope:{batchView,asOf:now.toISOString(),expiryStart:expiryStart.toISOString(),expiryEnd:future.toISOString(),expiryBoundary:'Expiry dates remain valid through the entire UTC calendar day. Expired before expiryStart; upcoming through inclusive expiryEnd using clamped calendar months',priceBasis,sortBy,sortOrder},rows:rows.slice((page-1)*limit,page*limit),total:rows.length,page,limit,totalPages:Math.ceil(rows.length/limit),
-      facets:Object.fromEntries(fields.map(f=>[f,[...new Set(all.map(i=>(i as any)[f]).filter(Boolean))].sort()])),
-      valuation:{current:totals(rows.filter(i=>!i.expiryDate||i.expiryDate>=expiryStart)),expired:totals(rows.filter(i=>i.expiryDate&&i.expiryDate<expiryStart))},
-      quality:Object.fromEntries([...new Set(all.flatMap(i=>i.issues))].map(key=>[key,all.filter(i=>i.issues.includes(key)).length]))};
+    return this.prisma.$transaction(
+      tx => readStockPage(tx, actor.branchId, q, item => this.present(item)),
+      { isolationLevel: 'RepeatableRead', timeout: 30000 },
+    );
   }
+
 /**
    * @cc [owner:nareshshah139,label:product;target] inventory-ledger-closing-balance
    * The item/batch ledger MUST expose each movement’s signed stock effect and running close so that
