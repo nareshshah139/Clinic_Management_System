@@ -39,6 +39,10 @@ interface PatientFormState {
   walkinRoomId?: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] patient-search-hint-layout
+ * Search hints MUST reserve their full wrapped height above the next filter.
+ */
 export default function PatientsManagement() {
   const router = useRouter();
   const { toast } = useToast();
@@ -907,9 +911,9 @@ export default function PatientsManagement() {
 
       <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row gap-4 items-center">
+          <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="relative w-full sm:flex-1" data-tour="search-patients">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-4.5 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <Input 
                 id="patients-search"
                 className="pl-10" 
@@ -918,17 +922,17 @@ export default function PatientsManagement() {
                 onChange={(e) => setSearch(e.target.value)}
               />
               {search.length > 0 && search.length < 2 && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-gray-500">
+                <div className="mt-1 text-xs text-gray-500">
                   Enter at least 2 characters to search
                 </div>
               )}
               {search.length === 0 && (
-                <div className="absolute top-full left-0 mt-1 text-xs text-gray-400">
+                <div className="mt-1 text-xs text-gray-400">
                   Try: 9xxx… (phone), abha…, @email
                 </div>
               )}
               {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
-                <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
+                <div className="absolute left-0 top-full z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
                   <div className="text-xs text-gray-600 mb-1">Did you mean</div>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.map((s) => (
