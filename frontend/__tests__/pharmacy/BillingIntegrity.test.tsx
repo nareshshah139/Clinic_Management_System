@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { PharmacyInvoiceBuilderFixed } from "@/components/pharmacy/PharmacyInvoiceBuilderFixed";
 import { PharmacyInvoiceList } from "@/components/pharmacy/PharmacyInvoiceList";
 import { apiClient } from "@/lib/api";
@@ -14,6 +14,8 @@ jest.mock("@/lib/api", () => ({
     patch: jest.fn(),
     getPatients: jest.fn(),
     getUsers: jest.fn(),
+    getPatient: jest.fn(),
+    getPrescription: jest.fn(),
     getPharmacyInvoices: jest.fn(),
     getPharmacyInvoicePrintData: jest.fn(),
     getPharmacyInvoiceById: jest.fn(),
@@ -220,3 +222,88 @@ it("reuses the original payment after a lost response even when reloaded balance
     ["/pharmacy/invoices/invoice-1/payments", saved],
   ]);
 });
+
+it.each(["prescription", "visit", "patient", "initial"])(
+  "ignores a late %s load after starting a new invoice",
+  async (source) => {
+    sessionStorage.setItem(
+      "pharmacy-checkout-attempt-v1",
+      JSON.stringify({ ...pending, confirmed: true })
+    );
+    const oldPatient = {
+      id: "patient-old",
+      name: "Previous Patient",
+      phone: "0000000001",
+    };
+    const oldDoctor = {
+      id: "doctor-old",
+      firstName: "Previous",
+      lastName: "Doctor",
+    };
+    const oldPrescription = {
+      id: "rx-old",
+      visit: { patient: oldPatient, doctor: oldDoctor },
+      items: [],
+    };
+    let resolveLate!: (value: any) => void;
+    let started = false;
+    const late = new Promise((resolve) => {
+      resolveLate = resolve;
+    });
+    const startLoad = () => {
+      started = true;
+      return late;
+    };
+    (apiClient.getPrescription as jest.Mock).mockResolvedValue(oldPrescription);
+    (apiClient.getUsers as jest.Mock).mockResolvedValue({ users: [oldDoctor] });
+    let prefill: {
+      patientId?: string;
+      doctorId?: string;
+      prescriptionId?: string;
+      visitId?: string;
+    };
+    let response: any;
+    if (source === "prescription") {
+      prefill = { prescriptionId: "rx-old" };
+      (apiClient.getPrescription as jest.Mock).mockImplementation(startLoad);
+      response = oldPrescription;
+    } else if (source === "visit") {
+      prefill = { visitId: "visit-old" };
+      (apiClient.get as jest.Mock).mockImplementation((url) =>
+        url === "/visits/visit-old"
+          ? startLoad()
+          : Promise.resolve({ data: [] })
+      );
+      response = {
+        patient: oldPatient,
+        doctor: oldDoctor,
+        prescription: { id: "rx-old" },
+      };
+    } else if (source === "patient") {
+      prefill = { patientId: "patient-old" };
+      (apiClient.getPatients as jest.Mock).mockResolvedValue({
+        data: [{ id: "patient-other", name: "Another Patient" }],
+      });
+      (apiClient.getPatient as jest.Mock).mockImplementation(startLoad);
+      response = oldPatient;
+    } else {
+      prefill = { patientId: "patient-old", doctorId: "doctor-old" };
+      (apiClient.getPatients as jest.Mock).mockImplementation(startLoad);
+      response = { data: [oldPatient] };
+    }
+    render(<PharmacyInvoiceBuilderFixed prefill={prefill} />);
+    await waitFor(() => expect(started).toBe(true));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Start a new invoice" })
+    );
+    await act(async () => resolveLate(response));
+    expect(screen.getByLabelText("Patient *")).toHaveValue("");
+    expect(screen.getByLabelText("Billing Name *")).toHaveValue("");
+    expect(screen.getByLabelText("Phone *")).toHaveValue("");
+    expect(
+      screen.queryByRole("heading", { name: "Linked Prescription" })
+    ).not.toBeInTheDocument();
+    expect(sessionStorage.getItem("pharmacy-checkout-attempt-v1")).toBeNull();
+    expect(apiClient.post).not.toHaveBeenCalled();
+  }
+);

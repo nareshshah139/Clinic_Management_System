@@ -185,7 +185,7 @@ const getDrugGstRate = (drug?: Partial<Drug> | null): number | null => {
 };
 
 export function PharmacyInvoiceBuilderFixed({
-  prefill,
+  prefill: suppliedPrefill,
 }: {
   prefill?: {
     patientId?: string;
@@ -194,6 +194,21 @@ export function PharmacyInvoiceBuilderFixed({
     visitId?: string;
   };
 }) {
+  const incomingPrefillKey = JSON.stringify([
+    suppliedPrefill?.patientId,
+    suppliedPrefill?.prescriptionId,
+    suppliedPrefill?.doctorId,
+    suppliedPrefill?.visitId,
+  ]);
+  const [clearedPrefillKey, setClearedPrefillKey] = useState<string | null>(null);
+  const prefill =
+    clearedPrefillKey === incomingPrefillKey ? undefined : suppliedPrefill;
+  const billingContextVersion = useRef(0);
+  useEffect(() => {
+    if (clearedPrefillKey !== null && clearedPrefillKey !== incomingPrefillKey)
+      setClearedPrefillKey(null);
+  }, [incomingPrefillKey, clearedPrefillKey]);
+
   const { toast } = useToast();
   const [checkoutAttempt, setCheckoutAttempt] = useState<CheckoutAttempt | null>(null);
   const checkoutAttemptRef = useRef<CheckoutAttempt | null>(null);
@@ -298,6 +313,7 @@ export function PharmacyInvoiceBuilderFixed({
   const prescriptionRequestRef = useRef(0);
   const removedPrescriptionIdsRef = useRef(new Set<string>());
   useEffect(() => () => {
+    ++billingContextVersion.current;
     ++prescriptionRequestRef.current;
     lastPrefilledPrescriptionIdRef.current = null;
     lastPrefilledVisitIdRef.current = null;
@@ -308,6 +324,7 @@ export function PharmacyInvoiceBuilderFixed({
       patientId?: string,
       fallback?: { name?: string; phone?: string }
     ) => {
+      const contextVersion = billingContextVersion.current;
       if (!patientId) {
         if (fallback?.name || fallback?.phone) {
           setInvoiceData((prev) => ({
@@ -341,6 +358,7 @@ export function PharmacyInvoiceBuilderFixed({
       fetchedPrefillPatientsRef.current.add(patientId);
       try {
         const patient = (await apiClient.getPatient(patientId)) as Patient;
+        if (contextVersion !== billingContextVersion.current) return;
         if (!patient) {
           throw new Error('Patient not found');
         }
@@ -358,6 +376,7 @@ export function PharmacyInvoiceBuilderFixed({
           billingPhone: patient.phone || fallback?.phone || '',
         }));
       } catch (error) {
+        if (contextVersion !== billingContextVersion.current) return;
         fetchedPrefillPatientsRef.current.delete(patientId);
         console.error('Failed to fetch prefill patient', error);
         toast({
@@ -562,6 +581,7 @@ export function PharmacyInvoiceBuilderFixed({
   // Handle visitId prefill: fetch visit to set patient/doctor; if visit has prescription, load items
   useEffect(() => {
     const run = async () => {
+      const contextVersion = billingContextVersion.current;
       const visitId = prefill?.visitId;
       // A selected prescription is authoritative; do not concurrently load the visit's prescription.
       if (!visitId || prefill?.prescriptionId || lastPrefilledVisitIdRef.current === visitId) return;
@@ -569,6 +589,7 @@ export function PharmacyInvoiceBuilderFixed({
       setLoadingPrescription(true);
       try {
         const visit: any = await apiClient.get(`/visits/${visitId}`);
+        if (contextVersion !== billingContextVersion.current) return;
         const patient = visit?.patient;
         if (patient?.id) {
           await ensurePatientSelected(patient.id, {
@@ -576,6 +597,7 @@ export function PharmacyInvoiceBuilderFixed({
             phone: patient.phone,
           });
         }
+        if (contextVersion !== billingContextVersion.current) return;
         const doc = visit?.doctor;
         if (doc?.id) {
           setSelectedDoctor(
@@ -593,13 +615,15 @@ export function PharmacyInvoiceBuilderFixed({
         if (prescId) {
           lastPrefilledPrescriptionIdRef.current = prescId;
           await loadPrescriptionData(prescId);
+          if (contextVersion !== billingContextVersion.current) return;
           setInvoiceData((prev) => ({ ...prev, prescriptionId: prescId }));
         }
       } catch (e) {
+        if (contextVersion !== billingContextVersion.current) return;
         console.error('Failed to prefill from visitId', e);
         setPrefillError(`Could not load visit: ${getErrorMessage(e)}. Reopen billing to retry.`);
       } finally {
-        setLoadingPrescription(false);
+        if (contextVersion === billingContextVersion.current) setLoadingPrescription(false);
       }
     };
     void run();
@@ -655,6 +679,7 @@ export function PharmacyInvoiceBuilderFixed({
   }, [patientSearchQuery]);
 
   const loadInitialData = async () => {
+    const contextVersion = billingContextVersion.current;
     try {
       const [patientsRes, doctorsRes, drugsRes, packagesRes] =
         await Promise.all([
@@ -681,6 +706,8 @@ export function PharmacyInvoiceBuilderFixed({
       setDoctors(doctorsData);
       setDrugs(drugsData);
       setPackages(packagesData);
+
+      if (contextVersion !== billingContextVersion.current) return;
 
       // Set prefilled patient
       if (prefill?.patientId) {
@@ -1905,6 +1932,63 @@ export function PharmacyInvoiceBuilderFixed({
   const prescriptionItems = items.filter(item => item.id.startsWith('prescription_'));
   const isPrescriptionItem = (itemId: string) => itemId.startsWith('prescription_');
 
+  /**
+   * @cc [owner:nareshshah139,label:product] fresh-invoice-context
+   * Starting a new invoice MUST clear patient, doctor, prescription, billing, print and item state.
+   * The previous parent prefill, URL parameters and late loads MUST NOT restore the previous bill.
+   */
+  const startNewInvoice = () => {
+    ++billingContextVersion.current;
+    ++prescriptionRequestRef.current;
+    setClearedPrefillKey(incomingPrefillKey);
+    sessionStorage.removeItem(checkoutStorageKey);
+    checkoutAttemptRef.current = null;
+    setCheckoutAttempt(null);
+    setInvoiceData({
+      patientId: '',
+      doctorId: '',
+      prescriptionId: '',
+      paymentMethod: 'CASH',
+      billingName: '',
+      billingPhone: '',
+      billingAddress: '',
+      billingCity: '',
+      billingState: '',
+      billingPincode: '',
+      notes: '',
+    });
+    invoiceItemsRef.current = [];
+    setItems([]);
+    setPrescriptionData(null);
+    setSelectedPatient(null);
+    setSelectedDoctor(null);
+    setPatientSearchQuery('');
+    setDrugSearchQuery('');
+    setSearchResults([]);
+    setShowPatientSearchResults(false);
+    setShowDrugSearchResults(false);
+    setSelectedTab('drugs');
+    setSubstitutingItemId(null);
+    setLoadingPrescription(false);
+    setPrefillError(null);
+    setPrintPreviewOpen(false);
+    setPrintPreviewData(null);
+    setPrintPreviewCopyType('ORIGINAL');
+    setPrintPreviewZoom(0.9);
+    fetchedPrefillPatientsRef.current.clear();
+    lastPrefilledPrescriptionIdRef.current = null;
+    lastPrefilledVisitIdRef.current = null;
+    removedPrescriptionIdsRef.current.clear();
+    const url = new URL(window.location.href);
+    for (const key of ['patientId', 'doctorId', 'prescriptionId', 'visitId'])
+      url.searchParams.delete(key);
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${url.pathname}${url.search}${url.hash}`
+    );
+  };
+
   const renderPrescriptionHeader = () => {
     if (!prescriptionData) return null;
 
@@ -1942,13 +2026,7 @@ export function PharmacyInvoiceBuilderFixed({
           <Button variant="outline" disabled={loading} onClick={() => void createAndConfirmInvoice(checkoutAttempt.previewItems, 'ORIGINAL', checkoutAttempt)}>
             {checkoutAttempt.confirmed ? 'Reopen confirmed invoice' : 'Retry pending checkout'}
           </Button>
-          {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={() => {
-            sessionStorage.removeItem(checkoutStorageKey);
-            checkoutAttemptRef.current = null;
-            setCheckoutAttempt(null);
-            setItems([]);
-            setPrintPreviewData(null);
-          }}>Start a new invoice</Button>}
+          {checkoutAttempt.confirmed && <Button variant="ghost" disabled={loading} onClick={startNewInvoice}>Start a new invoice</Button>}
         </div>
       )}
       {loadingPrescription && (
@@ -2030,6 +2108,7 @@ export function PharmacyInvoiceBuilderFixed({
                                 key={p.id}
                                 className="px-3 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                                 onMouseDown={() => {
+                                  setSelectedPatient(p);
                                   setInvoiceData((prev) => ({
                                     ...prev,
                                     patientId: p.id,

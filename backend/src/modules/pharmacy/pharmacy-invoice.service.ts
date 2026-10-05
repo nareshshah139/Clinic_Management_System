@@ -73,7 +73,7 @@ export class PharmacyInvoiceService {
   /**
    * @cc [owner:nareshshah139,label:product] checkout-atomic-stock
    * Checkout MUST commit its invoice, items and validated stock deductions together, or leave
-   * no invoice or stock movement.
+   * no invoice or stock movement. Batch eligibility MUST be checked within that serializable transaction.
    */
   async checkout(
     dto: CheckoutPharmacyInvoiceDto,
@@ -137,18 +137,17 @@ export class PharmacyInvoiceService {
       try {
         return await this.prisma.$transaction(
           (tx) => command(tx, invoiceNumber),
-          { timeout: 15000 },
+          { timeout: 15000, isolationLevel: 'Serializable' },
         );
       } catch (error) {
-        if (
-          error?.code !== 'P2002' ||
-          !String(error.meta?.target).includes('invoiceNumber')
-        )
-          throw error;
+        const duplicate =
+          error?.code === 'P2002' &&
+          /invoiceNumber|checkoutRequestKey/.test(String(error.meta?.target));
+        if (!duplicate && !this.isSerializationFailure(error)) throw error;
       }
     }
     throw new ConflictException(
-      'Invoice numbering changed concurrently. Retry this request.',
+      'Invoice or stock changed concurrently. Retry this request with the same key.',
     );
   }
 
@@ -198,42 +197,16 @@ export class PharmacyInvoiceService {
       }
     }
 
-    // Validate prescription if provided
     if (createInvoiceDto.prescriptionId) {
-      const prescription = await tx.prescription.findFirst({
-        where: { id: createInvoiceDto.prescriptionId },
-        include: {
-          visit: {
-            include: {
-              patient: {
-                select: {
-                  id: true,
-                  branchId: true,
-                },
-              },
-            },
-          },
+      await this.requireEligiblePrescription(
+        tx,
+        {
+          prescriptionId: createInvoiceDto.prescriptionId,
+          patientId: createInvoiceDto.patientId,
+          doctorId: createInvoiceDto.doctorId,
         },
-      });
-      if (!prescription) {
-        throw new NotFoundException('Prescription not found');
-      }
-      if (
-        prescription.visit?.patient?.branchId !== branchId ||
-        prescription.visit?.patientId !== createInvoiceDto.patientId
-      ) {
-        throw new BadRequestException(
-          'Prescription does not belong to the selected patient and branch',
-        );
-      }
-      if (
-        createInvoiceDto.doctorId &&
-        prescription.visit?.doctorId !== createInvoiceDto.doctorId
-      ) {
-        throw new BadRequestException(
-          'Prescription doctor does not match the selected doctor',
-        );
-      }
+        branchId,
+      );
     }
 
     // Validate items and get drug/package information
@@ -401,8 +374,6 @@ export class PharmacyInvoiceService {
         });
       }),
     );
-
-    // Do not apply stock mutations in create. Stock mutations are centralized in updateStatus with idempotency.
 
     return { ...invoice, items: invoiceItems };
   }
@@ -953,43 +924,23 @@ export class PharmacyInvoiceService {
           }
         }
 
-        if (updateInvoiceDto.prescriptionId) {
-          const prescription = await prisma.prescription.findFirst({
-            where: { id: updateInvoiceDto.prescriptionId },
-            include: {
-              visit: {
-                include: {
-                  patient: {
-                    select: {
-                      id: true,
-                      branchId: true,
-                    },
-                  },
-                },
-              },
+        const targetPrescriptionId =
+          updateInvoiceDto.prescriptionId === undefined
+            ? existingInvoice.prescriptionId
+            : updateInvoiceDto.prescriptionId;
+        if (targetPrescriptionId) {
+          await this.requireEligiblePrescription(
+            prisma,
+            {
+              prescriptionId: targetPrescriptionId,
+              patientId: targetPatientId,
+              doctorId:
+                updateInvoiceDto.doctorId === undefined
+                  ? existingInvoice.doctorId
+                  : updateInvoiceDto.doctorId,
             },
-          });
-          if (!prescription) {
-            throw new NotFoundException('Prescription not found');
-          }
-          if (
-            prescription.visit?.patient?.branchId !== branchId ||
-            prescription.visit?.patientId !== targetPatientId
-          ) {
-            throw new BadRequestException(
-              'Prescription does not belong to the selected patient and branch',
-            );
-          }
-          const targetDoctorId =
-            updateInvoiceDto.doctorId || existingInvoice.doctorId;
-          if (
-            targetDoctorId &&
-            prescription.visit?.doctorId !== targetDoctorId
-          ) {
-            throw new BadRequestException(
-              'Prescription doctor does not match the selected doctor',
-            );
-          }
+            branchId,
+          );
         }
 
         let updateData: any = {
@@ -1195,15 +1146,38 @@ export class PharmacyInvoiceService {
    * in the same transaction. All transitions MUST read invoice state after acquiring its row lock.
    * Posted invoices MUST reject direct cancellation and direct the caller to returns.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-posting-serializable-eligibility
+   * Stock posting MUST serialize eligibility reads with concurrent batch identity, status and expiry
+   * changes. Serialization conflicts MUST roll back and retry all validation before any sale commits.
+   */
   async updateStatus(
     id: string,
     status: string,
     branchId: string,
     userId?: string,
   ) {
-    return this.prisma.$transaction(
-      (tx) => this.transitionInvoice(tx, id, status, branchId, userId),
-      { timeout: 15000 },
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        return await this.prisma.$transaction(
+          (tx) => this.transitionInvoice(tx, id, status, branchId, userId),
+          { timeout: 15000, isolationLevel: 'Serializable' },
+        );
+      } catch (error) {
+        if (!this.isSerializationFailure(error)) throw error;
+      }
+    }
+    throw new ConflictException(
+      'Invoice or stock changed concurrently. Refresh and retry confirmation.',
+    );
+  }
+
+  private isSerializationFailure(error: unknown): boolean {
+    const failure = error as { code?: string; meta?: { code?: string } };
+    return (
+      failure?.code === 'P2034' ||
+      (failure?.code === 'P2010' &&
+        ['40001', '40P01'].includes(failure.meta?.code || ''))
     );
   }
 
@@ -1252,6 +1226,18 @@ export class PharmacyInvoiceService {
       );
     }
 
+    if (shouldApplyStock && existingInvoice.prescriptionId) {
+      await this.requireEligiblePrescription(
+        tx,
+        {
+          prescriptionId: existingInvoice.prescriptionId,
+          patientId: existingInvoice.patientId,
+          doctorId: existingInvoice.doctorId,
+        },
+        branchId,
+      );
+    }
+
     const stockOps = shouldApplyStock
       ? await this.planConfirmedStockDeductions(
           tx,
@@ -1280,7 +1266,6 @@ export class PharmacyInvoiceService {
       },
     });
 
-    // If transitioning FROM DRAFT TO CONFIRMED/COMPLETED/DISPENSED, create stock transactions (idempotent)
     if (shouldApplyStock && userId) {
       for (const op of stockOps.sort((a, b) =>
         a.inventoryItemId.localeCompare(b.inventoryItemId),
@@ -1315,9 +1300,64 @@ export class PharmacyInvoiceService {
   }
 
   /**
+   * @cc [owner:nareshshah139,label:product;security] prescription-billing-eligibility
+   * Creating or relinking a prescription bill and every first stock posting MUST require an ACTIVE,
+   * unexpired prescription on an undeleted visit belonging to the selected patient, doctor and branch.
+   * Eligibility MUST be re-read under prescription then visit row locks retained through commit,
+   * so a cancellation that wins the prescription lock prevents stock posting.
+   */
+  private async requireEligiblePrescription(
+    tx: Prisma.TransactionClient,
+    input: {
+      prescriptionId: string;
+      patientId: string;
+      doctorId?: string | null;
+    },
+    branchId: string,
+  ): Promise<void> {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT r.id FROM prescriptions r JOIN visits v ON v.id = r."visitId"
+      JOIN patients p ON p.id = v."patientId"
+      WHERE r.id = ${input.prescriptionId} AND p."branchId" = ${branchId}
+      FOR UPDATE OF r`;
+    if (!locked.length)
+      throw new NotFoundException('Prescription not found in this branch');
+    const prescription = await tx.prescription.findUniqueOrThrow({
+      where: { id: input.prescriptionId },
+      select: { visitId: true, status: true, validUntil: true },
+    });
+    await tx.$queryRaw`SELECT id FROM visits WHERE id = ${prescription.visitId} FOR UPDATE`;
+    const visit = await tx.visit.findFirst({
+      where: {
+        id: prescription.visitId,
+        deletedAt: null,
+        patient: { branchId },
+      },
+      select: { patientId: true, doctorId: true },
+    });
+    if (!visit)
+      throw new BadRequestException(
+        'Prescription visit is deleted or unavailable',
+      );
+    if (prescription.status !== 'ACTIVE')
+      throw new BadRequestException('Only active prescriptions can be billed');
+    if (prescription.validUntil && prescription.validUntil < new Date())
+      throw new BadRequestException('Expired prescriptions cannot be billed');
+    if (visit.patientId !== input.patientId)
+      throw new BadRequestException(
+        'Prescription does not belong to the selected patient and branch',
+      );
+    if (input.doctorId && visit.doctorId !== input.doctorId)
+      throw new BadRequestException(
+        'Prescription doctor does not match the selected doctor',
+      );
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:product] invoice-writer-lock
    * Every existing invoice command MUST acquire this branch-scoped row lock before reading mutable
-   * invoice state and retain it through commit. Invoice locks precede inventory locks.
+   * invoice state and retain it through commit. Existing invoice locks precede prescription, visit
+   * and inventory locks, in that order. Newly inserted invoices are private to their transaction.
    */
   private async lockInvoice(
     tx: Prisma.TransactionClient,

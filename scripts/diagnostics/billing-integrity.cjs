@@ -14,6 +14,12 @@ const { PharmacyInvoiceService } = require(
 const { PharmacyPackageService } = require(
   root + "/backend/src/modules/pharmacy/pharmacy-package.service",
 );
+const { PrescriptionsService } = require(
+  root + "/backend/src/modules/prescriptions/prescriptions.service",
+);
+const { InventoryService } = require(
+  root + "/backend/src/modules/inventory/inventory.service",
+);
 const adminUrl = "postgresql://nshah@127.0.0.1:55457/postgres";
 const schema = "pstack_audit_" + randomUUID().replaceAll("-", "");
 const url = adminUrl + "?schema=" + schema;
@@ -623,6 +629,424 @@ const probe = async (name, fn) => {
       return { invoices: 1, sales: 1, remainingStock: 0 };
     },
   );
+
+  const prescriptionFixture = async () => {
+    const visit = await db.visit.create({
+      data: { patientId: patient.id, doctorId: doctor.id, complaints: "[]" },
+    });
+    return db.prescription.create({
+      data: { visitId: visit.id, items: "[]", status: "ACTIVE" },
+    });
+  };
+  const invalidatePrescription = async (prescription, state) => {
+    if (state === "deleted")
+      await db.visit.update({
+        where: { id: prescription.visitId },
+        data: { deletedAt: new Date() },
+      });
+    else
+      await db.prescription.update({
+        where: { id: prescription.id },
+        data:
+          state === "expired"
+            ? { validUntil: new Date("2000-01-01") }
+            : { status: "CANCELLED" },
+      });
+  };
+  for (const state of ["cancelled", "expired", "deleted"]) {
+    await probe(
+      `Reject ${state} prescriptions on draft creation and relinking`,
+      async () => {
+        const s = await stockFixture();
+        const rx = await prescriptionFixture();
+        await invalidatePrescription(rx, state);
+        const payload = { ...payloadFor(s), prescriptionId: rx.id };
+        const { requestKey, ...draft } = payload;
+        await assert.rejects(
+          () => billing.create(draft, branch.id, doctor.id),
+          /prescription|visit/i,
+        );
+        await assert.rejects(
+          () => billing.checkout(payload, branch.id, doctor.id),
+          /prescription|visit/i,
+        );
+        const existing = await invoiceFixture();
+        await assert.rejects(
+          () =>
+            billing.update(
+              existing.invoice.id,
+              { prescriptionId: rx.id },
+              branch.id,
+            ),
+          /prescription|visit/i,
+        );
+        assert.equal(
+          (
+            await db.pharmacyInvoice.findUnique({
+              where: { id: existing.invoice.id },
+            })
+          ).prescriptionId,
+          null,
+        );
+        assert.equal(
+          await db.pharmacyInvoice.count({ where: { prescriptionId: rx.id } }),
+          0,
+        );
+        assert.equal(
+          await db.stockTransaction.count({ where: { itemId: s.item.id } }),
+          0,
+        );
+        assert.equal(
+          (await db.inventoryItem.findUnique({ where: { id: s.item.id } }))
+            .currentStock,
+          20,
+        );
+        return {
+          createdInvoices: 0,
+          relinkedInvoices: 0,
+          sales: 0,
+          remainingStock: 20,
+        };
+      },
+    );
+    await probe(
+      `Recheck ${state} prescription immediately before posting a saved draft`,
+      async () => {
+        const s = await stockFixture();
+        const rx = await prescriptionFixture();
+        const { requestKey, ...draft } = {
+          ...payloadFor(s),
+          prescriptionId: rx.id,
+        };
+        const invoice = await billing.create(draft, branch.id, doctor.id);
+        await invalidatePrescription(rx, state);
+        await assert.rejects(
+          () =>
+            billing.updateStatus(invoice.id, "CONFIRMED", branch.id, doctor.id),
+          /prescription|visit/i,
+        );
+        assert.equal(
+          (await db.pharmacyInvoice.findUnique({ where: { id: invoice.id } }))
+            .status,
+          "DRAFT",
+        );
+        assert.equal(
+          await db.stockTransaction.count({ where: { itemId: s.item.id } }),
+          0,
+        );
+        assert.equal(
+          (await db.inventoryItem.findUnique({ where: { id: s.item.id } }))
+            .currentStock,
+          20,
+        );
+        return { status: "DRAFT", sales: 0, remainingStock: 20 };
+      },
+    );
+  }
+
+  const observePrescriptionLock = (pause = false) => {
+    let release, acquired, attempting;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    const locked = new Promise((resolve) => {
+      acquired = resolve;
+    });
+    const attempted = new Promise((resolve) => {
+      attempting = resolve;
+    });
+    const client = new Proxy(db, {
+      get(target, key) {
+        if (key === "$transaction")
+          return (command, options) =>
+            target.$transaction(
+              (tx) =>
+                command(
+                  new Proxy(tx, {
+                    get(inner, prop) {
+                      if (prop === "$queryRaw")
+                        return async (...args) => {
+                          const prescriptionLock = String(args[0]).includes(
+                            "FOR UPDATE OF r",
+                          );
+                          if (prescriptionLock) attempting();
+                          const result = await inner.$queryRaw(...args);
+                          if (prescriptionLock) {
+                            acquired();
+                            if (pause) await gate;
+                          }
+                          return result;
+                        };
+                      const value = inner[prop];
+                      return typeof value === "function"
+                        ? value.bind(inner)
+                        : value;
+                    },
+                  }),
+                ),
+              options,
+            );
+        const value = target[key];
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    return { client, locked, attempted, release: () => release() };
+  };
+  await probe(
+    "Cancellation winning the prescription lock rejects concurrent stock posting",
+    async () => {
+      const s = await stockFixture();
+      const rx = await prescriptionFixture();
+      const { requestKey, ...draft } = {
+        ...payloadFor(s),
+        prescriptionId: rx.id,
+      };
+      const invoice = await billing.create(draft, branch.id, doctor.id);
+      const cancelLock = observePrescriptionLock(true);
+      const postingLock = observePrescriptionLock();
+      const cancellation = new PrescriptionsService(
+        cancelLock.client,
+        {},
+      ).cancelPrescription(
+        rx.id,
+        branch.id,
+        "Synthetic cancellation",
+        doctor.id,
+      );
+      await cancelLock.locked;
+      const posting = new PharmacyInvoiceService(
+        postingLock.client,
+        numbering,
+      ).updateStatus(invoice.id, "CONFIRMED", branch.id, doctor.id);
+      const rejected = assert.rejects(posting, /active prescriptions/);
+      await postingLock.attempted;
+      cancelLock.release();
+      await Promise.all([cancellation, rejected]);
+      assert.equal(
+        (await db.prescription.findUnique({ where: { id: rx.id } })).status,
+        "CANCELLED",
+      );
+      assert.equal(
+        (await db.pharmacyInvoice.findUnique({ where: { id: invoice.id } }))
+          .status,
+        "DRAFT",
+      );
+      assert.equal(
+        (await db.inventoryItem.findUnique({ where: { id: s.item.id } }))
+          .currentStock,
+        20,
+      );
+      assert.equal(
+        await db.stockTransaction.count({ where: { itemId: s.item.id } }),
+        0,
+      );
+      return {
+        prescriptionStatus: "CANCELLED",
+        invoiceStatus: "DRAFT",
+        remainingStock: 20,
+        sales: 0,
+      };
+    },
+  );
+  await probe(
+    "Stock posting winning the prescription lock commits before cancellation",
+    async () => {
+      const s = await stockFixture();
+      const rx = await prescriptionFixture();
+      await db.prescription.update({
+        where: { id: rx.id },
+        data: { validUntil: new Date("2099-01-01") },
+      });
+      const { requestKey, ...draft } = {
+        ...payloadFor(s),
+        prescriptionId: rx.id,
+      };
+      const invoice = await billing.create(draft, branch.id, doctor.id);
+      const postingLock = observePrescriptionLock(true);
+      const cancelLock = observePrescriptionLock();
+      const posting = new PharmacyInvoiceService(
+        postingLock.client,
+        numbering,
+      ).updateStatus(invoice.id, "CONFIRMED", branch.id, doctor.id);
+      await postingLock.locked;
+      const cancellation = new PrescriptionsService(
+        cancelLock.client,
+        {},
+      ).cancelPrescription(
+        rx.id,
+        branch.id,
+        "Synthetic cancellation after posting",
+        doctor.id,
+      );
+      await cancelLock.attempted;
+      postingLock.release();
+      await Promise.all([posting, cancellation]);
+      assert.equal(
+        (await db.prescription.findUnique({ where: { id: rx.id } })).status,
+        "CANCELLED",
+      );
+      assert.equal(
+        (await db.pharmacyInvoice.findUnique({ where: { id: invoice.id } }))
+          .status,
+        "CONFIRMED",
+      );
+      assert.equal(
+        (await db.inventoryItem.findUnique({ where: { id: s.item.id } }))
+          .currentStock,
+        15,
+      );
+      assert.equal(
+        await db.stockTransaction.count({ where: { itemId: s.item.id } }),
+        1,
+      );
+      return {
+        postingBeforeCancellation: true,
+        invoiceStatus: "CONFIRMED",
+        remainingStock: 15,
+        sales: 1,
+      };
+    },
+  );
+  await probe(
+    "Changing a prescription-linked draft patient must preserve prescription ownership",
+    async () => {
+      const s = await stockFixture();
+      const rx = await prescriptionFixture();
+      const { requestKey, ...draft } = {
+        ...payloadFor(s),
+        prescriptionId: rx.id,
+      };
+      const invoice = await billing.create(draft, branch.id, doctor.id);
+      const another = await db.patient.create({
+        data: {
+          branchId: branch.id,
+          name: "Other synthetic patient",
+          gender: "FEMALE",
+          phone: "0000000000",
+        },
+      });
+      await assert.rejects(
+        () => billing.update(invoice.id, { patientId: another.id }, branch.id),
+        /selected patient/,
+      );
+      assert.equal(
+        (await db.pharmacyInvoice.findUnique({ where: { id: invoice.id } }))
+          .patientId,
+        patient.id,
+      );
+      return { originalPatientRetained: true };
+    },
+  );
+
+  for (const change of [{ status: "INACTIVE" }, { expiryDate: "2000-01-01" }]) {
+    for (const command of ["checkout", "confirm"])
+      await probe(
+        `Reject ${command} when batch ${Object.keys(change)[0]} changes after allocation`,
+        async () => {
+          const s = await stockFixture();
+          const payload = payloadFor(s);
+          const { requestKey, ...draft } = payload;
+          const invoice =
+            command === "confirm"
+              ? await billing.create(draft, branch.id, doctor.id)
+              : null;
+          let changed = false;
+          const proxy = new Proxy(db, {
+            get(target, key) {
+              if (key === "$transaction")
+                return (fn, options) =>
+                  target.$transaction(
+                    (tx) =>
+                      fn(
+                        new Proxy(tx, {
+                          get(inner, prop) {
+                            if (prop === "pharmacyInvoice")
+                              return new Proxy(inner.pharmacyInvoice, {
+                                get(delegate, method) {
+                                  if (method === "update")
+                                    return async (args) => {
+                                      if (
+                                        !changed &&
+                                        args.data.status === "CONFIRMED"
+                                      ) {
+                                        changed = true;
+                                        await new InventoryService(
+                                          db,
+                                        ).updateInventoryItem(
+                                          s.item.id,
+                                          change,
+                                          branch.id,
+                                        );
+                                      }
+                                      return delegate.update(args);
+                                    };
+                                  const value = delegate[method];
+                                  return typeof value === "function"
+                                    ? value.bind(delegate)
+                                    : value;
+                                },
+                              });
+                            const value = inner[prop];
+                            return typeof value === "function"
+                              ? value.bind(inner)
+                              : value;
+                          },
+                        }),
+                      ),
+                    options,
+                  );
+              const value = target[key];
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          });
+          const service = new PharmacyInvoiceService(proxy, numbering);
+          await assert.rejects(
+            () =>
+              command === "checkout"
+                ? service.checkout(payload, branch.id, doctor.id)
+                : service.updateStatus(
+                    invoice.id,
+                    "CONFIRMED",
+                    branch.id,
+                    doctor.id,
+                  ),
+            /stock|identity/i,
+          );
+          assert.equal(changed, true);
+          assert.equal(
+            (await db.inventoryItem.findUnique({ where: { id: s.item.id } }))
+              .currentStock,
+            20,
+          );
+          assert.equal(
+            await db.stockTransaction.count({ where: { itemId: s.item.id } }),
+            0,
+          );
+          if (invoice)
+            assert.equal(
+              (
+                await db.pharmacyInvoice.findUnique({
+                  where: { id: invoice.id },
+                })
+              ).status,
+              "DRAFT",
+            );
+          else
+            assert.equal(
+              await db.pharmacyInvoice.count({
+                where: { checkoutRequestKey: requestKey },
+              }),
+              0,
+            );
+          return {
+            changeApplied: change,
+            saleRejected: true,
+            remainingStock: 20,
+            sales: 0,
+          };
+        },
+      );
+  }
   const reconcile = () =>
     execFileSync(
       process.execPath,
