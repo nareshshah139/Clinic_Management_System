@@ -680,8 +680,78 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     ).toEqual(stamp);
   });
 
+  it('preserves prescription line identity for legacy duplicates, stock, edits and removal', async () => {
+    const items = [5, 10].map(dosage => ({ drugName: 'Drug X', dosage, dosageUnit: 'MG', quantity: 3, inventoryItemId: `identity-stock-${dosage}` }));
+    await db.inventoryItem.createMany({ data: [5, 10].map(dosage => ({
+      id: `identity-stock-${dosage}`, branchId, name: 'Drug X', type: 'MEDICINE', unit: 'PIECES',
+      currentStock: dosage, costPrice: 1, sellingPrice: 2, batchNumber: `DOSE-${dosage}`,
+    })) });
+    await rx('line-identity', { items, task: 'IN_REVIEW' });
+    const task = await db.pharmacyDispenseTask.findFirstOrThrow({ where: { prescriptionId: 'line-identity' } });
+    await db.pharmacyDispenseTaskLine.createMany({ data: items.map((item, index) => ({
+      id: `identity-line-${index}`, taskId: task.id, drugName: item.drugName, dosage: String(item.dosage),
+      dosageUnit: item.dosageUnit, prescribedQuantity: 3, action: index ? 'ACCEPTED' : 'PENDING',
+      originalText: JSON.stringify({ drugName: item.drugName, dosage: item.dosage, dosageUnit: item.dosageUnit, prescribedQuantity: 3 }),
+    })) });
+    const before = await db.pharmacyDispenseTaskLine.findMany({ where: { taskId: task.id }, orderBy: { id: 'asc' } });
+    const detail = await queue.findOne('line-identity', branchId);
+    expect(detail.medications.map(line => [line.lineId, line.action])).toEqual([['identity-line-0', 'pending'], ['identity-line-1', 'accepted']]);
+    expect(await db.pharmacyDispenseTaskLine.findMany({ where: { taskId: task.id }, orderBy: { id: 'asc' } })).toEqual(before);
+    const pulled = (await queue.pull('line-identity', branchId)).data;
+    expect(pulled.medications.map(line => [line.lineId, line.recommendedBatchNumber])).toEqual([['identity-line-0', 'DOSE-5'], ['identity-line-1', 'DOSE-10']]);
+    const accepted = await queue.updateTaskLine(task.id, 'identity-line-0', { action: 'ACCEPTED' as any }, branchId, doctorId);
+    expect(accepted.dispenseStatus).toBe('READY_TO_BILL');
+    const reordered = [items[1], items[0], { ...items[0] }];
+    await db.prescription.update({ where: { id: 'line-identity' }, data: { items: JSON.stringify(reordered) } });
+    await expect(queue.updateTaskStatus(task.id, { status: 'READY_TO_BILL' as any }, branchId, doctorId)).rejects.toThrow('Review every available medicine');
+    const duplicate = (await queue.pull('line-identity', branchId)).data;
+    expect(duplicate.medications.map(line => line.action)).toEqual(['accepted', 'accepted', 'pending']);
+    expect(duplicate.medications.slice(0, 2).map(line => line.lineId)).toEqual(['identity-line-1', 'identity-line-0']);
+    expect(new Set(duplicate.medications.map(line => line.lineId)).size).toBe(3);
+    await queue.pull('line-identity', branchId);
+    expect(await db.pharmacyDispenseTaskLine.count({ where: { taskId: task.id } })).toBe(3);
+    const changed = [{ ...items[0], dosage: 20 }];
+    await db.prescription.update({ where: { id: 'line-identity' }, data: { items: JSON.stringify(changed) } });
+    expect((await queue.findOne('line-identity', branchId)).medications[0].action).toBe('pending');
+    await expect(queue.updateTaskLine(task.id, 'identity-line-0', { action: 'ACCEPTED' as any }, branchId, doctorId)).rejects.toThrow('Prescription line changed');
+    const replacement = (await queue.pull('line-identity', branchId)).data.medications[0];
+    expect(replacement.lineId).not.toBe('identity-line-0');
+    const finished = await queue.updateTaskLine(task.id, replacement.lineId!, { action: 'ACCEPTED' as any }, branchId, doctorId);
+    expect(finished.dispenseStatus).toBe('READY_TO_BILL');
+    await queue.updateTaskStatus(task.id, { status: 'READY_TO_BILL' as any }, branchId, doctorId);
+  });
+
+  it('binds indistinguishable legacy prescription duplicates once each and retains their reviews', async () => {
+    const item = { drugName: 'Legacy medicine', dosage: 5, dosageUnit: 'MG', quantity: 2 };
+    await rx('legacy-equal-lines', { items: [item, item], task: 'IN_REVIEW' });
+    const task = await db.pharmacyDispenseTask.findFirstOrThrow({ where: { prescriptionId: 'legacy-equal-lines' } });
+    await db.pharmacyDispenseTaskLine.createMany({ data: [
+      { id: 'legacy-line-z', action: 'PENDING' as const, createdAt: stamp },
+      { id: 'legacy-line-a', action: 'ACCEPTED' as const, createdAt: new Date(stamp.getTime() + 1000) },
+    ].map(line => ({ ...line, taskId: task.id, drugName: item.drugName, dosage: '5', dosageUnit: 'MG', prescribedQuantity: 2 })) });
+    const detail = await queue.findOne('legacy-equal-lines', branchId);
+    expect(detail.medications.map(line => [line.lineId, line.action])).toEqual([['legacy-line-z', 'pending'], ['legacy-line-a', 'accepted']]);
+    const pulled = (await queue.pull('legacy-equal-lines', branchId)).data;
+    expect(pulled.medications.map(line => line.lineId)).toEqual(['legacy-line-z', 'legacy-line-a']);
+    expect(new Set(pulled.medications.map(line => line.sourceLineKey)).size).toBe(2);
+    expect((await queue.pull('legacy-equal-lines', branchId)).data.medications.map(line => line.action)).toEqual(['pending', 'accepted']);
+    expect(await db.pharmacyDispenseTaskLine.count({ where: { taskId: task.id } })).toBe(2);
+  });
+
+  it('credits invoice quantities once across repeated prescription lines in detail and filtered pages', async () => {
+    const items = [5, 10].map(dosage => ({ drugName: 'Azithral 500', drugId, dosage, quantity: 3 }));
+    await rx('invoice-line-identity', { items, invoice: 'CONFIRMED', quantity: 4 });
+    const detail = await queue.findOne('invoice-line-identity', branchId);
+    expect(detail.medications.map(line => line.dispensedQuantity)).toEqual([3, 1]);
+    expect(detail.status).toBe('partial');
+    expect((await queue.findAll({ status: PrescriptionQueueStatus.PARTIAL, limit: 100 }, branchId)).data.map(row => row.prescriptionId)).toContain('invoice-line-identity');
+    await db.pharmacyInvoiceItem.updateMany({ where: { invoice: { prescriptionId: 'invoice-line-identity' } }, data: { quantity: 6 } });
+    expect((await queue.findOne('invoice-line-identity', branchId)).medications.map(line => line.dispensedQuantity)).toEqual([3, 3]);
+    expect((await queue.findAll({ status: PrescriptionQueueStatus.DISPENSED, limit: 100 }, branchId)).data.map(row => row.prescriptionId)).toContain('invoice-line-identity');
+  });
+
   it('requires saved review of every available line before marking a task Ready', async () => {
-    await rx('ready-review-guard', { task: 'IN_REVIEW' });
+    await rx('ready-review-guard', { task: 'IN_REVIEW', items: [{ drugName: 'Azithral 500' }, { drugName: 'Other medicine' }] });
     const task = await db.pharmacyDispenseTask.findFirstOrThrow({ where: { prescriptionId: 'ready-review-guard' } });
     const markReady = () => queue.updateTaskStatus(task.id, { status: 'READY_TO_BILL' as any }, branchId, doctorId);
     const readTask = () => db.pharmacyDispenseTask.findUniqueOrThrow({ where: { id: task.id }, include: { lines: { orderBy: { id: 'asc' } } } });

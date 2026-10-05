@@ -33,6 +33,7 @@ import { apiClient } from '@/lib/api';
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 
 type QueueMedication = {
+  sourceLineKey?: string;
   drugName: string;
   prescribedQuantity: number | null;
   dispensedQuantity: number;
@@ -310,9 +311,9 @@ export function PrescriptionDispensingQueue({
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal">
                     <div className="flex flex-col gap-1">
-                      {entry.medications.map((medication) => (
+                      {entry.medications.map((medication, index) => (
                         <div
-                          key={`${entry.prescriptionId}-${medication.drugName}`}
+                          key={`${entry.prescriptionId}-${medication.sourceLineKey || index}`}
                           className="text-sm"
                         >
                           <span className="font-medium">

@@ -46,6 +46,7 @@ type DispenseLifecycle =
   | 'Cancelled';
 
 type QueueMedication = {
+  sourceLineKey?: string;
   lineId?: string;
   drugName: string;
   genericName?: string | null;
@@ -129,6 +130,7 @@ type StockBatch = {
 };
 
 type StockCheckItem = {
+  sourceLineKey?: string;
   drugName: string;
   matchedDrug?: {
     id: string;
@@ -185,6 +187,7 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
 /**
  * @cc [owner:nareshshah139,label:product] counter-prescription-line-review
  * Review state MUST come from each active prescription line, defaulting to pending when absent.
+ * Stock and review commands MUST use that line identity, even when other medicines share its name.
  */
 /**
  * @cc [owner:nareshshah139,label:product] counter-ready-reviewed-task
@@ -334,19 +337,19 @@ export function PharmacyCounterCockpit({
     return () => { current = false; };
   }, [activeId, stockReloadKey]);
 
-  const stockByDrug = useMemo(() => {
-    return Object.fromEntries(stockItems.map((item) => [item.drugName, item]));
+  const stockByLine = useMemo(() => {
+    return Object.fromEntries(stockItems.map((item, index) => [item.sourceLineKey ?? String(index), item]));
   }, [stockItems]);
 
   const exceptionCount = useMemo(() => {
     return stockItems.filter(
-      (item) =>
+      (item, index) =>
         item.stockStatus !== 'IN_STOCK' ||
         item.nearExpiry ||
         item.lowStock ||
-        activeEntry?.medications.some(
-          line => line.drugName === item.drugName && line.action === 'unavailable',
-        ),
+        activeEntry?.medications.find((line, lineIndex) =>
+          item.sourceLineKey ? line.sourceLineKey === item.sourceLineKey : lineIndex === index,
+        )?.action === 'unavailable',
     ).length;
   }, [activeEntry, stockItems]);
 
@@ -364,8 +367,8 @@ export function PharmacyCounterCockpit({
 
   const pickLines = useMemo(() => {
     if (!activeEntry) return [];
-    return activeEntry.medications.map((medication) => {
-      const stock = stockByDrug[medication.drugName];
+    return activeEntry.medications.map((medication, index) => {
+      const stock = stockByLine[medication.sourceLineKey ?? String(index)];
       const batches = stock?.batches || [];
       const recommendedBatch = batches[0] || null;
       const requiredQuantity = Math.max(
@@ -384,7 +387,7 @@ export function PharmacyCounterCockpit({
         alternateCount: Math.max(0, batches.length - 1),
       };
     });
-  }, [activeEntry, stockByDrug]);
+  }, [activeEntry, stockByLine]);
 
   const activeLifecycle = activeEntry
     ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
@@ -511,7 +514,9 @@ export function PharmacyCounterCockpit({
         const task = await ensureDispenseTask(activeEntry);
         const line = medication.lineId
           ? task.medications.find(item => item.lineId === medication.lineId)
-          : task.medications[activeEntry.medications.indexOf(medication)];
+          : medication.sourceLineKey
+            ? task.medications.find(item => item.sourceLineKey === medication.sourceLineKey)
+            : task.medications[activeEntry.medications.indexOf(medication)];
         if (!line?.lineId || line.drugName !== medication.drugName) {
           throw new Error('Prescription line no longer exists');
         }
@@ -613,7 +618,7 @@ export function PharmacyCounterCockpit({
 
         <ActiveDispenseColumn
           activeEntry={activeEntry}
-          stockByDrug={stockByDrug}
+          stockByLine={stockByLine}
           loadingStock={loadingStock}
           setLineAction={updateLineAction}
           activeLifecycle={activeLifecycle}
@@ -808,7 +813,7 @@ function QueueColumn({
 
 function ActiveDispenseColumn({
   activeEntry,
-  stockByDrug,
+  stockByLine,
   loadingStock,
   setLineAction,
   activeLifecycle,
@@ -823,7 +828,7 @@ function ActiveDispenseColumn({
   savingTask,
 }: {
   activeEntry: QueueEntry | null;
-  stockByDrug: Record<string, StockCheckItem>;
+  stockByLine: Record<string, StockCheckItem>;
   loadingStock: boolean;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
   activeLifecycle: DispenseLifecycle;
@@ -884,7 +889,7 @@ function ActiveDispenseColumn({
             <fieldset disabled={savingTask || activeEntry?.dispensingEligible === false} className="contents">
               <MedicationReviewTable
                 activeEntry={activeEntry}
-                stockByDrug={stockByDrug}
+                stockByLine={stockByLine}
                 setLineAction={setLineAction}
               />
             </fieldset>
@@ -973,11 +978,11 @@ function ActiveDispenseColumn({
 
 function MedicationReviewTable({
   activeEntry,
-  stockByDrug,
+  stockByLine,
   setLineAction,
 }: {
   activeEntry: QueueEntry;
-  stockByDrug: Record<string, StockCheckItem>;
+  stockByLine: Record<string, StockCheckItem>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
 }) {
   return (
@@ -991,10 +996,10 @@ function MedicationReviewTable({
       </div>
       <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
         {activeEntry.medications.map((medication, index) => {
-          const stock = stockByDrug[medication.drugName];
+          const stock = stockByLine[medication.sourceLineKey ?? String(index)];
           return (
             <MedicationReviewRow
-              key={`${activeEntry.prescriptionId}-${medication.lineId || index}`}
+              key={`${activeEntry.prescriptionId}-${medication.sourceLineKey || medication.lineId || index}`}
               medication={medication}
               stock={stock}
               action={medication.action || 'pending'}

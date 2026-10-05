@@ -1,3 +1,4 @@
+import { lineMetadata, matchPrescriptionLines, prescriptionLineKeys } from './pharmacy-prescription-line-identity';
 import { queueStatusPage, queueFrequencyPerDay, queueDurationDays, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
 } from './dto/pharmacy-dispense-task.dto';
 
 type QueueMedication = {
+  sourceLineKey?: string;
   inventoryItemId?: string | null;
   drugId?: string | null;
   lineId?: string;
@@ -110,6 +112,7 @@ type LoadedInvoice = {
 
 type LoadedInvoiceItem = {
   inventoryItemId?: string | null;
+  id?: string;
   quantity: number;
   drug?: { id: string; name: string } | null;
 };
@@ -135,6 +138,7 @@ type InventoryBatch = {
 };
 
 type StockCheckResult = {
+  sourceLineKey?: string;
   inventoryItemId?: string | null;
   unit?: string | null;
   totalOnHandStock?: number;
@@ -165,6 +169,9 @@ type StockCheckResult = {
 };
 
 type DispenseTaskLine = {
+  originalText?: string | null;
+  metadata?: unknown;
+  createdAt?: Date;
   id: string;
   drugName: string;
   genericName?: string | null;
@@ -320,6 +327,7 @@ export class PharmacyPrescriptionQueueService {
     const items = await Promise.all(
       entry.medications.map(async (item) => ({
         ...await this.stockCheckMedication(item, branchId),
+        sourceLineKey: item.sourceLineKey,
         prescribedQuantity: item.prescribedQuantity,
       })),
     );
@@ -338,8 +346,8 @@ export class PharmacyPrescriptionQueueService {
    */
   /**
    * @cc [owner:nareshshah139,label:product] task-ready-requires-reviewed-lines
-   * READY_TO_BILL MUST reject empty tasks and tasks with pending or unavailable lines with
-   * BadRequestException and no changes; validation and status writes MUST share the task lock.
+   * READY_TO_BILL MUST reject empty tasks and current prescription lines with missing, pending
+   * or unavailable reviews with BadRequestException and no changes; validation and writes MUST share the task lock.
    */
   async updateTaskStatus(
     taskId: string,
@@ -375,10 +383,11 @@ export class PharmacyPrescriptionQueueService {
       throw new NotFoundException('Dispense task not found in this branch');
     }
 
+    const currentTask = await this.currentReviewTask(task, branchId);
     if (
       body.status === PharmacyDispenseTaskStatusDto.READY_TO_BILL &&
-      (!task.lines?.length ||
-        task.lines.some(line =>
+      (!currentTask.lines?.length ||
+        currentTask.lines.some(line =>
           line.action === PharmacyDispenseLineActionDto.PENDING ||
           line.action === PharmacyDispenseLineActionDto.UNAVAILABLE,
         ))
@@ -452,6 +461,11 @@ export class PharmacyPrescriptionQueueService {
       throw new NotFoundException('Dispense task line not found');
     }
 
+    const currentTask = await this.currentReviewTask(task, branchId);
+    if (!currentTask.lines?.some(line => line.id === lineId)) {
+      throw new BadRequestException('Prescription line changed. Pull the prescription and review its current medicines.');
+    }
+
     await lineDelegate.update({
       where: { id: lineId },
       data: {
@@ -469,13 +483,14 @@ export class PharmacyPrescriptionQueueService {
       where: { id: taskId, branchId },
       include: { lines: true },
     })) as DispenseTask;
-    const nextStatus = this.nextStatusAfterLineReview(refreshed);
+    const currentRefreshed = await this.currentReviewTask(refreshed, branchId);
+    const nextStatus = this.nextStatusAfterLineReview(currentRefreshed);
     await delegate.update({
       where: { id: taskId },
       data: {
         status: nextStatus,
         assignedToId: task.assignedToId || userId,
-        exceptionCount: this.taskExceptionCount(refreshed),
+        exceptionCount: this.taskExceptionCount(currentRefreshed),
         ...(nextStatus !== task.status ? this.statusTimestampPatch(nextStatus, new Date()) : {}),
       },
     });
@@ -566,25 +581,34 @@ export class PharmacyPrescriptionQueueService {
       }
     }
 
+    const bound = matchPrescriptionLines(entry.medications, existing.lines || []);
     if (lineDelegate) {
-      const existingNames = new Set(
-        (existing.lines || []).map((line) => this.normalizeName(line.drugName)),
-      );
-      const missingLines = entry.medications.filter(
-        (medication) => !existingNames.has(this.normalizeName(medication.drugName)),
-      );
-
-      for (const medication of missingLines) {
-        await lineDelegate.create({
-          data: {
-            taskId: existing.id,
-            ...this.taskLineCreateData(medication),
-          },
-        });
+      for (const [index, medication] of entry.medications.entries()) {
+        const line = bound[index];
+        if (line) {
+          if (!lineMetadata(line).prescriptionLineKey) {
+            await lineDelegate.update({ where: { id: line.id }, data: {
+              metadata: { ...lineMetadata(line), prescriptionLineKey: medication.sourceLineKey },
+            } });
+          }
+        } else {
+          await lineDelegate.create({ data: { taskId: existing.id, ...this.taskLineCreateData(medication) } });
+        }
+      }
+      const currentIds = new Set(bound.filter(Boolean).map(line => line!.id));
+      for (const line of existing.lines || []) {
+        if (!currentIds.has(line.id) && !lineMetadata(line).prescriptionLineRetired) {
+          await lineDelegate.update({ where: { id: line.id }, data: {
+            metadata: { ...lineMetadata(line), prescriptionLineRetired: true },
+          } });
+        }
       }
     }
 
-    const status = this.syncedTaskStatus(existing.status, entry.status);
+    let status = this.syncedTaskStatus(existing.status, entry.status);
+    if (status === PharmacyDispenseTaskStatusDto.READY_TO_BILL) {
+      status = this.nextStatusAfterLineReview(this.reviewTask(existing, entry));
+    }
     return (await delegate.update({
       where: { id: existing.id },
       data: {
@@ -599,6 +623,24 @@ export class PharmacyPrescriptionQueueService {
       },
       include: { lines: true },
     })) as DispenseTask;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] current-prescription-review-lines
+   * Workflow review MUST count only current prescription lines. Missing bindings MUST count
+   * as pending; removed or replaced saved lines MUST be unavailable to review commands.
+   */
+  private reviewTask(task: DispenseTask, entry: QueueEntry): DispenseTask {
+    const bound = matchPrescriptionLines(entry.medications, task.lines || []);
+    return { ...task, lines: entry.medications.map((medication, index) => bound[index] || {
+      id: '', drugName: medication.drugName, action: PharmacyDispenseLineActionDto.PENDING,
+      dispensedQuantity: medication.dispensedQuantity,
+    }) };
+  }
+
+  private async currentReviewTask(task: DispenseTask, branchId: string): Promise<DispenseTask> {
+    return task.prescriptionId
+      ? this.reviewTask(task, await this.findOne(task.prescriptionId, branchId)) : task;
   }
 
   private async findTaskById(taskId: string, branchId: string) {
@@ -643,20 +685,20 @@ export class PharmacyPrescriptionQueueService {
   }
 
   private mergeTask(entry: QueueEntry, task?: DispenseTask | null): QueueEntry {
-    if (!task) return { ...entry, dispenseStatus: this.taskStatusFromQueue(entry.status), source: 'VISIT' };
+    if (!task) return { ...entry, medications: entry.medications.map(line => ({ ...line, action: 'pending' })), dispenseStatus: this.taskStatusFromQueue(entry.status), source: 'VISIT' };
     const synced = this.syncedTaskStatus(task.status, entry.status);
     const queueStatus = this.queueStatusFromTask(synced, entry.status);
     const blocked = entry.dispensingEligible === false && queueStatus !== PrescriptionQueueStatus.DISPENSED;
     const status = blocked && synced !== 'CANCELLED' ? PharmacyDispenseTaskStatusDto.PAUSED : synced;
-    const linesByName = new Map(
-      (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
-    );
+    const lines = matchPrescriptionLines(entry.medications, task.lines || []);
+    const reviewStatus = status === PharmacyDispenseTaskStatusDto.READY_TO_BILL
+      ? this.nextStatusAfterLineReview(this.reviewTask(task, entry)) : status;
 
     return {
       ...entry,
       dispenseTaskId: task.id,
       status: blocked ? PrescriptionQueueStatus.EXPIRED : queueStatus,
-      dispenseStatus: status,
+      dispenseStatus: reviewStatus,
       source: task.source,
       assignedToId: task.assignedToId,
       statusReasonType: task.statusReasonType,
@@ -668,9 +710,9 @@ export class PharmacyPrescriptionQueueService {
       dispensedAt: task.dispensedAt,
       cancelledAt: task.cancelledAt,
       lastStockCheckAt: task.lastStockCheckAt,
-      medications: entry.medications.map((medication) => {
-        const line = linesByName.get(this.normalizeName(medication.drugName));
-        if (!line) return medication;
+      medications: entry.medications.map((medication, index) => {
+        const line = lines[index];
+        if (!line) return { ...medication, lineId: undefined, action: 'pending' };
         return {
           ...medication,
           lineId: line.id,
@@ -705,12 +747,13 @@ export class PharmacyPrescriptionQueueService {
     })) as DispenseTask | null;
     if (!task) return;
 
-    const linesByName = new Map(
-      (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
+    const linesByKey = new Map(
+      (task.lines || []).filter(line => !lineMetadata(line).prescriptionLineRetired)
+        .map(line => [lineMetadata(line).prescriptionLineKey, line]),
     );
 
     for (const item of items) {
-      const line = linesByName.get(this.normalizeName(item.drugName));
+      const line = item.sourceLineKey ? linesByKey.get(item.sourceLineKey) : undefined;
       if (!line) continue;
       const recommendedBatch = item.batches?.[0] || null;
       await lineDelegate.update({
@@ -751,6 +794,7 @@ export class PharmacyPrescriptionQueueService {
 
   private taskLineCreateData(medication: QueueMedication) {
     return {
+      metadata: { prescriptionLineKey: medication.sourceLineKey },
       drugName: medication.drugName,
       genericName: medication.genericName || null,
       originalText: JSON.stringify({
@@ -989,6 +1033,7 @@ export class PharmacyPrescriptionQueueService {
           status: true,
           items: {
             select: {
+              id: true,
               quantity: true,
               inventoryItemId: true,
               drug: {
@@ -1010,6 +1055,11 @@ export class PharmacyPrescriptionQueueService {
    * Draft/pending invoices alone MUST leave the prescription pending (or age-expired),
    * including after a failed stock confirmation; linked invoice IDs remain available for review.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-coverage-no-double-credit
+   * Posted invoice units MUST be consumed once in prescription order and invoice-item ID order,
+   * up to each known prescribed quantity. Unknown quantities may consume remaining matching units.
+   */
   private toQueueEntry(prescription: LoadedPrescription, nowMs = Date.now()): QueueEntry {
     const pendingHours = Math.max(
       0,
@@ -1022,9 +1072,12 @@ export class PharmacyPrescriptionQueueService {
       (invoice) => ['CONFIRMED', 'DISPENSED', 'COMPLETED'].includes(invoice.status),
     );
     const rawItems = this.parsePrescriptionItems(prescription.items);
-    const medications = rawItems.map((item) =>
-      this.toMedicationCoverage(item, activeInvoices),
-    );
+    const invoiceItems = activeInvoices.flatMap(invoice => invoice.items)
+      .sort((a, b) => (a.id || '').localeCompare(b.id || ''))
+      .map(item => ({ ...item, remaining: Math.max(0, item.quantity) }));
+    const medications = rawItems.map(item => this.toMedicationCoverage(item, invoiceItems));
+    const sourceLineKeys = prescriptionLineKeys(medications);
+    medications.forEach((medication, index) => { medication.sourceLineKey = sourceLineKeys[index]; });
     const hasCompletedInvoice = activeInvoices.some((invoice) =>
       ['DISPENSED', 'COMPLETED'].includes(invoice.status),
     );
@@ -1075,22 +1128,23 @@ export class PharmacyPrescriptionQueueService {
 
   private toMedicationCoverage(
     item: PrescriptionItem,
-    invoices: LoadedInvoice[],
+    invoiceItems: Array<LoadedInvoiceItem & { remaining: number }>,
   ): QueueMedication {
     const drugName = this.itemDrugName(item);
     const prescribedQuantity = this.inferQuantity(item);
-    const dispensedQuantity = invoices.reduce((sum, invoice) => {
-      return (
-        sum +
-        invoice.items
-          .filter((invoiceItem) => {
-            if (item.inventoryItemId && invoiceItem.inventoryItemId) return item.inventoryItemId === invoiceItem.inventoryItemId;
-            if (item.drugId) return item.drugId === invoiceItem.drug?.id;
-            return this.namesMatch(drugName, invoiceItem.drug?.name || '');
-          })
-          .reduce((itemSum, invoiceItem) => itemSum + invoiceItem.quantity, 0)
-      );
-    }, 0);
+    let remaining = prescribedQuantity ?? Number.POSITIVE_INFINITY;
+    let dispensedQuantity = 0;
+    for (const invoiceItem of invoiceItems) {
+      const matches = item.inventoryItemId && invoiceItem.inventoryItemId
+        ? item.inventoryItemId === invoiceItem.inventoryItemId
+        : item.drugId ? item.drugId === invoiceItem.drug?.id
+          : this.namesMatch(drugName, invoiceItem.drug?.name || '');
+      if (!matches) continue;
+      const quantity = Math.min(remaining, invoiceItem.remaining);
+      dispensedQuantity += quantity;
+      remaining -= quantity;
+      invoiceItem.remaining -= quantity;
+    }
 
     let coverageStatus: QueueMedication['coverageStatus'] = 'unknown';
     if (prescribedQuantity !== null) {

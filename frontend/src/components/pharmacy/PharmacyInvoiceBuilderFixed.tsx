@@ -403,6 +403,11 @@ export function PharmacyInvoiceBuilderFixed({
    * medicines. Only the stock check's matched product ID may establish an automatic link;
    * failed lookups MUST retain flagged lines and expose a retryable error, never omit them.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-bill-source-line-state
+   * Draft edits and removals MUST follow an unchanged prescription source snapshot and duplicate
+   * occurrence across reloads and reorder. A changed source line MUST start a fresh draft line.
+   */
   const loadPrescriptionData = useCallback(
     async (prescriptionId: string) => {
       const request = ++prescriptionRequestRef.current;
@@ -474,6 +479,13 @@ export function PharmacyInvoiceBuilderFixed({
           lookupFailed = true;
         }
 
+        const occurrences = new Map<string, number>();
+        const sourceLineIds = prescriptionItemsRaw.map((item: Record<string, unknown>) => {
+          const snapshot = JSON.stringify(Object.keys(item).sort().map(key => [key, item[key]]));
+          const occurrence = occurrences.get(snapshot) || 0;
+          occurrences.set(snapshot, occurrence + 1);
+          return `prescription_${prescriptionId}_${encodeURIComponent(snapshot)}_${occurrence}`;
+        });
         const invoiceItems: InvoiceItem[] = await Promise.all(
           prescriptionItemsRaw.map(async (item: any, index: number) => {
             const stock = stockItems[index];
@@ -490,7 +502,7 @@ export function PharmacyInvoiceBuilderFixed({
               lookupFailed = true;
             }
 
-              const invoiceItemId = `prescription_${prescriptionId}_${index}`;
+              const invoiceItemId = sourceLineIds[index];
               const existingItem = previousPrefilledMap.get(invoiceItemId);
               // Preserve pharmacist changes when retrying a failed inventory read.
               const substituted = existingItem?.substituted === true;

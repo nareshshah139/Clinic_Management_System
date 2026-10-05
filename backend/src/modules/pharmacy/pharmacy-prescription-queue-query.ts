@@ -83,6 +83,11 @@ const numericLookup = (
  * DRAFT prescriptions MUST be hidden. Inactive or explicitly expired prescriptions MUST
  * appear expired unless already dispensed; historical fulfillment MUST remain viewable.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] queue-coverage-no-double-credit
+ * Posted invoice units MUST be allocated once in prescription order, with invoice items ordered
+ * by ID. Filtering MUST agree with detail coverage when multiple lines match the same product.
+ */
 export function queueStatusPage(
   branchId: string,
   status: PrescriptionQueueStatus | undefined,
@@ -107,7 +112,7 @@ export function queueStatusPage(
   );
   const invoiceName = normalized(Prisma.sql`coalesce(d.name, '')`);
   return Prisma.sql`
-    WITH branch_prescriptions AS MATERIALIZED (
+    WITH RECURSIVE branch_prescriptions AS MATERIALIZED (
       SELECT p.id, p."createdAt", t.status::text AS task_status,
         coalesce(to_jsonb(p)->>'status', 'ACTIVE') AS prescription_status,
         coalesce((to_jsonb(p)->>'validUntil')::timestamp < ${now}, false) AS clinically_expired,
@@ -119,26 +124,45 @@ export function queueStatusPage(
       WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
     ), medications AS (
-      SELECT p.id, item, coalesce(${explicit}, ceil(${frequency} * ${duration} * ${multiplier})) AS quantity,
+      SELECT p.id, item, ordinal, coalesce(${explicit}, ceil(${frequency} * ${duration} * ${multiplier})) AS quantity,
         ${medicationName} AS name
       FROM branch_prescriptions p
-      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) item
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) WITH ORDINALITY AS source(item, ordinal)
+    ), invoice_pool AS (
+      SELECT i."prescriptionId" AS id,
+        jsonb_agg(jsonb_build_object('drugId', ii."drugId", 'inventoryItemId', ii."inventoryItemId",
+          'name', ${invoiceName}, 'remaining', ii.quantity) ORDER BY ii.id) AS items
+      FROM pharmacy_invoices i JOIN branch_prescriptions p ON p.id = i."prescriptionId"
+      JOIN pharmacy_invoice_items ii ON ii."invoiceId" = i.id LEFT JOIN drugs d ON d.id = ii."drugId"
+      WHERE i."branchId" = ${branchId} AND i.status IN ('CONFIRMED', 'DISPENSED', 'COMPLETED')
+      GROUP BY i."prescriptionId"
     ), coverage AS (
-      SELECT m.id, m.quantity, coalesce((
-        SELECT sum(ii.quantity) FROM pharmacy_invoices i
-        JOIN pharmacy_invoice_items ii ON ii."invoiceId" = i.id
-        LEFT JOIN drugs d ON d.id = ii."drugId"
-        WHERE i."prescriptionId" = m.id AND i."branchId" = ${branchId}
-          AND i.status IN ('CONFIRMED', 'DISPENSED', 'COMPLETED')
-          AND CASE
-            WHEN nullif(m.item->>'inventoryItemId', '') IS NOT NULL AND ii."inventoryItemId" IS NOT NULL
-              THEN m.item->>'inventoryItemId' = ii."inventoryItemId"
-            WHEN nullif(m.item->>'drugId', '') IS NOT NULL THEN m.item->>'drugId' = ii."drugId"
-            ELSE m.name <> '' AND ${invoiceName} <> '' AND
-              (strpos(m.name, ${invoiceName}) > 0 OR strpos(${invoiceName}, m.name) > 0)
-          END
-      ), 0) AS dispensed
-      FROM medications m
+      SELECT p.id, 0::bigint AS ordinal, coalesce(pool.items, '[]'::jsonb) AS remaining,
+        NULL::double precision AS quantity, 0::double precision AS dispensed
+      FROM branch_prescriptions p LEFT JOIN invoice_pool pool ON pool.id = p.id
+      UNION ALL
+      SELECT m.id, m.ordinal, allocated.remaining, m.quantity, allocated.dispensed
+      FROM coverage previous JOIN medications m ON m.id = previous.id AND m.ordinal = previous.ordinal + 1
+      CROSS JOIN LATERAL (
+        SELECT coalesce(jsonb_agg(jsonb_set(invoice, '{remaining}',
+          to_jsonb((invoice->>'remaining')::double precision - taken)) ORDER BY position), '[]'::jsonb) AS remaining,
+          coalesce(sum(taken), 0)::double precision AS dispensed
+        FROM (
+          SELECT invoice, position, least(available, greatest(0,
+            coalesce(m.quantity, 'Infinity'::double precision) - coalesce(sum(available) OVER (
+              ORDER BY position ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0))) AS taken
+          FROM (
+            SELECT invoice, position, CASE WHEN CASE
+              WHEN nullif(m.item->>'inventoryItemId', '') IS NOT NULL AND invoice->>'inventoryItemId' IS NOT NULL
+                THEN m.item->>'inventoryItemId' = invoice->>'inventoryItemId'
+              WHEN nullif(m.item->>'drugId', '') IS NOT NULL THEN m.item->>'drugId' = invoice->>'drugId'
+              ELSE m.name <> '' AND invoice->>'name' <> '' AND
+                (strpos(m.name, invoice->>'name') > 0 OR strpos(invoice->>'name', m.name) > 0)
+              END THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available
+            FROM jsonb_array_elements(previous.remaining) WITH ORDINALITY AS pool(invoice, position)
+          ) candidates
+        ) portions
+      ) allocated
     ), invoice_state AS (
       SELECT i."prescriptionId" AS id,
         bool_or(i.status IN ('CONFIRMED', 'DISPENSED', 'COMPLETED', 'CANCELLED')) AS has_posted_or_cancelled,

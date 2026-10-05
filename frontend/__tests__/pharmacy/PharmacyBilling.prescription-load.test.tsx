@@ -278,3 +278,29 @@ it('starts a new patient bill after prescription checkout without the previous c
   ]);
   expect(api.patch).not.toHaveBeenCalled();
 });
+
+it('keeps billing edits with unchanged source lines on reorder and resets changed medicines', async () => {
+  let prescriptionItems = names.map((drugName, index) => ({ drugName, quantity: quantities[index] }));
+  api.getPrescription.mockImplementation(async id => ({ id, visit: { patient, doctor }, items: prescriptionItems }) as any);
+  const get = api.get.getMockImplementation()!;
+  let fail = true;
+  api.get.mockImplementation(async (url, query) => {
+    if (url.endsWith('/stock-check')) return { items: prescriptionItems.map(item => ({ ...stock[names.indexOf(item.drugName)] })) } as any;
+    if (url === '/drugs/drug-0' && fail) throw new Error('Temporary lookup failure');
+    return get(url, query);
+  });
+  render(<PharmacyPage />);
+  await loadPatient();
+  const row = (name: string) => screen.getByRole('heading', { name, level: 4 }).closest('[data-invoice-item]') as HTMLElement;
+  fireEvent.change(within(row(names[1])).getByLabelText('Quantity'), { target: { value: '2' } });
+  prescriptionItems = [prescriptionItems[1], prescriptionItems[0], prescriptionItems[2], prescriptionItems[3]];
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
+  await waitFor(() => expect(api.getPrescription).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(within(row(names[1])).getByLabelText('Quantity')).toHaveValue(2));
+  expect(within(row(names[0])).getByLabelText('Quantity')).toHaveValue(14);
+  prescriptionItems = prescriptionItems.map((item, index) => index === 0 ? { ...item, quantity: 9 } : item);
+  fail = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
+  await waitFor(() => expect(screen.queryByText('Inventory check failed')).not.toBeInTheDocument());
+  expect(within(row(names[1])).getByLabelText('Quantity')).toHaveValue(9);
+});

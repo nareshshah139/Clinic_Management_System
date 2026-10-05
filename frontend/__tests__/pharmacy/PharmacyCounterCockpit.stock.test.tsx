@@ -193,3 +193,18 @@ it('keeps unavailable lines reviewed but blocks Ready until they are resolved', 
   await screen.findByText('1/1 lines reviewed');
   expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
 });
+
+
+it('shows separate stock for same-name lines using source identity even when responses are reordered', async () => {
+  const saved = { ...preparedEntry(), medications: [
+    { ...preparedEntry().medications[0], sourceLineKey: 'dose-5', dosage: 5 },
+    { ...preparedEntry().medications[0], sourceLineKey: 'dose-10', lineId: 'line-2', dosage: 10 },
+  ] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? { items: [
+    { ...stock(10).items[0], sourceLineKey: 'dose-10' },
+    { ...stock(5).items[0], sourceLineKey: 'dose-5' },
+  ] } : { data: [saved], pagination: { total: 1 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText(/5 available/);
+  expect(screen.getByText(/10 available/)).toBeInTheDocument();
+});
