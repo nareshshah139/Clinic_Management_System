@@ -7,14 +7,14 @@ Base: production main `2ec721a`. The primary checkout was 27 commits behind prod
 - [x] Read the Principles section of the poteto-mode skill in full.
 - [x] Phase A: Frame
 - [x] Phase B: Design the workflow
-- [ ] Phase C: Run the loop
+- [x] Phase C: Run the loop
 - [x] Repair billing atomicity, checkout/payment retries and package stock side effects.
 - [x] Repair visit deletion/completion, draft-photo access and prescription/refill persistence.
 - [x] Repair clinical explicit clears and completion after reload.
 - [x] Make queue reads side-effect free and bounded; preserve stock filtering and pagination.
 - [x] Integrate independently committed slices and run real PostgreSQL regressions.
-- [ ] Review contracts, comments, security boundaries and actual diffs independently.
-- [ ] Rehearse migrations, run production builds and verify the UI through local authenticated flows.
+- [x] Review contracts, comments, security boundaries and actual diffs independently.
+- [x] Rehearse migrations, run production builds and verify the UI through local authenticated flows.
 - [ ] Deploy the reviewed integrated revision and verify both services and normal-auth smoke checks.
 - [ ] Phase D: Keep the audit trail
 - [ ] Phase E: Verify and hand back
@@ -43,4 +43,4 @@ Decision trail: `decisions.tsv`. Evidence locations and final commands are recor
 
 ## Release follow-up gates
 
-Independent reviewers returned billing PASS and lifecycle PASS with the requirement to drain backend writes during migration. Clinical conflict propagation and duplicate medicine-line identity remain active corrections. Final frontend checks, source-bound rebuild, authenticated HTTP/browser acceptance and independent release verdict are required before merging. Graphite is unavailable; use the authorized single-PR GitHub workflow after all gates pass.
+Independent reviewers returned billing PASS and lifecycle PASS with the requirement to drain backend writes during migration. Clinical conflict propagation, full medicine-line identity and billing snapshot consistency passed independent re-review and final app acceptance. Final frontend checks, source-bound rebuild, authenticated HTTP/browser acceptance and independent release verdict are required before merging. Graphite is unavailable; use the authorized single-PR GitHub workflow after all gates pass.

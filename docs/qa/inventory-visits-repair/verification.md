@@ -14,15 +14,16 @@ This release repairs the audited inventory, billing and visit behaviors on produ
 | Draft photos | Every draft-photo route enforces the authenticated branch. | Normal-auth multipart upload, list, binary read and delete denial for a foreign branch. |
 | Prescriptions and refills | Status, validity and refill decisions persist. Only clinicians approve/reject refills. | Real guards, lifecycle database tests and command eligibility checks. |
 | Clinical forms | Explicit empty/null values survive save and reload. Conflicts preserve drafts and require explicit reconciliation. | Field regressions, normal-auth browser clearing, fresh-context reload and idle-save checks. Shared conflict-path review passed; actual conflict and recovery UI checks passed. |
-| Queue reads | GET performs no task creation or timestamp changes; filtering precedes pagination. Staff actions create tasks explicitly. | Full-population comparisons and real HTTP checks. Duplicate-line regressions and normal-auth HTTP checks passed; final complete-regimen review is pending. |
+| Queue reads | GET performs no task creation or timestamp changes; filtering precedes pagination. Staff actions create tasks explicitly. | Full-population comparisons and real HTTP checks. Duplicate-line regressions and normal-auth HTTP checks passed; final complete-regimen review passed. |
 | Stock reads | PostgreSQL handles exact filtering, aggregation and paging. Fuzzy/name ordering preserves existing matching using slim candidate scans. | Fourteen complete-response comparisons across 2,500 batches. |
 
 ## Evidence recorded so far
 
-- Full backend suite passed 766 tests; three existing tests were skipped.
+- Full backend suite passed 771 tests; three existing tests were skipped.
+- Full frontend suite passed 458 tests across 57 suites.
 - Twenty-six billing database scenarios passed on PostgreSQL 17.
 - All five additive migrations applied against a local copy of the production schema and migration history. A second deployment applied nothing. Invalid-index checks passed. Six pre-existing constraint/index naming differences remain explicitly allowlisted.
-- Contract syntax and discoverability passed for 67 changed TypeScript files. SQL, CONTRACTS discovery and CommonJS scripts were reviewed manually where the CLI does not support them.
+- Contract syntax and discoverability passed for 68 changed TypeScript files, followed by rechecking all five files in the final regimen/snapshot correction. SQL, CONTRACTS discovery and CommonJS scripts were reviewed manually where the CLI does not support them.
 - Actual Chrome UI saved an empty heart rate as null, preserved weight, reopened in a fresh login session and made no idle write. A competing save returned 409, retained local edits and stopped retries; explicit discard reloaded the authoritative value. An independent reviewer repeated this with a separate synthetic visit and browser.
 - The real billing UI survived a dropped response after backend commit, replayed the same checkout after reload, then cleared context and successfully billed a second patient. A probe initially pressed Escape while focus was inside the PDF iframe; closing the visible dialog through its Close button proved the reset handler.
 - The production smoke workflow passed locally, including exact cleanup and unchanged fingerprints across 18 tables.
@@ -33,7 +34,7 @@ The synthetic repeated-read queue benchmark with 1,000 prescriptions improved fr
 
 ## Release gates
 
-The final source-bound frontend/backend rebuild, final integrated frontend and changed-path tests, authenticated HTTP/browser acceptance, independent final verdict and deployed-revision verification remain pending. No deployment is claimed by this document yet.
+The final source-bound frontend/backend rebuild, complete backend/frontend suites, 11 authenticated HTTP checks, clinical/browser recovery, billing response-loss/reset checks and exact-cleanup smoke rehearsal all passed on application source `0fbd340`. The source hash is `62187b285213ec81b26842c1ef70d0b0fa6eb4623e9a93f7928b0983a98e860f`. All four implementation areas have independent passing scope reviews. Final per-PR verification and deployed-revision checks remain pending. No deployment is claimed by this document yet.
 
 A Railway-native snapshot was verified before release. Backup ID `fabe7078-b03c-45de-9063-8c0938c48877` was created at `2026-10-05T10:07:13.489Z`. Backend writes must be drained during migration to avoid old financial writers and the appointment/visit migration lock-order conflict.
 
