@@ -182,6 +182,15 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
  * Passive queue and stock refreshes MUST NOT create tasks. Staff review and status actions
  * MUST obtain a persisted task and line identity before saving; failed saves MUST NOT mark a line reviewed.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-prescription-line-review
+ * Review state MUST come from each active prescription line, defaulting to pending when absent.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-ready-reviewed-task
+ * Ready MUST recheck the prepared task and reject empty tasks or pending and unavailable lines
+ * before saving status. Unreviewed or unavailable lines MUST keep the Ready button disabled.
+ */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
@@ -203,7 +212,6 @@ export function PharmacyCounterCockpit({
   const [stockItems, setStockItems] = useState<StockCheckItem[]>([]);
   const [stockReloadKey, setStockReloadKey] = useState(0);
   const [stockError, setStockError] = useState<string | null>(null);
-  const [lineActions, setLineActions] = useState<Record<string, LineAction>>({});
   const [reasonType, setReasonType] = useState(reasonOptions[0]);
   const [reasonNote, setReasonNote] = useState('');
   const [loadingQueue, setLoadingQueue] = useState(false);
@@ -217,29 +225,13 @@ export function PharmacyCounterCockpit({
     [activeId, queue],
   );
 
-  const mergePersistedLineActions = useCallback((entries: QueueEntry[]) => {
-    setLineActions((current) => {
-      const next = { ...current };
-      for (const entry of entries) {
-        for (const medication of entry.medications) {
-          if (medication.action) next[medication.drugName] = medication.action;
-        }
-      }
-      return next;
-    });
+  const replaceQueueEntry = useCallback((updatedEntry: QueueEntry) => {
+    setQueue((current) =>
+      current.map((entry) =>
+        entry.prescriptionId === updatedEntry.prescriptionId ? updatedEntry : entry,
+      ),
+    );
   }, []);
-
-  const replaceQueueEntry = useCallback(
-    (updatedEntry: QueueEntry) => {
-      setQueue((current) =>
-        current.map((entry) =>
-          entry.prescriptionId === updatedEntry.prescriptionId ? updatedEntry : entry,
-        ),
-      );
-      mergePersistedLineActions([updatedEntry]);
-    },
-    [mergePersistedLineActions],
-  );
 
   const loadQueue = useCallback(async () => {
     setStockReloadKey(key => key + 1);
@@ -267,7 +259,6 @@ export function PharmacyCounterCockpit({
       }
 
       setQueue(entries);
-      mergePersistedLineActions(entries);
       setQueueTotal(response.pagination?.total ?? entries.length);
       setActiveId((current) => {
         if (
@@ -294,7 +285,7 @@ export function PharmacyCounterCockpit({
     } finally {
       setLoadingQueue(false);
     }
-  }, [mergePersistedLineActions, prefill?.prescriptionId]);
+  }, [prefill?.prescriptionId]);
 
   useEffect(() => {
     void loadQueue();
@@ -329,13 +320,6 @@ export function PharmacyCounterCockpit({
         );
         if (!current) return;
         setStockItems(response.items || []);
-        setLineActions((current) => {
-          const next = { ...current };
-          for (const item of response.items || []) {
-            if (!next[item.drugName]) next[item.drugName] = 'pending';
-          }
-          return next;
-        });
       } catch (err) {
         if (!current) return;
         console.error('Failed to load pharmacy stock check:', err);
@@ -360,20 +344,23 @@ export function PharmacyCounterCockpit({
         item.stockStatus !== 'IN_STOCK' ||
         item.nearExpiry ||
         item.lowStock ||
-        lineActions[item.drugName] === 'unavailable',
+        activeEntry?.medications.some(
+          line => line.drugName === item.drugName && line.action === 'unavailable',
+        ),
     ).length;
-  }, [lineActions, stockItems]);
+  }, [activeEntry, stockItems]);
 
   const reviewedLineCount = useMemo(() => {
     if (!activeEntry) return 0;
     return activeEntry.medications.filter(
-      (medication) => (lineActions[medication.drugName] || 'pending') !== 'pending',
+      (medication) => (medication.action || 'pending') !== 'pending',
     ).length;
-  }, [activeEntry, lineActions]);
+  }, [activeEntry]);
 
   const allLinesReviewed =
     Boolean(activeEntry?.medications.length) &&
     reviewedLineCount === activeEntry?.medications.length;
+  const readyForBilling = Boolean(activeEntry && hasBillableReview(activeEntry));
 
   const pickLines = useMemo(() => {
     if (!activeEntry) return [];
@@ -400,7 +387,7 @@ export function PharmacyCounterCockpit({
   }, [activeEntry, stockByDrug]);
 
   const activeLifecycle = activeEntry
-    ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, allLinesReviewed)
+    ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
     : 'Queued';
   const activeBillingPrefill = useMemo<PharmacyBillingPrefill | undefined>(() => {
     if (!activeEntry) return undefined;
@@ -454,6 +441,12 @@ export function PharmacyCounterCockpit({
         setSavingTask(true);
         setError(null);
         const task = await ensureDispenseTask(activeEntry);
+        if (status === 'READY_TO_BILL' && !hasBillableReview(task)) {
+          setError(
+            'Review every available medicine before marking ready for billing. Unavailable medicines must be resolved first.',
+          );
+          return;
+        }
         const updated = await apiClient.patch<QueueEntry>(
           `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
           {
@@ -516,8 +509,12 @@ export function PharmacyCounterCockpit({
         setSavingTask(true);
         setError(null);
         const task = await ensureDispenseTask(activeEntry);
-        const line = task.medications.find(item => item.drugName === medication.drugName);
-        if (!line?.lineId) throw new Error('Prescription line no longer exists');
+        const line = medication.lineId
+          ? task.medications.find(item => item.lineId === medication.lineId)
+          : task.medications[activeEntry.medications.indexOf(medication)];
+        if (!line?.lineId || line.drugName !== medication.drugName) {
+          throw new Error('Prescription line no longer exists');
+        }
         const updated = await apiClient.patch<QueueEntry>(
           `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
           {
@@ -618,11 +615,10 @@ export function PharmacyCounterCockpit({
           activeEntry={activeEntry}
           stockByDrug={stockByDrug}
           loadingStock={loadingStock}
-          lineActions={lineActions}
           setLineAction={updateLineAction}
           activeLifecycle={activeLifecycle}
           reviewedLineCount={reviewedLineCount}
-          allLinesReviewed={allLinesReviewed}
+          readyForBilling={readyForBilling}
           reasonType={reasonType}
           setReasonType={setReasonType}
           reasonNote={reasonNote}
@@ -814,11 +810,10 @@ function ActiveDispenseColumn({
   activeEntry,
   stockByDrug,
   loadingStock,
-  lineActions,
   setLineAction,
   activeLifecycle,
   reviewedLineCount,
-  allLinesReviewed,
+  readyForBilling,
   reasonType,
   setReasonType,
   reasonNote,
@@ -830,11 +825,10 @@ function ActiveDispenseColumn({
   activeEntry: QueueEntry | null;
   stockByDrug: Record<string, StockCheckItem>;
   loadingStock: boolean;
-  lineActions: Record<string, LineAction>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
-  allLinesReviewed: boolean;
+  readyForBilling: boolean;
   reasonType: string;
   setReasonType: (value: string) => void;
   reasonNote: string;
@@ -891,7 +885,6 @@ function ActiveDispenseColumn({
               <MedicationReviewTable
                 activeEntry={activeEntry}
                 stockByDrug={stockByDrug}
-                lineActions={lineActions}
                 setLineAction={setLineAction}
               />
             </fieldset>
@@ -922,7 +915,7 @@ function ActiveDispenseColumn({
           <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-[10px] border border-slate-200 bg-white p-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
               <p className="font-semibold text-slate-950">
-                {allLinesReviewed ? 'Ready for billing review' : 'Review every medicine before billing'}
+                {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -938,7 +931,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('READY_TO_BILL')}
-                disabled={!allLinesReviewed || savingTask || activeEntry?.dispensingEligible === false}
+                disabled={!readyForBilling || savingTask || activeEntry?.dispensingEligible === false}
               >
                 Ready
               </Button>
@@ -981,12 +974,10 @@ function ActiveDispenseColumn({
 function MedicationReviewTable({
   activeEntry,
   stockByDrug,
-  lineActions,
   setLineAction,
 }: {
   activeEntry: QueueEntry;
   stockByDrug: Record<string, StockCheckItem>;
-  lineActions: Record<string, LineAction>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
 }) {
   return (
@@ -999,14 +990,14 @@ function MedicationReviewTable({
         <span>Action</span>
       </div>
       <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
-        {activeEntry.medications.map((medication) => {
+        {activeEntry.medications.map((medication, index) => {
           const stock = stockByDrug[medication.drugName];
           return (
             <MedicationReviewRow
-              key={`${activeEntry.prescriptionId}-${medication.drugName}`}
+              key={`${activeEntry.prescriptionId}-${medication.lineId || index}`}
               medication={medication}
               stock={stock}
-              action={lineActions[medication.drugName] || 'pending'}
+              action={medication.action || 'pending'}
               setAction={(action) => setLineAction(medication, action)}
             />
           );
@@ -1512,6 +1503,15 @@ function stockWarnings(stock: StockCheckItem) {
   );
   if (expiredBatch) warnings.push('Expired batch blocked');
   return warnings;
+}
+
+function hasBillableReview(entry: QueueEntry): boolean {
+  return (
+    entry.medications.length > 0 &&
+    entry.medications.every(
+      line => line.action && line.action !== 'pending' && line.action !== 'unavailable',
+    )
+  );
 }
 
 function deriveLifecycle(

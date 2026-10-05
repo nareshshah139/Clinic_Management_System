@@ -336,6 +336,11 @@ export class PharmacyPrescriptionQueueService {
    * Repeating the saved workflow status MUST preserve its lifecycle timestamp. A transition
    * MUST stamp the destination status without overwriting timestamps for other stages.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] task-ready-requires-reviewed-lines
+   * READY_TO_BILL MUST reject empty tasks and tasks with pending or unavailable lines with
+   * BadRequestException and no changes; validation and status writes MUST share the task lock.
+   */
   async updateTaskStatus(
     taskId: string,
     body: UpdateDispenseTaskStatusDto,
@@ -368,6 +373,19 @@ export class PharmacyPrescriptionQueueService {
 
     if (!task) {
       throw new NotFoundException('Dispense task not found in this branch');
+    }
+
+    if (
+      body.status === PharmacyDispenseTaskStatusDto.READY_TO_BILL &&
+      (!task.lines?.length ||
+        task.lines.some(line =>
+          line.action === PharmacyDispenseLineActionDto.PENDING ||
+          line.action === PharmacyDispenseLineActionDto.UNAVAILABLE,
+        ))
+    ) {
+      throw new BadRequestException(
+        'Review every available medicine before marking ready for billing. Unavailable medicines must be resolved first.',
+      );
     }
 
     const now = new Date();

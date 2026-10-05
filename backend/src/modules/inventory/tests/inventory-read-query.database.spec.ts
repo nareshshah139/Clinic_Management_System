@@ -680,6 +680,33 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     ).toEqual(stamp);
   });
 
+  it('requires saved review of every available line before marking a task Ready', async () => {
+    await rx('ready-review-guard', { task: 'IN_REVIEW' });
+    const task = await db.pharmacyDispenseTask.findFirstOrThrow({ where: { prescriptionId: 'ready-review-guard' } });
+    const markReady = () => queue.updateTaskStatus(task.id, { status: 'READY_TO_BILL' as any }, branchId, doctorId);
+    const readTask = () => db.pharmacyDispenseTask.findUniqueOrThrow({ where: { id: task.id }, include: { lines: { orderBy: { id: 'asc' } } } });
+    const empty = await readTask();
+    await expect(markReady()).rejects.toThrow('Review every available medicine');
+    expect(await readTask()).toEqual(empty);
+    await db.pharmacyDispenseTaskLine.createMany({ data: [
+      { id: 'ready-line-1', taskId: task.id, drugName: 'Azithral 500', action: 'ACCEPTED' },
+      { id: 'ready-line-2', taskId: task.id, drugName: 'Other medicine', action: 'PENDING' },
+    ] });
+    const pending = await readTask();
+    await expect(markReady()).rejects.toThrow('Review every available medicine');
+    expect(await readTask()).toEqual(pending);
+    await queue.updateTaskLine(task.id, 'ready-line-2', { action: 'UNAVAILABLE' as any }, branchId, doctorId);
+    const partial = await readTask();
+    expect(partial.status).toBe('PARTIALLY_FILLED');
+    await expect(markReady()).rejects.toThrow('Review every available medicine');
+    expect(await readTask()).toEqual(partial);
+    await queue.updateTaskLine(task.id, 'ready-line-2', { action: 'ACCEPTED' as any }, branchId, doctorId);
+    const ready = await readTask();
+    expect(ready.status).toBe('READY_TO_BILL');
+    await markReady();
+    expect((await readTask()).readyToBillAt).toEqual(ready.readyToBillAt);
+  });
+
   it('enforces stored lifecycle and validity before every prescription-backed command', async () => {
     for (const [name, status, validUntil] of [
       ['draft', 'DRAFT', null], ['cancelled', 'CANCELLED', null], ['closed', 'COMPLETED', null],

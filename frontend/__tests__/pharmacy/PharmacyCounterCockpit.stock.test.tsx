@@ -137,3 +137,59 @@ it('keeps inactive prescriptions viewable without offering dispense mutations', 
   expect(apiClient.post).not.toHaveBeenCalled();
   expect(apiClient.patch).not.toHaveBeenCalled();
 });
+
+it('does not carry a reviewed medicine into a different virtual prescription', async () => {
+  const accepted = { ...preparedEntry(), dispenseStatus: 'READY_TO_BILL', medications: [{ ...preparedEntry().medications[0], action: 'accepted' }] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [accepted, entry('rx-2')], pagination: { total: 2 } });
+  const view = render(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-1' }} />);
+  await screen.findByText('1/1 lines reviewed');
+  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeEnabled();
+
+  view.rerender(<PharmacyCounterCockpit {...props} prefill={{ prescriptionId: 'rx-2' }} />);
+  await waitFor(() => expect(get).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-2/stock-check'));
+  expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
+  const ready = screen.getByRole('button', { name: 'Ready', exact: true });
+  expect(ready).toBeDisabled();
+  fireEvent.click(ready);
+  expect(apiClient.post).not.toHaveBeenCalled();
+  expect(apiClient.patch).not.toHaveBeenCalled();
+});
+
+it('rechecks saved reviews after creating a task before marking it Ready', async () => {
+  const stale = { ...entry(), medications: [{ ...entry().medications[0], action: 'accepted' }] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [stale], pagination: { total: 1 } });
+  (apiClient.post as jest.Mock).mockResolvedValue({ data: preparedEntry() });
+  (apiClient.patch as jest.Mock).mockResolvedValue({ ...preparedEntry(), dispenseStatus: 'READY_TO_BILL' });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('1/1 lines reviewed');
+  fireEvent.click(screen.getByRole('button', { name: 'Ready', exact: true }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Review every available medicine before marking ready for billing');
+  expect(screen.getByText('0/1 lines reviewed')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  expect(apiClient.patch).not.toHaveBeenCalled();
+});
+
+it('keeps same-name prescription lines independently reviewed', async () => {
+  const saved = { ...preparedEntry(), medications: [
+    { ...preparedEntry().medications[0], action: 'accepted' },
+    { ...preparedEntry().medications[0], lineId: 'line-2', action: 'pending' },
+  ] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [saved], pagination: { total: 1 } });
+  (apiClient.patch as jest.Mock).mockResolvedValue({ ...saved, dispenseStatus: 'READY_TO_BILL', medications: saved.medications.map(line => ({ ...line, action: 'accepted' })) });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findAllByText(/10 available/);
+  expect(screen.getByText('1/2 lines reviewed')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Accept', exact: true })[1]);
+  await screen.findByText('2/2 lines reviewed');
+  expect(apiClient.patch).toHaveBeenCalledWith('/pharmacy/dispense-tasks/task-1/lines/line-2', expect.objectContaining({ action: 'ACCEPTED' }));
+});
+
+
+it('keeps unavailable lines reviewed but blocks Ready until they are resolved', async () => {
+  const partial = { ...preparedEntry(), dispenseStatus: 'PARTIALLY_FILLED', medications: [{ ...preparedEntry().medications[0], action: 'unavailable' }] };
+  get.mockImplementation(async url => url.endsWith('/stock-check') ? stock(10) : { data: [partial], pagination: { total: 1 } });
+  render(<PharmacyCounterCockpit {...props} />);
+  await screen.findByText('1/1 lines reviewed');
+  expect(screen.getByRole('button', { name: 'Ready', exact: true })).toBeDisabled();
+});
