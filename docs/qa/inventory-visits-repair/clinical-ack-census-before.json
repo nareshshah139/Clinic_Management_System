@@ -1,0 +1,174 @@
+{
+  "premise": "Every clinical mutation conflict reaches the parent form conflict gate before later version acknowledgements.",
+  "census": [
+    {
+      "file": "frontend/src/components/visits/MedicalVisitForm.tsx",
+      "boundaries": {
+        "versionReceipt": [
+          {
+            "line": 213,
+            "text": "visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, version);"
+          },
+          {
+            "line": 647,
+            "text": "if (visitVersionRef.current === undefined && draft.visitVersion !== undefined) {"
+          },
+          {
+            "line": 648,
+            "text": "visitVersionRef.current = draft.visitVersion;"
+          },
+          {
+            "line": 1023,
+            "text": "if (visitVersionRef.current === undefined) visitVersionRef.current = res.version;"
+          },
+          {
+            "line": 2270,
+            "text": "onVisitVersion={(version) => {"
+          },
+          {
+            "line": 2308,
+            "text": "onVisitSaved={(saved) => {"
+          }
+        ],
+        "conflict": [
+          {
+            "line": 210,
+            "text": "const automaticSaveBlocked = useRef(false);"
+          },
+          {
+            "line": 212,
+            "text": "if (!automaticSaveBlocked.current) {"
+          },
+          {
+            "line": 574,
+            "text": "saveConflict: automaticSaveBlocked.current,"
+          },
+          {
+            "line": 652,
+            "text": "automaticSaveBlocked.current = true;"
+          },
+          {
+            "line": 806,
+            "text": "if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {"
+          },
+          {
+            "line": 852,
+            "text": "if ((error as any)?.status === 409) {"
+          },
+          {
+            "line": 853,
+            "text": "automaticSaveBlocked.current = true;"
+          },
+          {
+            "line": 898,
+            "text": "if (!hasUnsavedChangesRef.current || automaticSaveBlocked.current) {"
+          },
+          {
+            "line": 1018,
+            "text": "automaticSaveBlocked.current = true;"
+          },
+          {
+            "line": 1127,
+            "text": "setSaveStatus(automaticSaveBlocked.current ? 'error' : 'unsaved');"
+          },
+          {
+            "line": 1497,
+            "text": "if (status === 409 && appointmentId) {"
+          },
+          {
+            "line": 1561,
+            "text": "if ((e as { status?: number })?.status === 409) {"
+          },
+          {
+            "line": 1562,
+            "text": "automaticSaveBlocked.current = true;"
+          },
+          {
+            "line": 1577,
+            "text": "if (hasUnsavedChangesRef.current && !automaticSaveBlocked.current) scheduleAutoSave();"
+          }
+        ],
+        "mutation": []
+      }
+    },
+    {
+      "file": "frontend/src/components/visits/PrescriptionBuilder.tsx",
+      "boundaries": {
+        "versionReceipt": [
+          {
+            "line": 91,
+            "text": "onVisitSaved?: (visit: Partial<VisitDetails>) => void;"
+          },
+          {
+            "line": 200,
+            "text": "function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {"
+          },
+          {
+            "line": 1193,
+            "text": "if (visitVersionRef.current === undefined) visitVersionRef.current = res?.version;"
+          },
+          {
+            "line": 2565,
+            "text": "visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);"
+          },
+          {
+            "line": 2566,
+            "text": "onVisitSaved?.(res.visit);"
+          },
+          {
+            "line": 2602,
+            "text": "}, [getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);"
+          },
+          {
+            "line": 2619,
+            "text": "visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, saved.version);"
+          },
+          {
+            "line": 2620,
+            "text": "onVisitSaved?.(saved);"
+          },
+          {
+            "line": 4070,
+            "text": "if (visitVersionRef.current === undefined && data.visitVersion !== undefined) visitVersionRef.current = data.visitVersion;"
+          }
+        ],
+        "conflict": [
+          {
+            "line": 1087,
+            "text": "if (status === 409 || lower.includes('already exists')) {"
+          },
+          {
+            "line": 3019,
+            "text": "if (e?.status === 409) {"
+          },
+          {
+            "line": 6536,
+            "text": "if (e?.status === 409) {"
+          }
+        ],
+        "mutation": []
+      }
+    },
+    {
+      "file": "frontend/src/components/visits/VisitPhotos.tsx",
+      "boundaries": {
+        "versionReceipt": [
+          {
+            "line": 20,
+            "text": "onVisitVersion?: (version: number) => void;"
+          },
+          {
+            "line": 33,
+            "text": "export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion }: Props) {"
+          },
+          {
+            "line": 46,
+            "text": "if (typeof data.visitVersion === 'number') onVisitVersion?.(data.visitVersion);"
+          }
+        ],
+        "conflict": [],
+        "mutation": []
+      }
+    }
+  ]
+}

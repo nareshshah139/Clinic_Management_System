@@ -8,11 +8,11 @@ Base: production main `2ec721a`. The primary checkout was 27 commits behind prod
 - [x] Phase A: Frame
 - [x] Phase B: Design the workflow
 - [ ] Phase C: Run the loop
-- [ ] Repair billing atomicity, checkout/payment retries and package stock side effects.
-- [ ] Repair visit deletion/completion, draft-photo access and prescription/refill persistence.
+- [x] Repair billing atomicity, checkout/payment retries and package stock side effects.
+- [x] Repair visit deletion/completion, draft-photo access and prescription/refill persistence.
 - [ ] Repair clinical explicit clears and completion after reload.
 - [ ] Make queue reads side-effect free and bounded; preserve stock filtering and pagination.
-- [ ] Integrate independently committed slices and run real PostgreSQL regressions.
+- [x] Integrate independently committed slices and run real PostgreSQL regressions.
 - [ ] Review contracts, comments, security boundaries and actual diffs independently.
 - [ ] Rehearse migrations, run production builds and verify the UI through local authenticated flows.
 - [ ] Deploy the reviewed integrated revision and verify both services and normal-auth smoke checks.
@@ -21,7 +21,7 @@ Base: production main `2ec721a`. The primary checkout was 27 commits behind prod
 
 ## Throughput checkpoint
 
-Blocking first steps were preserving local work, identifying the production base, reproducing defects and agreeing on additive persistence changes. These are complete apart from rerunning the probes on current main.
+Blocking first steps were preserving local work, identifying the production base, reproducing defects and agreeing on additive persistence changes. These are complete; all nine initial probes also reproduced against current production main.
 
 Four independent workstreams own billing, backend lifecycle, clinical forms, and inventory/queue reads. Each has a managed worktree and branch. The parent owns integration, combined regressions, release evidence and deployment. Prisma schema changes are restricted to each lane's models and separate migrations, then reconciled by the parent. No worker edits the primary checkout or deploys independently.
 
@@ -40,3 +40,7 @@ All twelve audit issues must have a verified correction or evidence that current
 The integrated revision must pass relevant unit/integration checks, production builds, migration rehearsal and authenticated browser smoke checks. Deployment must show the exact intended application commit on frontend and backend, health checks and migration completion. Historical inconsistencies are reported rather than silently rewritten. The primary checkout's unrelated work remains preserved.
 
 Decision trail: `decisions.tsv`. Evidence locations and final commands are recorded as work completes. A negative or inconclusive check is not a pass.
+
+## Release follow-up gates
+
+Independent reviewers returned billing PASS and lifecycle PASS with the requirement to drain backend writes during migration. Clinical conflict propagation and duplicate medicine-line identity remain active corrections. Final frontend checks, source-bound rebuild, authenticated HTTP/browser acceptance and independent release verdict are required before merging. Graphite is unavailable; use the authorized single-PR GitHub workflow after all gates pass.
