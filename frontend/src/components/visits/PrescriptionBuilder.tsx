@@ -173,7 +173,11 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  */
 /**
  * @cc [owner:nareshshah139,label:product] optional-dose-and-review-date
- * Numeric dose MUST remain optional and editable without changing regimen text.
+ * Main medicine rows MUST omit numeric-dose and dosage-unit controls. Saving
+ * other fields MUST preserve recorded dosage and dosageUnit values.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] review-date-independent-validity
  * A clinical review date MUST NOT set or clear prescription validity.
  */
 /**
@@ -5096,13 +5100,6 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                             {regimenHint(it, idx, 'frequency')}
-                            <div className="mt-2 flex items-center gap-2">
-                              <Input type="number" step="any" min="0.01" aria-label={`Numeric dosage for ${it.drugName || 'new medicine'}`} placeholder="Optional dose" value={it.dosage ?? ''} onChange={event => updateItem(idx, { dosage: event.target.value === '' ? '' : Number(event.target.value) })} />
-                              <Select value={it.dosageUnit} onValueChange={(value: DosageUnit) => updateItem(idx, { dosageUnit: value })}>
-                                <SelectTrigger aria-label={`Dosage unit for ${it.drugName || 'new medicine'}`}><SelectValue /></SelectTrigger>
-                                <SelectContent>{(['MG', 'ML', 'MCG', 'IU', 'TABLET', 'CAPSULE', 'DROP', 'SPRAY', 'PATCH', 'INJECTION'] as const).map(unit => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
-                              </Select>
-                            </div>
                           </td>
                           <td className="px-3 py-2 align-top">
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
