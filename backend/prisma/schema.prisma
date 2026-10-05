@@ -903,6 +903,7 @@ model InventoryItem {
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
+  @@index([branchId, name, id], map: "inventory_items_branch_name_id_read_idx")
   @@map("inventory_items")
 }
 
@@ -1221,6 +1222,7 @@ model PharmacyInvoice {
   @@index([paymentStatus])
   @@index([invoiceDate])
   @@index([createdAt])
+  @@index([prescriptionId, branchId], map: "pharmacy_invoices_prescription_branch_read_idx")
   @@map("pharmacy_invoices")
 }
 
