@@ -157,6 +157,25 @@ async function main() {
     assert.equal(after.currentStock, before.currentStock);
     assert.equal((await db.pharmacyInvoice.findUniqueOrThrow({ where: { id: draft.id } })).status, 'DRAFT');
   });
+  await check('Repeated medicine lines retain separate reviews and receive invoice quantity only once', async () => {
+    const rx = await makePrescription({ items: [5, 10].map(dosage => ({ drugName: 'Synthetic audit cream', drugId: f.drugId, inventoryItemId: f.inventoryItemId, dosage, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 2, durationUnit: 'DAYS', quantity: 2 })) });
+    const entry = await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue/' + rx.id));
+    assert.equal(entry.medications.length, 2);
+    assert.equal(new Set(entry.medications.map(line => line.lineId)).size, 2);
+    assert(entry.medications.every(line => line.lineId && line.action === 'pending'));
+    await ok(request('pharmacist', 'PATCH', `/pharmacy/dispense-tasks/${entry.dispenseTaskId}/lines/${entry.medications[0].lineId}`, { action: 'ACCEPTED' }));
+    const partlyReviewed = await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue/' + rx.id));
+    assert.deepEqual(partlyReviewed.medications.map(line => line.action), ['accepted', 'pending']);
+    assert.equal((await request('pharmacist', 'PATCH', `/pharmacy/dispense-tasks/${entry.dispenseTaskId}/status`, { status: 'READY_TO_BILL' })).status, 400);
+    await ok(request('pharmacist', 'PATCH', `/pharmacy/dispense-tasks/${entry.dispenseTaskId}/lines/${entry.medications[1].lineId}`, { action: 'ACCEPTED' }));
+    assert.equal((await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue/' + rx.id))).dispenseStatus, 'READY_TO_BILL');
+    await ok(request('pharmacist', 'POST', '/pharmacy/invoices/checkout', { ...invoicePayload(rx.patientId), prescriptionId: rx.id, requestKey: key() }));
+    const covered = await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue/' + rx.id));
+    assert.deepEqual(covered.medications.map(line => line.dispensedQuantity), [2, 0]);
+    assert.equal(covered.status, 'partial');
+    const page = await ok(request('pharmacist', 'GET', '/pharmacy/prescription-queue?status=partial&limit=100'));
+    assert(page.data.some(row => row.prescriptionId === rx.id));
+  });
   await check('Queue filters precede pagination and GET aliases never write', async () => {
     const baseline = await ok(request('doctor', 'GET', '/pharmacy/prescription-queue?status=pending&limit=2&page=1'));
     const active = [];
@@ -180,7 +199,7 @@ async function main() {
     assert.equal(first.pagination.limit, 2);
     assert.equal(first.pagination.page, 1);
     assert.equal(second.pagination.page, 2);
-    assert(first.data.every(row => row.status === 'pending' && row.dispenseTaskId === null));
+    assert(first.data.every(row => row.status === 'pending' && row.dispenseTaskId == null));
     assert.deepEqual(alias.data.map(row => row.prescriptionId), expected.slice(0, 2));
     assert.deepEqual(alias.pagination, first.pagination);
     assert(expiredPage.data.some(row => row.prescriptionId === expired.id && row.status === 'expired'));

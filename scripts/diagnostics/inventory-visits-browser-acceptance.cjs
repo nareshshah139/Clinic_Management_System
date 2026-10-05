@@ -82,6 +82,28 @@ async function main() {
   assert.equal(idleAfter.updatedAt, idleBefore.updatedAt);
   await reopened.screenshot({ path: path.join(output, 'visit-clear-reopened.png'), fullPage: false });
   report.checks.push({ name: 'Fresh authenticated browser context reopens cleared value and performs no idle save', outcome: 'VERIFIED' });
+  const external = await fetch(session.frontend + '/api/visits/' + fixture.visitId, { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() }, body: JSON.stringify({ version: idleAfter.version, vitals: { heartRate: 90 } }) });
+  assert.equal(external.status, 200);
+  await reopened.focus('input[placeholder="bpm"]');
+  await reopened.keyboard.type('77');
+  const conflictResponse = reopened.waitForResponse(response => response.request().method() === 'PATCH' && response.url().endsWith('/visits/' + fixture.visitId));
+  const saveAgain = await reopened.evaluateHandle(() => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === 'Save Draft'));
+  await saveAgain.asElement().focus();
+  await reopened.keyboard.press('Enter');
+  assert.equal((await conflictResponse).status(), 409);
+  await reopened.waitForFunction(() => document.body.innerText.includes('Autosave is paused'));
+  assert.equal(await reopened.$eval('input[placeholder="bpm"]', element => element.value), '77');
+  const attempts = idleMutations.length;
+  await new Promise(resolve => setTimeout(resolve, 9000));
+  assert.equal(idleMutations.length, attempts);
+  assert.equal((await read()).vitals.heartRate, 90);
+  await reopened.screenshot({ path: path.join(output, 'visit-conflict-protected.png'), fullPage: false });
+  const discard = await reopened.evaluateHandle(() => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === 'Discard draft and reload saved visit'));
+  await discard.asElement().focus();
+  await reopened.keyboard.press('Enter');
+  await reopened.waitForFunction(() => document.querySelector('input[placeholder="bpm"]').value === '90');
+  assert(!(await reopened.evaluate(() => document.body.innerText)).includes('Autosave is paused'));
+  report.checks.push({ name: 'A real conflicting save retains edits, stops retries and reloads only through explicit recovery', outcome: 'VERIFIED' });
   report.outcome = 'VERIFIED';
 }
 main().catch(error => { report.outcome = 'NOT VERIFIED'; report.error = error.message; process.exitCode = 1; }).finally(async () => {

@@ -49,7 +49,7 @@ async function main() {
   await page.click('button[type=submit]');
   await page.waitForFunction(() => !location.pathname.includes('login'));
   await page.goto(session.frontend + '/dashboard/pharmacy?tab=billing&patientId=' + f.patientId + '&prescriptionId=' + rx.id + '&doctorId=' + f.users.doctor.id, { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => [...document.querySelectorAll('tr')].some(row => row.innerText.includes('Synthetic audit cream') && row.querySelector('input[type=number]')));
+  await page.waitForSelector('input[id^="quantity-"]');
   const cdp = await page.createCDPSession();
   let dropped = false, firstPayload;
   cdp.on('Fetch.requestPaused', async event => {
@@ -60,8 +60,11 @@ async function main() {
     } else await cdp.send('Fetch.continueRequest', { requestId: event.requestId });
   });
   await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/pharmacy/invoices/checkout', requestStage: 'Response' }] });
+  report.stage = 'Open invoice preview';
   await clickText(page, 'Print Preview');
+  report.stage = 'Confirm invoice';
   await clickText(page, 'Confirm Invoice');
+  report.stage = 'Observe dropped response';
   await page.waitForFunction(() => document.body.innerText.includes('Error Confirming Invoice'));
   assert(dropped);
   assert.equal(firstPayload.prescriptionId, rx.id);
@@ -93,8 +96,10 @@ async function main() {
   const drug = await page.evaluateHandle(() => [...document.querySelectorAll('[role=button]')].find(element => element.innerText.includes('Synthetic audit cream')));
   await drug.asElement().focus();
   await page.keyboard.press('Enter');
+  report.stage = 'Open invoice preview';
   await clickText(page, 'Print Preview');
   const nextResponse = page.waitForResponse(response => response.request().method() === 'POST' && response.url().endsWith('/pharmacy/invoices/checkout'));
+  report.stage = 'Confirm invoice';
   await clickText(page, 'Confirm Invoice');
   const next = await nextResponse;
   assert.equal(next.status(), 201);
