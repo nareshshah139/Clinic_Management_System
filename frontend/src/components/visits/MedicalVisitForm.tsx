@@ -48,14 +48,14 @@ import {
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { compactClinicalPatch, mergeClinicalPatch } from '@/lib/clinical-patch';
+import { compactClinicalPatch, mergeClinicalPatch, useClinicalState } from '@/lib/clinical-patch';
 import { usePatientHistory } from './usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
 import PrescriptionBuilder from '@/components/visits/PrescriptionBuilder';
 import VisitPhotos from '@/components/visits/VisitPhotos';
 import { DoctorTour } from '@/components/tours';
-import type { Patient, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
+import type { Patient, VisitStatus, VisitDetails, VisitPatientSummary, VisitSummary } from '@/lib/types';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { isUuid } from '@/lib/id';
@@ -70,7 +70,7 @@ interface Props {
   patientName?: string;
   visitDate?: string; // ISO string; falls back to today if not provided
   appointmentId?: string;
-  appointmentData?: VisitDetails | null;
+  appointmentData?: { patient?: VisitPatientSummary } | null;
   initialVisitId?: string;
 }
 
@@ -101,6 +101,8 @@ type CompositeLabValue = Record<string, SimpleLabValue>;
 type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 
 type MedicalVisitDraftState = {
+  dirtyClinicalFields?: string[];
+  visitVersion?: number;
   consultationType?: ConsultationType;
   teleVideoConsent?: boolean;
   prescriptionClinical?: Record<string, unknown>;
@@ -132,7 +134,7 @@ type MedicalVisitDraftState = {
   reviewDate: string;
   activeTab: string;
   completedSections: string[];
-  visitStatus: 'draft' | 'in-progress' | 'completed';
+  visitStatus: VisitStatus | 'draft';
 };
 
 const INITIAL_VITALS: VitalsState = {
@@ -188,12 +190,20 @@ const ROLE_PERMISSIONS = {
 };
 
 /**
+ * @cc [owner:nareshshah139,label:product] visit-save-version
+ * Existing-visit saves MUST send the version loaded or acknowledged by this form.
+ * A conflict MUST preserve edits and stop automatic retries. Completed status MUST
+ * come from the server, including walk-ins and restored local drafts.
+ */
+/**
  * @cc [owner:nareshshah139,label:product] consultation-consent-form
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
 export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId }: Props) {
-  // Parse helper
+  const visitVersionRef = useRef<number | undefined>(undefined);
+  const dirtyClinicalFields = useRef(new Set<string>());
+  const clinicalField = <T,>(field: string, value: T): T | undefined => Array.from(dirtyClinicalFields.current).some(path => path === field || path.startsWith(`${field}.`)) ? value : undefined;
   const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
     if (!value) return undefined;
     if (typeof value === 'object') return value as T;
@@ -214,50 +224,50 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   // Core visit data
   const [visitId, setVisitId] = useState<string | null>(initialVisitId || null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
-  const [visitStatus, setVisitStatus] = useState<'draft' | 'in-progress' | 'completed'>('draft');
+  const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   
   // Form sections state
   const [activeTab, setActiveTab] = useState('overview');
   const [completedSections, setCompletedSections] = useState<Set<string>>(new Set());
   
   // Basic info (Therapist/Nurse level - 20-25%)
-  const [vitals, setVitals] = useState<VitalsState>({ ...INITIAL_VITALS });
-  const [painScore, setPainScore] = useState('');
-  const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
+  const [vitals, setVitals, hydrateVitals] = useClinicalState<VitalsState>({ ...INITIAL_VITALS }, 'vitals', dirtyClinicalFields);
+  const [painScore, setPainScore, hydratePainScore] = useClinicalState('', 'painScore', dirtyClinicalFields);
+  const [skinConcerns, setSkinConcerns, hydrateSkinConcerns] = useClinicalState<Set<string>>(new Set(), 'skinConcerns', dirtyClinicalFields);
   
   // Complaints (Nurse+ level - 35-40%)
-  const [complaints, setComplaints] = useState<string[]>([]);
+  const [complaints, setComplaints, hydrateComplaints] = useClinicalState<string[]>([], 'complaints', dirtyClinicalFields);
 
   // Doctor level (remaining 75-80%)
-  const [subjective, setSubjective] = useState('');
-  const [objective, setObjective] = useState('');
-  const [assessment, setAssessment] = useState('');
-  const [plan, setPlan] = useState('');
+  const [subjective, setSubjective, hydrateSubjective] = useClinicalState('', 'subjective', dirtyClinicalFields);
+  const [objective, setObjective, hydrateObjective] = useClinicalState('', 'objective', dirtyClinicalFields);
+  const [assessment, setAssessment, hydrateAssessment] = useClinicalState('', 'assessment', dirtyClinicalFields);
+  const [plan, setPlan, hydratePlan] = useClinicalState('', 'plan', dirtyClinicalFields);
 
   // Dermatology-specific
-  const [skinType, setSkinType] = useState<string>('');
-  const [morphology, setMorphology] = useState<Set<string>>(new Set());
-  const [distribution, setDistribution] = useState<Set<string>>(new Set());
-  const [acneSeverity, setAcneSeverity] = useState<string>('');
-  const [itchScore, setItchScore] = useState<string>('');
-  const [triggers, setTriggers] = useState<string>('');
-  const [priorTx, setPriorTx] = useState<string>('');
-  const [dermDx, setDermDx] = useState<Set<string>>(new Set());
-  const [procType, setProcType] = useState<string>('');
-  const [fluence, setFluence] = useState<string>('');
-  const [spotSize, setSpotSize] = useState<string>('');
-  const [passes, setPasses] = useState<string>('');
-  const [topicals, setTopicals] = useState<string>('');
-  const [systemics, setSystemics] = useState<string>('');
-  const [counseling, setCounseling] = useState<string>('');
-  const [reviewDate, setReviewDate] = useState<string>('');
+  const [skinType, setSkinType, hydrateSkinType] = useClinicalState<string>('', 'skinType', dirtyClinicalFields);
+  const [morphology, setMorphology, hydrateMorphology] = useClinicalState<Set<string>>(new Set(), 'morphology', dirtyClinicalFields);
+  const [distribution, setDistribution, hydrateDistribution] = useClinicalState<Set<string>>(new Set(), 'distribution', dirtyClinicalFields);
+  const [acneSeverity, setAcneSeverity, hydrateAcneSeverity] = useClinicalState<string>('', 'acneSeverity', dirtyClinicalFields);
+  const [itchScore, setItchScore, hydrateItchScore] = useClinicalState<string>('', 'itchScore', dirtyClinicalFields);
+  const [triggers, setTriggers, hydrateTriggers] = useClinicalState<string>('', 'triggers', dirtyClinicalFields);
+  const [priorTx, setPriorTx, hydratePriorTx] = useClinicalState<string>('', 'priorTx', dirtyClinicalFields);
+  const [dermDx, setDermDx, hydrateDermDx] = useClinicalState<Set<string>>(new Set(), 'dermDx', dirtyClinicalFields);
+  const [procType, setProcType, hydrateProcType] = useClinicalState<string>('', 'procType', dirtyClinicalFields);
+  const [fluence, setFluence, hydrateFluence] = useClinicalState<string>('', 'fluence', dirtyClinicalFields);
+  const [spotSize, setSpotSize, hydrateSpotSize] = useClinicalState<string>('', 'spotSize', dirtyClinicalFields);
+  const [passes, setPasses, hydratePasses] = useClinicalState<string>('', 'passes', dirtyClinicalFields);
+  const [topicals, setTopicals, hydrateTopicals] = useClinicalState<string>('', 'topicals', dirtyClinicalFields);
+  const [systemics, setSystemics, hydrateSystemics] = useClinicalState<string>('', 'systemics', dirtyClinicalFields);
+  const [counseling, setCounseling, hydrateCounseling] = useClinicalState<string>('', 'counseling', dirtyClinicalFields);
+  const [reviewDate, setReviewDate, hydrateReviewDate] = useClinicalState<string>('', 'reviewDate', dirtyClinicalFields);
   
   // Lab Tests (Investigations)
   const investigationOptions: string[] = useMemo(() => (
     ['CBC','ESR','CRP','LFT','Fasting lipid profile','RFT','Creatinine','FBS','Fasting Insulin','HbA1c','RBS','CUE','Stool examination','Total Testosterone','S. Prolactin','Vitamin B12','Vitamin D','Ferritin','TSH','Thyroid profile','HIV-I,II','HbS Ag','Anti HCV','VDRL','RPR','TPHA','TB Gold Quantiferon Test','Montoux Test','Chest Xray PA view','2D Echo','Skin Biopsy']
   ), []);
-  const [labSelections, setLabSelections] = useState<string[]>([]);
-  const [labResults, setLabResults] = useState<LabResultsMap>({});
+  const [labSelections, setLabSelections, hydrateLabSelections] = useClinicalState<string[]>([], 'labSelections', dirtyClinicalFields);
+  const [labResults, setLabResults, hydrateLabResults] = useClinicalState<LabResultsMap>({}, 'labResults', dirtyClinicalFields);
   const [labsAutofillLoading, setLabsAutofillLoading] = useState(false);
   const [compareLabs, setCompareLabs] = useState(false);
   const [prevLabResults, setPrevLabResults] = useState<LabResultsMap>({});
@@ -287,7 +297,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   useEffect(() => {
     // Ensure labResults has entries for selected tests with default units/subtests
-    setLabResults((prev) => {
+    const reconcile = (prev: LabResultsMap) => {
       const next: typeof prev = { ...prev };
       // Add new selections
       for (const test of labSelections) {
@@ -305,7 +315,9 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       // Remove deselections
       Object.keys(next).forEach((k) => { if (!labSelections.includes(k)) delete next[k]; });
       return next;
-    });
+    };
+    if (dirtyClinicalFields.current.has('labSelections')) setLabResults(reconcile);
+    else hydrateLabResults(reconcile(labResults));
   }, [labSelections, COMPOSITE_TESTS, SIMPLE_TEST_UNITS]);
 
   // Load previous visit's lab results for comparison
@@ -358,8 +370,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const vitalKeys: Record<string, keyof VitalsState> = { systolicBP: 'bpS', diastolicBP: 'bpD', heartRate: 'hr', temperature: 'temp', weight: 'weight', height: 'height', oxygenSaturation: 'spo2', respiratoryRate: 'rr' };
     const changes: Partial<VitalsState> = {};
     for (const [key, value] of Object.entries(nextVitals)) {
-      if (vitalKeys[key] && value != null && value !== previousVitals[key]) {
-        changes[vitalKeys[key]] = String(key === 'temperature' ? Number(value) * 9 / 5 + 32 : value);
+      if (vitalKeys[key] && value !== previousVitals[key]) {
+        changes[vitalKeys[key]] = value == null || value === '' ? '' : String(key === 'temperature' ? Number(value) * 9 / 5 + 32 : value);
       }
     }
     if (Object.keys(changes).length) setVitals(current => ({ ...current, ...changes }));
@@ -497,7 +509,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   );
 
   const isInitialLoadRef = useRef(true);
-  const restoredDraftRef = useRef(false);
   const hasUnsavedChangesRef = useRef(false);
   const autoSaveTimerRef = useRef<number | null>(null);
   const autoSavePromiseRef = useRef<Promise<void> | null>(null);
@@ -544,6 +555,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   }, []);
 
   const serializeDraft = useCallback((): MedicalVisitDraftState => ({
+    dirtyClinicalFields: Array.from(dirtyClinicalFields.current),
+    visitVersion: visitVersionRef.current,
     consultationType,
     teleVideoConsent,
     prescriptionClinical,
@@ -609,47 +622,48 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     acneSeverity,
     consultationType,
     teleVideoConsent,
+    dirtyClinicalFields.current,
   ]);
 
   const latestDraftStateRef = useRef(serializeDraft());
   latestDraftStateRef.current = serializeDraft();
 
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
-    restoredDraftRef.current = true;
+    if (draft.visitVersion !== undefined) visitVersionRef.current = draft.visitVersion;
     if (draft.consultationType) {
       setConsultationType(draft.consultationType);
       setTeleVideoConsent(draft.consultationType === 'TELE_VIDEO' && draft.teleVideoConsent === true);
     }
     if (draft.prescriptionClinical) receiveClinicalData(draft.prescriptionClinical);
-    if (draft.labSelections) setLabSelections(draft.labSelections);
-    if (draft.labResults) setLabResults(draft.labResults);
-    setVitals(draft.vitals || { ...INITIAL_VITALS });
-    setPainScore(draft.painScore || '');
-    setSkinConcerns(new Set(draft.skinConcerns || []));
-    setComplaints(draft.complaints || []);
-    setSubjective(draft.subjective || '');
-    setObjective(draft.objective || '');
-    setAssessment(draft.assessment || '');
-    setPlan(draft.plan || '');
-    setSkinType(draft.skinType || '');
-    setMorphology(new Set(draft.morphology || []));
-    setDistribution(new Set(draft.distribution || []));
-    setAcneSeverity(draft.acneSeverity || '');
-    setItchScore(draft.itchScore || '');
-    setTriggers(draft.triggers || '');
-    setPriorTx(draft.priorTx || '');
-    setDermDx(new Set(draft.dermDx || []));
-    setProcType(draft.procType || '');
-    setFluence(draft.fluence || '');
-    setSpotSize(draft.spotSize || '');
-    setPasses(draft.passes || '');
-    setTopicals(draft.topicals || '');
-    setSystemics(draft.systemics || '');
-    setCounseling(draft.counseling || '');
-    setReviewDate(draft.reviewDate || '');
+    if (draft.labSelections) hydrateLabSelections(draft.labSelections, draft.dirtyClinicalFields ?? 'populated');
+    if (draft.labResults) hydrateLabResults(draft.labResults, draft.dirtyClinicalFields ?? 'populated');
+    hydrateVitals(draft.vitals || { ...INITIAL_VITALS }, draft.dirtyClinicalFields ?? 'populated');
+    hydratePainScore(draft.painScore || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateSkinConcerns(new Set(draft.skinConcerns || []), draft.dirtyClinicalFields ?? 'populated');
+    hydrateComplaints(draft.complaints || [], draft.dirtyClinicalFields ?? 'populated');
+    hydrateSubjective(draft.subjective || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateObjective(draft.objective || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateAssessment(draft.assessment || '', draft.dirtyClinicalFields ?? 'populated');
+    hydratePlan(draft.plan || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateSkinType(draft.skinType || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateMorphology(new Set(draft.morphology || []), draft.dirtyClinicalFields ?? 'populated');
+    hydrateDistribution(new Set(draft.distribution || []), draft.dirtyClinicalFields ?? 'populated');
+    hydrateAcneSeverity(draft.acneSeverity || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateItchScore(draft.itchScore || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateTriggers(draft.triggers || '', draft.dirtyClinicalFields ?? 'populated');
+    hydratePriorTx(draft.priorTx || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateDermDx(new Set(draft.dermDx || []), draft.dirtyClinicalFields ?? 'populated');
+    hydrateProcType(draft.procType || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateFluence(draft.fluence || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateSpotSize(draft.spotSize || '', draft.dirtyClinicalFields ?? 'populated');
+    hydratePasses(draft.passes || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateTopicals(draft.topicals || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateSystemics(draft.systemics || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateCounseling(draft.counseling || '', draft.dirtyClinicalFields ?? 'populated');
+    hydrateReviewDate(draft.reviewDate || '', draft.dirtyClinicalFields ?? 'populated');
     setActiveTab(draft.activeTab || 'overview');
     setCompletedSections(new Set(draft.completedSections || []));
-    setVisitStatus(draft.visitStatus || 'draft');
+
   }, [receiveClinicalData]);
 
   const persistDraftToStorage = useCallback(
@@ -705,102 +719,59 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     return Math.round((completedSections.size / totalSections) * 100);
   }, [completedSections.size, hasPermission]);
 
-  // Build payload for save/update (moved up to avoid TDZ issues)
+  /**
+   * @cc [owner:nareshshah139,label:product] dirty-clinical-save
+   * Untouched diagnoses, vitals, examination, and plan fields MUST be omitted.
+   * Edited empty values MUST survive the request, and editor patches MUST NOT
+   * overwrite newer shared-vitals edits. Personal history retains its visit snapshot.
+   */
   const buildPayload = useCallback(() => {
-    // Convert Fahrenheit (UI unit) to Celsius for backend validation/storage
-    let temperatureC: number | undefined = undefined;
-    if (vitals.temp !== '') {
-      const n = Number(vitals.temp);
-      if (!Number.isNaN(n)) {
-        temperatureC = ((n - 32) * 5) / 9;
-      }
-    }
-    const complaintValues = (() => {
-      if (complaints.length > 0) {
-        return complaints;
-      }
-      if (!visitId) {
-        if (subjective) return [subjective];
-        return ['General consultation'];
-      }
-      return [];
-    })();
-
-    const payload: Record<string, unknown> = {
-      patientId,
-      doctorId,
-      appointmentId, // Include appointment ID if available
-      visitNumber: currentVisitNumber,
-      status: visitStatus,
-      complaints: complaintValues.map((complaint) => ({ complaint })),
-      history: { subjective: subjective || undefined },
-      scribeJson: { assessment: assessment || undefined },
+    const field = clinicalField;
+    const number = (value: string) => value === '' ? null : Number(value);
+    const payload = compactClinicalPatch({
+      patientId, doctorId, appointmentId, visitNumber: currentVisitNumber, version: visitVersionRef.current,
+      complaints: field('complaints', complaints.map(complaint => ({ complaint })))
+        ?? (!visitId ? [{ complaint: subjective || 'General consultation' }] : undefined),
+      history: { subjective: field('subjective', subjective) },
+      scribeJson: { assessment: field('assessment', assessment) },
       examination: {
-        ...(objective ? { generalAppearance: objective } : {}),
+        generalAppearance: field('objective', objective),
         dermatology: {
-          skinType: skinType || undefined,
-          morphology: Array.from(morphology),
-          distribution: Array.from(distribution),
-          acneSeverity: acneSeverity || undefined,
-          itchScore: itchScore ? Number(itchScore) : undefined,
-          painScore: painScore ? Number(painScore) : undefined,
-          triggers: triggers || undefined,
-          priorTreatments: priorTx || undefined,
-          skinConcerns: Array.from(skinConcerns),
-        }
+          skinType: field('skinType', skinType), morphology: field('morphology', Array.from(morphology)),
+          distribution: field('distribution', Array.from(distribution)), acneSeverity: field('acneSeverity', acneSeverity),
+          itchScore: field('itchScore', number(itchScore)), painScore: field('painScore', number(painScore)),
+          triggers: field('triggers', triggers), priorTreatments: field('priorTx', priorTx),
+          skinConcerns: field('skinConcerns', Array.from(skinConcerns)),
+        },
       },
-      diagnosis: (dermDx.size > 0 ? Array.from(dermDx) : assessment ? [assessment] : [])
-        .map((dx) => ({ diagnosis: dx })),
+      diagnosis: field('dermDx', Array.from(dermDx).map(diagnosis => ({ diagnosis }))),
       treatmentPlan: {
-        ...(plan ? { notes: plan } : {}),
+        notes: field('plan', plan), followUpDate: field('reviewDate', reviewDate || null),
         dermatology: {
-          procedures: procType ? [{ 
-            type: procType, 
-            fluence: fluence ? Number(fluence) : undefined, 
-            spotSize: spotSize ? Number(spotSize) : undefined, 
-            passes: passes ? Number(passes) : undefined 
-          }] : [],
-          medications: {
-            topicals: topicals || undefined,
-            systemics: systemics || undefined,
-          },
-          counseling: counseling || undefined,
-          investigations: labSelections.length ? labSelections : undefined,
-          labResults: labResults && Object.keys(labResults).length ? labResults : undefined,
-          // follow-up date handled at visit completion; prescription gets reviewDate via prop
-        }
+          procedures: ['procType', 'fluence', 'spotSize', 'passes'].some(key => dirtyClinicalFields.current.has(key))
+            ? (procType ? [{ type: procType, fluence: number(fluence), spotSize: number(spotSize), passes: number(passes) }] : []) : undefined,
+          medications: { topicals: field('topicals', topicals), systemics: field('systemics', systemics) },
+          counseling: field('counseling', counseling), investigations: field('labSelections', labSelections),
+          labResults: field('labResults', labResults),
+        },
       },
       vitals: {
-        systolicBP: vitals.bpS ? Number(vitals.bpS) : undefined,
-        diastolicBP: vitals.bpD ? Number(vitals.bpD) : undefined,
-        heartRate: vitals.hr ? Number(vitals.hr) : undefined,
-        temperature: temperatureC,
-        weight: vitals.weight ? Number(vitals.weight) : undefined,
-        height: vitals.height ? Number(vitals.height) : undefined,
-        respiratoryRate: vitals.rr ? Number(vitals.rr) : undefined,
-        oxygenSaturation: vitals.spo2 ? Number(vitals.spo2) : undefined,
+        systolicBP: field('vitals.bpS', number(vitals.bpS)), diastolicBP: field('vitals.bpD', number(vitals.bpD)),
+        heartRate: field('vitals.hr', number(vitals.hr)), weight: field('vitals.weight', number(vitals.weight)),
+        height: field('vitals.height', number(vitals.height)), respiratoryRate: field('vitals.rr', number(vitals.rr)),
+        oxygenSaturation: field('vitals.spo2', number(vitals.spo2)),
+        temperature: field('vitals.temp', vitals.temp === '' ? null : (Number(vitals.temp) - 32) * 5 / 9),
       },
-      photos: [], // Photos are now managed by VisitPhotos component
-      metadata: {
-        capturedBy: userRole,
-        sections: Array.from(completedSections),
-        progress: getProgress(),
-      }
-    };
-
-    if (reviewDate) {
-      (payload.treatmentPlan as Record<string, unknown>).followUpDate = reviewDate;
-    }
-
-    const compact = compactClinicalPatch(payload);
-    const merged = mergeClinicalPatch(compact, prescriptionClinicalRef.current);
-    if (compact.vitals) merged.vitals = { ...merged.vitals, ...compact.vitals };
+      metadata: { capturedBy: userRole, sections: Array.from(completedSections), progress: getProgress() },
+    });
+    const merged = mergeClinicalPatch(payload, prescriptionClinicalRef.current);
+    if (payload.vitals) merged.vitals = { ...merged.vitals, ...payload.vitals };
     if (consultationType) {
       merged.consultationType = consultationType;
       merged.teleVideoConsent = teleVideoConsent;
     }
     return merged;
-  }, [consultationType, teleVideoConsent, triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, visitStatus, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, triggers, prescriptionClinical, labSelections, labResults, spotSize, assessment, complaints, counseling, dermDx, doctorId, fluence, passes, patientId, plan, priorTx, procType, reviewDate, skinConcerns, skinType, subjective, systemics, topicals, currentVisitNumber, appointmentId, morphology, distribution, acneSeverity, itchScore, painScore, getProgress, completedSections, userRole, vitals, objective, visitId]);
 
   const latestPayload = useRef(buildPayload);
   latestPayload.current = buildPayload;
@@ -814,7 +785,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       return;
     }
 
-    const persisted = persistDraftToStorage();
+    persistDraftToStorage();
 
     if (autoSavePromiseRef.current) {
       return;
@@ -836,9 +807,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
           idemKey = currentKey;
           lastIdempotencyKeyRef.current = idemKey;
         }
-        await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey });
+        const saved = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey }) as VisitDetails;
+        const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
+        visitVersionRef.current = saved.version ?? visitVersionRef.current;
         visitSaveAttempt.current = null;
-        if (JSON.stringify(payload) !== JSON.stringify(latestPayload.current())) {
+        latestDraftWriter.current(!newerChanges);
+        if (newerChanges) {
           hasUnsavedChangesRef.current = true;
           setSaveStatus('unsaved');
           return;
@@ -846,9 +820,6 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         hasUnsavedChangesRef.current = false;
         autoSaveFailureNotifiedRef.current = false;
         justSavedRef.current = true;
-        if (!persisted) {
-          persistDraftToStorage(true);
-        }
         setSaveStatus('saved');
         setLastSavedAt(Date.now());
       } catch (error) {
@@ -856,7 +827,11 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         hasUnsavedChangesRef.current = true;
         setSaveStatus('error');
         // If unauthorized, prompt sign-in and do not retry
-        if ((error as any)?.status === 401) {
+        if ((error as any)?.status === 409) {
+          retryAllowed = false;
+          clearAutoSaveTimer();
+          toast({ variant: 'warning', title: 'Visit changed elsewhere', description: 'Your draft is retained. Reload the visit before saving again.' });
+        } else if ((error as any)?.status === 401) {
           retryAllowed = false;
           toast({
             variant: 'destructive',
@@ -1013,24 +988,25 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const load = async () => {
       if (!visitId) return;
       try {
-        const initialState = JSON.stringify(latestDraftStateRef.current);
-        const res: any = await apiClient.get(`/visits/${visitId}`);
+        const res: any = await apiClient.get<VisitDetails>(`/visits/${visitId}`);
+        if (visitVersionRef.current === undefined) visitVersionRef.current = res.version;
+        if (res.status) setVisitStatus(res.status);
         if (!latestDraftStateRef.current.consultationType) {
           setConsultationType(res?.consultationType === 'TELE_VIDEO' ? 'TELE_VIDEO' : 'IN_PERSON');
           setTeleVideoConsent(res?.consultationType === 'TELE_VIDEO' && !!res.teleVideoConsentById && !!res.teleVideoConsentAt);
         }
-        if (restoredDraftRef.current || initialState !== JSON.stringify(latestDraftStateRef.current)) return;
+
         // Prefill complaints, vitals, exam, diagnosis, plan when empty
         try {
           const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
           if (Array.isArray(complaintsArr) && complaints.length === 0) {
-            setComplaints(complaintsArr.map((c: any) => c?.complaint).filter(Boolean));
+            hydrateComplaints(complaintsArr.map((c: any) => c?.complaint).filter(Boolean));
           }
         } catch {}
         try {
           const v = typeof res?.vitals === 'object' ? res.vitals : (res?.vitals ? JSON.parse(res.vitals) : undefined);
           if (v && Object.keys(v).length && JSON.stringify(vitals) === JSON.stringify(INITIAL_VITALS)) {
-            setVitals({
+            hydrateVitals({
               bpS: v.systolicBP ? String(v.systolicBP) : '',
               bpD: v.diastolicBP ? String(v.diastolicBP) : '',
               hr: v.heartRate ? String(v.heartRate) : '',
@@ -1045,49 +1021,49 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         } catch {}
         try {
           const savedHistory = typeof res?.history === 'string' ? JSON.parse(res.history) : res?.history;
-          if (savedHistory?.subjective && !subjective) setSubjective(savedHistory.subjective);
+          if (savedHistory?.subjective && !subjective) hydrateSubjective(savedHistory.subjective);
           const savedScribe = typeof res?.scribeJson === 'string' ? JSON.parse(res.scribeJson) : res?.scribeJson;
-          if (savedScribe?.assessment && !assessment) setAssessment(savedScribe.assessment);
+          if (savedScribe?.assessment && !assessment) hydrateAssessment(savedScribe.assessment);
           const exam = typeof res?.exam === 'object' ? res.exam : (res?.exam ? JSON.parse(res.exam) : undefined);
-          if (exam?.generalAppearance && !objective) setObjective(String(exam.generalAppearance));
+          if (exam?.generalAppearance && !objective) hydrateObjective(String(exam.generalAppearance));
           const derm = exam?.dermatology || {};
-          if (derm?.skinType && !skinType) setSkinType(String(derm.skinType));
-          if (Array.isArray(derm?.morphology) && morphology.size === 0) setMorphology(new Set(derm.morphology));
-          if (Array.isArray(derm?.distribution) && distribution.size === 0) setDistribution(new Set(derm.distribution));
-          if (derm?.acneSeverity && !acneSeverity) setAcneSeverity(String(derm.acneSeverity));
-          if (derm?.itchScore != null && !itchScore) setItchScore(String(derm.itchScore));
-          if (derm?.painScore != null && !painScore) setPainScore(String(derm.painScore));
-          if (derm?.triggers && !triggers) setTriggers(String(derm.triggers));
-          if (derm?.priorTreatments && !priorTx) setPriorTx(String(derm.priorTreatments));
-          if (Array.isArray(derm?.skinConcerns) && skinConcerns.size === 0) setSkinConcerns(new Set(derm.skinConcerns));
+          if (derm?.skinType && !skinType) hydrateSkinType(String(derm.skinType));
+          if (Array.isArray(derm?.morphology) && morphology.size === 0) hydrateMorphology(new Set(derm.morphology));
+          if (Array.isArray(derm?.distribution) && distribution.size === 0) hydrateDistribution(new Set(derm.distribution));
+          if (derm?.acneSeverity && !acneSeverity) hydrateAcneSeverity(String(derm.acneSeverity));
+          if (derm?.itchScore != null && !itchScore) hydrateItchScore(String(derm.itchScore));
+          if (derm?.painScore != null && !painScore) hydratePainScore(String(derm.painScore));
+          if (derm?.triggers && !triggers) hydrateTriggers(String(derm.triggers));
+          if (derm?.priorTreatments && !priorTx) hydratePriorTx(String(derm.priorTreatments));
+          if (Array.isArray(derm?.skinConcerns) && skinConcerns.size === 0) hydrateSkinConcerns(new Set(derm.skinConcerns));
         } catch {}
         try {
           const diagArr = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
           if (Array.isArray(diagArr) && dermDx.size === 0 && !assessment) {
             const vals = diagArr.map((d: any) => d?.diagnosis).filter(Boolean);
-            setDermDx(new Set(vals));
-            if (vals[0]) setAssessment(current => current || String(vals[0]));
+            hydrateDermDx(new Set(vals));
+            if (vals[0]) hydrateAssessment(String(vals[0]));
           }
         } catch {}
         try {
           const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
-          if (planObj?.notes && !plan) setPlan(String(planObj.notes));
+          if (planObj?.notes && !plan) hydratePlan(String(planObj.notes));
           const derm = planObj?.dermatology || {};
-          if (planObj?.followUpDate && !reviewDate) setReviewDate(String(planObj.followUpDate).slice(0, 10));
-          if (derm?.labResults && !Object.keys(labResults).length) setLabResults(derm.labResults);
-          if (Array.isArray(derm?.investigations) && labSelections.length === 0) setLabSelections(derm.investigations);
+          if (planObj?.followUpDate && !reviewDate) hydrateReviewDate(String(planObj.followUpDate).slice(0, 10));
+          if (derm?.labResults && !Object.keys(labResults).length) hydrateLabResults(derm.labResults);
+          if (Array.isArray(derm?.investigations) && labSelections.length === 0) hydrateLabSelections(derm.investigations);
           if (derm?.procedures && Array.isArray(derm.procedures) && derm.procedures.length && !procType) {
             const p = derm.procedures[0];
-            if (p?.type) setProcType(String(p.type));
-            if (p?.fluence) setFluence(String(p.fluence));
-            if (p?.spotSize) setSpotSize(String(p.spotSize));
-            if (p?.passes) setPasses(String(p.passes));
+            if (p?.type) hydrateProcType(String(p.type));
+            if (p?.fluence) hydrateFluence(String(p.fluence));
+            if (p?.spotSize) hydrateSpotSize(String(p.spotSize));
+            if (p?.passes) hydratePasses(String(p.passes));
           }
           if (derm?.medications) {
-            if (derm.medications.topicals && !topicals) setTopicals(String(derm.medications.topicals));
-            if (derm.medications.systemics && !systemics) setSystemics(String(derm.medications.systemics));
+            if (derm.medications.topicals && !topicals) hydrateTopicals(String(derm.medications.topicals));
+            if (derm.medications.systemics && !systemics) hydrateSystemics(String(derm.medications.systemics));
           }
-          if (derm?.counseling && !counseling) setCounseling(String(derm.counseling));
+          if (derm?.counseling && !counseling) hydrateCounseling(String(derm.counseling));
         } catch {}
       } catch {
         // ignore
@@ -1473,7 +1449,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       await autoSavePromiseRef.current;
       latestDraftWriter.current();
       setSaveStatus('saving');
-      const payload = buildPayload();
+      const payload = latestPayload.current();
       
       let visit;
       if (visitId) {
@@ -1511,14 +1487,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
       visitSaveAttempt.current = null;
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
+      visitVersionRef.current = (visit as VisitDetails).version ?? visitVersionRef.current;
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
-        const completePayload: Record<string, unknown> = {};
+        const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
         if (reviewDate) completePayload.followUpDate = reviewDate;
         const completeId = (visit as VisitDetails).id;
         const idemKey = buildIdempotencyKey('POST', completeId, completePayload as any);
-        await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
-        setVisitStatus('completed');
+        const completedVisit = await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
+        if (completedVisit.status !== 'COMPLETED') throw new Error('The server did not confirm visit completion. Please retry.');
+        setVisitStatus(completedVisit.status);
+        visitVersionRef.current = completedVisit.version ?? visitVersionRef.current;
         if (typeof window !== 'undefined' && draftStorageKey) {
           try {
             window.localStorage.removeItem(draftStorageKey);
@@ -1527,7 +1506,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         lastDraftJsonRef.current = null;
         hasUnsavedChangesRef.current = false;
       } else {
-        setVisitStatus('in-progress');
+        if ((visit as VisitDetails).status) setVisitStatus((visit as VisitDetails).status!);
         hasUnsavedChangesRef.current = newerChanges;
         justSavedRef.current = true;
         clearAutoSaveTimer();
@@ -1726,8 +1705,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
                 Visit #{currentVisitNumber}
-                <Badge variant={visitStatus === 'completed' ? 'default' : visitStatus === 'in-progress' ? 'secondary' : 'outline'}>
-                  {visitStatus.replace('-', ' ').toUpperCase()}
+                <Badge variant={visitStatus === 'COMPLETED' ? 'default' : visitStatus === 'IN_PROGRESS' ? 'secondary' : 'outline'}>
+                  {visitStatus.replace('_', ' ').toUpperCase()}
                 </Badge>
                 {appointmentData && (
                   <Badge variant="secondary" className="bg-blue-100 text-blue-700">
@@ -1864,8 +1843,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-gray-600">Status:</span>
-                      <Badge variant={visitStatus === 'completed' ? 'default' : 'secondary'}>
-                        {visitStatus.replace('-', ' ').toUpperCase()}
+                      <Badge variant={visitStatus === 'COMPLETED' ? 'default' : 'secondary'}>
+                        {visitStatus.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </div>
                     <div className="flex justify-between">
@@ -2218,12 +2197,17 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   patientId={patientId}
                   allowDelete={hasPermission('photos') || hasPermission('all')}
                   onChangeCount={(c) => { setPhotoCount(c); }}
+                  onVisitVersion={(version) => {
+                    visitVersionRef.current = Math.max(visitVersionRef.current ?? 0, version);
+                    latestDraftWriter.current();
+                  }}
                   onVisitNeeded={async () => {
                     if (consentMissing) throw new Error(TELE_VIDEO_CONSENT_REQUIRED);
                     if (!visitId) {
                       const minimalPayload = buildPayload();
                       const newVisit = await apiClient.createVisit(minimalPayload);
                       const newVisitId = (newVisit as VisitDetails).id;
+                      visitVersionRef.current = (newVisit as VisitDetails).version;
                       setVisitId(newVisitId);
                       return newVisitId;
                     }
@@ -2248,6 +2232,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   consultationType={consultationType}
                   teleVideoConsent={teleVideoConsent}
                   onClinicalDataChange={receiveClinicalData}
+                  getClinicalSavePatch={() => latestPayload.current()}
+                  onVisitSaved={(saved) => {
+                    visitVersionRef.current = saved.version ?? visitVersionRef.current;
+                    if (saved.status) setVisitStatus(saved.status);
+                    latestDraftWriter.current();
+                  }}
                   onBeforeExport={async () => {
                     const savedId = await save(false, true);
                     if (!savedId) {
@@ -2279,6 +2269,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       if (!newVisit?.id) throw error;
                     }
                     const newVisitId = (newVisit as VisitDetails).id;
+                    visitVersionRef.current = (newVisit as VisitDetails).version;
                     setVisitId(newVisitId);
                     return newVisitId;
                   }}
@@ -2576,8 +2567,8 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                         
                         {/* Timeline dot */}
                         <div className={`relative flex items-center justify-center w-8 h-8 rounded-full ${
-                          visit.status === 'completed' ? 'bg-green-100 text-green-600' : 
-                          visit.status === 'in-progress' ? 'bg-blue-100 text-blue-600' : 
+                          visit.status === 'COMPLETED' ? 'bg-green-100 text-green-600' :
+                          visit.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-600' :
                           'bg-gray-100 text-gray-600'
                         }`}>
                           <div className="w-3 h-3 rounded-full bg-current" />

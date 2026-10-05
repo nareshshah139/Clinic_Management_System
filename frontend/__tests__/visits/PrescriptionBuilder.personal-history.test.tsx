@@ -32,7 +32,8 @@ it.each([false, true])('reopens the visit snapshot (legacy string JSON: %j)', as
   render(<PrescriptionBuilder patientId="patient" visitId="saved" doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(screen.getByRole('textbox', { name: 'Personal history' })).toHaveValue('Saved snapshot'));
   fireEvent.change(screen.getByRole('textbox', { name: 'Personal history' }), { target: { value: '' } });
-  expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ history: { personalHistory: '', pastHistory: 'Keep past history' } }));
+  expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ history: { personalHistory: '' } }));
+  expect(screen.getByRole('textbox', { name: 'Past history' })).toHaveValue('Keep past history');
   expect(jest.mocked(apiClient.get).mock.calls.some(([url]) => url.endsWith('/personal-history'))).toBe(false);
 });
 

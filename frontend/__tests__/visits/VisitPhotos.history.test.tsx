@@ -34,3 +34,19 @@ it('does not hide successfully loaded visit photos when the draft archive reques
   expect(await screen.findByText('Unattached uploads could not be loaded.')).toBeInTheDocument();
   expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 1 Jan 2025' })).toBeInTheDocument();
 });
+
+it('advances the editor version only from a successful photo mutation', async () => {
+  const onVisitVersion = jest.fn();
+  (global.fetch as jest.Mock).mockImplementation(async (_url, init) => ({ ok: true, json: async () => init?.method === 'DELETE'
+    ? { items: [], visitVersion: 8 }
+    : { items: [{ url: '/visits/current/photos/photo' }], visitVersion: 7 } }));
+  const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
+  try {
+    render(<VisitPhotos patientId="p" visitId="current" allowDelete onVisitVersion={onVisitVersion} />);
+    await screen.findByAltText('visit');
+    expect(onVisitVersion).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+    await screen.findByText('No photos attached to this visit');
+    expect(onVisitVersion).toHaveBeenCalledWith(8);
+  } finally { confirm.mockRestore(); }
+});

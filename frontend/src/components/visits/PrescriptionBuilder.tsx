@@ -1,8 +1,9 @@
 'use client';
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
-import { compactClinicalPatch } from '@/lib/clinical-patch';
+import { compactClinicalPatch, useClinicalState } from '@/lib/clinical-patch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -86,6 +87,8 @@ interface Props {
   userRole?: string;
   onCreated?: (id?: string) => void;
   onClinicalDataChange?: (patch: Record<string, unknown>) => void;
+  getClinicalSavePatch?: () => Record<string, unknown>;
+  onVisitSaved?: (visit: Partial<VisitDetails>) => void;
   onBeforeExport?: () => Promise<string>;
   onPreview?: () => void;
   reviewDate?: string;
@@ -166,6 +169,11 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * fields without values MUST remain omitted in both layouts.
  */
 /**
+ * @cc [owner:nareshshah139,label:product] optional-dose-and-review-date
+ * Numeric dose MUST remain optional and editable without changing regimen text.
+ * A clinical review date MUST NOT set or clear prescription validity.
+ */
+/**
  * @cc [owner:nareshshah139,label:product] personal-history-editing
  * Personal history MUST remain scoped to the selected patient and visit. Saved
  * drafts and edits, including clears, MUST take precedence over delayed prefill.
@@ -187,19 +195,22 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+  const visitVersionRef = useRef<number | undefined>(undefined);
+  const dirtyClinicalFields = useRef(new Set<string>());
+  const clinicalField = <T,>(field: string, value: T): T | undefined => Array.from(dirtyClinicalFields.current).some(path => path === field || path.startsWith(`${field}.`)) ? value : undefined;
   const { toast } = useToast();
   useEffect(() => { ensureGlobalPrintStyles(); }, []);
   const [language, setLanguage] = useState<Language>('EN');
-  const [diagnosis, setDiagnosis] = useState('');
+  const [diagnosis, setDiagnosis, hydrateDiagnosis] = useClinicalState('', 'diagnosis', dirtyClinicalFields);
   const deferredDiagnosis = useDeferredValue(diagnosis);
   // Removed doctor's personal notes field from UI; retain no top-level notes state
-  const [followUpInstructions, setFollowUpInstructions] = useState('');
+  const [followUpInstructions, setFollowUpInstructions, hydrateFollowUpInstructions] = useClinicalState('', 'followUpInstructions', dirtyClinicalFields);
 
-  const [items, setItems] = useState<PrescriptionItemForm[]>([]);
+  const [items, setItems, hydrateItems] = useClinicalState<PrescriptionItemForm[]>([], 'items', dirtyClinicalFields);
   const [loadingPrevMeds, setLoadingPrevMeds] = useState(false);
-  const [customSections, setCustomSections] = useState<Array<{ id: string; title: string; content: string }>>([]);
-  const [procedureMetrics, setProcedureMetrics] = useState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({});
+  const [customSections, setCustomSections, hydrateCustomSections] = useClinicalState<Array<{ id: string; title: string; content: string }>>([], 'customSections', dirtyClinicalFields);
+  const [procedureMetrics, setProcedureMetrics, hydrateProcedureMetrics] = useClinicalState<{ device?: string; wavelengthNm?: number | ''; fluenceJcm2?: number | ''; spotSizeMm?: number | ''; pulseMs?: number | ''; shots?: number | ''; cooling?: string; area?: string; peelAgent?: string; peelConcentration?: string; peelContactTimeMin?: number | ''; frosting?: string; needleDepthMm?: string; passes?: number | ''; anesthetic?: string }>({}, 'procedureMetrics', dirtyClinicalFields);
 
   // Allow creating a drug in DB for doctors, admins, pharmacists
   const canAddDrugToDB = useMemo(() => ['ADMIN', 'PHARMACIST', 'DOCTOR'].includes(String(userRole || '').toUpperCase()), [userRole]);
@@ -332,8 +343,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   };
 
   // Additional clinical fields per requirements
-  const [chiefComplaints, setChiefComplaints] = useState<string>('');
-  const [pastHistory, setPastHistory] = useState<string>('');
+  const [chiefComplaints, setChiefComplaints, hydrateChiefComplaints] = useClinicalState<string>('', 'chiefComplaints', dirtyClinicalFields);
+  const [pastHistory, setPastHistory, hydratePastHistory] = useClinicalState<string>('', 'pastHistory', dirtyClinicalFields);
   // Undefined means not loaded/edited yet; an empty string is an explicit clear.
   const [personalHistoryState, setPersonalHistoryState] = useState<{ patientId: string; visitId: string | null | undefined; value: string | undefined }>({ patientId, visitId, value: undefined });
   const matchesPersonalHistoryContext = (state: typeof personalHistoryState) => state.patientId === patientId && (!state.visitId || state.visitId === visitId);
@@ -342,20 +353,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     patientId, visitId,
     value: typeof next === 'function' ? next(matchesPersonalHistoryContext(previous) ? previous.value : undefined) : next,
   }));
-  const [medicationHistory, setMedicationHistory] = useState<string>('');
-  const [menstrualHistory, setMenstrualHistory] = useState<string>('');
+  const [medicationHistory, setMedicationHistory, hydrateMedicationHistory] = useClinicalState<string>('', 'medicationHistory', dirtyClinicalFields);
+  const [menstrualHistory, setMenstrualHistory, hydrateMenstrualHistory] = useClinicalState<string>('', 'menstrualHistory', dirtyClinicalFields);
   const [familyHistoryTouched, setFamilyHistoryTouched] = useState<string[]>([]);
-  const [familyHistoryDM, setFamilyHistoryDM] = useState<boolean>(false);
-  const [familyHistoryHTN, setFamilyHistoryHTN] = useState<boolean>(false);
-  const [familyHistoryThyroid, setFamilyHistoryThyroid] = useState<boolean>(false);
-  const [familyHistoryOthers, setFamilyHistoryOthers] = useState<string>('');
+  const [familyHistoryDM, setFamilyHistoryDM, hydrateFamilyHistoryDM] = useClinicalState<boolean>(false, 'familyHistoryDM', dirtyClinicalFields);
+  const [familyHistoryHTN, setFamilyHistoryHTN, hydrateFamilyHistoryHTN] = useClinicalState<boolean>(false, 'familyHistoryHTN', dirtyClinicalFields);
+  const [familyHistoryThyroid, setFamilyHistoryThyroid, hydrateFamilyHistoryThyroid] = useClinicalState<boolean>(false, 'familyHistoryThyroid', dirtyClinicalFields);
+  const [familyHistoryOthers, setFamilyHistoryOthers, hydrateFamilyHistoryOthers] = useClinicalState<string>('', 'familyHistoryOthers', dirtyClinicalFields);
   const [creatingTemplate, setCreatingTemplate] = useState<boolean>(false);
   const [savingFieldsTemplate, setSavingFieldsTemplate] = useState<boolean>(false);
   const [templatesReady, setTemplatesReady] = useState(false);
   const [showTemplatesBar, setShowTemplatesBar] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const restoredClinicalDraftRef = useRef(false);
-  const latestClinicalDataRef = useRef<unknown>(undefined);
 
   // Stabilize callback props to prevent infinite loops
   const onChangeChiefComplaintsRef = useRef(onChangeChiefComplaints);
@@ -365,7 +374,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   
   // Bubble chief complaint changes up so parent (visit form) stays in sync
   useEffect(() => {
-    if (chiefComplaints.trim()) onChangeChiefComplaintsRef.current?.(chiefComplaints);
+    if (dirtyClinicalFields.current.has('chiefComplaints')) onChangeChiefComplaintsRef.current?.(chiefComplaints);
   }, [chiefComplaints]);
 
   const showTemplateCreateError = useCallback((error: any, retry?: () => void) => {
@@ -481,7 +490,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const SKIN_CONCERNS = useMemo(() => (
     ['Acne', 'Pigmentation', 'Aging', 'Dryness', 'Sensitivity', 'Redness', 'Scarring']
   ), []);
-  const [skinConcerns, setSkinConcerns] = useState<Set<string>>(new Set());
+  const [skinConcerns, setSkinConcerns, hydrateSkinConcerns] = useClinicalState<Set<string>>(new Set(), 'skinConcerns', dirtyClinicalFields);
   const toggleSet = useCallback(<T,>(current: Set<T>, item: T, updater: (next: Set<T>) => void) => {
     const next = new Set(current);
     if (next.has(item)) next.delete(item);
@@ -496,7 +505,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [customInvestigationOptions, setCustomInvestigationOptions] = useState<string[]>([]);
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
   const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
-  const [investigations, setInvestigations] = useState<string[]>([]);
+  const [investigations, setInvestigations, hydrateInvestigations] = useClinicalState<string[]>([], 'investigations', dirtyClinicalFields);
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -512,15 +521,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     followUpInstructions: string;
     reviewDate: string;
   } | null>(null);
-  const [procedures, setProcedures] = useState<string>('');
-  const [procedurePlanned, setProcedurePlanned] = useState<string>('');
+  const [procedures, setProcedures, hydrateProcedures] = useClinicalState<string>('', 'procedures', dirtyClinicalFields);
+  const [procedurePlanned, setProcedurePlanned, hydrateProcedurePlanned] = useClinicalState<string>('', 'procedurePlanned', dirtyClinicalFields);
   // Vitals (with BMI)
-  const [vitalsHeightCm, setVitalsHeightCm] = useState<number | ''>('');
-  const [vitalsWeightKg, setVitalsWeightKg] = useState<number | ''>('');
+  const [vitalsHeightCm, setVitalsHeightCm, hydrateVitalsHeightCm] = useClinicalState<number | ''>('', 'vitalsHeightCm', dirtyClinicalFields);
+  const [vitalsWeightKg, setVitalsWeightKg, hydrateVitalsWeightKg] = useClinicalState<number | ''>('', 'vitalsWeightKg', dirtyClinicalFields);
   const [vitalsBmi, setVitalsBmi] = useState<number | ''>('');
-  const [vitalsBpSys, setVitalsBpSys] = useState<number | ''>('');
-  const [vitalsBpDia, setVitalsBpDia] = useState<number | ''>('');
-  const [vitalsPulse, setVitalsPulse] = useState<number | ''>('');
+  const [vitalsBpSys, setVitalsBpSys, hydrateVitalsBpSys] = useClinicalState<number | ''>('', 'vitalsBpSys', dirtyClinicalFields);
+  const [vitalsBpDia, setVitalsBpDia, hydrateVitalsBpDia] = useClinicalState<number | ''>('', 'vitalsBpDia', dirtyClinicalFields);
+  const [vitalsPulse, setVitalsPulse, hydrateVitalsPulse] = useClinicalState<number | ''>('', 'vitalsPulse', dirtyClinicalFields);
   // Restore drug search states (now per-row)
   const [rowDrugQueries, setRowDrugQueries] = useState<Record<number, string>>({});
   const [rowDrugResults, setRowDrugResults] = useState<Record<number, any[]>>({});
@@ -829,64 +838,17 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return merged;
   }, [DISTRIBUTION_BASE, customDistribution]);
   const FITZPATRICK = useMemo(() => ['I','II','III','IV','V','VI'], []);
-  const [exSkinType, setExSkinType] = useState<string>('');
-  const [exMorphology, setExMorphology] = useState<Set<string>>(new Set());
-  const [exDistribution, setExDistribution] = useState<Set<string>>(new Set());
-  const [exAcneSeverity, setExAcneSeverity] = useState<string>('');
-  const [exItchScore, setExItchScore] = useState<string>('');
+  const [exSkinType, setExSkinType, hydrateExSkinType] = useClinicalState<string>('', 'exSkinType', dirtyClinicalFields);
+  const [exMorphology, setExMorphology, hydrateExMorphology] = useClinicalState<Set<string>>(new Set(), 'exMorphology', dirtyClinicalFields);
+  const [exDistribution, setExDistribution, hydrateExDistribution] = useClinicalState<Set<string>>(new Set(), 'exDistribution', dirtyClinicalFields);
+  const [exAcneSeverity, setExAcneSeverity, hydrateExAcneSeverity] = useClinicalState<string>('', 'exAcneSeverity', dirtyClinicalFields);
+  const [exItchScore, setExItchScore, hydrateExItchScore] = useClinicalState<string>('', 'exItchScore', dirtyClinicalFields);
   const [newMorphology, setNewMorphology] = useState<string>('');
   const [newDistribution, setNewDistribution] = useState<string>('');
-  const [exTriggers, setExTriggers] = useState<string>('');
-  const [exPriorTx, setExPriorTx] = useState<string>('');
-  const [exDermDx, setExDermDx] = useState<Set<string>>(new Set());
-  const [exObjective, setExObjective] = useState<string>('');
-
-  // Seed On Examination from visit if present
-  useEffect(() => {
-    try {
-      const exam = (visitData?.examination && typeof visitData.examination === 'object') ? visitData.examination : (visitData?.examination ? JSON.parse(visitData.examination) : null);
-      if (!exam) return;
-      const derm = exam.dermatology || {};
-      if (derm.skinType) setExSkinType(String(derm.skinType));
-      if (Array.isArray(derm.morphology)) setExMorphology(new Set(derm.morphology));
-      if (Array.isArray(derm.distribution)) setExDistribution(new Set(derm.distribution));
-      if (derm.acneSeverity) setExAcneSeverity(String(derm.acneSeverity));
-      if (typeof derm.itchScore !== 'undefined') setExItchScore(String(derm.itchScore ?? ''));
-      if (derm.triggers) setExTriggers(String(derm.triggers));
-      if (derm.priorTreatments) setExPriorTx(String(derm.priorTreatments));
-      if (Array.isArray(derm.skinConcerns)) setSkinConcerns(new Set(derm.skinConcerns));
-      if (Array.isArray(visitData?.diagnosis)) setExDermDx(new Set((visitData.diagnosis as any[]).map((d: any) => (typeof d === 'string' ? d : d?.diagnosis)).filter(Boolean)));
-      const generalAppearance = exam.generalAppearance || '';
-      if (generalAppearance) setExObjective(String(generalAppearance));
-    } catch {}
-  }, [visitData]);
-
-  // Also seed triggers/prior treatments from visit history if present
-  useEffect(() => {
-    try {
-      const hist = (visitData?.history && typeof visitData.history === 'object') ? visitData.history : (visitData?.history ? JSON.parse(visitData.history) : null);
-      if (!hist) return;
-      if (hist.triggers) setExTriggers(String(hist.triggers));
-      if (hist.priorTreatments) setExPriorTx(String(hist.priorTreatments));
-    } catch {}
-  }, [visitData]);
-
-  // Seed local vitals from visit data (one-time when empty)
-  useEffect(() => {
-    if (!visitVitals) return;
-    // Only fill if local fields are empty
-    const hv = (vitalsHeightCm === '' || vitalsHeightCm == null) && (visitVitals.height || visitVitals.heightCm);
-    const wv = (vitalsWeightKg === '' || vitalsWeightKg == null) && visitVitals.weight;
-    const sv = (vitalsBpSys === '' || vitalsBpSys == null) && (visitVitals.systolicBP || visitVitals.bpSys || visitVitals.bpS);
-    const dv = (vitalsBpDia === '' || vitalsBpDia == null) && (visitVitals.diastolicBP || visitVitals.bpDia || visitVitals.bpD);
-    const pv = (vitalsPulse === '' || vitalsPulse == null) && (visitVitals.heartRate || visitVitals.pulse || visitVitals.pr);
-    if (hv) setVitalsHeightCm(Number(visitVitals.height || visitVitals.heightCm));
-    if (wv) setVitalsWeightKg(Number(visitVitals.weight));
-    if (sv) setVitalsBpSys(Number(visitVitals.systolicBP || visitVitals.bpSys || visitVitals.bpS));
-    if (dv) setVitalsBpDia(Number(visitVitals.diastolicBP || visitVitals.bpDia || visitVitals.bpD));
-    if (pv) setVitalsPulse(Number(visitVitals.heartRate || visitVitals.pulse || visitVitals.pr));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visitVitals]);
+  const [exTriggers, setExTriggers, hydrateExTriggers] = useClinicalState<string>('', 'exTriggers', dirtyClinicalFields);
+  const [exPriorTx, setExPriorTx, hydrateExPriorTx] = useClinicalState<string>('', 'exPriorTx', dirtyClinicalFields);
+  const [exDermDx, setExDermDx, hydrateExDermDx] = useClinicalState<Set<string>>(new Set(), 'exDermDx', dirtyClinicalFields);
+  const [exObjective, setExObjective, hydrateExObjective] = useClinicalState<string>('', 'exObjective', dirtyClinicalFields);
 
   const [localIncludeSections, setLocalIncludeSections] = useState<Record<string, boolean>>({
     patientInfo: true,
@@ -1217,81 +1179,82 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
-        const initialClinicalData = JSON.stringify(latestClinicalDataRef.current);
         const res: any = await apiClient.get(`/visits/${visitId}`);
         if (cancelled) return;
         const savedHistory = typeof res?.history === 'string' ? (() => { try { return JSON.parse(res.history); } catch { return null; } })() : res?.history;
         if (typeof savedHistory?.personalHistory === 'string') {
           setPersonalHistory(current => current ?? savedHistory.personalHistory);
         }
+        if (visitVersionRef.current === undefined) visitVersionRef.current = res?.version;
         setVisitData(res || null);
         if (res?.prescription?.id) setSavedPrescriptionId(res.prescription.id);
-        if (restoredClinicalDraftRef.current || initialClinicalData !== JSON.stringify(latestClinicalDataRef.current)) return;
+
         if (res?.prescription?.id) {
           setSavedPrescriptionId(res.prescription.id);
           const savedItems = typeof res.prescription.items === 'string' ? JSON.parse(res.prescription.items) : res.prescription.items;
           if (Array.isArray(savedItems) && !items.some(item => item.drugName.trim())) {
-            setItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+            hydrateItems(savedItems.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
-          if (!followUpInstructions && res.prescription.instructions) setFollowUpInstructions(res.prescription.instructions);
+          if (!followUpInstructions && res.prescription.instructions) hydrateFollowUpInstructions(res.prescription.instructions);
         }
         const scribe = typeof res?.scribeJson === 'string' ? JSON.parse(res.scribeJson) : res?.scribeJson;
-        if (Array.isArray(scribe?.customSections) && !customSections.length) setCustomSections(scribe.customSections);
-        if (scribe?.procedureMetrics && !Object.keys(procedureMetrics).length) setProcedureMetrics(scribe.procedureMetrics);
+        if (Array.isArray(scribe?.customSections) && !customSections.length) hydrateCustomSections(scribe.customSections);
+        if (scribe?.procedureMetrics && !Object.keys(procedureMetrics).length) hydrateProcedureMetrics(scribe.procedureMetrics);
         // Seed fields from visit if empty
         try {
           const diagArr = Array.isArray(res?.diagnosis) ? res.diagnosis : (res?.diagnosis ? JSON.parse(res.diagnosis) : []);
           if (!diagnosis && Array.isArray(diagArr) && diagArr.length > 0) {
-            setDiagnosis(diagArr.map((d: any) => d?.diagnosis || '').filter(Boolean).join(', '));
+            hydrateDiagnosis(diagArr.map((d: any) => d?.diagnosis || '').filter(Boolean).join(', '));
           }
         } catch {}
         try {
           // Complaints
           const complaintsArr = Array.isArray(res?.complaints) ? res.complaints : (res?.complaints ? JSON.parse(res.complaints) : []);
           if (!chiefComplaints && Array.isArray(complaintsArr) && complaintsArr.length > 0) {
-            setChiefComplaints(complaintsArr.map((c: any) => c?.complaint || '').filter(Boolean).join(', '));
+            hydrateChiefComplaints(complaintsArr.map((c: any) => c?.complaint || '').filter(Boolean).join(', '));
           }
         } catch {}
         try {
           // History & family history
           const historyObj = typeof res?.history === 'object' ? res.history : (res?.history ? JSON.parse(res.history) : null);
           if (historyObj) {
-            if (!pastHistory && typeof historyObj.pastHistory === 'string') setPastHistory(historyObj.pastHistory);
-            if (!medicationHistory && typeof historyObj.medicationHistory === 'string') setMedicationHistory(historyObj.medicationHistory);
-            if (!menstrualHistory && typeof historyObj.menstrualHistory === 'string') setMenstrualHistory(historyObj.menstrualHistory);
-            if (!exTriggers && typeof historyObj.triggers === 'string') setExTriggers(historyObj.triggers);
-            if (!exPriorTx && typeof historyObj.priorTreatments === 'string') setExPriorTx(historyObj.priorTreatments);
+            if (!pastHistory && typeof historyObj.pastHistory === 'string') hydratePastHistory(historyObj.pastHistory);
+            if (!medicationHistory && typeof historyObj.medicationHistory === 'string') hydrateMedicationHistory(historyObj.medicationHistory);
+            if (!menstrualHistory && typeof historyObj.menstrualHistory === 'string') hydrateMenstrualHistory(historyObj.menstrualHistory);
+            if (!exTriggers && typeof historyObj.triggers === 'string') hydrateExTriggers(historyObj.triggers);
+            if (!exPriorTx && typeof historyObj.priorTreatments === 'string') hydrateExPriorTx(historyObj.priorTreatments);
             const fam = historyObj.familyHistory || {};
-            if (familyHistoryDM === false && typeof fam.dm === 'boolean') setFamilyHistoryDM(!!fam.dm);
-            if (familyHistoryHTN === false && typeof fam.htn === 'boolean') setFamilyHistoryHTN(!!fam.htn);
-            if (familyHistoryThyroid === false && typeof fam.thyroid === 'boolean') setFamilyHistoryThyroid(!!fam.thyroid);
-            if (!familyHistoryOthers && typeof fam.others === 'string') setFamilyHistoryOthers(fam.others);
+            if (familyHistoryDM === false && typeof fam.dm === 'boolean') hydrateFamilyHistoryDM(!!fam.dm);
+            if (familyHistoryHTN === false && typeof fam.htn === 'boolean') hydrateFamilyHistoryHTN(!!fam.htn);
+            if (familyHistoryThyroid === false && typeof fam.thyroid === 'boolean') hydrateFamilyHistoryThyroid(!!fam.thyroid);
+            if (!familyHistoryOthers && typeof fam.others === 'string') hydrateFamilyHistoryOthers(fam.others);
           }
         } catch {}
         try {
           // Examination
           const examObj = typeof res?.exam === 'object' ? res.exam : (res?.exam ? JSON.parse(res.exam) : null);
           if (examObj) {
-            if (!exObjective && typeof examObj.generalAppearance === 'string') setExObjective(examObj.generalAppearance);
+            if (!exObjective && typeof examObj.generalAppearance === 'string') hydrateExObjective(examObj.generalAppearance);
             const derm = examObj.dermatology || {};
-            if (exDermDx.size === 0 && Array.isArray(derm.diagnoses)) setExDermDx(new Set(derm.diagnoses));
-            if (!exSkinType && typeof derm.skinType === 'string') setExSkinType(derm.skinType);
-            if (exMorphology.size === 0 && Array.isArray(derm.morphology)) setExMorphology(new Set(derm.morphology));
-            if (exDistribution.size === 0 && Array.isArray(derm.distribution)) setExDistribution(new Set(derm.distribution));
-            if (!exAcneSeverity && typeof derm.acneSeverity === 'string') setExAcneSeverity(derm.acneSeverity);
-            if (!exItchScore && (typeof derm.itchScore === 'string' || typeof derm.itchScore === 'number')) setExItchScore(String(derm.itchScore));
-            if (skinConcerns.size === 0 && Array.isArray(derm.skinConcerns)) setSkinConcerns(new Set(derm.skinConcerns));
+            if (exDermDx.size === 0 && Array.isArray(derm.diagnoses)) hydrateExDermDx(new Set(derm.diagnoses));
+            if (!exSkinType && typeof derm.skinType === 'string') hydrateExSkinType(derm.skinType);
+            if (exMorphology.size === 0 && Array.isArray(derm.morphology)) hydrateExMorphology(new Set(derm.morphology));
+            if (exDistribution.size === 0 && Array.isArray(derm.distribution)) hydrateExDistribution(new Set(derm.distribution));
+            if (!exAcneSeverity && typeof derm.acneSeverity === 'string') hydrateExAcneSeverity(derm.acneSeverity);
+            if (!exItchScore && (typeof derm.itchScore === 'string' || typeof derm.itchScore === 'number')) hydrateExItchScore(String(derm.itchScore));
+            if (skinConcerns.size === 0 && Array.isArray(derm.skinConcerns)) hydrateSkinConcerns(new Set(derm.skinConcerns));
           }
         } catch {}
         try {
           // Plan and dermatology sub-plan
           const planObj = typeof res?.plan === 'object' ? res.plan : (res?.plan ? JSON.parse(res.plan) : {});
           const dermaPlan = { ...(planObj?.dermatology || {}), ...(planObj || {}) };
-          if (!followUpInstructions && (dermaPlan.followUpInstructions || dermaPlan.followUp)) setFollowUpInstructions(String(dermaPlan.followUpInstructions || dermaPlan.followUp));
+          if (typeof dermaPlan.followUpInstructions === 'string') hydrateFollowUpInstructions(dermaPlan.followUpInstructions);
+          else if (dermaPlan.followUp) hydrateFollowUpInstructions(String(dermaPlan.followUp));
           const follow = dermaPlan?.followUpDays;
-          if (!followUpInstructions && follow) setFollowUpInstructions(`Follow up in ${follow} days`);
+          if (dermaPlan.followUpInstructions === undefined && !dermaPlan.followUp && follow) hydrateFollowUpInstructions(`Follow up in ${follow} days`);
           if (Array.isArray(dermaPlan.investigations) && investigations.length === 0) {
-            setInvestigations(dermaPlan.investigations);
+            hydrateInvestigations(dermaPlan.investigations);
             // Extract custom investigations that aren't in the default list
             const customInvs = dermaPlan.investigations.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
             if (customInvs.length > 0) {
@@ -1299,23 +1262,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             }
           }
           if (!res?.prescription?.id && !items.some(item => item.drugName.trim()) && Array.isArray(dermaPlan.medicationPlan)) {
-            setItems(dermaPlan.medicationPlan.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
+            hydrateItems(dermaPlan.medicationPlan.map(mapPrevRxItem).filter(Boolean) as PrescriptionItemForm[]);
           }
           if (!procedures && Array.isArray(dermaPlan.procedures) && dermaPlan.procedures.length > 0) {
             const procLine = dermaPlan.procedures.map((p: any) => p?.type).filter(Boolean).join(', ');
-            if (procLine) setProcedures(procLine);
+            if (procLine) hydrateProcedures(procLine);
           }
-          if (!procedurePlanned && typeof dermaPlan.procedurePlanned === 'string') setProcedurePlanned(dermaPlan.procedurePlanned);
+          if (!procedurePlanned && typeof dermaPlan.procedurePlanned === 'string') hydrateProcedurePlanned(dermaPlan.procedurePlanned);
         } catch {}
         try {
           // Vitals
           const vitalsObj = typeof res?.vitals === 'object' ? res.vitals : (res?.vitals ? JSON.parse(res.vitals) : null);
           if (vitalsObj) {
-            if (vitalsHeightCm === '' && vitalsObj.height != null) setVitalsHeightCm(Number(vitalsObj.height));
-            if (vitalsWeightKg === '' && vitalsObj.weight != null) setVitalsWeightKg(Number(vitalsObj.weight));
-            if (vitalsBpSys === '' && vitalsObj.systolicBP != null) setVitalsBpSys(Number(vitalsObj.systolicBP));
-            if (vitalsBpDia === '' && vitalsObj.diastolicBP != null) setVitalsBpDia(Number(vitalsObj.diastolicBP));
-            if (vitalsPulse === '' && vitalsObj.heartRate != null) setVitalsPulse(Number(vitalsObj.heartRate));
+            if (vitalsHeightCm === '' && vitalsObj.height != null) hydrateVitalsHeightCm(Number(vitalsObj.height));
+            if (vitalsWeightKg === '' && vitalsObj.weight != null) hydrateVitalsWeightKg(Number(vitalsObj.weight));
+            if (vitalsBpSys === '' && vitalsObj.systolicBP != null) hydrateVitalsBpSys(Number(vitalsObj.systolicBP));
+            if (vitalsBpDia === '' && vitalsObj.diastolicBP != null) hydrateVitalsBpDia(Number(vitalsObj.diastolicBP));
+            if (vitalsPulse === '' && vitalsObj.heartRate != null) hydrateVitalsPulse(Number(vitalsObj.heartRate));
           }
         } catch {}
         // Enable sections based on visit content OR current form state
@@ -2449,63 +2412,56 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           pulseRegimen: it.pulseRegimen || undefined,
         })), [validItems]);
 
+  /**
+   * @cc [owner:nareshshah139,label:product] edited-clinical-patch
+   * Hydration MUST NOT request clinical deletions. Edited empty histories,
+   * diagnoses, investigations, procedures, and vitals MUST be emitted as clears.
+   */
   const clinicalData = useMemo(() => {
-    const patch = { ...compactClinicalPatch({
-          ...(consultationType ? { consultationType, teleVideoConsent } : {}),
-          scribeJson: { customSections: customSections.filter(section => section.title.trim() || section.content.trim()), procedureMetrics },
-          vitals: (vitalsBpSys !== '' || vitalsBpDia !== '' || vitalsPulse !== '' || vitalsWeightKg !== '' || vitalsHeightCm !== '') ? {
-            ...(vitalsBpSys !== '' ? { systolicBP: Number(vitalsBpSys) } : {}),
-            ...(vitalsBpDia !== '' ? { diastolicBP: Number(vitalsBpDia) } : {}),
-            ...(vitalsPulse !== '' ? { heartRate: Number(vitalsPulse) } : {}),
-            ...(vitalsWeightKg !== '' ? { weight: Number(vitalsWeightKg) } : {}),
-            ...(vitalsHeightCm !== '' ? { height: Number(vitalsHeightCm) } : {}),
-          } : undefined,
-          complaints: chiefComplaints ? [{ complaint: chiefComplaints }] : undefined,
-          history: {
-            pastHistory: pastHistory || undefined,
-            medicationHistory: medicationHistory || undefined,
-            menstrualHistory: menstrualHistory || undefined,
-            triggers: exTriggers || undefined,
-            priorTreatments: exPriorTx || undefined,
-            familyHistory: {
-              dm: familyHistoryDM || familyHistoryTouched.includes('dm') ? familyHistoryDM : undefined,
-              htn: familyHistoryHTN || familyHistoryTouched.includes('htn') ? familyHistoryHTN : undefined,
-              thyroid: familyHistoryThyroid || familyHistoryTouched.includes('thyroid') ? familyHistoryThyroid : undefined,
-              others: familyHistoryOthers || undefined,
-            },
-          },
-          diagnosis: Array.from(new Set([diagnosis, ...Array.from(exDermDx).filter(dx => !diagnosis.split(', ').includes(dx))].filter(Boolean))).map(diagnosis => ({ diagnosis })),
-          treatmentPlan: {
-            investigations: (investigations && investigations.length) ? investigations : undefined,
-            procedurePlanned: procedurePlanned || undefined,
-            followUpInstructions: followUpInstructions || undefined,
-            followUpDate: reviewDate || undefined,
-            dermatology: {
-              procedures: procedures?.trim()?.length ? [{ type: procedures.trim() }] : undefined,
-              medicationPlan: validItems.length ? validItems : undefined,
-            },
-          },
-          dermatology: {
-            skinConcerns: Array.from(skinConcerns),
-          },
-          examination: {
-            ...(exObjective ? { generalAppearance: exObjective } : {}),
-            dermatology: {
-              diagnoses: Array.from(exDermDx),
-              skinType: exSkinType || undefined,
-              morphology: Array.from(exMorphology),
-              distribution: Array.from(exDistribution),
-              acneSeverity: exAcneSeverity || undefined,
-              itchScore: exItchScore ? Number(exItchScore) : undefined,
-              skinConcerns: Array.from(skinConcerns),
-            }
-          },
-        }) };
-    // Apply after compaction so clearing this field survives the clinical merge.
-    if (personalHistory !== undefined) patch.history = { ...patch.history, personalHistory };
-    return patch;
-  }, [consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, reviewDate, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
-  latestClinicalDataRef.current = clinicalData;
+    const field = clinicalField;
+    const number = (value: number | '') => value === '' ? null : Number(value);
+    return compactClinicalPatch({
+      ...(consultationType ? { consultationType, teleVideoConsent } : {}),
+      scribeJson: {
+        customSections: field('customSections', customSections.filter(section => section.title.trim() || section.content.trim())),
+        procedureMetrics: field('procedureMetrics', procedureMetrics),
+      },
+      vitals: {
+        systolicBP: field('vitalsBpSys', number(vitalsBpSys)), diastolicBP: field('vitalsBpDia', number(vitalsBpDia)),
+        heartRate: field('vitalsPulse', number(vitalsPulse)), weight: field('vitalsWeightKg', number(vitalsWeightKg)),
+        height: field('vitalsHeightCm', number(vitalsHeightCm)),
+      },
+      complaints: field('chiefComplaints', chiefComplaints ? [{ complaint: chiefComplaints }] : []),
+      history: {
+        pastHistory: field('pastHistory', pastHistory), personalHistory,
+        medicationHistory: field('medicationHistory', medicationHistory), menstrualHistory: field('menstrualHistory', menstrualHistory),
+        triggers: field('exTriggers', exTriggers), priorTreatments: field('exPriorTx', exPriorTx),
+        familyHistory: {
+          dm: field('familyHistoryDM', familyHistoryDM), htn: field('familyHistoryHTN', familyHistoryHTN),
+          thyroid: field('familyHistoryThyroid', familyHistoryThyroid), others: field('familyHistoryOthers', familyHistoryOthers),
+        },
+      },
+      diagnosis: ['diagnosis', 'exDermDx'].some(key => dirtyClinicalFields.current.has(key))
+        ? Array.from(new Set([diagnosis, ...Array.from(exDermDx).filter(dx => !diagnosis.split(', ').includes(dx))].filter(Boolean))).map(diagnosis => ({ diagnosis })) : undefined,
+      treatmentPlan: {
+        investigations: field('investigations', investigations), procedurePlanned: field('procedurePlanned', procedurePlanned),
+        followUpInstructions: field('followUpInstructions', followUpInstructions),
+        dermatology: {
+          procedures: field('procedures', procedures.trim() ? [{ type: procedures.trim() }] : []),
+          medicationPlan: field('items', validItems),
+        },
+      },
+      examination: {
+        generalAppearance: field('exObjective', exObjective),
+        dermatology: {
+          diagnoses: field('exDermDx', Array.from(exDermDx)), skinType: field('exSkinType', exSkinType),
+          morphology: field('exMorphology', Array.from(exMorphology)), distribution: field('exDistribution', Array.from(exDistribution)),
+          acneSeverity: field('exAcneSeverity', exAcneSeverity), itchScore: field('exItchScore', exItchScore === '' ? null : Number(exItchScore)),
+          skinConcerns: field('skinConcerns', Array.from(skinConcerns)),
+        },
+      },
+    }) || {};
+  }, [dirtyClinicalFields.current, consultationType, teleVideoConsent, exDermDx, familyHistoryTouched, validItems, customSections, procedureMetrics, vitalsBpSys, vitalsBpDia, vitalsPulse, vitalsWeightKg, vitalsHeightCm, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, diagnosis, investigations, procedurePlanned, followUpInstructions, procedures, skinConcerns, exObjective, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore]);
   useEffect(() => { onClinicalDataChange?.(clinicalData); }, [clinicalData, onClinicalDataChange]);
 
   const create = useCallback(async (fromPreview = false, exportVisitId?: string) => {
@@ -2560,35 +2516,35 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!standalone && !ensuredVisitId) throw new Error('Unable to link the visit. Nothing was saved. Please retry.');
 
       const payload = {
-        clinicalData,
+        clinicalData: getClinicalSavePatch?.() ?? { ...clinicalData, version: visitVersionRef.current },
         patientId: effectivePatientId,
         visitId: standalone ? undefined : (ensuredVisitId || visitId || undefined),
         doctorId: effectiveDoctorId,
         items: prescriptionItemsPayload,
-        diagnosis: diagnosis || undefined,
+        diagnosis: clinicalField('diagnosis', diagnosis),
         language,
-        validUntil: reviewDate || undefined,
-        followUpInstructions: followUpInstructions || undefined,
+
+        followUpInstructions: clinicalField('followUpInstructions', followUpInstructions),
         procedureMetrics: Object.keys(procedureMetrics).length ? procedureMetrics : undefined,
         metadata: {
-          chiefComplaints: chiefComplaints || undefined,
+          chiefComplaints: clinicalField('chiefComplaints', chiefComplaints),
           histories: {
-            pastHistory: pastHistory || undefined,
+            pastHistory: clinicalField('pastHistory', pastHistory),
             personalHistory,
-            medicationHistory: medicationHistory || undefined,
-            menstrualHistory: menstrualHistory || undefined,
-            triggers: exTriggers || undefined,
-            priorTreatments: exPriorTx || undefined,
+            medicationHistory: clinicalField('medicationHistory', medicationHistory),
+            menstrualHistory: clinicalField('menstrualHistory', menstrualHistory),
+            triggers: clinicalField('exTriggers', exTriggers),
+            priorTreatments: clinicalField('exPriorTx', exPriorTx),
           },
           familyHistory: {
-            dm: familyHistoryDM || familyHistoryTouched.includes('dm') ? familyHistoryDM : undefined,
-            htn: familyHistoryHTN || familyHistoryTouched.includes('htn') ? familyHistoryHTN : undefined,
-            thyroid: familyHistoryThyroid || familyHistoryTouched.includes('thyroid') ? familyHistoryThyroid : undefined,
-            others: familyHistoryOthers || undefined,
+            dm: clinicalField('familyHistoryDM', familyHistoryDM),
+            htn: clinicalField('familyHistoryHTN', familyHistoryHTN),
+            thyroid: clinicalField('familyHistoryThyroid', familyHistoryThyroid),
+            others: clinicalField('familyHistoryOthers', familyHistoryOthers),
           },
-          investigations: investigations && investigations.length ? investigations : undefined,
-          procedures: procedures || undefined,
-          procedurePlanned: procedurePlanned || undefined,
+          investigations: clinicalField('investigations', investigations),
+          procedures: clinicalField('procedures', procedures),
+          procedurePlanned: clinicalField('procedurePlanned', procedurePlanned),
         },
       };
       const existingId = createdPrescriptionIdRef.current || savedPrescriptionId || visitData?.prescription?.id || visitData?.prescriptionId;
@@ -2600,6 +2556,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!res?.id) throw new Error('The server did not confirm the saved prescription. Your draft is still available; please retry.');
       createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
+      if (res.visit) {
+        visitVersionRef.current = res.visit.version ?? visitVersionRef.current;
+        onVisitSaved?.(res.visit);
+      }
       onCreated?.(res?.id);
 
       const skipCleanup = skipPostSaveCleanupRef.current;
@@ -2634,7 +2594,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       prescriptionSaveInFlight.current = false;
       setSavingFromPreview(false);
     }
-  }, [consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
+  }, [getClinicalSavePatch, onVisitSaved, consultationType, teleVideoConsent, savedPrescriptionId, prescriptionItemsPayload, clinicalData, ensureVisitId, standalone, standaloneReason, validItems, visitData, canCreate, patientId, visitId, doctorId, items, diagnosis, language, reviewDate, followUpInstructions, procedureMetrics, chiefComplaints, pastHistory, personalHistory, medicationHistory, menstrualHistory, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, investigations, procedures, procedurePlanned, onCreated]);
 
   const exportSaveInFlight = useRef(false);
   const [savingForExport, setSavingForExport] = useState(false);
@@ -2649,8 +2609,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
         else {
           savedVisitId = savedVisitId || await ensureVisitId?.() || null;
           if (!savedVisitId) throw new Error('Select a visit before exporting.');
-          const saved: any = await apiClient.updateVisit(savedVisitId, clinicalData);
+          const saved: any = await apiClient.updateVisit(savedVisitId, { ...clinicalData, version: visitVersionRef.current });
           if (!saved?.id) throw new Error('The server did not confirm the saved visit.');
+          visitVersionRef.current = saved.version ?? visitVersionRef.current;
+          onVisitSaved?.(saved);
         }
       }
       const prescriptionId = validItems.length > 0 ? await create(true, savedVisitId || undefined) : undefined;
@@ -4029,6 +3991,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     try {
       const data = {
         dosageSchemaVersion: 1,
+        dirtyClinicalFields: Array.from(dirtyClinicalFields.current),
+        visitVersion: visitVersionRef.current,
         items,
         followUpInstructions,
         chiefComplaints,
@@ -4092,25 +4056,25 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       const raw = localStorage.getItem(draftKey);
       if (raw) {
         const data = JSON.parse(raw);
-        restoredClinicalDraftRef.current = true;
+        if (data.visitVersion !== undefined) visitVersionRef.current = data.visitVersion;
         if (Array.isArray(data?.items)) {
-          setItems(data.dosageSchemaVersion === 1 ? data.items : data.items.map((item: PrescriptionItemForm) => ({
+          hydrateItems(data.dosageSchemaVersion === 1 ? data.items : data.items.map((item: PrescriptionItemForm) => ({
             ...item,
             dosage: restoreLegacyDosage(item.dosage),
-          })));
+          })), data.dirtyClinicalFields ?? 'populated');
         }
-        if (typeof data?.followUpInstructions === 'string') setFollowUpInstructions(data.followUpInstructions);
-        if (typeof data?.chiefComplaints === 'string') setChiefComplaints(data.chiefComplaints);
-        if (typeof data?.diagnosis === 'string') setDiagnosis(data.diagnosis);
-        if (typeof data?.pastHistory === 'string') setPastHistory(data.pastHistory);
+        if (typeof data?.followUpInstructions === 'string') hydrateFollowUpInstructions(data.followUpInstructions, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.chiefComplaints === 'string') hydrateChiefComplaints(data.chiefComplaints, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.diagnosis === 'string') hydrateDiagnosis(data.diagnosis, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.pastHistory === 'string') hydratePastHistory(data.pastHistory, data.dirtyClinicalFields ?? 'populated');
         if (typeof data?.personalHistory === 'string') setPersonalHistory(data.personalHistory);
-        if (typeof data?.medicationHistory === 'string') setMedicationHistory(data.medicationHistory);
-        if (typeof data?.menstrualHistory === 'string') setMenstrualHistory(data.menstrualHistory);
-        if (typeof data?.exObjective === 'string') setExObjective(data.exObjective);
-        if (typeof data?.procedures === 'string') setProcedures(data.procedures);
-        if (typeof data?.procedurePlanned === 'string') setProcedurePlanned(data.procedurePlanned);
+        if (typeof data?.medicationHistory === 'string') hydrateMedicationHistory(data.medicationHistory, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.menstrualHistory === 'string') hydrateMenstrualHistory(data.menstrualHistory, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exObjective === 'string') hydrateExObjective(data.exObjective, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.procedures === 'string') hydrateProcedures(data.procedures, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.procedurePlanned === 'string') hydrateProcedurePlanned(data.procedurePlanned, data.dirtyClinicalFields ?? 'populated');
         if (Array.isArray(data?.investigations)) {
-          setInvestigations(data.investigations);
+          hydrateInvestigations(data.investigations, data.dirtyClinicalFields ?? 'populated');
           // Extract custom investigations that aren't in the default list
           const customInvs = data.investigations.filter((inv: string) => !defaultInvestigationOptions.includes(inv));
           if (customInvs.length > 0) {
@@ -4128,27 +4092,27 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             });
           }
         }
-        if (data?.vitalsHeightCm !== undefined) setVitalsHeightCm(data.vitalsHeightCm);
-        if (data?.vitalsWeightKg !== undefined) setVitalsWeightKg(data.vitalsWeightKg);
+        if (data?.vitalsHeightCm !== undefined) hydrateVitalsHeightCm(data.vitalsHeightCm, data.dirtyClinicalFields ?? 'populated');
+        if (data?.vitalsWeightKg !== undefined) hydrateVitalsWeightKg(data.vitalsWeightKg, data.dirtyClinicalFields ?? 'populated');
         if (data?.vitalsBmi !== undefined) setVitalsBmi(data.vitalsBmi);
-        if (data?.vitalsBpSys !== undefined) setVitalsBpSys(data.vitalsBpSys);
-        if (data?.vitalsBpDia !== undefined) setVitalsBpDia(data.vitalsBpDia);
-        if (data?.vitalsPulse !== undefined) setVitalsPulse(data.vitalsPulse);
-        if (Array.isArray(data?.skinConcerns)) setSkinConcerns(new Set(data.skinConcerns));
-        if (typeof data?.exSkinType === 'string') setExSkinType(data.exSkinType);
-        if (Array.isArray(data?.exMorphology)) setExMorphology(new Set(data.exMorphology));
-        if (Array.isArray(data?.exDistribution)) setExDistribution(new Set(data.exDistribution));
-        if (typeof data?.exAcneSeverity === 'string') setExAcneSeverity(data.exAcneSeverity);
-        if (typeof data?.exItchScore === 'string') setExItchScore(data.exItchScore);
-        if (typeof data?.exTriggers === 'string') setExTriggers(data.exTriggers);
-        if (typeof data?.exPriorTx === 'string') setExPriorTx(data.exPriorTx);
-        if (typeof data?.familyHistoryDM === 'boolean') setFamilyHistoryDM(data.familyHistoryDM);
-        if (typeof data?.familyHistoryHTN === 'boolean') setFamilyHistoryHTN(data.familyHistoryHTN);
-        if (typeof data?.familyHistoryThyroid === 'boolean') setFamilyHistoryThyroid(data.familyHistoryThyroid);
-        if (typeof data?.familyHistoryOthers === 'string') setFamilyHistoryOthers(data.familyHistoryOthers);
-        if (Array.isArray(data?.customSections)) setCustomSections(data.customSections);
-        if (data?.procedureMetrics) setProcedureMetrics(data.procedureMetrics);
-        if (Array.isArray(data?.exDermDx)) setExDermDx(new Set(data.exDermDx));
+        if (data?.vitalsBpSys !== undefined) hydrateVitalsBpSys(data.vitalsBpSys, data.dirtyClinicalFields ?? 'populated');
+        if (data?.vitalsBpDia !== undefined) hydrateVitalsBpDia(data.vitalsBpDia, data.dirtyClinicalFields ?? 'populated');
+        if (data?.vitalsPulse !== undefined) hydrateVitalsPulse(data.vitalsPulse, data.dirtyClinicalFields ?? 'populated');
+        if (Array.isArray(data?.skinConcerns)) hydrateSkinConcerns(new Set(data.skinConcerns), data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exSkinType === 'string') hydrateExSkinType(data.exSkinType, data.dirtyClinicalFields ?? 'populated');
+        if (Array.isArray(data?.exMorphology)) hydrateExMorphology(new Set(data.exMorphology), data.dirtyClinicalFields ?? 'populated');
+        if (Array.isArray(data?.exDistribution)) hydrateExDistribution(new Set(data.exDistribution), data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exAcneSeverity === 'string') hydrateExAcneSeverity(data.exAcneSeverity, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exItchScore === 'string') hydrateExItchScore(data.exItchScore, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exTriggers === 'string') hydrateExTriggers(data.exTriggers, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.exPriorTx === 'string') hydrateExPriorTx(data.exPriorTx, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.familyHistoryDM === 'boolean') hydrateFamilyHistoryDM(data.familyHistoryDM, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.familyHistoryHTN === 'boolean') hydrateFamilyHistoryHTN(data.familyHistoryHTN, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.familyHistoryThyroid === 'boolean') hydrateFamilyHistoryThyroid(data.familyHistoryThyroid, data.dirtyClinicalFields ?? 'populated');
+        if (typeof data?.familyHistoryOthers === 'string') hydrateFamilyHistoryOthers(data.familyHistoryOthers, data.dirtyClinicalFields ?? 'populated');
+        if (Array.isArray(data?.customSections)) hydrateCustomSections(data.customSections, data.dirtyClinicalFields ?? 'populated');
+        if (data?.procedureMetrics) hydrateProcedureMetrics(data.procedureMetrics, data.dirtyClinicalFields ?? 'populated');
+        if (Array.isArray(data?.exDermDx)) hydrateExDermDx(new Set(data.exDermDx), data.dirtyClinicalFields ?? 'populated');
         if (Array.isArray(data?.familyHistoryTouched)) setFamilyHistoryTouched(data.familyHistoryTouched);
         if (data?.language) setLanguage(data.language);
         // Restore customization settings
@@ -4167,6 +4131,10 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     pushHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey]);
+  const latestDraftWriter = useRef(saveDraftNow);
+  latestDraftWriter.current = saveDraftNow;
+  useEffect(() => () => latestDraftWriter.current(), []);
+
   // Flush draft on nav/unload/back
   useEffect(() => {
     const handler = () => saveDraftNow();
@@ -4394,11 +4362,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-3 md:grid-cols-8 gap-2">
                   <div>
                     <label className="text-xs text-gray-600">Height (cm)</label>
-                    <Input key="vitals-height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-height" aria-label="Height" type="number" value={vitalsHeightCm ?? ''} onChange={(e) => setVitalsHeightCm(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Weight (kg)</label>
-                    <Input key="vitals-weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-weight" aria-label="Weight" type="number" value={vitalsWeightKg ?? ''} onChange={(e) => setVitalsWeightKg(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BMI</label>
@@ -4406,15 +4374,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BP (Sys)</label>
-                    <Input key="vitals-bp-sys" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-sys" aria-label="Systolic blood pressure" type="number" value={vitalsBpSys ?? ''} onChange={(e) => setVitalsBpSys(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">BP (Dia)</label>
-                    <Input key="vitals-bp-dia" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-bp-dia" aria-label="Diastolic blood pressure" type="number" value={vitalsBpDia ?? ''} onChange={(e) => setVitalsBpDia(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600">Pulse (bpm)</label>
-                    <Input key="vitals-pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
+                    <Input key="vitals-pulse" aria-label="Pulse" type="number" value={vitalsPulse ?? ''} onChange={(e) => setVitalsPulse(e.target.value === '' ? '' : Number(e.target.value))} />
                   </div>
                   <div></div>
                   <div></div>
@@ -4540,7 +4508,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="opacity-100">
                 <label className="text-xs text-gray-600 flex items-center gap-1">Diagnosis{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
                 <div className="relative diag-autocomplete">
-                  <Input key="diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
+                  <Input key="diagnosis" aria-label="Diagnosis" placeholder="e.g., Acne vulgaris" value={diagnosis} onChange={(e) => setDiagnosis(e.target.value)} />
                   {diagOptions.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full bg-white border rounded shadow-sm max-h-48 overflow-auto" onMouseDown={(e) => e.preventDefault()}>
                       {diagOptions.map((opt) => (
@@ -4565,15 +4533,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Past History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="past-history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
+                    <Textarea key="past-history" aria-label="Past history" rows={2} value={pastHistory} onChange={(e) => setPastHistory(e.target.value)} onBlur={(e) => pushRecent('pastHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Medication History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="medication-history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
+                    <Textarea key="medication-history" aria-label="Medication history" rows={2} value={medicationHistory} onChange={(e) => setMedicationHistory(e.target.value)} onBlur={(e) => pushRecent('medicationHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Menstrual History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Textarea key="menstrual-history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
+                    <Textarea key="menstrual-history" aria-label="Menstrual history" rows={2} value={menstrualHistory} onChange={(e) => setMenstrualHistory(e.target.value)} onBlur={(e) => pushRecent('menstrualHistory', e.target.value)} />
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
@@ -5092,6 +5060,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                               </Select>
                             </div>
                             {regimenHint(it, idx, 'frequency')}
+                            <div className="mt-2 flex items-center gap-2">
+                              <Input type="number" step="any" min="0.01" aria-label={`Numeric dosage for ${it.drugName || 'new medicine'}`} placeholder="Optional dose" value={it.dosage ?? ''} onChange={event => updateItem(idx, { dosage: event.target.value === '' ? '' : Number(event.target.value) })} />
+                              <Select value={it.dosageUnit} onValueChange={(value: DosageUnit) => updateItem(idx, { dosageUnit: value })}>
+                                <SelectTrigger aria-label={`Dosage unit for ${it.drugName || 'new medicine'}`}><SelectValue /></SelectTrigger>
+                                <SelectContent>{(['MG', 'ML', 'MCG', 'IU', 'TABLET', 'CAPSULE', 'DROP', 'SPRAY', 'PATCH', 'INJECTION'] as const).map(unit => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}</SelectContent>
+                              </Select>
+                            </div>
                           </td>
                           <td className="px-3 py-2 align-top">
                             <Select value={it.timing || ''} onOpenChange={() => setActiveRowIdx(idx)} onValueChange={(v: string) => {
@@ -5185,11 +5160,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
               <div className="space-y-3 opacity-100">
                 <div>
                   <label className="text-xs text-gray-600 flex items-center gap-1">Procedures{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                  <Textarea rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
+                  <Textarea aria-label="Procedures performed" rows={2} value={procedures} onChange={(e) => setProcedures(e.target.value)} onBlur={(e) => pushRecent('procedures', e.target.value)} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-600 flex items-center gap-1">Procedure Planned{language !== 'EN' && (<Languages className="h-3 w-3 text-blue-600" aria-label="Translated on print" />)}</label>
-                  <Textarea rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
+                  <Textarea aria-label="Procedures planned" rows={2} value={procedurePlanned} onChange={(e) => setProcedurePlanned(e.target.value)} onBlur={(e) => pushRecent('procedurePlanned', e.target.value)} />
                 </div>
               </div>
             </CollapsibleSection>
@@ -5312,7 +5287,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm text-gray-700 flex items-center gap-1">Follow-up Instructions{language !== 'EN' && (<Languages className="h-3.5 w-3.5 text-blue-600" aria-label="Translated on print" />)}</label>
-                    <Input key="followup-instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
+                    <Input key="followup-instructions" aria-label="Follow-up instructions" placeholder="e.g., Review in 4 weeks" value={followUpInstructions} onChange={(e) => setFollowUpInstructions(e.target.value)} onBlur={(e) => pushRecent('followUp', e.target.value)} />
                     {followUpSuggestions.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-2">
                         {followUpSuggestions.map((suggestion) => (
@@ -5338,7 +5313,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-100">
               <div className="md:col-span-1">
                 <label className="text-sm text-gray-700">Review Date</label>
-                <Input type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
+                <Input aria-label="Review date" type="date" value={reviewDate || ''} onChange={(e) => onChangeReviewDate?.(e.target.value)} />
                 {reviewDateShortcutDays.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {reviewDateShortcutDays.map((days) => (
@@ -5696,23 +5671,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 {includeSections.vitals && (vitalsHeightCm || vitalsWeightKg || vitalsBmi || vitalsBpSys || vitalsBpDia || vitalsPulse) && (
                   (() => {
                     const entries: Array<{ label: string; value: React.ReactNode }> = [];
-                    if ((vitalsHeightCm !== '' && vitalsHeightCm != null) || visitVitals?.height || visitVitals?.heightCm) {
-                      entries.push({ label: 'Height', value: <>{(vitalsHeightCm !== '' && vitalsHeightCm != null) ? vitalsHeightCm : (visitVitals?.height || visitVitals?.heightCm)} cm</> });
+                    if ((vitalsHeightCm !== '' && vitalsHeightCm != null)) {
+                      entries.push({ label: 'Height', value: <>{vitalsHeightCm} cm</> });
                     }
-                    if ((vitalsWeightKg !== '' && vitalsWeightKg != null) || visitVitals?.weight) {
-                      entries.push({ label: 'Weight', value: <>{(vitalsWeightKg !== '' && vitalsWeightKg != null) ? vitalsWeightKg : (visitVitals?.weight)} kg</> });
+                    if ((vitalsWeightKg !== '' && vitalsWeightKg != null)) {
+                      entries.push({ label: 'Weight', value: <>{vitalsWeightKg} kg</> });
                     }
-                    const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : Number(visitVitals?.height || visitVitals?.heightCm || 0);
-                    const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : Number(visitVitals?.weight || 0);
+                    const h = (vitalsHeightCm !== '' && vitalsHeightCm != null) ? Number(vitalsHeightCm) : 0;
+                    const w = (vitalsWeightKg !== '' && vitalsWeightKg != null) ? Number(vitalsWeightKg) : 0;
                     const bmi = (vitalsBmi !== '' && vitalsBmi != null) ? vitalsBmi : (h > 0 && w > 0 ? Number((w / ((h/100)*(h/100))).toFixed(1)) : '');
                     if (bmi !== '' && bmi != null) {
                       entries.push({ label: 'BMI', value: <>{bmi}</> });
                     }
-                    if (((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null)) || visitVitals?.systolicBP || visitVitals?.diastolicBP || visitVitals?.bpSys || visitVitals?.bpDia) {
-                      entries.push({ label: 'BP', value: <>{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : (visitVitals?.systolicBP || visitVitals?.bpSys || visitVitals?.bpS) || '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : (visitVitals?.diastolicBP || visitVitals?.bpDia || visitVitals?.bpD) || '—'} mmHg</> });
+                    if (((vitalsBpSys !== '' && vitalsBpSys != null) || (vitalsBpDia !== '' && vitalsBpDia != null))) {
+                      entries.push({ label: 'BP', value: <>{(vitalsBpSys !== '' && vitalsBpSys != null) ? vitalsBpSys : '—'}/{(vitalsBpDia !== '' && vitalsBpDia != null) ? vitalsBpDia : '—'} mmHg</> });
                     }
-                    if ((vitalsPulse !== '' && vitalsPulse != null) || visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr) {
-                      entries.push({ label: 'PR', value: <>{(vitalsPulse !== '' && vitalsPulse != null) ? vitalsPulse : (visitVitals?.heartRate || visitVitals?.pulse || visitVitals?.pr)} bpm</> });
+                    if ((vitalsPulse !== '' && vitalsPulse != null)) {
+                      entries.push({ label: 'PR', value: <>{vitalsPulse} bpm</> });
                     }
                     return (
                       <div className="py-3">

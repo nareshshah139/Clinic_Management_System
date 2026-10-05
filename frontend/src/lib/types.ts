@@ -29,6 +29,7 @@ export interface SystemAlert {
 // Enums
 import type { AppointmentStatus } from '@cms/shared-types';
 export { UserRole, AppointmentStatus } from '@cms/shared-types';
+export type VisitStatus = 'IN_PROGRESS' | 'COMPLETED';
 export type VisitType = 'OPD' | 'TELEMED' | 'PROCEDURE';
 
 // Room
@@ -503,6 +504,7 @@ export interface DrugInventoryChangeRequestResponse {
 
 // Visit summaries used in procedures dashboard
 export interface VisitSummary {
+  version?: number;
   consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
   teleVideoConsentById?: string | null;
   teleVideoConsentAt?: string | null;
@@ -512,7 +514,7 @@ export interface VisitSummary {
   createdAt: string;
   updatedAt?: string;
   appointmentId?: string | null;
-  status?: string | null;
+  status?: VisitStatus;
   visitType?: string | null;
   plan?: unknown;
   exam?: unknown;
@@ -520,6 +522,8 @@ export interface VisitSummary {
   complaints?: unknown;
   diagnosis?: unknown;
   scribeJson?: unknown;
+  completedAt?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface ProcedureVisitResponse {
@@ -535,9 +539,10 @@ export interface StaffSummary {
 }
 
 export interface VisitTimelineEntry {
+  version?: number;
   id: string;
   createdAt?: string;
-  status?: string | null;
+  status?: VisitStatus;
   visitType?: string | null;
   complaints?: unknown;
   diagnosis?: unknown;
@@ -547,6 +552,8 @@ export interface VisitTimelineEntry {
   vitals?: unknown;
   doctor?: { firstName?: string; lastName?: string } | null;
   prescription?: { id: string; createdAt?: string | null } | null;
+  completedAt?: string | null;
+  deletedAt?: string | null;
 }
 
 export interface PatientVisitHistoryPayload {
@@ -570,6 +577,7 @@ export interface VisitPatientSummary {
 }
 
 export interface VisitDetails {
+  version?: number;
   consultationType?: 'IN_PERSON' | 'TELE_VIDEO';
   teleVideoConsentById?: string | null;
   teleVideoConsentAt?: string | null;
@@ -584,6 +592,8 @@ export interface VisitDetails {
   diagnosis?: unknown;
   plan?: unknown;
   vitals?: unknown;
-  status?: string;
+  status?: VisitStatus;
   metadata?: Record<string, unknown>;
+  completedAt?: string | null;
+  deletedAt?: string | null;
 }

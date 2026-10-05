@@ -99,6 +99,7 @@ beforeAll(() => {
 
 // Use fake timers to drive debounced effects (250ms + 300ms)
 beforeEach(() => {
+  localStorage.clear();
   jest.useFakeTimers();
   lastPagedCssText = null;
   paginateSourceContent = false;
@@ -693,4 +694,26 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
     localStorage.removeItem('rxDraft:signature-patient:signature-visit');
     localStorage.removeItem('rxDraft:signature-other-patient:signature-other-visit');
   }
+});
+
+it('saves the parent clinical patch with its acknowledged version without making review date an expiry date', async () => {
+  const item = { drugName: 'Synthetic medicine', dosage: '', dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  localStorage.setItem('rxDraft:version-patient:visit', JSON.stringify({ dosageSchemaVersion: 1, items: [item] }));
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'version-rx', visit: { id: 'visit', version: 10, status: 'IN_PROGRESS' } } as any);
+  const onVisitSaved = jest.fn();
+  let version = 8;
+  try {
+    render(<PrescriptionBuilder patientId="version-patient" visitId="visit" doctorId="doctor" reviewDate="2026-10-15"
+      onBeforeExport={async () => { version = 9; return 'visit'; }}
+      getClinicalSavePatch={() => ({ version, vitals: { heartRate: null }, diagnosis: [] })}
+      onVisitSaved={onVisitSaved} />);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(createRx).toHaveBeenCalled());
+    const payload = createRx.mock.calls.at(-1)![0] as any;
+    expect(payload.clinicalData).toEqual({ version: 9, vitals: { heartRate: null }, diagnosis: [] });
+    expect(payload).not.toHaveProperty('validUntil');
+    expect(onVisitSaved).toHaveBeenCalledWith({ id: 'visit', version: 10, status: 'IN_PROGRESS' });
+  } finally { createRx.mockRestore(); }
 });

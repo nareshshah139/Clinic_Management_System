@@ -17,6 +17,7 @@ interface Props {
   onVisitNeeded?: () => Promise<string>; // Callback to create visit if needed
   patientId?: string; // required for draft uploads when visitId is temp
   allowDelete?: boolean; // doctor-only delete control
+  onVisitVersion?: (version: number) => void;
   onChangeCount?: (count: number) => void; // notify parent of photo count changes
 }
 
@@ -24,7 +25,12 @@ type PhotoPosition = 'FRONT' | 'LEFT_PROFILE' | 'RIGHT_PROFILE' | 'BACK' | 'CLOS
 
 interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoPosition; displayOrder?: number }
 
-export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
+/**
+ * @cc [owner:nareshshah139,label:product] photo-mutation-version
+ * Successful photo uploads and deletions MUST forward their acknowledged visitVersion
+ * to the editor. Photo list reads MUST NOT advance the editor's save version.
+ */
+export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount, onVisitVersion }: Props) {
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [photoLoading, setPhotoLoading] = useState(true);
@@ -36,6 +42,9 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
   const [selectedCompareVisitId, setSelectedCompareVisitId] = useState<string | null>(null);
   const [compareItems, setCompareItems] = useState<PhotoItem[]>([]);
   const [pairIndex, setPairIndex] = useState<number>(0);
+  const acknowledgeVersion = (data: { visitVersion?: number }) => {
+    if (typeof data.visitVersion === 'number') onVisitVersion?.(data.visitVersion);
+  };
   const [uploading, setUploading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [activeIndex, setActiveIndex] = useState<number>(0);
@@ -401,7 +410,10 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           }
           xhr.onreadystatechange = () => {
             if (xhr.readyState === 4) {
-              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try { acknowledgeVersion(JSON.parse(xhr.responseText)); } catch {}
+                resolve();
+              }
               else reject(new Error(`HTTP ${xhr.status}`));
             }
           };
@@ -550,7 +562,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
         const resp = await fetch(draftUrl, { method: 'DELETE', credentials: 'include' });
         if (resp.status === 401) handleUnauthorizedRedirect(resp);
         if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
-        try { const data = await resp.json(); applyResponseList(data); }
+        try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
         catch { await load(); }
       } else {
         // If the image URL points to API route, delete that resource; else treat as legacy
@@ -559,7 +571,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           const resp = await fetch(target, { method: 'DELETE', credentials: 'include' });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
-          try { const data = await resp.json(); applyResponseList(data); }
+          try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
           catch { await load(); }
         } else if (/\/uploads\//i.test(active.url)) {
           const resp = await fetch(`${baseUrl}/visits/${visitId}/photos/legacy`, {
@@ -570,7 +582,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
           });
           if (resp.status === 401) handleUnauthorizedRedirect(resp);
           if (!resp.ok) throw new Error(`Delete failed: ${resp.status}`);
-          try { const data = await resp.json(); applyResponseList(data); }
+          try { const data = await resp.json(); acknowledgeVersion(data); applyResponseList(data); }
           catch { await load(); }
         } else {
           throw new Error('Unsupported photo URL');
