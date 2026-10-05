@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,6 +68,11 @@ export function PharmacyInvoiceList() {
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(typeof window==='undefined'?'':new URLSearchParams(window.location.search).get('search')||'');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const paymentInFlight = useRef(false);
+  const [pendingPaymentIds, setPendingPaymentIds] = useState<string[]>([]);
+  useEffect(() => {
+    setPendingPaymentIds(invoices.filter(invoice => sessionStorage.getItem(`pharmacy-payment-attempt:${invoice.id}`)).map(invoice => invoice.id));
+  }, [invoices]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
   const [dateRange, setDateRange] = useState<DateRange>('today');
@@ -413,28 +418,55 @@ export function PharmacyInvoiceList() {
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] collect-remaining-balance
+   * Mark as paid MUST collect the freshly loaded remaining balance, never the original total.
+   * An uncertain payment MUST retain its request key and exact amount across retries and reloads.
+   */
   const handleMarkAsPaid = async (invoice: PharmacyInvoiceSummary) => {
-    if (!confirm(`Mark invoice ${invoice.invoiceNumber} as paid?\n\nAmount: ₹${invoice.totalAmount?.toFixed(2) || '0.00'}`)) {
-      return;
-    }
-
+    if (paymentInFlight.current) return;
+    paymentInFlight.current = true;
+    const storageKey = `pharmacy-payment-attempt:${invoice.id}`;
     try {
       setLoading(true);
-      
-      // Add a payment for the full amount
-      await apiClient.post(`/pharmacy/invoices/${invoice.id}/payments`, {
-        amount: invoice.totalAmount || 0,
-        method: invoice.paymentMethod || 'CASH',
-        reference: `Payment for ${invoice.invoiceNumber}`,
-      });
-
-      // Reload invoices to show updated status
+      const saved = sessionStorage.getItem(storageKey);
+      let payment: { requestKey: string; amount: number; method: string; reference: string };
+      if (saved) {
+        payment = JSON.parse(saved);
+      } else {
+        const latest = await apiClient.get<PharmacyInvoiceSummary & { payments: Array<{ status: string; amount: number }> }>(`/pharmacy/invoices/${invoice.id}`);
+        const amount = Math.round(Math.max(0, latest.totalAmount - latest.payments
+          .filter(entry => entry.status === 'COMPLETED').reduce((sum, entry) => sum + entry.amount, 0)) * 100) / 100;
+        if (amount <= 0) {
+          await loadInvoices();
+          alert('This invoice has no remaining balance.');
+          return;
+        }
+        payment = {
+          requestKey: Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join(''),
+          amount,
+          method: latest.paymentMethod || 'CASH',
+          reference: `Payment for ${invoice.invoiceNumber}`,
+        };
+      }
+      if (!confirm(`Mark invoice ${invoice.invoiceNumber} as paid?\n\nRemaining payment: ₹${payment.amount.toFixed(2)}`)) return;
+      sessionStorage.setItem(storageKey, JSON.stringify(payment));
+      setPendingPaymentIds(previous => [...new Set([...previous, invoice.id])]);
+      await apiClient.post(`/pharmacy/invoices/${invoice.id}/payments`, payment);
+      sessionStorage.removeItem(storageKey);
+      setPendingPaymentIds(previous => previous.filter(id => id !== invoice.id));
       await loadInvoices();
       alert('Invoice marked as paid successfully');
-    } catch (error) {
+    } catch (error: unknown) {
+      const status = (error as { status?: number })?.status;
+      if (status === 400 || status === 404) {
+        sessionStorage.removeItem(storageKey);
+        setPendingPaymentIds(previous => previous.filter(id => id !== invoice.id));
+      }
       console.error('Failed to mark invoice as paid:', error);
-      alert('Failed to mark invoice as paid. Please try again.');
+      alert('Payment could not be confirmed. Retry to reconcile the same payment.');
     } finally {
+      paymentInFlight.current = false;
       setLoading(false);
     }
   };
@@ -743,13 +775,13 @@ export function PharmacyInvoiceList() {
                       >
                         <Download className="h-4 w-4" />
                       </Button>
-                      {(invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID') && (
+                      {(pendingPaymentIds.includes(invoice.id) || (invoice.status !== 'CANCELLED' && (invoice.paymentStatus === 'PENDING' || invoice.paymentStatus === 'PARTIALLY_PAID'))) && (
                         <Button
                           variant="ghost"
                           size="sm"
                           onClick={() => handleMarkAsPaid(invoice)}
                           className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                          title="Mark as Paid"
+                          title={pendingPaymentIds.includes(invoice.id) ? "Retry Payment" : "Mark as Paid"}
                         >
                           <CheckCircle className="h-4 w-4" />
                         </Button>

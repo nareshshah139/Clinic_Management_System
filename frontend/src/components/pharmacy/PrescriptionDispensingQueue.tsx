@@ -33,6 +33,7 @@ import { apiClient } from '@/lib/api';
 type QueueStatus = 'pending' | 'partial' | 'dispensed' | 'expired';
 
 type QueueMedication = {
+  sourceLineKey?: string;
   drugName: string;
   prescribedQuantity: number | null;
   dispensedQuantity: number;
@@ -41,6 +42,7 @@ type QueueMedication = {
 
 type QueueEntry = {
   prescriptionId: string;
+  dispensingEligible?: boolean;
   visitId?: string | null;
   patient: {
     id: string;
@@ -115,6 +117,11 @@ const statusOptions: Array<{ value: QueueStatus | 'all'; label: string }> = [
  * @cc [owner:nareshshah139,label:product] pending-refresh-after-invoice
  * After a pharmacy invoice refresh event, the queue MUST reload its current filter from
  * the server so prescriptions linked to saved invoices leave Pending without a page reload.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] queue-read-refresh-and-eligibility
+ * Stock refresh MUST use read requests. Ineligible prescriptions MAY remain visible as
+ * history but MUST NOT offer billing links or inventory-link mutations.
  */
 export function PrescriptionDispensingQueue({
   onOpenBilling,
@@ -205,20 +212,10 @@ export function PrescriptionDispensingQueue({
     };
   }, [loadQueue]);
 
-  const handlePull = async (prescriptionId: string) => {
-    try {
-      setRefreshingId(prescriptionId);
-      await apiClient.post(
-        `/pharmacy/prescription-queue/${prescriptionId}/pull`,
-        {},
-      );
-      await loadQueue();
-    } catch (err) {
-      console.error('Failed to recompute prescription queue entry:', err);
-      setError('Unable to recompute prescription queue entry');
-    } finally {
-      setRefreshingId(null);
-    }
+  const refreshEntry = async (prescriptionId: string) => {
+    setRefreshingId(prescriptionId);
+    await loadQueue();
+    setRefreshingId(null);
   };
 
   const visibleRange = useMemo(() => {
@@ -314,9 +311,9 @@ export function PrescriptionDispensingQueue({
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal">
                     <div className="flex flex-col gap-1">
-                      {entry.medications.map((medication) => (
+                      {entry.medications.map((medication, index) => (
                         <div
-                          key={`${entry.prescriptionId}-${medication.drugName}`}
+                          key={`${entry.prescriptionId}-${medication.sourceLineKey || index}`}
                           className="text-sm"
                         >
                           <span className="font-medium">
@@ -346,7 +343,7 @@ export function PrescriptionDispensingQueue({
                   <TableCell className="whitespace-normal">
                     {stockErrors[entry.prescriptionId] ? <p role="alert" className="text-sm text-destructive">{stockErrors[entry.prescriptionId]}</p> : <StockWarnings
                       items={stockByPrescription[entry.prescriptionId] || []}
-                      prescriptionId={entry.prescriptionId} onLinked={loadQueue}
+                      prescriptionId={entry.prescriptionId} onLinked={loadQueue} canLink={entry.dispensingEligible !== false}
                     />}
                   </TableCell>
                   <TableCell>
@@ -355,7 +352,7 @@ export function PrescriptionDispensingQueue({
                         variant="outline"
                         size="icon"
                         aria-label={`Refresh stock for ${entry.patient.name}`}
-                        onClick={() => handlePull(entry.prescriptionId)}
+                        onClick={() => refreshEntry(entry.prescriptionId)}
                         disabled={refreshingId === entry.prescriptionId}
                       >
                         <RefreshCw
@@ -366,7 +363,9 @@ export function PrescriptionDispensingQueue({
                           }
                         />
                       </Button>
-                      {onOpenBilling ? (
+                      {entry.dispensingEligible === false ? (
+                        <Button size="sm" disabled>{openActionLabel}</Button>
+                      ) : onOpenBilling ? (
                         <Button
                           size="sm"
                           onClick={() => onOpenBilling(buildBillingPrefill(entry))}
@@ -456,7 +455,7 @@ function StatusBadge({ status }: { status: QueueStatus }) {
  * Every checked prescription line MUST show its stock status and available quantity with unit.
  * Unlinked quantities MUST be unknown, not zero; no healthy lines may be hidden or truncated.
  */
-function StockWarnings({ items, prescriptionId, onLinked }: { items: StockCheckItem[]; prescriptionId: string; onLinked: () => Promise<void> }) {
+function StockWarnings({ items, prescriptionId, onLinked, canLink }: { items: StockCheckItem[]; prescriptionId: string; onLinked: () => Promise<void>; canLink: boolean }) {
   if (!items.length) return <span className="text-sm text-muted-foreground">Checking…</span>;
   return <div className="flex flex-col gap-2">{items.map((item, index) => <div key={`${index}-${item.drugName}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
     <Badge variant="outline" className={item.stockStatus === 'IN_STOCK' ? 'text-emerald-700' : 'text-amber-700'}>
@@ -465,7 +464,7 @@ function StockWarnings({ items, prescriptionId, onLinked }: { items: StockCheckI
     <span>{item.drugName} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
     {!!(item.heldStock || item.expiredStock) && <span className="ml-1 text-muted-foreground">{item.totalOnHandStock} on hand · {item.heldStock || 0} held · {item.expiredStock || 0} expired</span>}
     {item.nearExpiry && <span className="ml-1 text-amber-700">Near expiry</span>}
-    <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />
+    {canLink && <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />}
   </div>)}</div>;
 }
 

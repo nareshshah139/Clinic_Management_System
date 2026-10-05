@@ -280,14 +280,24 @@ enum ConsultationType {
   TELE_VIDEO
 }
 
+enum VisitStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
 model Visit {
   id               String            @id @default(cuid())
   patientId        String
   doctorId         String
   appointmentId    String?           @unique
+  deletedAppointmentId String?
   consultationType ConsultationType @default(IN_PERSON)
   teleVideoConsentById String?
   teleVideoConsentAt DateTime?
+  status           VisitStatus       @default(IN_PROGRESS)
+  completedAt      DateTime?
+  deletedAt        DateTime?
+  version          Int               @default(0)
   vitals           String?
   complaints       String
   history          String?
@@ -364,9 +374,33 @@ model DraftAttachment {
   @@map("draft_attachments")
 }
 
+enum PrescriptionStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum RefillStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
 model Prescription {
   id               String                   @id @default(cuid())
   visitId          String                   @unique
+  status           PrescriptionStatus       @default(ACTIVE)
+  validUntil       DateTime?
+  maxRefills       Int                      @default(0)
+  cancelledAt      DateTime?
+  cancelledBy      String?
+  cancellationReason String?
+  metadata         String?
+  refills          PrescriptionRefill[]
   language         Language                 @default(EN)
   items            String
   instructions     String?
@@ -386,6 +420,28 @@ model Prescription {
 
   @@index([createdAt])
   @@map("prescriptions")
+}
+
+model PrescriptionRefill {
+  id             String        @id @default(cuid())
+  prescriptionId String
+  status         RefillStatus  @default(PENDING)
+  reason         String?
+  notes          String?
+  requestedDate  DateTime      @default(now())
+  approvedAt     DateTime?
+  approvedBy     String?
+  rejectedAt     DateTime?
+  rejectedBy     String?
+  rejectionReason String?
+  metadata       String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  prescription   Prescription  @relation(fields: [prescriptionId], references: [id])
+
+  @@index([prescriptionId, status])
+  @@index([createdAt])
+  @@map("prescription_refills")
 }
 
 // Template Library for Prescriptions
@@ -903,6 +959,7 @@ model InventoryItem {
   prescriptionLinks PrescriptionInventoryLink[]
   drugInventoryChangeRequests DrugInventoryChangeRequest[]
 
+  @@index([branchId, name, id], map: "inventory_items_branch_name_id_read_idx")
   @@map("inventory_items")
 }
 
@@ -1170,6 +1227,8 @@ model PharmacyInvoice {
   patientId      String
   doctorId       String?
   prescriptionId String?
+  checkoutRequestKey String?
+  checkoutPayloadHash String?
   branchId       String
 
   // Invoice Details
@@ -1211,6 +1270,7 @@ model PharmacyInvoice {
   items        PharmacyInvoiceItem[]
   payments     PharmacyPayment[]
 
+  @@unique([branchId, checkoutRequestKey])
   @@index([patientId])
   @@index([doctorId])
   @@index([branchId])
@@ -1218,6 +1278,7 @@ model PharmacyInvoice {
   @@index([paymentStatus])
   @@index([invoiceDate])
   @@index([createdAt])
+  @@index([prescriptionId, branchId], map: "pharmacy_invoices_prescription_branch_read_idx")
   @@map("pharmacy_invoices")
 }
 
@@ -1266,6 +1327,8 @@ model PharmacyInvoiceItem {
 model PharmacyPayment {
   id        String @id @default(cuid())
   invoiceId String
+  requestKey String?
+  payloadHash String?
 
   // Payment Details
   amount    Float
@@ -1282,6 +1345,7 @@ model PharmacyPayment {
   // Relations
   invoice PharmacyInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  @@unique([invoiceId, requestKey])
   @@index([invoiceId])
   @@index([status])
   @@index([paymentDate])

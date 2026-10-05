@@ -13,6 +13,7 @@ function ToastMessage() {
 jest.mock('@/lib/api', () => ({
   apiClient: {
     get: jest.fn().mockResolvedValue({}),
+    updateVisit: jest.fn(),
     createPrescription: jest.fn().mockResolvedValue({ id: "saved-rx" }),
     patch: jest.fn().mockResolvedValue({ id: "saved-rx" }),
     updatePrescription: jest.fn<() => Promise<{ id: string }>>().mockResolvedValue({ id: "saved-rx" }),
@@ -99,6 +100,7 @@ beforeAll(() => {
 
 // Use fake timers to drive debounced effects (250ms + 300ms)
 beforeEach(() => {
+  localStorage.clear();
   jest.useFakeTimers();
   lastPagedCssText = null;
   paginateSourceContent = false;
@@ -693,4 +695,69 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
     localStorage.removeItem('rxDraft:signature-patient:signature-visit');
     localStorage.removeItem('rxDraft:signature-other-patient:signature-other-visit');
   }
+});
+
+it('saves the parent clinical patch with its acknowledged version without making review date an expiry date', async () => {
+  const item = { drugName: 'Synthetic medicine', dosage: '', dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
+  localStorage.setItem('rxDraft:version-patient:visit', JSON.stringify({ dosageSchemaVersion: 1, items: [item] }));
+  const createRx = jest.spyOn(apiClient, 'createPrescription').mockResolvedValue({ id: 'version-rx', visit: { id: 'visit', version: 10, status: 'IN_PROGRESS' } } as any);
+  const onVisitSaved = jest.fn();
+  let version = 8;
+  try {
+    render(<PrescriptionBuilder patientId="version-patient" visitId="visit" doctorId="doctor" reviewDate="2026-10-15"
+      onBeforeExport={async () => { version = 9; return 'visit'; }}
+      getClinicalSavePatch={() => ({ version, vitals: { heartRate: null }, diagnosis: [] })}
+      onVisitSaved={onVisitSaved} />);
+    await openPreview();
+    await settlePreviewPagination();
+    fireEvent.click(screen.getByRole('button', { name: 'Download PDF' }));
+    await waitFor(() => expect(createRx).toHaveBeenCalled());
+    const payload = createRx.mock.calls.at(-1)![0] as any;
+    expect(payload.clinicalData).toEqual({ version: 9, vitals: { heartRate: null }, diagnosis: [] });
+    expect(payload).not.toHaveProperty('validUntil');
+    expect(onVisitSaved).toHaveBeenCalledWith({ id: 'visit', version: 10, status: 'IN_PROGRESS' });
+  } finally { createRx.mockRestore(); }
+});
+
+
+it.each(['Download PDF', 'PDF via WhatsApp', 'Print', 'Email'])('reports delegated visit conflicts before allowing %s output', async action => {
+  mockPdfOutput.mockClear();
+  const get = jest.spyOn(apiClient, 'get').mockResolvedValue({ id: 'visit', prescription: { id: 'rx' }, patient: { email: 'synthetic@example.com' } });
+  const print = jest.spyOn(window, 'print').mockImplementation(() => {});
+  const onClinicalConflict = jest.fn();
+  try {
+    render(<PrescriptionBuilder patientId="conflict-patient" visitId="visit" doctorId="doctor" onClinicalConflict={onClinicalConflict} onBeforeExport={async () => { throw Object.assign(new Error('Visit changed; reload before saving'), { status: 409 }); }} />);
+    await openPreview(); await settlePreviewPagination();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: action })));
+    expect(onClinicalConflict).toHaveBeenCalledTimes(1);
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+    expect(print).not.toHaveBeenCalled();
+  } finally { get.mockRestore(); print.mockRestore(); }
+});
+
+it('reports a direct visit-save conflict before export without a parent save callback', async () => {
+  mockPdfOutput.mockClear();
+  const update = jest.spyOn(apiClient, 'updateVisit').mockRejectedValue(Object.assign(new Error('Visit changed; reload before saving'), { status: 409 }));
+  const onClinicalConflict = jest.fn();
+  try {
+    render(<PrescriptionBuilder patientId="direct-conflict" visitId="visit" doctorId="doctor" onClinicalConflict={onClinicalConflict} />);
+    await openPreview(); await settlePreviewPagination();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })));
+    expect(onClinicalConflict).toHaveBeenCalledTimes(1);
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+  } finally { update.mockRestore(); }
+});
+
+it('reports an Rx conflict between the successful visit save and PDF output', async () => {
+  mockPdfOutput.mockClear();
+  const create = jest.spyOn(apiClient, 'createPrescription').mockRejectedValue(Object.assign(new Error('Visit changed; reload before saving'), { status: 409 }));
+  const onClinicalConflict = jest.fn();
+  localStorage.setItem('rxDraft:rx-conflict:visit', JSON.stringify({ items: [{ drugName: 'Synthetic medicine', frequency: 'ONCE_DAILY', dosageUnit: 'MG', duration: 7, durationUnit: 'DAYS' }] }));
+  try {
+    render(<PrescriptionBuilder patientId="rx-conflict" visitId="visit" doctorId="doctor" onClinicalConflict={onClinicalConflict} onBeforeExport={async () => 'visit'} />);
+    await openPreview(); await settlePreviewPagination();
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Download PDF' })));
+    expect(onClinicalConflict).toHaveBeenCalledTimes(1);
+    expect(mockPdfOutput).not.toHaveBeenCalled();
+  } finally { create.mockRestore(); }
 });

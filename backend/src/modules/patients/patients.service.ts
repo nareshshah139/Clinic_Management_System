@@ -92,6 +92,11 @@ export class PatientsService {
     );
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] recent-patient-active-encounters
+   * A deleted visit MUST NOT qualify an older patient for recent-patient results
+   * or their total count. Recent registration or an undeleted visit may qualify.
+   */
   async findAll(
     options: { page: number; limit: number; search?: string; gender?: string; consultationType?: string; dateRange?: string },
     branchId: string,
@@ -141,7 +146,7 @@ export class PatientsService {
       andConditions.push({
         OR: [
           { createdAt: { gte: dateRangeCutoff } },
-          { visits: { some: { createdAt: { gte: dateRangeCutoff } } } },
+          { visits: { some: { deletedAt: null, createdAt: { gte: dateRangeCutoff } } } },
         ],
       });
     }
@@ -206,6 +211,11 @@ export class PatientsService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] patient-active-visit-preview
+   * Patient detail MUST exclude deleted visits before choosing its latest five
+   * visits, so deleted encounters neither appear nor displace active encounters.
+   */
   async findOne(id: string, branchId: string) {
     const patient = await this.prisma.patient.findFirst({
       where: { id, branchId },
@@ -245,6 +255,7 @@ export class PatientsService {
           take: 5,
         },
         visits: {
+          where: { deletedAt: null },
           orderBy: { createdAt: 'desc' },
           take: 5,
         },

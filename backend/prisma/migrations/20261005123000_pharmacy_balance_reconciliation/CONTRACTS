@@ -1,0 +1,8 @@
+@cc [owner:nareshshah139,label:product] receipt-authoritative-cache-repair
+Reconciliation MUST derive paidAmount, balanceAmount and paymentStatus from completed payment
+receipts. It MUST NOT change payment rows, invoice timestamps or mutationVersion. A second run
+without ledger changes MUST leave every invoice unchanged.
+
+@cc [owner:nareshshah139,label:product] overpayment-stops-repair
+If rounded completed receipts exceed an invoice total, reconciliation MUST fail visibly before
+changing any invoice cache. It MUST NOT repair overpayment by altering receipts.

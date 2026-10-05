@@ -1,0 +1,91 @@
+{
+  "schemaRemoved": true,
+  "results": [
+    {
+      "name": "Package creation fabricates a purchase without changing stock",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "onHandBefore": 0,
+        "onHandAfter": 0,
+        "purchaseMovementQuantity": 10
+      }
+    },
+    {
+      "name": "Cancelled confirmed invoice retains stock deduction",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "originalStock": 20,
+        "afterCancel": 15,
+        "status": "CANCELLED",
+        "movementTypes": [
+          "SALE"
+        ]
+      }
+    },
+    {
+      "name": "Draft edit resumes after confirmation and rewrites posted quantity",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "status": "CONFIRMED",
+        "billedUnits": 10,
+        "stockUnitsDeducted": 1
+      }
+    },
+    {
+      "name": "Concurrent payments overcollect and overwrite cached balance",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "invoiceTotal": 100,
+        "actualPayments": 160,
+        "displayedPaid": 80,
+        "displayedBalance": 20
+      }
+    },
+    {
+      "name": "Soft-deleted visit remains in visit list and patient history",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "returnedByVisitList": true,
+        "returnedByPatientHistory": true,
+        "storedPlan": "{\"deleted\":true,\"deletedAt\":\"2026-10-05T09:15:19.229Z\"}"
+      }
+    },
+    {
+      "name": "Walk-in completion has no persisted lifecycle state",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "appointment": null,
+        "persistedStatus": null,
+        "finalNotes": "Synthetic completion"
+      }
+    },
+    {
+      "name": "Empty clinical patch preserves previously saved values",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "emittedPatch": null,
+        "savedDiagnosisCount": 1,
+        "oldInstructionsRemain": true,
+        "savedHeartRate": 80
+      }
+    },
+    {
+      "name": "Draft-photo binary API has no branch boundary",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "branchRequiredByService": false,
+        "foreignPhotoRead": true,
+        "foreignPhotoDeleted": true,
+        "note": "Controller/guard source separately establishes authenticated branch is not checked."
+      }
+    },
+    {
+      "name": "Prescription cancellation uses fields absent from real Prisma model",
+      "outcome": "REPRODUCED",
+      "evidence": {
+        "error": "Prisma validation: Unknown argument status",
+        "prescriptionStillExists": true
+      }
+    }
+  ]
+}

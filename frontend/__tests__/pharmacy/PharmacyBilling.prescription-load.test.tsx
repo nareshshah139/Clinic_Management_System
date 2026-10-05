@@ -18,11 +18,12 @@ jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: mockToast }) }
 const api = apiClient as jest.Mocked<typeof apiClient>;
 const names = ['Itin 12 tablet', 'Nixiper 1 Creme Rinse Shampoo 150 Gm', 'Fucibet cream', 'Bilashine 40mg Tablet'];
 const quantities = [14, 5, 20, 5];
+const prescriptionVersion = '2026-10-05T10:00:00.000Z';
 const patient = { id: 'patient-trina', name: 'Trina Ganguly', phone: '9000000000' };
 const secondPatient = { id: 'patient-other', name: 'Synthetic Patient Two', phone: '9000000001' };
 const doctor = { id: 'doctor-1', firstName: 'Test', lastName: 'Doctor' };
 const drugs = names.map((name, index) => ({ id: `drug-${index}`, name, price: 100, gstRate: 5, manufacturerName: 'Test', packSizeLabel: '1', totalStock: 100 }));
-const stock = names.map((drugName, index) => ({ drugName, matchedDrug: drugs[index], stockStatus: index === 0 ? 'OUT_OF_STOCK' : 'IN_STOCK', totalNonExpiredStock: index === 0 ? 0 : 100, lowStock: false, nearExpiry: false, alternatives: [] }));
+const stock = names.map((drugName, index) => ({ drugName, prescriptionVersion, matchedDrug: drugs[index], stockStatus: index === 0 ? 'OUT_OF_STOCK' : 'IN_STOCK', totalNonExpiredStock: index === 0 ? 0 : 100, lowStock: false, nearExpiry: false, alternatives: [] }));
 const entries = [patient, secondPatient].map((p, index) => ({
   prescriptionId: `rx-${index}`, visitId: `visit-${index}`, patient: p, doctor: { id: doctor.id, name: 'Test Doctor' },
   createdAt: new Date().toISOString(), pendingHours: 22, isOverTwoHours: true, linkedInvoiceIds: [], status: 'pending',
@@ -32,25 +33,28 @@ let saved = false;
 const scrollIntoView = jest.fn();
 
 beforeEach(() => {
-  jest.clearAllMocks(); saved = false;
+  jest.clearAllMocks(); sessionStorage.clear(); saved = false;
   Element.prototype.scrollIntoView = scrollIntoView;
   api.getPatients.mockResolvedValue({ data: [patient, secondPatient] } as any);
   api.getPatient.mockImplementation(async id => id === patient.id ? patient : secondPatient as any);
   api.getUsers.mockResolvedValue({ users: [doctor] } as any);
   api.getPrescription.mockImplementation(async id => ({
-    id, visit: { patient: id === 'rx-0' ? patient : secondPatient, doctor },
+    id, updatedAt: prescriptionVersion, visit: { patient: id === 'rx-0' ? patient : secondPatient, doctor },
     items: (id === 'rx-0' ? names : ['Unmatched cream']).map((drugName, i) => ({ drugName, quantity: quantities[i] })),
   }) as any);
   api.get.mockImplementation(async (url, query: any) => {
     if (url === '/pharmacy/prescription-queue') return { data: saved ? entries.slice(1) : entries, pagination: { page: 1, limit: 20, total: saved ? 1 : 2, pages: 1 } };
-    if (url.includes('/stock-check')) return { items: url.includes('rx-0') ? stock : [{ drugName: 'Unmatched cream', matchedDrug: null, stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, lowStock: true, alternatives: [] }] };
+    if (url.includes('/stock-check')) return { items: url.includes('rx-0') ? stock : [{ drugName: 'Unmatched cream', prescriptionVersion, matchedDrug: null, stockStatus: 'UNMATCHED', totalNonExpiredStock: 0, lowStock: true, alternatives: [] }] };
     if (url.startsWith('/drugs/')) return drugs.find(d => url === `/drugs/${d.id}`) || drugs;
     if (url === '/drugs') return { data: query?.search ? drugs.filter(d => d.name.toLowerCase().includes(query.search.toLowerCase())) : drugs };
     if (url.startsWith('/visits/')) return { patient, doctor, prescription: { id: 'rx-0' } };
     return {};
   });
-  api.post.mockResolvedValue({ id: 'invoice-1', invoiceNumber: 'PH-1' } as any);
-  api.patch.mockImplementation(async () => { saved = true; return {} as any; });
+  api.post.mockImplementation(async (url) => {
+    if (url !== '/pharmacy/invoices/checkout') throw new Error('Expected atomic checkout');
+    saved = true;
+    return { id: 'invoice-1', invoiceNumber: 'PH-1', status: 'CONFIRMED' } as any;
+  });
   api.getPharmacyInvoicePrintData.mockResolvedValue({ id: 'invoice-1', invoiceNumber: 'PH-1' } as any);
 });
 
@@ -165,7 +169,7 @@ it('substitutes an unmatched line with the chosen product and keeps its edited q
   expect(within(item).queryByText('No match')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
-  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices', expect.objectContaining({
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String),
     prescriptionId: 'rx-1', patientId: secondPatient.id,
     items: [expect.objectContaining({ drugId: 'drug-1', quantity: 2, unitPrice: 100, taxPercent: 5 })],
   })));
@@ -187,7 +191,7 @@ it('ignores a late prescription response after switching patients', async () => 
 });
 
 it('keeps a pending prescription visible and reports a failed confirmation', async () => {
-  api.patch.mockRejectedValue(new Error('Insufficient inventory stock'));
+  api.post.mockRejectedValue(new Error('Insufficient inventory stock'));
   render(<PharmacyPage />);
   await loadPatient();
   await screen.findByRole('heading', { name: names[0], level: 4 });
@@ -213,6 +217,114 @@ it('refreshes Pending after confirmation while preserving the prescription link 
   await screen.findByRole('heading', { name: names[0], level: 4 });
   fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Confirm Invoice' }));
-  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices', expect.objectContaining({ prescriptionId: 'rx-0', patientId: patient.id, items: drugs.map((d, i) => expect.objectContaining({ drugId: d.id, quantity: quantities[i] })) })));
+  await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pharmacy/invoices/checkout', expect.objectContaining({ requestKey: expect.any(String), prescriptionId: 'rx-0', patientId: patient.id, items: drugs.map((d, i) => expect.objectContaining({ drugId: d.id, quantity: quantities[i] })) })));
   await waitFor(() => expect(screen.queryByText(patient.name, { selector: 'td *' })).not.toBeInTheDocument());
+});
+
+it('starts a new patient bill after prescription checkout without the previous context', async () => {
+  render(<PharmacyPage />);
+  await loadPatient();
+  await screen.findByRole('heading', { name: names[0], level: 4 });
+  fireEvent.change(screen.getByLabelText('Notes'), {
+    target: { value: 'Old notes' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Confirm Invoice' })
+  );
+  await screen.findByRole('button', { name: 'Invoice Confirmed' });
+  fireEvent.click(screen.getByText('Close', { selector: 'button' }));
+  window.history.replaceState(
+    {},
+    '',
+    '/dashboard/pharmacy?section=billing&patientId=patient-trina&prescriptionId=rx-0&doctorId=doctor-1&visitId=visit-0'
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Start a new invoice' }));
+  await waitFor(() =>
+    expect(
+      screen.queryByRole('heading', { name: 'Linked Prescription' })
+    ).not.toBeInTheDocument()
+  );
+  expect(screen.getByLabelText('Patient *')).toHaveValue('');
+  expect(screen.getByLabelText('Notes')).toHaveValue('');
+  for (const key of ['patientId', 'prescriptionId', 'doctorId', 'visitId'])
+    expect(new URLSearchParams(window.location.search).get(key)).toBeNull();
+  const bill = screen.getByRole('region', { name: 'Prescription bill' });
+  fireEvent.change(screen.getByLabelText('Patient *'), {
+    target: { value: 'Synthetic Patient Two' },
+  });
+  fireEvent.mouseDown(await within(bill).findByText(secondPatient.name));
+  fireEvent.change(screen.getByLabelText('Search Drugs'), {
+    target: { value: 'Nixiper' },
+  });
+  const result = (
+    await screen.findByRole('heading', { name: names[1], level: 4 })
+  ).closest('[role="button"]') as HTMLElement;
+  fireEvent.click(within(result).getByRole('button', { name: 'Add' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Print Preview' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Confirm Invoice' })
+  );
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2));
+  expect(api.post.mock.calls[1]).toEqual([
+    '/pharmacy/invoices/checkout',
+    expect.objectContaining({
+      patientId: secondPatient.id,
+      prescriptionId: '',
+      doctorId: '',
+      billingAddress: '',
+      notes: '',
+      requestKey: expect.any(String),
+    }),
+  ]);
+  expect(api.patch).not.toHaveBeenCalled();
+});
+
+it('keeps billing edits with unchanged source lines on reorder and resets changed medicines', async () => {
+  let prescriptionItems = names.map((drugName, index) => ({ drugName, quantity: quantities[index] }));
+  api.getPrescription.mockImplementation(async id => ({ id, updatedAt: prescriptionVersion, visit: { patient, doctor }, items: prescriptionItems }) as any);
+  const get = api.get.getMockImplementation()!;
+  let fail = true;
+  api.get.mockImplementation(async (url, query) => {
+    if (url.endsWith('/stock-check')) return { items: prescriptionItems.map(item => ({ ...stock[names.indexOf(item.drugName)] })) } as any;
+    if (url === '/drugs/drug-0' && fail) throw new Error('Temporary lookup failure');
+    return get(url, query);
+  });
+  render(<PharmacyPage />);
+  await loadPatient();
+  const row = (name: string) => screen.getByRole('heading', { name, level: 4 }).closest('[data-invoice-item]') as HTMLElement;
+  fireEvent.change(within(row(names[1])).getByLabelText('Quantity'), { target: { value: '2' } });
+  prescriptionItems = [prescriptionItems[1], prescriptionItems[0], prescriptionItems[2], prescriptionItems[3]];
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
+  await waitFor(() => expect(api.getPrescription).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(within(row(names[1])).getByLabelText('Quantity')).toHaveValue(2));
+  expect(within(row(names[0])).getByLabelText('Quantity')).toHaveValue(14);
+  prescriptionItems = prescriptionItems.map((item, index) => index === 0 ? { ...item, quantity: 9 } : item);
+  fail = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
+  await waitFor(() => expect(screen.queryByText('Inventory check failed')).not.toBeInTheDocument());
+  expect(within(row(names[1])).getByLabelText('Quantity')).toHaveValue(9);
+});
+
+
+it.each(['2026-10-05T10:00:01.000Z', prescriptionVersion, undefined])('rejects reordered stock with revision %s and retries safely', async stockVersion => {
+  const get = api.get.getMockImplementation()!;
+  let changed = true;
+  api.get.mockImplementation(async (url, query) => {
+    if (url.endsWith('/stock-check') && changed) return { items: [...stock].reverse().map(item => ({ ...item, prescriptionVersion: stockVersion })) } as any;
+    return get(url, query);
+  });
+  render(<PharmacyPage />);
+  await loadPatient();
+  await screen.findByText(/Prescription loaded, but some inventory details/);
+  expect(screen.getAllByText('Inventory check failed')).toHaveLength(4);
+  expect(api.get.mock.calls.some(([url]) => url.startsWith('/drugs/'))).toBe(false);
+  changed = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading prescription' }));
+  await waitFor(() => expect(screen.queryByText(/Prescription loaded, but some inventory details/)).not.toBeInTheDocument());
+  expect(api.get).toHaveBeenCalledWith('/drugs/drug-0');
+  for (const [index, name] of names.entries()) {
+    const row = screen.getByRole('heading', { name, level: 4 }).closest('[data-invoice-item]') as HTMLElement;
+    expect(within(row).getByLabelText('Quantity')).toHaveValue(quantities[index]);
+  }
 });

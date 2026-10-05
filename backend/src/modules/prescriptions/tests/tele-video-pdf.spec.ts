@@ -41,7 +41,7 @@ it('rejects cross-branch prescriptions and invalid uploads before sharing', asyn
   const body = { channel: 'EMAIL' as const, to: 'synthetic@example.test' };
   const file = { buffer: Buffer.from('%PDF-synthetic'), mimetype: 'application/pdf' } as any;
   await expect(service.sharePrescriptionPreview('rx', 'branch', body, file)).rejects.toThrow('Prescription not found');
-  expect(db.prescription.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'rx', visit: { patient: { branchId: 'branch' } } } }));
+  expect(db.prescription.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'rx', visit: { deletedAt: null, patient: { branchId: 'branch' } } } }));
   db.prescription.findFirst.mockResolvedValue({ id: 'rx' } as any);
   await expect(service.sharePrescriptionPreview('rx', 'branch', body, { ...file, buffer: Buffer.from('not a pdf') })).rejects.toThrow('valid prescription PDF');
   await expect(service.sharePrescriptionPreview('rx', 'branch', { ...body, to: '' }, file)).rejects.toThrow('recipient');

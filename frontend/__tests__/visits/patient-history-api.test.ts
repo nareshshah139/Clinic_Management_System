@@ -15,8 +15,8 @@ describe('Complete patient history loading', () => {
     jest.spyOn(client, 'getPatientVisitHistory').mockResolvedValueOnce({ visits: [{ id: 'one' }], pagination: { hasMore: true } }).mockRejectedValueOnce(new Error('Network error'));
     await expect(client.getAllPatientVisitHistory('patient')).rejects.toThrow('Network error');
   });
-  it('does not turn empty draft controls into deletion of saved clinical fields', () => {
-    const patch = compactClinicalPatch({ history: { pastHistory: '' }, diagnosis: [], examination: { dermatology: { morphology: [] } }, vitals: { heartRate: 70 } });
+  it('omits untouched controls without erasing saved clinical fields', () => {
+    const patch = compactClinicalPatch({ history: { pastHistory: undefined }, diagnosis: undefined, examination: { dermatology: { morphology: undefined } }, vitals: { heartRate: 70 } });
     expect(patch).toEqual({ vitals: { heartRate: 70 } });
     expect(mergeClinicalPatch({ vitals: { temperature: 37 }, history: { pastHistory: 'Keep' } }, patch)).toEqual({ vitals: { temperature: 37, heartRate: 70 }, history: { pastHistory: 'Keep' } });
   });

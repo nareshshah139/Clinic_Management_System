@@ -27,11 +27,12 @@ describe('InventoryController (Integration)', () => {
     canActivate: jest.fn(() => true),
   };
 
-  // Mock PrismaService
   const mockPrismaService = {
     onModuleInit: jest.fn(),
     $connect: jest.fn(),
     enableShutdownHooks: jest.fn(),
+    $transaction: jest.fn(),
+    inventoryWorkflowEffect: { count: jest.fn() },
     inventoryItem: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -42,7 +43,6 @@ describe('InventoryController (Integration)', () => {
       count: jest.fn(),
       groupBy: jest.fn(),
       aggregate: jest.fn(),
-      groupBy: jest.fn(),
     },
     stockTransaction: {
       create: jest.fn(),
@@ -86,7 +86,6 @@ describe('InventoryController (Integration)', () => {
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(new ValidationPipe());    prisma = moduleFixture.get<PrismaService>(PrismaService);
 
-    // Mock request user
     app.use((req, res, next) => {
       req.user = mockUser;
       next();
@@ -100,7 +99,10 @@ describe('InventoryController (Integration)', () => {
   });
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    mockAuthGuard.canActivate.mockReturnValue(true);
+    mockPrismaService.$transaction.mockImplementation(work => work(mockPrismaService));
+    mockPrismaService.inventoryWorkflowEffect.count.mockResolvedValue(0);
   });
 
   describe('/inventory/items (POST)', () => {
@@ -180,9 +182,9 @@ describe('InventoryController (Integration)', () => {
 
     it('should return 400 for invalid data', async () => {
       const createItemDto = {
-        name: '', // Invalid empty name
+        name: '',
         type: InventoryItemType.MEDICINE,
-        costPrice: -10, // Invalid negative price
+        costPrice: -10,
         sellingPrice: 15.0,
         unit: UnitType.STRIPS,
       };
@@ -325,16 +327,27 @@ describe('InventoryController (Integration)', () => {
   });
 
   describe('/inventory/items/:id (PATCH)', () => {
+    it('requires a linked correction to change posted purchase cost', async () => {
+      mockPrismaService.inventoryItem.findFirst.mockResolvedValue({
+        id: 'item-123', costPrice: 10,
+      });
+      await request(app.getHttpServer())
+        .patch('/inventory/items/item-123')
+        .send({ costPrice: 12 })
+        .expect(400);
+      expect(mockPrismaService.inventoryItem.update).not.toHaveBeenCalled();
+    });
+
     it('should update inventory item', async () => {
       const updateDto = {
         name: 'Updated Paracetamol',
-        costPrice: 12.0,
         sellingPrice: 18.0,
       };
 
       const existingItem = {
         id: 'item-123',
         name: 'Paracetamol',
+        costPrice: 10,
         sku: 'PAR-500',
         barcode: '123456789',
         tags: null,
@@ -356,7 +369,6 @@ describe('InventoryController (Integration)', () => {
       expect(response.body).toMatchObject({
         id: 'item-123',
         name: 'Updated Paracetamol',
-        costPrice: 12.0,
         sellingPrice: 18.0,
       });
     });
@@ -554,7 +566,7 @@ describe('InventoryController (Integration)', () => {
     it('should transfer stock', async () => {
       const transferDto = {
         itemId: '550e8400-e29b-41d4-a716-446655440000',
-        quantity: 10,
+        quantity: 50,
         fromLocation: 'Store A',
         toLocation: 'Store B',
         notes: 'Transfer between stores',
@@ -564,27 +576,29 @@ describe('InventoryController (Integration)', () => {
         id: 'item-123',
         costPrice: 10.5,
         currentStock: 50,
+        heldStock: 0,
+        storageLocation: 'Store A',
       };
 
       const mockOutboundTransaction = {
         id: 'outbound-123',
         type: TransactionType.TRANSFER,
-        quantity: 10,
+        quantity: 50,
         location: 'Store A',
       };
 
       const mockInboundTransaction = {
         id: 'inbound-123',
         type: TransactionType.TRANSFER,
-        quantity: 10,
+        quantity: 50,
         location: 'Store B',
       };
 
-      mockPrismaService.inventoryItem.findFirst.mockResolvedValue(mockItem);
+      mockPrismaService.inventoryItem.findFirst.mockImplementation(async () => ({ ...mockItem }));
       mockPrismaService.stockTransaction.create
         .mockResolvedValueOnce(mockOutboundTransaction)
         .mockResolvedValueOnce(mockInboundTransaction);
-      mockPrismaService.inventoryItem.update.mockResolvedValue({});
+      mockPrismaService.inventoryItem.update.mockImplementation(async ({ data }) => Object.assign(mockItem, data));
 
       const response = await request(app.getHttpServer())
         .post('/inventory/transfers')
@@ -595,6 +609,8 @@ describe('InventoryController (Integration)', () => {
       expect(response.body).toHaveProperty('inboundTransaction');
       expect(response.body.outboundTransaction.location).toBe('Store A');
       expect(response.body.inboundTransaction.location).toBe('Store B');
+      expect(mockItem.currentStock).toBe(50);
+      expect(mockItem.storageLocation).toBe('Store B');
     });
 
     it('should return 400 for insufficient stock', async () => {
@@ -608,6 +624,7 @@ describe('InventoryController (Integration)', () => {
       const mockItem = {
         id: 'item-123',
         currentStock: 50,
+        storageLocation: 'Store A',
       };
 
       mockPrismaService.inventoryItem.findFirst.mockResolvedValue(mockItem);
@@ -745,35 +762,16 @@ describe('InventoryController (Integration)', () => {
       expect(response.body).toHaveProperty('items');
       expect(response.body).toHaveProperty('summary');
       expect(response.body.summary.totalItems).toBe(2);
-      expect(response.body.summary.totalValue).toBe(550); // (50 * 10.5) + (5 * 5.0)
+      expect(response.body.summary.totalValue).toBe(550);
     });
   });
 
   describe('/inventory/statistics (GET)', () => {
     it('should return inventory statistics', async () => {
-      const mockStats = {
-        totalItems: 100,
-        totalValue: 5000,
-        lowStockCount: 15,
-        expiredCount: 5,
-        typeBreakdown: [
-          { type: InventoryItemType.MEDICINE, _count: { id: 60 }, _sum: { currentStock: 3000 } },
-          { type: InventoryItemType.EQUIPMENT, _count: { id: 40 }, _sum: { currentStock: 2000 } },
-        ],
-        categoryBreakdown: [
-          { category: 'Pain Relief', _count: { id: 30 }, _sum: { currentStock: 1500 } },
-        ],
-        locationBreakdown: [
-          { storageLocation: 'Store A', _count: { id: 50 }, _sum: { currentStock: 2500 } },
-        ],
-      };
-
-      mockPrismaService.inventoryItem.count.mockResolvedValue(100);
-      mockPrismaService.inventoryItem.aggregate.mockResolvedValue({ _sum: { currentStock: 5000 } });
-      mockPrismaService.inventoryItem.groupBy
-        .mockResolvedValueOnce(mockStats.typeBreakdown)
-        .mockResolvedValueOnce(mockStats.categoryBreakdown)
-        .mockResolvedValueOnce(mockStats.locationBreakdown);
+      mockPrismaService.inventoryItem.findMany.mockResolvedValue([
+        { id: 'one', currentStock: 10, costPrice: 25, type: InventoryItemType.MEDICINE, category: 'Pain Relief', storageLocation: 'Store A' },
+        { id: 'two', currentStock: 5, costPrice: 10, type: InventoryItemType.EQUIPMENT, category: 'Equipment', storageLocation: 'Store A' },
+      ]);
 
       const response = await request(app.getHttpServer())
         .get('/inventory/statistics')
@@ -781,11 +779,14 @@ describe('InventoryController (Integration)', () => {
         .expect(200);
 
       expect(response.body).toMatchObject({
-        totalItems: 100,
-        totalValue: 5000,
-        typeBreakdown: mockStats.typeBreakdown,
-        categoryBreakdown: mockStats.categoryBreakdown,
-        locationBreakdown: mockStats.locationBreakdown,
+        totalItems: 2,
+        totalValue: 300,
+        valuationBasis: 'Cost per stock unit; excludes tax',
+        typeBreakdown: [
+          { type: InventoryItemType.MEDICINE, _count: { id: 1 }, _sum: { currentStock: 10 } },
+          { type: InventoryItemType.EQUIPMENT, _count: { id: 1 }, _sum: { currentStock: 5 } },
+        ],
+        locationBreakdown: [{ storageLocation: 'Store A', _count: { id: 2 }, _sum: { currentStock: 15 } }],
       });
     });
   });
@@ -895,6 +896,7 @@ describe('InventoryController (Integration)', () => {
       const mockItem = {
         id: 'item-123',
         name: 'Paracetamol',
+        costPrice: 10,
         sku: 'PAR-500',
         tags: null,
         metadata: null,
@@ -910,6 +912,7 @@ describe('InventoryController (Integration)', () => {
       expect(response.body).toMatchObject({
         id: 'item-123',
         name: 'Paracetamol',
+        costPrice: 10,
         sku: 'PAR-500',
       });
     });

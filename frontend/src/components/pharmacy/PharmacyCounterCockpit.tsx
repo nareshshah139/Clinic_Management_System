@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Barcode,
@@ -46,6 +46,7 @@ type DispenseLifecycle =
   | 'Cancelled';
 
 type QueueMedication = {
+  sourceLineKey?: string;
   lineId?: string;
   drugName: string;
   genericName?: string | null;
@@ -72,6 +73,7 @@ type QueueMedication = {
 
 type QueueEntry = {
   dispenseTaskId?: string;
+  dispensingEligible?: boolean;
   prescriptionId: string;
   patient: {
     id: string;
@@ -128,6 +130,7 @@ type StockBatch = {
 };
 
 type StockCheckItem = {
+  sourceLineKey?: string;
   drugName: string;
   matchedDrug?: {
     id: string;
@@ -176,6 +179,21 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
  * Obsolete responses MUST NOT replace a newer selection; failed reads MUST clear stale stock
  * and show a retryable error rather than a successful availability result.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-explicit-task-commands
+ * Passive queue and stock refreshes MUST NOT create tasks. Staff review and status actions
+ * MUST obtain a persisted task and line identity before saving; failed saves MUST NOT mark a line reviewed.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-prescription-line-review
+ * Review state MUST come from each active prescription line, defaulting to pending when absent.
+ * Stock and review commands MUST use that line identity, even when other medicines share its name.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-ready-reviewed-task
+ * Ready MUST recheck the prepared task and reject empty tasks or pending and unavailable lines
+ * before saving status. Unreviewed or unavailable lines MUST keep the Ready button disabled.
+ */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
@@ -197,12 +215,12 @@ export function PharmacyCounterCockpit({
   const [stockItems, setStockItems] = useState<StockCheckItem[]>([]);
   const [stockReloadKey, setStockReloadKey] = useState(0);
   const [stockError, setStockError] = useState<string | null>(null);
-  const [lineActions, setLineActions] = useState<Record<string, LineAction>>({});
   const [reasonType, setReasonType] = useState(reasonOptions[0]);
   const [reasonNote, setReasonNote] = useState('');
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [loadingStock, setLoadingStock] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
+  const taskCommandInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeEntry = useMemo(
@@ -210,29 +228,13 @@ export function PharmacyCounterCockpit({
     [activeId, queue],
   );
 
-  const mergePersistedLineActions = useCallback((entries: QueueEntry[]) => {
-    setLineActions((current) => {
-      const next = { ...current };
-      for (const entry of entries) {
-        for (const medication of entry.medications) {
-          if (medication.action) next[medication.drugName] = medication.action;
-        }
-      }
-      return next;
-    });
+  const replaceQueueEntry = useCallback((updatedEntry: QueueEntry) => {
+    setQueue((current) =>
+      current.map((entry) =>
+        entry.prescriptionId === updatedEntry.prescriptionId ? updatedEntry : entry,
+      ),
+    );
   }, []);
-
-  const replaceQueueEntry = useCallback(
-    (updatedEntry: QueueEntry) => {
-      setQueue((current) =>
-        current.map((entry) =>
-          entry.prescriptionId === updatedEntry.prescriptionId ? updatedEntry : entry,
-        ),
-      );
-      mergePersistedLineActions([updatedEntry]);
-    },
-    [mergePersistedLineActions],
-  );
 
   const loadQueue = useCallback(async () => {
     setStockReloadKey(key => key + 1);
@@ -260,7 +262,6 @@ export function PharmacyCounterCockpit({
       }
 
       setQueue(entries);
-      mergePersistedLineActions(entries);
       setQueueTotal(response.pagination?.total ?? entries.length);
       setActiveId((current) => {
         if (
@@ -287,7 +288,7 @@ export function PharmacyCounterCockpit({
     } finally {
       setLoadingQueue(false);
     }
-  }, [mergePersistedLineActions, prefill?.prescriptionId]);
+  }, [prefill?.prescriptionId]);
 
   useEffect(() => {
     void loadQueue();
@@ -322,13 +323,6 @@ export function PharmacyCounterCockpit({
         );
         if (!current) return;
         setStockItems(response.items || []);
-        setLineActions((current) => {
-          const next = { ...current };
-          for (const item of response.items || []) {
-            if (!next[item.drugName]) next[item.drugName] = 'pending';
-          }
-          return next;
-        });
       } catch (err) {
         if (!current) return;
         console.error('Failed to load pharmacy stock check:', err);
@@ -343,35 +337,38 @@ export function PharmacyCounterCockpit({
     return () => { current = false; };
   }, [activeId, stockReloadKey]);
 
-  const stockByDrug = useMemo(() => {
-    return Object.fromEntries(stockItems.map((item) => [item.drugName, item]));
+  const stockByLine = useMemo(() => {
+    return Object.fromEntries(stockItems.map((item, index) => [item.sourceLineKey ?? String(index), item]));
   }, [stockItems]);
 
   const exceptionCount = useMemo(() => {
     return stockItems.filter(
-      (item) =>
+      (item, index) =>
         item.stockStatus !== 'IN_STOCK' ||
         item.nearExpiry ||
         item.lowStock ||
-        lineActions[item.drugName] === 'unavailable',
+        activeEntry?.medications.find((line, lineIndex) =>
+          item.sourceLineKey ? line.sourceLineKey === item.sourceLineKey : lineIndex === index,
+        )?.action === 'unavailable',
     ).length;
-  }, [lineActions, stockItems]);
+  }, [activeEntry, stockItems]);
 
   const reviewedLineCount = useMemo(() => {
     if (!activeEntry) return 0;
     return activeEntry.medications.filter(
-      (medication) => (lineActions[medication.drugName] || 'pending') !== 'pending',
+      (medication) => (medication.action || 'pending') !== 'pending',
     ).length;
-  }, [activeEntry, lineActions]);
+  }, [activeEntry]);
 
   const allLinesReviewed =
     Boolean(activeEntry?.medications.length) &&
     reviewedLineCount === activeEntry?.medications.length;
+  const readyForBilling = Boolean(activeEntry && hasBillableReview(activeEntry));
 
   const pickLines = useMemo(() => {
     if (!activeEntry) return [];
-    return activeEntry.medications.map((medication) => {
-      const stock = stockByDrug[medication.drugName];
+    return activeEntry.medications.map((medication, index) => {
+      const stock = stockByLine[medication.sourceLineKey ?? String(index)];
       const batches = stock?.batches || [];
       const recommendedBatch = batches[0] || null;
       const requiredQuantity = Math.max(
@@ -390,10 +387,10 @@ export function PharmacyCounterCockpit({
         alternateCount: Math.max(0, batches.length - 1),
       };
     });
-  }, [activeEntry, stockByDrug]);
+  }, [activeEntry, stockByLine]);
 
   const activeLifecycle = activeEntry
-    ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, allLinesReviewed)
+    ? deriveLifecycle(activeEntry, activeEntry.prescriptionId === activeId, readyForBilling)
     : 'Queued';
   const activeBillingPrefill = useMemo<PharmacyBillingPrefill | undefined>(() => {
     if (!activeEntry) return undefined;
@@ -404,8 +401,12 @@ export function PharmacyCounterCockpit({
     };
   }, [activeEntry]);
   const openActiveBilling = useCallback(() => {
+    if (activeEntry?.dispensingEligible === false) {
+      setError('This prescription is not active or has expired.');
+      return;
+    }
     onOpenBilling(activeBillingPrefill);
-  }, [activeBillingPrefill, onOpenBilling]);
+  }, [activeBillingPrefill, activeEntry?.dispensingEligible, onOpenBilling]);
   const commandStats = useMemo(() => {
     const inReview = queue.filter((entry) => entry.dispenseStatus === 'IN_REVIEW').length;
     const ready = queue.filter((entry) => entry.dispenseStatus === 'READY_TO_BILL').length;
@@ -421,14 +422,36 @@ export function PharmacyCounterCockpit({
     return { inReview, ready, paid, exceptions };
   }, [queue]);
 
+  const ensureDispenseTask = useCallback(async (entry: QueueEntry) => {
+    if (entry.dispensingEligible === false) throw new Error('Prescription is not active or has expired');
+    if (entry.dispenseTaskId && entry.medications.every(line => line.lineId)) {
+      return { ...entry, dispenseTaskId: entry.dispenseTaskId };
+    }
+    const response = await apiClient.post<{ data: QueueEntry }>(
+      `/pharmacy/prescription-queue/${entry.prescriptionId}/pull`,
+      {},
+    );
+    if (!response.data.dispenseTaskId) throw new Error('Dispense task was not created');
+    replaceQueueEntry(response.data);
+    return { ...response.data, dispenseTaskId: response.data.dispenseTaskId };
+  }, [replaceQueueEntry]);
+
   const updateTaskStatus = useCallback(
     async (status: DispenseTaskStatus) => {
-      if (!activeEntry?.dispenseTaskId) return;
+      if (!activeEntry || taskCommandInFlight.current) return;
+      taskCommandInFlight.current = true;
       try {
         setSavingTask(true);
         setError(null);
+        const task = await ensureDispenseTask(activeEntry);
+        if (status === 'READY_TO_BILL' && !hasBillableReview(task)) {
+          setError(
+            'Review every available medicine before marking ready for billing. Unavailable medicines must be resolved first.',
+          );
+          return;
+        }
         const updated = await apiClient.patch<QueueEntry>(
-          `/pharmacy/dispense-tasks/${activeEntry.dispenseTaskId}/status`,
+          `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
           {
             status,
             reasonType:
@@ -446,41 +469,59 @@ export function PharmacyCounterCockpit({
         console.error('Failed to update dispense task status:', err);
         setError('Unable to save dispense status');
       } finally {
+        taskCommandInFlight.current = false;
         setSavingTask(false);
       }
     },
-    [activeEntry?.dispenseTaskId, reasonNote, reasonType, replaceQueueEntry],
+    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
   );
 
   const selectQueueEntry = useCallback(
-    (entry: QueueEntry) => {
+    async (entry: QueueEntry) => {
+      if (taskCommandInFlight.current) return;
       setActiveId(entry.prescriptionId);
-      if (entry.dispenseTaskId && entry.dispenseStatus === 'QUEUED') {
-        void apiClient
-          .patch<QueueEntry>(
-            `/pharmacy/dispense-tasks/${entry.dispenseTaskId}/status`,
+      if (entry.dispensingEligible === false) return;
+      taskCommandInFlight.current = true;
+      try {
+        setSavingTask(true);
+        setError(null);
+        const task = await ensureDispenseTask(entry);
+        if (task.dispenseStatus === 'QUEUED') {
+          const updated = await apiClient.patch<QueueEntry>(
+            `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
             { status: 'IN_REVIEW' },
-          )
-          .then(replaceQueueEntry)
-          .catch((err) => {
-            console.error('Failed to mark dispense task in review:', err);
-          });
+          );
+          replaceQueueEntry(updated);
+        }
+      } catch (err) {
+        console.error('Failed to start dispense review:', err);
+        setError('Unable to start medicine review. Select the prescription to retry.');
+      } finally {
+        taskCommandInFlight.current = false;
+        setSavingTask(false);
       }
     },
-    [replaceQueueEntry],
+    [ensureDispenseTask, replaceQueueEntry],
   );
 
   const updateLineAction = useCallback(
     async (medication: QueueMedication, action: LineAction) => {
-      setLineActions((current) => ({ ...current, [medication.drugName]: action }));
-
-      if (!activeEntry?.dispenseTaskId || !medication.lineId) return;
-
+      if (!activeEntry || taskCommandInFlight.current) return;
+      taskCommandInFlight.current = true;
       try {
         setSavingTask(true);
         setError(null);
+        const task = await ensureDispenseTask(activeEntry);
+        const line = medication.lineId
+          ? task.medications.find(item => item.lineId === medication.lineId)
+          : medication.sourceLineKey
+            ? task.medications.find(item => item.sourceLineKey === medication.sourceLineKey)
+            : task.medications[activeEntry.medications.indexOf(medication)];
+        if (!line?.lineId || line.drugName !== medication.drugName) {
+          throw new Error('Prescription line no longer exists');
+        }
         const updated = await apiClient.patch<QueueEntry>(
-          `/pharmacy/dispense-tasks/${activeEntry.dispenseTaskId}/lines/${medication.lineId}`,
+          `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
           {
             action: backendActionFromLineAction(action),
             reasonType:
@@ -494,15 +535,11 @@ export function PharmacyCounterCockpit({
         console.error('Failed to save dispense line review:', err);
         setError('Unable to save medicine review');
       } finally {
+        taskCommandInFlight.current = false;
         setSavingTask(false);
       }
     },
-    [
-      activeEntry?.dispenseTaskId,
-      reasonNote,
-      reasonType,
-      replaceQueueEntry,
-    ],
+    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
   );
 
   return (
@@ -539,7 +576,7 @@ export function PharmacyCounterCockpit({
               variant="outline"
               className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={loadQueue}
-              disabled={loadingQueue}
+              disabled={loadingQueue || savingTask}
             >
               <RefreshCw className={`h-4 w-4 ${loadingQueue ? 'animate-spin' : ''}`} />
               Refresh
@@ -553,7 +590,7 @@ export function PharmacyCounterCockpit({
               <ClipboardCheck className="h-4 w-4" />
               Rx queue
             </Button>
-            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling}>
+            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
               <Receipt className="h-4 w-4" />
               Bill
             </Button>
@@ -581,13 +618,12 @@ export function PharmacyCounterCockpit({
 
         <ActiveDispenseColumn
           activeEntry={activeEntry}
-          stockByDrug={stockByDrug}
+          stockByLine={stockByLine}
           loadingStock={loadingStock}
-          lineActions={lineActions}
           setLineAction={updateLineAction}
           activeLifecycle={activeLifecycle}
           reviewedLineCount={reviewedLineCount}
-          allLinesReviewed={allLinesReviewed}
+          readyForBilling={readyForBilling}
           reasonType={reasonType}
           setReasonType={setReasonType}
           reasonNote={reasonNote}
@@ -777,13 +813,12 @@ function QueueColumn({
 
 function ActiveDispenseColumn({
   activeEntry,
-  stockByDrug,
+  stockByLine,
   loadingStock,
-  lineActions,
   setLineAction,
   activeLifecycle,
   reviewedLineCount,
-  allLinesReviewed,
+  readyForBilling,
   reasonType,
   setReasonType,
   reasonNote,
@@ -793,13 +828,12 @@ function ActiveDispenseColumn({
   savingTask,
 }: {
   activeEntry: QueueEntry | null;
-  stockByDrug: Record<string, StockCheckItem>;
+  stockByLine: Record<string, StockCheckItem>;
   loadingStock: boolean;
-  lineActions: Record<string, LineAction>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
   activeLifecycle: DispenseLifecycle;
   reviewedLineCount: number;
-  allLinesReviewed: boolean;
+  readyForBilling: boolean;
   reasonType: string;
   setReasonType: (value: string) => void;
   reasonNote: string;
@@ -852,12 +886,13 @@ function ActiveDispenseColumn({
               Checking stock and FEFO batches
             </div>
           ) : (
-            <MedicationReviewTable
-              activeEntry={activeEntry}
-              stockByDrug={stockByDrug}
-              lineActions={lineActions}
-              setLineAction={setLineAction}
-            />
+            <fieldset disabled={savingTask || activeEntry?.dispensingEligible === false} className="contents">
+              <MedicationReviewTable
+                activeEntry={activeEntry}
+                stockByLine={stockByLine}
+                setLineAction={setLineAction}
+              />
+            </fieldset>
           )}
 
           <div className="mt-2 shrink-0 rounded-[10px] border border-slate-200 bg-slate-50/80 p-2">
@@ -885,7 +920,7 @@ function ActiveDispenseColumn({
           <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-[10px] border border-slate-200 bg-white p-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
               <p className="font-semibold text-slate-950">
-                {allLinesReviewed ? 'Ready for billing review' : 'Review every medicine before billing'}
+                {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
               </p>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -893,7 +928,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('PAUSED')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Pause
               </Button>
@@ -901,7 +936,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('READY_TO_BILL')}
-                disabled={!allLinesReviewed || savingTask}
+                disabled={!readyForBilling || savingTask || activeEntry?.dispensingEligible === false}
               >
                 Ready
               </Button>
@@ -909,7 +944,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('PAID')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Paid
               </Button>
@@ -917,11 +952,11 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('DISPENSED')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Dispense
               </Button>
-              <Button size="sm" onClick={onOpenBilling} disabled={savingTask}>
+              <Button size="sm" onClick={onOpenBilling} disabled={savingTask || activeEntry?.dispensingEligible === false}>
                 <Receipt className="mr-2 h-4 w-4" />
                 Open bill
               </Button>
@@ -943,13 +978,11 @@ function ActiveDispenseColumn({
 
 function MedicationReviewTable({
   activeEntry,
-  stockByDrug,
-  lineActions,
+  stockByLine,
   setLineAction,
 }: {
   activeEntry: QueueEntry;
-  stockByDrug: Record<string, StockCheckItem>;
-  lineActions: Record<string, LineAction>;
+  stockByLine: Record<string, StockCheckItem>;
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
 }) {
   return (
@@ -962,14 +995,14 @@ function MedicationReviewTable({
         <span>Action</span>
       </div>
       <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
-        {activeEntry.medications.map((medication) => {
-          const stock = stockByDrug[medication.drugName];
+        {activeEntry.medications.map((medication, index) => {
+          const stock = stockByLine[medication.sourceLineKey ?? String(index)];
           return (
             <MedicationReviewRow
-              key={`${activeEntry.prescriptionId}-${medication.drugName}`}
+              key={`${activeEntry.prescriptionId}-${medication.sourceLineKey || medication.lineId || index}`}
               medication={medication}
               stock={stock}
-              action={lineActions[medication.drugName] || 'pending'}
+              action={medication.action || 'pending'}
               setAction={(action) => setLineAction(medication, action)}
             />
           );
@@ -1475,6 +1508,15 @@ function stockWarnings(stock: StockCheckItem) {
   );
   if (expiredBatch) warnings.push('Expired batch blocked');
   return warnings;
+}
+
+function hasBillableReview(entry: QueueEntry): boolean {
+  return (
+    entry.medications.length > 0 &&
+    entry.medications.every(
+      line => line.action && line.action !== 'pending' && line.action !== 'unavailable',
+    )
+  );
 }
 
 function deriveLifecycle(

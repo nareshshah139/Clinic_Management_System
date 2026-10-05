@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { resolvePrescriptionInventory } from './pharmacy-stock-identity';
 import {
   Injectable,
@@ -9,6 +10,7 @@ import {
 import { jsonObject, money } from '../inventory/inventory-stock';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
+  CheckoutPharmacyInvoiceDto,
   CreatePharmacyInvoiceDto,
   UpdatePharmacyInvoiceDto,
   QueryPharmacyInvoiceDto,
@@ -48,345 +50,332 @@ export class PharmacyInvoiceService {
     private invoiceNumbers: InvoiceNumbersService,
   ) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] draft-create-no-stock
+   * Creating a draft MUST persist its items and outstanding balance atomically without stock movements.
+   */
   async create(
-    createInvoiceDto: CreatePharmacyInvoiceDto,
+    dto: CreatePharmacyInvoiceDto,
     branchId: string,
     userId?: string,
   ) {
-    this.validateInvoiceItemsInput(
-      createInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
-    );
-
-    console.log('🏥 PharmacyInvoiceService.create called with:', {
-      patientId: createInvoiceDto.patientId,
-      doctorId: createInvoiceDto.doctorId,
-      prescriptionId: createInvoiceDto.prescriptionId,
-      itemsCount: createInvoiceDto.items?.length,
+    return this.withInvoiceNumber(
+      (tx, invoiceNumber) => this.createDraft(tx, dto, branchId, invoiceNumber),
       branchId,
-      userId,
-    });
-    console.log('🔍 Full DTO:', JSON.stringify(createInvoiceDto, null, 2));
+    );
+  }
 
-    try {
-      const prismaAny = this.prisma as any;
-      // Validate patient exists
-      const patient = await prismaAny.patient.findFirst({
-        where: { id: createInvoiceDto.patientId, branchId },
+  /**
+   * @cc [owner:nareshshah139,label:product] checkout-retry-atomic
+   * A branch request key with the same payload MUST return the same posted invoice on retry.
+   * Reusing the key with a changed payload MUST conflict without changing the original invoice.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] checkout-atomic-stock
+   * Checkout MUST commit its invoice, items and validated stock deductions together, or leave
+   * no invoice or stock movement. Batch eligibility MUST be checked within that serializable transaction.
+   */
+  async checkout(
+    dto: CheckoutPharmacyInvoiceDto,
+    branchId: string,
+    userId: string,
+  ) {
+    this.assertRequestKey(dto.requestKey);
+    const { requestKey, ...payload } = dto;
+    const payloadHash = this.payloadHash(payload);
+    return this.withInvoiceNumber(async (tx, invoiceNumber) => {
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended(${`pharmacy-checkout:${branchId}:${requestKey}`}, 0))`;
+      const existing = await tx.pharmacyInvoice.findUnique({
+        where: {
+          branchId_checkoutRequestKey: {
+            branchId,
+            checkoutRequestKey: requestKey,
+          },
+        },
+        include: {
+          items: { include: { drug: true, package: true } },
+          patient: true,
+          doctor: true,
+        },
+      });
+      if (existing) {
+        if (existing.checkoutPayloadHash !== payloadHash)
+          throw new ConflictException(
+            'Checkout request key was already used with different invoice details',
+          );
+        return existing;
+      }
+      const invoice = await this.createDraft(
+        tx,
+        payload,
+        branchId,
+        invoiceNumber,
+        {
+          checkoutRequestKey: requestKey,
+          checkoutPayloadHash: payloadHash,
+        },
+      );
+      return this.transitionInvoice(
+        tx,
+        invoice.id,
+        'CONFIRMED',
+        branchId,
+        userId,
+      );
+    }, branchId);
+  }
+
+  private async withInvoiceNumber<T>(
+    command: (
+      tx: Prisma.TransactionClient,
+      invoiceNumber: string,
+    ) => Promise<T>,
+    branchId: string,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const invoiceNumber = await this.generateInvoiceNumber(branchId);
+      try {
+        return await this.prisma.$transaction(
+          (tx) => command(tx, invoiceNumber),
+          { timeout: 15000, isolationLevel: 'Serializable' },
+        );
+      } catch (error) {
+        const duplicate =
+          error?.code === 'P2002' &&
+          /invoiceNumber|checkoutRequestKey/.test(String(error.meta?.target));
+        if (!duplicate && !this.isSerializationFailure(error)) throw error;
+      }
+    }
+    throw new ConflictException(
+      'Invoice or stock changed concurrently. Retry this request with the same key.',
+    );
+  }
+
+  private async createDraft(
+    tx: Prisma.TransactionClient,
+    createInvoiceDto: CreatePharmacyInvoiceDto,
+    branchId: string,
+    invoiceNumber: string,
+    operation:
+      | { checkoutRequestKey: string; checkoutPayloadHash: string }
+      | Record<string, never> = {},
+  ) {
+    this.validateInvoiceItemsInput(createInvoiceDto.items);
+    // Validate patient exists
+    const patient = await tx.patient.findFirst({
+      where: { id: createInvoiceDto.patientId, branchId },
+    });
+
+    if (!patient) {
+      console.error(
+        '❌ Patient not found:',
+        createInvoiceDto.patientId,
+        'in branch:',
+        branchId,
+      );
+      throw new NotFoundException(
+        `Patient not found: ${createInvoiceDto.patientId}`,
+      );
+    }
+
+    // Validate doctor if provided
+    if (createInvoiceDto.doctorId) {
+      const doctor = await tx.user.findFirst({
+        where: { id: createInvoiceDto.doctorId, branchId },
       });
 
-      if (!patient) {
+      if (!doctor) {
         console.error(
-          '❌ Patient not found:',
-          createInvoiceDto.patientId,
+          '❌ Doctor not found:',
+          createInvoiceDto.doctorId,
           'in branch:',
           branchId,
         );
         throw new NotFoundException(
-          `Patient not found: ${createInvoiceDto.patientId}`,
+          `Doctor not found: ${createInvoiceDto.doctorId}`,
         );
       }
+    }
 
-      // Validate doctor if provided
-      if (createInvoiceDto.doctorId) {
-        const doctor = await prismaAny.user.findFirst({
-          where: { id: createInvoiceDto.doctorId, branchId },
-        });
-
-        if (!doctor) {
-          console.error(
-            '❌ Doctor not found:',
-            createInvoiceDto.doctorId,
-            'in branch:',
-            branchId,
-          );
-          throw new NotFoundException(
-            `Doctor not found: ${createInvoiceDto.doctorId}`,
-          );
-        }
-        console.log('✅ Doctor found:', doctor.firstName, doctor.lastName);
-      }
-
-      // Validate prescription if provided
-      if (createInvoiceDto.prescriptionId) {
-        const prescription = await prismaAny.prescription.findFirst({
-          where: { id: createInvoiceDto.prescriptionId },
-          include: {
-            visit: {
-              include: {
-                patient: {
-                  select: {
-                    id: true,
-                    branchId: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-        if (!prescription) {
-          throw new NotFoundException('Prescription not found');
-        }
-        if (
-          prescription.visit?.patient?.branchId !== branchId ||
-          prescription.visit?.patientId !== createInvoiceDto.patientId
-        ) {
-          throw new BadRequestException(
-            'Prescription does not belong to the selected patient and branch',
-          );
-        }
-        if (
-          createInvoiceDto.doctorId &&
-          prescription.visit?.doctorId !== createInvoiceDto.doctorId
-        ) {
-          throw new BadRequestException(
-            'Prescription doctor does not match the selected doctor',
-          );
-        }
-      }
-
-      // Validate items and get drug/package information
-      const drugIds = [
-        ...new Set(
-          createInvoiceDto.items
-            .filter((item) => item.itemType === 'DRUG' || !item.itemType)
-            .map((item) => item.drugId)
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-
-      const packageIds = [
-        ...new Set(
-          createInvoiceDto.items
-            .filter((item) => item.itemType === 'PACKAGE')
-            .map((item) => item.packageId)
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-
-      // Validate drugs
-      let drugs = [];
-      if (drugIds.length > 0) {
-        drugs = await prismaAny.drug.findMany({
-          where: { id: { in: drugIds }, branchId, isActive: true },
-        });
-
-        if (drugs.length !== drugIds.length) {
-          const foundIds = drugs.map((d: any) => d.id);
-          const missingIds = drugIds.filter((id) => !foundIds.includes(id));
-          console.error('❌ Drugs not found or inactive:', missingIds);
-          throw new BadRequestException(
-            `Drugs not found or inactive: ${missingIds.join(', ')}`,
-          );
-        }
-        console.log('✅ All drugs validated:', drugs.length);
-      }
-
-      // Validate packages
-      let packages = [];
-      if (packageIds.length > 0) {
-        packages = await prismaAny.pharmacyPackage.findMany({
-          where: {
-            id: { in: packageIds },
-            branchId,
-            isActive: true,
-          },
-          include: {
-            items: {
-              include: {
-                drug: true,
-              },
-            },
-          },
-        });
-
-        if (packages.length !== packageIds.length) {
-          throw new BadRequestException(
-            'One or more packages not found or inactive',
-          );
-        }
-      }
-
-      // Validate that all PACKAGE items reference a loaded/active package
-      this.validatePackageConsistency(
-        createInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
-        packages,
-      );
-
-      // Calculate totals
-      const { subtotal, totalDiscount, totalTax, grandTotal } =
-        this.calculateInvoiceTotals(createInvoiceDto, packages);
-
-      // Retry-on-unique invoice number generation to avoid race collisions
-      const MAX_ATTEMPTS = 5;
-      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-        const invoiceNumber = await this.generateInvoiceNumber(branchId);
-        try {
-          return await prismaAny.$transaction(async (tx: any) => {
-            // Precompute inventory mapping by drugId using relations
-            const allDrugIds = new Set<string>();
-            for (const item of createInvoiceDto.items) {
-              if ((item.itemType === 'DRUG' || !item.itemType) && item.drugId)
-                allDrugIds.add(item.drugId);
-            }
-            for (const pkg of packages as any[]) {
-              for (const pkgItem of pkg.items) {
-                if (pkgItem.drug?.id) allDrugIds.add(pkgItem.drug.id);
-              }
-            }
-            const drugIdList = Array.from(allDrugIds);
-            const inventoryItems =
-              drugIdList.length > 0
-                ? await tx.inventoryItem.findMany({
-                    where: {
-                      branchId,
-                      drugs: { some: { id: { in: drugIdList } } },
-                    },
-                    include: { drugs: { select: { id: true } } },
-                  })
-                : [];
-            const drugIdToInventory = new Map<string, any>();
-            for (const inv of inventoryItems) {
-              for (const d of inv.drugs) {
-                if (!drugIdToInventory.has(d.id))
-                  drugIdToInventory.set(d.id, inv);
-              }
-            }
-
-            // Create invoice
-            const invoice = await tx.pharmacyInvoice.create({
-              data: {
-                invoiceNumber,
-                patientId: createInvoiceDto.patientId,
-                doctorId: createInvoiceDto.doctorId || undefined,
-                prescriptionId: createInvoiceDto.prescriptionId || undefined,
-                branchId,
-                subtotal,
-                discountAmount: totalDiscount,
-                taxAmount: totalTax,
-                totalAmount: grandTotal,
-                paymentMethod: createInvoiceDto.paymentMethod,
-                billingName: createInvoiceDto.billingName,
-                billingPhone: createInvoiceDto.billingPhone,
-                billingAddress: createInvoiceDto.billingAddress,
-                billingCity: createInvoiceDto.billingCity,
-                billingState: createInvoiceDto.billingState,
-                billingPincode: createInvoiceDto.billingPincode,
-                notes: createInvoiceDto.notes,
-              },
-              include: {
-                patient: { select: { id: true, name: true, phone: true } },
-                doctor: {
-                  select: { id: true, firstName: true, lastName: true },
-                },
-              },
-            });
-
-            // Create invoice items
-            const invoiceItems = await Promise.all(
-              createInvoiceDto.items.map(async (item) => {
-                const resolvedUnitPrice = this.resolveUnitPrice(
-                  item as unknown as PharmacyInvoiceItemDto,
-                  packages,
-                );
-                const discountAmount =
-                  (item.quantity *
-                    resolvedUnitPrice *
-                    (item.discountPercent || 0)) /
-                  100;
-                const discountedAmount =
-                  item.quantity * resolvedUnitPrice - discountAmount;
-                const taxAmount =
-                  (discountedAmount * (item.taxPercent || 0)) / 100;
-                const totalAmount = discountedAmount + taxAmount;
-
-                return tx.pharmacyInvoiceItem.create({
-                  data: {
-                    invoiceId: invoice.id,
-                    drugId: item.drugId,
-                    inventoryItemId: item.inventoryItemId,
-                    packageId: item.packageId,
-                    itemType: item.itemType || 'DRUG',
-                    quantity: item.quantity,
-                    unitPrice: resolvedUnitPrice,
-                    discountPercent: item.discountPercent || 0,
-                    discountAmount,
-                    taxPercent: item.taxPercent || 0,
-                    taxAmount,
-                    totalAmount,
-                    dosage: item.dosage,
-                    frequency: item.frequency,
-                    duration: item.duration,
-                    instructions: item.instructions,
-                  },
-                  include: {
-                    drug: item.drugId
-                      ? {
-                          select: {
-                            id: true,
-                            name: true,
-                            manufacturerName: true,
-                            packSizeLabel: true,
-                          },
-                        }
-                      : undefined,
-                    package: item.packageId
-                      ? {
-                          select: {
-                            id: true,
-                            name: true,
-                            category: true,
-                            subcategory: true,
-                            packagePrice: true,
-                            originalPrice: true,
-                            discountPercent: true,
-                          },
-                        }
-                      : undefined,
-                  },
-                });
-              }),
-            );
-
-            // Do not apply stock mutations in create. Stock mutations are centralized in updateStatus with idempotency.
-
-            return { ...invoice, items: invoiceItems };
-          });
-        } catch (e: any) {
-          if (e?.code === 'P2002') {
-            const t = e?.meta?.target;
-            const hit = Array.isArray(t)
-              ? t.join(',').includes('invoiceNumber')
-              : typeof t === 'string'
-                ? t.includes('invoiceNumber')
-                : false;
-            if (hit) {
-              console.warn(
-                `⚠️ Invoice number collision on attempt ${attempt}; retrying`,
-              );
-              if (attempt === MAX_ATTEMPTS)
-                throw new InternalServerErrorException(
-                  'Failed to generate unique invoice number after retries',
-                );
-              continue;
-            }
-          }
-          throw e;
-        }
-      }
-      throw new InternalServerErrorException('Failed to create invoice');
-    } catch (error) {
-      console.error('❌ PharmacyInvoiceService.create error:', error);
-      console.error('❌ Error stack:', error.stack);
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      throw new InternalServerErrorException(
-        `Failed to create invoice: ${error.message}`,
+    if (createInvoiceDto.prescriptionId) {
+      await this.requireEligiblePrescription(
+        tx,
+        {
+          prescriptionId: createInvoiceDto.prescriptionId,
+          patientId: createInvoiceDto.patientId,
+          doctorId: createInvoiceDto.doctorId,
+        },
+        branchId,
       );
     }
+
+    // Validate items and get drug/package information
+    const drugIds = [
+      ...new Set(
+        createInvoiceDto.items
+          .filter((item) => item.itemType === 'DRUG' || !item.itemType)
+          .map((item) => item.drugId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const packageIds = [
+      ...new Set(
+        createInvoiceDto.items
+          .filter((item) => item.itemType === 'PACKAGE')
+          .map((item) => item.packageId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    // Validate drugs
+    let drugs = [];
+    if (drugIds.length > 0) {
+      drugs = await tx.drug.findMany({
+        where: { id: { in: drugIds }, branchId, isActive: true },
+      });
+
+      if (drugs.length !== drugIds.length) {
+        const foundIds = drugs.map((d: any) => d.id);
+        const missingIds = drugIds.filter((id) => !foundIds.includes(id));
+        console.error('❌ Drugs not found or inactive:', missingIds);
+        throw new BadRequestException(
+          `Drugs not found or inactive: ${missingIds.join(', ')}`,
+        );
+      }
+    }
+
+    // Validate packages
+    let packages: Prisma.PharmacyPackageGetPayload<{
+      include: { items: { include: { drug: true } } };
+    }>[] = [];
+    if (packageIds.length > 0) {
+      packages = await tx.pharmacyPackage.findMany({
+        where: {
+          id: { in: packageIds },
+          branchId,
+          isActive: true,
+        },
+        include: {
+          items: {
+            include: {
+              drug: true,
+            },
+          },
+        },
+      });
+
+      if (packages.length !== packageIds.length) {
+        throw new BadRequestException(
+          'One or more packages not found or inactive',
+        );
+      }
+    }
+
+    // Validate that all PACKAGE items reference a loaded/active package
+    this.validatePackageConsistency(
+      createInvoiceDto.items as unknown as PharmacyInvoiceItemDto[],
+      packages,
+    );
+
+    // Calculate totals
+    const { subtotal, totalDiscount, totalTax, grandTotal } =
+      this.calculateInvoiceTotals(createInvoiceDto, packages);
+    // Create invoice
+    const invoice = await tx.pharmacyInvoice.create({
+      data: {
+        invoiceNumber,
+        ...operation,
+        patientId: createInvoiceDto.patientId,
+        doctorId: createInvoiceDto.doctorId || undefined,
+        prescriptionId: createInvoiceDto.prescriptionId || undefined,
+        branchId,
+        subtotal,
+        discountAmount: totalDiscount,
+        taxAmount: totalTax,
+        totalAmount: money(grandTotal),
+        balanceAmount: money(grandTotal),
+        paymentMethod: createInvoiceDto.paymentMethod,
+        billingName: createInvoiceDto.billingName,
+        billingPhone: createInvoiceDto.billingPhone,
+        billingAddress: createInvoiceDto.billingAddress,
+        billingCity: createInvoiceDto.billingCity,
+        billingState: createInvoiceDto.billingState,
+        billingPincode: createInvoiceDto.billingPincode,
+        notes: createInvoiceDto.notes,
+      },
+      include: {
+        patient: { select: { id: true, name: true, phone: true } },
+        doctor: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    // Create invoice items
+    const invoiceItems = await Promise.all(
+      createInvoiceDto.items.map(async (item) => {
+        const resolvedUnitPrice = this.resolveUnitPrice(
+          item as unknown as PharmacyInvoiceItemDto,
+          packages,
+        );
+        const discountAmount =
+          (item.quantity * resolvedUnitPrice * (item.discountPercent || 0)) /
+          100;
+        const discountedAmount =
+          item.quantity * resolvedUnitPrice - discountAmount;
+        const taxAmount = (discountedAmount * (item.taxPercent || 0)) / 100;
+        const totalAmount = discountedAmount + taxAmount;
+
+        return tx.pharmacyInvoiceItem.create({
+          data: {
+            invoiceId: invoice.id,
+            drugId: item.drugId,
+            inventoryItemId: item.inventoryItemId,
+            packageId: item.packageId,
+            itemType: item.itemType || 'DRUG',
+            quantity: item.quantity,
+            unitPrice: resolvedUnitPrice,
+            discountPercent: item.discountPercent || 0,
+            discountAmount,
+            taxPercent: item.taxPercent || 0,
+            taxAmount,
+            totalAmount,
+            dosage: item.dosage,
+            frequency: item.frequency,
+            duration: item.duration,
+            instructions: item.instructions,
+          },
+          include: {
+            drug: item.drugId
+              ? {
+                  select: {
+                    id: true,
+                    name: true,
+                    manufacturerName: true,
+                    packSizeLabel: true,
+                  },
+                }
+              : undefined,
+            package: item.packageId
+              ? {
+                  select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    subcategory: true,
+                    packagePrice: true,
+                    originalPrice: true,
+                    discountPercent: true,
+                  },
+                }
+              : undefined,
+          },
+        });
+      }),
+    );
+
+    return { ...invoice, items: invoiceItems };
   }
 
   async findAll(query: QueryPharmacyInvoiceDto, branchId: string) {
@@ -863,102 +852,101 @@ export class PharmacyInvoiceService {
     }
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] draft-edit-fence
+   * Invoice edits MUST lock the invoice before reading its state and replacing items.
+   * Posted invoices MUST reject edits; a draft total MUST NOT fall below completed payments.
+   */
   async update(
     id: string,
     updateInvoiceDto: UpdatePharmacyInvoiceDto,
     branchId: string,
   ) {
     try {
-      // Check if invoice exists
-      const existingInvoice = await this.prisma.pharmacyInvoice.findFirst({
-        where: { id, branchId },
-        include: { items: true },
-      });
-
-      if (!existingInvoice) {
-        throw new NotFoundException('Invoice not found');
-      }
-
-      // Only allow updates for DRAFT invoices
-      if (existingInvoice.status !== 'DRAFT') {
-        throw new BadRequestException('Only draft invoices can be updated');
-      }
-
-      if (
-        updateInvoiceDto.status &&
-        updateInvoiceDto.status !== existingInvoice.status
-      ) {
-        throw new BadRequestException(
-          'Use the invoice status endpoint to change invoice status',
-        );
-      }
-
-      const prismaAny = this.prisma as any;
-      const targetPatientId =
-        updateInvoiceDto.patientId || existingInvoice.patientId;
-
-      if (updateInvoiceDto.patientId) {
-        const patient = await prismaAny.patient.findFirst({
-          where: { id: updateInvoiceDto.patientId, branchId },
-          select: { id: true },
+      return await this.prisma.$transaction(async (prisma) => {
+        await this.lockInvoice(prisma, id, branchId);
+        // Check if invoice exists
+        const existingInvoice = await prisma.pharmacyInvoice.findFirst({
+          where: { id, branchId },
+          include: { items: true },
         });
-        if (!patient) {
-          throw new NotFoundException(
-            `Patient not found: ${updateInvoiceDto.patientId}`,
-          );
-        }
-      }
 
-      if (updateInvoiceDto.doctorId) {
-        const doctor = await prismaAny.user.findFirst({
-          where: { id: updateInvoiceDto.doctorId, branchId },
-          select: { id: true },
-        });
-        if (!doctor) {
-          throw new NotFoundException(
-            `Doctor not found: ${updateInvoiceDto.doctorId}`,
-          );
+        if (!existingInvoice) {
+          throw new NotFoundException('Invoice not found');
         }
-      }
 
-      if (updateInvoiceDto.prescriptionId) {
-        const prescription = await prismaAny.prescription.findFirst({
-          where: { id: updateInvoiceDto.prescriptionId },
-          include: {
-            visit: {
-              include: {
-                patient: {
-                  select: {
-                    id: true,
-                    branchId: true,
-                  },
-                },
-              },
-            },
-          },
-        });
-        if (!prescription) {
-          throw new NotFoundException('Prescription not found');
-        }
+        // Only allow updates for DRAFT invoices
         if (
-          prescription.visit?.patient?.branchId !== branchId ||
-          prescription.visit?.patientId !== targetPatientId
+          existingInvoice.status !== 'DRAFT' ||
+          existingInvoice.checkoutRequestKey
+        ) {
+          throw new BadRequestException('Only draft invoices can be updated');
+        }
+
+        if (
+          updateInvoiceDto.status &&
+          updateInvoiceDto.status !== existingInvoice.status
         ) {
           throw new BadRequestException(
-            'Prescription does not belong to the selected patient and branch',
+            'Use the invoice status endpoint to change invoice status',
           );
         }
-        const targetDoctorId =
-          updateInvoiceDto.doctorId || existingInvoice.doctorId;
-        if (targetDoctorId && prescription.visit?.doctorId !== targetDoctorId) {
-          throw new BadRequestException(
-            'Prescription doctor does not match the selected doctor',
-          );
-        }
-      }
 
-      return await this.prisma.$transaction(async (prisma) => {
-        let updateData: any = { ...updateInvoiceDto };
+        if (updateInvoiceDto.paymentStatus !== undefined) {
+          throw new BadRequestException(
+            'Payment status is determined by recorded payments',
+          );
+        }
+        const targetPatientId =
+          updateInvoiceDto.patientId || existingInvoice.patientId;
+
+        if (updateInvoiceDto.patientId) {
+          const patient = await prisma.patient.findFirst({
+            where: { id: updateInvoiceDto.patientId, branchId },
+            select: { id: true },
+          });
+          if (!patient) {
+            throw new NotFoundException(
+              `Patient not found: ${updateInvoiceDto.patientId}`,
+            );
+          }
+        }
+
+        if (updateInvoiceDto.doctorId) {
+          const doctor = await prisma.user.findFirst({
+            where: { id: updateInvoiceDto.doctorId, branchId },
+            select: { id: true },
+          });
+          if (!doctor) {
+            throw new NotFoundException(
+              `Doctor not found: ${updateInvoiceDto.doctorId}`,
+            );
+          }
+        }
+
+        const targetPrescriptionId =
+          updateInvoiceDto.prescriptionId === undefined
+            ? existingInvoice.prescriptionId
+            : updateInvoiceDto.prescriptionId;
+        if (targetPrescriptionId) {
+          await this.requireEligiblePrescription(
+            prisma,
+            {
+              prescriptionId: targetPrescriptionId,
+              patientId: targetPatientId,
+              doctorId:
+                updateInvoiceDto.doctorId === undefined
+                  ? existingInvoice.doctorId
+                  : updateInvoiceDto.doctorId,
+            },
+            branchId,
+          );
+        }
+
+        let updateData: any = {
+          ...updateInvoiceDto,
+          mutationVersion: { increment: 1 },
+        };
 
         // If items are being updated, recalculate totals
         if (updateInvoiceDto.items) {
@@ -1050,7 +1038,24 @@ export class PharmacyInvoiceService {
           updateData.subtotal = recomputeTotals.subtotal;
           updateData.discountAmount = recomputeTotals.totalDiscount;
           updateData.taxAmount = recomputeTotals.totalTax;
-          updateData.totalAmount = grandTotal;
+          const paid = await prisma.pharmacyPayment.aggregate({
+            where: { invoiceId: id, status: 'COMPLETED' },
+            _sum: { amount: true },
+          });
+          const paidAmount = money(paid._sum.amount || 0);
+          if (money(grandTotal) < paidAmount)
+            throw new BadRequestException(
+              'Invoice total cannot be lower than payments already received',
+            );
+          updateData.totalAmount = money(grandTotal);
+          updateData.paidAmount = paidAmount;
+          updateData.balanceAmount = money(grandTotal - paidAmount);
+          updateData.paymentStatus =
+            paidAmount >= money(grandTotal)
+              ? 'COMPLETED'
+              : paidAmount > 0
+                ? 'PARTIALLY_PAID'
+                : 'PENDING';
 
           // Delete existing items
           await prisma.pharmacyInvoiceItem.deleteMany({
@@ -1136,12 +1141,15 @@ export class PharmacyInvoiceService {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:product;target] sales-pending-confirmation-stock
-   * A transition from any unposted sale state, including PENDING, to a stock-posting state MUST
-   * apply its validated batch deductions exactly once; a confirmed status without its stock effect
-   * is invalid.
-   * Acceptance: INV-24.4. Validation and open gaps:
-   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:product] sales-pending-confirmation-stock
+   * DRAFT or PENDING transitions to CONFIRMED, DISPENSED or COMPLETED MUST post stock exactly once
+   * in the same transaction. All transitions MUST read invoice state after acquiring its row lock.
+   * Posted invoices MUST reject direct cancellation and direct the caller to returns.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-posting-serializable-eligibility
+   * Stock posting MUST serialize eligibility reads with concurrent batch identity, status and expiry
+   * changes. Serialization conflicts MUST roll back and retry all validation before any sale commits.
    */
   async updateStatus(
     id: string,
@@ -1149,141 +1157,244 @@ export class PharmacyInvoiceService {
     branchId: string,
     userId?: string,
   ) {
-    try {
-      const existingInvoice = await this.prisma.pharmacyInvoice.findFirst({
-        where: { id, branchId },
-        include: {
-          items: {
-            include: {
-              drug: true,
-              package: {
-                include: {
-                  items: {
-                    include: {
-                      drug: true,
-                    },
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        return await this.prisma.$transaction(
+          (tx) => this.transitionInvoice(tx, id, status, branchId, userId),
+          { timeout: 15000, isolationLevel: 'Serializable' },
+        );
+      } catch (error) {
+        if (!this.isSerializationFailure(error)) throw error;
+      }
+    }
+    throw new ConflictException(
+      'Invoice or stock changed concurrently. Refresh and retry confirmation.',
+    );
+  }
+
+  private isSerializationFailure(error: unknown): boolean {
+    const failure = error as { code?: string; meta?: { code?: string } };
+    return (
+      failure?.code === 'P2034' ||
+      (failure?.code === 'P2010' &&
+        ['40001', '40P01'].includes(failure.meta?.code || ''))
+    );
+  }
+
+  private async transitionInvoice(
+    tx: Prisma.TransactionClient,
+    id: string,
+    status: string,
+    branchId: string,
+    userId?: string,
+  ) {
+    await this.lockInvoice(tx, id, branchId);
+    const existingInvoice = await tx.pharmacyInvoice.findFirst({
+      where: { id, branchId },
+      include: {
+        items: {
+          include: {
+            drug: true,
+            package: {
+              include: {
+                items: {
+                  include: {
+                    drug: true,
                   },
                 },
               },
             },
           },
         },
-      });
+      },
+    });
 
-      if (!existingInvoice) {
-        throw new NotFoundException('Invoice not found');
-      }
+    if (!existingInvoice) {
+      throw new NotFoundException('Invoice not found');
+    }
 
-      // Validate status transition
-      const validStatuses = [
-        'DRAFT',
-        'PENDING',
-        'CONFIRMED',
-        'DISPENSED',
-        'COMPLETED',
-        'CANCELLED',
-      ];
-      if (!validStatuses.includes(status)) {
-        throw new BadRequestException(`Invalid status: ${status}`);
-      }
+    const oldStatus = existingInvoice.status;
+    this.assertInvoiceStatusTransition(oldStatus, status);
+    if (oldStatus === status) return existingInvoice;
+    const shouldApplyStock =
+      ['DRAFT', 'PENDING'].includes(oldStatus) &&
+      ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(status);
 
-      const oldStatus = existingInvoice.status;
-      this.assertInvoiceStatusTransition(oldStatus, status);
-
-      // Use transaction to update status and create stock transactions
-      return await this.prisma.$transaction(async (tx: any) => {
-        const shouldApplyStock =
-          ['DRAFT', 'PENDING'].includes(oldStatus) &&
-          ['CONFIRMED', 'COMPLETED', 'DISPENSED'].includes(status);
-
-        if (shouldApplyStock && !userId) {
-          throw new BadRequestException(
-            'A user is required to confirm stock-deducting invoice statuses',
-          );
-        }
-
-        const stockOps = shouldApplyStock
-          ? await this.planConfirmedStockDeductions(
-              tx,
-              existingInvoice.items,
-              branchId,
-            )
-          : [];
-
-        const updatedInvoice = await tx.pharmacyInvoice.update({
-          where: { id, branchId, status: oldStatus, updatedAt: existingInvoice.updatedAt },
-          data: { status: status as any },
-          include: {
-            items: {
-              include: {
-                drug: true,
-                package: true,
-              },
-            },
-            patient: true,
-            doctor: true,
-          },
-        });
-
-        // If transitioning FROM DRAFT TO CONFIRMED/COMPLETED/DISPENSED, create stock transactions (idempotent)
-        if (shouldApplyStock && userId) {
-          // Idempotency fence: bump mutationVersion and only execute mutations once per invoice
-          const fresh = await tx.pharmacyInvoice.update({
-            where: { id },
-            data: { mutationVersion: { increment: 1 } },
-            select: { mutationVersion: true, invoiceNumber: true },
-          });
-          if (fresh.mutationVersion > 1) {
-            // Mutations already applied
-            return updatedInvoice;
-          }
-          console.log(
-            `✅ Creating stock transactions for invoice ${existingInvoice.invoiceNumber} (status: ${oldStatus} → ${status})`,
-          );
-
-          for (const op of stockOps) {
-            await tx.stockTransaction.create({
-              data: {
-                itemId: op.inventoryItemId,
-                type: 'SALE',
-                reason: 'Pharmacy bill saved and confirmed',
-                quantity: op.quantity,
-                quantityDelta: -op.quantity,
-                unitPrice: op.unitPrice,
-                totalAmount: money(op.unitPrice * op.quantity),
-                reference: `INV-${existingInvoice.invoiceNumber}`,
-                notes: op.notes,
-                batchNumber: op.batchNumber || undefined,
-                expiryDate: op.expiryDate || undefined,
-                branchId,
-                userId,
-              },
-            });
-            await this.applyInventorySale(
-              tx,
-              op.inventoryItemId,
-              op.quantity,
-              branchId,
-            );
-          }
-        }
-
-        return updatedInvoice;
-      }, { isolationLevel: 'Serializable' });
-    } catch (error) {
-      if (['P2025','P2034'].includes(error?.code)) throw new ConflictException('Invoice or stock changed. Refresh and retry confirmation.');
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException ||
-        error instanceof ConflictException
-      ) {
-        throw error;
-      }
-      console.error('❌ PharmacyInvoiceService.updateStatus error:', error);
-      throw new InternalServerErrorException(
-        `Failed to update invoice status: ${error.message}`,
+    if (shouldApplyStock && !userId) {
+      throw new BadRequestException(
+        'A user is required to confirm stock-deducting invoice statuses',
       );
     }
+
+    if (shouldApplyStock && existingInvoice.prescriptionId) {
+      await this.requireEligiblePrescription(
+        tx,
+        {
+          prescriptionId: existingInvoice.prescriptionId,
+          patientId: existingInvoice.patientId,
+          doctorId: existingInvoice.doctorId,
+        },
+        branchId,
+      );
+    }
+
+    const stockOps = shouldApplyStock
+      ? await this.planConfirmedStockDeductions(
+          tx,
+          existingInvoice.items,
+          branchId,
+        )
+      : [];
+
+    const updatedInvoice = await tx.pharmacyInvoice.update({
+      where: {
+        id,
+        branchId,
+        status: oldStatus,
+        updatedAt: existingInvoice.updatedAt,
+      },
+      data: { status: status as any, mutationVersion: { increment: 1 } },
+      include: {
+        items: {
+          include: {
+            drug: true,
+            package: true,
+          },
+        },
+        patient: true,
+        doctor: true,
+      },
+    });
+
+    if (shouldApplyStock && userId) {
+      for (const op of stockOps.sort((a, b) =>
+        a.inventoryItemId.localeCompare(b.inventoryItemId),
+      )) {
+        await tx.stockTransaction.create({
+          data: {
+            itemId: op.inventoryItemId,
+            type: 'SALE',
+            reason: 'Pharmacy bill saved and confirmed',
+            quantity: op.quantity,
+            quantityDelta: -op.quantity,
+            unitPrice: op.unitPrice,
+            totalAmount: money(op.unitPrice * op.quantity),
+            reference: `INV-${existingInvoice.invoiceNumber}`,
+            notes: op.notes,
+            batchNumber: op.batchNumber || undefined,
+            expiryDate: op.expiryDate || undefined,
+            branchId,
+            userId,
+          },
+        });
+        await this.applyInventorySale(
+          tx,
+          op.inventoryItemId,
+          op.quantity,
+          branchId,
+        );
+      }
+    }
+
+    return updatedInvoice;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;security] prescription-billing-eligibility
+   * Creating or relinking a prescription bill and every first stock posting MUST require an ACTIVE,
+   * unexpired prescription on an undeleted visit belonging to the selected patient, doctor and branch.
+   * Eligibility MUST be re-read under prescription then visit row locks retained through commit,
+   * so a cancellation that wins the prescription lock prevents stock posting.
+   */
+  private async requireEligiblePrescription(
+    tx: Prisma.TransactionClient,
+    input: {
+      prescriptionId: string;
+      patientId: string;
+      doctorId?: string | null;
+    },
+    branchId: string,
+  ): Promise<void> {
+    const locked = await tx.$queryRaw<{ id: string }[]>`
+      SELECT r.id FROM prescriptions r JOIN visits v ON v.id = r."visitId"
+      JOIN patients p ON p.id = v."patientId"
+      WHERE r.id = ${input.prescriptionId} AND p."branchId" = ${branchId}
+      FOR UPDATE OF r`;
+    if (!locked.length)
+      throw new NotFoundException('Prescription not found in this branch');
+    const prescription = await tx.prescription.findUniqueOrThrow({
+      where: { id: input.prescriptionId },
+      select: { visitId: true, status: true, validUntil: true },
+    });
+    await tx.$queryRaw`SELECT id FROM visits WHERE id = ${prescription.visitId} FOR UPDATE`;
+    const visit = await tx.visit.findFirst({
+      where: {
+        id: prescription.visitId,
+        deletedAt: null,
+        patient: { branchId },
+      },
+      select: { patientId: true, doctorId: true },
+    });
+    if (!visit)
+      throw new BadRequestException(
+        'Prescription visit is deleted or unavailable',
+      );
+    if (prescription.status !== 'ACTIVE')
+      throw new BadRequestException('Only active prescriptions can be billed');
+    if (prescription.validUntil && prescription.validUntil < new Date())
+      throw new BadRequestException('Expired prescriptions cannot be billed');
+    if (visit.patientId !== input.patientId)
+      throw new BadRequestException(
+        'Prescription does not belong to the selected patient and branch',
+      );
+    if (input.doctorId && visit.doctorId !== input.doctorId)
+      throw new BadRequestException(
+        'Prescription doctor does not match the selected doctor',
+      );
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] invoice-writer-lock
+   * Every existing invoice command MUST acquire this branch-scoped row lock before reading mutable
+   * invoice state and retain it through commit. Existing invoice locks precede prescription, visit
+   * and inventory locks, in that order. Newly inserted invoices are private to their transaction.
+   */
+  private async lockInvoice(
+    tx: Prisma.TransactionClient,
+    id: string,
+    branchId: string,
+  ) {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM pharmacy_invoices WHERE id = ${id} AND "branchId" = ${branchId} FOR UPDATE`;
+    if (!rows.length) throw new NotFoundException('Invoice not found');
+  }
+
+  private assertRequestKey(requestKey: string) {
+    if (
+      typeof requestKey !== 'string' ||
+      !requestKey.trim() ||
+      requestKey.length > 128
+    )
+      throw new BadRequestException(
+        'A request key of 1 to 128 characters is required',
+      );
+  }
+
+  private payloadHash(value: unknown): string {
+    const canonical = (input: unknown): unknown => {
+      if (Array.isArray(input)) return input.map(canonical);
+      if (input && typeof input === 'object')
+        return Object.fromEntries(
+          Object.entries(input)
+            .filter(([, v]) => v !== undefined)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([k, v]) => [k, canonical(v)]),
+        );
+      return input;
+    };
+    return createHash('sha256')
+      .update(JSON.stringify(canonical(value)))
+      .digest('hex');
   }
 
   private validateInvoiceItemsInput(
@@ -1647,6 +1758,14 @@ export class PharmacyInvoiceService {
     oldStatus: string,
     nextStatus: string,
   ): void {
+    if (
+      nextStatus === 'CANCELLED' &&
+      ['CONFIRMED', 'DISPENSED', 'COMPLETED'].includes(oldStatus)
+    ) {
+      throw new BadRequestException(
+        'Posted invoices cannot be cancelled. Use the sales return workflow to reverse dispensed stock.',
+      );
+    }
     if (oldStatus === nextStatus) return;
 
     const allowedTransitions: Record<string, Set<string>> = {
@@ -1658,7 +1777,7 @@ export class PharmacyInvoiceService {
         'CANCELLED',
       ]),
       PENDING: new Set(['CONFIRMED', 'DISPENSED', 'COMPLETED', 'CANCELLED']),
-      CONFIRMED: new Set(['DISPENSED', 'COMPLETED', 'CANCELLED']),
+      CONFIRMED: new Set(['DISPENSED', 'COMPLETED']),
       DISPENSED: new Set(['COMPLETED']),
       COMPLETED: new Set(),
       CANCELLED: new Set(),
@@ -2031,111 +2150,108 @@ export class PharmacyInvoiceService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] draft-delete-fence
+   * Deletion MUST lock and recheck the invoice. Only drafts without completed payments may be
+   * deleted; confirmation winning the lock MUST prevent deletion of its invoice and items.
+   */
   async remove(id: string, branchId: string) {
-    try {
-      const existingInvoice = await this.prisma.pharmacyInvoice.findFirst({
-        where: { id, branchId },
-      });
-
-      if (!existingInvoice) {
-        throw new NotFoundException('Invoice not found');
-      }
-
-      // Only allow deletion of DRAFT invoices
-      if (existingInvoice.status !== 'DRAFT') {
-        throw new BadRequestException('Only draft invoices can be deleted');
-      }
-
-      await this.prisma.pharmacyInvoice.delete({
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockInvoice(tx, id, branchId);
+      const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
         where: { id },
-      });
-
-      return { message: 'Invoice deleted successfully' };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      console.error('❌ PharmacyInvoiceService.remove error:', error);
-      throw new InternalServerErrorException(
-        `Failed to delete invoice: ${error.message}`,
-      );
-    }
-  }
-
-  async addPayment(
-    invoiceId: string,
-    paymentDto: PharmacyPaymentDto,
-    branchId: string,
-  ) {
-    try {
-      const invoice = await this.prisma.pharmacyInvoice.findFirst({
-        where: { id: invoiceId, branchId },
         include: { payments: true },
       });
+      if (invoice.status !== 'DRAFT' || invoice.checkoutRequestKey)
+        throw new BadRequestException('Only draft invoices can be deleted');
+      if (invoice.payments.some((payment) => payment.status === 'COMPLETED'))
+        throw new BadRequestException(
+          'Invoices with received payments cannot be deleted',
+        );
+      await tx.pharmacyInvoice.delete({ where: { id } });
+      return { message: 'Invoice deleted successfully' };
+    });
+  }
 
-      if (!invoice) {
-        throw new NotFoundException('Invoice not found');
-      }
-
-      const totalPaid = invoice.payments.reduce(
-        (sum, payment) =>
-          payment.status === 'COMPLETED' ? sum + payment.amount : sum,
-        0,
+  /**
+   * @cc [owner:nareshshah139,label:product] payment-atomic-retry
+   * A payment MUST lock its invoice, reject overpayment using completed ledger entries, and commit
+   * its receipt and recomputed balance together. The same invoice request key and payload MUST
+   * return the original receipt; a changed payload MUST conflict without collecting again.
+   */
+  async addPayment(
+    invoiceId: string,
+    dto: PharmacyPaymentDto,
+    branchId: string,
+  ) {
+    this.assertRequestKey(dto.requestKey);
+    if (
+      !Number.isFinite(dto.amount) ||
+      dto.amount <= 0 ||
+      money(dto.amount) !== dto.amount
+    )
+      throw new BadRequestException(
+        'Payment amount must be positive with at most two decimal places',
       );
-
-      const remainingAmount = invoice.totalAmount - totalPaid;
-
-      if (paymentDto.amount > remainingAmount) {
+    const { requestKey, ...payload } = dto;
+    const payloadHash = this.payloadHash(payload);
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockInvoice(tx, invoiceId, branchId);
+      const existing = await tx.pharmacyPayment.findUnique({
+        where: { invoiceId_requestKey: { invoiceId, requestKey } },
+      });
+      if (existing) {
+        if (existing.payloadHash !== payloadHash)
+          throw new ConflictException(
+            'Payment request key was already used with different payment details',
+          );
+        return existing;
+      }
+      const invoice = await tx.pharmacyInvoice.findUniqueOrThrow({
+        where: { id: invoiceId },
+      });
+      if (invoice.status === 'CANCELLED')
+        throw new BadRequestException(
+          'Cancelled invoices cannot receive payments',
+        );
+      const before = await tx.pharmacyPayment.aggregate({
+        where: { invoiceId, status: 'COMPLETED' },
+        _sum: { amount: true },
+      });
+      const remaining = money(invoice.totalAmount - (before._sum.amount || 0));
+      if (dto.amount > remaining)
         throw new BadRequestException(
           'Payment amount exceeds remaining balance',
         );
-      }
-
-      const payment = await this.prisma.pharmacyPayment.create({
+      const payment = await tx.pharmacyPayment.create({
         data: {
           invoiceId,
-          amount: paymentDto.amount,
-          method: paymentDto.method,
-          reference: paymentDto.reference,
-          gateway: paymentDto.gateway,
+          requestKey,
+          payloadHash,
+          amount: dto.amount,
+          method: dto.method,
+          reference: dto.reference,
+          gateway: dto.gateway,
           status: 'COMPLETED',
         },
       });
-
-      // Update invoice payment status
-      const newTotalPaid = totalPaid + paymentDto.amount;
-      const newPaymentStatus =
-        newTotalPaid >= invoice.totalAmount
-          ? 'COMPLETED'
-          : newTotalPaid > 0
-            ? 'PARTIALLY_PAID'
-            : 'PENDING';
-
-      await this.prisma.pharmacyInvoice.update({
+      const after = await tx.pharmacyPayment.aggregate({
+        where: { invoiceId, status: 'COMPLETED' },
+        _sum: { amount: true },
+      });
+      const paidAmount = money(after._sum.amount || 0);
+      const balanceAmount = money(invoice.totalAmount - paidAmount);
+      await tx.pharmacyInvoice.update({
         where: { id: invoiceId },
         data: {
-          paymentStatus: newPaymentStatus,
-          paidAmount: newTotalPaid,
-          balanceAmount: invoice.totalAmount - newTotalPaid,
+          paidAmount,
+          balanceAmount,
+          paymentStatus: balanceAmount === 0 ? 'COMPLETED' : 'PARTIALLY_PAID',
+          mutationVersion: { increment: 1 },
         },
       });
-
       return payment;
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      console.error('❌ PharmacyInvoiceService.addPayment error:', error);
-      throw new InternalServerErrorException(
-        `Failed to add payment: ${error.message}`,
-      );
-    }
+    });
   }
 
   private calculateInvoiceTotals(

@@ -21,6 +21,7 @@ import { Permissions } from '../../shared/decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
 import { PharmacyInvoiceService } from './pharmacy-invoice.service';
 import {
+  CheckoutPharmacyInvoiceDto,
   CreatePharmacyInvoiceDto,
   UpdatePharmacyInvoiceDto,
   UpdatePharmacyInvoiceStatusDto,
@@ -57,6 +58,21 @@ export class PharmacyInvoiceController {
     );
   }
 
+  @Post('checkout')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST)
+  @Permissions('pharmacy:invoice:create', 'pharmacy:invoice:update')
+  @ApiOperation({
+    summary:
+      'Create and confirm an invoice atomically with a stable request key',
+  })
+  async checkout(@Body() dto: CheckoutPharmacyInvoiceDto, @Request() req: any) {
+    return this.pharmacyInvoiceService.checkout(
+      dto,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
   @Get()
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:invoice:read')
@@ -72,7 +88,10 @@ export class PharmacyInvoiceController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.DOCTOR)
   @Permissions('pharmacy:invoice:read')
   @ApiOperation({ summary: 'Get standardized pharmacy invoice print data' })
-  @ApiResponse({ status: 200, description: 'Print data retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Print data retrieved successfully',
+  })
   @ApiResponse({ status: 404, description: 'Invoice not found' })
   async getPrintData(
     @Param('id') id: string,

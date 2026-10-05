@@ -1147,7 +1147,8 @@ function VisitsPageInner() {
         </div>
       </div>
 
-      <MedicalVisitForm 
+      <MedicalVisitForm
+        key={`${selectedPatientId}:${urlVisitId || appointmentData?.id || "new"}`}
         patientId={selectedPatientId} 
         doctorId={selectedDoctorId}
         userRole={currentUserRole}

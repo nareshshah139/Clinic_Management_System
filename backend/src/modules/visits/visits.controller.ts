@@ -49,6 +49,7 @@ import ffmpeg from 'fluent-ffmpeg';
 const fsPromises = fs.promises;
 
 interface AuthenticatedRequest {
+  branchId?: string;
   user: {
     id: string;
     branchId: string;
@@ -172,13 +173,6 @@ async function processImageUpload(file: Express.Multer.File) {
   }
 }
 
-async function ensurePatientDraftDir(patientId: string) {
-  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const dir = join(process.cwd(), 'uploads', 'patients', patientId, dateStr);
-  await fsPromises.mkdir(dir, { recursive: true, mode: 0o700 });
-  return { absPath: dir, dateStr };
-}
-
 async function ensureTranscribeTmpDir() {
   const base = join(process.cwd(), 'uploads', 'tmp', 'transcribe');
   await fsPromises.mkdir(base, { recursive: true, mode: 0o700 });
@@ -260,7 +254,7 @@ export class VisitsController {
     @Body() createVisitDto: CreateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.create(createVisitDto, req.user.branchId, req.user.id);
+    return this.visitsService.create(createVisitDto, (req.branchId ?? req.user.branchId), req.user.id);
   }
 
   @Get()
@@ -268,10 +262,15 @@ export class VisitsController {
     @Query() query: QueryVisitsDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.findAll(query, req.user.branchId);
+    return this.visitsService.findAll(query, (req.branchId ?? req.user.branchId));
   }
 
   // Draft photo upload before a visit exists
+  /**
+   * @cc [owner:nareshshah139,label:security] authenticated-draft-branch
+   * Draft endpoints MUST pass the server-selected request branch, falling back
+   * only to authenticated user branch, into every attachment service operation.
+   */
   @Post('photos/draft/:patientId')
   @UseInterceptors(
     FilesInterceptor('files', 6, {
@@ -286,9 +285,11 @@ export class VisitsController {
   async uploadDraftPhotos(
     @Param('patientId') patientId: string,
     @UploadedFiles() files: Express.Multer.File[],
+    @Request() req: AuthenticatedRequest,
     @Body() body?: any,
   ) {
-    const { dateStr } = await ensurePatientDraftDir(patientId);
+    await this.visitsService.authorizeDraftPatient(patientId, (req.branchId ?? req.user.branchId));
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const parsePositions = (): string[] => {
       const allowed = new Set([
         'FRONT',
@@ -337,7 +338,7 @@ export class VisitsController {
         const position = positions[idx] as any;
         const { buffer, ext } = await processImageUpload(file);
         const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-        await this.visitsService.createDraftAttachment(patientId, dateStr, {
+        await this.visitsService.createDraftAttachment(patientId, dateStr, (req.branchId ?? req.user.branchId), {
           preferredExt: ext,
           contentType,
           buffer,
@@ -363,14 +364,15 @@ export class VisitsController {
     this.logger.debug(
       `uploadDraftPhotos: processed ${processedCount}/${files?.length ?? 0} files for patient=${patientId}`,
     );
-    return this.visitsService.listDraftAttachments(patientId, dateStr);
+    return this.visitsService.listDraftAttachments(patientId, dateStr, (req.branchId ?? req.user.branchId));
   }
 
   @Get('photos/draft/:patientId')
   async listDraftPhotos(@Param('patientId') patientId: string, @Query('allDates') allDates: string, @Request() req: AuthenticatedRequest) {
-    if (allDates === 'true') return this.visitsService.listAllDraftAttachments(patientId, req.user.branchId);
-    const { dateStr } = await ensurePatientDraftDir(patientId);
-    return this.visitsService.listDraftAttachments(patientId, dateStr);
+    if (allDates === 'true') return this.visitsService.listAllDraftAttachments(patientId, (req.branchId ?? req.user.branchId));
+    await this.visitsService.authorizeDraftPatient(patientId, (req.branchId ?? req.user.branchId));
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return this.visitsService.listDraftAttachments(patientId, dateStr, (req.branchId ?? req.user.branchId));
   }
 
   @Get('photos/draft/:patientId/:dateStr/:attachmentId')
@@ -378,6 +380,7 @@ export class VisitsController {
     @Param('patientId') patientId: string,
     @Param('dateStr') dateStr: string,
     @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
     @Res({ passthrough: true }) res?: Response,
   ) {
     const { data, contentType } =
@@ -385,11 +388,12 @@ export class VisitsController {
         patientId,
         dateStr,
         attachmentId,
+        (req.branchId ?? req.user.branchId),
       );
     if (res) {
       res.set({
         'Content-Type': contentType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cache-Control': 'private, no-store',
       });
     }
     return new StreamableFile(data);
@@ -400,13 +404,15 @@ export class VisitsController {
     @Param('patientId') patientId: string,
     @Param('dateStr') dateStr: string,
     @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
   ) {
     await this.visitsService.deleteDraftAttachment(
       patientId,
       dateStr,
       attachmentId,
+      (req.branchId ?? req.user.branchId),
     );
-    return this.visitsService.listDraftAttachments(patientId, dateStr);
+    return this.visitsService.listDraftAttachments(patientId, dateStr, (req.branchId ?? req.user.branchId));
   }
 
   @Get('statistics')
@@ -416,7 +422,7 @@ export class VisitsController {
     @Query('endDate') endDate?: string,
   ) {
     return this.visitsService.getVisitStatistics(
-      req.user.branchId,
+      (req.branchId ?? req.user.branchId),
       startDate,
       endDate,
     );
@@ -427,7 +433,7 @@ export class VisitsController {
     @Param('patientId') patientId: string,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.getPatientPersonalHistory(patientId, req.user.branchId);
+    return this.visitsService.getPatientPersonalHistory(patientId, (req.branchId ?? req.user.branchId));
   }
 
   @Get('patient/:patientId/history')
@@ -438,7 +444,7 @@ export class VisitsController {
   ) {
     return this.visitsService.getPatientVisitHistory(
       { patientId, ...query },
-      req.user.branchId,
+      (req.branchId ?? req.user.branchId),
     );
   }
 
@@ -450,13 +456,13 @@ export class VisitsController {
   ) {
     return this.visitsService.getDoctorVisits(
       { doctorId, ...query },
-      req.user.branchId,
+      (req.branchId ?? req.user.branchId),
     );
   }
 
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.visitsService.findOne(id, req.user.branchId);
+    return this.visitsService.findOne(id, (req.branchId ?? req.user.branchId));
   }
 
   @Patch(':id')
@@ -466,7 +472,7 @@ export class VisitsController {
     @Body() updateVisitDto: UpdateVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.update(id, updateVisitDto, req.user.branchId, req.user.id);
+    return this.visitsService.update(id, updateVisitDto, (req.branchId ?? req.user.branchId), req.user.id);
   }
 
   @Post(':id/complete')
@@ -476,12 +482,12 @@ export class VisitsController {
     @Body() completeVisitDto: CompleteVisitDto,
     @Request() req: AuthenticatedRequest,
   ) {
-    return this.visitsService.complete(id, completeVisitDto, req.user.branchId);
+    return this.visitsService.complete(id, completeVisitDto, (req.branchId ?? req.user.branchId));
   }
 
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.visitsService.remove(id, req.user.branchId);
+    return this.visitsService.remove(id, (req.branchId ?? req.user.branchId));
   }
 
   @Post(':id/photos')
@@ -549,7 +555,7 @@ export class VisitsController {
         const position = positions[idx] as any;
         const { buffer, ext } = await processImageUpload(file);
         const contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
-        await this.visitsService.createVisitAttachment(id, req.user.branchId, {
+        return this.visitsService.createVisitAttachment(id, (req.branchId ?? req.user.branchId), {
           preferredExt: ext,
           contentType,
           buffer,
@@ -575,7 +581,8 @@ export class VisitsController {
     this.logger.debug(
       `uploadPhotos: processed ${processedCount}/${files?.length ?? 0} files for visit=${id}`,
     );
-    return this.visitsService.listAttachments(id, req.user.branchId);
+    const visitVersion = Math.max(...results.flatMap(result => result.status === 'fulfilled' ? [result.value.visitVersion] : []));
+    return { ...await this.visitsService.listAttachments(id, (req.branchId ?? req.user.branchId)), visitVersion };
   }
 
   private positionOrderValue(position?: string): number {
@@ -597,7 +604,7 @@ export class VisitsController {
 
   @Get(':id/photos')
   listPhotos(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
-    return this.visitsService.listAttachments(id, req.user.branchId);
+    return this.visitsService.listAttachments(id, (req.branchId ?? req.user.branchId));
   }
 
   @Get(':id/photos/:attachmentId')
@@ -611,7 +618,7 @@ export class VisitsController {
       await this.visitsService.getVisitAttachmentBinary(
         id,
         attachmentId,
-        req.user.branchId,
+        (req.branchId ?? req.user.branchId),
       );
     if (res) {
       res.set({
@@ -620,21 +627,6 @@ export class VisitsController {
       });
     }
     return new StreamableFile(data);
-  }
-
-  @Delete(':id/photos/:attachmentId')
-  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
-  async deleteVisitPhoto(
-    @Param('id') id: string,
-    @Param('attachmentId') attachmentId: string,
-    @Request() req: AuthenticatedRequest,
-  ) {
-    await this.visitsService.deleteVisitAttachment(
-      id,
-      attachmentId,
-      req.user.branchId,
-    );
-    return this.visitsService.listAttachments(id, req.user.branchId);
   }
 
   @Delete(':id/photos/legacy')
@@ -648,8 +640,23 @@ export class VisitsController {
     if (!url) {
       throw new BadRequestException('Missing url');
     }
-    await this.visitsService.deleteLegacyAttachment(id, url, req.user.branchId);
-    return this.visitsService.listAttachments(id, req.user.branchId);
+    const { visitVersion } = await this.visitsService.deleteLegacyAttachment(id, url, (req.branchId ?? req.user.branchId));
+    return { ...await this.visitsService.listAttachments(id, (req.branchId ?? req.user.branchId)), visitVersion };
+  }
+
+  @Delete(':id/photos/:attachmentId')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
+  async deleteVisitPhoto(
+    @Param('id') id: string,
+    @Param('attachmentId') attachmentId: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    const { visitVersion } = await this.visitsService.deleteVisitAttachment(
+      id,
+      attachmentId,
+      (req.branchId ?? req.user.branchId),
+    );
+    return { ...await this.visitsService.listAttachments(id, (req.branchId ?? req.user.branchId)), visitVersion };
   }
 
   // Speech-to-text proxy to OpenAI Transcription API
@@ -963,10 +970,8 @@ export class VisitsController {
                 speaker:
                   typeof s?.speaker === 'string' &&
                   s.speaker.toUpperCase().includes('DOC')
-                    ? 'DOCTOR'
-                    : s?.speaker === 'PATIENT'
-                      ? 'PATIENT'
-                      : 'PATIENT',
+                    ? 'DOCTOR' as const
+                    : 'PATIENT' as const,
                 text: typeof s?.text === 'string' ? s.text : '',
                 confidence:
                   typeof s?.confidence === 'number' ? s.confidence : undefined,

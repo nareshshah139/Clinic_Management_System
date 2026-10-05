@@ -13,6 +13,11 @@ import { Prisma } from '@prisma/client';
 export class PharmacyPackageService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:product] package-recipe-no-stock
+   * Creating a package recipe MUST NOT create inventory or PURCHASE movements, alter balances,
+   * or create stock mappings. Existing drugs may be included with zero available stock.
+   */
   async create(
     createPackageDto: CreatePharmacyPackageDto, 
     branchId: string, 
@@ -107,46 +112,6 @@ export class PharmacyPackageService {
             })
           )
         );
-
-        // Ensure inventory has at least 10x the amount of each package item
-        for (const pkgItem of packageItems) {
-          const targetQty = (pkgItem.quantity || 1) * 10;
-          let invItem = await prisma.inventoryItem.findFirst({ where: { branchId, name: pkgItem.drug.name } });
-          if (!invItem) {
-            invItem = await prisma.inventoryItem.create({
-              data: {
-                branchId,
-                name: pkgItem.drug.name,
-                description: `Inventory for ${pkgItem.drug.name}`,
-                type: 'MEDICINE',
-                category: pkgItem.drug.category || 'Dermatology',
-                manufacturer: pkgItem.drug.manufacturerName,
-                costPrice: pkgItem.drug.price * 0.7,
-                sellingPrice: pkgItem.drug.price,
-                unit: 'PIECES',
-                packSize: 1,
-                currentStock: 0,
-                status: 'ACTIVE',
-                stockStatus: 'OUT_OF_STOCK',
-              },
-            });
-          }
-          if (invItem.currentStock < targetQty) {
-            const diff = targetQty - invItem.currentStock;
-            await prisma.stockTransaction.create({
-              data: {
-                itemId: invItem.id,
-                type: 'PURCHASE',
-                quantity: diff,
-                unitPrice: invItem.costPrice,
-                totalAmount: invItem.costPrice * diff,
-                reason: `Auto top-up for package ${package_.name}`,
-                branchId,
-                userId: createdBy || 'system',
-              },
-            });
-          }
-        }
 
         return this.formatPackageResponse(package_, packageItems);
       });

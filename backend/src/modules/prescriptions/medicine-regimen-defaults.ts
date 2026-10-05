@@ -49,6 +49,11 @@ class Votes {
   }
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] eligible-regimen-history
+ * Learned regimens MUST exclude cancelled prescriptions and deleted visits;
+ * requesting defaults MUST NOT mutate prescription or visit records.
+ */
 export async function medicineRegimenDefaults(
   prisma: PrismaService, drugId: string, branchId: string, doctorId: string, currentVisitId?: string, now = new Date(),
 ) {
@@ -74,7 +79,7 @@ export async function medicineRegimenDefaults(
   // Stream all eligible saved prescriptions: no recent-N truncation can change the mode.
   for (;;) {
     const prescriptions = await prisma.prescription.findMany({
-      where: { createdAt: { gte: since, lte: now }, visit: { patient: { branchId }, ...(currentVisitId ? { id: { not: currentVisitId } } : {}) } },
+      where: { status: { not: 'CANCELLED' }, createdAt: { gte: since, lte: now }, visit: { deletedAt: null, patient: { branchId }, ...(currentVisitId ? { id: { not: currentVisitId } } : {}) } },
       select: { id: true, items: true, createdAt: true, visit: { select: { doctorId: true } } },
       orderBy: { id: 'asc' }, take: 500,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),

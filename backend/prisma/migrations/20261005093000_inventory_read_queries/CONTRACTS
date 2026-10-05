@@ -1,0 +1,7 @@
+@cc [owner:nareshshah139,label:product] inventory-read-helper-effects
+The migration MUST add only read helpers and indexes. Helper calls MUST NOT mutate tables.
+Malformed JSON and numeric input MUST return NULL without suppressing database access failures.
+
+@cc [owner:nareshshah139,label:product] prescription-number-prefix-parity
+prescription_positive_number MUST accept finite positive numeric prefixes like JavaScript
+parseFloat and return NULL for absent, invalid, nonpositive or overflowing input.

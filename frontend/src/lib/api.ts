@@ -384,7 +384,7 @@ export class ApiClient {
   }
 
   async completeVisit(id: string, data: Record<string, unknown>, opts?: { idempotencyKey?: string }) {
-    return this.post(`/visits/${id}/complete`, data, opts);
+    return this.post<Partial<import('./types').VisitDetails>>(`/visits/${id}/complete`, data, opts);
   }
 
   async getPatientVisitHistory<T = unknown>(patientId: string, params?: { limit?: number; offset?: number; includeAppointments?: boolean; startDate?: string; endDate?: string }): Promise<T> {

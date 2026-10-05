@@ -27,6 +27,7 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
   };
   const hydrate = (s: any) => s.rx ? { ...s.rx, visit: { ...s.visit, patient, doctor } } : null;
   const client = (getState: () => any): any => ({
+    $queryRaw: async () => [{ id: 'pipeline-rx' }],
     patient: { findFirst: async ({ where }: any) => where.id === patient.id && where.branchId === patient.branchId ? patient : null },
     user: { findFirst: async ({ where }: any) => where.id === doctor.id ? doctor : null },
     visit: {
@@ -34,12 +35,13 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
       update: async ({ data }: any) => (getState().visit = { ...getState().visit, ...data }),
     },
     prescription: {
+      findUnique: async () => hydrate(getState()),
       findFirst: async ({ where }: any) => {
         const s = getState();
         if (where.visit?.patient?.branchId && where.visit.patient.branchId !== patient.branchId) return null;
         return s.rx && (!where.id || where.id === s.rx.id) && (!where.visitId || where.visitId === s.rx.visitId) ? hydrate(s) : null;
       },
-      create: async ({ data }: any) => { getState().rx = { id: 'pipeline-rx', ...data }; return hydrate(getState()); },
+      create: async ({ data }: any) => { getState().rx = { id: 'pipeline-rx', status: 'ACTIVE', refills: [], ...data }; return hydrate(getState()); },
       update: async ({ data }: any) => { Object.assign(getState().rx, data); return hydrate(getState()); },
     },
     prescriptionPrintEvent: { create: async ({ data }: any) => { getState().events.push(data); return data; }, findMany: async () => getState().events },

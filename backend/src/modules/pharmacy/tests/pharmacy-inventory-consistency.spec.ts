@@ -98,7 +98,7 @@ describe('Billing queue represents posted stock only', () => {
       visit: { patient: { id: 'patient-1' }, doctor: { id: actor.id, firstName: 'Test', lastName: 'Doctor' } },
       pharmacyInvoices: [{ id: 'invoice-1', status, items: [{ quantity: 10, drug: product }] }],
     };
-    const service = new PharmacyPrescriptionQueueService({ prescription: { findFirst: async () => prescription } } as any, {} as any);
+    const service = new PharmacyPrescriptionQueueService({ $queryRaw: async () => [{ id: 'rx-1' }], prescription: { findFirst: async () => prescription } } as any, {} as any);
     const entry = await service.findOne(prescription.id, branchId);
     expect(entry.status).toBe('pending');
     expect(entry.medications[0].dispensedQuantity).toBe(0);

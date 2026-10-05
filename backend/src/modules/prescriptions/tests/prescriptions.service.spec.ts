@@ -11,6 +11,7 @@ describe('PrescriptionsService', () => {
 
   const mockPrisma = {
     $transaction: jest.fn(),
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'prescription-123' }]),
     patient: {
       findFirst: jest.fn(),
     },
@@ -24,6 +25,7 @@ describe('PrescriptionsService', () => {
       findFirst: jest.fn(),
     },
     prescription: {
+      findUnique: jest.fn(),
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -76,6 +78,11 @@ describe('PrescriptionsService', () => {
   };
 
   beforeEach(async () => {
+    mockPrisma.$queryRaw.mockResolvedValue([{ id: 'prescription-123' }]);
+    mockPrisma.prescription.findUnique.mockImplementation(async () => {
+      const value = await mockPrisma.prescription.findFirst();
+      return value ? { ...value, visitId: value.visitId || value.visit?.id } : null;
+    });
     mockPrisma.$transaction.mockImplementation(async callback => callback(mockPrisma));
     mockPrisma.visit.findFirst.mockResolvedValue(mockVisit);
     mockPrisma.visit.update.mockImplementation(async ({ data }) => ({ ...mockVisit, ...data }));
@@ -307,6 +314,7 @@ describe('PrescriptionsService', () => {
       const mockPrescriptions = [
         {
           id: 'prescription-1',
+          status: PrescriptionStatus.ACTIVE, refills: [],
           visit: {
             ...mockVisit,
             patientId: mockPatient.id,
@@ -497,7 +505,7 @@ describe('PrescriptionsService', () => {
       const updateDto = { notes: 'Updated notes' };
 
       await expect(service.updatePrescription('prescription-123', updateDto, mockBranchId)).rejects.toThrow(
-        new BadRequestException('Cannot update completed prescription'),
+        new BadRequestException('Cannot update a completed, cancelled or expired prescription'),
       );
     });
   });
@@ -542,12 +550,7 @@ describe('PrescriptionsService', () => {
 
       expect(result).toEqual(mockRefill);
       expect(mockPrisma.prescriptionRefill.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          prescriptionId: refillDto.prescriptionId,
-          reason: refillDto.reason,
-          status: RefillStatus.PENDING,
-        }),
-        include: expect.any(Object),
+        data: expect.objectContaining({ prescriptionId: refillDto.prescriptionId, reason: refillDto.reason }),
       });
     });
 
@@ -573,7 +576,7 @@ describe('PrescriptionsService', () => {
       mockPrisma.prescription.findFirst.mockResolvedValue(mockPrescription);
 
       await expect(service.requestRefill(refillDto, mockBranchId)).rejects.toThrow(
-        new BadRequestException('Can only request refill for active prescriptions'),
+        new BadRequestException('Can only refill active prescriptions'),
       );
     });
 
@@ -632,6 +635,7 @@ describe('PrescriptionsService', () => {
         approvedBy: 'doctor-123',
       };
 
+      mockPrisma.prescription.findUnique.mockResolvedValue({ ...mockRefill.prescription, maxRefills: 1, refills: [mockRefill] });
       mockPrisma.prescriptionRefill.findFirst.mockResolvedValue(mockRefill);
       mockPrisma.prescriptionRefill.update.mockResolvedValue(mockApprovedRefill);
 
@@ -680,43 +684,19 @@ describe('PrescriptionsService', () => {
   });
 
   describe('getPrescriptionStatistics', () => {
-    it('should return prescription statistics', async () => {
-      const query = {
-        startDate: '2024-12-01',
-        endDate: '2024-12-31',
-      };
-
-      const mockStats = {
-        totalPrescriptions: 100,
-        prescriptionCount: 100,
-        drugBreakdown: [
-          { items: JSON.stringify([{ drugName: 'Paracetamol' }]), _count: { id: 50 } },
-          { items: JSON.stringify([{ drugName: 'Amoxicillin' }]), _count: { id: 30 } },
-        ],
-        doctorBreakdown: [
-          { doctorId: 'doctor-1', _count: { id: 60 } },
-          { doctorId: 'doctor-2', _count: { id: 40 } },
-        ],
-        dailyBreakdown: [
-          { createdAt: new Date('2024-12-01'), _count: { id: 5 } },
-          { createdAt: new Date('2024-12-02'), _count: { id: 8 } },
-        ],
-      };
-
-      mockPrisma.prescription.aggregate.mockResolvedValue({ _count: { id: 100 } });
-      mockPrisma.prescription.count.mockResolvedValue(100);
-      mockPrisma.prescription.groupBy
-        .mockResolvedValueOnce(mockStats.drugBreakdown)
-        .mockResolvedValueOnce(mockStats.doctorBreakdown)
-        .mockResolvedValueOnce(mockStats.dailyBreakdown);
-
-      const result = await service.getPrescriptionStatistics(query, mockBranchId);
-
-      expect(result).toHaveProperty('totalPrescriptions');
-      expect(result).toHaveProperty('drugBreakdown');
-      expect(result).toHaveProperty('doctorBreakdown');
-      expect(result).toHaveProperty('dailyBreakdown');
-      expect(result.totalPrescriptions).toBe(100);
+    it('groups real prescription records by Visit doctor and calendar day', async () => {
+      mockPrisma.prescription.findMany.mockResolvedValue([
+        { items: '["A"]', createdAt: new Date('2024-12-01T10:00:00Z'), visit: { doctorId: 'doctor-1' } },
+        { items: '["A"]', createdAt: new Date('2024-12-01T12:00:00Z'), visit: { doctorId: 'doctor-1' } },
+        { items: '["B"]', createdAt: new Date('2024-12-02T10:00:00Z'), visit: { doctorId: 'doctor-2' } },
+      ]);
+      expect(await service.getPrescriptionStatistics({}, mockBranchId)).toEqual({
+        totalPrescriptions: 3,
+        drugBreakdown: [{ drug: '["A"]', count: 2 }, { drug: '["B"]', count: 1 }],
+        doctorBreakdown: [{ doctorId: 'doctor-1', count: 2 }, { doctorId: 'doctor-2', count: 1 }],
+        dailyBreakdown: [{ date: '2024-12-01', count: 2 }, { date: '2024-12-02', count: 1 }],
+        period: { startDate: null, endDate: null, groupBy: 'day' },
+      });
     });
   });
 

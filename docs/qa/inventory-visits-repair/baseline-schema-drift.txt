@@ -1,0 +1,17 @@
+-- RenameForeignKey
+ALTER TABLE "pharmacy_purchase_invoice_documents" RENAME CONSTRAINT "purchase_invoice_documents_branch_fkey" TO "pharmacy_purchase_invoice_documents_branchId_fkey";
+
+-- RenameForeignKey
+ALTER TABLE "pharmacy_purchase_invoice_documents" RENAME CONSTRAINT "purchase_invoice_documents_invoice_fkey" TO "pharmacy_purchase_invoice_documents_purchaseInvoiceId_fkey";
+
+-- RenameIndex
+ALTER INDEX "partner_daily_sales_branchId_date_partnerOrganizationId_status_" RENAME TO "partner_daily_sales_branchId_date_partnerOrganizationId_sta_idx";
+
+-- RenameIndex
+ALTER INDEX "pharmacy_purchase_invoices_branchId_distributorGstin_invoiceNum" RENAME TO "pharmacy_purchase_invoices_branchId_distributorGstin_invoic_key";
+
+-- RenameIndex
+ALTER INDEX "pharmacy_purchase_payment_allocations_paymentId_purchaseInvoice" RENAME TO "pharmacy_purchase_payment_allocations_paymentId_purchaseInv_key";
+
+-- RenameIndex
+ALTER INDEX "pharmacy_purchase_payments_branchId_distributorGstin_paymentDat" RENAME TO "pharmacy_purchase_payments_branchId_distributorGstin_paymen_idx";

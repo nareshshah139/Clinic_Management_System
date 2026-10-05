@@ -15,9 +15,9 @@ it('sends examination diagnosis shortcuts and explicitly unchecked family histor
   const onClinicalDataChange = jest.fn();
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenCalled());
-  fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris', exact: true }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM', exact: true }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({
     diagnosis: [{ diagnosis: 'Acne vulgaris' }],
     history: expect.objectContaining({ familyHistory: expect.objectContaining({ dm: false }) }),
@@ -40,7 +40,7 @@ it('sends restored history, examination, medications, procedures, custom section
     history: { pastHistory: 'Past history', medicationHistory: 'Medication history', menstrualHistory: 'Menstrual history', triggers: 'Sun', priorTreatments: 'Prior treatment', familyHistory: { dm: true, others: 'Family note' } },
     vitals: { height: 160, weight: 60, systolicBP: 120, diastolicBP: 80, heartRate: 72 },
     examination: { generalAppearance: 'Examination', dermatology: { diagnoses: ['Psoriasis'], skinType: 'III', morphology: ['Papules'], distribution: ['Face'], acneSeverity: 'Mild', itchScore: 0, skinConcerns: ['Dryness'] } },
-    treatmentPlan: { investigations: ['CBC'], procedurePlanned: 'Procedure planned', followUpInstructions: 'Review instructions', followUpDate: '2026-10-01', dermatology: { procedures: [{ type: 'Procedure performed' }], medicationPlan: [item] } },
+    treatmentPlan: { investigations: ['CBC'], procedurePlanned: 'Procedure planned', followUpInstructions: 'Review instructions', dermatology: { procedures: [{ type: 'Procedure performed' }], medicationPlan: [item] } },
     scribeJson: { procedureMetrics: { device: 'Laser', wavelengthNm: 1064, passes: 0, area: 'Face' }, customSections: [{ id: 'custom', title: 'Additional detail', content: 'Complete custom note' }] },
   })));
 });

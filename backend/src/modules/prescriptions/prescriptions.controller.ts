@@ -121,17 +121,33 @@ export class PrescriptionsController {
     return this.prescriptionsService.requestRefill(refillDto, req.user.branchId);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] authoritative-refill-path
+   * Approval MUST target the refill ID in the route, regardless of a body ID.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:security] clinician-refill-approval
+   * Only DOCTOR, ADMIN and OWNER may approve refills. Other authenticated roles
+   * MUST receive 403 before any refill mutation.
+   */
   @Post('refills/:id/approve')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   approveRefill(
     @Param('id') id: string,
     @Body() approveDto: ApproveRefillDto,
     @Request() req: AuthenticatedRequest,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.approveRefill(approveDto, req.user.branchId, req.user.id);
+    return this.prescriptionsService.approveRefill({ ...approveDto, refillId: id }, req.user.branchId, req.user.id);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] clinician-refill-rejection
+   * Only DOCTOR, ADMIN and OWNER may reject refills. Other authenticated roles
+   * MUST receive 403 before any refill mutation.
+   */
   @Post('refills/:id/reject')
+  @Roles(UserRole.DOCTOR, UserRole.ADMIN, UserRole.OWNER)
   rejectRefill(
     @Param('id') id: string,
     @Body() body: { reason: string },
@@ -530,6 +546,6 @@ export class PrescriptionsController {
     @Query('reason') reason?: string,
   ) {
     this.requireIdempotency(req as any);
-    return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason);
+    return this.prescriptionsService.cancelPrescription(id, req.user.branchId, reason, req.user.id);
   }
 }
