@@ -15,4 +15,3 @@ ALTER INDEX "pharmacy_purchase_payment_allocations_paymentId_purchaseInvoice" RE
 
 -- RenameIndex
 ALTER INDEX "pharmacy_purchase_payments_branchId_distributorGstin_paymentDat" RENAME TO "pharmacy_purchase_payments_branchId_distributorGstin_paymen_idx";
-
