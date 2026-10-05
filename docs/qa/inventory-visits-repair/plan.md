@@ -10,8 +10,8 @@ Base: production main `2ec721a`. The primary checkout was 27 commits behind prod
 - [ ] Phase C: Run the loop
 - [x] Repair billing atomicity, checkout/payment retries and package stock side effects.
 - [x] Repair visit deletion/completion, draft-photo access and prescription/refill persistence.
-- [ ] Repair clinical explicit clears and completion after reload.
-- [ ] Make queue reads side-effect free and bounded; preserve stock filtering and pagination.
+- [x] Repair clinical explicit clears and completion after reload.
+- [x] Make queue reads side-effect free and bounded; preserve stock filtering and pagination.
 - [x] Integrate independently committed slices and run real PostgreSQL regressions.
 - [ ] Review contracts, comments, security boundaries and actual diffs independently.
 - [ ] Rehearse migrations, run production builds and verify the UI through local authenticated flows.

@@ -13,8 +13,8 @@ This release repairs the audited inventory, billing and visit behaviors on produ
 | Visits | Completion and deletion are durable fields. Deleted visits disappear from patient/appointment consumers; appointments can restart with preserved historical linkage. | Database lifecycle and real HTTP checks; additive migration rehearsal. |
 | Draft photos | Every draft-photo route enforces the authenticated branch. | Normal-auth multipart upload, list, binary read and delete denial for a foreign branch. |
 | Prescriptions and refills | Status, validity and refill decisions persist. Only clinicians approve/reject refills. | Real guards, lifecycle database tests and command eligibility checks. |
-| Clinical forms | Explicit empty/null values survive save and reload. Conflicts preserve drafts and require explicit reconciliation. | Field regressions, normal-auth browser clearing, fresh-context reload and idle-save checks. Final shared conflict-path review is pending. |
-| Queue reads | GET performs no task creation or timestamp changes; filtering precedes pagination. Staff actions create tasks explicitly. | Full-population comparisons and real HTTP checks. Final duplicate-line identity review is pending. |
+| Clinical forms | Explicit empty/null values survive save and reload. Conflicts preserve drafts and require explicit reconciliation. | Field regressions, normal-auth browser clearing, fresh-context reload and idle-save checks. Shared conflict-path review passed; actual conflict and recovery UI checks passed. |
+| Queue reads | GET performs no task creation or timestamp changes; filtering precedes pagination. Staff actions create tasks explicitly. | Full-population comparisons and real HTTP checks. Duplicate-line regressions and normal-auth HTTP checks passed; final complete-regimen review is pending. |
 | Stock reads | PostgreSQL handles exact filtering, aggregation and paging. Fuzzy/name ordering preserves existing matching using slim candidate scans. | Fourteen complete-response comparisons across 2,500 batches. |
 
 ## Evidence recorded so far
@@ -23,13 +23,13 @@ This release repairs the audited inventory, billing and visit behaviors on produ
 - Twenty-six billing database scenarios passed on PostgreSQL 17.
 - All five additive migrations applied against a local copy of the production schema and migration history. A second deployment applied nothing. Invalid-index checks passed. Six pre-existing constraint/index naming differences remain explicitly allowlisted.
 - Contract syntax and discoverability passed for 67 changed TypeScript files. SQL, CONTRACTS discovery and CommonJS scripts were reviewed manually where the CLI does not support them.
-- Actual Chrome UI saved an empty heart rate as null, preserved weight, reopened in a fresh login session and made no idle write.
-- The real billing UI survived a dropped response after backend commit, then replayed the same checkout after reload. Its previous reset behavior retained the old patient, reproducing the reported defect before the reset correction.
+- Actual Chrome UI saved an empty heart rate as null, preserved weight, reopened in a fresh login session and made no idle write. A competing save returned 409, retained local edits and stopped retries; explicit discard reloaded the authoritative value. An independent reviewer repeated this with a separate synthetic visit and browser.
+- The real billing UI survived a dropped response after backend commit, replayed the same checkout after reload, then cleared context and successfully billed a second patient. A probe initially pressed Escape while focus was inside the PDF iframe; closing the visible dialog through its Close button proved the reset handler.
 - The production smoke workflow passed locally, including exact cleanup and unchanged fingerprints across 18 tables.
 
 ## Performance scope
 
-The synthetic repeated-read queue benchmark with 1,000 prescriptions improved from 7,005 queries and 1,000 writes to 11 queries and zero writes. Measured runs were about 518–565 ms before and 14–17 ms after. Stock reads over 2,500 batches improved from 97 ms to 25 ms; fuzzy search improved from 101 ms to 60 ms. These are local fixture measurements, not production latency guarantees. Fuzzy/name sorting still scales with branch candidate count.
+The synthetic repeated-read queue benchmark with 1,000 prescriptions improved from 7,005 queries and 1,000 writes to 11 queries and zero writes. Measured runs were about 518–565 ms before and 14–24 ms after. Stock reads over 2,500 batches improved from 97 ms to 25 ms; fuzzy search improved from 101 ms to 60 ms. These are local fixture measurements, not production latency guarantees. Fuzzy/name sorting still scales with branch candidate count.
 
 ## Release gates
 
@@ -46,3 +46,25 @@ Independent reviewers inspected actual diffs, contracts, unchanged consumers and
 ## Decisions that changed the implementation
 
 Model the Domain led to durable visit/prescription states and explicit clinical clear intent. Make Operations Idempotent led to durable checkout/payment request keys. Separate Before Serializing Shared State led to four managed implementation worktrees. Build the Lever led to rerunnable real-database, HTTP, browser and migration checks. Prove It Works required the actual frontend proxy and normal login. Attack the Premise expanded conflict and medicine-line identity fixes across every participating caller instead of stopping at the first symptom.
+
+## Reproduction commands
+
+Run from this checkout with isolated PostgreSQL 17 on `127.0.0.1:55457`. Tests create disposable schemas or databases. Do not substitute a production database URL.
+
+```sh
+INVENTORY_READ_TEST_DATABASE_URL=postgresql://nshah@127.0.0.1:55457/postgres VISIT_LIFECYCLE_TEST_DATABASE_URL=postgresql://nshah@127.0.0.1:55457/postgres PURCHASE_AUTOMATION_TEST_DATABASE_URL=postgresql://nshah@127.0.0.1:55457/postgres npm test --workspace=backend -- --runInBand
+npm test --workspace=frontend -- --runInBand
+node scripts/diagnostics/inventory-visits-build.cjs
+node scripts/diagnostics/inventory-visits-local.cjs
+```
+
+With the generated synthetic app running, use a separate terminal for each sequential check. The local session file contains synthetic credentials and must remain uncommitted. The browser scripts launch and close their own isolated Chrome processes.
+
+```sh
+node scripts/diagnostics/inventory-visits-http-acceptance.cjs
+node scripts/diagnostics/inventory-visits-browser-acceptance.cjs
+node scripts/diagnostics/inventory-visits-billing-browser.cjs
+node scripts/diagnostics/inventory-visits-production-smoke.cjs --local-rehearsal
+```
+
+Production snapshot, preservation and smoke tools are scoped to the configured clinic Railway project. `inventory-visits-railway-snapshot.cjs` without `--create` verifies the existing backup. Capture preservation only after backend writes stop; verify after migration. The production smoke requires `--run` and a verified snapshot, creates only a uniquely named synthetic branch, and checks exact cleanup.

@@ -46,7 +46,7 @@ async function main() {
   const before = await read();
   const seed = await fetch(session.frontend + '/api/visits/' + fixture.visitId, { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', 'Idempotency-Key': randomUUID() }, body: JSON.stringify({ version: before.version, vitals: { heartRate: 80 } }) });
   assert.equal(seed.status, 200);
-  browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9318', defaultViewport: null });
+  browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, protocolTimeout: 30000, args: ['--no-first-run', '--no-default-browser-check'] });
   const page = await openVisit();
   await page.waitForFunction(() => document.querySelector('input[placeholder="bpm"]').value === '80');
   await page.focus('input[placeholder="bpm"]');
@@ -91,6 +91,7 @@ async function main() {
   await saveAgain.asElement().focus();
   await reopened.keyboard.press('Enter');
   assert.equal((await conflictResponse).status(), 409);
+  report.stage = 'Observe shared conflict notice';
   await reopened.waitForFunction(() => document.body.innerText.includes('Autosave is paused'));
   assert.equal(await reopened.$eval('input[placeholder="bpm"]', element => element.value), '77');
   const attempts = idleMutations.length;
@@ -99,16 +100,21 @@ async function main() {
   assert.equal((await read()).vitals.heartRate, 90);
   await reopened.screenshot({ path: path.join(output, 'visit-conflict-protected.png'), fullPage: false });
   const discard = await reopened.evaluateHandle(() => [...document.querySelectorAll('button')].find(element => element.textContent.trim() === 'Discard draft and reload saved visit'));
-  await discard.asElement().focus();
-  await reopened.keyboard.press('Enter');
-  await reopened.waitForFunction(() => document.querySelector('input[placeholder="bpm"]').value === '90');
-  assert(!(await reopened.evaluate(() => document.body.innerText)).includes('Autosave is paused'));
+  await reopened.bringToFront();
+  await discard.asElement().click();
+  report.stage = 'Observe explicit saved-visit reload';
+  await reopened.waitForFunction(() => ![...document.querySelectorAll('p')].some(element => element.offsetWidth && element.textContent.includes('Autosave is paused')), { polling: 100 });
+  await reopened.click('button[id$="trigger-vitals"]');
+  report.stage = 'Observe refreshed Vitals tab';
+  await reopened.waitForFunction(() => document.querySelector('button[id$="trigger-vitals"]')?.getAttribute('aria-selected') === 'true', { polling: 100 });
+  await reopened.waitForFunction(() => document.querySelector('input[placeholder="bpm"]')?.value === '90', { polling: 100 });
+  assert.equal(await reopened.$$eval('p', elements => elements.some(element => element.offsetWidth && element.textContent.includes('Autosave is paused'))), false);
   report.checks.push({ name: 'A real conflicting save retains edits, stops retries and reloads only through explicit recovery', outcome: 'VERIFIED' });
   report.outcome = 'VERIFIED';
 }
-main().catch(error => { report.outcome = 'NOT VERIFIED'; report.error = error.message; process.exitCode = 1; }).finally(async () => {
+main().catch(async error => { report.outcome = 'NOT VERIFIED'; report.error = error.message; process.exitCode = 1; const pages = contexts.length ? await contexts.at(-1).pages() : []; if (pages[0]) { report.failureUrl = pages[0].url(); report.visibleFailureText = (await pages[0].evaluate(() => document.body.innerText)).slice(-4500); await pages[0].screenshot({ path: path.join(output, 'visit-acceptance-failure.png') }); } }).finally(async () => {
   for (const context of contexts) await context.close().catch(() => {});
-  if (browser) await browser.disconnect();
+  if (browser) await browser.close();
   fs.writeFileSync(path.join(output, 'browser-acceptance.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
 });

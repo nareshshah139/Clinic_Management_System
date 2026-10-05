@@ -38,7 +38,7 @@ async function main() {
   }
   const second = await db.patient.create({ data: { name: 'Synthetic second billing patient ' + randomUUID().slice(0, 8), gender: 'FEMALE', phone: '0000000002', branchId: f.branchId } });
   const before = await db.inventoryItem.findUniqueOrThrow({ where: { id: f.inventoryItemId } });
-  browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9318', defaultViewport: null });
+  browser = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true, protocolTimeout: 30000, args: ['--no-first-run', '--no-default-browser-check'] });
   context = await browser.createBrowserContext();
   const page = await context.newPage();
   await page.setViewport({ width: 1500, height: 1100 });
@@ -83,8 +83,12 @@ async function main() {
   assert.equal(once.currentStock, before.currentStock - 2);
   assert.equal(once.heldStock, before.heldStock);
   report.checks.push('Lost committed checkout response survives reload and retries one invoice/stock deduction');
-  await page.keyboard.press('Escape');
+  await page.waitForSelector('[role=dialog][data-state=open] button[data-slot=dialog-close]');
+  await page.click('[role=dialog][data-state=open] button[data-slot=dialog-close]');
+  await page.waitForFunction(() => !document.querySelector('[role=dialog]') && document.body.style.pointerEvents !== 'none', { polling: 100 });
   await clickText(page, 'Start a new invoice');
+  report.stage = 'Observe new-invoice reset';
+  await page.waitForFunction(() => document.querySelector('#patient')?.value === '');
   assert.equal(await page.$eval('#patient', element => element.value), '');
   assert(!new URL(page.url()).searchParams.has('prescriptionId'));
   await page.type('#patient', second.name);
@@ -111,4 +115,4 @@ async function main() {
   report.checks.push('Start a new invoice clears prescription context and successfully bills another patient');
   report.outcome = 'VERIFIED';
 }
-main().catch(error => { report.outcome = 'NOT VERIFIED'; report.error = error.message; process.exitCode = 1; }).finally(async () => { await context?.close().catch(() => {}); await browser?.disconnect(); await db.$disconnect(); fs.writeFileSync(path.join(output, 'billing-browser-acceptance.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2)); });
+main().catch(error => { report.outcome = 'NOT VERIFIED'; report.error = error.message; process.exitCode = 1; }).finally(async () => { await context?.close().catch(() => {}); await browser?.close(); await db.$disconnect(); fs.writeFileSync(path.join(output, 'billing-browser-acceptance.json'), JSON.stringify(report, null, 2)); console.log(JSON.stringify(report, null, 2)); });
