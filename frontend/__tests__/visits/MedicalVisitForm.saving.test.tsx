@@ -3,9 +3,11 @@ import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
 jest.mock('@/lib/api', () => ({ apiClient: { get: jest.fn(), getPatient: jest.fn(), getPatientVisitHistory: jest.fn(), getAllPatientVisitHistory: jest.fn(), getVisits: jest.fn(), updateVisit: jest.fn(), createVisit: jest.fn(), completeVisit: jest.fn() } }));
 jest.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: jest.fn() }) }));
+let mockPhotoVersion: ((version: number) => void) | undefined;
+let mockRxSaved: ((visit: { version: number }) => void) | undefined;
 let mockExportResult: Promise<string> | undefined;
-jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport }: any) { return <><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
-jest.mock('@/components/visits/VisitPhotos', () => function Photos() { return null; });
+jest.mock('@/components/visits/PrescriptionBuilder', () => function Editor({ onClinicalDataChange, onBeforeExport, onVisitSaved }: any) { mockRxSaved = onVisitSaved; return <><button onClick={() => { mockExportResult = onBeforeExport(); }}>Export saved visit</button><button onClick={() => onClinicalDataChange({ vitals: { systolicBP: 110 } })}>Set editor blood pressure</button><input aria-label="Clinical note" onChange={e => onClinicalDataChange({ history: { pastHistory: e.target.value } })} /></>; });
+jest.mock('@/components/visits/VisitPhotos', () => function Photos({ onVisitVersion }: any) { mockPhotoVersion = onVisitVersion; return null; });
 jest.mock('@/components/tours', () => ({ DoctorTour: () => null }));
 const flush = async () => { await act(async () => { await Promise.resolve(); }); };
 beforeEach(() => {
@@ -103,4 +105,74 @@ it('blocks export if newer form edits arrive while saving', async () => {
   await act(async () => finish({ id: 'v' }));
   await rejected;
   expect(Object.values(localStorage).some(value => String(value).includes('New note during save'))).toBe(true);
+});
+
+
+it.each(['manual', 'autosave'])('keeps the newest mutation acknowledgement when an older %s response arrives late', async mode => {
+  let finish!: (value: unknown) => void;
+  let serverVersion = 3;
+  let first = true;
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', version: 3, patientId: 'p', complaints: [], history: {}, plan: {}, exam: {} });
+  (apiClient.updateVisit as jest.Mock).mockImplementation((_id, payload) => {
+    if (payload.version !== serverVersion) return Promise.reject(Object.assign(new Error('Stale version'), { status: 409 }));
+    serverVersion += 1;
+    if (first) {
+      first = false;
+      return new Promise(resolve => { finish = resolve; });
+    }
+    return Promise.resolve({ id: 'v', version: serverVersion });
+  });
+  await openForm();
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Photos' }), { button: 0, ctrlKey: false });
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'First edit' } });
+  await act(async () => {
+    if (mode === 'manual') fireEvent.click(screen.getByRole('button', { name: 'Save Draft' }));
+    else jest.advanceTimersByTime(8100);
+  });
+  serverVersion = 5;
+  await act(async () => { mockPhotoVersion!(5); });
+  await act(async () => { finish({ id: 'v', version: 4 }); });
+  await act(async () => { mockRxSaved!({ version: 4 }); });
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Newest edit' } });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ version: 5, history: { pastHistory: 'Newest edit' } }), expect.anything());
+  expect(serverVersion).toBe(6);
+  expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
+});
+
+it('keeps a manual conflict draft without retrying automatically or rebasing after further edits', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', version: 3, patientId: 'p', complaints: [], history: {}, plan: {}, exam: {} });
+  (apiClient.updateVisit as jest.Mock).mockRejectedValue(Object.assign(new Error('Visit changed elsewhere'), { status: 409 }));
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Keep conflicted edit' } });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  expect(apiClient.updateVisit).toHaveBeenCalledTimes(1);
+  await act(async () => { jest.advanceTimersByTime(40000); });
+  expect(apiClient.updateVisit).toHaveBeenCalledTimes(1);
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Keep newer local edit' } });
+  await act(async () => { jest.advanceTimersByTime(40000); });
+  expect(apiClient.updateVisit).toHaveBeenCalledTimes(1);
+  expect(Object.values(localStorage).some(value => String(value).includes('Keep newer local edit'))).toBe(true);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Photos' }), { button: 0, ctrlKey: false });
+  await act(async () => { mockPhotoVersion!(5); mockRxSaved!({ version: 4 }); });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  expect(apiClient.updateVisit).toHaveBeenCalledTimes(2);
+  expect(apiClient.updateVisit).toHaveBeenLastCalledWith('v', expect.objectContaining({ version: 3 }), expect.anything());
+});
+
+
+it('pauses autosave for a restored stale draft before it can overwrite a newer server visit', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', version: 3, status: 'IN_PROGRESS' });
+  const view = render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
+  await flush();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Offline draft' } });
+  view.unmount();
+  (apiClient.get as jest.Mock).mockResolvedValue({ id: 'v', version: 4, status: 'IN_PROGRESS' });
+  await openForm();
+  expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+  await act(async () => { jest.advanceTimersByTime(40000); });
+  expect(apiClient.updateVisit).not.toHaveBeenCalled();
+  const draft = JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!);
+  expect(draft.data.visitVersion).toBe(3);
+  expect(draft.data.prescriptionClinical.history.pastHistory).toBe('Offline draft');
 });

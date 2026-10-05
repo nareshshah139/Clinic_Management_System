@@ -137,3 +137,43 @@ it('advances the acknowledged version for consecutive saves and retains a confli
   expect(screen.getByRole('textbox', { name: 'Past history' })).toHaveValue('Unsaved local note');
   expect(saved.history.pastHistory).toBe('');
 });
+
+
+it('keeps a conflicting draft across reopening and explicitly replaces it with the saved visit', async () => {
+  const view = await openForm();
+  fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Conflicting local history' } });
+  saved.version = 4;
+  saved.history.pastHistory = 'History saved elsewhere';
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  view.unmount();
+  render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />);
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('Conflicting local history'));
+  expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+  expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
+
+  (apiClient.get as jest.Mock).mockResolvedValueOnce(JSON.parse(JSON.stringify(saved))).mockRejectedValue(new Error('No second fetch needed for recovery'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
+  fireEvent.mouseDown(screen.getByRole('tab', { name: 'Prescription' }), { button: 0, ctrlKey: false });
+  await waitFor(() => expect(screen.getByLabelText('Past history')).toHaveValue('History saved elsewhere'));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(localStorage.getItem('rxDraft:p:v') || '').not.toContain('Conflicting local history');
+  fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Reviewed new edit' } });
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.at(-1)[1].version).toBe(4);
+  expect(saved.history.pastHistory).toBe('Reviewed new edit');
+  expect(saved.version).toBe(5);
+});
+
+it('retains the conflicting draft when loading the saved visit fails', async () => {
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Past history'), { target: { value: 'Keep until reload succeeds' } });
+  saved.version = 4;
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save Draft' })));
+  (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Synthetic reload failure'));
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Discard draft and reload saved visit' })));
+  expect(screen.getByRole('alert')).toHaveTextContent('Autosave is paused');
+  expect(screen.getByLabelText('Past history')).toHaveValue('Keep until reload succeeds');
+  expect(JSON.parse(localStorage.getItem('clinic:visit-draft:d:p:visit-v')!).data).toMatchObject({ visitVersion: 3, saveConflict: true });
+  expect(localStorage.getItem('clinic:visit-draft:d:p:visit-v')).toContain('Keep until reload succeeds');
+});

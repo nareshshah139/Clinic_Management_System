@@ -3,7 +3,7 @@ import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationTy
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
-import { compactClinicalPatch, useClinicalState } from '@/lib/clinical-patch';
+import { compactClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -89,6 +89,8 @@ interface Props {
   onClinicalDataChange?: (patch: Record<string, unknown>) => void;
   getClinicalSavePatch?: () => Record<string, unknown>;
   onVisitSaved?: (visit: Partial<VisitDetails>) => void;
+  shouldPersistDraft?: () => boolean;
+  initialVisitSnapshot?: VisitDetails;
   onBeforeExport?: () => Promise<string>;
   onPreview?: () => void;
   reviewDate?: string;
@@ -195,8 +197,9 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * and the disclaimer above the signature, even when the signature is hidden.
  * Switching to In-person MUST remove both from regenerated preview and exports.
  */
-function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
+function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, visitId, doctorId, userRole = 'DOCTOR', onCreated, onClinicalDataChange, getClinicalSavePatch, onVisitSaved, shouldPersistDraft, initialVisitSnapshot, onBeforeExport, onPreview, reviewDate, printBgUrl, printTopMarginPx, printLeftMarginPx, printRightMarginPx, printBottomMarginPx, contentOffsetXPx, contentOffsetYPx, onChangeReviewDate, refreshKey, standalone = false, standaloneReason, includeSections: includeSectionsProp, onChangeIncludeSections, ensureVisitId, onChangeChiefComplaints, onChangeContentOffset, designAids, paperPreset, grayscale, bleedSafe, frames, onChangeFrames }: Props) {
   const visitVersionRef = useRef<number | undefined>(undefined);
+  const initialVisitSnapshotRef = useRef(initialVisitSnapshot);
   const dirtyClinicalFields = useRef(new Set<string>());
   const clinicalField = <T,>(field: string, value: T): T | undefined => Array.from(dirtyClinicalFields.current).some(path => path === field || path.startsWith(`${field}.`)) ? value : undefined;
   const { toast } = useToast();
@@ -1179,7 +1182,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       if (!visitId || standalone) return;
       try {
         setLoadingVisit(true);
-        const res: any = await apiClient.get(`/visits/${visitId}`);
+        const snapshot = initialVisitSnapshotRef.current;
+        initialVisitSnapshotRef.current = undefined;
+        const res: any = snapshot?.id === visitId ? snapshot : await apiClient.get(`/visits/${visitId}`);
         if (cancelled) return;
         const savedHistory = typeof res?.history === 'string' ? (() => { try { return JSON.parse(res.history); } catch { return null; } })() : res?.history;
         if (typeof savedHistory?.personalHistory === 'string') {
@@ -2557,7 +2562,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       createdPrescriptionIdRef.current = res.id;
       setSavedPrescriptionId(res?.id || null);
       if (res.visit) {
-        visitVersionRef.current = res.visit.version ?? visitVersionRef.current;
+        visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, res.visit.version);
         onVisitSaved?.(res.visit);
       }
       onCreated?.(res?.id);
@@ -2611,7 +2616,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
           if (!savedVisitId) throw new Error('Select a visit before exporting.');
           const saved: any = await apiClient.updateVisit(savedVisitId, { ...clinicalData, version: visitVersionRef.current });
           if (!saved?.id) throw new Error('The server did not confirm the saved visit.');
-          visitVersionRef.current = saved.version ?? visitVersionRef.current;
+          visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, saved.version);
           onVisitSaved?.(saved);
         }
       }
@@ -3987,7 +3992,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (undoStackRef.current.length > 50) undoStackRef.current.shift();
     redoStackRef.current = [];
   }, [items, followUpInstructions]);
+  /**
+   * @cc [owner:nareshshah139,label:product] discarded-prescription-draft
+   * When the parent has discarded this editor, persistence MUST NOT recreate
+   * its local draft, including during unmount cleanup.
+   */
   const saveDraftNow = useCallback(() => {
+    if (shouldPersistDraft?.() === false) return;
     try {
       const data = {
         dosageSchemaVersion: 1,
@@ -4043,7 +4054,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       };
       localStorage.setItem(draftKey, JSON.stringify(data));
     } catch {}
-  }, [draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
+  }, [shouldPersistDraft, draftKey, procedureMetrics, exDermDx, familyHistoryTouched, language, items, followUpInstructions, chiefComplaints, diagnosis, pastHistory, personalHistory, medicationHistory, menstrualHistory, exObjective, procedures, procedurePlanned, investigations, customInvestigationOptions, vitalsHeightCm, vitalsWeightKg, vitalsBmi, vitalsBpSys, vitalsBpDia, vitalsPulse, skinConcerns, exSkinType, exMorphology, exDistribution, exAcneSeverity, exItchScore, exTriggers, exPriorTx, familyHistoryDM, familyHistoryHTN, familyHistoryThyroid, familyHistoryOthers, customSections, overrideTopMarginPx, overrideBottomMarginPx, activeProfileId, showRefillStamp, letterheadOption, breakBeforeMedications, breakBeforeInvestigations, breakBeforeFollowUp, breakBeforeSignature, avoidBreakInsideTables]);
   useEffect(() => {
     const t = setTimeout(() => { saveDraftNow(); }, 600);
     return () => clearTimeout(t);
@@ -4056,7 +4067,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       const raw = localStorage.getItem(draftKey);
       if (raw) {
         const data = JSON.parse(raw);
-        if (data.visitVersion !== undefined) visitVersionRef.current = data.visitVersion;
+        if (visitVersionRef.current === undefined && data.visitVersion !== undefined) visitVersionRef.current = data.visitVersion;
         if (Array.isArray(data?.items)) {
           hydrateItems(data.dosageSchemaVersion === 1 ? data.items : data.items.map((item: PrescriptionItemForm) => ({
             ...item,

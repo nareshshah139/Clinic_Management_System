@@ -77,3 +77,14 @@ export function mergeClinicalPatch(previous: any, patch: any): any {
   }
   return result;
 }
+
+
+/**
+ * @cc [owner:nareshshah139,label:product] monotonic-mutation-version
+ * Successful mutation acknowledgements MUST NOT lower an already acknowledged
+ * visit version. Callers MUST NOT use read responses or conflicts to advance it.
+ */
+export function acknowledgedVisitVersion(current: number | undefined, received: number | undefined): number | undefined {
+  if (received === undefined) return current;
+  return current === undefined ? received : Math.max(current, received);
+}

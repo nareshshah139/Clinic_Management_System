@@ -48,7 +48,7 @@ import {
 import { TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
-import { compactClinicalPatch, mergeClinicalPatch, useClinicalState } from '@/lib/clinical-patch';
+import { compactClinicalPatch, mergeClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
 import { usePatientHistory } from './usePatientHistory';
 import { encounterTime, encounterDay } from '@/lib/patient-history';
 import PatientHistoryVisitCard from '@/components/visits/PatientHistoryVisitCard';
@@ -103,6 +103,7 @@ type LabResultsMap = Record<string, SimpleLabValue | CompositeLabValue>;
 type MedicalVisitDraftState = {
   dirtyClinicalFields?: string[];
   visitVersion?: number;
+  saveConflict?: boolean;
   consultationType?: ConsultationType;
   teleVideoConsent?: boolean;
   prescriptionClinical?: Record<string, unknown>;
@@ -192,16 +193,29 @@ const ROLE_PERMISSIONS = {
 /**
  * @cc [owner:nareshshah139,label:product] visit-save-version
  * Existing-visit saves MUST send the version loaded or acknowledged by this form.
- * A conflict MUST preserve edits and stop automatic retries. Completed status MUST
- * come from the server, including walk-ins and restored local drafts.
+ * A conflict MUST preserve edits and stop automatic retries, including after new
+ * edits and reopening. Only explicit discard may replace a conflicting draft
+ * with a fresh server baseline. Mutation receipts MUST NOT rebase a known
+ * conflict; otherwise delayed successes MUST NOT lower its version.
+ * Completed status MUST come from the server, including walk-ins and drafts.
  */
 /**
  * @cc [owner:nareshshah139,label:product] consultation-consent-form
  * New visits default to In-person. Tele-video saves and exports MUST be blocked
  * until consent is checked; visit recovery MUST restore the consultation choice.
  */
-export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId }: Props) {
+function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visitNumber = 1, patientName = '', visitDate, appointmentId, appointmentData, initialVisitId, initialVisitSnapshot, onDiscardLocalDraft }: Props & { initialVisitSnapshot?: VisitDetails; onDiscardLocalDraft: (saved: VisitDetails) => void }) {
   const visitVersionRef = useRef<number | undefined>(undefined);
+  const restoredDraftVersion = useRef<number | undefined>(undefined);
+  const automaticSaveBlocked = useRef(false);
+  const acknowledgeMutationVersion = useCallback((version: number | undefined) => {
+    if (!automaticSaveBlocked.current) {
+      visitVersionRef.current = acknowledgedVisitVersion(visitVersionRef.current, version);
+    }
+  }, []);
+  const discardDraftRef = useRef(false);
+  const [saveConflict, setSaveConflict] = useState(false);
+  const [reloadingSavedVisit, setReloadingSavedVisit] = useState(false);
   const dirtyClinicalFields = useRef(new Set<string>());
   const clinicalField = <T,>(field: string, value: T): T | undefined => Array.from(dirtyClinicalFields.current).some(path => path === field || path.startsWith(`${field}.`)) ? value : undefined;
   const parseJsonValue = useCallback(<T,>(value: unknown): T | undefined => {
@@ -222,7 +236,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const consentMissing = consultationType === 'TELE_VIDEO' && !teleVideoConsent;
 
   // Core visit data
-  const [visitId, setVisitId] = useState<string | null>(initialVisitId || null);
+  const [visitId, setVisitId] = useState<string | null>(initialVisitSnapshot?.id || initialVisitId || null);
   const [currentVisitNumber, setCurrentVisitNumber] = useState(visitNumber);
   const [visitStatus, setVisitStatus] = useState<VisitStatus | 'draft'>('draft');
   
@@ -557,6 +571,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   const serializeDraft = useCallback((): MedicalVisitDraftState => ({
     dirtyClinicalFields: Array.from(dirtyClinicalFields.current),
     visitVersion: visitVersionRef.current,
+    saveConflict: automaticSaveBlocked.current,
     consultationType,
     teleVideoConsent,
     prescriptionClinical,
@@ -629,7 +644,14 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   latestDraftStateRef.current = serializeDraft();
 
   const applyDraft = useCallback((draft: MedicalVisitDraftState) => {
-    if (draft.visitVersion !== undefined) visitVersionRef.current = draft.visitVersion;
+    if (visitVersionRef.current === undefined && draft.visitVersion !== undefined) {
+      visitVersionRef.current = draft.visitVersion;
+      restoredDraftVersion.current = draft.visitVersion;
+    }
+    if (draft.saveConflict) {
+      automaticSaveBlocked.current = true;
+      setSaveConflict(true);
+    }
     if (draft.consultationType) {
       setConsultationType(draft.consultationType);
       setTeleVideoConsent(draft.consultationType === 'TELE_VIDEO' && draft.teleVideoConsent === true);
@@ -668,7 +690,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
 
   const persistDraftToStorage = useCallback(
     (force = false, draftOverride?: MedicalVisitDraftState) => {
-      if (!draftStorageKey || typeof window === 'undefined') return false;
+      if (discardDraftRef.current || !draftStorageKey || typeof window === 'undefined') return false;
       try {
     const payload = draftOverride ?? serializeDraft();
     const record = {
@@ -781,7 +803,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   latestDraftWriter.current = persistDraftToStorage;
 
   const runAutoSave = useCallback(async () => {
-    if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current) {
+    if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {
       return;
     }
 
@@ -809,7 +831,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         }
         const saved = await apiClient.updateVisit(visitId, payload, { idempotencyKey: idemKey }) as VisitDetails;
         const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
-        visitVersionRef.current = saved.version ?? visitVersionRef.current;
+        acknowledgeMutationVersion(saved.version);
         visitSaveAttempt.current = null;
         latestDraftWriter.current(!newerChanges);
         if (newerChanges) {
@@ -828,9 +850,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         setSaveStatus('error');
         // If unauthorized, prompt sign-in and do not retry
         if ((error as any)?.status === 409) {
+          automaticSaveBlocked.current = true;
+          setSaveConflict(true);
+          latestDraftWriter.current();
           retryAllowed = false;
           clearAutoSaveTimer();
-          toast({ variant: 'warning', title: 'Visit changed elsewhere', description: 'Your draft is retained. Reload the visit before saving again.' });
+          toast({ variant: 'warning', title: 'Visit changed elsewhere', description: 'Your draft is retained and autosave is paused. Use the conflict notice to discard it and reload the saved visit.' });
         } else if ((error as any)?.status === 401) {
           retryAllowed = false;
           toast({
@@ -870,7 +895,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (typeof window === 'undefined') {
         return;
       }
-      if (!hasUnsavedChangesRef.current) {
+      if (!hasUnsavedChangesRef.current || automaticSaveBlocked.current) {
         return;
       }
       if (justSavedRef.current) {
@@ -988,7 +1013,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     const load = async () => {
       if (!visitId) return;
       try {
-        const res: any = await apiClient.get<VisitDetails>(`/visits/${visitId}`);
+        const res: any = initialVisitSnapshot ?? await apiClient.get<VisitDetails>(`/visits/${visitId}`);
+        if (restoredDraftVersion.current !== undefined && res.version !== undefined && restoredDraftVersion.current !== res.version) {
+          automaticSaveBlocked.current = true;
+          setSaveConflict(true);
+          clearAutoSaveTimer();
+          latestDraftWriter.current();
+        }
         if (visitVersionRef.current === undefined) visitVersionRef.current = res.version;
         if (res.status) setVisitStatus(res.status);
         if (!latestDraftStateRef.current.consultationType) {
@@ -1093,7 +1124,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     }
 
     hasUnsavedChangesRef.current = true;
-    setSaveStatus('unsaved');
+    setSaveStatus(automaticSaveBlocked.current ? 'error' : 'unsaved');
     autoSaveFailureNotifiedRef.current = false;
     const changed = persistDraftToStorage();
     if (changed) {
@@ -1487,7 +1518,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       if (!(visit as VisitDetails)?.id) throw new Error('The server did not confirm the saved visit. Your draft is still available.');
       visitSaveAttempt.current = null;
       const newerChanges = JSON.stringify(payload) !== JSON.stringify(latestPayload.current());
-      visitVersionRef.current = (visit as VisitDetails).version ?? visitVersionRef.current;
+      acknowledgeMutationVersion((visit as VisitDetails).version);
       if ((complete || requireLatest) && newerChanges) throw new Error('New changes were entered while saving. Please save again before completing or exporting.');
       if (complete) {
         const completePayload: Record<string, unknown> = { version: visitVersionRef.current };
@@ -1497,7 +1528,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         const completedVisit = await apiClient.completeVisit(completeId, completePayload, { idempotencyKey: idemKey });
         if (completedVisit.status !== 'COMPLETED') throw new Error('The server did not confirm visit completion. Please retry.');
         setVisitStatus(completedVisit.status);
-        visitVersionRef.current = completedVisit.version ?? visitVersionRef.current;
+        acknowledgeMutationVersion(completedVisit.version);
         if (typeof window !== 'undefined' && draftStorageKey) {
           try {
             window.localStorage.removeItem(draftStorageKey);
@@ -1527,6 +1558,12 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
       return (visit as VisitDetails).id;
     } catch (e) {
       console.error('Save failed:', e);
+      if ((e as { status?: number })?.status === 409) {
+        automaticSaveBlocked.current = true;
+        setSaveConflict(true);
+        latestDraftWriter.current();
+        clearAutoSaveTimer();
+      }
       setSaveStatus('error');
       toast({
         variant: 'destructive',
@@ -1537,7 +1574,30 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
     } finally {
       manualSaveInFlight.current = false;
       setSaving(false);
-      if (hasUnsavedChangesRef.current) scheduleAutoSave();
+      if (hasUnsavedChangesRef.current && !automaticSaveBlocked.current) scheduleAutoSave();
+    }
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:product] discard-conflicting-draft
+   * Only an explicit discard after a successful visit fetch may remove local
+   * clinical drafts and reset their version. Failed fetches MUST retain edits.
+   */
+  const discardAndReloadSavedVisit = async () => {
+    if (!visitId || reloadingSavedVisit) return;
+    setReloadingSavedVisit(true);
+    try {
+      const saved = await apiClient.get<VisitDetails>(`/visits/${visitId}`);
+      if (saved.id !== visitId) throw new Error('The saved visit could not be loaded.');
+      clearAutoSaveTimer();
+      discardDraftRef.current = true;
+      window.localStorage.removeItem(draftStorageKey);
+      window.localStorage.removeItem(`rxDraft:${patientId}:${visitId}`);
+      onDiscardLocalDraft(saved);
+    } catch (error) {
+      discardDraftRef.current = false;
+      toast({ variant: 'destructive', title: 'Unable to reload saved visit', description: getErrorMessage(error) || 'Your draft is still available. Please try again.' });
+      setReloadingSavedVisit(false);
     }
   };
 
@@ -1696,6 +1756,16 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
         )}
         
         
+
+      {saveConflict && (
+        <div role="alert" className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950">
+          <p className="font-medium">This visit changed elsewhere. Your local draft is retained.</p>
+          <p className="text-sm">Autosave is paused. You can keep these edits here, or discard them and load the saved visit.</p>
+          <Button variant="outline" onClick={() => void discardAndReloadSavedVisit()} disabled={reloadingSavedVisit || saving}>
+            {reloadingSavedVisit ? 'Loading saved visit…' : 'Discard draft and reload saved visit'}
+          </Button>
+        </div>
+      )}
 
       {/* Visit Header */}
       <Card>
@@ -2198,7 +2268,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   allowDelete={hasPermission('photos') || hasPermission('all')}
                   onChangeCount={(c) => { setPhotoCount(c); }}
                   onVisitVersion={(version) => {
-                    visitVersionRef.current = Math.max(visitVersionRef.current ?? 0, version);
+                    acknowledgeMutationVersion(version);
                     latestDraftWriter.current();
                   }}
                   onVisitNeeded={async () => {
@@ -2207,7 +2277,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       const minimalPayload = buildPayload();
                       const newVisit = await apiClient.createVisit(minimalPayload);
                       const newVisitId = (newVisit as VisitDetails).id;
-                      visitVersionRef.current = (newVisit as VisitDetails).version;
+                      acknowledgeMutationVersion((newVisit as VisitDetails).version);
                       setVisitId(newVisitId);
                       return newVisitId;
                     }
@@ -2233,8 +2303,10 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                   teleVideoConsent={teleVideoConsent}
                   onClinicalDataChange={receiveClinicalData}
                   getClinicalSavePatch={() => latestPayload.current()}
+                  shouldPersistDraft={() => !discardDraftRef.current}
+                  initialVisitSnapshot={initialVisitSnapshot}
                   onVisitSaved={(saved) => {
-                    visitVersionRef.current = saved.version ?? visitVersionRef.current;
+                    acknowledgeMutationVersion(saved.version);
                     if (saved.status) setVisitStatus(saved.status);
                     latestDraftWriter.current();
                   }}
@@ -2269,7 +2341,7 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
                       if (!newVisit?.id) throw error;
                     }
                     const newVisitId = (newVisit as VisitDetails).id;
-                    visitVersionRef.current = (newVisit as VisitDetails).version;
+                    acknowledgeMutationVersion((newVisit as VisitDetails).version);
                     setVisitId(newVisitId);
                     return newVisitId;
                   }}
@@ -2614,3 +2686,13 @@ export default function MedicalVisitForm({ patientId, doctorId, userRole = 'DOCT
   </div>
   );
 } 
+
+export default function MedicalVisitForm(props: Props) {
+  const [editor, setEditor] = useState<{ generation: number; snapshot?: VisitDetails }>({ generation: 0 });
+  return <MedicalVisitFormEditor
+    key={editor.generation}
+    {...props}
+    initialVisitSnapshot={editor.snapshot}
+    onDiscardLocalDraft={snapshot => setEditor(previous => ({ generation: previous.generation + 1, snapshot }))}
+  />;
+}
