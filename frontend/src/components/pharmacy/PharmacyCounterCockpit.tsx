@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
   Barcode,
@@ -72,6 +72,7 @@ type QueueMedication = {
 
 type QueueEntry = {
   dispenseTaskId?: string;
+  dispensingEligible?: boolean;
   prescriptionId: string;
   patient: {
     id: string;
@@ -176,6 +177,11 @@ const DISPENSE_TASK_CANCELLED = `CANCEL${'LED'}` as DispenseTaskStatus;
  * Obsolete responses MUST NOT replace a newer selection; failed reads MUST clear stale stock
  * and show a retryable error rather than a successful availability result.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] counter-explicit-task-commands
+ * Passive queue and stock refreshes MUST NOT create tasks. Staff review and status actions
+ * MUST obtain a persisted task and line identity before saving; failed saves MUST NOT mark a line reviewed.
+ */
 export function PharmacyCounterCockpit({
   prefill,
   onOpenBilling,
@@ -203,6 +209,7 @@ export function PharmacyCounterCockpit({
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [loadingStock, setLoadingStock] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
+  const taskCommandInFlight = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
   const activeEntry = useMemo(
@@ -404,8 +411,12 @@ export function PharmacyCounterCockpit({
     };
   }, [activeEntry]);
   const openActiveBilling = useCallback(() => {
+    if (activeEntry?.dispensingEligible === false) {
+      setError('This prescription is not active or has expired.');
+      return;
+    }
     onOpenBilling(activeBillingPrefill);
-  }, [activeBillingPrefill, onOpenBilling]);
+  }, [activeBillingPrefill, activeEntry?.dispensingEligible, onOpenBilling]);
   const commandStats = useMemo(() => {
     const inReview = queue.filter((entry) => entry.dispenseStatus === 'IN_REVIEW').length;
     const ready = queue.filter((entry) => entry.dispenseStatus === 'READY_TO_BILL').length;
@@ -421,14 +432,30 @@ export function PharmacyCounterCockpit({
     return { inReview, ready, paid, exceptions };
   }, [queue]);
 
+  const ensureDispenseTask = useCallback(async (entry: QueueEntry) => {
+    if (entry.dispensingEligible === false) throw new Error('Prescription is not active or has expired');
+    if (entry.dispenseTaskId && entry.medications.every(line => line.lineId)) {
+      return { ...entry, dispenseTaskId: entry.dispenseTaskId };
+    }
+    const response = await apiClient.post<{ data: QueueEntry }>(
+      `/pharmacy/prescription-queue/${entry.prescriptionId}/pull`,
+      {},
+    );
+    if (!response.data.dispenseTaskId) throw new Error('Dispense task was not created');
+    replaceQueueEntry(response.data);
+    return { ...response.data, dispenseTaskId: response.data.dispenseTaskId };
+  }, [replaceQueueEntry]);
+
   const updateTaskStatus = useCallback(
     async (status: DispenseTaskStatus) => {
-      if (!activeEntry?.dispenseTaskId) return;
+      if (!activeEntry || taskCommandInFlight.current) return;
+      taskCommandInFlight.current = true;
       try {
         setSavingTask(true);
         setError(null);
+        const task = await ensureDispenseTask(activeEntry);
         const updated = await apiClient.patch<QueueEntry>(
-          `/pharmacy/dispense-tasks/${activeEntry.dispenseTaskId}/status`,
+          `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
           {
             status,
             reasonType:
@@ -446,41 +473,53 @@ export function PharmacyCounterCockpit({
         console.error('Failed to update dispense task status:', err);
         setError('Unable to save dispense status');
       } finally {
+        taskCommandInFlight.current = false;
         setSavingTask(false);
       }
     },
-    [activeEntry?.dispenseTaskId, reasonNote, reasonType, replaceQueueEntry],
+    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
   );
 
   const selectQueueEntry = useCallback(
-    (entry: QueueEntry) => {
+    async (entry: QueueEntry) => {
+      if (taskCommandInFlight.current) return;
       setActiveId(entry.prescriptionId);
-      if (entry.dispenseTaskId && entry.dispenseStatus === 'QUEUED') {
-        void apiClient
-          .patch<QueueEntry>(
-            `/pharmacy/dispense-tasks/${entry.dispenseTaskId}/status`,
+      if (entry.dispensingEligible === false) return;
+      taskCommandInFlight.current = true;
+      try {
+        setSavingTask(true);
+        setError(null);
+        const task = await ensureDispenseTask(entry);
+        if (task.dispenseStatus === 'QUEUED') {
+          const updated = await apiClient.patch<QueueEntry>(
+            `/pharmacy/dispense-tasks/${task.dispenseTaskId}/status`,
             { status: 'IN_REVIEW' },
-          )
-          .then(replaceQueueEntry)
-          .catch((err) => {
-            console.error('Failed to mark dispense task in review:', err);
-          });
+          );
+          replaceQueueEntry(updated);
+        }
+      } catch (err) {
+        console.error('Failed to start dispense review:', err);
+        setError('Unable to start medicine review. Select the prescription to retry.');
+      } finally {
+        taskCommandInFlight.current = false;
+        setSavingTask(false);
       }
     },
-    [replaceQueueEntry],
+    [ensureDispenseTask, replaceQueueEntry],
   );
 
   const updateLineAction = useCallback(
     async (medication: QueueMedication, action: LineAction) => {
-      setLineActions((current) => ({ ...current, [medication.drugName]: action }));
-
-      if (!activeEntry?.dispenseTaskId || !medication.lineId) return;
-
+      if (!activeEntry || taskCommandInFlight.current) return;
+      taskCommandInFlight.current = true;
       try {
         setSavingTask(true);
         setError(null);
+        const task = await ensureDispenseTask(activeEntry);
+        const line = task.medications.find(item => item.drugName === medication.drugName);
+        if (!line?.lineId) throw new Error('Prescription line no longer exists');
         const updated = await apiClient.patch<QueueEntry>(
-          `/pharmacy/dispense-tasks/${activeEntry.dispenseTaskId}/lines/${medication.lineId}`,
+          `/pharmacy/dispense-tasks/${task.dispenseTaskId}/lines/${line.lineId}`,
           {
             action: backendActionFromLineAction(action),
             reasonType:
@@ -494,15 +533,11 @@ export function PharmacyCounterCockpit({
         console.error('Failed to save dispense line review:', err);
         setError('Unable to save medicine review');
       } finally {
+        taskCommandInFlight.current = false;
         setSavingTask(false);
       }
     },
-    [
-      activeEntry?.dispenseTaskId,
-      reasonNote,
-      reasonType,
-      replaceQueueEntry,
-    ],
+    [activeEntry, ensureDispenseTask, reasonNote, reasonType, replaceQueueEntry],
   );
 
   return (
@@ -539,7 +574,7 @@ export function PharmacyCounterCockpit({
               variant="outline"
               className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={loadQueue}
-              disabled={loadingQueue}
+              disabled={loadingQueue || savingTask}
             >
               <RefreshCw className={`h-4 w-4 ${loadingQueue ? 'animate-spin' : ''}`} />
               Refresh
@@ -553,7 +588,7 @@ export function PharmacyCounterCockpit({
               <ClipboardCheck className="h-4 w-4" />
               Rx queue
             </Button>
-            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling}>
+            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
               <Receipt className="h-4 w-4" />
               Bill
             </Button>
@@ -852,12 +887,14 @@ function ActiveDispenseColumn({
               Checking stock and FEFO batches
             </div>
           ) : (
-            <MedicationReviewTable
-              activeEntry={activeEntry}
-              stockByDrug={stockByDrug}
-              lineActions={lineActions}
-              setLineAction={setLineAction}
-            />
+            <fieldset disabled={savingTask || activeEntry?.dispensingEligible === false} className="contents">
+              <MedicationReviewTable
+                activeEntry={activeEntry}
+                stockByDrug={stockByDrug}
+                lineActions={lineActions}
+                setLineAction={setLineAction}
+              />
+            </fieldset>
           )}
 
           <div className="mt-2 shrink-0 rounded-[10px] border border-slate-200 bg-slate-50/80 p-2">
@@ -893,7 +930,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('PAUSED')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Pause
               </Button>
@@ -901,7 +938,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('READY_TO_BILL')}
-                disabled={!allLinesReviewed || savingTask}
+                disabled={!allLinesReviewed || savingTask || activeEntry?.dispensingEligible === false}
               >
                 Ready
               </Button>
@@ -909,7 +946,7 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('PAID')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Paid
               </Button>
@@ -917,11 +954,11 @@ function ActiveDispenseColumn({
                 size="sm"
                 variant="outline"
                 onClick={() => onUpdateStatus('DISPENSED')}
-                disabled={savingTask}
+                disabled={savingTask || activeEntry?.dispensingEligible === false}
               >
                 Dispense
               </Button>
-              <Button size="sm" onClick={onOpenBilling} disabled={savingTask}>
+              <Button size="sm" onClick={onOpenBilling} disabled={savingTask || activeEntry?.dispensingEligible === false}>
                 <Receipt className="mr-2 h-4 w-4" />
                 Open bill
               </Button>

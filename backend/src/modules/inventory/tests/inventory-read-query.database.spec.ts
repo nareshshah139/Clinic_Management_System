@@ -30,6 +30,7 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     await db.$executeRawUnsafe(
       `ALTER TABLE visits ADD COLUMN IF NOT EXISTS "deletedAt" timestamp(3)`,
     );
+    await db.$executeRawUnsafe(`ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS "validUntil" timestamp(3)`);
     branchId = (
       await db.branch.create({
         data: { name: 'Synthetic read fixtures', address: 'test' },
@@ -677,6 +678,36 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
         })
       ).paidAt,
     ).toEqual(stamp);
+  });
+
+  it('enforces stored lifecycle and validity before every prescription-backed command', async () => {
+    for (const [name, status, validUntil] of [
+      ['draft', 'DRAFT', null], ['cancelled', 'CANCELLED', null], ['closed', 'COMPLETED', null],
+      ['expired-state', 'EXPIRED', null], ['expired-time', 'ACTIVE', new Date('2020-01-01')],
+    ] as const) {
+      const id = `lifecycle-${name}`;
+      await rx(id, { task: 'IN_REVIEW' });
+      await db.$executeRawUnsafe(`UPDATE prescriptions SET status = '${status}', "validUntil" = $1 WHERE id = $2`, validUntil, id);
+      const task = await db.pharmacyDispenseTask.findFirstOrThrow({ where: { prescriptionId: id } });
+      await db.pharmacyDispenseTaskLine.create({ data: { id: `line-${id}`, taskId: task.id, drugName: 'Azithral 500' } });
+      const before = await db.pharmacyDispenseTask.findUnique({ where: { id: task.id }, include: { lines: true } });
+      await expect(queue.pull(id, branchId)).rejects.toThrow('not active or has expired');
+      await expect(queue.updateTaskStatus(task.id, { status: 'IN_REVIEW' as any }, branchId, doctorId)).rejects.toThrow('not active or has expired');
+      await expect(queue.updateTaskLine(task.id, `line-${id}`, { action: 'ACCEPTED' as any }, branchId, doctorId)).rejects.toThrow('not active or has expired');
+      await expect(queue.linkInventory(id, 0, 'a', branchId, doctorId, 'stale')).rejects.toThrow('not active or has expired');
+      expect(await db.pharmacyDispenseTask.findUnique({ where: { id: task.id }, include: { lines: true } })).toEqual(before);
+      if (['DRAFT', 'CANCELLED'].includes(status)) {
+        await expect(queue.findOne(id, branchId)).rejects.toThrow('Prescription not found');
+        expect((await queue.findAll({ limit: 100 }, branchId)).data.some(row => row.prescriptionId === id)).toBe(false);
+      } else {
+        expect(await queue.findOne(id, branchId)).toMatchObject({ status: 'expired', dispensingEligible: false });
+        expect((await queue.findAll({ status: PrescriptionQueueStatus.EXPIRED, limit: 100 }, branchId)).data.some(row => row.prescriptionId === id)).toBe(true);
+      }
+    }
+    await rx('historical-completed', { invoice: 'COMPLETED' });
+    await db.$executeRawUnsafe(`UPDATE prescriptions SET status = 'COMPLETED', "validUntil" = '2020-01-01' WHERE id = 'historical-completed'`);
+    expect(await queue.findOne('historical-completed', branchId)).toMatchObject({ status: 'dispensed', dispensingEligible: false });
+    expect((await queue.findAll({ status: PrescriptionQueueStatus.DISPENSED, limit: 100 }, branchId)).data.map(row => row.prescriptionId)).toContain('historical-completed');
   });
 
   it('resolves pg_trgm operators through the disposable schema search path', async () => {

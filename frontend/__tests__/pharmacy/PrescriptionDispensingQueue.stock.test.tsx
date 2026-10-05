@@ -33,7 +33,7 @@ it('refreshes stock and matching to show updated quantities', async () => {
   quantity = 19;
   fireEvent.click(screen.getByRole('button', { name: 'Refresh stock for Patient A' }));
   await waitFor(() => expect(screen.getAllByText('Sebium gel moussant (19 tubes)')).toHaveLength(2));
-  expect(post).toHaveBeenCalledWith('/pharmacy/prescription-queue/rx-0/pull', {});
+  expect(post).not.toHaveBeenCalled();
 });
 it('remembers an explicit choice and refreshes the same medicine for both patients', async () => {
   render(<PrescriptionDispensingQueue />);
@@ -50,4 +50,16 @@ it('reports failed stock reads without presenting zeros or perpetual Checking', 
   render(<PrescriptionDispensingQueue />);
   await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
   expect(screen.queryByText('Checking…')).not.toBeInTheDocument();
+});
+
+it('keeps inactive history readable while disabling billing and inventory linking', async () => {
+  const original = get.getMockImplementation()!;
+  get.mockImplementation((url: string) => url === '/pharmacy/prescription-queue' ? Promise.resolve({ data: entries.map(entry => ({ ...entry, dispensingEligible: false, status: 'expired' })), pagination: { page: 1, limit: 20, total: 2, pages: 1 } }) : original(url));
+  render(<PrescriptionDispensingQueue openActionLabel="Bill prescription" />);
+  await screen.findAllByText('Sebium gel moussant (24 tubes)');
+  expect(screen.getAllByRole('button', { name: 'Bill prescription' })).toHaveLength(2);
+  for (const button of screen.getAllByRole('button', { name: 'Bill prescription' })) expect(button).toBeDisabled();
+  expect(screen.queryByRole('link', { name: 'Bill prescription' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Link inventory for Unlinked cream' })).not.toBeInTheDocument();
+  expect(post).not.toHaveBeenCalled();
 });

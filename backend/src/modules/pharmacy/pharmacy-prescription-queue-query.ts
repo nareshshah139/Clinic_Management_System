@@ -33,6 +33,29 @@ export const queueDurationDays: Record<string, number> = {
   years: 365,
 };
 
+export type PrescriptionQueueLifecycle = {
+  id: string;
+  status: string;
+  expired: boolean;
+};
+
+/**
+ * @cc [owner:nareshshah139,label:product;security] branch-prescription-lifecycle-read
+ * Lifecycle reads MUST exclude deleted visits and foreign branches. Locking reads MUST
+ * hold the prescription row lock until their caller's transaction commits or rolls back.
+ */
+export function prescriptionQueueLifecycle(
+  prescriptionId: string,
+  branchId: string,
+  lock = false,
+): Prisma.Sql {
+  return Prisma.sql`SELECT p.id, coalesce(to_jsonb(p)->>'status', 'ACTIVE') AS status,
+    coalesce((to_jsonb(p)->>'validUntil')::timestamp < ${new Date()}, false) AS expired
+    FROM prescriptions p JOIN visits v ON v.id = p."visitId" JOIN patients patient ON patient.id = v."patientId"
+    WHERE p.id = ${prescriptionId} AND patient."branchId" = ${branchId} AND to_jsonb(v)->>'deletedAt' IS NULL
+    ${lock ? Prisma.sql`FOR UPDATE OF p` : Prisma.empty}`;
+}
+
 const normalized = (value: Prisma.Sql) =>
   Prisma.sql`trim(both '_' from regexp_replace(lower(trim(${value})), '[^a-z0-9]+', '_', 'g'))`;
 const positiveNumber = (value: Prisma.Sql) =>
@@ -54,6 +77,11 @@ const numericLookup = (
  * Status filtering and total MUST use all branch prescriptions, posted invoice coverage,
  * age and staff task overrides before LIMIT/OFFSET. Cancelled prescriptions and deleted visits MUST be excluded.
  * The selected IDs MUST have deterministic creation-time and ID ordering, including empty pages.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] queue-clinical-eligibility-projection
+ * DRAFT prescriptions MUST be hidden. Inactive or explicitly expired prescriptions MUST
+ * appear expired unless already dispensed; historical fulfillment MUST remain viewable.
  */
 export function queueStatusPage(
   branchId: string,
@@ -81,12 +109,14 @@ export function queueStatusPage(
   return Prisma.sql`
     WITH branch_prescriptions AS MATERIALIZED (
       SELECT p.id, p."createdAt", t.status::text AS task_status,
+        coalesce(to_jsonb(p)->>'status', 'ACTIVE') AS prescription_status,
+        coalesce((to_jsonb(p)->>'validUntil')::timestamp < ${now}, false) AS clinically_expired,
         inventory_read_json(p.items) AS items
       FROM prescriptions p
       JOIN visits v ON v.id = p."visitId"
       JOIN patients patient ON patient.id = v."patientId"
       LEFT JOIN pharmacy_dispense_tasks t ON t."prescriptionId" = p.id AND t."branchId" = ${branchId}
-      WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') <> 'CANCELLED'
+      WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
     ), medications AS (
       SELECT p.id, item, coalesce(${explicit}, ceil(${frequency} * ${duration} * ${multiplier})) AS quantity,
@@ -134,14 +164,23 @@ export function queueStatusPage(
         WHEN task_status = 'QUEUED' AND derived_status = 'expired' THEN 'PAUSED'
         ELSE task_status END AS workflow_status
       FROM derived
-    ), filtered AS MATERIALIZED (
-      SELECT id, "createdAt" FROM synced WHERE ${status ?? null}::text IS NULL OR ${status ?? null} = CASE
+    ), queue_statuses AS (
+      SELECT *, CASE
         WHEN workflow_status = 'DISPENSED' THEN 'dispensed'
         WHEN workflow_status = 'PARTIALLY_FILLED' THEN 'partial'
         WHEN workflow_status IN ('PAUSED', 'CANCELLED') THEN 'expired'
         WHEN workflow_status IN ('READY_TO_BILL', 'PAID', 'IN_REVIEW') AND derived_status NOT IN ('partial', 'dispensed') THEN 'pending'
-        ELSE derived_status END
+        ELSE derived_status END AS queue_status FROM synced
+    ), visible_statuses AS (
+      SELECT *, CASE WHEN (prescription_status <> 'ACTIVE' OR clinically_expired) AND queue_status <> 'dispensed'
+        THEN 'expired' ELSE queue_status END AS visible_status FROM queue_statuses
+    ), filtered AS MATERIALIZED (
+      SELECT id, "createdAt" FROM visible_statuses WHERE ${status ?? null}::text IS NULL OR ${status ?? null} = visible_status
+    ), page_ids AS MATERIALIZED (
+      SELECT id, "createdAt" FROM filtered ORDER BY "createdAt" DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}
     )
     SELECT (SELECT count(*)::int FROM filtered) AS total,
-      ARRAY(SELECT id FROM filtered ORDER BY "createdAt" DESC, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}) AS ids`;
+      ARRAY(SELECT id FROM page_ids ORDER BY "createdAt" DESC, id DESC) AS ids,
+      coalesce((SELECT jsonb_object_agg(p.id, jsonb_build_object('id', p.id, 'status', p.prescription_status, 'expired', p.clinically_expired))
+        FROM branch_prescriptions p JOIN page_ids page ON page.id = p.id), '{}'::jsonb) AS lifecycle`;
 }

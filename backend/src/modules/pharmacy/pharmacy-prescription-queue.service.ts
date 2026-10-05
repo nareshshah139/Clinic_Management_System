@@ -1,4 +1,4 @@
-import { queueStatusPage, queueFrequencyPerDay, queueDurationDays } from './pharmacy-prescription-queue-query';
+import { queueStatusPage, queueFrequencyPerDay, queueDurationDays, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -45,6 +45,8 @@ type QueueMedication = {
 
 type QueueEntry = {
   dispenseTaskId?: string;
+  prescriptionStatus?: string;
+  dispensingEligible?: boolean;
   prescriptionId: string;
   prescriptionUpdatedAt?: Date;
   patient: { id: string; name: string; patientCode?: string | null };
@@ -90,6 +92,7 @@ type PrescriptionItem = {
 type LoadedPrescription = {
   id: string;
   updatedAt?: Date;
+  lifecycle?: PrescriptionQueueLifecycle;
   items: string;
   createdAt: Date;
   visit: {
@@ -233,7 +236,7 @@ export class PharmacyPrescriptionQueueService {
     const limit = Math.min(this.toPositiveInt(query.limit, 20), 100);
     const now = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number }[]>(
+      const [selection] = await tx.$queryRaw<{ ids: string[]; total: number; lifecycle: Record<string, PrescriptionQueueLifecycle> }[]>(
         queueStatusPage(branchId, query.status, page, limit, now),
       );
       const prescriptions = await tx.prescription.findMany({
@@ -246,7 +249,7 @@ export class PharmacyPrescriptionQueueService {
       });
       const taskByPrescription = new Map(tasks.map(task => [task.prescriptionId, task]));
       const entryById = new Map(prescriptions.map(prescription => [prescription.id,
-        this.mergeTask(this.toQueueEntry(prescription, now.getTime()), taskByPrescription.get(prescription.id)),
+        this.mergeTask(this.toQueueEntry({ ...prescription, lifecycle: selection.lifecycle[prescription.id] }, now.getTime()), taskByPrescription.get(prescription.id)),
       ]));
       return {
         data: selection.ids.map(id => entryById.get(id)!),
@@ -258,16 +261,11 @@ export class PharmacyPrescriptionQueueService {
   /**
    * @cc [owner:nareshshah139,label:product] queue-detail-read-only
    * Detail reads MUST preserve stored task and line state, including all timestamps.
-   * Cancelled prescriptions, deleted visits and prescriptions outside the branch MUST return not found.
+   * Draft or cancelled prescriptions, deleted visits and prescriptions outside the branch MUST return not found.
    */
   async findOne(prescriptionId: string, branchId: string) {
-    const active = await this.prisma.$queryRaw<{ id: string }[]>`
-      SELECT p.id FROM prescriptions p JOIN visits v ON v.id = p."visitId"
-      JOIN patients patient ON patient.id = v."patientId"
-      WHERE p.id = ${prescriptionId} AND patient."branchId" = ${branchId}
-        AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') <> 'CANCELLED'
-        AND to_jsonb(v)->>'deletedAt' IS NULL`;
-    if (!active.length) throw new NotFoundException('Prescription not found in this branch');
+    const [lifecycle] = await this.prisma.$queryRaw<PrescriptionQueueLifecycle[]>(prescriptionQueueLifecycle(prescriptionId, branchId));
+    if (!lifecycle || ['DRAFT', 'CANCELLED'].includes(lifecycle.status)) throw new NotFoundException('Prescription not found in this branch');
     const prescription = (await this.prisma.prescription.findFirst({
       where: {
         id: prescriptionId,
@@ -287,7 +285,7 @@ export class PharmacyPrescriptionQueueService {
     const task = await this.taskDelegate()?.findFirst({
       where: { branchId, prescriptionId }, include: { lines: true },
     });
-    return this.mergeTask(this.toQueueEntry(prescription), task);
+    return this.mergeTask(this.toQueueEntry({ ...prescription, lifecycle }), task);
   }
 
   /**
@@ -296,11 +294,16 @@ export class PharmacyPrescriptionQueueService {
    * move stock or change invoices. Refreshing an unchanged task status MUST preserve its timestamp.
    */
   async pull(prescriptionId: string, branchId: string) {
-    const entry = await this.findOne(prescriptionId, branchId);
-    await this.withPersistedTask(entry, branchId);
-    const stock = await this.stockCheck(prescriptionId, branchId);
-    await this.persistStockCheck(prescriptionId, branchId, stock.items);
-    return { recomputedAt: new Date(), data: await this.findOne(prescriptionId, branchId) };
+    return this.prisma.$transaction(async tx => {
+      const service = new PharmacyPrescriptionQueueService(tx as PrismaService, this.drugService);
+      await service.requireDispensingPrescription(prescriptionId, branchId);
+      const entry = await service.findOne(prescriptionId, branchId);
+      const stock = await service.stockCheck(prescriptionId, branchId);
+      await service.requireDispensingPrescription(prescriptionId, branchId);
+      await service.withPersistedTask(entry, branchId);
+      await service.persistStockCheck(prescriptionId, branchId, stock.items);
+      return { recomputedAt: new Date(), data: await service.findOne(prescriptionId, branchId) };
+    });
   }
 
   /**
@@ -339,10 +342,24 @@ export class PharmacyPrescriptionQueueService {
     branchId: string,
     userId: string,
   ) {
+    return this.prisma.$transaction(async tx => {
+      const service = new PharmacyPrescriptionQueueService(tx as PrismaService, this.drugService);
+      return service.saveTaskStatus(taskId, body, branchId, userId);
+    });
+  }
+
+  private async saveTaskStatus(
+    taskId: string,
+    body: UpdateDispenseTaskStatusDto,
+    branchId: string,
+    userId: string,
+  ) {
     const delegate = this.taskDelegate();
     if (!delegate) {
       throw new NotFoundException('Dispense task storage is not available');
     }
+
+    await this.lockDispenseTask(taskId, branchId);
 
     const task = (await delegate.findFirst({
       where: { id: taskId, branchId },
@@ -383,11 +400,26 @@ export class PharmacyPrescriptionQueueService {
     branchId: string,
     userId: string,
   ) {
+    return this.prisma.$transaction(async tx => {
+      const service = new PharmacyPrescriptionQueueService(tx as PrismaService, this.drugService);
+      return service.saveTaskLine(taskId, lineId, body, branchId, userId);
+    });
+  }
+
+  private async saveTaskLine(
+    taskId: string,
+    lineId: string,
+    body: UpdateDispenseTaskLineDto,
+    branchId: string,
+    userId: string,
+  ) {
     const delegate = this.taskDelegate();
     const lineDelegate = this.taskLineDelegate();
     if (!delegate || !lineDelegate) {
       throw new NotFoundException('Dispense task storage is not available');
     }
+
+    await this.lockDispenseTask(taskId, branchId);
 
     const task = (await delegate.findFirst({
       where: { id: taskId, branchId },
@@ -435,6 +467,24 @@ export class PharmacyPrescriptionQueueService {
     }
 
     return this.findTaskById(taskId, branchId);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;security] queue-command-source-eligibility
+   * Prescription-backed commands MUST lock the source prescription through commit and require
+   * ACTIVE status, an unexpired explicit validity date and an undeleted visit in the branch.
+   */
+  private async requireDispensingPrescription(prescriptionId: string, branchId: string) {
+    const [source] = await this.prisma.$queryRaw<PrescriptionQueueLifecycle[]>(prescriptionQueueLifecycle(prescriptionId, branchId, true));
+    if (!source) throw new NotFoundException('Prescription not found in this branch');
+    if (source.status !== 'ACTIVE' || source.expired) throw new BadRequestException('Prescription is not active or has expired');
+  }
+
+  private async lockDispenseTask(taskId: string, branchId: string) {
+    const task = await this.taskDelegate().findFirst({ where: { id: taskId, branchId }, select: { prescriptionId: true } });
+    if (!task) throw new NotFoundException('Dispense task not found in this branch');
+    if (task.prescriptionId) await this.requireDispensingPrescription(task.prescriptionId, branchId);
+    await this.prisma.$queryRaw`SELECT id FROM pharmacy_dispense_tasks WHERE id = ${taskId} AND "branchId" = ${branchId} FOR UPDATE`;
   }
 
   private async withPersistedTask(
@@ -576,7 +626,10 @@ export class PharmacyPrescriptionQueueService {
 
   private mergeTask(entry: QueueEntry, task?: DispenseTask | null): QueueEntry {
     if (!task) return { ...entry, dispenseStatus: this.taskStatusFromQueue(entry.status), source: 'VISIT' };
-    const status = this.syncedTaskStatus(task.status, entry.status);
+    const synced = this.syncedTaskStatus(task.status, entry.status);
+    const queueStatus = this.queueStatusFromTask(synced, entry.status);
+    const blocked = entry.dispensingEligible === false && queueStatus !== PrescriptionQueueStatus.DISPENSED;
+    const status = blocked && synced !== 'CANCELLED' ? PharmacyDispenseTaskStatusDto.PAUSED : synced;
     const linesByName = new Map(
       (task.lines || []).map((line) => [this.normalizeName(line.drugName), line]),
     );
@@ -584,7 +637,7 @@ export class PharmacyPrescriptionQueueService {
     return {
       ...entry,
       dispenseTaskId: task.id,
-      status: this.queueStatusFromTask(status, entry.status),
+      status: blocked ? PrescriptionQueueStatus.EXPIRED : queueStatus,
       dispenseStatus: status,
       source: task.source,
       assignedToId: task.assignedToId,
@@ -979,8 +1032,14 @@ export class PharmacyPrescriptionQueueService {
       status = PrescriptionQueueStatus.PARTIAL;
     }
 
+    const prescriptionStatus = prescription.lifecycle?.status ?? 'ACTIVE';
+    const dispensingEligible = prescriptionStatus === 'ACTIVE' && !prescription.lifecycle?.expired;
+    if (!dispensingEligible && status !== PrescriptionQueueStatus.DISPENSED) status = PrescriptionQueueStatus.EXPIRED;
+
     return {
       prescriptionId: prescription.id,
+      prescriptionStatus,
+      dispensingEligible,
       prescriptionUpdatedAt: prescription.updatedAt,
       patient: prescription.visit.patient,
       doctor: {
@@ -1096,6 +1155,7 @@ export class PharmacyPrescriptionQueueService {
   async linkInventory(prescriptionId: string, index: number, inventoryItemId: string, branchId: string, userId: string, expectedVersion: string) {
     if (!Number.isSafeInteger(index) || index < 0 || !inventoryItemId || !userId) throw new BadRequestException('Select a prescription line and inventory item');
     await this.prisma.$transaction(async (tx) => {
+      await new PharmacyPrescriptionQueueService(tx as PrismaService, this.drugService).requireDispensingPrescription(prescriptionId, branchId);
       const prescription = await tx.prescription.findFirst({ where: { id: prescriptionId, visit: { patient: { branchId } } } });
       if (!prescription) throw new NotFoundException('Prescription not found in this branch');
       if (!expectedVersion || prescription.updatedAt.toISOString() !== expectedVersion) throw new BadRequestException('Prescription changed. Refresh before linking inventory.');
