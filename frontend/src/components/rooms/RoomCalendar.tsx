@@ -225,9 +225,9 @@ export default function RoomCalendar() {
   return (
     <div className="space-y-6">
       {/* Header Controls */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex min-w-0 max-w-full items-center gap-4">
+          <div className="flex min-w-0 items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -235,7 +235,7 @@ export default function RoomCalendar() {
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <div className="flex items-center gap-2 min-w-[200px]">
+            <div className="flex min-w-0 items-center gap-2 sm:min-w-[200px]">
               <Calendar className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold">
                 {selectedDate.toLocaleDateString('en-US', { 
@@ -256,9 +256,9 @@ export default function RoomCalendar() {
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex max-w-full flex-wrap items-center gap-4">
           <Select value={selectedRoomType} onValueChange={setSelectedRoomType}>
-            <SelectTrigger className="w-[200px]">
+            <SelectTrigger className="w-[200px] max-w-full">
               <SelectValue placeholder="Filter by room type" />
             </SelectTrigger>
             <SelectContent>
@@ -270,7 +270,7 @@ export default function RoomCalendar() {
             </SelectContent>
           </Select>
           <input
-            className="border rounded px-3 py-2 text-sm w-[220px]"
+            className="border rounded px-3 py-2 text-sm w-[220px] max-w-full"
             placeholder="Search room name..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}

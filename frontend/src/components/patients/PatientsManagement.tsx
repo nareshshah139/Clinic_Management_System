@@ -726,7 +726,7 @@ export default function PatientsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Patients</h2>
           <p className="text-gray-600">Search, add, and manage patient records</p>
@@ -899,7 +899,7 @@ export default function PatientsManagement() {
             </div>
           </DialogContent>
         </Dialog>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={clearFilters}>Clear Filters</Button>
           <Button variant="outline" onClick={exportCsv} disabled={exporting}><Download className="h-4 w-4 mr-2" /> {exporting ? 'Exporting...' : 'Export CSV'}</Button>
         </div>
@@ -1158,11 +1158,11 @@ export default function PatientsManagement() {
           
           {/* Pagination Controls */}
           {!listLoading && patients.length > 0 && totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 border-t">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
               <div className="text-sm text-gray-500">
                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"

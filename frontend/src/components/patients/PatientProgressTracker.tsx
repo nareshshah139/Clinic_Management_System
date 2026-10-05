@@ -33,6 +33,11 @@ interface VisitEntryMinimal {
   prescription?: { id?: string } | null;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] scrollable-patient-progress
+ * Progress steps wider than their container MUST scroll within the tracker.
+ * Patient actions MUST remain reachable without scrolling the page horizontally.
+ */
 export default function PatientProgressTracker({ patientId, compact = false, variant = 'full' }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,9 +250,9 @@ export default function PatientProgressTracker({ patientId, compact = false, var
 
   return (
     <div className={`w-full ${compact || variant === 'compact' ? 'py-2' : 'py-3'}`}>
-      <div className={`flex items-center ${compact || variant === 'compact' ? 'gap-2' : 'gap-3'}`}>
+      <div className={`flex items-center overflow-x-auto ${compact || variant === 'compact' ? 'gap-2' : 'gap-3'}`}>
         {steps.map((step, idx) => (
-          <div key={step.key} className="flex items-center">
+          <div key={step.key} className="flex shrink-0 items-center">
             <div className="flex flex-col items-center">
               <div className={`h-7 w-7 rounded-full border flex items-center justify-center ${circleClass(step.status)}`}>
                 {step.icon}
@@ -266,7 +271,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
       </div>
 
       {/* Minimal inline actions */}
-      <div className={`mt-2 flex items-center gap-2 ${(compact || variant === 'compact') ? 'text-xs' : 'text-sm'}`}>
+      <div className={`mt-2 flex flex-wrap items-center gap-2 ${(compact || variant === 'compact') ? 'text-xs' : 'text-sm'}`}>
         {hasUpcomingAppointment && !latestVisit?.id && (
           <Badge variant="secondary">Upcoming appt</Badge>
         )}

@@ -235,7 +235,7 @@
   :root {
     --app-text-increase: 0.125rem;
   }
-  body {
+  html body {
     font-size: var(--text-base);
   }
 }
