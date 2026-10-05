@@ -738,6 +738,58 @@ databaseTests('Inventory and queue reads with PostgreSQL', () => {
     expect(await db.pharmacyDispenseTaskLine.count({ where: { taskId: task.id } })).toBe(2);
   });
 
+  it('invalidates review for every persisted dispensing regimen change including route and timing', async () => {
+    const regimen: Record<string, unknown> = {
+      drugName: 'Regimen medicine', dosage: 5, dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS', quantity: 7,
+      brandName: 'Brand medicine', dosePattern: '1-0-0', notes: 'Avoid eyes', route: 'Oral', timing: 'Before food', isGeneric: true,
+      applicationSite: 'Face', applicationAmount: '1 FTU', dayPart: 'AM', leaveOn: true, washOffAfterMinutes: 10,
+      taperSchedule: 'Daily then weekly', weightMgPerKgPerDay: 1, calculatedDailyDoseMg: 20,
+      pregnancyWarning: true, photosensitivityWarning: true, foodInstructions: 'With food', pulseRegimen: 'First week monthly',
+    };
+    const changes = { route: 'Topical', timing: 'After food', brandName: 'Other brand', dosePattern: '0-0-1', notes: 'Avoid mouth', isGeneric: false,
+      applicationSite: 'Scalp', applicationAmount: '2 FTU', dayPart: 'PM', leaveOn: false, washOffAfterMinutes: 20,
+      taperSchedule: 'Daily then stop', weightMgPerKgPerDay: 2, calculatedDailyDoseMg: 40,
+      pregnancyWarning: false, photosensitivityWarning: false, foodInstructions: 'Without food', pulseRegimen: 'Two weeks monthly',
+    };
+    await rx('regimen-identity', { items: [regimen] });
+    const prepared = (await queue.pull('regimen-identity', branchId)).data;
+    const original = prepared.medications[0];
+    await queue.updateTaskLine(prepared.dispenseTaskId!, original.lineId!, { action: 'ACCEPTED' as any }, branchId, doctorId);
+    for (const [field, value] of Object.entries(changes)) {
+      await db.prescription.update({ where: { id: 'regimen-identity' }, data: { items: JSON.stringify([{ ...regimen, [field]: value }]) } });
+      const changed = await queue.findOne('regimen-identity', branchId);
+      expect({ field, unchangedKey: changed.medications[0].sourceLineKey === original.sourceLineKey, action: changed.medications[0].action }).toEqual({ field, unchangedKey: false, action: 'pending' });
+      expect(changed.dispenseStatus).toBe('IN_REVIEW');
+      await expect(queue.updateTaskStatus(prepared.dispenseTaskId!, { status: 'READY_TO_BILL' as any }, branchId, doctorId)).rejects.toThrow('Review every available medicine');
+    }
+    const changedRegimen = { ...regimen, route: 'Topical', timing: 'After food' };
+    await db.prescription.update({ where: { id: 'regimen-identity' }, data: { items: JSON.stringify([changedRegimen]) } });
+    await expect(queue.updateTaskLine(prepared.dispenseTaskId!, original.lineId!, { action: 'ACCEPTED' as any }, branchId, doctorId)).rejects.toThrow('Prescription line changed');
+    const changed = (await queue.pull('regimen-identity', branchId)).data;
+    expect(changed.medications[0].lineId).not.toBe(original.lineId);
+    expect(changed.medications[0].action).toBe('pending');
+    const stockCheck = await queue.stockCheck('regimen-identity', branchId);
+    expect(stockCheck.items[0].sourceLineKey).toBe(changed.medications[0].sourceLineKey);
+    const page = await queue.findAll({ status: PrescriptionQueueStatus.PENDING, limit: 100 }, branchId);
+    expect(page.data.find(row => row.prescriptionId === 'regimen-identity')).toMatchObject({ status: changed.status, medications: changed.medications });
+    const saved = await db.pharmacyDispenseTaskLine.findUniqueOrThrow({ where: { id: changed.medications[0].lineId } });
+    expect(JSON.parse(saved.originalText!)).toMatchObject(changedRegimen);
+  });
+
+  it('does not inherit incomplete legacy reviews when a persisted regimen was never captured', async () => {
+    const basic = { drugName: 'Legacy regimen', dosage: 5, dosageUnit: 'MG', quantity: 3 };
+    await rx('legacy-regimen', { items: [basic] });
+    const initial = (await queue.pull('legacy-regimen', branchId)).data;
+    await queue.updateTaskLine(initial.dispenseTaskId!, initial.medications[0].lineId!, { action: 'ACCEPTED' as any }, branchId, doctorId);
+    await db.prescription.update({ where: { id: 'legacy-regimen' }, data: { items: JSON.stringify([{ ...basic, route: 'Topical', timing: 'After food' }]) } });
+    const changed = await queue.findOne('legacy-regimen', branchId);
+    expect(changed.medications[0]).toMatchObject({ action: 'pending' });
+    expect(changed.medications[0].lineId).toBeUndefined();
+    const prepared = (await queue.pull('legacy-regimen', branchId)).data;
+    expect(new Set(prepared.medications.map(line => line.lineId)).size).toBe(1);
+    expect(prepared.medications[0].action).toBe('pending');
+  });
+
   it('credits invoice quantities once across repeated prescription lines in detail and filtered pages', async () => {
     const items = [5, 10].map(dosage => ({ drugName: 'Azithral 500', drugId, dosage, quantity: 3 }));
     await rx('invoice-line-identity', { items, invoice: 'CONFIRMED', quantity: 4 });

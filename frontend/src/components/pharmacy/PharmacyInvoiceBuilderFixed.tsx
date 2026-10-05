@@ -408,6 +408,12 @@ export function PharmacyInvoiceBuilderFixed({
    * Draft edits and removals MUST follow an unchanged prescription source snapshot and duplicate
    * occurrence across reloads and reorder. A changed source line MUST start a fresh draft line.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-stock-revision-match
+   * Automatic product links MUST use stock from the loaded prescription revision and source order.
+   * Missing or mismatched revision, count or source names MUST reject stock before automatic product
+   * lookup, retain prescribed lines, and expose a retryable error.
+   */
   const loadPrescriptionData = useCallback(
     async (prescriptionId: string) => {
       const request = ++prescriptionRequestRef.current;
@@ -470,8 +476,16 @@ export function PharmacyInvoiceBuilderFixed({
           const stock = await apiClient.get<{ items: PrescriptionStockItem[] }>(
             `/pharmacy/prescription-queue/${prescriptionId}/stock-check`
           );
-          if (!Array.isArray(stock.items) || stock.items.length !== prescriptionItemsRaw.length) {
-            throw new Error('Incomplete prescription stock check');
+          const sourceVersion = prescription.updatedAt;
+          if (
+            typeof sourceVersion !== 'string' || !sourceVersion ||
+            !Array.isArray(stock.items) || stock.items.length !== prescriptionItemsRaw.length ||
+            stock.items.some((line, index) =>
+              line.prescriptionVersion !== sourceVersion ||
+              line.drugName !== (prescriptionItemsRaw[index].drugName || prescriptionItemsRaw[index].brandName || prescriptionItemsRaw[index].genericName || 'Unknown drug'),
+            )
+          ) {
+            throw new Error('Prescription changed during inventory lookup. Retry loading the prescription.');
           }
           stockItems = stock.items;
         } catch (error) {

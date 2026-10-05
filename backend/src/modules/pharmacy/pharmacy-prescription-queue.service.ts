@@ -16,6 +16,7 @@ import {
 } from './dto/pharmacy-dispense-task.dto';
 
 type QueueMedication = {
+  sourceItem?: Record<string, unknown>;
   sourceLineKey?: string;
   inventoryItemId?: string | null;
   drugId?: string | null;
@@ -798,6 +799,7 @@ export class PharmacyPrescriptionQueueService {
       drugName: medication.drugName,
       genericName: medication.genericName || null,
       originalText: JSON.stringify({
+        ...medication.sourceItem,
         drugName: medication.drugName,
         dosage: medication.dosage,
         dosageUnit: medication.dosageUnit,
@@ -1126,6 +1128,11 @@ export class PharmacyPrescriptionQueueService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] prescription-complete-source-snapshot
+   * Queue projection MUST retain every persisted item field for review identity and saved
+   * originalText; clinical fields outside the display projection MUST NOT be discarded.
+   */
   private toMedicationCoverage(
     item: PrescriptionItem,
     invoiceItems: Array<LoadedInvoiceItem & { remaining: number }>,
@@ -1155,6 +1162,7 @@ export class PharmacyPrescriptionQueueService {
     }
 
     return {
+      sourceItem: { ...item },
       drugName,
       drugId: item.drugId || null,
       inventoryItemId: item.inventoryItemId || null,

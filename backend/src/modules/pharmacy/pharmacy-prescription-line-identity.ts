@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 type PrescriptionLine = {
+  sourceItem?: Record<string, unknown>;
   drugName: string;
   genericName?: string | null;
   drugId?: string | null;
@@ -38,6 +39,38 @@ const text = (value: unknown) =>
     : String(value).normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
 const clinicalSnapshot = (line: PrescriptionLine) =>
   clinicalFields.map((field) => text(line[field]));
+const normalizedSourceFields = new Set<string>([
+  ...clinicalFields,
+  'drugId',
+  'inventoryItemId',
+  'quantity',
+  'totalQuantity',
+  'qty',
+]);
+const canonicalValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [
+          key,
+          canonicalValue((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return typeof value === 'string' ? text(value) : value;
+};
+const additionalSnapshot = (source: Record<string, unknown> = {}) =>
+  Object.keys(source)
+    .sort()
+    .filter(
+      (key) =>
+        !normalizedSourceFields.has(key) &&
+        source[key] != null &&
+        (typeof source[key] !== 'string' || text(source[key]) !== ''),
+    )
+    .map((key) => [key, canonicalValue(source[key])]);
 export const lineMetadata = (line: {
   metadata?: unknown;
 }): Record<string, unknown> =>
@@ -49,21 +82,25 @@ export const lineMetadata = (line: {
 
 /**
  * @cc [owner:nareshshah139,label:product] prescription-line-source-identity
- * A line key MUST distinguish clinical instructions and explicit product identity; equal
- * snapshots MUST receive separate occurrence keys. Reordering distinct snapshots MUST preserve keys.
+ * A line key MUST cover the complete persisted prescription item, including route, timing,
+ * application, taper, dose patterns and warnings beyond the normalized base fields. Empty fields
+ * may be omitted; false and zero MUST remain distinct. Equal snapshots MUST receive separate
+ * occurrence keys, and reordering distinct snapshots MUST preserve keys.
  */
 export function prescriptionLineKeys(lines: PrescriptionLine[]): string[] {
   const occurrences = new Map<string, number>();
   return lines.map((line) => {
+    const additional = additionalSnapshot(line.sourceItem);
     const signature = JSON.stringify([
       ...clinicalSnapshot(line),
       line.drugId || '',
       line.inventoryItemId || '',
+      ...(additional.length ? [additional] : []),
     ]);
     const hash = createHash('sha256').update(signature).digest('hex');
     const occurrence = occurrences.get(hash) || 0;
     occurrences.set(hash, occurrence + 1);
-    return `rx-line-v1:${hash}:${occurrence}`;
+    return `rx-line-${additional.length ? 'v2' : 'v1'}:${hash}:${occurrence}`;
   });
 }
 
@@ -71,7 +108,8 @@ export function prescriptionLineKeys(lines: PrescriptionLine[]): string[] {
  * @cc [owner:nareshshah139,label:product] prescription-line-one-to-one
  * Each current prescription line MUST bind at most one distinct saved line. Metadata keys
  * take precedence; legacy lines MUST match the full saved clinical snapshot and be consumed
- * once in creation/ID order. Retired or changed lines MUST NOT donate a review to another line.
+ * once in creation/ID order. Missing saved regimen fields MUST NOT match present source fields.
+ * Retired or changed lines MUST NOT donate a review to another line.
  */
 export function matchPrescriptionLines<T extends SavedLine>(
   medications: PrescriptionLine[],
@@ -110,7 +148,9 @@ export function matchPrescriptionLines<T extends SavedLine>(
         }
         return (
           JSON.stringify(clinicalSnapshot({ ...candidate, ...original })) ===
-          snapshot
+            snapshot &&
+          JSON.stringify(additionalSnapshot(original)) ===
+            JSON.stringify(additionalSnapshot(medication.sourceItem))
         );
       });
     }
