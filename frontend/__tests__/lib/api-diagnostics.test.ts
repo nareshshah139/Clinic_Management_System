@@ -1,6 +1,7 @@
 import { ApiClient } from "@/lib/api";
 import {
   API_DIAGNOSTICS_KEY,
+  diagnosticResource,
   recordApiDiagnostic,
 } from "@/lib/api-diagnostics";
 
@@ -214,5 +215,19 @@ it("bounds and sanitizes stored diagnostics and tolerates storage failures", asy
   (fetch as jest.Mock).mockResolvedValue(response(201, { id: "saved" }));
   await expect(new ApiClient().createPatient({})).resolves.toEqual({
     id: "saved",
+  });
+});
+
+
+describe("inventory diagnostic categories", () => {
+  it.each(["inventory", "pharmacy", "drugs"])("retains %s without copying identifiers or queries", (resource) => {
+    expect(diagnosticResource(`/${resource}/PRIVATE-id?secret=PRIVATE`)).toBe(resource);
+    sessionStorage.clear();
+    recordApiDiagnostic({ timestamp: new Date().toISOString(), requestId, resource, method: "PATCH", status: 200, code: "success", durationMs: 1, attempts: 1 });
+    expect(JSON.parse(sessionStorage.getItem(API_DIAGNOSTICS_KEY)!)[0].resource).toBe(resource);
+    expect(sessionStorage.getItem(API_DIAGNOSTICS_KEY)).not.toContain("PRIVATE");
+  });
+  it("does not treat unknown endpoints as resource names", () => {
+    expect(diagnosticResource("/PRIVATE-id/inventory")).toBe("other");
   });
 });

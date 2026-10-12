@@ -152,3 +152,26 @@ Focused verification (synthetic data; no production database required):
 npm test --workspace=backend -- --runInBand http-observability.spec.ts request-context.interceptor.spec.ts
 npm test --workspace=frontend -- --runInBand api-diagnostics.test.ts api.retry.test.ts save-error-message.test.ts MedicalVisitForm.saving.test.tsx
 ```
+
+
+### Inventory diagnostics
+
+The global HTTP logger also covers `/inventory`, `/drugs`, and `/pharmacy` operations,
+including item changes, stock adjustments/transfers, counts, purchase intake, stock commits,
+and inventory workflow transitions. Route templates, request references, status, duration,
+validation rules and safe database error codes are available in Railway; payloads are excluded.
+Browser request summaries retain the fixed `inventory`, `pharmacy`, and `drugs` categories.
+
+Background and manually triggered stock automation additionally writes JSON events named
+`inventory.automation`. Each event includes a random `runId`, `scheduled`, `operation`,
+`outcome`, and `durationMs`. The run ID matches persisted automation history. Fixed error
+categories and safe HTTP/Prisma codes identify missing owners, rejected steps, nested failed
+purchase-order results, settings failures and history-persistence failures. These events are
+emitted independently of `HTTP_LOG_LEVEL`; diagnostic sink failures never block stock work.
+A failed step and its final failed-run summary share one run ID and must not be double-counted.
+A successful step followed by failed history persistence is not evidence of rollback.
+
+The daily 12:00 Asia/Kolkata Railway monitor summarizes patient saves and inventory operations,
+including request failures/slowness, retries, automation outcomes, recoveries and retrieval gaps.
+It performs read-only checks; it does not run stock automation or change records to test logging.
+Browser-only network failures are local diagnostics and cannot be inferred from Railway alone.

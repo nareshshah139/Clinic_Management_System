@@ -5,6 +5,9 @@ const RESOURCES = new Set([
   "visits",
   "prescriptions",
   "appointments",
+  "inventory",
+  "pharmacy",
+  "drugs",
   "auth",
 ]);
 export type DiagnosticCode =
@@ -108,6 +111,11 @@ export function recordApiDiagnostic(entry: ApiDiagnostic): void {
   }
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] diagnostic-resource-categories
+ * Inventory, pharmacy and drug requests retain their fixed resource category. Unknown paths
+ * return other; identifiers, query strings and payload data MUST NOT enter the category.
+ */
 export function diagnosticResource(endpoint: string): string {
   const resource = endpoint.split(/[/?#]/)[1];
   return RESOURCES.has(resource) ? resource : "other";
