@@ -19,7 +19,11 @@ export class InventoryWorkflowScheduler {
    * @cc [owner:nareshshah139,label:product] inventory-automation-reviewable-output
    * Disabled automation MUST create no documents. Enabled runs MUST use branch/date request keys,
    * retain outcomes for the UI and create reviewable proposals or orders without supplier dispatch.
-   * A branch setup/run failure MUST be logged without blocking later branches; overlapping ticks skip.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:observability] inventory-scheduler-failure-isolation
+   * Log branch setup/run failures without blocking later branches. Overlapping ticks MUST skip;
+   * scheduler lookup failures MUST be logged and rethrown with the running lock released.
    */
   @Cron('0 */30 * * * *')
   async tick() {

@@ -93,6 +93,11 @@ export function diagnosticValidationPipe(): ValidationPipe {
   });
 }
 
+/**
+ * @cc [owner:nareshshah139,label:security] fixed-http-failure-category
+ * Map HTTP status to a fixed failure category, using server_error for unlisted 5xx statuses
+ * and request_rejected for other unlisted statuses; never derive categories from error text.
+ */
 export function failureCode(status: number): Failure {
   if (status === 400 || status === 422) return 'invalid_request';
   if (status === 401) return 'unauthenticated';
