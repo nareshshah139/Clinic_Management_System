@@ -104,3 +104,51 @@ npm run prisma:migrate --name add-number-sequences
 ```
 
 On production, ensure zero-downtime by applying the schema before deploying code that uses it.
+
+## Diagnosing patient saves
+
+The API writes one JSON `http.request_completed` event per response to stdout. It records
+the request reference, route template, method, HTTP status, duration, attempt number and
+outcome. Failures include a category (`invalid_request`, `unauthenticated`, `forbidden`,
+`conflict`, `timeout`, `rate_limited`, etc.). DTO validation failures include declared field
+and validator names; database failures include a Prisma code when available. New diagnostic
+events exclude patient identifiers, clinical values, bodies, query strings, credentials and
+raw exception messages/stacks. Existing database audit records remain separate.
+
+`HTTP_LOG_LEVEL` defaults to `info` (all requests). Set `warn` for failed, aborted or slow
+requests (at least two seconds), or `error` for HTTP 5xx only. Keep `info` while investigating
+save problems, since successful writes help distinguish lost responses from failed writes.
+Logs use the hosting platform's retention; this change does not create rotating local files.
+
+Save errors display a `Reference` UUID. After deploying both frontend and backend, search
+the backend platform logs for that reference, for example:
+
+```sh
+railway logs --service backend --environment production --lines 200 --filter 'REFERENCE_UUID'
+```
+
+The same reference is sent as `X-Request-Id` across retries; `X-Request-Attempt` distinguishes
+attempts. The browser keeps its last 100 summaries in the current tab's session storage
+under `clinic:request-diagnostics:v1`, including network/proxy failures that never reached
+the API. These summaries contain no form data and survive reloads in that tab. Support can
+copy them in browser developer tools using
+`copy(sessionStorage.getItem('clinic:request-diagnostics:v1'))` (where `copy` is supported).
+If storage is unavailable, browser failures still emit a JSON console warning. Browser
+diagnostics are not automatically uploaded; closing the tab may discard them.
+
+Check `validation` for rejected fields, 401 for expired login, 403 for permissions, 409 for
+conflicts and 5xx/Prisma codes for server/database failures. A browser timeout or
+`http.request_aborted` means the outcome is unknown: the database may already have committed.
+Check the patient's record before manually repeating a create. Patient/visit/prescription
+save requests time out after 30 seconds per attempt unless explicitly overridden; they do
+not acquire additional mutation retries from logging. Upload/transcription/export subroutes
+keep their existing timeouts. Autosave preserves rejected drafts and stops automatic
+retries for deterministic 4xx errors until an edit or manual save. Version conflicts
+remain blocked until the existing explicit reconciliation flow is completed.
+
+Focused verification (synthetic data; no production database required):
+
+```sh
+npm test --workspace=backend -- --runInBand http-observability.spec.ts request-context.interceptor.spec.ts
+npm test --workspace=frontend -- --runInBand api-diagnostics.test.ts api.retry.test.ts save-error-message.test.ts MedicalVisitForm.saving.test.tsx
+```

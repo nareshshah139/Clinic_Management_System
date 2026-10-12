@@ -827,6 +827,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
     return latestPayload.current();
   }, []);
 
+  /**
+   * @cc [owner:nareshshah139,label:reliability] rejected-draft-retries
+   * Deterministic HTTP 4xx failures MUST pause automatic resubmission while retaining
+   * the draft. New edits may retry ordinary rejections, but version conflicts remain
+   * blocked until explicit reconciliation under visit-save-version. 408, 425 and 429 may retry.
+   */
   const runAutoSave = useCallback(async () => {
     if (!visitId || !hasUnsavedChangesRef.current || manualSaveInFlight.current || automaticSaveBlocked.current) {
       return;
@@ -873,6 +879,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         console.error('Auto-save failed:', error);
         hasUnsavedChangesRef.current = true;
         setSaveStatus('error');
+        const status = (error as { status?: number })?.status;
+        retryAllowed = !status || status >= 500 || [408, 425, 429].includes(status);
+        clearAutoSaveTimer();
         // If unauthorized, prompt sign-in and do not retry
         if ((error as any)?.status === 409) {
           blockAutomaticSave();
@@ -893,10 +902,12 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             description: getErrorMessage(error) || 'We will retry shortly.',
           });
           clearAutoSaveTimer();
-          autoSaveTimerRef.current = window.setTimeout(() => {
-            autoSaveTimerRef.current = null;
-            void autoSaveRunner.current();
-          }, AUTO_SAVE_RETRY_MS);
+          if (retryAllowed) {
+            autoSaveTimerRef.current = window.setTimeout(() => {
+              autoSaveTimerRef.current = null;
+              void autoSaveRunner.current();
+            }, AUTO_SAVE_RETRY_MS);
+          }
         }
       } finally {
         autoSavePromiseRef.current = null;

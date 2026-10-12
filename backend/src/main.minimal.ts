@@ -3,16 +3,19 @@ import { AppMinimalModule } from './app.minimal.module';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from '@nestjs/common';
+import { installHttpObservability } from './shared/logging/http-observability';
 
 async function bootstrap() {
   const logger = new Logger('BootstrapMinimal');
   logger.log('Starting Clinic Management System backend (minimal entry)');
   const app = await NestFactory.create(AppMinimalModule, new ExpressAdapter());
+  installHttpObservability(app);
   app.enableCors({
     origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Request-Id', 'X-Request-Attempt'],
+    exposedHeaders: ['X-Request-Id', 'Retry-After'],
   });
 
   // Swagger setup

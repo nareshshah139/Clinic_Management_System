@@ -176,3 +176,18 @@ it('pauses autosave for a restored stale draft before it can overwrite a newer s
   expect(draft.data.visitVersion).toBe(3);
   expect(draft.data.prescriptionClinical.history.pastHistory).toBe('Offline draft');
 });
+
+it.each([400, 403, 404, 422])('does not repeatedly resubmit a rejected draft (HTTP %s)', async status => {
+  (apiClient.updateVisit as jest.Mock).mockRejectedValue(Object.assign(new Error('Correct the input'), { status }));
+  await openForm();
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Keep rejected draft' } });
+  await act(async () => { jest.advanceTimersByTime(8100); });
+  const attempts = (apiClient.updateVisit as jest.Mock).mock.calls.length;
+  await act(async () => { jest.advanceTimersByTime(30000); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBe(attempts);
+  expect(screen.getByText('Save failed')).toBeInTheDocument();
+  expect(Object.values(localStorage).some(value => String(value).includes('Keep rejected draft'))).toBe(true);
+  fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Corrected draft' } });
+  await act(async () => { jest.advanceTimersByTime(8100); });
+  expect((apiClient.updateVisit as jest.Mock).mock.calls.length).toBeGreaterThan(attempts);
+});

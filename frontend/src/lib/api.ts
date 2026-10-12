@@ -1,9 +1,12 @@
 import { PATIENT_HISTORY_CHANGED } from './patient-history';
+import { diagnosticResource, newRequestId, recordApiDiagnostic, validRequestId, type DiagnosticCode } from './api-diagnostics';
 const API_BASE_URL = '/api';
 
 export interface ApiError extends Error {
   status?: number;
   body?: { message?: string } | null;
+  requestId?: string;
+  diagnosticCode?: DiagnosticCode;
 }
 
 import type {
@@ -70,10 +73,63 @@ export class ApiClient {
     return this.post<{ access_token?: string; user: any }>(`/auth/login`, { identifier, password });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:observability] correlated-api-outcome
+   * Every API operation MUST send a UUID reference shared across its retries and record a
+   * payload-free final outcome. Failures expose that reference for support; diagnostic storage
+   * failures MUST NOT change the API result or retry a mutation.
+   */
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    extra?: { timeoutMs?: number; retryUnsafe?: boolean }
+    extra?: { timeoutMs?: number; retryUnsafe?: boolean },
+  ): Promise<T> {
+    let requestId = newRequestId();
+    const started = Date.now();
+    let attempts = 0;
+    let status = 0;
+    let code: DiagnosticCode = 'success';
+    const method = (options.method || 'GET').toUpperCase();
+    try {
+      return await this.performRequest<T>(endpoint, {
+        ...options,
+        headers: { ...options.headers, 'X-Request-Id': requestId },
+      }, {
+        ...extra,
+        onAttempt: () => { attempts++; status = 0; },
+        onResponse: response => {
+          status = response.status;
+          const returnedId = response.headers?.get('X-Request-Id');
+          if (validRequestId(returnedId)) requestId = returnedId;
+        },
+      });
+    } catch (error) {
+      const original = error as ApiError;
+      status = original?.status || status;
+      code = original?.diagnosticCode || (status === 408 ? 'timeout' : status >= 400 ? 'http_error' : 'network_error');
+      const apiError: ApiError = Object.assign(new Error(original?.message || 'Unable to reach the server'), {
+        status: status || undefined, body: original?.body, requestId, diagnosticCode: code,
+      });
+      apiError.message += ` (Reference: ${requestId})`;
+      throw apiError;
+    } finally {
+      recordApiDiagnostic({
+        timestamp: new Date().toISOString(), requestId, resource: diagnosticResource(endpoint),
+        method, status, code, durationMs: Date.now() - started, attempts,
+      });
+    }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:reliability] bounded-clinical-request
+   * Patient, visit and prescription save endpoints use a 30-second timeout unless explicitly overridden.
+   * Upload, transcription and export subroutes retain their own timeouts. Only safe methods
+   * or mutations explicitly marked retryable may retry; deterministic 4xx responses never retry.
+   */
+  private async performRequest<T>(
+    endpoint: string,
+    options: RequestInit = {},
+    extra?: { timeoutMs?: number; retryUnsafe?: boolean; onAttempt: () => void; onResponse: (response: Response) => void }
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const baseHeaders: Record<string, string> = {
@@ -93,123 +149,139 @@ export class ApiClient {
     const maxRetries = isSafeMethod || extra?.retryUnsafe ? 2 : 0;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      extra?.onAttempt();
+      baseHeaders['X-Request-Attempt'] = String(attempt + 1);
       const controller = new AbortController();
-      const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs : undefined;
+      const timeoutMs = extra?.timeoutMs && extra.timeoutMs > 0 ? extra.timeoutMs :
+        ['POST', 'PATCH', 'PUT'].includes(method) &&
+          /^\/(patients|visits|prescriptions)(\/[^/?#]+)?(\/complete)?([?#]|$)/.test(endpoint) ? 30000 : undefined;
       let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
       if (timeoutMs) {
         timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
       }
 
-      let response: Response;
       try {
-        response = await fetch(url, {
-          ...options,
-          headers: baseHeaders,
-          credentials: 'include',
-          signal: controller.signal,
-        });
-      } catch (err: any) {
-        if (err?.name === 'AbortError') {
+        let response: Response;
+        try {
+          response = await fetch(url, {
+            ...options,
+            headers: baseHeaders,
+            credentials: 'include',
+            signal: controller.signal,
+          });
+          extra?.onResponse(response);
+        } catch (err: any) {
+          if (err?.name === 'AbortError') {
+            if (attempt < maxRetries) {
+              const backoffMs = Math.min(3000, 500 * Math.pow(2, attempt));
+              await new Promise((r) => setTimeout(r, backoffMs));
+              continue;
+            }
+            const timeoutMessage = isSafeMethod ? 'Request timed out' : 'The save timed out. Check whether it completed before trying again.';
+            const apiErr: ApiError = new Error(timeoutMessage);
+            apiErr.status = 408;
+            apiErr.body = { message: timeoutMessage };
+            throw apiErr;
+          }
+          // For network errors, do not auto-retry unsafe methods
           if (attempt < maxRetries) {
-            const backoffMs = Math.min(3000, 500 * Math.pow(2, attempt));
+            const backoffMs = Math.min(2000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
             await new Promise((r) => setTimeout(r, backoffMs));
             continue;
           }
-          const apiErr: ApiError = new Error('Request timed out');
-          apiErr.status = 408;
-          apiErr.body = { message: 'Request timed out' };
+          throw err;
+        }
+
+        if (!response.ok) {
+          // Retry only transient failures. Validation, auth, and permission
+          // errors are deterministic and should be surfaced immediately.
+          const transient = response.status === 408 || response.status === 425 ||
+            response.status === 429 || response.status >= 500;
+          if (transient && attempt < maxRetries) {
+            const retryAfter = response.headers.get('Retry-After');
+            let delayMs = 0;
+            if (retryAfter) {
+              const seconds = parseInt(retryAfter, 10);
+              if (!Number.isNaN(seconds)) {
+                delayMs = seconds * 1000;
+              } else {
+                const dateMs = Date.parse(retryAfter);
+                if (!Number.isNaN(dateMs)) {
+                  delayMs = Math.max(0, dateMs - Date.now());
+                }
+              }
+            }
+            if (delayMs <= 0) {
+              delayMs = Math.min(3000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
+            }
+            await new Promise((r) => setTimeout(r, delayMs));
+            continue;
+          }
+
+          let body: { message?: string } | null = null;
+          try {
+            body = (await response.json()) as { message?: string };
+          } catch {
+            try {
+              const text = await response.text();
+              body = { message: text || 'Network error' };
+            } catch {
+              body = { message: 'Network error' };
+            }
+          }
+
+          // Centralized 401 handling: clear client token and redirect to login with next param
+          if (response.status === 401 && typeof window !== 'undefined') {
+            try {
+              this.clearToken();
+            } catch {}
+            try {
+              const isOnLogin = window.location.pathname.startsWith('/login');
+              if (!isOnLogin) {
+                const nextUrl = window.location.pathname + window.location.search + window.location.hash;
+                // Store next for fallback
+                try { window.localStorage.setItem('cms_next_after_login', nextUrl); } catch {}
+                window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
+              }
+            } catch {
+              // ignore redirect errors
+            }
+          }
+
+          const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
+          apiErr.status = response.status;
+          apiErr.body = body;
           throw apiErr;
         }
-        // For network errors, do not auto-retry unsafe methods
-        if (attempt < maxRetries) {
-          const backoffMs = Math.min(2000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
-          await new Promise((r) => setTimeout(r, backoffMs));
-          continue;
+
+        if (method !== 'GET' && /^\/(visits|prescriptions|appointments)(\/|$)/.test(endpoint) && typeof window !== 'undefined') {
+          window.dispatchEvent(new Event(PATIENT_HISTORY_CHANGED));
         }
-        throw err;
+        if (response.status === 204) {
+          return undefined as T;
+        }
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          // Surface a clear error so callers can handle gracefully instead of crashing on undefined
+          let text = '';
+          try { text = await response.text(); } catch {}
+          const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
+          apiErr.status = response.status;
+          apiErr.body = { message: 'Unexpected non-JSON response' };
+          apiErr.diagnosticCode = 'invalid_response';
+          throw apiErr;
+        }
+        try {
+          return (await response.json()) as T;
+        } catch {
+          const apiErr: ApiError = new Error('The server returned an incomplete response. Check whether the save completed before trying again.');
+          apiErr.status = controller.signal.aborted ? 408 : response.status;
+          apiErr.diagnosticCode = controller.signal.aborted ? 'timeout' : 'invalid_response';
+          throw apiErr;
+        }
       } finally {
         if (timeoutHandle) clearTimeout(timeoutHandle);
       }
-
-      if (!response.ok) {
-        // Retry only transient failures. Validation, auth, and permission
-        // errors are deterministic and should be surfaced immediately.
-        const transient = response.status === 408 || response.status === 425 ||
-          response.status === 429 || response.status >= 500;
-        if (transient && attempt < maxRetries) {
-          const retryAfter = response.headers.get('Retry-After');
-          let delayMs = 0;
-          if (retryAfter) {
-            const seconds = parseInt(retryAfter, 10);
-            if (!Number.isNaN(seconds)) {
-              delayMs = seconds * 1000;
-            } else {
-              const dateMs = Date.parse(retryAfter);
-              if (!Number.isNaN(dateMs)) {
-                delayMs = Math.max(0, dateMs - Date.now());
-              }
-            }
-          }
-          if (delayMs <= 0) {
-            delayMs = Math.min(3000, 500 * Math.pow(2, attempt)) + Math.floor(Math.random() * 250);
-          }
-          await new Promise((r) => setTimeout(r, delayMs));
-          continue;
-        }
-
-        let body: { message?: string } | null = null;
-        try {
-          body = (await response.json()) as { message?: string };
-        } catch {
-          try {
-            const text = await response.text();
-            body = { message: text || 'Network error' };
-          } catch {
-            body = { message: 'Network error' };
-          }
-        }
-
-        // Centralized 401 handling: clear client token and redirect to login with next param
-        if (response.status === 401 && typeof window !== 'undefined') {
-          try {
-            this.clearToken();
-          } catch {}
-          try {
-            const isOnLogin = window.location.pathname.startsWith('/login');
-            if (!isOnLogin) {
-              const nextUrl = window.location.pathname + window.location.search + window.location.hash;
-              // Store next for fallback
-              try { window.localStorage.setItem('cms_next_after_login', nextUrl); } catch {}
-              window.location.href = `/login?next=${encodeURIComponent(nextUrl)}`;
-            }
-          } catch {
-            // ignore redirect errors
-          }
-        }
-
-        const apiErr: ApiError = new Error((body && body.message) || `HTTP ${response.status}`);
-        apiErr.status = response.status;
-        apiErr.body = body;
-        throw apiErr;
-      }
-
-      if (method !== 'GET' && /^\/(visits|prescriptions|appointments)(\/|$)/.test(endpoint) && typeof window !== 'undefined') {
-        window.dispatchEvent(new Event(PATIENT_HISTORY_CHANGED));
-      }
-      if (response.status === 204) {
-        return undefined as T;
-      }
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        // Surface a clear error so callers can handle gracefully instead of crashing on undefined
-        let text = '';
-        try { text = await response.text(); } catch {}
-        const apiErr: ApiError = new Error(text || 'Unexpected non-JSON response');
-        apiErr.status = response.status;
-        apiErr.body = { message: 'Unexpected non-JSON response' };
-        throw apiErr;
-      }
-      return (await response.json()) as T;
     }
 
     // Should not reach here

@@ -208,6 +208,11 @@ export function isSlotInPast(slotTime: string, targetDate: string): boolean {
 }
 
 // Error handling utilities
+/**
+ * @cc [owner:nareshshah139,label:observability] support-reference-message
+ * Preserve all public validation messages and append a valid UUID support reference once
+ * when available; arbitrary reference strings MUST NOT be rendered as diagnostic IDs.
+ */
 export function getErrorMessage(error: any): string {
   const messageText = (value: unknown): string => {
     if (typeof value === 'string') return value;
@@ -215,7 +220,11 @@ export function getErrorMessage(error: any): string {
     return '';
   };
   const message = messageText(error?.body?.message) || messageText(error?.message);
-  if (message) return message;
+  if (message) {
+    const reference = error?.requestId;
+    const valid = typeof reference === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reference);
+    return valid && !message.includes(reference) ? `${message} (Reference: ${reference})` : message;
+  }
   if (typeof error === 'string') return error;
   return 'An unexpected error occurred';
 }
