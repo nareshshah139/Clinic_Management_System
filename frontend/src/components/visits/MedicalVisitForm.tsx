@@ -747,13 +747,18 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
    * Edited empty values MUST survive the request, and editor patches MUST NOT
    * overwrite newer shared-vitals edits. Personal history retains its visit snapshot.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] empty-visit-complaints
+   * A new visit with no recorded complaints MUST send an empty complaints array,
+   * never a placeholder complaint. Existing visits MUST omit untouched complaints.
+   */
   const buildPayload = useCallback(() => {
     const field = clinicalField;
     const number = (value: string) => value === '' ? null : Number(value);
     const payload = compactClinicalPatch({
       patientId, doctorId, appointmentId, visitNumber: currentVisitNumber, version: visitVersionRef.current,
       complaints: field('complaints', complaints.map(complaint => ({ complaint })))
-        ?? (!visitId ? [{ complaint: subjective || 'General consultation' }] : undefined),
+        ?? (!visitId ? [] : undefined),
       history: { subjective: field('subjective', subjective) },
       scribeJson: { assessment: field('assessment', assessment) },
       examination: {
