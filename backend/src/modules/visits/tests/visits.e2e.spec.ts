@@ -433,15 +433,11 @@ describe('Visits E2E Tests', () => {
       expect(statsResponse.body.totalVisits).toBeGreaterThan(0);
     });
 
-    it('should handle visit creation with minimal required data', async () => {
+    it('should create an empty draft with minimal required data', async () => {
       const minimalVisitDto = {
         patientId,
         doctorId,
-        complaints: [
-          {
-            complaint: 'General consultation',
-          },
-        ],
+        complaints: [],
       };
 
       const response = await request(app.getHttpServer())
@@ -517,7 +513,7 @@ describe('Visits E2E Tests', () => {
       const invalidDto = {
         patientId: 'invalid-id',
         doctorId: 'invalid-id',
-        complaints: [], // Empty complaints should fail
+        complaints: null, // Empty arrays are valid; malformed complaints still fail.
       };
 
       await request(app.getHttpServer())
@@ -769,4 +765,4 @@ describe('Visits E2E Tests', () => {
       expect(searchResponse.body.visits.length).toBeGreaterThan(0);
     });
   });
-}); 
+});

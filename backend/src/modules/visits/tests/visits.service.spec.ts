@@ -261,21 +261,36 @@ describe('VisitsService', () => {
       );
     });
 
-    it('should throw BadRequestException if no complaints provided', async () => {
-      const invalidDto = {
-        ...createVisitDto,
+    it.each([undefined, 'appointment-123'])('creates an empty draft with appointment %s', async appointmentId => {
+      const draftDto = {
+        patientId: createVisitDto.patientId,
+        doctorId: createVisitDto.doctorId,
         complaints: [],
-        appointmentId: undefined,
+        appointmentId,
       };
-
       prismaMock.patient.findFirst.mockResolvedValue(mockPatient);
       prismaMock.user.findFirst.mockResolvedValue(mockDoctor);
-      // Mock appointment check to return null for this test
-      prismaMock.appointment.findFirst.mockResolvedValue(null);
+      prismaMock.appointment.findFirst.mockResolvedValue(mockAppointment);
+      prismaMock.visit.findFirst.mockResolvedValue(null);
+      prismaMock.visit.create.mockImplementation(async ({ data }) => ({ ...data, id: 'empty-visit' }));
 
-      await expect(service.create(invalidDto, mockBranchId)).rejects.toThrow(
-        new BadRequestException('At least one complaint is required'),
+      const result = await service.create(draftDto, mockBranchId);
+      expect(result).toMatchObject({ id: 'empty-visit', complaints: '[]', diagnosis: null, plan: null });
+      expect(prismaMock.visit.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ patientId: draftDto.patientId, doctorId: draftDto.doctorId, complaints: '[]' }),
+      }));
+      if (appointmentId) {
+        expect(prismaMock.appointment.update).toHaveBeenCalledWith({ where: { id: appointmentId }, data: { status: 'IN_PROGRESS' } });
+      } else {
+        expect(prismaMock.appointment.update).not.toHaveBeenCalled();
+      }
+    });
+
+    it.each([undefined, null, '', {}])('rejects non-array complaints: %p', async complaints => {
+      await expect(service.create({ ...createVisitDto, complaints } as any, mockBranchId)).rejects.toThrow(
+        new BadRequestException('Complaints must be an array'),
       );
+      expect(prismaMock.visit.create).not.toHaveBeenCalled();
     });
   });
 

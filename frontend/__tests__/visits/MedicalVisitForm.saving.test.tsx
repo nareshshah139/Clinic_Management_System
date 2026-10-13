@@ -21,6 +21,15 @@ beforeEach(() => {
 });
 afterEach(() => { jest.useRealTimers(); });
 async function openForm() { render(<MedicalVisitForm patientId="p" doctorId="d" initialVisitId="v" userRole="ADMIN" />); await flush(); }
+it.each(['Save Draft', 'Export saved visit'])('creates an empty visit through %s without fabricated complaints', async action => {
+  (apiClient.createVisit as jest.Mock).mockResolvedValue({ id: 'new-visit', version: 0 });
+  render(<MedicalVisitForm patientId="p" doctorId="d" userRole="ADMIN" />);
+  await flush();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: action })); });
+  expect(apiClient.createVisit).toHaveBeenCalledWith(expect.objectContaining({ patientId: 'p', doctorId: 'd', complaints: [] }), expect.anything());
+  if (action === 'Export saved visit') await expect(mockExportResult).resolves.toBe('new-visit');
+  expect(apiClient.completeVisit).not.toHaveBeenCalled();
+});
 it('autosaves editor-only notes and includes them in the recoverable draft', async () => {
   await openForm(); fireEvent.change(screen.getByLabelText('Clinical note'), { target: { value: 'Synthetic clinical detail' } });
   await act(async () => { jest.advanceTimersByTime(8100); });

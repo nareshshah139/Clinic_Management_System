@@ -65,6 +65,12 @@ export class VisitsService {
    * Appointment validation and visit creation MUST commit atomically. Concurrent
    * starts MUST create at most one linked visit.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] empty-visit-draft
+   * New visits MUST accept and persist an empty complaints array without fabricated
+   * clinical content. Missing or non-array complaints MUST fail before writes;
+   * patient, doctor, appointment and consultation-consent checks still apply.
+   */
   async create(createVisitDto: CreateVisitDto, branchId: string, actorId?: string) {
     const consultation = consultationPatch(createVisitDto, undefined, actorId);
     const {
@@ -83,9 +89,8 @@ export class VisitsService {
       notes,
     } = createVisitDto;
 
-    // Validate complaints are provided first so we return 400 before 404s
-    if (!complaints || complaints.length === 0) {
-      throw new BadRequestException('At least one complaint is required');
+    if (!Array.isArray(complaints)) {
+      throw new BadRequestException('Complaints must be an array');
     }
 
     const patient = await this.prisma.patient.findFirst({
