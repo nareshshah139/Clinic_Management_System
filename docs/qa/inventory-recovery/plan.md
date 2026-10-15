@@ -9,7 +9,7 @@
   - [x] Opening stock. Persist row outcomes and retry failed rows without touching successful rows.
   - [x] Direct stock APIs. Require stable operation and row IDs, reject changed replays, and expose outcomes.
 - [x] Phase D. Append evidence and decisions to decisions.tsv as each unit lands.
-- [ ] Phase E. Review the integrated changes, verify UI recovery paths, and deliver the logic map and reviewable PRs.
+- [x] Phase E. Review the integrated changes, verify UI recovery paths, and deliver the logic map and reviewable PRs.
 
 ## Definition of done
 
