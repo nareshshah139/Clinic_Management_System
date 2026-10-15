@@ -2,13 +2,13 @@
 
 - [x] Read the Poteto Mode Principles index and applicable leaves.
 - [x] Phase A. Frame the four user-specified recovery gaps.
-- [ ] Phase B. Ground two independent designs, cross-judge, and select transaction boundaries.
-- [ ] Phase C. Run each unit as a failing reproduction, smallest fix, and persisted-outcome verification.
-  - [ ] Partner sales. Retry outstanding quantities and correct unresolved matching without repeating deductions.
-  - [ ] Supplier payments. Reverse or reallocate atomically with an audit trail and restored balances.
-  - [ ] Opening stock. Persist row outcomes and retry failed rows without touching successful rows.
-  - [ ] Direct stock APIs. Require stable operation and row IDs, reject changed replays, and expose outcomes.
-- [ ] Phase D. Append evidence and decisions to decisions.tsv as each unit lands.
+- [x] Phase B. Ground two independent designs, cross-judge, and select transaction boundaries.
+- [x] Phase C. Run each unit as a failing reproduction, smallest fix, and persisted-outcome verification.
+  - [x] Partner sales. Retry outstanding quantities and correct unresolved matching without repeating deductions.
+  - [x] Supplier payments. Reverse or reallocate atomically with an audit trail and restored balances.
+  - [x] Opening stock. Persist row outcomes and retry failed rows without touching successful rows.
+  - [x] Direct stock APIs. Require stable operation and row IDs, reject changed replays, and expose outcomes.
+- [x] Phase D. Append evidence and decisions to decisions.tsv as each unit lands.
 - [ ] Phase E. Review the integrated changes, verify UI recovery paths, and deliver the logic map and reviewable PRs.
 
 ## Definition of done
@@ -28,4 +28,4 @@ Four domain units cover partner sales, supplier finance, opening imports, and di
 
 ## Capability fallbacks
 
-The exact Poteto agent profile and a different model family are unavailable. Delegates use the full portable persona and the inherited model. No diversity claim is made. No installed deslop skill was found; a manual small-diff cleanup replaces that optional pass. Live UI reproduction applies to existing UI surfaces; exposed API-only paths use service and HTTP checks.
+The exact Poteto agent profile and a different model family are unavailable. Delegates use the full portable persona and the inherited model. No diversity claim is made. No installed deslop skill was found; a manual small-diff cleanup replaces that optional pass. Live UI reproduction applies to existing UI surfaces; exposed API-only paths use service and controller checks.
