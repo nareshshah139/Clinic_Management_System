@@ -1,0 +1,4 @@
+@cc [owner:nareshshah139,label:testing] partner-browser-proof-local-only
+The partner recovery browser proof MUST serve only a temporary loopback fixture with synthetic
+API responses, block off-origin browser traffic, refuse existing routes and listeners, and remove
+its route and generated route types while stopping only its own processes on success or failure.
