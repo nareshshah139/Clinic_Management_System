@@ -24,7 +24,8 @@
 - [x] Implement real HTTP and PostgreSQL recovery scenarios with one command.
 - [x] Capture desktop and mobile screenshots of failure and recovered states.
 - [x] Integrate scenarios and screenshots into the testing process.
-- [ ] Parent-run verification, independent review, evidence and PR.
+- [x] Parent-run verification, independent review and evidence.
+- [ ] Publish PR. GitHub rejected the workflow file because the configured token lacks `workflow` scope; SSH authentication is unavailable. The user has been asked about authorization.
 
 ## Throughput checkpoint
 

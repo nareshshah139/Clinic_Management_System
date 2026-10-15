@@ -41,4 +41,4 @@ Independent correctness review found no actionable issue. Comment review removed
 
 The E2E run exposed adjacent supplier panels with identical React keys. Distinct supplier-specific keys removed that warning. The final run had no page errors or duplicate-key diagnostics. Expected negative-authentication, injected transport-failure and validation responses remain in the browser diagnostics.
 
-The workflow has been added; hosted execution is reported separately from these local results. No deployment or production-data change is part of this test work.
+The workflow is committed locally. GitHub rejected publication because the configured token lacks `workflow` scope, and SSH authentication is unavailable. No new PR or hosted CI run exists yet. No deployment or production-data change is part of this test work.
