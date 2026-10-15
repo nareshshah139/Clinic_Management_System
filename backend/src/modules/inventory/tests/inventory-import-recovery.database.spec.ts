@@ -302,6 +302,15 @@ databaseTests('Opening import recovery with PostgreSQL', () => {
       stockAdjusted: 0,
       errors: [],
     },
+    {
+      totalRows: 1,
+      created: 0,
+      updated: 0,
+      skipped: 1,
+      drugsCreated: 0,
+      stockAdjusted: 0,
+      errors: [null],
+    },
   ])('does not replay uncertain legacy outcomes %j', async (result) => {
     const uploaded = workbook([
       ['Drug name', 'Current stock'],
