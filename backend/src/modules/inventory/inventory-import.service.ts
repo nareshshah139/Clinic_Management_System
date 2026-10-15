@@ -112,187 +112,316 @@ export class InventoryImportService {
   }
 
   /**
-   * @cc [owner:nareshshah139,label:product;target] inventory-opening-import-retry
-   * Retrying an opening-stock import MUST NOT add its absolute opening quantities again; rejected
-   * rows MUST identify their worksheet row and leave that row’s inventory unchanged.
-   * Acceptance: INV-08. Validation and open gaps:
-   * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+   * @cc [owner:nareshshah139,label:product] inventory-opening-import-retry
+   * Re-uploading the same branch and workbook MUST preserve every successful row, including
+   * zero-stock and metadata-only rows. Failed rows run again only through explicit retry.
    */
   async importStarterExcel(
     file: Express.Multer.File | undefined,
     branchId: string,
     userId: string,
   ) {
-    if (!file?.buffer?.length) {
+    if (!file?.buffer?.length)
       throw new BadRequestException('Please upload a non-empty Excel file');
-    }
-
-    if (!/\.(xlsx|xls)$/i.test(file.originalname || '')) {
+    if (!/\.(xlsx|xls)$/i.test(file.originalname || ''))
       throw new BadRequestException('Only .xlsx and .xls files are supported');
-    }
+    const rows = this.importRows(file.buffer);
+    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
+    const migration = await this.prisma.inventoryMigration.upsert({
+      where: { branchId_sha256: { branchId, sha256 } },
+      update: {},
+      create: {
+        branchId,
+        createdBy: userId,
+        fileName: file.originalname,
+        sha256,
+        data: file.buffer,
+        rowTrackingVersion: 1,
+      },
+    });
+    await this.ensureRowOutcomes(migration, rows);
+    return this.processImport(migration.id, branchId, userId, rows, false);
+  }
 
-    const rows = this.readWorkbookRows(file.buffer);
-    const nonEmptyRows = rows.filter((row) =>
+  /**
+   * @cc [owner:nareshshah139,label:security] opening-outcome-branch-scope
+   * Outcome lookup MUST reject an import outside the authenticated branch and return no workbook values.
+   */
+  async importOutcome(id: string, branchId: string) {
+    const migration = await this.originalImport(id, branchId);
+    const rows = this.importRows(Buffer.from(migration.data));
+    const outcomes =
+      migration.rowTrackingVersion === 1
+        ? await this.prisma.inventoryMigrationRow.findMany({
+            where: { importId: id },
+            orderBy: { sourceRow: 'asc' },
+          })
+        : this.legacyRows(migration, rows).rows;
+    return this.summarize(migration, rows, outcomes);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-retry-failed-only
+   * Retry MUST use the retained workbook, skip successful and uncertain legacy rows, and leave
+   * validation failures for correction. Row effects and the success marker MUST commit atomically.
+   */
+  async retryFailedRows(id: string, branchId: string, userId: string) {
+    const migration = await this.originalImport(id, branchId);
+    const rows = this.importRows(Buffer.from(migration.data));
+    await this.ensureRowOutcomes(migration, rows);
+    return this.processImport(id, branchId, userId, rows, true);
+  }
+
+  private importRows(buffer: Buffer) {
+    const rows = this.readWorkbookRows(buffer).filter((row) =>
       Object.values(row).some((value) => String(value ?? '').trim() !== ''),
     );
-
-    if (nonEmptyRows.length === 0) {
+    if (!rows.length)
       throw new BadRequestException('The uploaded Excel file has no data rows');
-    }
-
-    if (nonEmptyRows.length > 1000) {
+    if (rows.length > 1000)
       throw new BadRequestException(
         'Import is limited to 1,000 rows at a time',
       );
-    }
+    return rows;
+  }
 
-    const sha256 = createHash('sha256').update(file.buffer).digest('hex');
-    const prior = await (this.prisma as any).inventoryMigration?.findUnique({
-      where: { branchId_sha256: { branchId, sha256 } },
-    });
-    if (prior?.result) return prior.result;
-    const migration = (this.prisma as any).inventoryMigration
-      ? await (this.prisma as any).inventoryMigration.upsert({
-          where: { branchId_sha256: { branchId, sha256 } },
-          update: {},
-          create: {
-            branchId,
-            createdBy: userId,
-            fileName: file.originalname,
-            sha256,
-            data: file.buffer,
-          },
-        })
-      : null;
-    if (migration) {
-      const claim = await (this.prisma as any).inventoryMigration.updateMany({
-        where: {
-          id: migration.id,
-          result: { equals: Prisma.DbNull },
-          OR: [
-            { processingUntil: null },
-            { processingUntil: { lt: new Date() } },
-          ],
-        },
-        data: { processingUntil: new Date(Date.now() + 30 * 60 * 1000) },
-      });
-      if (!claim.count) {
-        const completed = await (
-          this.prisma as any
-        ).inventoryMigration.findUnique({ where: { id: migration.id } });
-        if (completed?.result) return completed.result;
-        throw new ConflictException(
-          'This opening import is already processing. Retry after it completes; the file is retained.',
-        );
-      }
-    }
-    const result = {
-      importId: migration?.id || sha256,
-      totalRows: nonEmptyRows.length,
-      created: 0,
-      updated: 0,
-      skipped: 0,
-      drugsCreated: 0,
-      stockAdjusted: 0,
-      errors: [] as Array<{ row: number; message: string }>,
+  private sourceRow(row: Record<string, unknown>, index: number) {
+    return typeof row.__rowNum__ === 'number' ? row.__rowNum__ + 1 : index + 2;
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] legacy-opening-evidence
+   * Legacy rows may be classified as successful only when retained source rows, aggregate counts,
+   * and unique error rows reconcile exactly. Uncertain transaction outcomes require reconciliation.
+   */
+  private legacyRows(migration: any, rows: Record<string, unknown>[]) {
+    const result = migration.result;
+    const numbers = rows.map((row, index) => this.sourceRow(row, index));
+    const errors = Array.isArray(result?.errors) ? result.errors : [];
+    const valid =
+      result &&
+      ['created', 'updated', 'skipped', 'drugsCreated', 'stockAdjusted'].every(
+        (key) => Number.isInteger(result[key]) && result[key] >= 0,
+      ) &&
+      result.totalRows === rows.length &&
+      result.created + result.updated + result.skipped === rows.length &&
+      result.drugsCreated <= result.created + result.updated &&
+      result.stockAdjusted <= result.created + result.updated &&
+      errors.length === result.skipped &&
+      new Set(errors.map((error) => error.row)).size === errors.length &&
+      errors.every(
+        (error) =>
+          numbers.includes(error.row) && typeof error.message === 'string',
+      );
+    return {
+      legacyResult: valid ? result : null,
+      rows: numbers.map((sourceRow) => {
+        const error = valid && errors.find((error) => error.row === sourceRow);
+        const retryable = !!error && /\bP(?:2024|2034)\b/.test(error.message);
+        const uncertain =
+          !valid ||
+          (!!error &&
+            !retryable &&
+            /\bP(?:2028|1001|1002|1008|1017)\b|ROW_FAILED|Could not save|Database could not finish/i.test(
+              error.message,
+            ));
+        return {
+          importId: migration.id,
+          sourceRow,
+          status: uncertain ? 'UNKNOWN' : error ? 'FAILED' : 'SUCCEEDED',
+          retryable,
+          outcome: null,
+          errorCode: uncertain
+            ? 'LEGACY_UNKNOWN'
+            : error
+              ? 'LEGACY_FAILED'
+              : null,
+          message: uncertain
+            ? 'Previous row outcome is uncertain. Reconcile this import before applying stock again.'
+            : error
+              ? retryable
+                ? 'Database save failed. Retry this row after the database recovers.'
+                : 'Correct this failed row in the workbook and upload only corrected rows. Previously successful rows must be omitted.'
+              : null,
+        };
+      }),
     };
+  }
+
+  private async ensureRowOutcomes(
+    migration: any,
+    rows: Record<string, unknown>[],
+  ) {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${migration.branchId}))`;
+      const current = await tx.inventoryMigration.findUniqueOrThrow({
+        where: { id: migration.id },
+      });
+      if (current.rowTrackingVersion === 0) {
+        const legacy = this.legacyRows(current, rows);
+        await tx.inventoryMigrationRow.createMany({
+          data: legacy.rows.map((row) => ({ ...row, outcome: Prisma.DbNull })),
+          skipDuplicates: true,
+        });
+        await tx.inventoryMigration.update({
+          where: { id: current.id },
+          data: {
+            rowTrackingVersion: 1,
+            legacyResult: legacy.legacyResult ?? Prisma.DbNull,
+          },
+        });
+      } else {
+        await tx.inventoryMigrationRow.createMany({
+          data: rows.map((row, index) => ({
+            importId: migration.id,
+            sourceRow: this.sourceRow(row, index),
+            status: 'PENDING',
+          })),
+          skipDuplicates: true,
+        });
+      }
+    });
+  }
+
+  private summarize(
+    migration: any,
+    rows: Record<string, unknown>[],
+    outcomes: any[],
+  ) {
+    const legacy =
+      migration.rowTrackingVersion === 0
+        ? this.legacyRows(migration, rows).legacyResult
+        : migration.legacyResult;
+    const result = {
+      importId: migration.id,
+      totalRows: rows.length,
+      created: legacy?.created ?? 0,
+      updated: legacy?.updated ?? 0,
+      skipped: 0,
+      drugsCreated: legacy?.drugsCreated ?? 0,
+      stockAdjusted: legacy?.stockAdjusted ?? 0,
+      retryableRows: 0,
+      pendingRows: 0,
+      reconciliationRequired: 0,
+      errors: [] as Array<{
+        row: number;
+        message: string;
+        retryable: boolean;
+        code: string;
+      }>,
+    };
+    for (const [index, row] of rows.entries()) {
+      const sourceRow = this.sourceRow(row, index);
+      const saved = outcomes.find((outcome) => outcome.sourceRow === sourceRow);
+      if (saved?.status === 'SUCCEEDED') {
+        if (saved.outcome?.status === 'created') result.created += 1;
+        if (saved.outcome?.status === 'updated') result.updated += 1;
+        if (saved.outcome?.drugCreated) result.drugsCreated += 1;
+        if (saved.outcome?.stockAdjusted) result.stockAdjusted += 1;
+        continue;
+      }
+      result.skipped += 1;
+      if (!saved || saved.status === 'PENDING') result.pendingRows += 1;
+      if (saved?.status === 'UNKNOWN') result.reconciliationRequired += 1;
+      if (saved?.status === 'FAILED' && saved.retryable)
+        result.retryableRows += 1;
+      result.errors.push({
+        row: sourceRow,
+        message:
+          saved?.message ||
+          'This row has not finished. Check the outcome or resume this import.',
+        retryable: saved?.status === 'FAILED' && saved.retryable,
+        code: saved?.errorCode || 'PENDING',
+      });
+    }
+    return result;
+  }
+
+  private async processImport(
+    id: string,
+    branchId: string,
+    userId: string,
+    rows: Record<string, unknown>[],
+    retry: boolean,
+  ) {
     const startedAt = Date.now();
     this.logger.log({
       event: 'inventory_import_started',
-      importId: result.importId,
-      totalRows: result.totalRows,
+      importId: id,
+      totalRows: rows.length,
     });
-    const duplicateRows = this.findDuplicateImportRows(nonEmptyRows);
-
-    for (const [index, sourceRow] of nonEmptyRows.entries()) {
-      // SheetJS preserves the original zero-based worksheet row, including gaps.
-      const rowNumber =
-        typeof sourceRow.__rowNum__ === 'number'
-          ? sourceRow.__rowNum__ + 1
-          : index + 2;
+    const duplicates = this.findDuplicateImportRows(rows);
+    for (const [index, source] of rows.entries()) {
+      const sourceRow = this.sourceRow(source, index);
+      const prior = await this.prisma.inventoryMigrationRow.findUniqueOrThrow({
+        where: { importId_sourceRow: { importId: id, sourceRow } },
+      });
+      if (
+        prior.status !== 'PENDING' &&
+        !(retry && prior.status === 'FAILED' && prior.retryable)
+      )
+        continue;
+      let saving = false;
       try {
-        const duplicates = duplicateRows.get(rowNumber);
-        if (duplicates) {
-          result.skipped += 1;
-          result.errors.push({
-            row: rowNumber,
-            message: `Duplicate medicine/code and batch in rows ${duplicates.join(', ')}. Keep one correct opening-stock row and import it again.`,
-          });
-          this.logger.warn({
-            event: 'inventory_import_row_failed',
-            importId: result.importId,
-            row: rowNumber,
-            code: 'DUPLICATE_ROW',
-          });
-          continue;
-        }
-        const parsed = this.mapImportRow(sourceRow);
-        if (!parsed) {
-          this.logger.warn({
-            event: 'inventory_import_row_failed',
-            importId: result.importId,
-            row: rowNumber,
-            code: 'MISSING_NAME',
-          });
-          result.skipped += 1;
-          result.errors.push({
-            row: rowNumber,
-            message:
-              'Missing medicine name. Add a Drug name, Medicine name, Item name, Product name, or Name column.',
-          });
-          continue;
-        }
-
-        parsed.importId = result.importId;
-        parsed.sourceRow = rowNumber;
+        if (duplicates.has(sourceRow))
+          throw new BadRequestException(
+            'Duplicate product/code and batch. Keep one correct row and upload only corrected failed rows.',
+          );
+        const parsed = this.mapImportRow(source);
+        if (!parsed)
+          throw new BadRequestException(
+            'Missing medicine name. Add a Drug name, Medicine name, Item name, Product name, or Name column.',
+          );
         if (parsed.minStockLevel > parsed.maxStockLevel)
           throw new BadRequestException('Minimum exceeds maximum');
-        const outcome = await this.upsertImportRow(parsed, branchId, userId);
-        if (outcome.status === 'created') result.created += 1;
-        if (outcome.status === 'updated') result.updated += 1;
-        if (outcome.drugCreated) result.drugsCreated += 1;
-        if (outcome.stockAdjusted) result.stockAdjusted += 1;
+        parsed.importId = id;
+        parsed.sourceRow = sourceRow;
+        saving = true;
+        await this.upsertImportRow(parsed, branchId, userId);
       } catch (error) {
-        // Never log workbook values or raw Prisma errors (which include row data).
         const code =
           typeof error?.code === 'string' && /^P\d{4}$/.test(error.code)
             ? error.code
-            : 'ROW_FAILED';
+            : saving
+              ? 'ROW_FAILED'
+              : 'VALIDATION';
+        const retryable =
+          saving && !(error instanceof BadRequestException) && code !== 'P2002';
+        const message = retryable
+          ? `Could not save this row (${code}). Retry failed rows after the database recovers.`
+          : code === 'P2002'
+            ? 'A medicine with this SKU or barcode already exists. Correct the duplicate code and upload only corrected failed rows.'
+            : `${error instanceof BadRequestException || !saving ? error.message : 'This row could not be saved'}. Correct this row and upload only corrected failed rows.`;
         this.logger.warn({
           event: 'inventory_import_row_failed',
-          importId: result.importId,
-          row: rowNumber,
+          importId: id,
+          row: sourceRow,
           code,
         });
-        result.skipped += 1;
-        result.errors.push({
-          row: rowNumber,
-          message:
-            code === 'P2028' || code === 'P2024'
-              ? `Database could not finish saving this row (${code}). Contact support with the import reference.`
-              : code === 'P2002'
-                ? 'A medicine with this SKU or barcode already exists. Check for duplicate codes.'
-                : error instanceof BadRequestException
-                  ? error.message
-                  : `Could not save this row (${code}). Contact support with the import reference.`,
+        await this.prisma.inventoryMigrationRow.updateMany({
+          where: {
+            importId: id,
+            sourceRow,
+            status: { in: ['PENDING', 'FAILED'] },
+          },
+          data: { status: 'FAILED', retryable, errorCode: code, message },
         });
       }
     }
-
+    const result = await this.importOutcome(id, branchId);
+    await this.prisma.inventoryMigration.update({
+      where: { id },
+      data: { result, processingUntil: null },
+    });
     this.logger.log({
       event: 'inventory_import_completed',
-      importId: result.importId,
+      importId: id,
       totalRows: result.totalRows,
       created: result.created,
       updated: result.updated,
       skipped: result.skipped,
       durationMs: Date.now() - startedAt,
     });
-    if (migration)
-      await (this.prisma as any).inventoryMigration.update({
-        where: { id: migration.id },
-        data: { result, processingUntil: null },
-      });
     return result;
   }
 
@@ -591,6 +720,16 @@ export class InventoryImportService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-rejected-row-no-effects
+   * Row validation failures MUST roll back that row's catalogue, inventory and stock-ledger changes.
+   * An already successful row MUST return its saved outcome without rewriting those records.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-existing-batch-preserves-live-stock
+   * Existing-batch imports MUST NOT write stock balance or stock status, even when the workbook
+   * matches the observed quantity; concurrent sales and adjustments remain authoritative.
+   */
   private async upsertImportRow(
     row: InventoryStarterImportRow,
     branchId: string,
@@ -600,6 +739,22 @@ export class InventoryImportService {
       // Serialize opening receipts within a branch, including different files for the same batch.
       if (typeof tx.$executeRaw === 'function')
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${branchId}))`;
+      if (row.importId && row.sourceRow) {
+        const saved = await tx.inventoryMigrationRow.findUniqueOrThrow({
+          where: {
+            importId_sourceRow: {
+              importId: row.importId,
+              sourceRow: row.sourceRow,
+            },
+          },
+        });
+        if (saved.status === 'SUCCEEDED')
+          return saved.outcome as unknown as InventoryStarterImportOutcome;
+        if (saved.status === 'UNKNOWN')
+          throw new ConflictException(
+            'This row requires reconciliation before stock can be applied',
+          );
+      }
       const existingDrug = await this.findImportedDrug(tx, row, branchId);
       const drugUniqueFields = await this.getSafeDrugUniqueFields(
         tx,
@@ -716,11 +871,13 @@ export class InventoryImportService {
           row,
         );
 
-        return {
+        const outcome: InventoryStarterImportOutcome = {
           status: 'created',
           drugCreated: !existingDrug,
           stockAdjusted,
         };
+        await this.saveRowSuccess(tx, row, outcome);
+        return outcome;
       }
 
       const stockDelta = row.hasCurrentStock
@@ -794,10 +951,6 @@ export class InventoryImportService {
       if (row.hasCostPrice) updatePayload.costPrice = row.costPrice;
       if (row.hasSellingPrice) updatePayload.sellingPrice = row.sellingPrice;
       if (row.hasMrp) updatePayload.mrp = row.mrp;
-      if (row.hasCurrentStock) {
-        updatePayload.currentStock = row.currentStock;
-        updatePayload.stockStatus = stockStatus;
-      }
       if (isDrugLinked === 0) {
         updatePayload.drugs = {
           connect: { id: drug.id },
@@ -834,11 +987,41 @@ export class InventoryImportService {
         row,
       );
 
-      return {
+      const outcome: InventoryStarterImportOutcome = {
         status: 'updated',
         drugCreated: !existingDrug,
         stockAdjusted,
       };
+      await this.saveRowSuccess(tx, row, outcome);
+      return outcome;
+    });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-success-atomicity
+   * A row success marker MUST use the transaction that writes its catalogue and stock effects,
+   * including metadata-only or zero-stock changes. A failed marker write MUST roll back those effects.
+   */
+  private async saveRowSuccess(
+    tx: Prisma.TransactionClient,
+    row: InventoryStarterImportRow,
+    outcome: InventoryStarterImportOutcome,
+  ) {
+    if (!row.importId || !row.sourceRow) return;
+    await tx.inventoryMigrationRow.update({
+      where: {
+        importId_sourceRow: {
+          importId: row.importId,
+          sourceRow: row.sourceRow,
+        },
+      },
+      data: {
+        status: 'SUCCEEDED',
+        outcome: { ...outcome },
+        retryable: false,
+        errorCode: null,
+        message: null,
+      },
     });
   }
 

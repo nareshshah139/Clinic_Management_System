@@ -35,7 +35,40 @@ interface InventoryImportSummary {
   skipped: number;
   drugsCreated: number;
   stockAdjusted: number;
+  retryableRows?: number;
+  pendingRows?: number;
+  reconciliationRequired?: number;
   errors: Array<{ row: number; message: string }>;
+}
+
+function validateImportSummary(
+  value: unknown,
+  expectedId?: string,
+): InventoryImportSummary {
+  const summary = value as InventoryImportSummary | null;
+  const counts = [
+    "totalRows",
+    "created",
+    "updated",
+    "skipped",
+    "drugsCreated",
+    "stockAdjusted",
+  ] as const;
+  if (
+    !summary ||
+    typeof summary !== "object" ||
+    counts.some((key) => !Number.isInteger(summary[key]) || summary[key] < 0) ||
+    (expectedId && summary.importId !== expectedId) ||
+    summary.created + summary.updated + summary.skipped !== summary.totalRows ||
+    !Array.isArray(summary.errors) ||
+    summary.errors.some(
+      (error) =>
+        !Number.isInteger(error.row) || typeof error.message !== "string",
+    )
+  ) {
+    throw new Error("The server did not confirm the import outcome.");
+  }
+  return summary;
 }
 
 const requiredColumns = [
@@ -69,7 +102,7 @@ export function PharmacyInventoryStarterImport({
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [preview,setPreview]=useState<any>(null);
+  const [preview, setPreview] = useState<any>(null);
   const [summary, setSummary] = useState<InventoryImportSummary | null>(null);
 
   const selectFile = (file: File | undefined) => {
@@ -119,11 +152,24 @@ export function PharmacyInventoryStarterImport({
     try {
       setIsUploading(true);
       setSummary(null);
-      if(!preview){const body=new FormData();body.append('file',selectedFile);const response=await fetch('/api/inventory/items/import-preview',{method:'POST',body,credentials:'include'});const result=await response.json();if(!response.ok)throw new Error(result.message||'Preview failed');setPreview(result);return;}
+      if (!preview) {
+        const body = new FormData();
+        body.append("file", selectedFile);
+        const response = await fetch("/api/inventory/items/import-preview", {
+          method: "POST",
+          body,
+          credentials: "include",
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || "Preview failed");
+        setPreview(result);
+        return;
+      }
       const response =
         await apiClient.importInventoryStarterExcel<InventoryImportSummary>(
           selectedFile,
         );
+      validateImportSummary(response);
       setSummary(response);
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       toast({
@@ -147,13 +193,104 @@ export function PharmacyInventoryStarterImport({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-recovery-preserves-summary
+   * Recovery MUST retain the previous summary on an uncertain response and offer outcome lookup.
+   * Only the explicit retry action may request another row attempt.
+   */
+  const recoverImport = async (retry: boolean) => {
+    if (!summary?.importId || isUploading) return;
+    setIsUploading(true);
+    try {
+      const result = retry
+        ? await apiClient.retryInventoryImportRows<InventoryImportSummary>(
+            summary.importId,
+          )
+        : await apiClient.getInventoryImportOutcome<InventoryImportSummary>(
+            summary.importId,
+          );
+      validateImportSummary(result, summary.importId);
+      setSummary(result);
+      window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
+      toast({
+        title: result.skipped
+          ? "Some rows still need attention"
+          : "Import complete",
+        description: `${result.created} created, ${result.updated} updated, ${result.skipped} remaining.`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Import outcome not confirmed",
+        description: `${getErrorMessage(error)} Check import outcome before trying again.`,
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const clearFile = () => {
     setSelectedFile(null);
     setSummary(null);
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const previewTable=preview&&<div className="overflow-x-auto border-t pt-4"><p className="mb-3 text-sm font-medium">Review {preview.rows.length} source rows. Existing batch balances cannot be reset.</p><table className="w-full text-left text-xs"><thead><tr>{['Row','Product','Pack / unit','Batch / expiry','Opening qty','PTR / MRP','HSN / GST','Location','Min / max','Errors'].map(t=><th key={t} className="p-2">{t}</th>)}</tr></thead><tbody>{preview.rows.map((r:any)=><tr key={r.sourceRow} className="border-t"><td className="p-2">{r.sourceRow}</td><td>{r.name}</td><td>{r.packSizeLabel} / {r.unit}</td><td>{r.batchNumber} / {r.expiryDate}</td><td>{r.currentStock}</td><td>{r.costPrice} / {r.mrp}</td><td>{r.hsnCode} / {r.gstRate}</td><td>{r.storageLocation}</td><td>{r.minStockLevel} / {r.maxStockLevel}</td><td className="text-destructive">{r.error||'Ready'}</td></tr>)}</tbody></table></div>;
+  const previewTable = preview && (
+    <div className="overflow-x-auto border-t pt-4">
+      <p className="mb-3 text-sm font-medium">
+        Review {preview.rows.length} source rows. Existing batch balances cannot
+        be reset.
+      </p>
+      <table className="w-full text-left text-xs">
+        <thead>
+          <tr>
+            {[
+              "Row",
+              "Product",
+              "Pack / unit",
+              "Batch / expiry",
+              "Opening qty",
+              "PTR / MRP",
+              "HSN / GST",
+              "Location",
+              "Min / max",
+              "Errors",
+            ].map((t) => (
+              <th key={t} className="p-2">
+                {t}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {preview.rows.map((r: any) => (
+            <tr key={r.sourceRow} className="border-t">
+              <td className="p-2">{r.sourceRow}</td>
+              <td>{r.name}</td>
+              <td>
+                {r.packSizeLabel} / {r.unit}
+              </td>
+              <td>
+                {r.batchNumber} / {r.expiryDate}
+              </td>
+              <td>{r.currentStock}</td>
+              <td>
+                {r.costPrice} / {r.mrp}
+              </td>
+              <td>
+                {r.hsnCode} / {r.gstRate}
+              </td>
+              <td>{r.storageLocation}</td>
+              <td>
+                {r.minStockLevel} / {r.maxStockLevel}
+              </td>
+              <td className="text-destructive">{r.error || "Ready"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
   if (compact) {
     return (
       <Card
@@ -223,7 +360,7 @@ export function PharmacyInventoryStarterImport({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
               type="button"
               variant="outline"
@@ -243,7 +380,7 @@ export function PharmacyInventoryStarterImport({
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
-              {preview?'Confirm opening import':'Preview import'}
+              {preview ? "Confirm opening import" : "Preview import"}
             </Button>
           </div>
 
@@ -268,7 +405,12 @@ export function PharmacyInventoryStarterImport({
                 <ImportMetric label="Updated" value={summary.updated} />
                 <ImportMetric label="Skipped" value={summary.skipped} />
               </div>
-              <ImportErrors summary={summary} />
+              <ImportErrors
+                summary={summary}
+                busy={isUploading}
+                onRetry={() => recoverImport(true)}
+                onCheck={() => recoverImport(false)}
+              />
             </div>
           )}
 
@@ -331,7 +473,7 @@ export function PharmacyInventoryStarterImport({
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
-              {preview?'Confirm opening import':'Preview import'}
+              {preview ? "Confirm opening import" : "Preview import"}
             </Button>
           </div>
         </div>
@@ -422,7 +564,12 @@ export function PharmacyInventoryStarterImport({
                 <ImportMetric label="Skipped" value={summary.skipped} />
               </div>
 
-              <ImportErrors summary={summary} />
+              <ImportErrors
+                summary={summary}
+                busy={isUploading}
+                onRetry={() => recoverImport(true)}
+                onCheck={() => recoverImport(false)}
+              />
             </div>
           )}
         </div>
@@ -440,7 +587,17 @@ function ImportMetric({ label, value }: { label: string; value: number }) {
   );
 }
 
-function ImportErrors({ summary }: { summary: InventoryImportSummary }) {
+function ImportErrors({
+  summary,
+  busy,
+  onRetry,
+  onCheck,
+}: {
+  summary: InventoryImportSummary;
+  busy: boolean;
+  onRetry: () => void;
+  onCheck: () => void;
+}) {
   if (summary.errors.length === 0) return null;
   return (
     <div
@@ -459,8 +616,44 @@ function ImportErrors({ summary }: { summary: InventoryImportSummary }) {
         ))}
       </div>
       {summary.importId && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {((summary.retryableRows ?? 0) > 0 ||
+            (summary.pendingRows ?? 0) > 0) && (
+            <Button type="button" size="sm" onClick={onRetry} disabled={busy}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {(summary.retryableRows ?? 0) > 0
+                ? "Retry failed rows"
+                : "Resume unfinished rows"}
+            </Button>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onCheck}
+            disabled={busy}
+          >
+            Check import outcome
+          </Button>
+        </div>
+      )}
+      {(summary.reconciliationRequired ?? 0) > 0 && (
+        <p className="mt-2">
+          Some earlier row outcomes are unknown. Ask an administrator to
+          reconcile them before importing stock again.
+        </p>
+      )}
+      {summary.importId && (
         <p className="mt-2 break-all text-xs">
-          Import reference: {summary.importId} <a className="ml-3 underline" href={`/api/inventory/imports/${summary.importId}/original`} target="_blank" rel="noreferrer">Download original Excel</a>
+          Import reference: {summary.importId}{" "}
+          <a
+            className="mt-1 block break-normal underline"
+            href={`/api/inventory/imports/${summary.importId}/original`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Download original Excel
+          </a>
         </p>
       )}
     </div>

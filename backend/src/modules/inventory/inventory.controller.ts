@@ -78,6 +78,27 @@ export class InventoryController {
     );
   }
 
+  @Get('imports/:id')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:read')
+  importOutcome(@Param('id') id: string, @Request() req: AuthenticatedRequest) {
+    return this.inventoryImportService.importOutcome(id, req.user.branchId);
+  }
+
+  @Post('imports/:id/retry-failed-rows')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:item:create')
+  retryImportRows(
+    @Param('id') id: string,
+    @Request() req: AuthenticatedRequest,
+  ) {
+    return this.inventoryImportService.retryFailedRows(
+      id,
+      req.user.branchId,
+      req.user.id,
+    );
+  }
+
   @Get('imports/:id/original')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:item:read')
