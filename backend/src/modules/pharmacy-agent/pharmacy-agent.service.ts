@@ -1416,7 +1416,8 @@ export class PharmacyAgentService implements OnModuleInit {
           user.branchId,
         );
       case 'adjust_stock':
-        return this.inventoryService.adjustStock(input, user.branchId, user.id);
+        if (!action.id) throw new BadRequestException('A saved action ID is required for stock changes');
+        return this.inventoryService.adjustStock({ ...input, operationId: `agent:${action.id}` }, user.branchId, user.id);
       case 'create_purchase_invoice_draft':
         return this.purchaseInvoiceService.createDraft(
           input,

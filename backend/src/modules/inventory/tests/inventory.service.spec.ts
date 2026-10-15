@@ -17,6 +17,7 @@ describe('InventoryService', () => {
   const mockPrisma: any = {
     $transaction: jest.fn(),
     inventoryWorkflowEffect: {count:jest.fn()},
+    inventoryStockOperation: {upsert:jest.fn()},
     inventoryItem: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -29,6 +30,7 @@ describe('InventoryService', () => {
       aggregate: jest.fn(),
     },
     stockTransaction: {
+      findUnique: jest.fn(),
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -61,6 +63,8 @@ describe('InventoryService', () => {
     jest.resetAllMocks();
     mockPrisma.$transaction.mockImplementation((run:any)=>run(mockPrisma));
     mockPrisma.inventoryWorkflowEffect.count.mockResolvedValue(0);
+    mockPrisma.inventoryStockOperation.upsert.mockImplementation(async ({ create }: any) => create);
+    mockPrisma.stockTransaction.findUnique.mockResolvedValue(null);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InventoryService,
@@ -361,6 +365,7 @@ describe('InventoryService', () => {
       };
 
       const createTransactionDto = {
+        operationId: 'test-movement',
         itemId: 'item-123',
         type: TransactionType.PURCHASE,
         quantity: 20,
@@ -380,6 +385,7 @@ describe('InventoryService', () => {
       mockPrisma.inventoryItem.findFirst.mockReset();
       mockPrisma.inventoryItem.findFirst.mockResolvedValue(mockItem);
       mockPrisma.stockTransaction.create.mockResolvedValue(mockTransaction);
+      mockPrisma.stockTransaction.update.mockResolvedValue(mockTransaction);
       mockPrisma.inventoryItem.update.mockResolvedValue({});
 
       const result = await service.createStockTransaction(createTransactionDto, 'branch-123', 'user-123');
@@ -395,6 +401,7 @@ describe('InventoryService', () => {
 
     it('should throw NotFoundException if item not found', async () => {
       const createTransactionDto = {
+        operationId: 'test-movement',
         itemId: 'non-existent',
         type: TransactionType.PURCHASE,
         quantity: 20,
@@ -416,6 +423,7 @@ describe('InventoryService', () => {
       };
 
       const adjustmentDto = {
+        operationId: 'test-adjustment',
         itemId: 'item-123',
         adjustmentQuantity: 10,
         reason: 'Stock adjustment',
@@ -434,6 +442,7 @@ describe('InventoryService', () => {
       mockPrisma.inventoryItem.findFirst.mockReset();
       mockPrisma.inventoryItem.findFirst.mockResolvedValue(mockItem);
       mockPrisma.stockTransaction.create.mockResolvedValue(mockTransaction);
+      mockPrisma.stockTransaction.update.mockResolvedValue(mockTransaction);
       mockPrisma.inventoryItem.update.mockResolvedValue({});
 
       const result = await service.adjustStock(adjustmentDto, 'branch-123', 'user-123');

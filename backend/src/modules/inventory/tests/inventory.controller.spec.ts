@@ -206,6 +206,7 @@ describe('InventoryController', () => {
   describe('createStockTransaction', () => {
     it('should create stock transaction', async () => {
       const createTransactionDto = {
+        operationId: 'test-operation',
         itemId: 'item-123',
         type: TransactionType.PURCHASE,
         quantity: 20,
@@ -330,14 +331,17 @@ describe('InventoryController', () => {
   describe('bulkStockUpdate', () => {
     it('should perform bulk stock update', async () => {
       const bulkUpdateDto = {
+        operationId: 'test-bulk',
         transactions: [
           {
+            rowId: 'row-1',
             itemId: 'item-1',
             type: TransactionType.PURCHASE,
             quantity: 50,
             unitPrice: 10.5,
           },
           {
+            rowId: 'row-2',
             itemId: 'item-2',
             type: TransactionType.SALE,
             quantity: 20,
@@ -372,6 +376,7 @@ describe('InventoryController', () => {
   describe('adjustStock', () => {
     it('should adjust stock', async () => {
       const adjustmentDto = {
+        operationId: 'test-adjustment',
         itemId: 'item-123',
         adjustmentQuantity: 10,
         reason: 'Stock adjustment',

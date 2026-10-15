@@ -193,6 +193,13 @@ export class InventoryController {
     );
   }
 
+  @Get('operations/:operationId')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions('inventory:transaction:read')
+  stockOperationOutcome(@Param('operationId') operationId: string, @Request() req: AuthenticatedRequest) {
+    return this.inventoryService.stockOperationOutcome(operationId, req.user.branchId);
+  }
+
   @Get('transactions')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions('inventory:transaction:read')
