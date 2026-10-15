@@ -18,6 +18,8 @@ import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { PharmacyPartnerSalesService } from './pharmacy-partner-sales.service';
 import {
   CreatePartnerDailySaleDto,
+  CommitPartnerSaleStockDto,
+  ReconcilePartnerSaleLineDto,
   QueryPartnerDailySalesDto,
   QueryPartnerMissingSalesDto,
 } from './dto/pharmacy-partner-sales.dto';
@@ -78,7 +80,36 @@ export class PharmacyPartnerSalesController {
     status: 200,
     description: 'Partner sale stock commit complete',
   })
-  commitStock(@Param('id') id: string, @Request() req: any) {
-    return this.partnerSalesService.commitStock(id, req.user);
+  commitStock(
+    @Param('id') id: string,
+    @Body() dto: CommitPartnerSaleStockDto,
+    @Request() req: any,
+  ) {
+    return this.partnerSalesService.commitStock(id, req.user, dto);
+  }
+
+  @Get(':id/items/:lineId/recovery-matches')
+  recoveryMatches(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Query('search') search: string,
+    @Request() req: any,
+  ) {
+    return this.partnerSalesService.recoveryMatches(
+      id,
+      lineId,
+      search,
+      req.user,
+    );
+  }
+
+  @Post(':id/items/:lineId/reconcile')
+  reconcileLine(
+    @Param('id') id: string,
+    @Param('lineId') lineId: string,
+    @Body() dto: ReconcilePartnerSaleLineDto,
+    @Request() req: any,
+  ) {
+    return this.partnerSalesService.reconcileLine(id, lineId, dto, req.user);
   }
 }

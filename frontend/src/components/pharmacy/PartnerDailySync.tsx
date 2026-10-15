@@ -52,7 +52,12 @@ type SaleStatus =
   | 'RECONCILIATION_REQUIRED'
   // eslint-disable-next-line no-restricted-syntax -- Partner sale status, not an appointment status.
   | 'CANCELLED';
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'brand';
+type BadgeVariant =
+  | 'default'
+  | 'secondary'
+  | 'destructive'
+  | 'outline'
+  | 'brand';
 
 type SaleItemForm = {
   localId: string;
@@ -73,12 +78,15 @@ type PartnerSaleItem = {
   discountGiven: number;
   paymentMode: PaymentMode;
   committedQuantity?: number;
+  recoveryInventoryItemId?: string | null;
   discrepancyFlag?: string | null;
   discrepancyReason?: string | null;
 };
 
 type PartnerSale = {
   id: string;
+  version: number;
+  canReconcile?: boolean;
   partnerOrganizationId: string;
   partnerOrganizationName: string;
   date: string;
@@ -153,6 +161,8 @@ export function PartnerDailySync() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [committingId, setCommittingId] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [matchingId, setMatchingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [date, setDate] = useState(today());
   const [partnerOrganizationName, setPartnerOrganizationName] = useState('');
@@ -277,22 +287,36 @@ export function PartnerDailySync() {
     }
   };
 
-  const commitStock = async (saleId: string) => {
-    setCommittingId(saleId);
+  const commitStock = async (sale: PartnerSale) => {
+    setCommittingId(sale.id);
     setError(null);
     try {
-      await apiClient.post(
-        `/pharmacy/partner-sales/${saleId}/commit-stock`,
-        {},
+      const updated = await apiClient.post<PartnerSale>(
+        `/pharmacy/partner-sales/${sale.id}/commit-stock`,
+        { expectedVersion: sale.version },
       );
-      toast({ title: 'Stock commit processed' });
+      if (!isConfirmedPartnerCommit(sale, updated))
+        throw new Error('The stock result could not be verified');
+      setRecentSales((current) =>
+        current.map((row) => (row.id === updated.id ? updated : row)),
+      );
+      const remaining = outstandingQuantity(updated);
+      toast({
+        title: remaining
+          ? `${remaining} units still outstanding`
+          : 'All sale quantities committed',
+        description: remaining
+          ? 'Match unresolved products or receive stock, then retry outstanding quantities.'
+          : undefined,
+      });
       await loadData();
     } catch (err) {
-      const message = getErrorMessage(err);
+      await loadData();
+      const message = `The stock outcome was not confirmed. Refresh the submission and review its quantities before retrying. ${getErrorMessage(err)}`;
       setError(message);
       toast({
         variant: 'destructive',
-        title: 'Commit failed',
+        title: 'Check the stock outcome',
         description: message,
       });
     } finally {
@@ -647,25 +671,39 @@ export function PartnerDailySync() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Button
-                          size="sm"
-                          variant={
-                            sale.stockCommittedAt ? 'outline' : 'default'
-                          }
-                          disabled={Boolean(
-                            sale.stockCommittedAt || committingId === sale.id,
-                          )}
-                          onClick={() => commitStock(sale.id)}
-                        >
-                          {committingId === sale.id ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : sale.stockCommittedAt ? (
-                            <PackageCheck className="mr-2 h-4 w-4" />
-                          ) : (
-                            <Send className="mr-2 h-4 w-4" />
-                          )}
-                          {sale.stockCommittedAt ? 'Committed' : 'Commit'}
-                        </Button>
+                        <div className="flex flex-col items-start gap-2">
+                          <Button
+                            size="sm"
+                            variant={
+                              outstandingQuantity(sale) > 0
+                                ? 'default'
+                                : 'outline'
+                            }
+                            disabled={
+                              sale.status === 'CANCELLED' ||
+                              outstandingQuantity(sale) <= 0 ||
+                              committingId === sale.id ||
+                              matchingId === sale.id ||
+                              !Number.isSafeInteger(sale.version)
+                            }
+                            onClick={() => void commitStock(sale)}
+                          >
+                            {committingId === sale.id ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : outstandingQuantity(sale) <= 0 ? (
+                              <PackageCheck className="mr-2 h-4 w-4" />
+                            ) : (
+                              <Send className="mr-2 h-4 w-4" />
+                            )}
+                            {sale.status === 'CANCELLED'
+                              ? 'Cancelled'
+                              : outstandingQuantity(sale) <= 0
+                                ? 'Committed'
+                                : sale.stockCommittedAt
+                                  ? 'Retry outstanding'
+                                  : 'Commit'}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
@@ -673,8 +711,400 @@ export function PartnerDailySync() {
               </TableBody>
             </Table>
           </div>
+          {recentSales
+            .filter(
+              (sale) =>
+                sale.canReconcile &&
+                sale.status !== 'CANCELLED' &&
+                outstandingQuantity(sale) > 0,
+            )
+            .map((sale) => (
+              <div
+                key={sale.id}
+                className="mt-4 space-y-4 rounded-md border bg-muted/30 p-3 sm:p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium">
+                    {sale.partnerOrganizationName} · {outstandingQuantity(sale)}{' '}
+                    units outstanding
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={
+                      committingId === sale.id || matchingId === sale.id
+                    }
+                    onClick={() =>
+                      setResolvingId((current) =>
+                        current === sale.id ? null : sale.id,
+                      )
+                    }
+                  >
+                    {resolvingId === sale.id
+                      ? 'Close corrections'
+                      : 'Resolve outstanding'}
+                  </Button>
+                </div>
+                {resolvingId === sale.id && (
+                  <div className="space-y-4">
+                    <p className="text-sm">
+                      Already committed quantities stay unchanged. Correct the
+                      product lookup, choose the stocked batch and enter a
+                      reason. Matching does not deduct stock.
+                    </p>
+                    {(sale.items || [])
+                      .filter(
+                        (item) =>
+                          item.quantitySold >
+                          Number(item.committedQuantity || 0),
+                      )
+                      .map((item) => (
+                        <PartnerLineRecovery
+                          key={item.id}
+                          sale={sale}
+                          item={item}
+                          onChanged={loadData}
+                          onBusyChange={(busy) =>
+                            setMatchingId(busy ? sale.id : null)
+                          }
+                          disabled={
+                            committingId === sale.id || matchingId === sale.id
+                          }
+                        />
+                      ))}
+                    <Button
+                      disabled={
+                        committingId === sale.id ||
+                        matchingId === sale.id ||
+                        !Number.isSafeInteger(sale.version)
+                      }
+                      onClick={() => void commitStock(sale)}
+                    >
+                      Retry these outstanding units
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] partner-complete-acknowledgement
+ * A write acknowledgement MUST retain every original line identity and sold quantity and advance
+ * the sale revision. Missing, stale, inconsistent or regressing progress MUST remain an unknown outcome.
+ */
+function hasCompletePartnerSnapshot(
+  previous: PartnerSale,
+  updated: PartnerSale,
+) {
+  if (
+    !updated ||
+    typeof updated !== 'object' ||
+    updated.id !== previous.id ||
+    !Number.isSafeInteger(updated.version) ||
+    updated.version <= previous.version ||
+    !Array.isArray(previous.items) ||
+    previous.items.length === 0 ||
+    !Array.isArray(updated.items) ||
+    updated.items.length !== previous.items.length ||
+    typeof updated.hasDiscrepancy !== 'boolean' ||
+    typeof updated.canReconcile !== 'boolean'
+  )
+    return false;
+  const immutableHeaders = [
+    'partnerOrganizationId',
+    'partnerOrganizationName',
+    'date',
+    'source',
+    'totalQuantity',
+    'grossAmount',
+    'totalDiscount',
+    'netAmount',
+    'lateEntry',
+  ] as const;
+  if (immutableHeaders.some((key) => updated[key] !== previous[key]))
+    return false;
+  const originals = new Map(previous.items.map((line) => [line.id, line]));
+  if (
+    originals.size !== previous.items.length ||
+    new Set(updated.items.map((line) => line?.id)).size !==
+      previous.items.length
+  )
+    return false;
+  return updated.items.every((line) => {
+    if (
+      !line ||
+      typeof line.id !== 'string' ||
+      !line.id ||
+      !Number.isSafeInteger(line.quantitySold) ||
+      line.quantitySold <= 0 ||
+      !Number.isSafeInteger(line.committedQuantity)
+    )
+      return false;
+    const original = originals.get(line.id);
+    return Boolean(
+      original &&
+        line.quantitySold === original.quantitySold &&
+        line.medicineName === original.medicineName &&
+        line.batchNumber === original.batchNumber &&
+        line.mrp === original.mrp &&
+        line.discountGiven === original.discountGiven &&
+        line.paymentMode === original.paymentMode &&
+        Number(line.committedQuantity) >=
+          Number(original.committedQuantity || 0) &&
+        Number(line.committedQuantity) <= line.quantitySold &&
+        (line.discrepancyReason == null ||
+          typeof line.discrepancyReason === 'string') &&
+        (line.recoveryInventoryItemId == null ||
+          typeof line.recoveryInventoryItemId === 'string'),
+    );
+  });
+}
+
+function isConfirmedPartnerCommit(previous: PartnerSale, updated: PartnerSale) {
+  if (!hasCompletePartnerSnapshot(previous, updated)) return false;
+  const lines = updated.items!;
+  const committed = lines.reduce(
+    (sum, line) => sum + Number(line.committedQuantity),
+    0,
+  );
+  const complete = lines.every(
+    (line) => line.committedQuantity === line.quantitySold,
+  );
+  return (
+    updated.status ===
+    (complete
+      ? 'STOCK_COMMITTED'
+      : committed > 0
+        ? 'PARTIAL_STOCK_COMMITTED'
+        : 'RECONCILIATION_REQUIRED')
+  );
+}
+
+function isConfirmedPartnerMatch(
+  previous: PartnerSale,
+  updated: PartnerSale,
+  lineId: string | undefined,
+  batchId: string,
+) {
+  if (
+    !hasCompletePartnerSnapshot(previous, updated) ||
+    updated.version !== previous.version + 1 ||
+    updated.status !== previous.status
+  )
+    return false;
+  return updated.items!.every((line) => {
+    const original = previous.items!.find((item) => item.id === line.id)!;
+    return (
+      line.committedQuantity === Number(original.committedQuantity || 0) &&
+      (line.id === lineId
+        ? line.recoveryInventoryItemId === batchId
+        : line.recoveryInventoryItemId === original.recoveryInventoryItemId)
+    );
+  });
+}
+
+const outstandingQuantity = (sale: PartnerSale) =>
+  (sale.items || []).reduce(
+    (sum, item) =>
+      sum +
+      Math.max(0, item.quantitySold - Number(item.committedQuantity || 0)),
+    0,
+  );
+
+type RecoveryBatch = {
+  id: string;
+  name: string;
+  batchNumber?: string | null;
+  availableQuantity: number;
+  unit: string;
+  expiryDate?: string | null;
+};
+
+/**
+ * @cc [owner:nareshshah139,label:product] partner-inline-match-preserves-sale
+ * Staff MUST explicitly choose a batch and supply a reason for only the outstanding quantity.
+ * Saving a match MUST preserve sold inputs and require a separate action before stock is deducted.
+ */
+function PartnerLineRecovery({
+  sale,
+  item,
+  onChanged,
+  onBusyChange,
+  disabled,
+}: {
+  sale: PartnerSale;
+  item: PartnerSaleItem;
+  onChanged: () => Promise<void>;
+  onBusyChange: (busy: boolean) => void;
+  disabled: boolean;
+}) {
+  const [search, setSearch] = useState(item.medicineName);
+  const [matches, setMatches] = useState<RecoveryBatch[] | null>(null);
+  const [selectedId, setSelectedId] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const searchBatches = async () => {
+    setBusy(true);
+    onBusyChange(true);
+    setError(null);
+    setMatches(null);
+    setSelectedId('');
+    setSaved(false);
+    try {
+      const result = await apiClient.get<{ matches: RecoveryBatch[] }>(
+        `/pharmacy/partner-sales/${sale.id}/items/${item.id}/recovery-matches`,
+        { search: search.trim() },
+      );
+      if (!Array.isArray(result.matches))
+        throw new Error('Batch search could not be verified');
+      setMatches(result.matches);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+      onBusyChange(false);
+    }
+  };
+  const saveMatch = async () => {
+    setBusy(true);
+    onBusyChange(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await apiClient.post<PartnerSale>(
+        `/pharmacy/partner-sales/${sale.id}/items/${item.id}/reconcile`,
+        {
+          expectedVersion: sale.version,
+          inventoryItemId: selectedId,
+          reason: reason.trim(),
+        },
+      );
+      if (!isConfirmedPartnerMatch(sale, updated, item.id, selectedId))
+        throw new Error('The match result could not be verified');
+      await onChanged();
+      setSaved(true);
+    } catch (err) {
+      await onChanged();
+      setError(
+        `The match was not confirmed. Refresh the submission and review its selected batch before retrying. ${getErrorMessage(err)}`,
+      );
+    } finally {
+      setBusy(false);
+      onBusyChange(false);
+    }
+  };
+  return (
+    <div className="space-y-3 rounded-md border bg-background p-3">
+      <div>
+        <p className="font-medium">
+          {item.medicineName} · batch {item.batchNumber}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          {Number(item.committedQuantity || 0)} committed ·{' '}
+          {item.quantitySold - Number(item.committedQuantity || 0)} outstanding
+        </p>
+      </div>
+      {item.discrepancyReason && (
+        <p className="text-sm">{item.discrepancyReason}</p>
+      )}
+      {item.recoveryInventoryItemId && (
+        <p className="text-sm text-emerald-700">
+          A batch is selected for the outstanding quantity. Retry outstanding
+          when stock is available.
+        </p>
+      )}
+      <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-end">
+        <div className="min-w-0 flex-1">
+          <Label htmlFor={`partner-search-${item.id}`}>
+            Corrected product name or batch
+          </Label>
+          <Input
+            id={`partner-search-${item.id}`}
+            value={search}
+            maxLength={100}
+            onChange={(event) => setSearch(event.target.value)}
+            disabled={disabled || busy}
+          />
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => void searchBatches()}
+          disabled={disabled || busy || !search.trim()}
+        >
+          Search batches
+        </Button>
+      </div>
+      {matches && matches.length === 0 && (
+        <p className="text-sm">
+          No stocked batch matches this search. Add or correct the product in
+          Inventory, receive its stock, then search again. The submitted sale
+          stays saved.
+        </p>
+      )}
+      {matches && matches.length > 0 && (
+        <>
+          <Label htmlFor={`partner-batch-${item.id}`}>
+            Choose the actual product and batch
+          </Label>
+          <select
+            id={`partner-batch-${item.id}`}
+            value={selectedId}
+            onChange={(event) => {
+              setSelectedId(event.target.value);
+              setSaved(false);
+            }}
+            disabled={disabled || busy}
+            className="w-full min-w-0 rounded-md border bg-background p-2 text-sm"
+          >
+            <option value="">Choose a batch</option>
+            {matches.map((batch) => (
+              <option key={batch.id} value={batch.id}>
+                {batch.name} · batch {batch.batchNumber || 'not recorded'} ·{' '}
+                {batch.availableQuantity} {batch.unit} available
+                {batch.expiryDate
+                  ? ` · expires ${batch.expiryDate.slice(0, 10)}`
+                  : ''}
+              </option>
+            ))}
+          </select>
+          <div>
+            <Label htmlFor={`partner-reason-${item.id}`}>
+              Reason for correcting the match
+            </Label>
+            <Input
+              id={`partner-reason-${item.id}`}
+              value={reason}
+              maxLength={500}
+              onChange={(event) => setReason(event.target.value)}
+              disabled={disabled || busy}
+            />
+          </div>
+          <Button
+            onClick={() => void saveMatch()}
+            disabled={disabled || busy || !selectedId || !reason.trim()}
+          >
+            Save match
+          </Button>
+        </>
+      )}
+      {saved && (
+        <p role="status" className="text-sm text-emerald-700">
+          Match saved. Use Retry outstanding to deduct only the remaining
+          quantities.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

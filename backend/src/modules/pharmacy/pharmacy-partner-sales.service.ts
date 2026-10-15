@@ -5,9 +5,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { writeStockMovement } from '../inventory/inventory-stock';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
   CreatePartnerDailySaleDto,
+  CommitPartnerSaleStockDto,
+  ReconcilePartnerSaleLineDto,
   QueryPartnerDailySalesDto,
   QueryPartnerMissingSalesDto,
 } from './dto/pharmacy-partner-sales.dto';
@@ -151,7 +154,7 @@ export class PharmacyPartnerSalesService {
     ]);
 
     return {
-      data: data.map((sale: any) => this.formatSale(sale)),
+      data: data.map((sale: any) => this.formatSale(sale, access.canViewAll)),
       pagination: {
         total,
         page,
@@ -214,8 +217,9 @@ export class PharmacyPartnerSalesService {
         ),
       ),
       discrepancyCount: sales.filter((sale: any) => sale.hasDiscrepancy).length,
-      stockCommittedCount: sales.filter((sale: any) => sale.stockCommittedAt)
-        .length,
+      stockCommittedCount: sales.filter(
+        (sale: any) => sale.status === 'STOCK_COMMITTED',
+      ).length,
       statusCounts,
     };
   }
@@ -276,104 +280,309 @@ export class PharmacyPartnerSalesService {
     };
   }
 
-  async commitStock(id: string, user: any) {
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-outstanding-stock-only
+   * A commit MUST deduct only each line's sold quantity minus its cumulative committed quantity.
+   * Legacy partial commits remain retryable; completed deductions and sold snapshots stay unchanged.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-stock-revision-atomic
+   * The sale revision, cumulative line progress and held-stock-safe movements MUST commit atomically.
+   * A stale revision or concurrent stock change MUST prevent new deductions for that attempt.
+   */
+  async commitStock(id: string, user: any, dto: CommitPartnerSaleStockDto) {
     const branchId = this.requireBranchId(user);
     const userId = this.requireUserId(user);
     const access = this.getAccessContext(user);
-    const prismaAny = this.prisma as any;
-
-    return prismaAny.$transaction(async (tx: any) => {
-      const sale = await tx.partnerDailySale.findFirst({
-        where: {
-          id,
-          branchId,
-          ...this.accessWhere(access),
+    this.requireVersion(dto?.expectedVersion);
+    try {
+      return await (this.prisma as any).$transaction(
+        async (tx: any) => {
+          const sale = await tx.partnerDailySale.findFirst({
+            where: { id, branchId, ...this.accessWhere(access) },
+            include: this.saleInclude(),
+          });
+          if (!sale)
+            throw new NotFoundException('Partner daily sale not found');
+          if (sale.status === 'CANCELLED')
+            throw new BadRequestException(
+              'Cancelled partner sales cannot commit stock',
+            );
+          for (const item of sale.items || []) {
+            if (
+              !Number.isSafeInteger(item.quantitySold) ||
+              !Number.isSafeInteger(item.committedQuantity ?? 0) ||
+              item.quantitySold < 0 ||
+              (item.committedQuantity ?? 0) < 0 ||
+              (item.committedQuantity ?? 0) > item.quantitySold
+            ) {
+              throw new ConflictException(
+                'Partner sale quantities require reconciliation before retrying',
+              );
+            }
+          }
+          if (
+            (sale.items || []).every(
+              (item: any) =>
+                Number(item.committedQuantity || 0) >= item.quantitySold,
+            )
+          ) {
+            return this.formatSale(sale, access.canViewAll);
+          }
+          if ((sale.version ?? 0) !== dto.expectedVersion)
+            throw new ConflictException(
+              'Partner sale changed. Refresh before retrying outstanding stock.',
+            );
+          const claim = await tx.partnerDailySale.updateMany({
+            where: { id, branchId, version: dto.expectedVersion },
+            data: {
+              version: { increment: 1 },
+              stockCommittedAt: sale.stockCommittedAt || new Date(),
+              stockCommittedBy: sale.stockCommittedBy || userId,
+            },
+          });
+          if (claim.count !== 1)
+            throw new ConflictException(
+              'Partner sale changed. Refresh before retrying outstanding stock.',
+            );
+          const itemResults: CommitLineResult[] = [];
+          for (const item of sale.items || [])
+            itemResults.push(
+              await this.commitSaleItem(tx, sale, item, branchId, userId),
+            );
+          const totalSold = sale.items.reduce(
+            (sum: number, item: any) => sum + item.quantitySold,
+            0,
+          );
+          const totalCommitted = itemResults.reduce(
+            (sum, item) => sum + item.committedQuantity,
+            0,
+          );
+          const flags = Array.from(
+            new Set<PartnerDiscrepancyFlag>([
+              ...(sale.lateEntry ? ['LATE_ENTRY' as const] : []),
+              ...itemResults
+                .map((item) => item.discrepancyFlag)
+                .filter((flag): flag is PartnerDiscrepancyFlag =>
+                  Boolean(flag),
+                ),
+            ]),
+          );
+          const hasDiscrepancy = flags.length > 0;
+          const updated = await tx.partnerDailySale.update({
+            where: { id },
+            data: {
+              status: this.deriveCommittedStatus(
+                totalSold,
+                totalCommitted,
+                hasDiscrepancy,
+              ),
+              hasDiscrepancy,
+              discrepancyFlags: this.stringifyFlags(flags),
+            },
+            include: this.saleInclude(),
+          });
+          return this.formatSale(updated, access.canViewAll);
         },
+        { isolationLevel: 'Serializable' },
+      );
+    } catch (error) {
+      if (error?.code === 'P2034')
+        throw new ConflictException(
+          'Stock changed. Refresh the submission before retrying.',
+        );
+      throw error;
+    }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] partner-recovery-staff-scope
+   * Only branch staff may search recovery batches for an outstanding line belonging to their branch.
+   * Results MUST omit prices, supplier details and other branches' inventory.
+   */
+  async recoveryMatches(
+    id: string,
+    lineId: string,
+    search: string | undefined,
+    user: any,
+  ) {
+    const branchId = this.requireBranchId(user);
+    this.requireRecoveryStaff(user);
+    const sale = await (this.prisma as any).partnerDailySale.findFirst({
+      where: { id, branchId },
+      include: this.saleInclude(),
+    });
+    const line = this.requireOutstandingLine(sale, lineId);
+    if (search !== undefined && typeof search !== 'string')
+      throw new BadRequestException('Enter one product name or batch');
+    const query = (search ?? line.medicineName).trim();
+    if (!query || query.length > 100)
+      throw new BadRequestException(
+        'Enter a product name or batch of at most 100 characters',
+      );
+    const rows = await this.prisma.inventoryItem.findMany({
+      where: {
+        branchId,
+        status: 'ACTIVE',
+        AND: [this.unexpiredWhere()],
+        OR: [
+          { name: { contains: query, mode: 'insensitive' } },
+          { batchNumber: { contains: query, mode: 'insensitive' } },
+          {
+            drugs: { some: { name: { contains: query, mode: 'insensitive' } } },
+          },
+        ],
+      },
+      take: 25,
+      orderBy: [{ name: 'asc' }, { batchNumber: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        batchNumber: true,
+        currentStock: true,
+        heldStock: true,
+        unit: true,
+        expiryDate: true,
+      },
+    });
+    return {
+      matches: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        batchNumber: row.batchNumber,
+        availableQuantity: Math.max(0, row.currentStock - row.heldStock),
+        unit: row.unit,
+        expiryDate: row.expiryDate,
+      })),
+    };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-recovery-selection-audited
+   * A staff-selected active branch batch and reason MUST be recorded atomically under the sale revision.
+   * Selection MUST NOT alter sold snapshots, prior matched identities, committed quantities or stock.
+   */
+  async reconcileLine(
+    id: string,
+    lineId: string,
+    dto: ReconcilePartnerSaleLineDto,
+    user: any,
+  ) {
+    const branchId = this.requireBranchId(user);
+    const userId = this.requireUserId(user);
+    this.requireRecoveryStaff(user);
+    this.requireVersion(dto?.expectedVersion);
+    if (
+      !dto.reason?.trim() ||
+      dto.reason.trim().length > 500 ||
+      !dto.inventoryItemId?.trim()
+    )
+      throw new BadRequestException(
+        'Choose a batch and enter a reason of at most 500 characters',
+      );
+    return (this.prisma as any).$transaction(async (tx: any) => {
+      const sale = await tx.partnerDailySale.findFirst({
+        where: { id, branchId },
         include: this.saleInclude(),
       });
-
-      if (!sale) {
-        throw new NotFoundException('Partner daily sale not found');
-      }
-      if (sale.status === 'CANCELLED') {
-        throw new BadRequestException(
-          'Cancelled partner sales cannot commit stock',
+      const line = this.requireOutstandingLine(sale, lineId);
+      if ((sale.version ?? 0) !== dto.expectedVersion)
+        throw new ConflictException(
+          'Partner sale changed. Refresh before correcting the match.',
         );
-      }
-      if (sale.stockCommittedAt) {
-        return this.formatSale(sale);
-      }
-
-      const claimedAt = new Date();
-      const claim = await tx.partnerDailySale.updateMany({
+      const batch = await tx.inventoryItem.findFirst({
         where: {
-          id,
+          id: dto.inventoryItemId,
           branchId,
-          stockCommittedAt: null,
+          status: 'ACTIVE',
+          ...this.unexpiredWhere(),
         },
+        select: { id: true },
+      });
+      if (!batch)
+        throw new BadRequestException(
+          'Choose an active, unexpired batch in this branch',
+        );
+      const claim = await tx.partnerDailySale.updateMany({
+        where: { id, branchId, version: dto.expectedVersion },
+        data: { version: { increment: 1 } },
+      });
+      if (claim.count !== 1)
+        throw new ConflictException(
+          'Partner sale changed. Refresh before correcting the match.',
+        );
+      await tx.partnerDailySaleItem.update({
+        where: { id: line.id },
+        data: { recoveryInventoryItemId: batch.id },
+      });
+      await tx.auditLog.create({
         data: {
-          stockCommittedAt: claimedAt,
-          stockCommittedBy: userId,
+          userId,
+          action: 'PARTNER_SALE_LINE_MATCHED',
+          entity: 'PartnerDailySaleItem',
+          entityId: line.id,
+          oldValues: JSON.stringify({
+            branchId,
+            saleId: id,
+            recoveryInventoryItemId: line.recoveryInventoryItemId || null,
+          }),
+          newValues: JSON.stringify({
+            branchId,
+            saleId: id,
+            recoveryInventoryItemId: batch.id,
+            reason: dto.reason.trim(),
+          }),
         },
       });
-
-      if (claim.count !== 1) {
-        const current = await tx.partnerDailySale.findFirst({
+      return this.formatSale(
+        await tx.partnerDailySale.findFirst({
           where: { id, branchId },
           include: this.saleInclude(),
-        });
-        if (current?.stockCommittedAt) {
-          return this.formatSale(current);
-        }
-        throw new ConflictException(
-          'Partner sale changed while committing stock. Refresh and retry.',
-        );
-      }
-
-      const itemResults: CommitLineResult[] = [];
-      for (const item of sale.items || []) {
-        itemResults.push(
-          await this.commitSaleItem(tx, sale, item, branchId, userId),
-        );
-      }
-
-      const totalSold = (sale.items || []).reduce(
-        (sum: number, item: any) => sum + Number(item.quantitySold || 0),
-        0,
+        }),
+        true,
       );
-      const totalCommitted = itemResults.reduce(
-        (sum, item) => sum + item.committedQuantity,
-        0,
-      );
-      const flags = Array.from(
-        new Set([
-          ...(this.parseFlags(
-            sale.discrepancyFlags,
-          ) as PartnerDiscrepancyFlag[]),
-          ...itemResults
-            .map((result) => result.discrepancyFlag)
-            .filter(Boolean),
-        ]),
-      ) as PartnerDiscrepancyFlag[];
-      const hasDiscrepancy = Boolean(sale.lateEntry || flags.length > 0);
-      const status = this.deriveCommittedStatus(
-        totalSold,
-        totalCommitted,
-        hasDiscrepancy,
-      );
-
-      const updated = await tx.partnerDailySale.update({
-        where: { id },
-        data: {
-          status,
-          hasDiscrepancy,
-          discrepancyFlags: this.stringifyFlags(flags),
-        },
-        include: this.saleInclude(),
-      });
-
-      return this.formatSale(updated);
     });
+  }
+
+  private requireRecoveryStaff(user: any) {
+    if (!this.getAccessContext(user).canViewAll)
+      throw new ForbiddenException(
+        'Only branch pharmacy staff can correct inventory matches',
+      );
+  }
+
+  private requireVersion(version: number) {
+    if (!Number.isSafeInteger(version) || version < 0)
+      throw new BadRequestException('Refresh the submission before retrying');
+  }
+
+  private requireOutstandingLine(sale: any, lineId: string) {
+    if (!sale) throw new NotFoundException('Partner daily sale not found');
+    const line = sale.items?.find((item: any) => item.id === lineId);
+    if (!line) throw new NotFoundException('Partner sale line not found');
+    if (
+      sale.status === 'CANCELLED' ||
+      Number(line.committedQuantity || 0) >= line.quantitySold
+    )
+      throw new BadRequestException(
+        'Only outstanding sale lines can be matched',
+      );
+    return line;
+  }
+
+  private unexpiredWhere() {
+    return {
+      OR: [
+        { expiryDate: null },
+        {
+          expiryDate: {
+            gte: new Date(
+              new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z',
+            ),
+          },
+        },
+      ],
+    };
   }
 
   private async commitSaleItem(
@@ -383,204 +592,117 @@ export class PharmacyPartnerSalesService {
     branchId: string,
     userId: string,
   ): Promise<CommitLineResult> {
-    const candidates = await this.findCandidateBatches(tx, branchId, item);
-    let remaining = Number(item.quantitySold || 0);
-    let committedQuantity = 0;
-    let matchedInventoryItemId: string | undefined;
-    let matchedDrugId: string | undefined;
-
-    for (const candidate of candidates) {
-      if (remaining <= 0) break;
-      const available = Math.max(0, Number(candidate.currentStock || 0));
-      const quantity = Math.min(remaining, available);
-      if (quantity <= 0) continue;
-
-      await this.decrementInventory(tx, candidate.id, quantity, branchId);
-      await tx.stockTransaction.create({
-        data: {
+    const previouslyCommitted = Number(item.committedQuantity || 0);
+    let committedQuantity = previouslyCommitted;
+    let matchedInventoryItemId = item.matchedInventoryItemId;
+    let matchedDrugId = item.matchedDrugId;
+    const remaining = item.quantitySold - previouslyCommitted;
+    const candidates =
+      remaining > 0 ? await this.findCandidateBatches(tx, branchId, item) : [];
+    if (remaining > 0 && candidates.length === 1) {
+      const candidate = candidates[0];
+      const quantity = Math.min(
+        remaining,
+        Math.max(0, candidate.currentStock - Number(candidate.heldStock || 0)),
+      );
+      if (quantity > 0) {
+        const movement = await writeStockMovement(tx, {
           branchId,
-          itemId: candidate.id,
           userId,
+          itemId: candidate.id,
+          delta: -quantity,
           type: 'SALE',
-          quantity,
           unitPrice: this.effectiveUnitPrice(item),
-          totalAmount: this.money(this.effectiveUnitPrice(item) * quantity),
           reference: `PARTNER-SALE-${sale.id}`,
-          notes: `Partner daily sale ${sale.partnerOrganizationName}; source ${sale.source}; item ${item.medicineName}`,
-          batchNumber: candidate.batchNumber || item.batchNumber,
-          expiryDate: candidate.expiryDate || undefined,
-          customer: sale.partnerOrganizationName,
           reason: 'PARTNER_DAILY_SYNC',
-        },
-      });
-
-      committedQuantity += quantity;
-      remaining -= quantity;
-      matchedInventoryItemId = matchedInventoryItemId || candidate.id;
-      matchedDrugId = matchedDrugId || candidate.drugs?.[0]?.id;
+          metadata: {
+            partnerSaleId: sale.id,
+            partnerSaleLineId: item.id,
+            previousCommittedQuantity: previouslyCommitted,
+          },
+        });
+        await tx.stockTransaction.update({
+          where: { id: movement.id },
+          data: { customer: sale.partnerOrganizationName },
+        });
+        committedQuantity += quantity;
+        matchedInventoryItemId ||= candidate.id;
+        matchedDrugId ||= candidate.drugs?.[0]?.id;
+      }
     }
-
     const result: CommitLineResult = {
       committedQuantity,
       matchedInventoryItemId,
       matchedDrugId,
     };
-
-    if (committedQuantity === 0) {
-      result.discrepancyFlag = 'UNMATCHED_BATCH';
-      result.discrepancyReason = `No matching active stock found for ${item.medicineName} batch ${item.batchNumber}`;
-    } else if (committedQuantity < Number(item.quantitySold || 0)) {
-      result.discrepancyFlag = 'INSUFFICIENT_STOCK';
-      result.discrepancyReason = `Sold ${item.quantitySold}, committed ${committedQuantity}; excess ${Number(item.quantitySold) - committedQuantity} left for reconciliation`;
+    if (committedQuantity < item.quantitySold) {
+      result.discrepancyFlag =
+        candidates.length === 1 ? 'INSUFFICIENT_STOCK' : 'UNMATCHED_BATCH';
+      result.discrepancyReason =
+        candidates.length === 1
+          ? `${item.quantitySold - committedQuantity} units remain. Receive stock and retry; held units are reserved.`
+          : 'Choose an exact product and batch for the outstanding quantity.';
     }
-
     await tx.partnerDailySaleItem.update({
       where: { id: item.id },
       data: {
         matchedInventoryItemId,
         matchedDrugId,
         committedQuantity,
-        discrepancyFlag: result.discrepancyFlag,
-        discrepancyReason: result.discrepancyReason,
+        discrepancyFlag: result.discrepancyFlag || null,
+        discrepancyReason: result.discrepancyReason || null,
       },
     });
-
     return result;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] partner-exact-or-explicit-batch
+   * Automatic matching MUST require one active, unexpired branch batch with an exact product identity
+   * and batch number. Ambiguous or fuzzy matches MUST leave stock untouched until staff choose a batch.
+   */
   private async findCandidateBatches(tx: any, branchId: string, item: any) {
-    const medicineName = String(item.medicineName || '').trim();
-    const batchNumber = String(item.batchNumber || '').trim();
-    const activeStockWhere = {
-      branchId,
-      status: 'ACTIVE',
-      currentStock: { gt: 0 },
-    };
-    const include = { drugs: true };
-    const byBatch = batchNumber
-      ? await tx.inventoryItem.findMany({
-          where: {
-            ...activeStockWhere,
-            batchNumber,
-          },
-          include,
-          orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
-        })
-      : [];
-
-    const byName = medicineName
-      ? await tx.inventoryItem.findMany({
-          where: {
-            ...activeStockWhere,
-            OR: this.nameMatchWhere(medicineName),
-          },
-          include,
-          orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
-        })
-      : [];
-
-    const combined = [...byBatch, ...byName];
-    const seen = new Set<string>();
-    return combined
-      .filter((candidate: any) => {
-        if (seen.has(candidate.id)) return false;
-        seen.add(candidate.id);
-        return true;
-      })
-      .sort((a: any, b: any) => {
-        const aScore = this.matchScore(a, medicineName, batchNumber);
-        const bScore = this.matchScore(b, medicineName, batchNumber);
-        if (aScore !== bScore) return bScore - aScore;
-        return (
-          new Date(a.expiryDate || '9999-12-31').getTime() -
-          new Date(b.expiryDate || '9999-12-31').getTime()
-        );
-      });
-  }
-
-  private nameMatchWhere(medicineName: string) {
-    return [
-      { name: { contains: medicineName, mode: 'insensitive' } },
-      { brandName: { contains: medicineName, mode: 'insensitive' } },
-      { genericName: { contains: medicineName, mode: 'insensitive' } },
-      {
-        drugs: {
-          some: {
-            name: { contains: medicineName, mode: 'insensitive' },
-          },
-        },
-      },
-    ];
-  }
-
-  private matchScore(
-    candidate: any,
-    medicineName: string,
-    batchNumber: string,
-  ) {
-    let score = 0;
     if (
-      batchNumber &&
-      String(candidate.batchNumber || '').toLowerCase() ===
-        batchNumber.toLowerCase()
-    ) {
-      score += 10;
-    }
-    const needle = medicineName.toLowerCase();
-    const names = [
-      candidate.name,
-      candidate.brandName,
-      candidate.genericName,
-      ...(candidate.drugs || []).map((drug: any) => drug.name),
-    ]
-      .filter(Boolean)
-      .map((value: string) => value.toLowerCase());
-    if (needle && names.some((name: string) => name === needle)) score += 5;
-    if (needle && names.some((name: string) => name.includes(needle)))
-      score += 3;
-    return score;
-  }
-
-  private async decrementInventory(
-    tx: any,
-    itemId: string,
-    quantity: number,
-    branchId: string,
-  ) {
-    const updated = await tx.inventoryItem.updateMany({
+      !item.recoveryInventoryItemId &&
+      (!String(item.medicineName || '').trim() ||
+        !String(item.batchNumber || '').trim())
+    )
+      return [];
+    const identity = item.recoveryInventoryItemId
+      ? { id: item.recoveryInventoryItemId }
+      : {
+          batchNumber: {
+            equals: String(item.batchNumber || '').trim(),
+            mode: 'insensitive',
+          },
+          OR: [
+            {
+              name: {
+                equals: String(item.medicineName || '').trim(),
+                mode: 'insensitive',
+              },
+            },
+            {
+              drugs: {
+                some: {
+                  name: {
+                    equals: String(item.medicineName || '').trim(),
+                    mode: 'insensitive',
+                  },
+                },
+              },
+            },
+          ],
+        };
+    return tx.inventoryItem.findMany({
       where: {
-        id: itemId,
         branchId,
-        currentStock: { gte: quantity },
+        status: 'ACTIVE',
+        AND: [this.unexpiredWhere(), identity],
       },
-      data: {
-        currentStock: { decrement: quantity },
-      },
-    });
-
-    if (updated.count !== 1) {
-      throw new ConflictException(
-        'Inventory changed while committing partner sale. Refresh and retry.',
-      );
-    }
-
-    const item = await tx.inventoryItem.findUnique({
-      where: { id: itemId },
-      select: {
-        currentStock: true,
-        minStockLevel: true,
-        reorderLevel: true,
-        expiryDate: true,
-      },
-    });
-    if (!item) {
-      throw new ConflictException(
-        'Inventory item disappeared while committing stock',
-      );
-    }
-    await tx.inventoryItem.update({
-      where: { id: itemId },
-      data: { stockStatus: this.deriveStockStatus(item) },
+      include: { drugs: { select: { id: true, name: true } } },
+      take: 2,
+      orderBy: { id: 'asc' },
     });
   }
 
@@ -735,9 +857,11 @@ export class PharmacyPartnerSalesService {
     };
   }
 
-  private formatSale(sale: any) {
+  private formatSale(sale: any, canReconcile = false) {
     return {
       ...sale,
+      version: sale.version ?? 0,
+      canReconcile,
       discrepancyFlags: this.parseFlags(sale.discrepancyFlags),
       paymentSummary: this.parseJsonObject(sale.paymentSummary),
     };
@@ -805,27 +929,6 @@ export class PharmacyPartnerSalesService {
     } catch {
       return {};
     }
-  }
-
-  private deriveStockStatus(item: {
-    currentStock: number;
-    minStockLevel?: number | null;
-    reorderLevel?: number | null;
-    expiryDate?: Date | null;
-  }) {
-    if (item.expiryDate && new Date(item.expiryDate).getTime() < Date.now()) {
-      return 'EXPIRED';
-    }
-    if (item.currentStock <= 0) return 'OUT_OF_STOCK';
-    const threshold = item.reorderLevel ?? item.minStockLevel;
-    if (
-      threshold !== null &&
-      threshold !== undefined &&
-      item.currentStock <= threshold
-    ) {
-      return 'LOW_STOCK';
-    }
-    return 'IN_STOCK';
   }
 
   private requireBranchId(user: any) {
