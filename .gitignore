@@ -60,3 +60,5 @@ prod-backup*.list
 !backend/prisma/migrations/20260928100000_inventory_batch_edits/migration.sql
 
 /output/diagnostics/partner-recovery/
+
+/output/diagnostics/recovery-e2e/

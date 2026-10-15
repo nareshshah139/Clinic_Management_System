@@ -1,0 +1,52 @@
+name: Recovery end-to-end tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  recovery-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: recovery_test
+          POSTGRES_PASSWORD: recovery_test
+          POSTGRES_DB: clinic_recovery
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recovery_test -d clinic_recovery"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install workspaces
+        run: npm ci
+      - name: Build shared types
+        run: npm run build --workspace=shared-types
+      - name: Run recovery scenarios
+        env:
+          RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
+        run: npm run test:recovery:e2e
+      - name: Upload recovery results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: recovery-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: output/diagnostics/recovery-e2e/
+          if-no-files-found: error
+          retention-days: 14
