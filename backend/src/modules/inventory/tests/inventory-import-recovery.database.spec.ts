@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { execFileSync } from 'node:child_process';
 import * as path from 'node:path';
 import * as XLSX from 'xlsx';
@@ -417,7 +418,7 @@ databaseTests('Opening import recovery with PostgreSQL', () => {
       .mockImplementation(async (tx: any, row: any, branch: string) => {
         const snapshot = await find(tx, row, branch);
         expect(snapshot.currentStock).toBe(10);
-        await db.$transaction(async (sale) =>
+        await db.$transaction(async (sale: Prisma.TransactionClient) =>
           writeStockMovement(sale, {
             branchId,
             userId,
@@ -462,7 +463,8 @@ databaseTests('Opening import recovery with PostgreSQL', () => {
     ]);
     expect(
       movements.reduce(
-        (balance, movement) => balance + movement.quantityDelta,
+        (balance: number, movement: { quantityDelta: number }) =>
+          balance + movement.quantityDelta,
         0,
       ),
     ).toBe(after.currentStock);

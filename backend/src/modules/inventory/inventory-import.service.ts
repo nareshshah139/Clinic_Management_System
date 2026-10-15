@@ -192,14 +192,25 @@ export class InventoryImportService {
   /**
    * @cc [owner:nareshshah139,label:product] legacy-opening-evidence
    * Legacy rows may be classified as successful only when retained source rows, aggregate counts,
-   * and unique error rows reconcile exactly. Uncertain transaction outcomes require reconciliation.
+   * and unique error rows reconcile exactly. Uncertain or malformed evidence requires reconciliation.
    */
   private legacyRows(migration: any, rows: Record<string, unknown>[]) {
     const result = migration.result;
     const numbers = rows.map((row, index) => this.sourceRow(row, index));
-    const errors = Array.isArray(result?.errors) ? result.errors : [];
+    const rawErrors: unknown[] = Array.isArray(result?.errors) ? result.errors : [];
+    const errors = rawErrors.filter(
+      (error): error is { row: number; message: string } =>
+        typeof error === 'object' &&
+        error !== null &&
+        'row' in error &&
+        typeof error.row === 'number' &&
+        'message' in error &&
+        typeof error.message === 'string',
+    );
     const valid =
       result &&
+      Array.isArray(result.errors) &&
+      errors.length === rawErrors.length &&
       ['created', 'updated', 'skipped', 'drugsCreated', 'stockAdjusted'].every(
         (key) => Number.isInteger(result[key]) && result[key] >= 0,
       ) &&
