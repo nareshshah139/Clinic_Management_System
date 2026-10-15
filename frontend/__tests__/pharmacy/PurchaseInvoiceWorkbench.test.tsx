@@ -25,6 +25,7 @@ jest.mock('@/lib/api', () => ({
     suggestPharmacyPurchaseMasterMatches: jest.fn(),
     confirmPharmacyPurchaseMaster: jest.fn(),
     reviewPharmacyPurchaseInvoice: jest.fn(),
+    reopenPharmacyPurchaseInvoiceReview: jest.fn(),
     commitPharmacyPurchaseInvoiceStock: jest.fn(),
     processPharmacyPurchaseInvoice: jest.fn(),
   },
@@ -230,6 +231,70 @@ describe('PurchaseInvoiceWorkbench', () => {
       expect(screen.getByDisplayValue('Moisturex Hydra Gel Cream')).toBeInTheDocument();
     }
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('offers inline catalogue recovery after a review rejection without committing stock', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true } as typeof mockPurchaseAccess;
+    api.reviewPharmacyPurchaseInvoice.mockRejectedValue(Object.assign(new Error('Line 1 needs a catalogue product.'), {
+      status: 400, body: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'missing', lineNumber: 1 },
+    }));
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'CREATE_NEW' }] });
+    renderSavedInvoice(); await editSelectedInvoice();
+    fireEvent.click(reviewConfirmation());
+    fireEvent.click(screen.getByRole('button', { name: 'Review & Add stock' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fix products on this invoice' }));
+    expect(await screen.findByRole('button', { name: 'Create new item' })).toBeVisible();
+    expect(screen.getByLabelText('Search saved products manually')).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Correct invoice name' }));
+    fireEvent.change(screen.getByLabelText('Corrected name for line 1'), { target: { value: 'Corrected tablet' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply name' }));
+    await waitFor(() => expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenLastCalledWith({ items: [expect.objectContaining({ productName: 'Corrected tablet', batchNumber: 'AZT2401', quantityPurchased: 1, taxableAmount: 100 })] }));
+    expect(api.confirmPharmacyPurchaseMaster).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    expect(reviewConfirmation()).not.toBeChecked();
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ productName: 'Corrected tablet', batchNumber: 'AZT2401', quantityPurchased: 1, taxableAmount: 100 })] })));
+  });
+
+  it('reopens a reviewed unposted bill and offers add, match and name correction in place', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, reopenReview: true } as typeof mockPurchaseAccess;
+    api.reopenPharmacyPurchaseInvoiceReview.mockResolvedValue({ ...draftInvoice, updatedAt: '2026-10-15T08:00:00.000Z' });
+    api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'CREATE_NEW' }] });
+    renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reopen review and fix products' }));
+    expect(await screen.findByRole('button', { name: 'Create new item' })).toBeVisible();
+    expect(api.reopenPharmacyPurchaseInvoiceReview).toHaveBeenCalledWith('pinv-1', draftInvoice.updatedAt);
+    expect(screen.getByRole('button', { name: 'Correct invoice name' })).toBeVisible();
+    expect(screen.getByLabelText('Search saved products manually')).toBeVisible();
+    expect(reviewConfirmation()).not.toBeChecked();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ expectedUpdatedAt: '2026-10-15T08:00:00.000Z' })));
+  });
+
+  it('keeps a reviewed bill locked when reopening fails and offers a saved-status reload', async () => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, reopenReview: true } as typeof mockPurchaseAccess;
+    api.reopenPharmacyPurchaseInvoiceReview.mockRejectedValue(new Error('Invoice changed. Reload the saved invoice.'));
+    renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Reopen review and fix products' }));
+    expect(await screen.findByText('Invoice changed. Reload the saved invoice.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Create new item' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload saved invoice' })).toBeEnabled();
+    expect(api.suggestPharmacyPurchaseMasterMatches).not.toHaveBeenCalled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: 'STOCK_COMMITTED', reopenReview: true, create: true, review: true },
+    { status: 'REVIEWED', reopenReview: false, create: true, review: true },
+    { status: 'REVIEWED', reopenReview: true, create: false, review: true },
+    { status: 'REVIEWED', reopenReview: true, create: true, review: false },
+  ])('does not offer reopening without eligibility: %p', async ({ status, ...access }) => {
+    mockPurchaseAccess = { ...mockPurchaseAccess, ...access } as typeof mockPurchaseAccess;
+    renderSavedInvoice({ ...draftInvoice, status });
+    await screen.findByRole('status', { name: 'Stock status' });
+    expect(screen.queryByRole('button', { name: 'Reopen review and fix products' })).not.toBeInTheDocument();
   });
 
   it('summarizes paid plus free stock units and tax-exclusive indicative margin without pack multiplication', async () => {

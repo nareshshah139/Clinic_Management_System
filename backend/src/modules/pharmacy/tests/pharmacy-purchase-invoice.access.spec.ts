@@ -31,6 +31,7 @@ describe('Purchase invoice access through HTTP', () => {
     searchMasterProducts: jest.fn().mockResolvedValue([]),
     getDistributorAnalytics: jest.fn().mockResolvedValue({}),
     markReviewed: jest.fn().mockResolvedValue({ status: 'REVIEWED' }),
+    reopenReview: jest.fn().mockResolvedValue({ status: 'DRAFT' }),
     commitStock: jest.fn().mockResolvedValue({ status: 'STOCK_COMMITTED' }),
     listUnlinkedDocuments: jest.fn().mockResolvedValue([]),
     getOriginalDocument: jest.fn().mockResolvedValue({ data: Buffer.from('%PDF-original'), sizeBytes: 13, mimeType: 'application/pdf', fileName: 'invoice.pdf' }),
@@ -75,6 +76,20 @@ describe('Purchase invoice access through HTTP', () => {
   const upload = () => request(app.getHttpServer())
     .post('/pharmacy/purchase-invoices/ocr/extract')
     .attach('file', Buffer.from('invoice-test-pixels'), { filename: 'invoice.jpg', contentType: 'image/jpeg' });
+
+  it.each([
+    [[], 403],
+    [['pharmacy:purchase-invoice:create'], 403],
+    [['pharmacy:purchase-invoice:review'], 403],
+    [['pharmacy:purchase-invoice:create', 'pharmacy:purchase-invoice:review'], 201],
+    [['inventory:po:create', 'inventory:po:update'], 201],
+  ])('requires create and review permissions to reopen (%p)', async (permissions, status) => {
+    userPermissions = permissions as string[];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/draft-1/reopen-review')
+      .send({ expectedUpdatedAt: '2026-10-15T08:00:00.000Z', branchId: 'untrusted-branch' }).expect(status as number);
+    if (status === 201) expect(service.reopenReview).toHaveBeenCalledWith('draft-1', expect.any(Object), 'branch-1', 'staff-1');
+    else expect(service.reopenReview).not.toHaveBeenCalled();
+  });
 
   it('allows staff to learn their capabilities before any purchase permissions are granted', async () => {
     const response = await request(app.getHttpServer()).get('/pharmacy/purchase-invoices/capabilities').expect(200);

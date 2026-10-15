@@ -33,6 +33,7 @@ import {
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
+  ReopenPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
   CorrectPharmacyPurchaseSupplierGstinDto,
   PurchaseProductCatalogDto,
@@ -118,7 +119,7 @@ export class PharmacyPurchaseInvoiceService {
     return { read, create, review, commit, automate: create && review && commit,
       saveSupplier: create && has('inventory:supplier:create'),
       editSupplier: create && has('inventory:supplier:update'),
-      sourceHighlights: true, catalogDetails: true, editProduct: create && has('pharmacy:drug:update') };
+      sourceHighlights: true, catalogDetails: true, reopenReview: create && review, editProduct: create && has('pharmacy:drug:update') };
   }
 
   /**
@@ -1126,7 +1127,8 @@ export class PharmacyPurchaseInvoiceService {
 
   /**
    * @cc [owner:nareshshah139,label:product;target] purchase-review-blockers-enforced
-   * Review MUST reject unresolved OCR flags, unreconciled totals or missing receipt details even
+   * Review MUST reject unresolved OCR flags, unreconciled totals, missing receipt details or unresolved
+   * catalogue products (missing, ambiguous or incomplete) before locking the editable draft, even
    * when invoked directly through the API; saving a draft MUST NOT count as resolving those issues.
    * Acceptance: INV-15. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
@@ -1182,6 +1184,10 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
+    for (const item of invoice.items) {
+      await this.resolvePurchaseLineDrug(prismaAny, item, branchId);
+    }
+
     const updated = await prismaAny.pharmacyPurchaseInvoice.update({
       where: { id, branchId, status: invoice.status, updatedAt: invoice.updatedAt },
       data: {
@@ -1204,6 +1210,42 @@ export class PharmacyPurchaseInvoiceService {
 
     await this.purchaseAudit(prismaAny, id, branchId, userId, 'REVIEWED', invoice, updated);
     return this.formatPurchaseInvoice(updated);
+    });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product;security] purchase-review-reopen-before-stock
+   * Reopening MUST atomically change only the caller branch's unposted REVIEWED invoice at the
+   * supplied revision to DRAFT and record REVIEW_REOPENED. Stale revisions or a concurrent stock
+   * claim MUST fail without changing invoice lines, catalogue records or inventory quantities.
+   */
+  async reopenReview(id: string, dto: ReopenPharmacyPurchaseInvoiceDto, branchId: string, userId?: string) {
+    const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
+    if (!dto.expectedUpdatedAt || !Number.isFinite(expectedUpdatedAt.getTime())) {
+      throw new BadRequestException('Reload the saved invoice before reopening its review.');
+    }
+    return this.prisma.$transaction(async (tx: any) => {
+      const before = await tx.pharmacyPurchaseInvoice.findFirst({
+        where: { id, branchId },
+        include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
+      });
+      if (!before) throw new NotFoundException('Purchase invoice not found');
+      if (before.status !== 'REVIEWED' || before.stockCommittedAt) {
+        throw new ConflictException('Only a reviewed invoice whose stock has not been added can be reopened. Reload its saved status.');
+      }
+      const claimed = await tx.pharmacyPurchaseInvoice.updateMany({
+        where: { id, branchId, status: 'REVIEWED', stockCommittedAt: null, updatedAt: expectedUpdatedAt },
+        data: { status: 'DRAFT', updatedAt: new Date() },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException('This invoice changed while you were reviewing it. Reload the saved invoice before correcting products.');
+      }
+      const updated = await tx.pharmacyPurchaseInvoice.findFirst({
+        where: { id, branchId },
+        include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
+      });
+      await this.purchaseAudit(tx, id, branchId, userId, 'REVIEW_REOPENED', before, updated);
+      return this.formatPurchaseInvoice(updated);
     });
   }
 
@@ -1691,23 +1733,26 @@ export class PharmacyPurchaseInvoiceService {
 
     const candidates = rawCandidates.filter((drug: any) => canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType));
     if (candidates.length === 0) {
-      throw new BadRequestException(
-        `${this.lineLabel(item)}: product master is missing or inactive for ${item.productName}. Create a complete drug master before committing stock.`,
-      );
+      throw new BadRequestException({
+        code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'missing', lineNumber: item.lineNumber,
+        message: `${this.lineLabel(item)}: product master is missing or inactive. Correct the invoice name, choose an existing product or add it to the catalogue here before adding stock.`,
+      });
     }
     if (candidates.length > 1) {
-      throw new ConflictException(
-        `${this.lineLabel(item)}: multiple active product master records match ${item.productName}. Resolve duplicates before committing stock.`,
-      );
+      throw new ConflictException({
+        code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'ambiguous', lineNumber: item.lineNumber,
+        message: `${this.lineLabel(item)}: multiple active product master records match. Correct the name, manufacturer or pack to identify one product, or ask a catalogue editor to resolve duplicates.`,
+      });
     }
 
     const drug = candidates[0];
     const missing = purchaseCatalogIssues(drug);
 
     if (missing.length > 0) {
-      throw new BadRequestException(
-        `${this.lineLabel(item)}: product master is incomplete for ${item.productName}; missing ${missing.join(', ')}`,
-      );
+      throw new BadRequestException({
+        code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'incomplete', lineNumber: item.lineNumber, missingFields: missing,
+        message: `${this.lineLabel(item)}: product master is incomplete; missing ${missing.join(', ')}. Complete its catalogue details here before adding stock.`,
+      });
     }
 
     return drug;

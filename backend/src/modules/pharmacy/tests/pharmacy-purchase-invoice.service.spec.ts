@@ -163,6 +163,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(saved).toMatchObject({ status: 'DRAFT', unresolvedOcrFlags: 0, reconciliationIssues: [], items: [{ manufacturer: '' }] });
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(saved);
     prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ ...saved, ...data }));
+    prisma.drug.findMany.mockResolvedValue([completeDrug()]);
     expect((await service.markReviewed(saved.id, {}, branchId)).status).toBe('REVIEWED');
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
@@ -176,6 +177,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     };
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(legacy);
     prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ ...legacy, ...data }));
+    prisma.drug.findMany.mockResolvedValue([completeDrug()]);
     const result = await service.markReviewed(legacy.id, {}, branchId);
     expect(result).toMatchObject({ status: 'REVIEWED', unresolvedOcrFlags: 0, reconciliationIssues: [], items: [{ manufacturer: '', ocrFlags: [] }] });
     expect(prisma.pharmacyPurchaseInvoice.update.mock.calls[0][0].data.items).toBeUndefined();
@@ -368,6 +370,75 @@ describe('PharmacyPurchaseInvoiceService', () => {
     minStockLevel: 5,
     maxStockLevel: 500,
     ...overrides,
+  });
+
+  it.each([
+    ['missing', []],
+    ['ambiguous', [completeDrug(), completeDrug({ id: 'drug-2' })]],
+    ['incomplete', [completeDrug({ composition1: '' })]],
+  ])('keeps the draft editable when catalogue resolution is %s', async (reason, drugs) => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice({ status: 'DRAFT' }));
+    prisma.drug.findMany.mockResolvedValue(drugs);
+    await expect(service.markReviewed('purchase-1', {}, branchId, userId)).rejects.toMatchObject({
+      response: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason, lineNumber: 1 },
+    });
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('reviews a corrected catalogue match without adding stock', async () => {
+    const invoice = reviewedInvoice({ status: 'DRAFT' });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(invoice);
+    prisma.drug.findMany.mockResolvedValue([completeDrug()]);
+    prisma.pharmacyPurchaseInvoice.update.mockImplementation(({ data }: any) => ({ ...invoice, ...data }));
+    expect((await service.markReviewed(invoice.id, {}, branchId, userId)).status).toBe('REVIEWED');
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('reopens only the expected reviewed revision and audits the transition without changing lines or stock', async () => {
+    const updatedAt = new Date('2026-10-15T08:00:00.000Z');
+    const invoice = reviewedInvoice({ updatedAt });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValueOnce(invoice)
+      .mockResolvedValueOnce({ ...invoice, status: 'DRAFT', updatedAt: new Date('2026-10-15T08:01:00.000Z') });
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    const result = await (service as any).reopenReview(invoice.id, { expectedUpdatedAt: updatedAt.toISOString() }, branchId, userId);
+    expect(result.status).toBe('DRAFT');
+    expect(result.items).toEqual(expect.arrayContaining([expect.objectContaining({ productName: invoice.items[0].productName })]));
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: invoice.id, branchId } }));
+    expect(prisma.pharmacyPurchaseInvoice.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: invoice.id, branchId, status: 'REVIEWED', stockCommittedAt: null, updatedAt },
+      data: { status: 'DRAFT', updatedAt: expect.any(Date) },
+    }));
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'REVIEW_REOPENED' }) }));
+    expect(prisma.pharmacyPurchaseInvoiceItem.update).not.toHaveBeenCalled();
+    expect(prisma.drug.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { status: 'STOCK_COMMITTED' },
+    { stockCommittedAt: new Date() },
+    { status: 'CANCELLED' },
+    { status: 'DRAFT' },
+  ])('refuses reopening an ineligible invoice %p', async (override) => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice(override));
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow(ConflictException);
+    expect(prisma.pharmacyPurchaseInvoice.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale revision or a concurrent stock claim without writing an audit', async () => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice());
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 0 });
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow(ConflictException);
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('does not reopen invoices outside the selected branch', async () => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(null);
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow('Purchase invoice not found');
+    expect(prisma.pharmacyPurchaseInvoice.updateMany).not.toHaveBeenCalled();
   });
 
   it.each(['Moisturex Hydra Gel Cream', 'Cream', '50 ml'])('CR-15: unrelated names and pack/form-only lines do not suggest Abzorb (%s)', async (productName) => {

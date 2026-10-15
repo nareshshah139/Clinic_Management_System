@@ -577,6 +577,12 @@ export class QueryPharmacyPurchaseAnalyticsDto {
   limit?: number = 25;
 }
 
+export class ReopenPharmacyPurchaseInvoiceDto {
+  @ApiProperty({ description: 'The saved revision being reopened for correction' })
+  @IsDateString()
+  expectedUpdatedAt: string;
+}
+
 export class ReviewPharmacyPurchaseInvoiceDto {
   @ApiPropertyOptional({ example: '2026-03-02' })
   @IsOptional()
