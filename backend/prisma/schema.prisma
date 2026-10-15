@@ -1586,6 +1586,15 @@ model PharmacyPurchasePayment {
   amount           Float
   referenceNo      String?
   requestKey       String?
+  requestFingerprint String?
+  reversedAt         DateTime?
+  reversedBy         String?
+  reversalReason     String?
+  correctionRequestKey String?
+  correctionFingerprint String?
+  replacesPaymentId  String? @unique
+  replacesPayment    PharmacyPurchasePayment? @relation("PaymentReplacement", fields: [replacesPaymentId], references: [id], onDelete: Restrict)
+  replacementPayment PharmacyPurchasePayment? @relation("PaymentReplacement")
   notes            String?
   createdAt        DateTime                    @default(now())
   updatedAt        DateTime                    @updatedAt
@@ -1598,6 +1607,7 @@ model PharmacyPurchasePayment {
   @@index([paymentDate])
   @@index([branchId, distributorGstin, paymentDate])
   @@unique([branchId, requestKey])
+  @@unique([branchId, correctionRequestKey])
   @@map("pharmacy_purchase_payments")
 }
 

@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Send,
 } from "lucide-react";
+import { SupplierPaymentRecovery, type RecoverableSupplierPayment } from "./SupplierPaymentRecovery";
 import { SupplierCreditPanel } from "@/components/inventory/SupplierCreditPanel";
 import { apiClient } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
@@ -91,6 +92,7 @@ type DistributorLedger = {
   distributorGstin: string;
   distributorName: string;
   invoices: LedgerInvoice[];
+  payments?: RecoverableSupplierPayment[];
 };
 
 type AlertInvoice = {
@@ -543,6 +545,8 @@ export function PurchaseLedger({
           onChanged={loadAll}
         />
       )}
+      {ledger && <SupplierPaymentRecovery key={selectedGstin} payments={ledger.payments || []}
+        invoices={ledger.invoices} canWrite={canWrite} onChanged={loadAll} />}
       <Card>
         <CardHeader>
           <CardTitle>Bulk Payment Allocation</CardTitle>
