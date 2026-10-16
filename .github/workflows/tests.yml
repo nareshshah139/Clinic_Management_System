@@ -27,17 +27,13 @@ jobs:
       - name: Install root deps
         run: npm ci
 
-      - name: Install frontend deps
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install backend deps
-        working-directory: backend
-        run: npm ci
-
       - name: Build shared types
         working-directory: shared-types
-        run: npm ci && npm run build
+        run: npm run build
+
+      - name: Generate backend Prisma client
+        working-directory: backend
+        run: npx prisma generate
 
       - name: Run frontend tests
         working-directory: frontend
