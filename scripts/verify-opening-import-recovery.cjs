@@ -13,9 +13,35 @@ const browserKind = process.env.OPENING_IMPORT_BROWSER || 'obscura';
 let next, obscura, browser;
 let createdQa = false;
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
-async function ready(url) {
+async function start(command, args, options) {
+  const child = spawn(command, args, { ...options, detached: true });
+  await new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('spawn', resolve);
+  });
+  return child;
+}
+async function stop(child) {
+  if (!child?.pid) return;
+  for (const signal of ['SIGTERM', 'SIGKILL']) {
+    try { process.kill(-child.pid, signal); } catch (error) {
+      if (error.code === 'ESRCH') return;
+      throw error;
+    }
+    for (let attempt = 0; attempt < 50; attempt++) {
+      try { process.kill(-child.pid, 0); } catch (error) {
+        if (error.code === 'ESRCH') return;
+        throw error;
+      }
+      await pause(100);
+    }
+  }
+  throw new Error(`Owned process group ${child.pid} did not stop`);
+}
+async function ready(url, child) {
   for (let attempt = 0; attempt < 120; attempt++) {
-    try { if ((await fetch(url)).ok) return; } catch {}
+    assert(child.exitCode === null && child.signalCode === null, `Local verification process exited before ready: ${url}`);
+    try { if ((await fetch(url, { signal: AbortSignal.timeout(1000) })).ok) return; } catch {}
     await pause(500);
   }
   throw new Error(`Local verification server did not start: ${url}`);
@@ -23,7 +49,8 @@ async function ready(url) {
 /**
  * @cc [owner:nareshshah139,label:testing] opening-ui-local-only
  * Verification MUST use a temporary local route and synthetic HTTP responses, and remove only
- * the route and processes created by this run. It MUST NOT call production inventory endpoints.
+ * the route and processes created by this run, including when a child cannot start. Cleanup MUST
+ * await owned process termination. It MUST NOT call production inventory endpoints.
  */
 async function run() {
   assert(!fs.existsSync(qa), 'Temporary verification route already exists');
@@ -32,11 +59,11 @@ async function run() {
   createdQa = true;
   fs.writeFileSync(path.join(qa, 'page.tsx'), '"use client";\nimport { PharmacyInventoryStarterImport } from "@/components/pharmacy/PharmacyInventoryStarterImport";\nexport default function Page(){return <main className="mx-auto max-w-3xl p-4"><PharmacyInventoryStarterImport compact /></main>;}\n');
   const log = fs.openSync(path.join(output, 'browser-server.log'), 'w');
-  next = spawn(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', String(port)], { cwd: path.join(root, 'frontend'), stdio: ['ignore', log, log] });
-  await ready(origin + '/opening-import-recovery-qa');
+  next = await start(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '--hostname', '127.0.0.1', '--port', String(port)], { cwd: path.join(root, 'frontend'), stdio: ['ignore', log, log] });
+  await ready(origin + '/opening-import-recovery-qa', next);
   if (browserKind === 'obscura') {
-    obscura = spawn('/Users/nshah/.local/share/obscura/v0.2.2/obscura', ['serve', '--port', '9347', '--host', '127.0.0.1', '--allow-private-network', '--allow-file-access'], { stdio: 'ignore' });
-    await ready('http://127.0.0.1:9347/json/version');
+    obscura = await start('/Users/nshah/.local/share/obscura/v0.2.2/obscura', ['serve', '--port', '9347', '--host', '127.0.0.1', '--allow-private-network', '--allow-file-access'], { stdio: 'ignore' });
+    await ready('http://127.0.0.1:9347/json/version', obscura);
     browser = await puppeteer.connect({ browserURL: 'http://127.0.0.1:9347' });
   } else {
     browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
@@ -108,7 +135,10 @@ async function run() {
   console.log(JSON.stringify(result));
 }
 run().catch(error => { console.error(error.stack); process.exitCode = 1; }).finally(async () => {
-  if (browser) await browser.close().catch(() => {});
-  obscura?.kill(); next?.kill();
-  if (createdQa && fs.existsSync(qa)) fs.rmSync(qa, { recursive: true });
-});
+  try {
+    if (browser) await browser.close().catch(() => {});
+    await Promise.all([stop(obscura), stop(next)]);
+  } finally {
+    if (createdQa && fs.existsSync(qa)) fs.rmSync(qa, { recursive: true });
+  }
+}).catch(error => { console.error(error.stack); process.exitCode = 1; });
