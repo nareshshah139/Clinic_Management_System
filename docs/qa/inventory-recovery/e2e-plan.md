@@ -25,7 +25,7 @@
 - [x] Capture desktop and mobile screenshots of failure and recovered states.
 - [x] Integrate scenarios and screenshots into the testing process.
 - [x] Parent-run verification, independent review and evidence.
-- [ ] Publish PR. GitHub rejected the workflow file because the configured token lacks `workflow` scope; SSH authentication is unavailable. The user has been asked about authorization.
+- [x] Publish [PR #11](https://github.com/nareshshah139/Clinic_Management_System/pull/11), stacked on #10. GitHub authorization resolved the workflow permission blocker.
 
 ## Throughput checkpoint
 

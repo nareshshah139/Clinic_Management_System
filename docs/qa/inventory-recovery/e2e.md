@@ -41,4 +41,4 @@ Independent correctness review found no actionable issue. Comment review removed
 
 The E2E run exposed adjacent supplier panels with identical React keys. Distinct supplier-specific keys removed that warning. The final run had no page errors or duplicate-key diagnostics. Expected negative-authentication, injected transport-failure and validation responses remain in the browser diagnostics.
 
-The workflow is committed locally. GitHub rejected publication because the configured token lacks `workflow` scope, and SSH authentication is unavailable. No new PR or hosted CI run exists yet. No deployment or production-data change is part of this test work.
+The suite and workflow are published in [PR #11](https://github.com/nareshshah139/Clinic_Management_System/pull/11), stacked on #10. Check the PR's Recovery end-to-end tests check for the hosted result at its current commit; each run uploads its own evidence. No deployment or production-data change is part of this test work.
