@@ -1015,6 +1015,11 @@ export function PurchaseInvoiceWorkbench({
  * to authorized editors. Reviewed bills MUST reopen through the revision-checked API before edits;
  * posted or unknown stock outcomes MUST stay locked. Reopening and corrections MUST clear final approval.
  */
+/**
+ * @cc [owner:nareshshah139,label:state] purchase-recovery-editor-identities
+ * Name correction and manual matching for an invoice line MUST have distinct stable React
+ * identities, so rerendering either editor cannot reuse its sibling's local state.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -4045,7 +4050,7 @@ function PurchaseInvoiceEditor({
                                   </div>
 
                                   {line && <PurchaseLineNameCorrection
-                                    key={line.localId}
+                                    key={`name-correction:${line.localId}`}
                                     lineNumber={match.lineIndex + 1}
                                     name={line.productName}
                                     disabled={busy || draftWriteBlocked}
@@ -4328,7 +4333,7 @@ function PurchaseInvoiceEditor({
                                       </p>
                                     ))}
                                   {!status && <PurchaseManualMatchSearch
-                                    key={line?.localId || match.lineIndex}
+                                    key={`manual-match:${line?.localId || match.lineIndex}`}
                                     lineNumber={match.lineIndex + 1}
                                     disabled={busy || masterConfirming !== null}
                                     onSelect={drug => { void confirmMasterLine(match, "MATCH_EXISTING", { drug, score: 0, confidence: "LOW" }); }}

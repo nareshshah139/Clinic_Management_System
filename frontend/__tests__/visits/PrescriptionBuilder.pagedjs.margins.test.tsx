@@ -623,6 +623,13 @@ it('retains an explicitly entered zero in a current draft and reports validation
   }
 });
 
+/**
+ * @cc [owner:nareshshah139,label:testing] signature-export-test-deadline
+ * Only the combined signature toggle, export and remount test MAY use this ten-second
+ * wall-clock budget; the suite's default deadline and every output assertion MUST remain unchanged.
+ */
+const SIGNATURE_EXPORT_TEST_TIMEOUT_MS = 10_000;
+
 it('toggles and remembers the doctor signature across preview, print, PDF, WhatsApp and Email', async () => {
   paginateSourceContent = true;
   const url = 'data:image/png;base64,c2lnbmF0dXJl';
@@ -689,7 +696,7 @@ it('toggles and remembers the doctor signature across preview, print, PDF, Whats
     localStorage.removeItem('rxDraft:signature-patient:signature-visit');
     localStorage.removeItem('rxDraft:signature-other-patient:signature-other-visit');
   }
-});
+}, SIGNATURE_EXPORT_TEST_TIMEOUT_MS);
 
 it('saves the parent clinical patch with its acknowledged version without making review date an expiry date', async () => {
   const item = { drugName: 'Synthetic medicine', dosage: '', dosageUnit: 'MG', frequency: 'ONCE_DAILY', duration: 7, durationUnit: 'DAYS' };
