@@ -61,6 +61,7 @@ export function ShelfIntelligence() {
   const [countReason, setCountReason] = useState('');
   const [savingShelf, setSavingShelf] = useState(false);
   const [postingCounts, setPostingCounts] = useState(false);
+  const [pendingCorrections, setPendingCorrections] = useState<Array<Parameters<typeof apiClient.adjustStock>[0]> | null>(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -171,57 +172,55 @@ export function ShelfIntelligence() {
   };
 
 
+  /**
+   * @cc [owner:nareshshah139,label:product] shelf-count-retry-identity
+   * Unconfirmed count corrections MUST retain their original quantities and operation IDs until
+   * acknowledged; retrying a partially completed submission MUST NOT repeat successful effects.
+   */
   const postCycleCounts = async () => {
-    const countRows = Object.entries(physicalCounts)
-      .map(([itemId, value]) => {
-        const item = items.find((candidate) => candidate.id === itemId);
-        const physical = Number(value);
-        if (!item || !Number.isFinite(physical)) return null;
-        const delta = Math.round(physical - item.currentStock);
-        if (delta === 0) return null;
-        return { item, delta };
-      })
-      .filter(Boolean) as Array<{ item: ShelfInventoryItem; delta: number }>;
-
-    if (countRows.length === 0) {
-      toast({ description: 'No stock variance to post.' });
-      return;
-    }
-    if (!countReason.trim()) {
-      toast({
-        variant: 'destructive',
-        title: 'Reason required',
-        description: 'Cycle count corrections need an auditable reason.',
+    if (postingCounts) return;
+    let corrections = pendingCorrections;
+    if (!corrections) {
+      const entered = Object.entries(physicalCounts).filter(([, value]) => value.trim() !== '');
+      if (entered.some(([, value]) => !Number.isSafeInteger(Number(value)) || Number(value) < 0)) {
+        toast({ variant: 'destructive', title: 'Check physical counts', description: 'Enter nonnegative whole numbers.' });
+        return;
+      }
+      if (!countReason.trim()) {
+        toast({ variant: 'destructive', title: 'Reason required', description: 'Cycle count corrections need an auditable reason.' });
+        return;
+      }
+      corrections = entered.flatMap(([itemId, value]) => {
+        const item = items.find(candidate => candidate.id === itemId);
+        const delta = item ? Number(value) - item.currentStock : 0;
+        if (!item || delta === 0) return [];
+        return [{ operationId: crypto.randomUUID(), itemId, adjustmentQuantity: delta,
+          reason: countReason.trim(), notes: `Shelf cycle count at ${item.storageLocation || 'unmapped shelf'}` }];
       });
-      return;
+      if (!corrections.length) { toast({ description: 'No stock variance to post.' }); return; }
+      setPendingCorrections(corrections);
     }
-
+    setPostingCounts(true);
     try {
-      setPostingCounts(true);
-      await Promise.all(
-        countRows.map(({ item, delta }) =>
-          apiClient.adjustStock({
-            itemId: item.id,
-            adjustmentQuantity: delta,
-            reason: countReason.trim(),
-            notes: `Shelf cycle count at ${item.storageLocation || 'unmapped shelf'}`,
-            batchNumber: item.batchNumber || undefined,
-            expiryDate: item.expiryDate || undefined,
-          }),
-        ),
-      );
-      toast({
-        description: `Posted ${countRows.length} cycle count correction${countRows.length === 1 ? '' : 's'}.`,
-      });
+      const outcomes = await Promise.allSettled(corrections.map(async data => {
+        const saved = await apiClient.adjustStock(data) as { id?: string; operationId?: string; itemId?: string; quantityDelta?: number };
+        if (!saved?.id || saved.operationId !== data.operationId || saved.itemId !== data.itemId || saved.quantityDelta !== data.adjustmentQuantity) {
+          throw new Error('Correction acknowledgement could not be verified');
+        }
+        return saved;
+      }));
+      const unknown = corrections.filter((_, index) => outcomes[index].status === 'rejected');
+      if (unknown.length) {
+        setPendingCorrections(unknown);
+        toast({ variant: 'destructive', title: 'Some corrections are unconfirmed',
+          description: `${unknown.length} correction${unknown.length === 1 ? '' : 's'} need confirmation. Retry uses the same details and cannot repeat a saved change.` });
+        return;
+      }
+      setPendingCorrections(null);
       setPhysicalCounts({});
       setCountReason('');
+      toast({ description: 'All cycle count corrections are confirmed.' });
       await loadItems();
-    } catch (err: unknown) {
-      toast({
-        variant: 'destructive',
-        title: 'Cycle count failed',
-        description: getApiErrorMessage(err, 'Could not post corrections.'),
-      });
     } finally {
       setPostingCounts(false);
     }
@@ -270,8 +269,8 @@ export function ShelfIntelligence() {
                 Location-aware batches for faster picking, cycle counts, and FEFO rotation.
               </p>
             </div>
-            <div className="flex gap-2">
-              <div className="relative min-w-64">
+            <div className="flex min-w-0 flex-wrap gap-2">
+              <div className="relative min-w-0 flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={query}
@@ -416,6 +415,8 @@ export function ShelfIntelligence() {
                         min={0}
                         className="text-right"
                         value={physicalCounts[item.id] || ''}
+                        aria-label={`Physical count for ${item.name}`}
+                        disabled={Boolean(pendingCorrections) || postingCounts}
                         onChange={(event) =>
                           setPhysicalCounts((current) => ({
                             ...current,
@@ -429,15 +430,17 @@ export function ShelfIntelligence() {
               </TableBody>
             </Table>
           </div>
+          {pendingCorrections && <p role="status" className="mt-3 text-sm text-amber-800">Some corrections are unconfirmed. Their quantities and reason are kept for a safe retry. Confirmed corrections will not be applied again.</p>}
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
             <Textarea
               value={countReason}
+              disabled={Boolean(pendingCorrections) || postingCounts}
               onChange={(event) => setCountReason(event.target.value)}
               placeholder="Reason required, for example: Shelf cycle count variance verified by pharmacist"
             />
             <Button onClick={postCycleCounts} disabled={postingCounts}>
               <Send className="mr-2 h-4 w-4" />
-              Post corrections
+              {pendingCorrections ? 'Retry corrections' : 'Post corrections'}
             </Button>
           </div>
         </div>

@@ -973,6 +973,9 @@ model StockTransaction {
   quantityDelta Int?
   unitPrice   Float
   totalAmount Float
+  operationId String?
+  operationRowId String?
+  requestFingerprint String?
   reference   String?
   notes       String?
   batchNumber String?
@@ -986,6 +989,7 @@ model StockTransaction {
   item        InventoryItem   @relation(fields: [itemId], references: [id])
   user        User            @relation(fields: [userId], references: [id])
 
+  @@unique([branchId, operationId, operationRowId])
   @@map("stock_transactions")
 }
 
@@ -2423,4 +2427,16 @@ model InventoryMigration {
   createdAt DateTime @default(now())
   @@unique([branchId,sha256])
   @@map("inventory_migrations")
+}
+
+model InventoryStockOperation {
+  id String @id @default(cuid())
+  branchId String
+  operationId String
+  kind String
+  rows Json
+  createdBy String
+  createdAt DateTime @default(now())
+  @@unique([branchId, operationId])
+  @@map("inventory_stock_operations")
 }

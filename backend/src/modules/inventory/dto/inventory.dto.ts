@@ -1,4 +1,4 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested, IsDateString, IsBoolean, Min, Max, IsUUID, IsInt, IsIn, MaxLength } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested, IsDateString, IsBoolean, Min, Max, IsUUID, IsInt, IsIn, MaxLength, IsNotEmpty, ArrayMinSize, ArrayMaxSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 // Enums
@@ -343,7 +343,7 @@ export class UpdateInventoryItemDto extends InventoryRegimenDefaultsDto {
 }
 
 // Stock Transaction DTOs
-export class CreateStockTransactionDto {
+export class StockMovementInputDto {
   @IsString()
   itemId: string;
 
@@ -395,6 +395,20 @@ export class CreateStockTransactionDto {
   @IsString()
   @IsOptional()
   location?: string;
+}
+
+export class CreateStockTransactionDto extends StockMovementInputDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  operationId: string;
+}
+
+export class BulkStockTransactionDto extends StockMovementInputDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  rowId: string;
 }
 
 export class UpdateStockTransactionDto {
@@ -452,13 +466,25 @@ export class UpdateStockTransactionDto {
 
 // Bulk Operations DTOs
 export class BulkStockUpdateDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  operationId: string;
+
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => CreateStockTransactionDto)
-  transactions: CreateStockTransactionDto[];
+  @Type(() => BulkStockTransactionDto)
+  transactions: BulkStockTransactionDto[];
 }
 
 export class StockAdjustmentDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(128)
+  operationId: string;
+
   @IsString()
   itemId: string;
 

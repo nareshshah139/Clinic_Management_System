@@ -1,3 +1,4 @@
+import { performStockOperation, registerStockOperation, requireStockOperationId, stockRequestFingerprint } from './inventory-stock-operations';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { writeStockMovement, movementDelta, money } from './inventory-stock';
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
@@ -279,18 +280,54 @@ export class InventoryService {
    * Acceptance: INV-32.3. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
-  async createStockTransaction(createTransactionDto: CreateStockTransactionDto, branchId: string, userId: string) {
-    if (!Number.isSafeInteger(createTransactionDto.quantity) || createTransactionDto.quantity <= 0) {
-      throw new BadRequestException('Quantity must be a positive whole number');
-    }
-    const sign = ['PURCHASE', 'RETURN'].includes(createTransactionDto.type) ? 1
-      : ['SALE', 'EXPIRED', 'DAMAGED'].includes(createTransactionDto.type) ? -1 : 0;
-    if (!sign) throw new BadRequestException('Use the adjustment or transfer workflow for this movement');
-    return this.prisma.$transaction(async (tx: any) => this.formatStockTransaction(await writeStockMovement(tx, {
-      branchId, userId, itemId: createTransactionDto.itemId, type: createTransactionDto.type,
-      delta: sign * createTransactionDto.quantity, unitPrice: createTransactionDto.unitPrice,
-      reference: createTransactionDto.reference, reason: createTransactionDto.reason, notes: createTransactionDto.notes,
-    })), { isolationLevel: 'Serializable' });
+  async createStockTransaction(dto: CreateStockTransactionDto, branchId: string, userId: string) {
+    const payload = this.stockMovementPayload(dto);
+    const fingerprint = stockRequestFingerprint('MOVEMENT', payload);
+    await registerStockOperation(this.prisma, { branchId, userId, operationId: dto.operationId, kind: 'MOVEMENT', rows: [{ rowId: 'single', fingerprint }] });
+    return this.commitMovement(dto, branchId, userId, dto.operationId, 'single', fingerprint);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] movement-location-identity
+   * Direct and bulk movement fingerprints MUST include submitted location; changing it under the
+   * same operation and row IDs MUST conflict without another stock effect.
+   */
+  private stockMovementPayload(dto: Omit<CreateStockTransactionDto, 'operationId'>) {
+    if (!Number.isSafeInteger(dto.quantity) || dto.quantity <= 0) throw new BadRequestException('Quantity must be a positive whole number');
+    if (!['PURCHASE', 'RETURN', 'SALE', 'EXPIRED', 'DAMAGED'].includes(dto.type)) throw new BadRequestException('Use the adjustment or transfer workflow for this movement');
+    return { itemId: dto.itemId, type: dto.type, quantity: dto.quantity, unitPrice: dto.unitPrice,
+      reference: dto.reference, reason: dto.reason, notes: dto.notes, location: dto.location };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] movement-location-persistence
+   * A new movement MUST retain the submitted location exactly, or use the batch storage location
+   * when omitted; an identical retry MUST return the original movement without changing stock.
+   */
+  private async commitMovement(dto: Omit<CreateStockTransactionDto, 'operationId'>, branchId: string, userId: string, operationId: string, rowId: string, fingerprint: string) {
+    const sign = ['PURCHASE', 'RETURN'].includes(dto.type) ? 1 : -1;
+    return this.formatStockTransaction(await performStockOperation(this.prisma,
+      { branchId, operationId, rowId, fingerprint }, tx => writeStockMovement(tx, {
+        branchId, userId, itemId: dto.itemId, type: dto.type, delta: sign * dto.quantity,
+        unitPrice: dto.unitPrice, reference: dto.reference, reason: dto.reason, notes: dto.notes, location: dto.location,
+      })));
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-operation-outcome
+   * Outcome lookup MUST remain branch-scoped and report uncommitted or absent rows as UNKNOWN;
+   * absence of a receipt never establishes failure or permits changing the original retry identity.
+   */
+  async stockOperationOutcome(operationId: string, branchId: string) {
+    requireStockOperationId(operationId);
+    const operation = await (this.prisma as any).inventoryStockOperation.findUnique({ where: { branchId_operationId: { branchId, operationId } } });
+    if (!operation) return { operationId, status: 'UNKNOWN', rows: [] };
+    const movements = await this.prisma.stockTransaction.findMany({ where: { branchId, operationId } as any });
+    const rows = (operation.rows as Array<{ rowId: string }>).map(row => {
+      const movement = movements.find((entry: any) => entry.operationRowId === row.rowId);
+      return { rowId: row.rowId, status: movement ? 'COMPLETED' : 'UNKNOWN', ...(movement ? { data: this.formatStockTransaction(movement) } : {}) };
+    });
+    return { operationId, status: rows.every(row => row.status === 'COMPLETED') ? 'COMPLETED' : 'UNKNOWN', rows };
   }
 
 
@@ -415,33 +452,39 @@ export class InventoryService {
   }
 
   // Bulk Operations
-  async bulkStockUpdate(bulkUpdateDto: BulkStockUpdateDto, branchId: string, userId: string) {
+  /**
+   * @cc [owner:nareshshah139,label:product] stock-bulk-row-retry
+   * Bulk retries MUST reuse operation and row IDs, return successful rows unchanged, and retry
+   * only rows without a committed receipt. Row identities are independent of input order.
+   */
+  async bulkStockUpdate(dto: BulkStockUpdateDto, branchId: string, userId: string) {
+    const rows = dto.transactions.map(row => ({ rowId: row.rowId, fingerprint: stockRequestFingerprint('MOVEMENT', this.stockMovementPayload(row)) }));
+    await registerStockOperation(this.prisma, { branchId, userId, operationId: dto.operationId, kind: 'BULK_MOVEMENT', rows });
     const results = [];
-
-    for (const transactionDto of bulkUpdateDto.transactions) {
+    for (const [index, transaction] of dto.transactions.entries()) {
+      const row = rows[index];
       try {
-        const result = await this.createStockTransaction(transactionDto, branchId, userId);
-        results.push({ success: true, data: result });
+        const data = await this.commitMovement(transaction, branchId, userId, dto.operationId, row.rowId, row.fingerprint);
+        results.push({ rowId: row.rowId, success: true, status: 'COMPLETED', data });
       } catch (error) {
-        results.push({ success: false, error: error.message, data: transactionDto });
+        results.push({ rowId: row.rowId, success: false, status: 'UNKNOWN', error: error instanceof BadRequestException || error instanceof ConflictException || error instanceof NotFoundException
+          ? error.message : 'Could not confirm this row. Check its saved outcome and retry with the same operation and row IDs.' });
       }
     }
-
-    return {
-      total: bulkUpdateDto.transactions.length,
-      successful: results.filter(r => r.success).length,
-      failed: results.filter(r => !r.success).length,
-      results,
-    };
+    return { operationId: dto.operationId, total: results.length, successful: results.filter(row => row.success).length, failed: results.filter(row => !row.success).length, results };
   }
 
-
-  async adjustStock(stockAdjustmentDto: StockAdjustmentDto, branchId: string, userId: string) {
-    if (!stockAdjustmentDto.reason?.trim()) throw new BadRequestException('An adjustment reason is required');
-    return this.prisma.$transaction(async (tx: any) => this.formatStockTransaction(await writeStockMovement(tx, {
-      branchId, userId, itemId: stockAdjustmentDto.itemId, delta: stockAdjustmentDto.adjustmentQuantity,
-      type: 'ADJUSTMENT', reason: stockAdjustmentDto.reason?.trim(), notes: stockAdjustmentDto.notes,
-    })), { isolationLevel: 'Serializable' });
+  async adjustStock(dto: StockAdjustmentDto, branchId: string, userId: string) {
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException('An adjustment reason is required');
+    if (!Number.isSafeInteger(dto.adjustmentQuantity) || dto.adjustmentQuantity === 0) throw new BadRequestException('Stock change must be a nonzero whole number');
+    const fingerprint = stockRequestFingerprint('ADJUSTMENT', { itemId: dto.itemId, quantity: dto.adjustmentQuantity, reason, notes: dto.notes });
+    await registerStockOperation(this.prisma, { branchId, userId, operationId: dto.operationId, kind: 'ADJUSTMENT', rows: [{ rowId: 'single', fingerprint }] });
+    return this.formatStockTransaction(await performStockOperation(this.prisma,
+      { branchId, operationId: dto.operationId, rowId: 'single', fingerprint }, tx => writeStockMovement(tx, {
+        branchId, userId, itemId: dto.itemId, delta: dto.adjustmentQuantity,
+        type: 'ADJUSTMENT', reason, notes: dto.notes,
+      })));
   }
 
   async transferStock(stockTransferDto: StockTransferDto, branchId: string, userId: string) {
