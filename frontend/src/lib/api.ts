@@ -678,6 +678,14 @@ export class ApiClient {
     );
   }
 
+  async getInventoryImportOutcome<T = unknown>(id: string): Promise<T> {
+    return this.get<T>(`/inventory/imports/${encodeURIComponent(id)}`);
+  }
+
+  async retryInventoryImportRows<T = unknown>(id: string): Promise<T> {
+    return this.request<T>(`/inventory/imports/${encodeURIComponent(id)}/retry-failed-rows`, { method: 'POST' }, { timeoutMs: 120000 });
+  }
+
   async deleteInventoryItem(id: string) {
     return this.delete(`/inventory/items/${id}`);
   }

@@ -2434,6 +2434,9 @@ model InventoryMigration {
   data Bytes
   result Json?
   processingUntil DateTime?
+  rowTrackingVersion Int @default(0)
+  legacyResult Json?
+  rows InventoryMigrationRow[]
   createdAt DateTime @default(now())
   @@unique([branchId,sha256])
   @@map("inventory_migrations")
@@ -2449,4 +2452,18 @@ model InventoryStockOperation {
   createdAt DateTime @default(now())
   @@unique([branchId, operationId])
   @@map("inventory_stock_operations")
+}
+
+model InventoryMigrationRow {
+  importId String
+  sourceRow Int
+  status String @default("PENDING")
+  outcome Json?
+  retryable Boolean @default(false)
+  errorCode String?
+  message String?
+  updatedAt DateTime @updatedAt
+  migration InventoryMigration @relation(fields: [importId], references: [id], onDelete: Cascade)
+  @@id([importId, sourceRow])
+  @@map("inventory_migration_rows")
 }
