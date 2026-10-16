@@ -12,6 +12,7 @@ import {
   RefreshCw,
   Send,
 } from "lucide-react";
+import { SupplierPaymentRecovery, type RecoverableSupplierPayment } from "./SupplierPaymentRecovery";
 import { SupplierCreditPanel } from "@/components/inventory/SupplierCreditPanel";
 import { apiClient } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
@@ -91,6 +92,7 @@ type DistributorLedger = {
   distributorGstin: string;
   distributorName: string;
   invoices: LedgerInvoice[];
+  payments?: RecoverableSupplierPayment[];
 };
 
 type AlertInvoice = {
@@ -133,6 +135,11 @@ const formatMoney = (value: number) =>
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
 
+/**
+ * @cc [owner:nareshshah139,label:product] supplier-panel-distinct-identity
+ * Credit and payment recovery panels MUST have distinct identities and reset their local state
+ * when the selected supplier changes.
+ */
 export function PurchaseLedger({
   initialGstin,
   canWrite = true,
@@ -537,12 +544,14 @@ export function PurchaseLedger({
 
       {selectedGstin && (
         <SupplierCreditPanel
-          key={selectedGstin}
+          key={`credits-${selectedGstin}`}
           supplierGstin={selectedGstin}
           canWrite={canWrite}
           onChanged={loadAll}
         />
       )}
+      {ledger && <SupplierPaymentRecovery key={`payments-${selectedGstin}`} payments={ledger.payments || []}
+        invoices={ledger.invoices} canWrite={canWrite} onChanged={loadAll} />}
       <Card>
         <CardHeader>
           <CardTitle>Bulk Payment Allocation</CardTitle>

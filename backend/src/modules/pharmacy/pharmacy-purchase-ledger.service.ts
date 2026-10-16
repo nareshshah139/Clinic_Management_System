@@ -1,10 +1,12 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
-import { CreatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
+import { createHash } from 'node:crypto';
+import { CreatePharmacyPurchasePaymentDto, ReversePharmacyPurchasePaymentDto, ReallocatePharmacyPurchasePaymentDto } from './dto/pharmacy-purchase-ledger.dto';
 
 type PurchasePaymentStatus = 'PENDING' | 'PARTIALLY_PAID' | 'PAID';
 
@@ -22,12 +24,15 @@ type LedgerInvoice = {
   status?: string;
   paymentAllocations?: {
     amount: number;
+    createdAt?: Date | string;
     payment?: {
       id: string;
       paymentDate: Date | string;
       amount: number;
       mode: string;
       referenceNo?: string | null;
+      reversedAt?: Date | string | null;
+      createdAt?: Date | string;
     } | null;
   }[];
 };
@@ -44,13 +49,14 @@ export class PharmacyPurchaseLedgerService {
    * @cc [owner:nareshshah139,label:product] supplier-payment-idempotent-balance
    * A nonempty request key MUST identify one payment per branch. Rounded allocations must equal
    * the payment exactly and cannot exceed posted balances after credits, even under concurrency.
+   * Reusing a request key with different payment details MUST fail without creating another payment.
    */
   async createPayment(
     dto: CreatePharmacyPurchasePaymentDto,
     branchId: string,
     userId: string,
   ) {
-    if (!dto.requestKey?.trim() || !branchId) throw new BadRequestException('Payment request key and branch are required');
+    if (!dto.requestKey?.trim() || dto.requestKey.trim().length > 128 || !branchId) throw new BadRequestException('Payment request key and branch are required');
     const distributorGstin = dto.distributorGstin.trim().toUpperCase();
     const distributorName = dto.distributorName.trim();
     const paidBy = (userId || '').trim();
@@ -70,8 +76,17 @@ export class PharmacyPurchaseLedgerService {
       );
     }
 
+    const requestFingerprint = this.paymentFingerprint(dto);
     return this.transaction(async (tx: any) => {
-      if (dto.requestKey) { const existing = await tx.pharmacyPurchasePayment.findUnique({where:{branchId_requestKey:{branchId,requestKey:dto.requestKey}},include:{allocations:true}}); if(existing) return existing; }
+      const existing = await tx.pharmacyPurchasePayment.findUnique({
+        where: { branchId_requestKey: { branchId, requestKey: dto.requestKey.trim() } },
+        include: { allocations: true },
+      });
+      if (existing) {
+        if ((existing.requestFingerprint || this.paymentFingerprint(existing)) !== requestFingerprint)
+          throw new ConflictException('This payment request key was used for different details. Reload the recorded payment.');
+        return existing;
+      }
       const invoiceIds = allocations.map(
         (allocation) => allocation.purchaseInvoiceId,
       );
@@ -82,7 +97,7 @@ export class PharmacyPurchaseLedgerService {
             id: { in: invoiceIds },
           },
           include: {
-            paymentAllocations: true,
+            paymentAllocations: { where: { payment: { reversedAt: null } } },
           },
         });
 
@@ -99,7 +114,8 @@ export class PharmacyPurchaseLedgerService {
       const payment = await tx.pharmacyPurchasePayment.create({
         data: {
           branchId,
-          requestKey: dto.requestKey || null,
+          requestKey: dto.requestKey.trim(),
+          requestFingerprint,
           distributorGstin,
           distributorName,
           paymentDate: new Date(dto.paymentDate),
@@ -150,6 +166,113 @@ export class PharmacyPurchaseLedgerService {
     });
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-payment-reversal
+   * Reversal MUST retain original allocations, restore their balances and audit the actor/reason
+   * atomically. A stale, cross-branch or conflicting repeated command MUST have no effects.
+   */
+  async reversePayment(id: string, dto: ReversePharmacyPurchasePaymentDto, branchId: string, userId: string) {
+    return this.correctPayment(id, dto, branchId, userId);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-payment-reallocation
+   * Reallocation MUST reverse the original and create exactly one linked replacement atomically.
+   * Its unchanged total must fit same-supplier posted balances after payments and credits.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-payment-reallocation-effective-time
+   * The original reversal, replacement payment and replacement allocations MUST share one
+   * effective timestamp so historical cutoffs cannot count both payments or neither payment.
+   */
+  async reallocatePayment(id: string, dto: ReallocatePharmacyPurchasePaymentDto, branchId: string, userId: string) {
+    return this.correctPayment(id, dto, branchId, userId, this.normalizeAllocations(dto.allocations));
+  }
+
+  private async correctPayment(
+    id: string, dto: ReversePharmacyPurchasePaymentDto, branchId: string, userId: string,
+    allocations?: { purchaseInvoiceId: string; amount: number }[],
+  ) {
+    const requestKey = dto.requestKey?.trim();
+    const reason = dto.reason?.trim();
+    const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
+    if (!branchId || !userId || !requestKey || requestKey.length > 128 || !reason || reason.length > 500 || !Number.isFinite(expectedUpdatedAt.getTime()))
+      throw new BadRequestException('A request key, current payment revision and correction reason are required');
+    const fingerprint = this.fingerprint({ id, action: allocations ? 'REALLOCATE' : 'REVERSE',
+      expectedUpdatedAt: expectedUpdatedAt.toISOString(), reason, allocations: allocations || null });
+    return this.transaction(async (tx: any) => {
+      const prior = await tx.pharmacyPurchasePayment.findUnique({
+        where: { branchId_correctionRequestKey: { branchId, correctionRequestKey: requestKey } },
+        include: { allocations: true, replacementPayment: { include: { allocations: true } } },
+      });
+      if (prior) {
+        if (prior.id !== id || prior.correctionFingerprint !== fingerprint)
+          throw new ConflictException('This correction request key was used for different details. Reload the payment.');
+        return { original: prior, replacement: prior.replacementPayment };
+      }
+      const original = await tx.pharmacyPurchasePayment.findFirst({
+        where: { id, branchId }, include: { allocations: true },
+      });
+      if (!original) throw new NotFoundException('Payment not found in this branch');
+      if (original.reversedAt || new Date(original.updatedAt).getTime() !== expectedUpdatedAt.getTime())
+        throw new ConflictException('This payment has changed. Reload before correcting it.');
+      if (allocations && (!allocations.length || Math.round(allocations.reduce((sum, row) => sum + row.amount, 0) * 100) !== Math.round(original.amount * 100)))
+        throw new BadRequestException('Reallocation must keep the original payment amount');
+      const reversedAt = new Date();
+      const claim = await tx.pharmacyPurchasePayment.updateMany({
+        where: { id, branchId, updatedAt: expectedUpdatedAt, reversedAt: null },
+        data: { reversedAt, reversedBy: userId, reversalReason: reason,
+          correctionRequestKey: requestKey, correctionFingerprint: fingerprint },
+      });
+      if (claim.count !== 1) throw new ConflictException('This payment has changed. Reload before correcting it.');
+      let replacement = null;
+      if (allocations) {
+        const invoices = await tx.pharmacyPurchaseInvoice.findMany({
+          where: { branchId, id: { in: allocations.map(row => row.purchaseInvoiceId) } },
+          include: { paymentAllocations: { where: { payment: { reversedAt: null } } } },
+        });
+        this.validateAllocationInvoices({ branchId, distributorGstin: original.distributorGstin, invoices, allocations });
+        replacement = await tx.pharmacyPurchasePayment.create({
+          data: {
+            branchId, distributorGstin: original.distributorGstin, distributorName: original.distributorName,
+            paymentDate: original.paymentDate, mode: original.mode, paidBy: userId, amount: original.amount,
+            referenceNo: original.referenceNo, notes: original.notes, replacesPaymentId: id,
+            createdAt: reversedAt,
+            allocations: { create: allocations.map(allocation => ({ ...allocation, createdAt: reversedAt })) },
+          },
+          include: { allocations: true },
+        });
+      }
+      await tx.auditLog.create({ data: {
+        userId, action: allocations ? 'SUPPLIER_PAYMENT_REALLOCATED' : 'SUPPLIER_PAYMENT_REVERSED',
+        entity: 'PharmacyPurchasePayment', entityId: id,
+        oldValues: JSON.stringify({ allocations: original.allocations, amount: original.amount }),
+        newValues: JSON.stringify({ reversedAt, reason, replacementPaymentId: replacement?.id || null,
+          allocations: allocations || [], requestKey }),
+      } });
+      const updated = await tx.pharmacyPurchasePayment.findFirst({ where: { id, branchId }, include: { allocations: true } });
+      return { original: updated, replacement };
+    });
+  }
+
+  private fingerprint(value: unknown) {
+    return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+  }
+
+  private paymentFingerprint(payment: any) {
+    const paymentDate = new Date(payment.paymentDate);
+    if (!Number.isFinite(paymentDate.getTime())) throw new BadRequestException('A valid payment date is required');
+    return this.fingerprint({
+      distributorGstin: payment.distributorGstin.trim().toUpperCase(),
+      distributorName: payment.distributorName.trim(), paymentDate: paymentDate.toISOString(),
+      mode: payment.mode, amount: Math.round(this.money(payment.amount) * 100),
+      referenceNo: payment.referenceNo?.trim() || null, notes: payment.notes?.trim() || null,
+      allocations: this.normalizeAllocations(payment.allocations).map(row => ({
+        purchaseInvoiceId: row.purchaseInvoiceId, amount: Math.round(row.amount * 100),
+      })),
+    });
+  }
+
   private async transaction<T>(run: (tx:any)=>Promise<T>): Promise<T> {
     for (let attempt=0;;attempt++) {
       try { return await this.prisma.$transaction(run,{isolationLevel:'Serializable'}); }
@@ -164,7 +287,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       asOfDate: asOfDate.toISOString(),
-      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       tcsThreshold: TCS_THRESHOLD_AMOUNT,
       distributors: Array.from(groups.values())
         .map((groupInvoices) =>
@@ -229,14 +352,17 @@ export class PharmacyPurchaseLedgerService {
         description: `Invoice ${invoice.invoiceNumber}`,
         invoiceId: invoice.id,
       })),
-      ...payments.map((payment: any) => ({
-        eventDate: payment.paymentDate,
+      ...payments.flatMap((payment: any) => [{
+        eventDate: payment.replacesPaymentId ? payment.createdAt : payment.paymentDate,
         type: 'PAYMENT' as const,
         debit: 0,
         credit: this.money(payment.amount),
         description: `Payment ${payment.referenceNo || payment.mode}`,
         paymentId: payment.id,
-      })),
+      }, ...(payment.reversedAt && new Date(payment.reversedAt) <= asOfDate ? [{
+        eventDate: payment.reversedAt, type: 'PAYMENT_REVERSAL', debit: this.money(payment.amount),
+        credit: 0, description: `Payment reversal: ${payment.reversalReason}`, paymentId: payment.id,
+      }] : [])]),
       ...creditAllocations.flatMap((a:any)=>[
         {eventDate:a.createdAt,type:'CREDIT_ALLOCATION',debit:0,credit:Number(a.amount),description:`Credit ${a.credit.reference}`,allocationId:a.id,invoiceId:a.purchaseInvoiceId},
         ...(a.reversedAt && new Date(a.reversedAt)<=asOfDate ? [{eventDate:a.reversedAt,type:'CREDIT_REVERSAL',debit:Number(a.amount),credit:0,description:`Reversal: ${a.reversalReason}`,allocationId:a.id,invoiceId:a.purchaseInvoiceId}] : []),
@@ -263,10 +389,15 @@ export class PharmacyPurchaseLedgerService {
       distributorGstin: gstin,
       distributorName: invoices[0].distributorName,
       asOfDate: asOfDate.toISOString(),
-      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       invoices: invoiceRows,
       payments: payments.map((payment: any) => ({
         id: payment.id,
+        updatedAt: payment.updatedAt,
+        reversedAt: payment.reversedAt && new Date(payment.reversedAt) <= asOfDate ? payment.reversedAt : null,
+        reversedBy: payment.reversedAt && new Date(payment.reversedAt) <= asOfDate ? payment.reversedBy : null,
+        reversalReason: payment.reversedAt && new Date(payment.reversedAt) <= asOfDate ? payment.reversalReason : null,
+        replacesPaymentId: payment.replacesPaymentId,
         paymentDate: payment.paymentDate,
         mode: payment.mode,
         paidBy: payment.paidBy,
@@ -326,7 +457,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       asOfDate: asOfDate.toISOString(),
-      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       buckets,
       totalOutstanding: this.money(
         buckets.reduce((sum, bucket) => sum + bucket.amount, 0),
@@ -385,7 +516,7 @@ export class PharmacyPurchaseLedgerService {
 
     return {
       asOfDate: asOfDate.toISOString(),
-      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
+      balanceBasis: 'Invoices posted and dated by cutoff; payments effective and recorded by cutoff less payment reversals recorded by cutoff; credit applications less reversals recorded by cutoff. Cutoff is an inclusive UTC instant.',
       dueIn7Days,
       dueToday,
       overdue,
@@ -418,7 +549,7 @@ export class PharmacyPurchaseLedgerService {
       );
     }
 
-    return Array.from(byInvoice.entries()).map(
+    return Array.from(byInvoice.entries()).sort(([a], [b]) => a.localeCompare(b)).map(
       ([purchaseInvoiceId, amount]) => ({
         purchaseInvoiceId,
         amount,
@@ -486,7 +617,7 @@ export class PharmacyPurchaseLedgerService {
    * @cc [owner:nareshshah139,label:product] supplier-ledger-historical-cutoff
    * As-of balances MUST include only invoices posted/dated, payments effective/recorded, and
    * credit applications recorded through the cutoff. A reversal after the cutoff MUST NOT
-   * remove an earlier credit. Current creditApplied must not substitute for historical events.
+   * remove an earlier payment or credit. Current creditApplied must not substitute for historical events.
    */
   private async findLedgerInvoices(
     branchId: string,
@@ -499,7 +630,7 @@ export class PharmacyPurchaseLedgerService {
       include:{paymentAllocations:{include:{payment:true}}},orderBy:[{distributorName:'asc'},{invoiceDate:'asc'},{id:'asc'}],
     });
     const allocations=await (this.prisma as any).inventoryCreditAllocation.findMany({where:{branchId,purchaseInvoiceId:{in:rows.map((r:any)=>r.id)},createdAt:{lte:asOfDate},OR:[{reversedAt:null},{reversedAt:{gt:asOfDate}}]}});
-    return rows.map((invoice:any)=>({...invoice,creditApplied:this.money(allocations.filter((a:any)=>a.purchaseInvoiceId===invoice.id).reduce((n:number,a:any)=>n+Number(a.amount),0)),paymentAllocations:(invoice.paymentAllocations||[]).filter((a:any)=>a.payment&&new Date(a.payment.paymentDate)<=asOfDate&&new Date(a.payment.createdAt||a.payment.paymentDate)<=asOfDate&&new Date(a.createdAt||a.payment.createdAt||a.payment.paymentDate)<=asOfDate)}));
+    return rows.map((invoice:any)=>({...invoice,creditApplied:this.money(allocations.filter((a:any)=>a.purchaseInvoiceId===invoice.id).reduce((n:number,a:any)=>n+Number(a.amount),0)),paymentAllocations:(invoice.paymentAllocations||[]).filter((a:any)=>a.payment&&new Date(a.payment.paymentDate)<=asOfDate&&new Date(a.payment.createdAt||a.payment.paymentDate)<=asOfDate&&new Date(a.createdAt||a.payment.createdAt||a.payment.paymentDate)<=asOfDate&&(!a.payment.reversedAt||new Date(a.payment.reversedAt)>asOfDate))}));
   }
 
   private groupInvoicesByDistributor(invoices: LedgerInvoice[]) {

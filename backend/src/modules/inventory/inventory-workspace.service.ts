@@ -234,9 +234,14 @@ export class InventoryWorkspaceService {
       return old?tx.inventoryIntakeDraft.update({where:{id:old.id,version:old.version},data:{...data,version:{increment:1}}}):tx.inventoryIntakeDraft.create({data:{...data,branchId:actor.branchId,requestKey:input.requestKey,createdBy:actor.id}});
     });
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] supplier-credit-current-payment-balance
+   * Current invoice balances MUST exclude reversed supplier payments while retaining their
+   * allocations for historical reports.
+   */
   async credits(actor:WorkflowActor) {
     await this.require(actor,'pharmacy:purchase-ledger:read');
-    const [credits,invoices]=await Promise.all([this.prisma.inventorySupplierCredit.findMany({where:{branchId:actor.branchId},include:{allocations:true},orderBy:{createdAt:'desc'}}),this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:true},orderBy:{invoiceDate:'desc'}})]);
+    const [credits,invoices]=await Promise.all([this.prisma.inventorySupplierCredit.findMany({where:{branchId:actor.branchId},include:{allocations:true},orderBy:{createdAt:'desc'}}),this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}},orderBy:{invoiceDate:'desc'}})]);
     return {credits:credits.map(c=>({...c,amount:Number(c.amount),applied:Number(c.applied),available:c.reversedAt?0:money(Number(c.amount)-Number(c.applied)),allocations:c.allocations.map(a=>({...a,amount:Number(a.amount)}))})),invoices:invoices.map(i=>({id:i.id,invoiceNumber:i.invoiceNumber,distributorGstin:i.distributorGstin,distributorName:i.distributorName,dueDate:i.dueDate,netPayable:i.netPayable,creditApplied:i.creditApplied,outstanding:money(i.netPayable-i.creditApplied-i.paymentAllocations.reduce((n,a)=>n+a.amount,0))}))};
   }
   /**
@@ -250,7 +255,7 @@ export class InventoryWorkspaceService {
     return this.workflow.transaction(async tx=>{
       const exists=await tx.inventoryCreditAllocation.findUnique({where:{branchId_requestKey:{branchId:actor.branchId,requestKey:input.requestKey}}});if(exists)return exists;
       const credit=await tx.inventorySupplierCredit.findFirst({where:{id:input.creditId,branchId:actor.branchId,reversedAt:null}});
-      const invoice=await tx.pharmacyPurchaseInvoice.findFirst({where:{id:input.purchaseInvoiceId,branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:true}});
+      const invoice=await tx.pharmacyPurchaseInvoice.findFirst({where:{id:input.purchaseInvoiceId,branchId:actor.branchId,status:'STOCK_COMMITTED'},include:{paymentAllocations:{where:{payment:{reversedAt:null}}}}});
       if(!credit||!invoice||credit.supplierGstin!==invoice.distributorGstin)throw new BadRequestException('Select a posted bill for the same supplier GSTIN');
       const outstanding=money(invoice.netPayable-invoice.creditApplied-invoice.paymentAllocations.reduce((n:number,a:any)=>n+a.amount,0));
       if(value>money(Number(credit.amount)-Number(credit.applied))||value>outstanding)throw new BadRequestException('Amount exceeds available credit or bill balance');

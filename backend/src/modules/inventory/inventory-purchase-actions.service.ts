@@ -29,6 +29,11 @@ export class InventoryPurchaseActionsService {
     return permissions;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-payment-reversal-history
+   * Readable payment history MUST retain original allocations and show each reversal with its
+   * recorded actor, time and reason rather than erasing the original payment.
+   */
   async detail(actor: WorkflowActor, id: string) {
     const permissions = await this.access(actor);
     const canReadLedger = permissions.has('*') || permissions.has('pharmacy:purchase-ledger:read');
@@ -64,7 +69,11 @@ export class InventoryPurchaseActionsService {
     for (const original of invoice.documents || []) events.push({ id: `source:${original.id}`, action: 'ORIGINAL_CAPTURED', actorId: original.uploadedBy, at: original.createdAt, after: { fileName: original.fileName, sha256: original.sha256 } });
     if (invoice.stockCommittedAt && !events.some(e => e.action === 'STOCK_COMMITTED')) events.push({ id: `posted:${id}`, action: 'STOCK_COMMITTED', actorId: invoice.stockCommittedBy, at: invoice.stockCommittedAt, after: { reference: invoice.stockCommitReference } });
     for (const doc of related) for (const event of doc.events) events.push({ id: event.id, action: `${doc.kind}: ${event.action}`, actorId: event.actorId, at: event.createdAt, documentId: doc.id, kind: doc.kind, after: event.detail });
-    for (const allocation of payments) events.push({ id: `payment:${allocation.id}`, action: 'PAYMENT_ALLOCATED', actorId: allocation.payment.paidBy, at: allocation.createdAt, after: { amount: allocation.amount, reference: allocation.payment.referenceNo, mode: allocation.payment.mode } });
+    for (const allocation of payments) {
+      events.push({ id: `payment:${allocation.id}`, action: 'PAYMENT_ALLOCATED', actorId: allocation.payment.paidBy, at: allocation.createdAt, after: { amount: allocation.amount, reference: allocation.payment.referenceNo, mode: allocation.payment.mode } });
+      const payment = allocation.payment as any;
+      if (payment.reversedAt) events.push({ id: `payment-reversed:${allocation.id}`, action: 'PAYMENT_REVERSED', actorId: payment.reversedBy, at: payment.reversedAt, after: { amount: allocation.amount, reason: payment.reversalReason } });
+    }
     for (const allocation of credits) {
       events.push({ id: `credit:${allocation.id}`, action: 'CREDIT_ALLOCATED', actorId: allocation.createdBy, at: allocation.createdAt, after: { amount: Number(allocation.amount), reference: allocation.credit.reference } });
       if (allocation.reversedAt) events.push({ id: `credit-reversed:${allocation.id}`, action: 'CREDIT_ALLOCATION_REVERSED', actorId: allocation.reversedBy, at: allocation.reversedAt, after: { amount: Number(allocation.amount), reason: allocation.reversalReason } });
