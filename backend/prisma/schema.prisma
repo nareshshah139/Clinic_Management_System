@@ -1787,6 +1787,7 @@ model PartnerOrganization {
 }
 
 model PartnerDailySale {
+  version                 Int                    @default(0)
   id                      String                 @id @default(cuid())
   branchId                String
   partnerOrganizationId   String
@@ -1824,6 +1825,7 @@ model PartnerDailySale {
 }
 
 model PartnerDailySaleItem {
+  recoveryInventoryItemId String?
   id                     String                           @id @default(cuid())
   partnerDailySaleId     String
   medicineName           String

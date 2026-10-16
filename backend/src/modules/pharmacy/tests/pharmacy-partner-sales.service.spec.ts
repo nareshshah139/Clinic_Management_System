@@ -39,6 +39,7 @@ describe('PharmacyPartnerSalesService', () => {
         update: jest.fn(),
       },
       inventoryItem: {
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         updateMany: jest.fn(),
         findUnique: jest.fn(),
@@ -46,6 +47,7 @@ describe('PharmacyPartnerSalesService', () => {
       },
       stockTransaction: {
         create: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -183,6 +185,7 @@ describe('PharmacyPartnerSalesService', () => {
     tx.inventoryItem.findMany
       .mockResolvedValueOnce([inventoryBatch])
       .mockResolvedValueOnce([]);
+    tx.inventoryItem.findFirst.mockResolvedValue(inventoryBatch);
     tx.inventoryItem.updateMany.mockResolvedValue({ count: 1 });
     tx.inventoryItem.findUnique.mockResolvedValue({
       currentStock: 0,
@@ -210,16 +213,19 @@ describe('PharmacyPartnerSalesService', () => {
       ],
     });
 
-    const result = await service.commitStock('sale-1', adminUser);
+    const result = await service.commitStock('sale-1', adminUser, {
+      expectedVersion: 0,
+    });
 
-    expect(tx.inventoryItem.updateMany).toHaveBeenCalledWith(
+    expect(tx.inventoryItem.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           id: 'inventory-1',
           branchId,
-          currentStock: { gte: 5 },
+          currentStock: 5,
+          heldStock: 0,
         }),
-        data: { currentStock: { decrement: 5 } },
+        data: expect.objectContaining({ currentStock: 0, heldStock: 0 }),
       }),
     );
     expect(tx.stockTransaction.create).toHaveBeenCalledWith(
@@ -230,7 +236,6 @@ describe('PharmacyPartnerSalesService', () => {
           type: 'SALE',
           quantity: 5,
           reference: 'PARTNER-SALE-sale-1',
-          customer: 'HealthPlus Partner',
           batchNumber: 'AZT-001',
         }),
       }),
@@ -287,11 +292,18 @@ describe('PharmacyPartnerSalesService', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    tx.inventoryItem.updateMany.mockResolvedValue({ count: 0 });
+    tx.inventoryItem.findFirst.mockResolvedValue({
+      id: 'inventory-1',
+      branchId,
+      currentStock: 2,
+      heldStock: 0,
+      costPrice: 1,
+    });
+    tx.inventoryItem.update.mockRejectedValue({ code: 'P2025' });
 
-    await expect(service.commitStock('sale-1', adminUser)).rejects.toThrow(
-      ConflictException,
-    );
+    await expect(
+      service.commitStock('sale-1', adminUser, { expectedVersion: 0 }),
+    ).rejects.toThrow(ConflictException);
     expect(tx.stockTransaction.create).not.toHaveBeenCalled();
   });
 

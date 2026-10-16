@@ -8,6 +8,8 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
+  IsNotEmpty,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -150,4 +152,25 @@ export class QueryPartnerMissingSalesDto {
   @Min(0)
   @Max(23)
   cutoffHour?: number = 22;
+}
+
+export class CommitPartnerSaleStockDto {
+  @ApiProperty({ example: 0 })
+  @IsInt()
+  @Min(0)
+  expectedVersion: number;
+}
+
+export class ReconcilePartnerSaleLineDto extends CommitPartnerSaleStockDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
+  inventoryItemId: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(500)
+  reason: string;
 }
