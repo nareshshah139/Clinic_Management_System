@@ -4,6 +4,14 @@ import { jest } from '@jest/globals';
 
 import * as toastHook from '@/hooks/use-toast';
 
+/**
+ * @cc [owner:nareshshah139,label:testing] prescription-workflow-completion-budget
+ * Full preview and export workflows MUST have a bounded fifteen-second completion deadline,
+ * not a latency assertion. Output assertions, async waits and simulated timer intervals MUST remain intact.
+ */
+const PRESCRIPTION_WORKFLOW_COMPLETION_TIMEOUT_MS = 15_000;
+jest.setTimeout(PRESCRIPTION_WORKFLOW_COMPLETION_TIMEOUT_MS);
+
 function ToastMessage() {
   const { toasts } = toastHook.useToast();
   return <output data-testid="toast-message">{String(toasts[0]?.description || '')}</output>;

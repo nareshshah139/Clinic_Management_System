@@ -560,6 +560,10 @@ export class ApiClient {
     return this.patch<T>(`/pharmacy/purchase-invoices/${id}/review`, data);
   }
 
+  async reopenPharmacyPurchaseInvoiceReview<T = unknown>(id: string, expectedUpdatedAt: string): Promise<T> {
+    return this.post<T>(`/pharmacy/purchase-invoices/${id}/reopen-review`, { expectedUpdatedAt });
+  }
+
   async commitPharmacyPurchaseInvoiceStock<T = unknown>(id: string): Promise<T> {
     return this.post<T>(`/pharmacy/purchase-invoices/${id}/commit-stock`, {});
   }

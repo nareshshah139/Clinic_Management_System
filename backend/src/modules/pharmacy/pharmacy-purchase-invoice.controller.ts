@@ -37,6 +37,7 @@ import {
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
+  ReopenPharmacyPurchaseInvoiceDto,
   SavePharmacyPurchaseSupplierDto,
   CorrectPharmacyPurchaseSupplierGstinDto,
   PurchaseProductCatalogDto,
@@ -362,6 +363,18 @@ export class PharmacyPurchaseInvoiceController {
     @Request() req: any,
   ) {
     return this.purchaseInvoiceService.markReviewed(id, dto, req.user.branchId, req.user.id);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] purchase-reopen-permissions
+   * Reopening review MUST require both draft-edit and review permissions and use the authenticated branch.
+   */
+  @Post(':id/reopen-review')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
+  @ApiOperation({ summary: 'Reopen an unposted reviewed invoice for correction and fresh review' })
+  reopenReview(@Param('id') id: string, @Body() dto: ReopenPharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.reopenReview(id, dto, req.user.branchId, req.user.id);
   }
 
   @Post(':id/commit-stock')

@@ -1009,6 +1009,17 @@ export function PurchaseInvoiceWorkbench({
  * including after saving or recovering a draft. Unknown stock outcome or a stale revision
  * MUST suppress that global success state.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-inline-catalogue-recovery
+ * Catalogue rejections MUST offer in-place name correction, catalogue creation and manual matching
+ * to authorized editors. Reviewed bills MUST reopen through the revision-checked API before edits;
+ * posted or unknown stock outcomes MUST stay locked. Reopening and corrections MUST clear final approval.
+ */
+/**
+ * @cc [owner:nareshshah139,label:state] purchase-recovery-editor-identities
+ * Name correction and manual matching for an invoice line MUST have distinct stable React
+ * identities, so rerendering either editor cannot reuse its sibling's local state.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -1099,6 +1110,20 @@ function PurchaseInvoiceEditor({
   const [masterMatches, setMasterMatches] = useState<MasterMatch[]>([]);
   const [masterConfirming, setMasterConfirming] = useState<string | null>(null);
   const [masterRefreshing, setMasterRefreshing] = useState(false);
+  const [reopeningReview, setReopeningReview] = useState(false);
+  const [catalogueIssue, setCatalogueIssue] = useState(false);
+  const captureCatalogueFailure = (err: unknown) => {
+    if ((err as { body?: { code?: string } })?.body?.code === "PURCHASE_CATALOG_REVIEW_REQUIRED") {
+      setCatalogueIssue(true);
+      setReviewAccepted(false);
+    }
+  };
+  const focusProductMatching = () => requestAnimationFrame(() => {
+    const section = document.getElementById("purchase-master-matching");
+    section?.focus({ preventScroll: true });
+    section?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  });
+
   const [masterStatuses, setMasterStatuses] = useState<
     Record<number, MasterStatus>
   >({});
@@ -1550,7 +1575,7 @@ function PurchaseInvoiceEditor({
     );
   };
 
-  const refreshMasterMatches = async () => {
+  const refreshMasterMatches = async (sourceLines: LineForm[] = lines) => {
     if (!access.create) return;
     setMasterRefreshing(true);
     setError(null);
@@ -1558,13 +1583,13 @@ function PurchaseInvoiceEditor({
       const response =
         await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>(
           {
-            items: lines.map(linePayload),
+            items: sourceLines.map(linePayload),
           },
         );
       setMasterMatches(response.matches || []);
       setMasterStatuses({});
       setNotice(
-        `Refreshed drug master suggestions for ${lines.length} line${lines.length === 1 ? "" : "s"}.`,
+        `Refreshed drug master suggestions for ${sourceLines.length} line${sourceLines.length === 1 ? "" : "s"}.`,
       );
     } catch (err) {
       setError(getErrorMessage(err));
@@ -2033,6 +2058,7 @@ function PurchaseInvoiceEditor({
       await loadRecent();
     } catch (err) {
       setError(getErrorMessage(err));
+      captureCatalogueFailure(err);
     } finally {
       setReviewing(false);
       focusActionFeedback();
@@ -2070,6 +2096,7 @@ function PurchaseInvoiceEditor({
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
     } catch (err) {
       setError(getErrorMessage(err));
+      captureCatalogueFailure(err);
       if (activeInvoice) await refreshStockStatus(activeInvoice.id);
     } finally {
       setCommitting(false);
@@ -2118,6 +2145,7 @@ function PurchaseInvoiceEditor({
   };
 
   const editSavedDraft = (invoice: PurchaseInvoice) => {
+    setCatalogueIssue(false);
     applyExtractedDraft({
       ...invoice,
       invoiceDate: dateInputFromIso(invoice.invoiceDate),
@@ -2138,6 +2166,40 @@ function PurchaseInvoiceEditor({
       canResumeManualReview(invoice) ? invoice.id : null,
     );
     setNotice(null);
+  };
+
+  const openProductRecovery = async () => {
+    if (!access.create || busy || savedFormLocked || draftWriteBlocked) return;
+    setShowIntakeHome(false);
+    setManualEntry(true);
+    await refreshMasterMatches();
+    focusProductMatching();
+  };
+
+  const reopenReviewedInvoice = async () => {
+    if (!canReopenReview || !activeInvoice?.updatedAt || busy) return;
+    setReopeningReview(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const reopened = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(activeInvoice.id, activeInvoice.updatedAt);
+      if (reopened?.id !== activeInvoice.id || reopened.status !== "DRAFT" || reopened.stockCommittedAt || !reopened.updatedAt || !Array.isArray(reopened.items)) {
+        throw new Error("The reopened invoice could not be confirmed. Reload the saved invoice.");
+      }
+      editSavedDraft(reopened);
+      setShowIntakeHome(false);
+      setManualEntry(true);
+      setCatalogueIssue(false);
+      await refreshMasterMatches(reopened.items.map((item, index) => lineFromExtracted(item as unknown as ExtractedPurchaseLine, index)));
+      setNotice("Review reopened. Correct the products here, save your corrections, then review again before adding stock.");
+      focusProductMatching();
+    } catch (err) {
+      setError(getErrorMessage(err));
+      setRevisionConflict("Reopening was not confirmed. Reload the saved invoice before editing or adding stock.");
+      focusActionFeedback();
+    } finally {
+      setReopeningReview(false);
+    }
   };
 
   const saveIncompleteDraft = async () => {
@@ -2392,6 +2454,7 @@ function PurchaseInvoiceEditor({
       window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
     } catch (err) {
       setError(getErrorMessage(err));
+      captureCatalogueFailure(err);
       if (activeInvoice) await refreshStockStatus(activeInvoice.id);
     } finally {
       setReviewing(false);
@@ -2421,6 +2484,7 @@ function PurchaseInvoiceEditor({
     reviewing ||
     committing ||
     refreshingStockStatus ||
+    reopeningReview ||
     savingSupplier ||
     masterConfirming !== null ||
     masterRefreshing;
@@ -2461,6 +2525,10 @@ function PurchaseInvoiceEditor({
     activeInvoice?.status === "REVIEWED" &&
     !stockStatusUnknown &&
     !draftWriteBlocked;
+  const canReopenReview =
+    access.create && access.review && access.reopenReview &&
+    activeInvoice?.status === "REVIEWED" && !!activeInvoice.updatedAt &&
+    !stockAdded && !stockStatusUnknown && !draftWriteBlocked;
   const savedFormLocked =
     !access.create ||
     stockAdded ||
@@ -2917,6 +2985,11 @@ function PurchaseInvoiceEditor({
           Review issues
         </Button>
       )}
+      {canReopenReview && (
+        <Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy}>
+          {reopeningReview ? "Reopening review…" : "Reopen review and fix products"}
+        </Button>
+      )}
       {editingSelectedInvoice && !stockAdded && !savedFormLocked && (
         <details className="text-sm">
           <summary className="cursor-pointer py-2">More options</summary>
@@ -3282,7 +3355,20 @@ function PurchaseInvoiceEditor({
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Request Failed</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="space-y-3">
+                <p>{error}</p>
+                {catalogueIssue && !stockAdded && !stockStatusUnknown && (
+                  !savedFormLocked && access.create ? (
+                    <Button variant="outline" onClick={openProductRecovery} disabled={busy || draftWriteBlocked}>
+                      Fix products on this invoice
+                    </Button>
+                  ) : canReopenReview ? (
+                    <p>Use “Reopen review and fix products” below to correct this bill before adding stock.</p>
+                  ) : (
+                    <p>A staff member with purchase edit and review permissions must correct the catalogue match.</p>
+                  )
+                )}
+              </AlertDescription>
             </Alert>
           )}
           {validationErrors.length > 0 && (
@@ -3883,7 +3969,7 @@ function PurchaseInvoiceEditor({
 
                     {lines.some((line) => line.productName.trim()) &&
                       !savedFormLocked && (
-                        <Card id="purchase-master-matching">
+                        <Card id="purchase-master-matching" tabIndex={-1}>
                           <CardHeader>
                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                               <div>
@@ -3901,7 +3987,7 @@ function PurchaseInvoiceEditor({
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                onClick={refreshMasterMatches}
+                                onClick={() => refreshMasterMatches()}
                                 disabled={
                                   !access.create ||
                                   busy ||
@@ -3963,6 +4049,19 @@ function PurchaseInvoiceEditor({
                                     )}
                                   </div>
 
+                                  {line && <PurchaseLineNameCorrection
+                                    key={`name-correction:${line.localId}`}
+                                    lineNumber={match.lineIndex + 1}
+                                    name={line.productName}
+                                    disabled={busy || draftWriteBlocked}
+                                    onCorrect={async (name) => {
+                                      const corrected = lines.map(current => current.localId === line.localId ? { ...current, productName: name } : current);
+                                      updateLine(line.localId, "productName", name);
+                                      setCatalogueIssue(false);
+                                      await refreshMasterMatches(corrected);
+                                      focusProductMatching();
+                                    }}
+                                  />}
                                   <div className="grid grid-cols-1 gap-3">
                                     <div className="rounded-md bg-muted/40 p-3">
                                       <p className="mb-2 text-xs font-medium uppercase text-muted-foreground">
@@ -4234,7 +4333,7 @@ function PurchaseInvoiceEditor({
                                       </p>
                                     ))}
                                   {!status && <PurchaseManualMatchSearch
-                                    key={line?.localId || match.lineIndex}
+                                    key={`manual-match:${line?.localId || match.lineIndex}`}
                                     lineNumber={match.lineIndex + 1}
                                     disabled={busy || masterConfirming !== null}
                                     onSelect={drug => { void confirmMasterLine(match, "MATCH_EXISTING", { drug, score: 0, confidence: "LOW" }); }}
@@ -5228,6 +5327,37 @@ function Detail({
     <div>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="break-words font-medium">{display}</dd>
+    </div>
+  );
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] invoice-name-correction-explicit
+ * Typing or cancelling a name correction MUST leave the invoice untouched; applying a nonblank
+ * name MUST change only that invoice line through the parent and MUST NOT rename a catalogue record.
+ */
+function PurchaseLineNameCorrection({ lineNumber, name, disabled, onCorrect }: {
+  lineNumber: number;
+  name: string;
+  disabled: boolean;
+  onCorrect: (name: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  if (!editing) return (
+    <Button type="button" variant="outline" size="sm" className="mb-3" disabled={disabled}
+      onClick={() => { setValue(name); setEditing(true); }}>Correct invoice name</Button>
+  );
+  return (
+    <div className="mb-4 space-y-2">
+      <Label htmlFor={`purchase-correct-name-${lineNumber}`}>Corrected name for line {lineNumber}</Label>
+      <p id={`purchase-correct-name-help-${lineNumber}`} className="text-sm text-muted-foreground">Correct the name read from this bill. Existing catalogue names stay unchanged.</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input id={`purchase-correct-name-${lineNumber}`} aria-describedby={`purchase-correct-name-help-${lineNumber}`}
+          value={value} disabled={disabled} onChange={event => setValue(event.target.value)} className="min-w-0 flex-1" />
+        <Button type="button" disabled={disabled || !value.trim()} onClick={() => { void onCorrect(value.trim()); setEditing(false); }}>Apply name</Button>
+        <Button type="button" variant="outline" disabled={disabled} onClick={() => setEditing(false)}>Cancel</Button>
+      </div>
     </div>
   );
 }

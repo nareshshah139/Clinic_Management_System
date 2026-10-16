@@ -1,0 +1,8 @@
+@cc [owner:nareshshah139,label:infra] workspace-test-dependencies
+In tests.yml, dependency setup MUST use one root npm ci for all workspaces and MUST NOT reinstall
+individual workspaces afterward, so frontend and backend test tools remain available after the
+shared-types build.
+
+@cc [owner:nareshshah139,label:infra] generated-backend-test-client
+In tests.yml, the backend Prisma client MUST be generated from the backend schema before the
+appointment tests run, so a clean dependency install exposes the schema's enums and client types.

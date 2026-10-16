@@ -3,6 +3,14 @@ import MedicalVisitForm from '@/components/visits/MedicalVisitForm';
 import { apiClient } from '@/lib/api';
 import { mergeClinicalPatch } from '@/lib/clinical-patch';
 
+/**
+ * @cc [owner:nareshshah139,label:testing] clinical-workflow-completion-budget
+ * Full clinical save, conflict and reopen workflows MUST have a bounded fifteen-second completion
+ * deadline, not a latency assertion. Patch assertions, async waits and autosave intervals MUST remain intact.
+ */
+const CLINICAL_WORKFLOW_COMPLETION_TIMEOUT_MS = 15_000;
+jest.setTimeout(CLINICAL_WORKFLOW_COMPLETION_TIMEOUT_MS);
+
 jest.mock('@/lib/api', () => ({ apiClient: {
   get: jest.fn(), getPatient: jest.fn().mockResolvedValue({ id: 'p', name: 'Synthetic patient' }),
   getClinicAssets: jest.fn().mockResolvedValue([]), getPrinterProfiles: jest.fn().mockResolvedValue([]),
