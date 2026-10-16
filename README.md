@@ -254,6 +254,14 @@ cd frontend
 npm run test
 ```
 
+Run the inventory recovery scenarios from the repository root with a disposable local PostgreSQL database and Chrome installed:
+
+```bash
+RECOVERY_E2E_DATABASE_URL=postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery npm run test:recovery:e2e
+```
+
+The [recovery E2E guide](docs/qa/inventory-recovery/e2e.md) describes the scenarios, screenshots, prerequisites and coverage limits. The dedicated recovery workflow runs this command on every pull request and retains its results as an artifact.
+
 ## Database
 
 ### Migrations
