@@ -590,6 +590,10 @@ exports.opening = async (f, s) => {
   );
   await f.capture(s, "legacy-reconciliation");
 };
+/**
+ * @cc [owner:nareshshah139,label:testing] stock-location-recovery-evidence
+ * Direct and bulk location checks MUST compare authenticated HTTP receipts with persisted locations, defaults, balances, and replay identity; changed-location retries MUST conflict without stock effects.
+ */
 exports.stock = async (f, s) => {
   const stock = await item(f, "API recovery stock", 100);
   const quantity = async () => (await current(f, stock.id)).currentStock;
@@ -801,6 +805,194 @@ exports.stock = async (f, s) => {
     "Conflicts and duplicate row IDs leave stock unchanged",
     { stock: await quantity(), movements: await movementCount(f, stock.id) },
     { stock: 1100, movements: 4 },
+  );
+  const locationStock = await item(f, "Location recovery stock", 50);
+  await f.db.inventoryItem.update({
+    where: { id: locationStock.id },
+    data: { storageLocation: "Default shelf" },
+  });
+  const movement = {
+    operationId: f.randomUUID(),
+    itemId: locationStock.id,
+    type: "SALE",
+    quantity: 5,
+    unitPrice: 2,
+    location: "Dispensing counter",
+  };
+  const directMovement = await post("/inventory/transactions", movement);
+  assert.equal(directMovement.status, 201);
+  const savedDirect = await f.db.stockTransaction.findUniqueOrThrow({
+    where: { id: directMovement.body.id },
+  });
+  f.check(
+    s,
+    "Direct movement retains explicit location",
+    {
+      responseLocation: directMovement.body.location,
+      savedLocation: savedDirect.location,
+      stock: (await current(f, locationStock.id)).currentStock,
+      movements: await movementCount(f, locationStock.id),
+    },
+    {
+      responseLocation: "Dispensing counter",
+      savedLocation: "Dispensing counter",
+      stock: 45,
+      movements: 1,
+    },
+  );
+
+  const directReplay = await post("/inventory/transactions", movement);
+  const changedLocation = await post("/inventory/transactions", {
+    ...movement,
+    location: "Other counter",
+  });
+  const retainedDirect = await f.db.stockTransaction.findUniqueOrThrow({
+    where: { id: savedDirect.id },
+  });
+  f.check(
+    s,
+    "Direct location replay retains receipt and rejects a changed location",
+    {
+      replayStatus: directReplay.status,
+      receipt: directReplay.body.id,
+      responseLocation: directReplay.body.location,
+      savedLocation: retainedDirect.location,
+      changedStatus: changedLocation.status,
+      stock: (await current(f, locationStock.id)).currentStock,
+      movements: await movementCount(f, locationStock.id),
+    },
+    {
+      replayStatus: 201,
+      receipt: savedDirect.id,
+      responseLocation: "Dispensing counter",
+      savedLocation: "Dispensing counter",
+      changedStatus: 409,
+      stock: 45,
+      movements: 1,
+    },
+  );
+
+  const defaultMovement = await post("/inventory/transactions", {
+    operationId: f.randomUUID(),
+    itemId: locationStock.id,
+    type: "PURCHASE",
+    quantity: 1,
+    unitPrice: 2,
+  });
+  assert.equal(defaultMovement.status, 201);
+  const savedDefault = await f.db.stockTransaction.findUniqueOrThrow({
+    where: { id: defaultMovement.body.id },
+  });
+  f.check(
+    s,
+    "Direct omitted location uses batch storage location",
+    {
+      responseLocation: defaultMovement.body.location,
+      savedLocation: savedDefault.location,
+      stock: (await current(f, locationStock.id)).currentStock,
+    },
+    {
+      responseLocation: "Default shelf",
+      savedLocation: "Default shelf",
+      stock: 46,
+    },
+  );
+
+  const locationOperationId = f.randomUUID();
+  const locationRows = [
+    {
+      rowId: "explicit-location",
+      itemId: locationStock.id,
+      type: "SALE",
+      quantity: 3,
+      unitPrice: 2,
+      location: "Dispatch counter",
+    },
+    {
+      rowId: "default-location",
+      itemId: locationStock.id,
+      type: "SALE",
+      quantity: 4,
+      unitPrice: 2,
+    },
+  ];
+  const locationBulk = await post("/inventory/transactions/bulk", {
+    operationId: locationOperationId,
+    transactions: locationRows,
+  });
+  assert.equal(locationBulk.status, 201);
+  assert.equal(locationBulk.body.failed, 0);
+  const savedLocations = await f.db.stockTransaction.findMany({
+    where: { operationId: locationOperationId },
+    orderBy: { operationRowId: "asc" },
+  });
+  f.check(
+    s,
+    "Bulk movements retain explicit and default locations",
+    {
+      responseLocations: locationBulk.body.results.map(
+        (row) => row.data.location,
+      ),
+      savedLocations: savedLocations.map((row) => row.location),
+      stock: (await current(f, locationStock.id)).currentStock,
+      movements: await movementCount(f, locationStock.id),
+    },
+    {
+      responseLocations: ["Dispatch counter", "Default shelf"],
+      savedLocations: ["Default shelf", "Dispatch counter"],
+      stock: 39,
+      movements: 4,
+    },
+  );
+
+  const bulkLocationReplay = await post("/inventory/transactions/bulk", {
+    operationId: locationOperationId,
+    transactions: [locationRows[1], locationRows[0]],
+  });
+  const changedBulkLocation = await post("/inventory/transactions/bulk", {
+    operationId: locationOperationId,
+    transactions: [{ ...locationRows[0], location: "Other counter" }],
+  });
+  assert.equal(bulkLocationReplay.status, 201);
+  const retainedLocations = await f.db.stockTransaction.findMany({
+    where: { operationId: locationOperationId },
+    orderBy: { operationRowId: "asc" },
+  });
+  f.check(
+    s,
+    "Bulk location replay retains receipts and rejects a changed location",
+    {
+      receipts: bulkLocationReplay.body.results.map((row) => ({
+        id: row.data.id,
+        location: row.data.location,
+      })),
+      savedReceipts: retainedLocations.map((row) => ({
+        id: row.id,
+        location: row.location,
+      })),
+      changedStatus: changedBulkLocation.status,
+      stock: (await current(f, locationStock.id)).currentStock,
+      movements: await movementCount(f, locationStock.id),
+    },
+    {
+      receipts: [
+        { id: locationBulk.body.results[1].data.id, location: "Default shelf" },
+        {
+          id: locationBulk.body.results[0].data.id,
+          location: "Dispatch counter",
+        },
+      ],
+      savedReceipts: [
+        { id: locationBulk.body.results[1].data.id, location: "Default shelf" },
+        {
+          id: locationBulk.body.results[0].data.id,
+          location: "Dispatch counter",
+        },
+      ],
+      changedStatus: 409,
+      stock: 39,
+      movements: 4,
+    },
   );
   await report("recovered result");
   await f.capture(s, "recovered");
