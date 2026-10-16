@@ -84,6 +84,37 @@ async function main() {
     await service.adjustStock(data, branch.id, user.id);
     assert.equal((await db.inventoryItem.findUniqueOrThrow({ where: { id: item.id } })).currentStock, before + 2);
   });
+  await check('direct movements preserve location and reject changed-location retries', async () => {
+    const located = await db.inventoryItem.create({ data: { branchId: branch.id, name: 'Synthetic located stock', type: 'MEDICINE', unit: 'PIECES', currentStock: 100, costPrice: 1, sellingPrice: 2, mrp: 2, storageLocation: 'DEFAULT-SHELF' } });
+    const movement = { itemId: located.id, type: 'SALE', quantity: 2, location: 'SUBMITTED-SHELF-A', operationId: randomUUID() };
+    const saved = await service.createStockTransaction(movement, branch.id, user.id);
+    assert.equal((await db.stockTransaction.findUniqueOrThrow({ where: { id: saved.id } })).location, 'SUBMITTED-SHELF-A');
+    assert.equal((await service.createStockTransaction(movement, branch.id, user.id)).id, saved.id);
+    await assert.rejects(service.createStockTransaction({ ...movement, location: 'SUBMITTED-SHELF-B' }, branch.id, user.id), error => error.getStatus() === 409);
+    assert.equal((await db.inventoryItem.findUniqueOrThrow({ where: { id: located.id } })).currentStock, 98);
+    assert.equal(await db.stockTransaction.count({ where: { itemId: located.id } }), 1);
+    const fallback = await service.createStockTransaction({ ...movement, location: undefined, operationId: randomUUID() }, branch.id, user.id);
+    assert.equal((await db.stockTransaction.findUniqueOrThrow({ where: { id: fallback.id } })).location, 'DEFAULT-SHELF');
+  });
+  await check('bulk movements bind each row location and retain the omitted-location default', async () => {
+    const located = await db.inventoryItem.create({ data: { branchId: branch.id, name: 'Synthetic bulk locations', type: 'MEDICINE', unit: 'PIECES', currentStock: 100, costPrice: 1, sellingPrice: 2, mrp: 2, storageLocation: 'DEFAULT-SHELF' } });
+    const movement = { operationId: randomUUID(), transactions: [
+      { rowId: 'explicit', itemId: located.id, type: 'SALE', quantity: 2, location: 'BULK-SHELF-A' },
+      { rowId: 'default', itemId: located.id, type: 'SALE', quantity: 3 },
+    ] };
+    const saved = await service.bulkStockUpdate(movement, branch.id, user.id);
+    assert.equal(saved.successful, 2);
+    const explicit = saved.results.find(row => row.rowId === 'explicit').data;
+    const fallback = saved.results.find(row => row.rowId === 'default').data;
+    assert.equal((await db.stockTransaction.findUniqueOrThrow({ where: { id: explicit.id } })).location, 'BULK-SHELF-A');
+    assert.equal((await db.stockTransaction.findUniqueOrThrow({ where: { id: fallback.id } })).location, 'DEFAULT-SHELF');
+    const replay = await service.bulkStockUpdate({ ...movement, transactions: [...movement.transactions].reverse() }, branch.id, user.id);
+    assert.equal(replay.results.find(row => row.rowId === 'explicit').data.id, explicit.id);
+    assert.equal(replay.results.find(row => row.rowId === 'default').data.id, fallback.id);
+    await assert.rejects(service.bulkStockUpdate({ ...movement, transactions: [{ ...movement.transactions[0], location: 'BULK-SHELF-B' }] }, branch.id, user.id), error => error.getStatus() === 409);
+    assert.equal((await db.inventoryItem.findUniqueOrThrow({ where: { id: located.id } })).currentStock, 95);
+    assert.equal(await db.stockTransaction.count({ where: { itemId: located.id } }), 2);
+  });
   await check('unknown and cross-branch outcomes expose no saved movement', async () => {
     const other = await db.branch.create({ data: { name: 'Synthetic other branch', address: 'LOCAL TEST' } });
     assert.deepEqual(await service.stockOperationOutcome(input.operationId, other.id), { operationId: input.operationId, status: 'UNKNOWN', rows: [] });

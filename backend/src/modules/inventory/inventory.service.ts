@@ -287,19 +287,29 @@ export class InventoryService {
     return this.commitMovement(dto, branchId, userId, dto.operationId, 'single', fingerprint);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] movement-location-identity
+   * Direct and bulk movement fingerprints MUST include submitted location; changing it under the
+   * same operation and row IDs MUST conflict without another stock effect.
+   */
   private stockMovementPayload(dto: Omit<CreateStockTransactionDto, 'operationId'>) {
     if (!Number.isSafeInteger(dto.quantity) || dto.quantity <= 0) throw new BadRequestException('Quantity must be a positive whole number');
     if (!['PURCHASE', 'RETURN', 'SALE', 'EXPIRED', 'DAMAGED'].includes(dto.type)) throw new BadRequestException('Use the adjustment or transfer workflow for this movement');
     return { itemId: dto.itemId, type: dto.type, quantity: dto.quantity, unitPrice: dto.unitPrice,
-      reference: dto.reference, reason: dto.reason, notes: dto.notes };
+      reference: dto.reference, reason: dto.reason, notes: dto.notes, location: dto.location };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:product] movement-location-persistence
+   * A new movement MUST retain the submitted location exactly, or use the batch storage location
+   * when omitted; an identical retry MUST return the original movement without changing stock.
+   */
   private async commitMovement(dto: Omit<CreateStockTransactionDto, 'operationId'>, branchId: string, userId: string, operationId: string, rowId: string, fingerprint: string) {
     const sign = ['PURCHASE', 'RETURN'].includes(dto.type) ? 1 : -1;
     return this.formatStockTransaction(await performStockOperation(this.prisma,
       { branchId, operationId, rowId, fingerprint }, tx => writeStockMovement(tx, {
         branchId, userId, itemId: dto.itemId, type: dto.type, delta: sign * dto.quantity,
-        unitPrice: dto.unitPrice, reference: dto.reference, reason: dto.reason, notes: dto.notes,
+        unitPrice: dto.unitPrice, reference: dto.reference, reason: dto.reason, notes: dto.notes, location: dto.location,
       })));
   }
 
