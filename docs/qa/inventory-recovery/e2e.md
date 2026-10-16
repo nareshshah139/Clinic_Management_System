@@ -17,7 +17,7 @@ The runner creates synthetic data in a unique schema and owns its local applicat
 | Partner sales | Real pharmacy desk | Initial partial commit, corrected batch match, outstanding-only retry and unchanged completed replay |
 | Supplier payments | Real purchase ledger | Reallocation and reversal, preserved original allocations, restored invoice balances and one correction after response loss |
 | Opening stock | Real opening-import page | Real workbook upload, row failure inside PostgreSQL, failed-row retry, preserved successful rows, outcome recovery and ambiguous legacy reconciliation |
-| Direct and bulk stock | Authenticated HTTP APIs | Stable operation and row IDs, lost-response replay, partial/subset/reordered retries, outcome lookup and changed-payload rejection |
+| Direct and bulk stock | Authenticated HTTP APIs | Stable operation and row IDs, lost-response replay, partial/subset/reordered retries, outcome lookup, explicit/default location persistence and changed-payload rejection |
 
 Interactions run at desktop width. The runner also captures responsive mobile states; it does not independently execute the journeys at mobile width. Stock screenshots are labeled API/database results because the stock-correction component is not mounted in the current product navigation. The report must not present them as a production screen.
 
@@ -31,9 +31,9 @@ The focused Nest application imports production feature modules and preserves th
 
 Existing simulated-response browser fixtures remain component checks. Existing service/database tests continue to cover concurrency and other cases beyond these visible recovery journeys.
 
-## Verified run
+## Verification history
 
-The parent independently ran the command on Node 22.12.0 against a new PostgreSQL database containing only the default `plpgsql` extension. All four families passed, with 25 persisted-state assertion groups and 26 PNGs. The final local artifact is `output/diagnostics/recovery-e2e/2026-10-15T18-16-02-751Z-708778e4/index.html`; its manifest records the runtime, base revision and dirty-source status. Generated artifacts are not committed.
+On 2026-10-15, the parent independently ran the command on Node 22.12.0 against a new PostgreSQL database containing only the default `plpgsql` extension. All four families passed, with 25 persisted-state assertion groups and 26 PNGs. That run's local artifact is `output/diagnostics/recovery-e2e/2026-10-15T18-16-02-751Z-708778e4/index.html`; its manifest records the runtime, base revision and dirty-source status. Generated artifacts are not committed.
 
 Additional checks passed: six supplier-payment component tests, frontend production TypeScript, CJS syntax and formatting, and clean workspace installation plus shared-type compilation. Missing and remote database URLs failed before boot. SIGTERM after real startup exited unsuccessfully and left zero owned schemas. Parent visual review covered the recovery checkpoints and the final compact API report.
 
@@ -41,4 +41,6 @@ Independent correctness review found no actionable issue. Comment review removed
 
 The E2E run exposed adjacent supplier panels with identical React keys. Distinct supplier-specific keys removed that warning. The final run had no page errors or duplicate-key diagnostics. Expected negative-authentication, injected transport-failure and validation responses remain in the browser diagnostics.
 
-The suite and workflow are published in [PR #11](https://github.com/nareshshah139/Clinic_Management_System/pull/11), stacked on #10. Check the PR's Recovery end-to-end tests check for the hosted result at its current commit; each run uploads its own evidence. No deployment or production-data change is part of this test work.
+On 2026-10-16, five location assertion groups were added, bringing the suite to 30 groups and 26 PNGs. They check direct and bulk explicit/default locations, original receipt identity, changed-location conflicts and unchanged balances. The regression failed on the old stock code and passed with the corrected persistence and fingerprint behavior. An independent full-suite rerun also passed.
+
+The suite and workflow are published in [PR #11](https://github.com/nareshshah139/Clinic_Management_System/pull/11), using the recovery fixes merged through PRs #6–#10. Check the PR's Recovery end-to-end tests check for the hosted result at its current commit; each run uploads its own evidence. No deployment or production-data change is part of this test work.
