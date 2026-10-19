@@ -131,7 +131,7 @@ export class PharmacyPurchaseInvoiceController {
     status: 409,
     description: 'Distributor GSTIN and invoice number already exist',
   })
-  createDraft(
+  async createDraft(
     @Body() dto: CreatePharmacyPurchaseInvoiceDto,
     @Request() req: any,
   ) {
@@ -139,6 +139,7 @@ export class PharmacyPurchaseInvoiceController {
       dto,
       req.user.branchId,
       req.user.id,
+      (await this.purchaseInvoiceService.capabilities(req.user)).read,
     );
   }
 
@@ -146,8 +147,8 @@ export class PharmacyPurchaseInvoiceController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
   @ApiOperation({ summary: 'Correct an unreviewed purchase invoice draft' })
-  updateDraft(@Param('id') id: string, @Body() dto: CreatePharmacyPurchaseInvoiceDto, @Request() req: any) {
-    return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId, req.user.id);
+  async updateDraft(@Param('id') id: string, @Body() dto: CreatePharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.updateDraft(id, dto, req.user.branchId, req.user.id, (await this.purchaseInvoiceService.capabilities(req.user)).read);
   }
 
   @Post('ocr/pages/extract')
@@ -160,7 +161,7 @@ export class PharmacyPurchaseInvoiceController {
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
   @Permissions(['pharmacy:purchase-invoice:create','inventory:po:create'],['pharmacy:purchase-invoice:review','inventory:po:update'],['pharmacy:purchase-invoice:commit','inventory:transaction:create'])
   @UseInterceptors(FilesInterceptor('files',10,{storage:memoryStorage(),limits:{fileSize:PURCHASE_OCR_UPLOAD_LIMIT_BYTES},fileFilter:purchaseInvoiceDocumentFilter}))
-  importPages(@UploadedFiles() files:Express.Multer.File[],@Body() dto:ImportPharmacyPurchaseInvoiceDto,@Request() req:any){return this.purchaseInvoiceService.extractMany(files,req.user.branchId,req.user.id,true,dto.goodsReceivedDate);}
+  async importPages(@UploadedFiles() files:Express.Multer.File[],@Body() dto:ImportPharmacyPurchaseInvoiceDto,@Request() req:any){return this.purchaseInvoiceService.extractMany(files,req.user.branchId,req.user.id,true,dto.goodsReceivedDate,(await this.purchaseInvoiceService.capabilities(req.user)).read);}
 
   @Post('ocr/extract')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
@@ -257,8 +258,8 @@ export class PharmacyPurchaseInvoiceController {
     storage: memoryStorage(), fileFilter: purchaseInvoiceDocumentFilter,
     limits: { fileSize: PURCHASE_OCR_UPLOAD_LIMIT_BYTES, files: 1 },
   }))
-  importFromDocument(@UploadedFile() file: Express.Multer.File, @Body() dto: ImportPharmacyPurchaseInvoiceDto, @Request() req: any) {
-    return this.purchaseInvoiceService.importFromDocument(file, req.user.branchId, req.user.id, dto.goodsReceivedDate);
+  async importFromDocument(@UploadedFile() file: Express.Multer.File, @Body() dto: ImportPharmacyPurchaseInvoiceDto, @Request() req: any) {
+    return this.purchaseInvoiceService.importFromDocument(file, req.user.branchId, req.user.id, dto.goodsReceivedDate, [], (await this.purchaseInvoiceService.capabilities(req.user)).read);
   }
 
   @Post(':id/process')

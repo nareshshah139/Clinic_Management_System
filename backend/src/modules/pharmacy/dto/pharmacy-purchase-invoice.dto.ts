@@ -584,6 +584,10 @@ export class ReopenPharmacyPurchaseInvoiceDto {
 }
 
 export class ReviewPharmacyPurchaseInvoiceDto {
+  @IsOptional()
+  @IsDateString()
+  expectedUpdatedAt?: string;
+
   @ApiPropertyOptional({ example: '2026-03-02' })
   @IsOptional()
   @IsDateString()

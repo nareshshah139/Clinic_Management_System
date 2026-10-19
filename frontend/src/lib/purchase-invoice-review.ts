@@ -38,8 +38,8 @@ const fields = [
   ['distributorName', 'supplier', 'distributor-name', /distributor.?name/i],
   ['distributorDlNo', 'supplier drug license', 'distributor-dl', /distributor.?dl/i],
   ['invoiceNumber', 'invoice number', 'invoice-number', /invoice.?number/i],
-  ['invoiceDate', 'invoice date', 'invoice-date', /invoice.?date/i],
   ['goodsReceivedDate', 'goods received date', 'goods-date', /goods.?received/i],
+  ['invoiceDate', 'invoice date', 'invoice-date', /invoice.?date/i],
   ['dueDate', 'due date', 'due-date', /due.?date/i],
   ['manufacturer', 'manufacturer', 'manufacturer', /manufacturer/i],
   ['packUnitType', 'stock unit', 'unit', /pack.?unit.?type|stock unit/i],
@@ -53,6 +53,15 @@ const fields = [
   ['purchaseRate', 'purchase rate', 'rate', /purchase.?rate/i],
   ['mrp', 'MRP', 'mrp', /mrp/i],
 ] as const;
+
+/**
+ * @cc [owner:nareshshah139,label:accessibility] purchase-structured-field-target
+ * Known structured fields MUST resolve through the same registry as legacy issues. Unknown fields MUST NOT create arbitrary DOM targets.
+ */
+export function purchaseReviewField(field: string, lineIndex?: number) {
+  const entry = fields.find(([key]) => key === field);
+  return entry ? { field: entry[0], label: entry[1], target: entry[2], lineIndex } : undefined;
+}
 
 /**
  * @cc [owner:nareshshah139,label:product] purchase-blocker-explanation

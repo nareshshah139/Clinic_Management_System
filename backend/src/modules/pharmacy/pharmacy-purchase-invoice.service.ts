@@ -364,24 +364,29 @@ export class PharmacyPurchaseInvoiceService {
    * Multi-file intake MUST retain each original byte stream before OCR. The assembled page order
    * MUST match upload order; all source documents MUST link to the saved invoice before processing.
    */
-  async extractMany(files: Express.Multer.File[], branchId: string, userId: string, automate = false, receivedDate?: string) {
+  async extractMany(files: Express.Multer.File[], branchId: string, userId: string, automate = false, receivedDate?: string, canReadExisting = false) {
     if (!files?.length || files.length > 10 || files.reduce((n,f)=>n+f.size,0)>100*1024*1024) throw new BadRequestException('Choose 1–10 files totalling at most 100 MB');
-    if (files.length === 1) return automate ? this.importFromDocument(files[0],branchId,userId,receivedDate) : this.extractDraftFromDocument(files[0],branchId,userId);
+    if (files.length === 1) return automate ? this.importFromDocument(files[0],branchId,userId,receivedDate,[],canReadExisting) : this.extractDraftFromDocument(files[0],branchId,userId);
     const originals=[] as any[];for(const file of files)originals.push(await this.archiveOriginal(file,branchId,userId));
     if(originals.some(d=>d.purchaseInvoiceId))throw new ConflictException('A selected original is already linked to an invoice. Open that invoice from the register.');
     const PDFDocument=require('pdfkit');const pdf=new PDFDocument({autoFirstPage:false,info:{Title:'Assembled invoice pages'}}),chunks:Buffer[]=[];
     const complete=new Promise<Buffer>((resolve,reject)=>{pdf.on('data',(c:Buffer)=>chunks.push(c));pdf.on('end',()=>resolve(Buffer.concat(chunks)));pdf.on('error',reject)});
     for(const file of files){const pages=await this.buildOcrImageDataUrls(file);for(const dataUrl of pages.imageDataUrls){const data=Buffer.from(dataUrl.split(',')[1],'base64'),meta=await sharp(data).metadata();const width=meta.width||1200,height=meta.height||1600;pdf.addPage({size:[width,height],margin:0});pdf.image(data,0,0,{width,height});}}
     pdf.end();const buffer=await complete;const combined={...files[0],originalname:'Combined invoice pages.pdf',mimetype:'application/pdf',buffer,size:buffer.length};
-    const result=automate?await this.importFromDocument(combined,branchId,userId,receivedDate,originals.map(d=>d.id)):await this.extractDraftFromDocument(combined,branchId,userId);
+    const result=automate?await this.importFromDocument(combined,branchId,userId,receivedDate,originals.map(d=>d.id),canReadExisting):await this.extractDraftFromDocument(combined,branchId,userId);
     return {...result,draft:{...result.draft,sourceDocumentIds:originals.map(d=>d.id)},sourceDocuments:originals};
   }
 
-  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string, sourceDocumentIds: string[] = []) {
+  /**
+   * @cc [owner:nareshshah139,label:security;product] purchase-import-duplicate-retained
+   * Automatic import MAY return an existing invoice only with current read capability and an exact duplicate identity conflict or already-linked original. When import resolves to an existing invoice, a newly uploaded original MUST remain unlinked until deliberate attachment.
+   */
+  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string, sourceDocumentIds: string[] = [], canReadExisting = false) {
     const sourceDocument = await this.archiveOriginal(file, branchId, userId);
     // A lost HTTP response must not trigger a new OCR interpretation of the same
     // already-linked bytes. Reopen the persisted invoice, including on retries.
     if (sourceDocument.purchaseInvoiceId) {
+      if (!canReadExisting) throw new ConflictException({ code: 'PURCHASE_DUPLICATE_INVOICE', message: 'This original is already linked to a saved invoice. Ask a colleague with invoice read permission to open it.' });
       const invoice = await this.findOne(sourceDocument.purchaseInvoiceId, branchId);
       return { draft: invoice, sourceDocument, ...this.automationResult(invoice, 'DUPLICATE') };
     }
@@ -396,23 +401,17 @@ export class PharmacyPurchaseInvoiceService {
 
     let invoice: any;
     try {
-      invoice = await this.createDraft(dto, branchId, userId);
+      invoice = await this.createDraft(dto, branchId, userId, canReadExisting);
     } catch (error) {
-      if (error instanceof ConflictException) {
-        const existing = await this.prisma.pharmacyPurchaseInvoice.findFirst({
-          where: { branchId, distributorGstin: dto.distributorGstin.trim().toUpperCase(), invoiceNumber: dto.invoiceNumber.trim() },
-          include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
-        });
-        if (existing) {
-          await this.prisma.$transaction((tx) => this.linkOriginal(tx, sourceDocument.id, existing.id, branchId));
-          const duplicate = await this.findOne(existing.id, branchId);
-          return { ...extracted, draft, ...this.automationResult(duplicate, 'DUPLICATE', [
-            'This invoice is already saved. Its existing values and stock were not changed.',
-          ]) };
-        }
+      const conflict = error instanceof ConflictException ? error.getResponse() : null;
+      if (canReadExisting && conflict && typeof conflict === 'object' && 'code' in conflict && conflict.code === 'PURCHASE_DUPLICATE_INVOICE' && 'existingInvoiceId' in conflict && typeof conflict.existingInvoiceId === 'string') {
+        const duplicate = await this.findOne(conflict.existingInvoiceId, branchId);
+        return { ...extracted, draft, ...this.automationResult(duplicate, 'DUPLICATE', [
+          'This invoice is already saved. Compare it before applying corrections. The new original remains unlinked.',
+        ]) };
       }
       return { ...extracted, draft, ...this.automationResult(null, 'NOT_SAVED', [
-        error instanceof BadRequestException ? error.message : 'Invoice saving failed. Keep this draft open and retry Save Draft.',
+        error instanceof BadRequestException || error instanceof ConflictException ? error.message : 'Invoice saving failed. Keep this draft open and retry Save Draft.',
       ]) };
     }
 
@@ -823,6 +822,7 @@ export class PharmacyPurchaseInvoiceService {
     dto: CreatePharmacyPurchaseInvoiceDto,
     branchId: string,
     userId?: string,
+    canReadExisting = false,
   ) {
     const prismaAny = this.prisma as any;
     try {
@@ -845,9 +845,7 @@ export class PharmacyPurchaseInvoiceService {
       return this.formatPurchaseInvoice(created);
     } catch (error: any) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException(
-          'Purchase invoice already exists for this distributor GSTIN and invoice number',
-        );
+        throw await this.draftConflict(error, dto, branchId, canReadExisting);
       }
       throw error;
     }
@@ -915,7 +913,7 @@ export class PharmacyPurchaseInvoiceService {
    * An expectedUpdatedAt value MUST match the saved draft before replacing lines; reviewed or
    * posted purchases MUST NOT be edited here. The correction and its audit record commit together.
    */
-  async updateDraft(id: string, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, userId?: string) {
+  async updateDraft(id: string, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, userId?: string, canReadExisting = false) {
     const { createdBy, ...data } = this.draftData(dto, branchId);
     try {
       return await this.prisma.$transaction(async (tx: any) => {
@@ -927,12 +925,14 @@ export class PharmacyPurchaseInvoiceService {
           data: { updatedAt: new Date() },
         });
         if (locked.count !== 1) {
-          throw new ConflictException('This invoice is no longer an editable draft. Refresh the purchase invoices.');
+          throw new ConflictException({ code: before && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED'].includes(before.status) ? 'PURCHASE_STALE_REVISION' : 'PURCHASE_LOCKED', message: 'This invoice changed or is no longer an editable draft. Compare with the saved version before continuing.' });
         }
+        const historicalHolds = this.parseIssues(before?.reconciliationIssues).filter(issue => /historical|stock snapshot|inventory backfill/i.test(issue));
+        const retainedIssues = [...new Set([...this.parseIssues(data.reconciliationIssues), ...historicalHolds])];
         for (const sourceId of [...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[]) await this.linkOriginal(tx, sourceId, id, branchId);
         const updated = await tx.pharmacyPurchaseInvoice.update({
           where: { id },
-          data: { ...data, reconciliationIssues: data.reconciliationIssues ?? null, items: { deleteMany: {}, create: data.items.create } },
+          data: { ...data, ...(historicalHolds.length ? { status: 'RECONCILIATION_FAILED' } : {}), workflowReceiptId: before?.workflowReceiptId || dto.workflowReceiptId, reconciliationIssues: this.stringifyIssues(retainedIssues) ?? null, items: { deleteMany: {}, create: data.items.create } },
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
         await this.purchaseAudit(tx, id, branchId, userId, 'DRAFT_CORRECTED', before, updated);
@@ -940,7 +940,7 @@ export class PharmacyPurchaseInvoiceService {
       });
     } catch (error: any) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException('Purchase invoice already exists for this distributor GSTIN and invoice number');
+        throw await this.draftConflict(error, dto, branchId, canReadExisting);
       }
       throw error;
     }
@@ -1130,6 +1130,7 @@ export class PharmacyPurchaseInvoiceService {
    * Review MUST reject unresolved OCR flags, unreconciled totals, missing receipt details or unresolved
    * catalogue products (missing, ambiguous or incomplete) before locking the editable draft, even
    * when invoked directly through the API; saving a draft MUST NOT count as resolving those issues.
+   * A supplied expectedUpdatedAt MUST match inside the transaction before any review effects.
    * Acceptance: INV-15. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
@@ -1148,40 +1149,33 @@ export class PharmacyPurchaseInvoiceService {
     if (!invoice) {
       throw new NotFoundException('Purchase invoice not found');
     }
+    if (dto.expectedUpdatedAt && new Date(dto.expectedUpdatedAt).getTime() !== new Date(invoice.updatedAt).getTime()) {
+      throw new ConflictException({ code: 'PURCHASE_STALE_REVISION', message: 'The saved invoice changed after you checked it. Compare with the saved version and check the corrections again.' });
+    }
     if (invoice.status === 'STOCK_COMMITTED' || invoice.stockCommittedAt) {
-      throw new ConflictException('This purchase is already posted. Use a linked return and replacement bill to correct it.');
+      throw new ConflictException({ code: 'PURCHASE_LOCKED', message: 'This purchase is already posted. Use a linked return and replacement bill to correct it.' });
     }
     if (invoice.status === 'CANCELLED') {
-      throw new BadRequestException(
-        'Cancelled purchase invoices cannot be reviewed',
-      );
+      throw new BadRequestException({ code: 'PURCHASE_LOCKED', message: 'Cancelled purchase invoices cannot be reviewed' });
     }
 
     const goodsReceivedDate = dto.goodsReceivedDate
       ? new Date(dto.goodsReceivedDate)
       : invoice.goodsReceivedDate;
     if (!goodsReceivedDate) {
-      throw new BadRequestException(
-        'Goods received date is required before a purchase invoice can be reviewed for stock intake',
-      );
+      throw new BadRequestException({ code: 'PURCHASE_REVIEW_REQUIRED', message: 'Goods received date is required before a purchase invoice can be reviewed for stock intake', issues: [{ message: 'Goods received date is required', field: 'goodsReceivedDate' }] });
     }
     if (goodsReceivedDate < invoice.invoiceDate) {
-      throw new BadRequestException(
-        'Goods received date cannot be before invoice date',
-      );
+      throw new BadRequestException({ code: 'PURCHASE_REVIEW_REQUIRED', message: 'Goods received date cannot be before invoice date', issues: [{ message: 'Goods received date cannot be before invoice date', field: 'goodsReceivedDate' }] });
     }
     const current = this.formatPurchaseInvoice(invoice);
     if (current.unresolvedOcrFlags > 0) {
-      throw new BadRequestException(
-        'Resolve OCR flags before reviewing this purchase invoice',
-      );
+      throw new BadRequestException({ code: 'PURCHASE_REVIEW_REQUIRED', message: 'Resolve OCR flags before reviewing this purchase invoice', issues: [...current.ocrFlags.map((message: string) => ({ message })), ...current.items.flatMap((item: any) => item.ocrFlags.map((message: string) => ({ message: `Line ${item.lineNumber}: ${message}`, lineNumber: item.lineNumber })))] });
     }
 
     const issues = current.reconciliationIssues;
     if (issues.length > 0) {
-      throw new BadRequestException(
-        `Resolve reconciliation issues before review: ${issues.join('; ')}`,
-      );
+      throw new BadRequestException({ code: 'PURCHASE_REVIEW_REQUIRED', message: `Resolve reconciliation issues before review: ${issues.join('; ')}`, issues: issues.map((message: string) => ({ message })) });
     }
 
     for (const item of invoice.items) {
@@ -2960,6 +2954,22 @@ export class PharmacyPurchaseInvoiceService {
     } catch {
       return [String(value)];
     }
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] purchase-conflict-disclosure
+   * Duplicate recovery MUST identify the actual unique key and disclose only an invoice in the authenticated branch after current read capability is checked. Unknown keys and denied reads MUST NOT disclose or guess an invoice ID.
+   */
+  private async draftConflict(error: any, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, canReadExisting: boolean) {
+    const target = error?.meta?.target;
+    const matches = (fields: string[]) => Array.isArray(target) && target.length === fields.length && fields.every(field => target.includes(field));
+    const receipt = matches(['branchId', 'workflowReceiptId']);
+    const duplicate = matches(['branchId', 'distributorGstin', 'invoiceNumber']);
+    const code = receipt ? 'PURCHASE_RECEIPT_ALREADY_LINKED' : duplicate ? 'PURCHASE_DUPLICATE_INVOICE' : 'PURCHASE_CONFLICT';
+    const message = receipt ? 'This inward receipt is already linked to a purchase invoice. Open that bill to check it; stock must not be received again.' : duplicate ? 'Purchase invoice already exists for this distributor GSTIN and invoice number' : 'The purchase conflicts with a saved record. Ask an authorized colleague to check it before trying again.';
+    const where = duplicate ? { branchId, distributorGstin: dto.distributorGstin.trim().toUpperCase(), invoiceNumber: dto.invoiceNumber.trim() } : receipt && dto.workflowReceiptId ? { branchId, workflowReceiptId: dto.workflowReceiptId } : null;
+    const existing = canReadExisting && where ? await (this.prisma as any).pharmacyPurchaseInvoice.findFirst({ where, select: { id: true } }) : null;
+    return new ConflictException({ code, message, ...(existing ? { existingInvoiceId: existing.id } : {}) });
   }
 
   private isUniqueConstraintError(error: any): boolean {
