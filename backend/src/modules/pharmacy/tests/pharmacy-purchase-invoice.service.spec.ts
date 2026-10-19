@@ -276,6 +276,41 @@ describe('PharmacyPurchaseInvoiceService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it.each([
+    [['branchId', 'distributorGstin', 'invoiceNumber'], 'PURCHASE_DUPLICATE_INVOICE', { branchId, distributorGstin: '36ABCDE1234F1Z5', invoiceNumber: 'LD-001' }],
+    [['branchId', 'workflowReceiptId'], 'PURCHASE_RECEIPT_ALREADY_LINKED', { branchId, workflowReceiptId: 'receipt-1' }],
+  ])('identifies the actual unique constraint without guessing the conflicting purchase (%s)', async (target, code, where) => {
+    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002', meta: { target } });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({ id: 'existing-1' });
+    const error = await service.createDraft({ ...validDto(), workflowReceiptId: 'receipt-1' }, branchId, userId, true).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code, existingInvoiceId: 'existing-1' });
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith({ where, select: { id: true } });
+  });
+
+  it('does not disclose duplicate invoice identity without read capability', async () => {
+    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002', meta: { target: ['branchId', 'distributorGstin', 'invoiceNumber'] } });
+    const error = await service.createDraft(validDto(), branchId, userId, false).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_DUPLICATE_INVOICE' });
+    expect(error.getResponse()).not.toHaveProperty('existingInvoiceId');
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('does not guess a purchase for an unknown unique constraint', async () => {
+    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002', meta: { target: ['id'] } });
+    const error = await service.createDraft(validDto(), branchId, userId, true).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_CONFLICT' });
+    expect(error.getResponse()).not.toHaveProperty('existingInvoiceId');
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects review of a different observed revision before validation or effects', async () => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({ id: 'purchase-1', status: 'DRAFT', updatedAt: new Date('2026-10-01T01:00:00Z'), items: [] });
+    const error = await service.markReviewed('purchase-1', { expectedUpdatedAt: '2026-10-01T00:00:00Z' }, branchId, userId).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_STALE_REVISION' });
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
   it('requires clear OCR and reconciliation state before review', async () => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({
       id: 'purchase-1',

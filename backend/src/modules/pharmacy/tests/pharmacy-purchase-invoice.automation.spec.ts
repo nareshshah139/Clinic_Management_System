@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy-purchase-invoice.service';
 
 describe('Automatic purchase invoice intake', () => {
@@ -60,7 +61,7 @@ describe('Automatic purchase invoice intake', () => {
     } as any));
   });
 
-  const importInvoice = () => (service as any).importFromDocument(file, 'branch-1', 'user-1', '2026-01-02');
+  const importInvoice = () => (service as any).importFromDocument(file, 'branch-1', 'user-1', '2026-01-02', [], true);
 
   it('normalizes absent manufacturer without an OCR blocker and preserves genuine identity uncertainty', () => {
     const normalized = (service as any).normalizeExtractedPurchaseLine({ ...draft.items[0], manufacturer: null,
@@ -207,15 +208,41 @@ describe('Automatic purchase invoice intake', () => {
 
   it('returns an existing duplicate without overwriting or committing it', async () => {
     stored = { id: 'existing', ...draft, items: [], status: 'DRAFT' };
-    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002' });
+    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002', meta:{ target:['branchId','distributorGstin','invoiceNumber'] } });
     const result = await importInvoice();
     expect(result.automation.status).toBe('DUPLICATE');
     expect(result.invoice.id).toBe('existing');
+    expect(prisma.pharmacyPurchaseInvoiceDocument.updateMany).not.toHaveBeenCalled();
     expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({
       where: { branchId: 'branch-1', distributorGstin: draft.distributorGstin, invoiceNumber: draft.invoiceNumber },
     }));
     expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('does not disclose a duplicate to importers without read capability', async () => {
+    stored = { id: 'existing', ...draft, items: [], status: 'DRAFT' };
+    prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({code:'P2002',meta:{target:['branchId','distributorGstin','invoiceNumber']}});
+    const result = await service.importFromDocument(file,'branch-1','user-1','2026-01-02',[],false);
+    expect(result.automation.status).toBe('NOT_SAVED');
+    expect(result.invoice).toBeNull();
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+    expect(prisma.pharmacyPurchaseInvoiceDocument.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not interpret unrelated conflicts as a duplicate', async () => {
+    jest.spyOn(service,'createDraft').mockRejectedValue(new ConflictException({code:'PURCHASE_LOCKED',message:'Locked original'}));
+    const result = await importInvoice();
+    expect(result.automation.status).toBe('NOT_SAVED');
+    expect(result.invoice).toBeNull();
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+    expect(prisma.pharmacyPurchaseInvoiceDocument.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('requires read capability before returning an already-linked original invoice', async () => {
+    (service.archiveOriginal as jest.Mock).mockResolvedValue({id:'document-1',purchaseInvoiceId:'existing'});
+    await expect(service.importFromDocument(file,'branch-1','user-1','2026-01-02',[],false)).rejects.toThrow('invoice read permission');
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
   });
 
   it('keeps the extracted form available if required identity or expiry is unreadable', async () => {

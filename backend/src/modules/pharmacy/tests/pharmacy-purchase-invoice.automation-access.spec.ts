@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -36,7 +36,7 @@ describe('Automatic intake HTTP permissions', () => {
     await app.listen(0, '127.0.0.1');
   });
   afterAll(async () => { await app?.close(); });
-  beforeEach(() => { role = 'PHARMACIST'; permissions = [...required]; jest.clearAllMocks(); });
+  beforeEach(() => { role = 'PHARMACIST'; permissions = [...required]; jest.clearAllMocks(); service.capabilities.mockResolvedValue({read:true}); });
   const upload = () => request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
@@ -105,9 +105,16 @@ describe('Automatic intake HTTP permissions', () => {
 
   it('passes the file, confirmed receipt date and authenticated identity to automatic import', async () => {
     await upload().expect(201);
-    expect(service.importFromDocument).toHaveBeenCalledWith(expect.objectContaining({ originalname: 'test.jpg' }), 'branch-1', 'user-1', '2026-09-12');
+    expect(service.importFromDocument).toHaveBeenCalledWith(expect.objectContaining({ originalname: 'test.jpg' }), 'branch-1', 'user-1', '2026-09-12', [], true);
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/invoice-1/process').send({}).expect(201);
     expect(service.processInvoice).toHaveBeenCalledWith('invoice-1', 'branch-1', 'user-1');
+  });
+
+  it('forwards denied read capability without widening automatic import permissions', async () => {
+    service.capabilities.mockResolvedValue({read:false});
+    await upload().expect(201);
+    expect(service.capabilities).toHaveBeenCalledWith({id:'user-1',branchId:'branch-1',role:'PHARMACIST'});
+    expect(service.importFromDocument).toHaveBeenCalledWith(expect.objectContaining({originalname:'test.jpg'}),'branch-1','user-1','2026-09-12',[],false);
   });
 
   it.each(required)('requires %s in addition to the other permissions', async (missing) => {

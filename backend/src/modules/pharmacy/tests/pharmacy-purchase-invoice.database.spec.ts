@@ -140,7 +140,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     expect(product.drug.manufacturerName).toBe('');
     draft.items[0].productName = name;
     delete draft.items[0].manufacturer;
-    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
+    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true);
     expect(result.automation.status).toBe('STOCK_COMMITTED');
 
     const second = await prisma.drug.create({ data: { branchId, name, manufacturerName: 'Another Pharma',
@@ -164,7 +164,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
   });
 
   it('persists invoice details and stock once, including duplicate uploads and concurrent retries', async () => {
-    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
+    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true);
     expect(result.automation.status).toBe('STOCK_COMMITTED');
     expect(result.invoice.documents).toHaveLength(1);
     const original = await service.getOriginalDocument(result.invoice.documents[0].id, branchId);
@@ -174,7 +174,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     const saved = await prisma.pharmacyPurchaseInvoice.findUniqueOrThrow({ where: { id: result.invoice.id }, include: { items: true } });
     expect(saved.items[0]).toMatchObject({ quantityPurchased: 10, freeQuantity: 2, batchNumber: draft.items[0].batchNumber });
     const ocrCalls = jest.mocked(service.extractDocumentDraft).mock.calls.length;
-    expect((await service.importFromDocument(upload, branchId, userId, '2026-01-02')).automation.status).toBe('DUPLICATE');
+    expect((await service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true)).automation.status).toBe('DUPLICATE');
     expect(jest.mocked(service.extractDocumentDraft).mock.calls.length).toBe(ocrCalls);
     expect(await prisma.pharmacyPurchaseInvoiceDocument.count({ where: { purchaseInvoiceId: saved.id } })).toBe(1);
     await Promise.all([1, 2, 3].map(() => service.processInvoice(saved.id, branchId, userId)));
@@ -232,11 +232,12 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
   });
 
   it('keeps a second distinct scan of a duplicate invoice without replacing the first or adding stock twice', async () => {
-    const first = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
+    const first = await service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true);
     const alternate = Buffer.concat([upload.buffer, Buffer.from('synthetic second scan')]);
-    const duplicate = await service.importFromDocument({ ...upload, buffer: alternate, size: alternate.length }, branchId, userId, '2026-01-02');
+    const duplicate = await service.importFromDocument({ ...upload, buffer: alternate, size: alternate.length }, branchId, userId, '2026-01-02', [], true);
     expect(duplicate.automation.status).toBe('DUPLICATE');
-    expect(duplicate.invoice.documents).toHaveLength(2);
+    expect(duplicate.invoice.documents).toHaveLength(1);
+    expect((await service.getOriginalDocument(duplicate.sourceDocument.id, branchId)).purchaseInvoiceId).toBeNull();
     expect(Buffer.from((await service.getOriginalDocument(first.sourceDocument.id, branchId)).data)).toEqual(upload.buffer);
     expect(await prisma.stockTransaction.count({ where: { reference: first.invoice.stockCommitReference } })).toBe(1);
   });
@@ -252,7 +253,7 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
 
   it('stores exceptions without stock and never processes another branch invoice', async () => {
     draft.items[0].ocrConfidence = 0.97;
-    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02');
+    const result = await service.importFromDocument(upload, branchId, userId, '2026-01-02', [], true);
     expect(result.automation.status).toBe('SAVED_FOR_REVIEW');
     const saved = await prisma.pharmacyPurchaseInvoice.findUniqueOrThrow({ where: { id: result.invoice.id } });
     expect(saved.reconciliationIssues).toContain('98%');
