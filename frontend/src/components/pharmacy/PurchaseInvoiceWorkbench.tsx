@@ -54,6 +54,7 @@ import {
   purchaseReviewIssue,
   uniquePurchaseReviewIssues,
 } from "@/lib/purchase-invoice-review";
+import { purchaseRecovery, purchaseRecoveryTarget, purchaseDifferences, isPurchaseReadback, canCorrectPurchase, type PurchaseAttempt, type PurchaseRecovery } from "@/lib/purchase-invoice-recovery";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   preserveInvoiceTotals,
@@ -212,6 +213,7 @@ type PurchaseInvoice = {
   invoiceDate: string;
   goodsReceivedDate?: string | null;
   billType: BillType;
+  source?: SourceType;
   dueDate?: string | null;
   status: PurchaseStatus;
   grossAmount: number;
@@ -1063,7 +1065,13 @@ function PurchaseInvoiceEditor({
   );
   const [revisionChecking, setRevisionChecking] = useState(false);
   const [revisionConflict, setRevisionConflict] = useState<string | null>(null);
-  const draftWriteBlocked = revisionChecking || !!revisionConflict;
+  const [unknownStockInvoiceId, setUnknownStockInvoiceId] = useState<
+    string | null
+  >(null);
+  const unknownStockRef = useRef<string | null>(null);
+  unknownStockRef.current = unknownStockInvoiceId;
+  const importLock = useRef(false);
+  const draftWriteBlocked = revisionChecking || !!revisionConflict || !!unknownStockInvoiceId;
   const recoveredRevision = useRef<string | null>(null);
   const initializedReceipt = useRef<string | null>(null);
   const recoveredIntake = useRef<string | null>(null);
@@ -1084,9 +1092,6 @@ function PurchaseInvoiceEditor({
   const saveLock = useRef(false);
   const processLock = useRef(false);
   const [manualReviewCandidateId, setManualReviewCandidateId] = useState<
-    string | null
-  >(null);
-  const [unknownStockInvoiceId, setUnknownStockInvoiceId] = useState<
     string | null
   >(null);
   const [refreshingStockStatus, setRefreshingStockStatus] = useState(false);
@@ -1131,6 +1136,37 @@ function PurchaseInvoiceEditor({
   const [activeInvoice, setActiveInvoice] = useState<PurchaseInvoice | null>(
     null,
   );
+  const [recovery, setRecovery] = useState<PurchaseRecovery | null>(null);
+  const [comparison, setComparison] = useState<{
+    attempt: PurchaseAttempt;
+    mode: 'duplicate' | 'stale';
+    local: { header: HeaderForm; lines: LineForm[]; amounts: Record<string, unknown> | null; flags: string };
+    saved: PurchaseInvoice;
+  } | null>(null);
+  const [pendingMismatch, setPendingMismatch] = useState<{
+    attempt: PurchaseAttempt; match: MasterMatch; candidate: MasterCandidate; line: LineForm; mismatches: string[]; reference?: string;
+  } | null>(null);
+  const editorGeneration = useRef(0);
+  const comparisonRequest = useRef(0);
+  const matchRequest = useRef(0);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const captureAttempt = (): PurchaseAttempt => Object.freeze({ generation: editorGeneration.current, scope: recoveryKey || 'purchase', invoiceId: editingId || activeInvoice?.id, revision: draftServerRevision || undefined, lineKeys: Object.freeze(lines.map(line => line.localId)) });
+  const attemptCurrent = (attempt: PurchaseAttempt) => mounted.current && attempt.generation === editorGeneration.current;
+  const invalidatePending = () => {
+    editorGeneration.current += 1;
+    comparisonRequest.current += 1;
+    matchRequest.current += 1;
+    setPendingMismatch(null);
+    setComparison(null);
+    setRecovery(null);
+    setReviewAccepted(false);
+  };
+  const captureRecovery = (err: unknown, attempt: PurchaseAttempt) => {
+    if (!attemptCurrent(attempt)) return;
+    setRecovery(purchaseRecovery(err, attempt));
+    setError(getErrorMessage(err));
+  };
   const [selectedSourceId, setSelectedSourceId] = useState("invoice-number");
   const [showIntakeHome, setShowIntakeHome] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
@@ -1183,6 +1219,7 @@ function PurchaseInvoiceEditor({
           })),
         );
         setEditingId(saved.editingId || null);
+        setUnknownStockInvoiceId(saved.unknownStockInvoiceId || null);
         recoveredInvoiceId.current = saved.editingId || null;
         const revision =
           saved.draftServerRevision || saved.originalAmounts?.updatedAt || null;
@@ -1218,6 +1255,7 @@ function PurchaseInvoiceEditor({
         recoveryKey,
         JSON.stringify({
           version: 1,
+          unknownStockInvoiceId,
           header,
           lines: linesWithPendingChecks,
           editingId,
@@ -1240,6 +1278,7 @@ function PurchaseInvoiceEditor({
   }, [
     recoveryKey,
     recoveryReady,
+    unknownStockInvoiceId,
     header,
     linesWithPendingChecks,
     editingId,
@@ -1326,6 +1365,7 @@ function PurchaseInvoiceEditor({
   }, [activeInvoice?.id, editingId]);
 
   const updateHeader = (key: keyof HeaderForm, value: string) => {
+    invalidatePending();
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
     if (key === "goodsReceivedDate") setReviewDate(value);
@@ -1337,6 +1377,7 @@ function PurchaseInvoiceEditor({
   };
 
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
+    invalidatePending();
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
     if (["productName", "packSize", "packUnitType"].includes(key)) {
@@ -1351,12 +1392,14 @@ function PurchaseInvoiceEditor({
   };
 
   const addLine = () => {
+    invalidatePending();
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
     setLines((current) => [...current, emptyLine(current.length + 1)]);
   };
 
   const removeLine = (localId: string) => {
+    invalidatePending();
     setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
     setReviewAccepted(false);
@@ -1401,12 +1444,12 @@ function PurchaseInvoiceEditor({
   };
 
   const resetDraft = () => {
+    invalidatePending();
     setCheckedOcr({});
     setShowIntakeHome(false);
     setManualEntry(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
-    setUnknownStockInvoiceId(null);
     setEditingId(null);
     setDraftServerRevision(null);
     recoveredRevision.current = null;
@@ -1443,13 +1486,13 @@ function PurchaseInvoiceEditor({
     extraction?: OcrExtractionResponse["extraction"],
     matches?: MasterMatchResponse,
   ) => {
+    invalidatePending();
     setCheckedOcr({});
     setReviewAccepted(false);
     const defaults = defaultHeader();
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
     setActiveInvoice(null);
-    setUnknownStockInvoiceId(null);
     setOriginalAmounts(draft as Record<string, unknown>);
     setEditingId(null);
     setDraftServerRevision(null);
@@ -1542,6 +1585,7 @@ function PurchaseInvoiceEditor({
     patch?: MasterConfirmationResponse["linePatch"],
   ) => {
     if (!patch) return;
+    invalidatePending();
     setManualReviewCandidateId(null);
     setReviewAccepted(false);
     setLines((current) =>
@@ -1577,6 +1621,8 @@ function PurchaseInvoiceEditor({
 
   const refreshMasterMatches = async (sourceLines: LineForm[] = lines) => {
     if (!access.create) return;
+    invalidatePending();
+    const attempt = captureAttempt();
     setMasterRefreshing(true);
     setError(null);
     try {
@@ -1586,6 +1632,7 @@ function PurchaseInvoiceEditor({
             items: sourceLines.map(linePayload),
           },
         );
+      if (!attemptCurrent(attempt)) return;
       setMasterMatches(response.matches || []);
       setMasterStatuses({});
       setNotice(
@@ -1608,8 +1655,11 @@ function PurchaseInvoiceEditor({
     action: "MATCH_EXISTING" | "CREATE_NEW",
     candidate?: MasterCandidate,
     catalog?: PurchaseProductCatalog,
+    acknowledgement?: PurchaseAttempt,
   ): Promise<string | undefined> => {
-    if (!access.create) return;
+    if (!access.create || (acknowledgement && !attemptCurrent(acknowledgement))) return;
+    const attempt = acknowledgement || captureAttempt();
+    const request = ++matchRequest.current;
     const line = lines[match.lineIndex];
     if (!line) {
       setError(
@@ -1630,6 +1680,7 @@ function PurchaseInvoiceEditor({
             drugId: candidate?.drug.id,
             catalog,
             item: linePayload(line),
+            ...(acknowledgement ? { mismatchAcknowledged: true } : {}),
           };
       let response: MasterConfirmationResponse;
       try {
@@ -1637,15 +1688,13 @@ function PurchaseInvoiceEditor({
       } catch (err) {
         const conflict = err as { status?: number; body?: { code?: string; mismatches?: string[] } };
         if (action !== "MATCH_EXISTING" || conflict.status !== 409 || conflict.body?.code !== "PURCHASE_PRODUCT_MISMATCH") throw err;
-        const confirmed = window.confirm([
-          "These look like different products. Confirm anyway?",
-          `Invoice: ${line.productName} · ${line.packSize}${line.productKind ? ` · ${line.productKind}` : ""}`,
-          `Saved product: ${candidate?.drug.name} · ${candidate?.drug.packSizeLabel} · ${candidate?.drug.productKind || candidate?.drug.type || "Kind not recorded"}`,
-          ...(conflict.body.mismatches || []),
-        ].join("\n"));
-        if (!confirmed) return;
-        response = await apiClient.confirmPharmacyPurchaseMaster<MasterConfirmationResponse>({ ...payload, mismatchAcknowledged: true });
+        if (!attemptCurrent(attempt) || request !== matchRequest.current || !candidate) return;
+        setPendingMismatch({ attempt, reference: purchaseRecovery(err, attempt).reference, match: structuredClone(match), candidate: structuredClone(candidate), line: { ...line }, mismatches: Array.isArray(conflict.body.mismatches) ? conflict.body.mismatches.filter(value => typeof value === 'string') : [] });
+        return;
+
       }
+      if (!attemptCurrent(attempt) || request !== matchRequest.current) return;
+      setPendingMismatch(null);
       applyLinePatch(match.lineIndex, response.linePatch);
       setMasterStatuses((current) => ({
         ...current,
@@ -1661,7 +1710,7 @@ function PurchaseInvoiceEditor({
       );
     } catch (err) {
       const message = getErrorMessage(err);
-      setError(message);
+      captureRecovery(err, attempt);
       return message;
     } finally {
       setMasterConfirming(null);
@@ -1743,7 +1792,7 @@ function PurchaseInvoiceEditor({
       setActiveInvoice(null);
     }
     const outcome = data.automation;
-    if (outcome?.status === "STOCK_COMMITTED") {
+    if (invoice?.status === "STOCK_COMMITTED" && invoice.stockCommittedAt) {
       setNotice(
         invoice?.workflowReceiptId
           ? `Invoice ${invoice.invoiceNumber} posted against its inward receipt. Stock was already received and has not been added again.`
@@ -1754,7 +1803,7 @@ function PurchaseInvoiceEditor({
       setNotice(
         `Invoice ${invoice?.invoiceNumber} is already saved. Opened the existing invoice; its values and stock were not changed.`,
       );
-    } else if (outcome?.status === "SAVED_FOR_REVIEW") {
+    } else if (invoice && (outcome?.status === "SAVED_FOR_REVIEW" || outcome?.status === "STOCK_COMMITTED")) {
       setNotice(
         `Invoice ${invoice?.invoiceNumber} saved for correction. Stock has not been added.`,
       );
@@ -1777,6 +1826,7 @@ function PurchaseInvoiceEditor({
   const processSavedInvoice = async () => {
     if (!access.automate || processLock.current || draftWriteBlocked) return;
     processLock.current = true;
+    const attempt = captureAttempt();
     setProcessing(true);
     let targetInvoiceId = activeInvoice?.id;
     setManualReviewCandidateId(null);
@@ -1801,10 +1851,12 @@ function PurchaseInvoiceEditor({
         savedForReview = saved;
       }
       if (!targetInvoiceId) return;
+      setUnknownStockInvoiceId(targetInvoiceId);
       const result =
         await apiClient.processPharmacyPurchaseInvoice<OcrExtractionResponse>(
           targetInvoiceId,
         );
+      if (!attemptCurrent(attempt)) return;
       if (
         result.invoice?.id !== targetInvoiceId ||
         !result.automation?.status
@@ -1813,7 +1865,9 @@ function PurchaseInvoiceEditor({
           "Processing did not return a confirmed invoice status. Checking the saved record.",
         );
       }
-      applyAutomationResult(result);
+      const confirmed = await refreshStockStatus(targetInvoiceId);
+      if (!confirmed) return;
+      applyAutomationResult({ ...result, invoice: confirmed });
       // A clean human-corrected draft may fail stricter automatic checks (such
       // as 98% OCR confidence). Keep manual review reachable after that result.
       // reviewInvoice saves again and the backend revalidates before reviewing.
@@ -1833,6 +1887,7 @@ function PurchaseInvoiceEditor({
         );
       }
     } catch (err) {
+      if (!attemptCurrent(attempt)) return;
       setError(getErrorMessage(err));
       if (targetInvoiceId) await refreshStockStatus(targetInvoiceId);
     } finally {
@@ -1842,13 +1897,20 @@ function PurchaseInvoiceEditor({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:state;product] purchase-import-outcome-unknown
+   * Automatic import MUST lock further writes before dispatch. A lost or malformed response MUST
+   * retain that lock and offer handoff; only an explicit no-stock outcome or verified saved invoice MAY clear it.
+   */
   const extractFromInvoiceFile = async (automate = false) => {
-    if (!access.create || (automate && !access.automate)) return;
+    if (!access.create || importLock.current || unknownStockRef.current || (automate && !access.automate)) return;
     if (!ocrFile) {
       setError("Choose an invoice PDF or image first");
       return;
     }
 
+    importLock.current = true;
+    let attempt = captureAttempt();
     setExtracting(true);
     setNotice(null);
     setError(null);
@@ -1859,6 +1921,7 @@ function PurchaseInvoiceEditor({
       else form.append("file", ocrFile);
       if (automate && importReceivedDate)
         form.append("goodsReceivedDate", importReceivedDate);
+      if (automate) { setUnknownStockInvoiceId("unconfirmed-import"); setShowIntakeHome(false); }
       const response = await fetch(
         `/api/pharmacy/purchase-invoices/ocr/${ocrFiles.length > 1 ? "pages/" : ""}${automate ? "import" : "extract"}`,
         {
@@ -1868,6 +1931,7 @@ function PurchaseInvoiceEditor({
         },
       );
 
+      if (!attemptCurrent(attempt)) return;
       if (response.status === 401 && typeof window !== "undefined") {
         const next = window.location.pathname + window.location.search;
         window.location.href = `/login?next=${encodeURIComponent(next)}`;
@@ -1878,10 +1942,11 @@ function PurchaseInvoiceEditor({
         let message = `Invoice OCR failed (${response.status})`;
         try {
           const body = await response.json();
+          if (!attemptCurrent(attempt)) return;
           if (body?.sourceDocument) {
-            resetDraft();
+            if (!automate) { resetDraft(); attempt = captureAttempt(); }
             setSourceDocument(body.sourceDocument);
-            setNotice(
+            if (!automate) setNotice(
               "Original file saved. Enter the invoice details manually or retry the upload.",
             );
           }
@@ -1896,12 +1961,14 @@ function PurchaseInvoiceEditor({
       }
 
       const data = (await response.json()) as OcrExtractionResponse;
+      if (!attemptCurrent(attempt)) return;
       const draft = data?.draft;
       if (!draft) {
         throw new Error("No purchase invoice draft was extracted");
       }
 
       applyExtractedDraft(draft, data.extraction, data.masterMatches);
+      attempt = captureAttempt();
       if (!automate) {
         setHeader(current => ({ ...current, goodsReceivedDate: importReceivedDate }));
         setReviewDate(importReceivedDate);
@@ -1912,7 +1979,21 @@ function PurchaseInvoiceEditor({
         (data as any).sourceDocuments?.map((d: any) => d.id) || [],
       );
       if (automate) {
-        applyAutomationResult(data);
+        if (data.automation?.status === "DUPLICATE" && data.invoice?.id) {
+          setUnknownStockInvoiceId(null);
+          setRecovery(purchaseRecovery({ body: { code: 'PURCHASE_DUPLICATE_INVOICE', existingInvoiceId: data.invoice.id, message: 'This invoice is already saved. Compare it before applying corrections. Your extracted entry and original are kept here.' } }, captureAttempt()));
+          setNotice(null);
+          return;
+        }
+        if (data.automation?.status === "NOT_SAVED") { setUnknownStockInvoiceId(null); applyAutomationResult(data); return; }
+        if (!data.invoice?.id) {
+          setUnknownStockInvoiceId("unconfirmed-import");
+          setError("The saved invoice identity could not be confirmed. Check the invoice register before another import.");
+          return;
+        }
+        const confirmed = await refreshStockStatus(data.invoice.id);
+        if (!confirmed) return;
+        applyAutomationResult({ ...data, invoice: confirmed });
         setOcrSummary(data.extraction || null);
         return;
       }
@@ -1932,11 +2013,15 @@ function PurchaseInvoiceEditor({
         }.`,
       );
     } catch (err) {
-      setError(
-        getErrorMessage(err) ||
-          "Invoice OCR failed. Try another file or enter manually.",
-      );
+      if (!attemptCurrent(attempt)) return;
+      if (automate) {
+        setUnknownStockInvoiceId("unconfirmed-import");
+        setShowIntakeHome(false);
+        setNotice(null);
+        setError(`The automatic import outcome could not be confirmed. ${getErrorMessage(err)} Check the saved purchase with an authorized colleague before another import.`);
+      } else setError(getErrorMessage(err) || "Invoice OCR failed. Try another file or enter manually.");
     } finally {
+      importLock.current = false;
       setExtracting(false);
       void loadUnlinkedUploads();
     }
@@ -1957,6 +2042,7 @@ function PurchaseInvoiceEditor({
       return;
     }
 
+    const attempt = captureAttempt();
     saveLock.current = true;
     setSaving(true);
     try {
@@ -1981,6 +2067,8 @@ function PurchaseInvoiceEditor({
         : await apiClient.createPharmacyPurchaseInvoiceDraft<PurchaseInvoice>(
             payload,
           );
+      if (!attemptCurrent(attempt)) return;
+      setRecovery(null);
       if (serverDraft) {
         try {
           await apiClient.post("/inventory/workspace/intake", {
@@ -1990,6 +2078,7 @@ function PurchaseInvoiceEditor({
           setServerDraft(null);
         } catch {}
       }
+      if (!attemptCurrent(attempt)) return;
       setEditingId(created.id);
       setDraftServerRevision(created.updatedAt || null);
       setRecent((current) =>
@@ -2009,14 +2098,15 @@ function PurchaseInvoiceEditor({
       );
       return created;
     } catch (err) {
+      if (!attemptCurrent(attempt)) return;
       const message = getErrorMessage(err);
-      setError(message);
+      captureRecovery(err, attempt);
       if (
         editingId &&
         /changed|stale|no longer an editable draft/i.test(message)
       ) {
         setRevisionConflict(
-          "The saved invoice changed while you were editing. Your corrections are retained. Reload the saved invoice before saving or adding stock; reloading replaces the local fields.",
+          "The saved invoice changed while you were editing. Your corrections are retained. Compare with the saved version before saving or adding stock.",
         );
       }
     } finally {
@@ -2031,6 +2121,7 @@ function PurchaseInvoiceEditor({
       return;
     setNotice(null);
     setError(null);
+    const attempt = captureAttempt();
     setReviewing(true);
     try {
       let invoiceToReview = activeInvoice;
@@ -2049,15 +2140,18 @@ function PurchaseInvoiceEditor({
         await apiClient.reviewPharmacyPurchaseInvoice<PurchaseInvoice>(
           invoiceToReview.id,
           {
+            expectedUpdatedAt: invoiceToReview.updatedAt,
             goodsReceivedDate: reviewDate,
             handwrittenNotes: invoiceToReview.handwrittenNotes || undefined,
           },
         );
+      if (!attemptCurrent(attempt)) return;
+      setRecovery(null);
       setActiveInvoice(reviewed);
       setNotice(`Purchase invoice ${reviewed.invoiceNumber} marked reviewed.`);
       await loadRecent();
     } catch (err) {
-      setError(getErrorMessage(err));
+      captureRecovery(err, attempt);
       captureCatalogueFailure(err);
     } finally {
       setReviewing(false);
@@ -2066,45 +2160,29 @@ function PurchaseInvoiceEditor({
   };
 
   const commitStock = async () => {
-    if (!activeInvoice || draftWriteBlocked) return;
-    const confirmed = window.confirm(
-      `Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`,
-    );
+    if (!access.commit || !activeInvoice || draftWriteBlocked) return;
+    const confirmed = window.confirm(`Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`);
     if (!confirmed) return;
-
+    const id = activeInvoice.id;
+    const attempt = captureAttempt();
     setNotice(null);
     setError(null);
     setCommitting(true);
+    setUnknownStockInvoiceId(id);
     try {
-      const committed =
-        await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
-          activeInvoice.id,
-        );
-      if (
-        committed?.id !== activeInvoice.id ||
-        (committed.status !== "STOCK_COMMITTED" && !committed.stockCommittedAt)
-      ) {
-        throw new Error(
-          "Stock commit did not return a confirmed outcome. Checking the saved record.",
-        );
-      }
-      setActiveInvoice(committed);
-      setNotice(
-        `Stock committed for ${committed.invoiceNumber}${committed.stockCommitReference ? ` (${committed.stockCommitReference})` : ""}.`,
-      );
-      await loadRecent();
-      window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
+      await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
     } catch (err) {
-      setError(getErrorMessage(err));
+      captureRecovery(err, attempt);
       captureCatalogueFailure(err);
-      if (activeInvoice) await refreshStockStatus(activeInvoice.id);
     } finally {
+      if (attemptCurrent(attempt)) await refreshStockStatus(id);
       setCommitting(false);
       focusActionFeedback();
     }
   };
 
   const refreshStockStatus = async (invoiceId: string) => {
+    const attempt = captureAttempt();
     setRefreshingStockStatus(true);
     setUnknownStockInvoiceId(invoiceId);
     try {
@@ -2113,8 +2191,9 @@ function PurchaseInvoiceEditor({
         await apiClient.getPharmacyPurchaseInvoiceById<PurchaseInvoice>(
           invoiceId,
         );
-      if (invoice?.id !== invoiceId || !invoice.status)
-        throw new Error("Invoice status was not returned");
+      if (!attemptCurrent(attempt)) return;
+      if (!isPurchaseReadback(invoice, invoiceId))
+        throw new Error("The saved invoice status could not be verified");
       setActiveInvoice(invoice);
       setManualReviewCandidateId(
         editingId === invoice.id && canResumeManualReview(invoice)
@@ -2128,13 +2207,15 @@ function PurchaseInvoiceEditor({
         ),
       );
       setUnknownStockInvoiceId(null);
-      if (invoice.status === "STOCK_COMMITTED" || invoice.stockCommittedAt) {
+      if (invoice.status === "STOCK_COMMITTED") {
+        setRecovery(null);
         setError(null);
         setNotice(
           `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
         );
         window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       }
+      return invoice;
     } catch {
       setNotice(null);
       // A lost response can hide a successful stock commit. Keep the outcome
@@ -2145,6 +2226,7 @@ function PurchaseInvoiceEditor({
   };
 
   const editSavedDraft = (invoice: PurchaseInvoice) => {
+    invalidatePending();
     setCatalogueIssue(false);
     applyExtractedDraft({
       ...invoice,
@@ -2250,6 +2332,8 @@ function PurchaseInvoiceEditor({
     }
   };
   const restoreServerDraft = (saved: any) => {
+    if (importLock.current || processLock.current || unknownStockRef.current) return;
+    invalidatePending();
     setCheckedOcr({});
     setReviewAccepted(false);
     const p = saved.payload;
@@ -2302,7 +2386,7 @@ function PurchaseInvoiceEditor({
    * @cc [owner:nareshshah139,label:state] purchase-recovery-server-revision
    * Recovered fields MUST retain the revision they were edited from. A changed or unknown
    * revision MUST block saving, reviewing and posting while retaining local fields until an
-   * explicit Reload saved invoice succeeds. Background list reads MUST NOT advance this baseline.
+   * explicit comparison choice adopts the saved revision. Background list reads MUST NOT advance this baseline.
    */
   const acceptRecoveredInvoice = (
     invoice: PurchaseInvoice,
@@ -2314,41 +2398,87 @@ function PurchaseInvoiceEditor({
     );
     if (!revision || !invoice.updatedAt || revision !== invoice.updatedAt) {
       setRevisionConflict(
-        "Your local corrections are retained, but the saved invoice changed or its earlier version cannot be verified. Reload the saved invoice before saving or adding stock. Reloading replaces these local fields.",
+        "Your local corrections are retained, but the saved invoice changed or its earlier version cannot be verified. Compare with the saved version before saving or adding stock.",
       );
       setReviewAccepted(false);
     } else setRevisionConflict(null);
   };
-  const reloadSavedInvoice = async () => {
-    const id = editingId || invoiceId || activeInvoice?.id;
-    if (!id) return;
+  /**
+   * @cc [owner:nareshshah139,label:state] purchase-comparison-preserves-local
+   * Reading a comparison MUST NOT replace fields or advance the saved revision. Only an explicit choice MAY adopt the compared record; local corrections MUST retain the selected saved identity and original receipt/document links.
+   */
+  const compareSavedInvoice = async (id: string, mode: 'duplicate' | 'stale') => {
+    if (!access.read || unknownStockInvoiceId) return;
+    const request = ++comparisonRequest.current;
+    const attempt = captureAttempt();
+    const local = structuredClone({ header, lines, amounts: originalAmounts, flags: headerFlags });
     setRevisionChecking(true);
     try {
-      const invoice =
-        await apiClient.getPharmacyPurchaseInvoiceById<PurchaseInvoice>(id);
-      if (invoice?.id !== id || !invoice.updatedAt)
-        throw new Error(
-          "The saved invoice version could not be checked. Try reloading again.",
-        );
-      editSavedDraft(invoice);
+      const saved = await apiClient.getPharmacyPurchaseInvoiceById<PurchaseInvoice>(id);
+      if (!attemptCurrent(attempt) || request !== comparisonRequest.current) return;
+      if (!isPurchaseReadback(saved, id)) throw new Error('The saved invoice could not be verified. Your corrections are retained.');
+      setComparison({ attempt, mode, local, saved: structuredClone(saved) });
     } catch (err) {
-      setRevisionConflict(getErrorMessage(err));
+      captureRecovery(err, attempt);
     } finally {
-      setRevisionChecking(false);
+      if (mounted.current) setRevisionChecking(false);
     }
+  };
+  const reloadSavedInvoice = async () => {
+    const id = editingId || invoiceId || activeInvoice?.id;
+    if (id) await compareSavedInvoice(id, 'stale');
+  };
+  const adoptComparison = async (keepLocal: boolean) => {
+    if (!comparison || unknownStockInvoiceId || !attemptCurrent(comparison.attempt)) return;
+    const { local, attempt } = comparison;
+    let saved = comparison.saved;
+    if (keepLocal && !access.create) return;
+    if (keepLocal && saved.status === 'REVIEWED' && access.reopenReview && access.review && saved.updatedAt) {
+      setReopeningReview(true);
+      try {
+        saved = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(saved.id, saved.updatedAt);
+        if (!attemptCurrent(attempt) || !isPurchaseReadback(saved, comparison.saved.id)) return;
+      } catch (err) { captureRecovery(err, attempt); return; }
+      finally { setReopeningReview(false); }
+    }
+    if (keepLocal && !canCorrectPurchase(saved)) return;
+    editSavedDraft(saved);
+    if (keepLocal) {
+      setHeader({ ...local.header, invoiceNumber: saved.invoiceNumber, distributorGstin: saved.distributorGstin, distributorName: saved.distributorName, source: saved.source as SourceType || 'MANUAL' });
+      setLines(local.lines.map(line => ({ ...line, ocrSourceRef: undefined })));
+      setOriginalAmounts(local.amounts);
+      setHeaderFlags(local.flags);
+      setCheckedOcr({});
+      setReviewDate(local.header.goodsReceivedDate);
+      setNotice('Your corrections are ready on the selected invoice. Save corrections and check again before completing review.');
+    } else setNotice('Saved values selected. Check this invoice before making further changes.');
+    setComparison(null);
+    setRecovery(null);
+    setError(null);
+  };
+  const copyHandoff = async () => {
+    const id = recovery?.attempt.invoiceId || activeInvoice?.id;
+    const invoiceLink = id ? `${window.location.origin}/dashboard/inventory?area=purchases&view=intake&invoice=${encodeURIComponent(id)}` : 'Unsaved purchase in this tab';
+    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink, recovery?.message || error || 'An authorized colleague is needed to continue this purchase.', recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      setNotice('Handoff details copied.');
+    } catch { setError(`Could not copy. Select and copy these details instead:\n${text}`); }
   };
   useEffect(() => {
     if (!access.read || !recoveryReady) return;
-    const id = invoiceId || recoveredInvoiceId.current;
+    const id = recoveredInvoiceId.current || invoiceId;
     if (!id) return;
     let cancelled = false;
     setRevisionChecking(true);
     apiClient
       .getPharmacyPurchaseInvoiceById<PurchaseInvoice>(id)
       .then((invoice) => {
-        if (cancelled) return;
-        if (invoice?.id !== id)
-          throw new Error("The saved invoice was not returned.");
+        if (cancelled || (unknownStockRef.current && unknownStockRef.current !== id)) return;
+        if (!isPurchaseReadback(invoice, id))
+          throw new Error("The saved invoice was not returned with a verifiable status.");
+        setUnknownStockInvoiceId(null);
         if (recoveredInvoiceId.current === invoice.id)
           acceptRecoveredInvoice(invoice, recoveredRevision.current);
         else editSavedDraft(invoice);
@@ -2430,6 +2560,9 @@ function PurchaseInvoiceEditor({
       draftWriteBlocked
     )
       return;
+    const attempt = captureAttempt();
+    let stockAttempted = false;
+    const id = activeInvoice.id;
     setReviewing(true);
     setError(null);
     try {
@@ -2437,33 +2570,27 @@ function PurchaseInvoiceEditor({
         editingId === activeInvoice.id ? await saveDraft() : activeInvoice;
       if (!saved) return;
       await apiClient.reviewPharmacyPurchaseInvoice(saved.id, {
+        expectedUpdatedAt: saved.updatedAt,
         goodsReceivedDate: reviewDate,
         handwrittenNotes: saved.handwrittenNotes || undefined,
       });
-      const committed =
-        await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
-          saved.id,
-        );
-      if (committed.status !== "STOCK_COMMITTED")
-        throw new Error("Stock status was not confirmed");
-      setActiveInvoice(committed);
-      setNotice(
-        `Stock added for ${committed.invoiceNumber}. Reference: ${committed.stockCommitReference}.`,
-      );
-      await loadRecent();
-      window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
+      if (!attemptCurrent(attempt)) return;
+      stockAttempted = true;
+      setUnknownStockInvoiceId(id);
+      await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
     } catch (err) {
-      setError(getErrorMessage(err));
+      captureRecovery(err, attempt);
       captureCatalogueFailure(err);
-      if (activeInvoice) await refreshStockStatus(activeInvoice.id);
+
     } finally {
+      if (stockAttempted && attemptCurrent(attempt)) await refreshStockStatus(id);
       setReviewing(false);
       focusActionFeedback();
     }
   };
 
   useEffect(() => {
-    if (importedDraft?.draft) {
+    if (importedDraft?.draft && !importLock.current && !processLock.current && !unknownStockRef.current) {
       resetDraft();
       applyExtractedDraft(importedDraft.draft);
       setSourceDocument(importedDraft.sourceDocument || null);
@@ -2488,11 +2615,9 @@ function PurchaseInvoiceEditor({
     savingSupplier ||
     masterConfirming !== null ||
     masterRefreshing;
-  const stockStatusUnknown =
-    !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
-  const stockAdded =
-    activeInvoice?.status === "STOCK_COMMITTED" ||
-    !!activeInvoice?.stockCommittedAt;
+  const stockStatusUnknown = !!unknownStockInvoiceId;
+  const stockAdded = !stockStatusUnknown &&
+    (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
   const stockReceivedEarlier =
     stockAdded && !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
   const committedLabel = stockReceivedEarlier
@@ -2785,6 +2910,7 @@ function PurchaseInvoiceEditor({
           "Save corrections"
         }
         onChange={(distributorName, distributorGstin) => {
+          invalidatePending();
           setReviewAccepted(false);
           setManualReviewCandidateId(null);
           setHeader((current) => ({
@@ -2932,12 +3058,80 @@ function PurchaseInvoiceEditor({
     </section>
   );
 
+  const recoveryIssues = recovery && (recovery.kind === 'review' || recovery.kind === 'catalogue') ? recovery.issues : correctionIssues;
+  const comparisonDifferences = comparison ? purchaseDifferences(
+    { header: comparison.local.header, lines: comparison.local.lines },
+    { header: Object.fromEntries(Object.entries(comparison.local.header).map(([key]) => [key, ['invoiceDate', 'goodsReceivedDate', 'dueDate'].includes(key) ? dateInputFromIso(comparison.saved[key as keyof PurchaseInvoice] as string) : formString(comparison.saved[key as keyof PurchaseInvoice], defaultHeader()[key as keyof HeaderForm])])), lines: (comparison.saved.items || []).map((line, index) => lineFromExtracted(line as unknown as ExtractedPurchaseLine, index)) },
+  ) : [];
+  const focusRecoveryIssue = (issue: ReturnType<typeof purchaseReviewIssue>) => {
+    const target = purchaseRecoveryTarget(issue, lines.map(line => line.localId));
+    if (!target) return;
+    setShowIntakeHome(false);
+    setManualEntry(true);
+    if (issue.category === 'product') void openProductRecovery();
+    requestAnimationFrame(() => focusPurchaseField(target));
+  };
+  const needsHandoff = !access.read || unknownStockInvoiceId === "unconfirmed-import" || recovery?.kind === 'permission' || recovery?.kind === 'locked' || !access.create || (activeInvoice?.status === 'REVIEWED' ? !access.commit : !access.review);
+  const recoveryPanel = !showIntakeHome && (recovery || comparison || pendingMismatch || unknownStockInvoiceId || (activeInvoice && !stockAdded) || (needsHandoff && !!error)) && (
+    <section id="purchase-recovery-panel" aria-labelledby="purchase-recovery-title" className="space-y-4 rounded-md border p-4">
+      <h3 id="purchase-recovery-title" className="font-semibold">Finish this purchase</h3>
+      {recovery && <p className="text-sm">{recovery.message}</p>}
+      {recovery?.reference && <p className="break-all text-sm">Reference: {recovery.reference}</p>}
+      {unknownStockInvoiceId && <div className="space-y-2">
+        <p role="status">Stock status unknown. Check the saved purchase before trying another stock operation.</p>
+        {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
+        {unknownStockInvoiceId !== "unconfirmed-import" && access.read && <Button variant="outline" disabled={busy} onClick={() => refreshStockStatus(unknownStockInvoiceId)}>Check saved status</Button>}
+      </div>}
+      {recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !comparison && !unknownStockInvoiceId && (
+        recovery.existingInvoiceId && access.read ? <Button variant="outline" disabled={busy} onClick={() => compareSavedInvoice(recovery.existingInvoiceId!, 'duplicate')}>Open existing invoice</Button> : <p className="text-sm">An authorized colleague must locate the existing invoice. Your attempted entry is kept here.</p>
+      )}
+      {recovery?.kind === 'stale' && !comparison && !unknownStockInvoiceId && <Button variant="outline" disabled={busy || !access.read} onClick={reloadSavedInvoice}>Compare with saved version</Button>}
+      {comparison && !unknownStockInvoiceId && <div className="space-y-3" aria-label="Compare with saved invoice">
+        <h4 className="font-semibold">Compare with saved invoice</h4>
+        <p className="text-sm">Your attempted entry is unchanged. Applying corrections keeps the saved invoice number, supplier identity, original documents and inward receipt link. Saved invoice {comparison.saved.invoiceNumber} is {purchaseInvoiceStatusLabel(comparison.saved).toLowerCase()}.</p>
+        {comparison.saved.workflowReceiptId && <p className="text-sm">This bill belongs to an inward receipt. Its receipt link stays with this saved bill and stock must not be received again.</p>}
+        <p className="text-sm">This loads your corrections for review. Save corrections and check again to save them. Stock is unchanged.</p>
+        {comparisonDifferences.length ? <ul className="space-y-2 text-sm">{comparisonDifferences.map((difference, index) => <li key={index} className="grid gap-1 rounded border p-2 sm:grid-cols-3"><strong>{difference.label}</strong><span className="break-words">Your entry: {difference.local}</span><span className="break-words">Saved: {difference.saved}</span></li>)}</ul> : <p className="text-sm">The editable values match.</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={busy} onClick={() => adoptComparison(false)}>Use saved values</Button>
+          {access.create && canCorrectPurchase(comparison.saved) && <Button disabled={busy} onClick={() => adoptComparison(true)}>Apply my corrections to this invoice</Button>}
+          {access.create && access.review && access.reopenReview && comparison.saved.status === 'REVIEWED' && !comparison.saved.stockCommittedAt && <Button disabled={busy} onClick={() => adoptComparison(true)}>Reopen review and apply my corrections</Button>}
+          <Button variant="ghost" disabled={busy} onClick={() => setComparison(null)}>Keep my attempted entry</Button>
+        </div>
+        {!canCorrectPurchase(comparison.saved) && <p className="text-sm">Reviewed invoices must be reopened before corrections. Posted or cancelled invoices cannot be edited here.</p>}
+      </div>}
+      {pendingMismatch && !unknownStockInvoiceId && <div className="space-y-3" role="region" aria-label="Compare products">
+        <h4 className="font-semibold">These look like different products</h4>
+        {pendingMismatch.reference && <p className="break-all text-sm">Reference: {pendingMismatch.reference}</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded border p-3"><strong>Invoice product</strong><p>{pendingMismatch.line.productName}</p><p>Pack: {pendingMismatch.line.packSize} · {pendingMismatch.line.packUnitType}</p><p>Kind: {pendingMismatch.line.productKind || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.line.manufacturer || 'Not recorded'}</p></div>
+          <div className="rounded border p-3"><strong>Saved product</strong><p>{pendingMismatch.candidate.drug.name}</p><p>Pack: {pendingMismatch.candidate.drug.packSizeLabel || 'Not recorded'}</p><p>Kind: {pendingMismatch.candidate.drug.productKind || pendingMismatch.candidate.drug.type || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.candidate.drug.manufacturerName || 'Not recorded'}</p><p>Composition: {pendingMismatch.candidate.drug.composition1 || 'Not recorded'}</p><p>Strength: {pendingMismatch.candidate.drug.strength || 'Not recorded'}</p><p>Form: {pendingMismatch.candidate.drug.dosageForm || 'Not recorded'}</p></div>
+        </div>
+        <ul className="list-disc pl-5 text-sm">{pendingMismatch.mismatches.map(message => <li key={message}>{message}</li>)}</ul>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={busy} onClick={() => { setPendingMismatch(null); focusProductMatching(); }}>Choose another product</Button>
+          <Button variant="outline" disabled={busy} onClick={() => { const id = pendingMismatch.line.localId; setPendingMismatch(null); focusPurchaseField(`${id}-product`); }}>Correct invoice details</Button>
+          <Button variant="ghost" disabled={busy || !access.create} onClick={() => confirmMasterLine(pendingMismatch.match, 'MATCH_EXISTING', pendingMismatch.candidate, undefined, pendingMismatch.attempt)}>Confirm this match</Button>
+        </div>
+        <p className="text-sm text-muted-foreground">Confirm only after checking both products and pack details against the original invoice.</p>
+      </div>}
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length > 0 && <ul className="space-y-2">{recoveryIssues.map(issue => <li key={issue.key} className="space-y-1 text-sm">{recovery && <><p>{issue.message}</p><p className="text-muted-foreground">{issue.help}</p></>}{issue.category !== 'historical' && purchaseRecoveryTarget(issue, lines.map(line => line.localId)) && access.create && !savedFormLocked && <Button size="sm" variant="outline" disabled={busy} onClick={() => focusRecoveryIssue(issue)}>Correct {issue.lineIndex === undefined ? issue.label : `line ${issue.lineIndex + 1} ${issue.label}`}</Button>}</li>)}</ul>}
+      <div className="flex flex-wrap gap-2">
+        {catalogueIssue && !stockAdded && !stockStatusUnknown && !savedFormLocked && access.create && <Button variant="outline" onClick={openProductRecovery} disabled={busy || draftWriteBlocked}>Fix products on this invoice</Button>}
+        {canReview && !comparison && !pendingMismatch && !reviewAccepted && <Button disabled={busy} onClick={() => focusPurchaseField("purchase-review-checklist")}>Continue to final review</Button>}
+        {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && <Button variant="outline" disabled={busy} onClick={saveDraft}>Save corrections and check again</Button>}
+        {(needsHandoff || (recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !recovery.existingInvoiceId)) && <Button variant="outline" onClick={copyHandoff}>Copy handoff details</Button>}
+      </div>
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing Add stock.</p>}
+    </section>
+  );
+
   const invoiceActions = activeInvoice && (
     <div className="flex flex-wrap items-center gap-2">
       {stockStatusUnknown ? (
         <Button
           variant="outline"
-          onClick={() => refreshStockStatus(activeInvoice.id)}
+          onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)}
           disabled={busy}
         >
           Refresh stock status
@@ -2962,7 +3156,7 @@ function PurchaseInvoiceEditor({
           disabled={savedFormLocked || busy || draftWriteBlocked}
           onClick={() =>
             reviewAccepted && canReview && access.commit
-              ? reviewAndCommit()
+              ? reviewInvoice()
               : saveDraft()
           }
         >
@@ -2974,7 +3168,7 @@ function PurchaseInvoiceEditor({
             : processing
               ? "Checking invoice…"
               : reviewAccepted && canReview && access.commit
-                ? activeInvoice.workflowReceiptId ? "Review & post bill" : "Review & Add stock"
+                ? "Complete review"
                 : "Save corrections"}
         </Button>
       ) : (
@@ -3091,6 +3285,7 @@ function PurchaseInvoiceEditor({
       }}
     >
       <div
+        onChangeCapture={invalidatePending}
         onFocusCapture={(event) => {
           const id = (event.target as HTMLElement).id;
           if (sourceTargets.some((target) => target.id === id))
@@ -3186,7 +3381,7 @@ function PurchaseInvoiceEditor({
                 resetDraft();
                 onNew?.();
               }}
-              disabled={busy}
+              disabled={busy || !!unknownStockInvoiceId}
             >
               New invoice
             </Button>
@@ -3228,7 +3423,7 @@ function PurchaseInvoiceEditor({
         {activeInvoice && !showIntakeHome && (
           <PurchaseDocumentActions
             invoice={activeInvoice}
-            onRefresh={() => refreshStockStatus(activeInvoice.id)}
+            onRefresh={async () => { await refreshStockStatus(activeInvoice.id); }}
             onEdit={
               !savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined
             }
@@ -3271,7 +3466,7 @@ function PurchaseInvoiceEditor({
                 resetDraft();
                 onNew?.();
               }}
-              disabled={busy}
+              disabled={busy || !!unknownStockInvoiceId}
             >
               New invoice
             </Button>
@@ -3279,7 +3474,7 @@ function PurchaseInvoiceEditor({
               <Button
                 variant="outline"
                 onClick={saveIncompleteDraft}
-                disabled={busy || savedFormLocked}
+                disabled={busy || savedFormLocked || draftWriteBlocked}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -3341,6 +3536,7 @@ function PurchaseInvoiceEditor({
           tabIndex={-1}
           className="space-y-3"
         >
+          {recoveryPanel}
           {notice && !(stockAdded && notice.startsWith("Restored")) && (
             <p role="status" className="flex items-start gap-2 text-sm">
               {stockAdded ? (
@@ -3351,7 +3547,7 @@ function PurchaseInvoiceEditor({
               {notice}
             </p>
           )}
-          {error && (
+          {error && (error.startsWith("Could not copy.") || !recovery || !error.includes(recovery.message)) && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Request Failed</AlertTitle>
@@ -3549,7 +3745,7 @@ function PurchaseInvoiceEditor({
                     onClick={reloadSavedInvoice}
                     disabled={revisionChecking || busy}
                   >
-                    Reload saved invoice
+                    Compare with saved version
                   </Button>
                 </AlertDescription>
               </Alert>
@@ -3619,7 +3815,7 @@ function PurchaseInvoiceEditor({
                           />
                         </div>
                         <Button type="button" onClick={() => extractFromInvoiceFile(false)}
-                          disabled={!access.create || busy || !ocrFile || !importReceivedDate} className="w-full md:w-auto">
+                          disabled={!access.create || busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate} className="w-full md:w-auto">
                           {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
                           {extracting ? "Reading bill…" : "Scan bill"}
                         </Button>
@@ -3627,7 +3823,7 @@ function PurchaseInvoiceEditor({
                         {access.automate && <details className="text-sm">
                           <summary className="cursor-pointer py-2">Automatic import</summary>
                           <p className="my-2 text-muted-foreground">Adds stock if every automatic check passes.</p>
-                          <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
+                          <Button type="button" variant="outline" onClick={() => extractFromInvoiceFile(true)} disabled={busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate}>Import &amp; Add Stock</Button>
                         </details>}
                       </div>
                     </div>

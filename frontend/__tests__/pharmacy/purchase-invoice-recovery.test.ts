@@ -1,0 +1,42 @@
+import { purchaseRecovery, purchaseRecoveryTarget, purchaseDifferences, isPurchaseReadback, canCorrectPurchase } from '@/lib/purchase-invoice-recovery';
+const attempt = Object.freeze({ generation: 1, scope: 'branch:user', invoiceId: 'invoice-1', revision: '2026-10-01T00:00:00Z', lineKeys: ['line-a'] });
+
+describe('purchase recovery boundary', () => {
+  it('does not turn unstructured duplicate text into invoice navigation', () => {
+    expect(purchaseRecovery({ status: 409, message: 'Duplicate invoice-1' }, attempt)).toEqual({ kind: 'unknown', message: 'Duplicate invoice-1', attempt, reference: undefined });
+  });
+  it('rejects unsafe identifiers and retains receipt-specific recovery', () => {
+    expect(purchaseRecovery({ body: { code: 'PURCHASE_RECEIPT_ALREADY_LINKED', existingInvoiceId: '../other', message: 'Receipt already linked' } }, attempt)).toEqual({ kind: 'receipt', message: 'Receipt already linked', existingInvoiceId: undefined, attempt, reference: undefined });
+  });
+  it('focuses the observed stable line key for a structured review issue', () => {
+    const recovery = purchaseRecovery({body:{code:'PURCHASE_REVIEW_REQUIRED',issues:[{message:'Line 1: batchNumber is required'}]}},attempt);
+    if (recovery.kind !== 'review') throw new Error('Expected review recovery');
+    expect(purchaseRecoveryTarget(recovery.issues[0],attempt.lineKeys)).toBe('line-a-batch');
+  });
+  it('honors structured fields and line numbers over ambiguous wording', () => {
+    const recovery = purchaseRecovery({body:{code:'PURCHASE_REVIEW_REQUIRED',issues:[
+      {message:'Goods received date cannot be before invoice date',field:'goodsReceivedDate'},
+      {message:'This value needs checking',field:'batchNumber',lineNumber:1},
+    ]}},attempt);
+    if (recovery.kind !== 'review') throw new Error('Expected review recovery');
+    expect(recovery.issues.map(issue=>purchaseRecoveryTarget(issue,attempt.lineKeys))).toEqual(['goods-date','line-a-batch']);
+  });
+  it('requires same invoice and complete saved state for stock proof', () => {
+    const saved = {id:'invoice-1',status:'STOCK_COMMITTED',stockCommittedAt:'2026-10-01T00:00:00Z',items:[],updatedAt:'2026-10-01T00:00:00Z'};
+    expect(isPurchaseReadback(saved,'invoice-1')).toBe(true);
+    expect(isPurchaseReadback({...saved,id:'invoice-2'},'invoice-1')).toBe(false);
+    expect(isPurchaseReadback({...saved,status:'SUCCESS'},'invoice-1')).toBe(false);
+    expect(isPurchaseReadback({...saved,items:undefined},'invoice-1')).toBe(false);
+    expect(isPurchaseReadback({...saved,updatedAt:'unknown'},'invoice-1')).toBe(false);
+  });
+  it('locks reviewed, posted, cancelled and unknown comparisons', () => {
+    expect(['REVIEWED','STOCK_COMMITTED','CANCELLED','NEW_STATUS'].map(status=>canCorrectPurchase({status}))).toEqual([false,false,false,false]);
+    expect(canCorrectPurchase({status:'DRAFT'})).toBe(true);
+  });
+  it('compares notes and changed quantities without changing either snapshot', () => {
+    const local = {header:{handwrittenNotes:'Corrected'},lines:[{localId:'a',quantityPurchased:'2'}]};
+    const saved = {header:{handwrittenNotes:'Original'},lines:[{localId:'b',quantityPurchased:'1'}]};
+    expect(purchaseDifferences(local,saved)).toEqual([{label:'handwritten notes',local:'Corrected',saved:'Original'},{label:'Line 1 quantity purchased',local:'2',saved:'1'}]);
+    expect(saved.lines).toEqual([{localId:'b',quantityPurchased:'1'}]);
+  });
+});
