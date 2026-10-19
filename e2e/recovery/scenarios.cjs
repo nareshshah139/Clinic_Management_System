@@ -12,30 +12,43 @@ async function visible(page, text) {
 async function click(page, text) {
   await page.waitForFunction(
     (t) =>
-      Array.from(document.querySelectorAll("button")).some(
+      Array.from(document.querySelectorAll("button, summary")).some(
         (b) => b.textContent.trim() === t && !b.disabled,
       ),
     { timeout: 30000 },
     text,
-  );
+  ).catch(error => { throw new Error(`Missing enabled action "${text}": ${error.message}`); });
   const handle = await page.evaluateHandle(
     (t) =>
-      Array.from(document.querySelectorAll("button")).find(
+      Array.from(document.querySelectorAll("button, summary")).find(
         (b) => b.textContent.trim() === t && !b.disabled,
       ),
     text,
   );
   const button = handle.asElement();
   assert(button, `Missing enabled action ${text}`);
-  await button.scrollIntoView();
+  await button.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+  await page.waitForFunction(element => {
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+    return hit === element || element.contains(hit);
+  }, { timeout: 5000 }, button);
   await button.click();
   await handle.dispose();
 }
 async function fill(page, selector, value) {
-  await page.waitForSelector(selector);
-  await page.click(selector, { clickCount: 3 });
+  const field = await page.waitForSelector(selector, { visible: true });
+  await field.evaluate(element => element.scrollIntoView({ block: "center", inline: "nearest" }));
+  await page.waitForFunction(element => {
+    const bounds = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+    return hit === element || element.contains(hit);
+  }, { timeout: 5000 }, field);
+  await field.click({ clickCount: 3 });
+  assert.equal(await field.evaluate(element => document.activeElement === element), true, `Field focus ${selector}`);
   await page.keyboard.press("Backspace");
-  await page.type(selector, String(value));
+  await field.type(String(value));
+  assert.equal(await field.evaluate(element => element.value), String(value), `Entered value ${selector}`);
 }
 async function until(read, predicate) {
   for (let i = 0; i < 100; i++) {
@@ -995,5 +1008,45 @@ exports.stock = async (f, s) => {
     },
   );
   await report("recovered result");
+  await f.capture(s, "recovered");
+};
+
+/**
+ * @cc [owner:nareshshah139,label:testing] purchase-duplicate-recovery
+ * Duplicate recovery MUST retain attempted corrections until an explicit choice and persist them only to the deliberately selected editable invoice without stock effects.
+ */
+exports.purchase = async (f, s) => {
+  const makeInvoice = (invoiceNumber) => f.db.pharmacyPurchaseInvoice.create({ data: {
+    branchId: f.branch.id, distributorName: "Recovery Purchase Supplier",
+    distributorGstin: "36ABCDE1234F1Z5", distributorDlNo: "Synthetic license",
+    invoiceNumber, invoiceDate: new Date("2026-10-01"), goodsReceivedDate: new Date("2026-10-02"),
+    billType: "CASH", doctorNameOrRegNo: "Synthetic", status: "DRAFT",
+    grossAmount: 100, taxableAmount: 100, totalGst: 0, netPayable: 100,
+    items: { create: { lineNumber: 1, productName: "Recovery purchase cream", manufacturer: "Synthetic",
+      packSize: "50 g", packUnitType: "Tube", hsnCode: "3304", batchNumber: "RECOVERY-PURCHASE",
+      expiryMonth: 12, expiryYear: 2027, quantityPurchased: 1, freeQuantity: 0,
+      mrp: 120, purchaseRate: 100, discountPercent: 0, taxableAmount: 100, gstAmount: 0, lineTotal: 100 } },
+  } });
+  const saved = await makeInvoice("RECOVERY-PURCHASE-EXISTING");
+  const attempted = await makeInvoice("RECOVERY-PURCHASE-ATTEMPT");
+  await navigate(f, `/dashboard/inventory?area=purchases&view=intake&invoice=${attempted.id}`);
+  await fill(f.page, "#invoice-number", saved.invoiceNumber);
+  await click(f.page, "Additional invoice details");
+  await fill(f.page, "#purchase-notes", "Keep this attempted correction");
+  f.check(s, "attempted note entered before rejection", await f.page.$eval("#purchase-notes", e => e.value), "Keep this attempted correction");
+  await click(f.page, "Save corrections");
+  await visible(f.page, "already exists");
+  await f.capture(s, "duplicate");
+  await click(f.page, "Open existing invoice");
+  await visible(f.page, "Compare with saved invoice");
+  f.check(s, "opening comparison preserves attempted notes", await f.page.$eval("#purchase-notes", e => e.value), "Keep this attempted correction");
+  f.check(s, "opening comparison performs no write", (await f.db.pharmacyPurchaseInvoice.findUnique({where:{id:saved.id}})).handwrittenNotes, null);
+  await f.capture(s, "compared");
+  await click(f.page, "Apply my corrections to this invoice");
+  await click(f.page, "Save corrections and check again");
+  const updated = await until(() => f.db.pharmacyPurchaseInvoice.findUnique({where:{id:saved.id}}), row => row.handwrittenNotes === "Keep this attempted correction");
+  f.check(s, "explicit corrections preserve selected identity", updated.invoiceNumber, "RECOVERY-PURCHASE-EXISTING");
+  f.check(s, "correction leaves stock untouched", updated.stockCommittedAt, null);
+  f.check(s, "attempted record remains distinct", (await f.db.pharmacyPurchaseInvoice.findUnique({where:{id:attempted.id}})).invoiceNumber, "RECOVERY-PURCHASE-ATTEMPT");
   await f.capture(s, "recovered");
 };

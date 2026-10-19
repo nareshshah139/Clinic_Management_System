@@ -1,5 +1,10 @@
 module.exports = Object.freeze([
   {
+    id: "purchase",
+    category: "production-ui",
+    checkpoints: ["duplicate", "compared", "recovered"],
+  },
+  {
     id: "partner",
     category: "production-ui",
     checkpoints: ["partial", "matched", "recovered"],

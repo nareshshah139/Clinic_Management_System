@@ -183,6 +183,9 @@ async function setup() {
     "pharmacy:purchase-ledger:read",
     "pharmacy:purchase-ledger:write",
     "pharmacy:purchase-invoice:read",
+    "pharmacy:purchase-invoice:create",
+    "pharmacy:purchase-invoice:review",
+    "pharmacy:purchase-invoice:commit-stock",
     "pharmacy:dashboard:read",
   ];
   const password = "Synthetic-Recovery-Only-2026";
@@ -489,6 +492,7 @@ async function setup() {
                 .querySelectorAll("[data-recovery-capture]")
                 .forEach((e) => e.removeAttribute("data-recovery-capture"));
               let target;
+              if (id === "purchase") target = document.querySelector("#purchase-recovery-panel") || document.querySelector("#purchase-action-feedback");
               if (id === "opening")
                 target = Array.from(
                   document.querySelectorAll("div.bg-slate-50"),
