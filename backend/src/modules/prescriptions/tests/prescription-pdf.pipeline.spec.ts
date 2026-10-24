@@ -154,7 +154,7 @@ describe('Prescription -> saved readback -> PDF pipeline', () => {
       verifyPdf(pdf, name, 'prescription-pipeline-updated.pdf');
     }
     expect(state.events).toHaveLength(5);
-    await expect(api.post('/prescriptions', payload)).rejects.toMatchObject({ status: 400, message: 'Missing Idempotency-Key header' });
+    await expect(api.post('/prescriptions', payload)).rejects.toMatchObject({ status: 400, message: expect.stringContaining('Missing Idempotency-Key header'), body: expect.objectContaining({ message: 'Missing Idempotency-Key header' }), requestId: expect.any(String) });
     await expect(api.generatePrescriptionPdf('missing')).rejects.toMatchObject({ status: 404 });
   });
 });

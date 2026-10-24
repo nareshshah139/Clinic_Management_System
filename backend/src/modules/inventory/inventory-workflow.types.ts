@@ -25,7 +25,7 @@ export class SaveWorkflowDocumentDto {
 }
 export class TransitionWorkflowDto {
   @IsInt() @Min(1) version: number;
-  @IsIn(['SUBMIT', 'APPROVE', 'REJECT', 'CHALLAN', 'POST', 'CANCEL', 'RELEASE', 'REVERSE', 'ACCEPT', 'CREATE_PO', 'CONVERT_SALE']) action: string;
+  @IsIn(['SUBMIT', 'APPROVE', 'REJECT', 'CHALLAN', 'POST', 'CANCEL', 'RELEASE', 'REVERSE', 'RECOUNT', 'ACCEPT', 'CREATE_PO', 'CONVERT_SALE']) action: string;
   @IsOptional() @IsString() reason?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) lineIds?: string[];
 }

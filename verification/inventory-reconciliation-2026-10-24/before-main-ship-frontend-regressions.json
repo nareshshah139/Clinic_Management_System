@@ -1,0 +1,2183 @@
+{
+  "passed": 465,
+  "failed": 0,
+  "skipped": 0,
+  "passed_suites": 63,
+  "suites": [
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx",
+      "tests": [
+        {
+          "name": "PurchaseInvoiceWorkbench scans and saves for human checking without invoking automatic processing or changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench requires a fresh final confirmation after correcting a printed amount",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench explains the recent supplier, catalogue and confidence blockers without enabling stock approval",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench gives historical invoices a stock-backfill check instead of retry instructions",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (false)",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (true)",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench summarizes paid plus free stock units and tax-exclusive indicative margin without pack multiplication",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves a new cosmetic through the invoice page with blank clinical fields",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench enforces saved product edit capability (true) on the invoice screen",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench enforces saved product edit capability (false) on the invoice screen",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps Save & Process as the action when product records still block intake",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves a verified supplier in the checklist without changing stock and restores Save & Process",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench disables stock actions for create-only staff and does not fetch forbidden lists",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps read-only invoice users from editing or saving",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench links the archived original when a preview is saved, and shows the download on the saved invoice",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench retains a saved original after OCR failure and recovers its link on remount",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench renders and saves all 20 OCR batch rows, including repeated products and a correction on the last row",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench lets staff attach a previously unlinked upload while correcting a saved draft",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench starts a new invoice without keeping the previous selection or committing stock",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench shows a replacement extraction as a new unsaved draft instead of hiding it behind the old selection",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench blocks invalid purchase drafts before calling the API",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench provides a correction-to-commit path for an approval bill blocked by OCR and low confidence",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench imports and adds stock in one request, displaying the persisted result without an extra save or confirmation",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench retains a saved exception and updates that same invoice after correction",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps unsaved OCR fields editable and clearly reports failure to save",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves corrections and then processes in one action without erasing reported totals",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps a single save-only action for staff without automatic stock permissions",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves once before processing even when the button is clicked rapidly",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench returns to Save & Process when fields change after an automatic review exception",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves current corrections before manually marking a draft reviewed",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps printed totals when a rate and a reported total are corrected together",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench processes the selected saved invoice and does not show committed stock as editable",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench lets staff correct a reported total before saving and processing, and rejects clearing it",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench submits a valid draft with calculated line and header totals",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench prefills purchase intake from invoice OCR before saving the reviewed draft",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves OCR with missing descriptive fields and updates the same draft on a second save",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench reopens a saved draft with header flags and retains edits after a failed update",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench recovers unfinished OCR edits after remount without hiding them behind another recent invoice",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench returns to Invoice OCR and resumes the same corrections without saving or processing",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps all product fields and confirmation controls visible in one review checklist",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench restores manual review after reopening an invoice held only by supplier matching and OCR confidence",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench checks saved stock status after a lost processing response instead of reporting stock was not added",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench checks saved stock status after a empty processing response instead of reporting stock was not added",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench does not claim stock is uncommitted when both processing and the status check fail",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench recovers the manual-review action when a lost response left a saved review exception",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps unknown automatic exceptions blocked instead of treating them as manual-review-only checks",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench reopens a reviewed purchase using its revision and reason, without committing stock",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench confirms a successful commit from the server when the commit response is lost",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench reviews a clean draft and commits reviewed stock explicitly",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench shows backend reconciliation problems and keeps review disabled",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench saves incomplete intake for later without creating or processing an invoice and reuses its request key",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench corrects a NOT_SAVED OCR result and uses the new primary to save and process its retained original once",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench keeps New invoice visible on a posted receipt and starts clean intake without changing posted stock",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench isolates unsaved recovery by invoice ID when switching records and remounting the first invoice",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench retains bill corrections when reopening intake linked to the same inward receipt",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench checks the newly created invoice after a lost process response from the new-intake primary",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench checks the newly created invoice after a empty process response from the new-intake primary",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench blocks stale recovered corrections until explicitly reloading the changed saved invoice",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench CR-14: shows five choices and line search, but no create action for an existing brand",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench CR-14: applies remembered supplier selection without confirmation or stock writes",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseInvoiceWorkbench CR-14: cancelling new-item confirmation performs no API write",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.pagedjs.margins.test.tsx",
+      "tests": [
+        {
+          "name": "keeps tele-video metadata in preview, print, PDF, WhatsApp and Email, and removes it on switching back",
+          "status": "passed"
+        },
+        {
+          "name": "refreshes personal history in an already-open paginated preview",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"Diet: vegetarian\\nSleep: 6 hours; teacher; sunscreen daily\" only when populated (space-optimized: false)",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"Diet: vegetarian\\nSleep: 6 hours; teacher; sunscreen daily\" only when populated (space-optimized: true)",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"\" only when populated (space-optimized: false)",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"\" only when populated (space-optimized: true)",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"  \\n  \" only when populated (space-optimized: false)",
+          "status": "passed"
+        },
+        {
+          "name": "prints personal history \"  \\n  \" only when populated (space-optimized: true)",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"\" consistently in Table preview, print, PDF and WhatsApp (saved: \"\")",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"  \\n  \" consistently in Text preview, print, PDF and WhatsApp (saved: \"  \\n  \")",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"Itchy rash\" consistently in Table preview, print, PDF and WhatsApp (saved: \"Itchy rash\")",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"General consultation\" consistently in Text preview, print, PDF and WhatsApp (saved: \"General consultation\")",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"\" consistently in Table preview, print, PDF and WhatsApp (saved: \"Recorded complaint\")",
+          "status": "passed"
+        },
+        {
+          "name": "renders complaint \"  \\n  \" consistently in Text preview, print, PDF and WhatsApp (saved: \"Recorded complaint\")",
+          "status": "passed"
+        },
+        {
+          "name": "omits the loose-tablet selling label from Table preview, print and Download PDF while saving the catalog name",
+          "status": "passed"
+        },
+        {
+          "name": "omits the loose-tablet selling label from Text preview, print and Download PDF while saving the catalog name",
+          "status": "passed"
+        },
+        {
+          "name": "omits the loose-tablet selling label from Table preview, print and PDF via WhatsApp while saving the catalog name",
+          "status": "passed"
+        },
+        {
+          "name": "omits the loose-tablet selling label from Text preview, print and PDF via WhatsApp while saving the catalog name",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionBuilder - Paged.js margin wiring applies @page margin-top from the Top margin slider (UI -> Paged.js)",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionBuilder - Paged.js margin wiring injects browser print CSS that isolates the print host and zeroes page margins",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionBuilder - Paged.js margin wiring prints from a temporary body-level host so dialog positioning does not affect browser print",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionBuilder - Paged.js margin wiring copies the first text offset from page 1 onto continuation pages",
+          "status": "passed"
+        },
+        {
+          "name": "saving before prescription export waits for the visit save before generating a PDF, including visits without medication",
+          "status": "passed"
+        },
+        {
+          "name": "saving before prescription export blocks Download PDF when the visit save fails",
+          "status": "passed"
+        },
+        {
+          "name": "saving before prescription export blocks PDF via WhatsApp when the visit save fails",
+          "status": "passed"
+        },
+        {
+          "name": "saving before prescription export blocks Print when the visit save fails",
+          "status": "passed"
+        },
+        {
+          "name": "saves medications before PDF output and updates the same prescription on another export",
+          "status": "passed"
+        },
+        {
+          "name": "does not export when medication saving fails after the visit save succeeds",
+          "status": "passed"
+        },
+        {
+          "name": "restores an unentered legacy dosage () as optional and exports without changing the instructions",
+          "status": "passed"
+        },
+        {
+          "name": "restores an unentered legacy dosage (null) as optional and exports without changing the instructions",
+          "status": "passed"
+        },
+        {
+          "name": "restores an unentered legacy dosage (undefined) as optional and exports without changing the instructions",
+          "status": "passed"
+        },
+        {
+          "name": "restores an unentered legacy dosage (0) as optional and exports without changing the instructions",
+          "status": "passed"
+        },
+        {
+          "name": "restores an unentered legacy dosage (0) as optional and exports without changing the instructions",
+          "status": "passed"
+        },
+        {
+          "name": "reopens a saved prescription with optional dosage and preserves a recorded positive dose on update",
+          "status": "passed"
+        },
+        {
+          "name": "retains an explicitly entered zero in a current draft, shows validation, and saves after correction",
+          "status": "passed"
+        },
+        {
+          "name": "toggles and remembers the doctor signature across preview, print, PDF, WhatsApp and Email",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.defaults.test.tsx",
+      "tests": [
+        {
+          "name": "leaves duration blank when a selected medicine has no history or inventory defaults",
+          "status": "passed"
+        },
+        {
+          "name": "preserves a duration the doctor entered before selecting a medicine",
+          "status": "passed"
+        },
+        {
+          "name": "suggests all four usual fields without needing a diagnosis and allows individual acceptance",
+          "status": "passed"
+        },
+        {
+          "name": "preserves edited suggestions and replaces untouched ones when another medicine is selected",
+          "status": "passed"
+        },
+        {
+          "name": "clears previous untouched suggestions for an unknown medicine",
+          "status": "passed"
+        },
+        {
+          "name": "protects edits including intentional clearing while suggestions are loading",
+          "status": "passed"
+        },
+        {
+          "name": "keeps two medicines independent and ignores late responses for replaced medicines",
+          "status": "passed"
+        },
+        {
+          "name": "uses inventory suggestions and stays blank with an actionable message if the lookup fails",
+          "status": "passed"
+        },
+        {
+          "name": "preserves all four pre-existing values, including custom units, when choosing from inventory",
+          "status": "passed"
+        },
+        {
+          "name": "does not apply a removed row\u2019s pending suggestion to the row that replaces it",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.autopilot.test.tsx",
+      "tests": [
+        {
+          "name": "uses examination diagnosis shortcuts and keeps Undo paused across source refresh until resumed",
+          "status": "passed"
+        },
+        {
+          "name": "can retry failed learning sources without leaving the editor",
+          "status": "passed"
+        },
+        {
+          "name": "offers partial matches for review without automatically adding medicines",
+          "status": "passed"
+        },
+        {
+          "name": "preserves a clinician-entered treatment when a matching plan arrives",
+          "status": "passed"
+        },
+        {
+          "name": "retains uncertainty markers from the actual diagnosis input",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.personal-history.test.tsx",
+      "tests": [
+        {
+          "name": "loads saved personal history for a new visit and sends it to the visit saver",
+          "status": "passed"
+        },
+        {
+          "name": "reopens the visit snapshot (legacy string JSON: false)",
+          "status": "passed"
+        },
+        {
+          "name": "reopens the visit snapshot (legacy string JSON: true)",
+          "status": "passed"
+        },
+        {
+          "name": "retains the draft value \"Recovered draft\" over the patient default",
+          "status": "passed"
+        },
+        {
+          "name": "retains the draft value \"\" over the patient default",
+          "status": "passed"
+        },
+        {
+          "name": "does not overwrite typing with a late patient history response",
+          "status": "passed"
+        },
+        {
+          "name": "keeps each patient and saved visit in its own personal history context",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PharmacyInvoiceBuilder.gst.test.tsx",
+      "tests": [
+        {
+          "name": "uses Inventory GST 5% in the line and invoice total",
+          "status": "passed"
+        },
+        {
+          "name": "uses Inventory GST 12% in the line and invoice total",
+          "status": "passed"
+        },
+        {
+          "name": "uses Inventory GST 0% in the line and invoice total",
+          "status": "passed"
+        },
+        {
+          "name": "submits the Inventory rate when the invoice is confirmed",
+          "status": "passed"
+        },
+        {
+          "name": "requires an explicit rate when Inventory GST is null",
+          "status": "passed"
+        },
+        {
+          "name": "requires an explicit rate when Inventory GST is undefined",
+          "status": "passed"
+        },
+        {
+          "name": "does not turn a cleared tax field into a zero-rate invoice",
+          "status": "passed"
+        },
+        {
+          "name": "preserves a reviewed tax override when the same drug is added again",
+          "status": "passed"
+        },
+        {
+          "name": "uses Inventory GST for prescription-prefilled drugs too",
+          "status": "passed"
+        },
+        {
+          "name": "uses a package rate only when all contents agree: [5, 5]",
+          "status": "passed"
+        },
+        {
+          "name": "uses a package rate only when all contents agree: [0, 0]",
+          "status": "passed"
+        },
+        {
+          "name": "uses a package rate only when all contents agree: [5, 12]",
+          "status": "passed"
+        },
+        {
+          "name": "uses a package rate only when all contents agree: [5, null]",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/MedicalVisitForm.complaints-integration.test.tsx",
+      "tests": [
+        {
+          "name": "preserves other visit information when saving complaints General consultation \u2192 undefined",
+          "status": "passed"
+        },
+        {
+          "name": "preserves other visit information when saving complaints  \u2192 undefined",
+          "status": "passed"
+        },
+        {
+          "name": "preserves other visit information when saving complaints Recorded complaint \u2192 ",
+          "status": "passed"
+        },
+        {
+          "name": "preserves other visit information when saving complaints Recorded complaint \u2192  \n ",
+          "status": "passed"
+        },
+        {
+          "name": "saves a new visit with the real editor, an empty complaint and entered clinical information",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.stock.test.tsx",
+      "tests": [
+        {
+          "name": "restores the inventory identity and uses its available stock despite a changed display name",
+          "status": "passed"
+        },
+        {
+          "name": "shows zero truthfully",
+          "status": "passed"
+        },
+        {
+          "name": "shows not linked truthfully",
+          "status": "passed"
+        },
+        {
+          "name": "shows unavailable quantity truthfully",
+          "status": "passed"
+        },
+        {
+          "name": "uses clinic inventory for a legacy free-text row without borrowing a partial match",
+          "status": "passed"
+        },
+        {
+          "name": "keeps selected row and tooltip stock consistent and retains the selected ID",
+          "status": "passed"
+        },
+        {
+          "name": "shares an in-flight inventory request and retries after a failed read",
+          "status": "passed"
+        },
+        {
+          "name": "allows retry of failed inventory reads",
+          "status": "passed"
+        },
+        {
+          "name": "clears the previous inventory identity when another medicine is typed",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.clinical-saving.test.tsx",
+      "tests": [
+        {
+          "name": "starts a new visit empty even when patient history contains General consultation",
+          "status": "passed"
+        },
+        {
+          "name": "restores an explicitly cleared complaint from a draft without restoring the saved complaint",
+          "status": "passed"
+        },
+        {
+          "name": "persists clearing a saved complaint to \"\" without changing unrelated history",
+          "status": "passed"
+        },
+        {
+          "name": "persists clearing a saved complaint to \"  \\n  \" without changing unrelated history",
+          "status": "passed"
+        },
+        {
+          "name": "sends examination diagnosis shortcuts and explicitly unchecked family history to the visit saver",
+          "status": "passed"
+        },
+        {
+          "name": "sends restored history, examination, medications, procedures, custom sections and follow-up together",
+          "status": "passed"
+        },
+        {
+          "name": "does not duplicate shortcut diagnoses when reopening a saved combined diagnosis",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PrescriptionBuilder.search.test.tsx",
+      "tests": [
+        {
+          "name": "prescription medicine search (template=false) retains the latest results when an older query finishes later",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=false) does not let an old failure clear a newer result or trigger a fallback",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=false) uses one request for an empty result",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=false) preserves server ranking instead of re-sorting suggestions",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=false) clears results immediately when the query is shortened and ignores pending results",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=true) retains the latest results when an older query finishes later",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=true) does not let an old failure clear a newer result or trigger a fallback",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=true) uses one request for an empty result",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=true) preserves server ranking instead of re-sorting suggestions",
+          "status": "passed"
+        },
+        {
+          "name": "prescription medicine search (template=true) clears results immediately when the query is shortened and ignores pending results",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/MedicalVisitForm.tele-video.test.tsx",
+      "tests": [
+        {
+          "name": "defaults to in-person, blocks missing consent, then saves tele-video and switches back",
+          "status": "passed"
+        },
+        {
+          "name": "blocks autosave until consent and restores the choice from the local draft",
+          "status": "passed"
+        },
+        {
+          "name": "reopens a saved tele-video visit with its consent checked",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PharmacyBilling.prescription-load.test.tsx",
+      "tests": [
+        {
+          "name": "Load opens a visible bill with all four prescribed quantities and flags unavailable stock",
+          "status": "passed"
+        },
+        {
+          "name": "retains an unmatched item, allows removal, and does not retain another patient\u2019s medicines",
+          "status": "passed"
+        },
+        {
+          "name": "loads inside StrictMode when effects are mounted again",
+          "status": "passed"
+        },
+        {
+          "name": "uses the inventory-matched ID even when search returns another medicine first",
+          "status": "passed"
+        },
+        {
+          "name": "uses the queue quantity inference when an older prescription omitted explicit quantities",
+          "status": "passed"
+        },
+        {
+          "name": "retrying an inventory failure preserves removed lines and reviewed quantities",
+          "status": "passed"
+        },
+        {
+          "name": "keeps every line when an inventory lookup fails and exposes a retry",
+          "status": "passed"
+        },
+        {
+          "name": "substitutes an unmatched line with the chosen product and keeps its edited quantity",
+          "status": "passed"
+        },
+        {
+          "name": "ignores a late prescription response after switching patients",
+          "status": "passed"
+        },
+        {
+          "name": "keeps a pending prescription visible and reports a failed confirmation",
+          "status": "passed"
+        },
+        {
+          "name": "shows a visible load error and retries the same prescription",
+          "status": "passed"
+        },
+        {
+          "name": "refreshes Pending after confirmation while preserving the prescription link in the saved bill",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/AddInventoryItemDialog.test.tsx",
+      "tests": [
+        {
+          "name": "AddInventoryItemDialog Form validation for required fields should display required field indicators",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Form validation for required fields should not submit form with empty required fields",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Form validation for required fields should submit form with all required fields filled",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Number input conversions should convert string prices to numbers on submit",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Number input conversions should convert string quantities to integers on submit",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Number input conversions should convert GST rate string to number on submit",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Date picker functionality should include expiry date in submission when selected",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Date picker functionality should not include expiry date if not provided",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Checkbox state management should handle requiresPrescription checkbox state",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Checkbox state management should handle isControlled checkbox state",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Checkbox state management should default checkboxes to false",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Select dropdown enum values should have correct type options in dropdown",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Select dropdown enum values should have correct unit options in dropdown",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Select dropdown enum values should default type to MEDICINE",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Select dropdown enum values should default unit to PIECES",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog API call with correct payload should send complete payload with all fields",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Success callback and dialog close should call onSuccess and onOpenChange after successful submission",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Success callback and dialog close should reset form after successful submission",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Error handling and display should display error message on API failure",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Error handling and display should not call onSuccess on API failure",
+          "status": "passed"
+        },
+        {
+          "name": "AddInventoryItemDialog Error handling and display should disable submit button while loading",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/MedicalVisitForm.saving.test.tsx",
+      "tests": [
+        {
+          "name": "autosaves editor-only notes and includes them in the recoverable draft",
+          "status": "passed"
+        },
+        {
+          "name": "does not mark newer edits saved when an older request finishes",
+          "status": "passed"
+        },
+        {
+          "name": "keeps notes in the local draft and reports a rejected save",
+          "status": "passed"
+        },
+        {
+          "name": "saves editor-only notes through the explicit Save Draft action",
+          "status": "passed"
+        },
+        {
+          "name": "stops automatic retries when authentication expires",
+          "status": "passed"
+        },
+        {
+          "name": "does not repeatedly resubmit a rejected draft (HTTP 400)",
+          "status": "passed"
+        },
+        {
+          "name": "does not repeatedly resubmit a rejected draft (HTTP 403)",
+          "status": "passed"
+        },
+        {
+          "name": "does not repeatedly resubmit a rejected draft (HTTP 404)",
+          "status": "passed"
+        },
+        {
+          "name": "does not repeatedly resubmit a rejected draft (HTTP 409)",
+          "status": "passed"
+        },
+        {
+          "name": "does not repeatedly resubmit a rejected draft (HTTP 422)",
+          "status": "passed"
+        },
+        {
+          "name": "saves all parent-form sections together, including independent subjective and assessment notes",
+          "status": "passed"
+        },
+        {
+          "name": "keeps the latest vitals-tab edit when the prescription editor holds an older value",
+          "status": "passed"
+        },
+        {
+          "name": "saves the full current form and returns the confirmed visit ID before export",
+          "status": "passed"
+        },
+        {
+          "name": "creates a new visit with no complaints before export (subjective: \"\")",
+          "status": "passed"
+        },
+        {
+          "name": "creates a new visit with no complaints before export (subjective: \"History entered without a chief complaint\")",
+          "status": "passed"
+        },
+        {
+          "name": "preserves an existing saved General consultation complaint on an unrelated edit",
+          "status": "passed"
+        },
+        {
+          "name": "blocks export if newer form edits arrive while saving",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PharmacyInvoiceBuilder.search.test.tsx",
+      "tests": [
+        {
+          "name": "uses shared autocomplete order, labels spelling suggestions, and requires Add before changing the invoice",
+          "status": "passed"
+        },
+        {
+          "name": "discards an older response after the query changes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PharmacyInvoice.print-names.test.tsx",
+      "tests": [
+        {
+          "name": "cleans draft and saved billing previews with standard print data while retaining catalog identities",
+          "status": "passed"
+        },
+        {
+          "name": "cleans draft and saved billing previews with legacy print data while retaining catalog identities",
+          "status": "passed"
+        },
+        {
+          "name": "cleans saved-invoice View Invoice output",
+          "status": "passed"
+        },
+        {
+          "name": "cleans saved-invoice Download Invoice output",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/lib/api.retry.test.ts",
+      "tests": [
+        {
+          "name": "ApiClient idempotent save retries retries a transient PATCH only when an idempotency key is present",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries does not retry a non-idempotent PATCH",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries keeps the purchase create key across a failed save and manual retry",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries generates an idempotency key for prescription updates",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries generates an idempotency key for prescription template saves",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries creates a prescription and then verifies a non-empty server PDF",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries does not request a PDF when prescription creation returns no ID",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries rejects invalid PDF bytes or a mismatched byte count",
+          "status": "passed"
+        },
+        {
+          "name": "ApiClient idempotent save retries rejects invalid PDF bytes or a mismatched byte count",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseHelp.test.tsx",
+      "tests": [
+        {
+          "name": "opens help on keyboard focus and dismisses with Escape without hiding the action",
+          "status": "passed"
+        },
+        {
+          "name": "opens and closes by tapping without submitting the surrounding form",
+          "status": "passed"
+        },
+        {
+          "name": "opens on hover and pairs status colors with readable labels",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/StockEditDialog.test.tsx",
+      "tests": [
+        {
+          "name": "submits the selected batch stock with its revision and reason",
+          "status": "passed"
+        },
+        {
+          "name": "submits the selected batch price with its revision and reason",
+          "status": "passed"
+        },
+        {
+          "name": "blocks invalid or unchanged counts: ",
+          "status": "passed"
+        },
+        {
+          "name": "blocks invalid or unchanged counts: -1",
+          "status": "passed"
+        },
+        {
+          "name": "blocks invalid or unchanged counts: 1.5",
+          "status": "passed"
+        },
+        {
+          "name": "blocks invalid or unchanged counts: 1",
+          "status": "passed"
+        },
+        {
+          "name": "blocks invalid or unchanged counts: 10",
+          "status": "passed"
+        },
+        {
+          "name": "keeps inputs after failure so the user can retry",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/hooks/usePrescriptionSignature.test.tsx",
+      "tests": [
+        {
+          "name": "remembers checked and unchecked choices across visits, isolated by doctor",
+          "status": "passed"
+        },
+        {
+          "name": "discards late responses from another doctor and refreshes after signature replacement",
+          "status": "passed"
+        },
+        {
+          "name": "reports a failed signature read and allows retry without forgetting the choice",
+          "status": "passed"
+        },
+        {
+          "name": "preserves the original 548 \u00d7 350 aspect ratio in bounded print dimensions",
+          "status": "passed"
+        },
+        {
+          "name": "preserves the original 1000 \u00d7 100 aspect ratio in bounded print dimensions",
+          "status": "passed"
+        },
+        {
+          "name": "preserves the original 100 \u00d7 500 aspect ratio in bounded print dimensions",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/InventoryRegimenFields.test.tsx",
+      "tests": [
+        {
+          "name": "saves optional defaults when adding inventory and resets them after saving",
+          "status": "passed"
+        },
+        {
+          "name": "loads, edits and clears defaults on a legacy consumable linked to a medicine",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseManualMatchSearch.test.tsx",
+      "tests": [
+        {
+          "name": "PurchaseManualMatchSearch discards a late result after clearing the search and never selects it",
+          "status": "passed"
+        },
+        {
+          "name": "PurchaseManualMatchSearch shows search failure instead of asserting there is no matching product",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PharmacyCounterCockpit.stock.test.tsx",
+      "tests": [
+        {
+          "name": "Refresh rechecks active stock after Inventory changes",
+          "status": "passed"
+        },
+        {
+          "name": "shows a retryable error when refreshed stock cannot be read",
+          "status": "passed"
+        },
+        {
+          "name": "refreshes when another pharmacy action announces an inventory change",
+          "status": "passed"
+        },
+        {
+          "name": "ignores a delayed stock response after the selected prescription changes",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/WorkspaceStock.batches.test.tsx",
+      "tests": [
+        {
+          "name": "defaults to all batches, colors depleted history and keeps the existing search when filtering",
+          "status": "passed"
+        },
+        {
+          "name": "uses the displayed scope for a count and clears selections when scope changes",
+          "status": "passed"
+        },
+        {
+          "name": "preserves explicit low/zero-stock deep links rather than hiding their results",
+          "status": "passed"
+        },
+        {
+          "name": "defaults an applied search to best match and explains typo suggestions without replacing the query",
+          "status": "passed"
+        },
+        {
+          "name": "shows an unverified ledger and submits confirmed identity recovery with its revision",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/PurchaseDocumentActions.test.tsx",
+      "tests": [
+        {
+          "name": "routes a posted correction to its linked return while keeping retained originals and exports visible",
+          "status": "passed"
+        },
+        {
+          "name": "saves metadata with the current action version and explains that historic totals stay unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "shows actual actor/time logs and opens the exact linked receipt",
+          "status": "passed"
+        },
+        {
+          "name": "keeps read-only users out of mutations and shows failures with a retry action",
+          "status": "passed"
+        },
+        {
+          "name": "reports a malformed response without crashing the purchase editor",
+          "status": "passed"
+        },
+        {
+          "name": "keeps linked credit draft identity stable for a bill and distinct across source bills",
+          "status": "passed"
+        },
+        {
+          "name": "opens eligible credits for this posted supplier bill with allocation permission true",
+          "status": "passed"
+        },
+        {
+          "name": "opens eligible credits for this posted supplier bill with allocation permission false",
+          "status": "passed"
+        },
+        {
+          "name": "hides supplier credit access without ledger-read permission or before posting",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PrescriptionDispensingQueue.stock.test.tsx",
+      "tests": [
+        {
+          "name": "shows every line, including the fourth healthy item and unknown quantity for unlinked items",
+          "status": "passed"
+        },
+        {
+          "name": "refreshes stock and matching to show updated quantities",
+          "status": "passed"
+        },
+        {
+          "name": "remembers an explicit choice and refreshes the same medicine for both patients",
+          "status": "passed"
+        },
+        {
+          "name": "reports failed stock reads without presenting zeros or perpetual Checking",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/AgenticPharmacyDock.test.tsx",
+      "tests": [
+        {
+          "name": "AgenticPharmacyDock chat input shortcuts sends the current message on Enter",
+          "status": "passed"
+        },
+        {
+          "name": "AgenticPharmacyDock chat input shortcuts keeps Shift+Enter available for multiline input",
+          "status": "passed"
+        },
+        {
+          "name": "AgenticPharmacyDock chat input shortcuts handles paste into the controlled chat textarea",
+          "status": "passed"
+        },
+        {
+          "name": "AgenticPharmacyDock chat input shortcuts keeps clipboard shortcuts inside the chat textarea",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/appointments/AppointmentScheduler.conflict.test.tsx",
+      "tests": [
+        {
+          "name": "AppointmentScheduler - conflict handling (toast) shows toast with suggested alternative slots on conflict",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/src/components/pharmacy/integrity-legacy-audit.test.tsx",
+      "tests": [
+        {
+          "name": "routes old audit users to versioned Counts without exposing or submitting retired adjustments",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/InventoryPresentation.test.tsx",
+      "tests": [
+        {
+          "name": "names an icon action, portals its keyboard tooltip and dismisses with Escape",
+          "status": "passed"
+        },
+        {
+          "name": "supports hover help and invokes only its action inside a form",
+          "status": "passed"
+        },
+        {
+          "name": "keeps guidance collapsed until requested, with posting status outside",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/InventoryUpdates.test.tsx",
+      "tests": [
+        {
+          "name": "pages the approval queue without loading the full drug catalog",
+          "status": "passed"
+        },
+        {
+          "name": "distinguishes a queue failure from no pending edits",
+          "status": "passed"
+        },
+        {
+          "name": "lets DOCTOR review and announces stock changes only for successful approval: approve",
+          "status": "passed"
+        },
+        {
+          "name": "lets DOCTOR review and announces stock changes only for successful approval: reject",
+          "status": "passed"
+        },
+        {
+          "name": "lets DOCTOR review and announces stock changes only for successful approval: failure",
+          "status": "passed"
+        },
+        {
+          "name": "lets ADMIN review and announces stock changes only for successful approval: approve",
+          "status": "passed"
+        },
+        {
+          "name": "lets ADMIN review and announces stock changes only for successful approval: reject",
+          "status": "passed"
+        },
+        {
+          "name": "lets ADMIN review and announces stock changes only for successful approval: failure",
+          "status": "passed"
+        },
+        {
+          "name": "lets OWNER review and announces stock changes only for successful approval: approve",
+          "status": "passed"
+        },
+        {
+          "name": "lets OWNER review and announces stock changes only for successful approval: reject",
+          "status": "passed"
+        },
+        {
+          "name": "lets OWNER review and announces stock changes only for successful approval: failure",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/usePatientHistory.test.tsx",
+      "tests": [
+        {
+          "name": "does not show another patient when a stale request resolves",
+          "status": "passed"
+        },
+        {
+          "name": "reports an error separately from empty history and supports retry",
+          "status": "passed"
+        },
+        {
+          "name": "refreshes after a saved visit or prescription",
+          "status": "passed"
+        },
+        {
+          "name": "filters past empty visits without changing the fetched records",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/src/components/appointments/AppointmentsCalendar.spec.tsx",
+      "tests": [
+        {
+          "name": "AppointmentsCalendar booking flow books when clicking a free slot and confirming",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/ReplenishmentTargets.test.tsx",
+      "tests": [
+        {
+          "name": "restores Today OPEN status and all URL filters, exports only the full matching scope, and navigates filter changes",
+          "status": "passed"
+        },
+        {
+          "name": "requires explicit row selection, before/after review and reason, and sends only selected rows with both revisions",
+          "status": "passed"
+        },
+        {
+          "name": "reviews multiple selected rows atomically and retains edits on a stale-version rejection",
+          "status": "passed"
+        },
+        {
+          "name": "read-only viewers can inspect saved units and history without changing target values",
+          "status": "passed"
+        },
+        {
+          "name": "ignores a slow previous URL scope so list and export cannot revert to stale records",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/src/components/appointments/AppointmentBookingDialog.spec.tsx",
+      "tests": [
+        {
+          "name": "AppointmentBookingDialog shows validation error when required fields missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentBookingDialog calls onConfirm with default derived slot when confirming",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/PatientHistoryVisitCard.test.tsx",
+      "tests": [
+        {
+          "name": "PatientHistoryVisitCard keeps visits with complaints [] available in history",
+          "status": "passed"
+        },
+        {
+          "name": "PatientHistoryVisitCard keeps visits with complaints [[Object]] available in history",
+          "status": "passed"
+        },
+        {
+          "name": "PatientHistoryVisitCard shows a collapsed summary by default and expands into full details",
+          "status": "passed"
+        },
+        {
+          "name": "renders every clinical field when expanded and uses the appointment day",
+          "status": "passed"
+        },
+        {
+          "name": "labels an appointment without a visit and never offers to resume it as a visit",
+          "status": "passed"
+        },
+        {
+          "name": "shows nested clinical fields as labeled rows and links every photo to its full size",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/DistributorAnalytics.test.tsx",
+      "tests": [
+        {
+          "name": "DistributorAnalytics renders distributor totals, product effective cost, and discount-drop alerts",
+          "status": "passed"
+        },
+        {
+          "name": "DistributorAnalytics sends filters when refreshed",
+          "status": "passed"
+        },
+        {
+          "name": "DistributorAnalytics shows a friendly empty state when the API returns no rows",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseSupplierReview.test.tsx",
+      "tests": [
+        {
+          "name": "requires verification, prevents rapid duplicate saves and confirms that stock is unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "invalidates verification after changing either identity field",
+          "status": "passed"
+        },
+        {
+          "name": "selects an existing supplier instead of creating a duplicate identity",
+          "status": "passed"
+        },
+        {
+          "name": "shows both GSTINs before selecting a same-name supplier with different details",
+          "status": "passed"
+        },
+        {
+          "name": "distinguishes list failure from an empty directory and supports retry",
+          "status": "passed"
+        },
+        {
+          "name": "keeps supplier creation unavailable without permission and explains the manual route",
+          "status": "passed"
+        },
+        {
+          "name": "keeps values and verification on a failed save so an idempotent retry is available",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/src/components/pharmacy/PharmacyInventoryStarterImport.test.tsx",
+      "tests": [
+        {
+          "name": "shows every failed row and a failure toast in the inventory page compact uploader",
+          "status": "passed"
+        },
+        {
+          "name": "rejects oversized files before submitting an import",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/VisitsPage.test.tsx",
+      "tests": [
+        {
+          "name": "VisitsPage renders loading state initially",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage shows setup when patient and doctor IDs are loaded",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage shows empty-state when no patients are found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage shows empty-state when no doctors are found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage handles API errors gracefully with empty-state",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage calls correct API endpoints with proper parameters",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage does not automatically open the first available patient",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage handles missing patient ID in response",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsPage handles missing doctor ID in response",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseProductDetails.test.tsx",
+      "tests": [
+        {
+          "name": "Invoice product details requires an explicit kind and saves a cosmetic without invented clinical values",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product details requires actual medicine fields and an explicit prescription choice",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product details clears inherited medicine defaults when correcting an existing cosmetic",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product details prevents duplicate saves and keeps entered values available after failure",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/ReplenishmentCenter.test.tsx",
+      "tests": [
+        {
+          "name": "sends only selected target line IDs with the saved revision and explicit Shortbook sync",
+          "status": "passed"
+        },
+        {
+          "name": "shows a failed list load without an empty or zero-result claim",
+          "status": "passed"
+        },
+        {
+          "name": "loads every list page and can open a request beyond the first 100",
+          "status": "passed"
+        },
+        {
+          "name": "passes authoritative remaining receipt context to Purchases and displays previous receipts",
+          "status": "passed"
+        },
+        {
+          "name": "settings preserve approval controls and submit changed bounce inputs",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseSourcePreview.test.tsx",
+      "tests": [
+        {
+          "name": "shows captured and edited values, rotates the original and supports image-to-field links",
+          "status": "passed"
+        },
+        {
+          "name": "changes to the source page and releases rendered image URLs",
+          "status": "passed"
+        },
+        {
+          "name": "locates legacy sources only after an explicit click and reports failure without losing the original link",
+          "status": "passed"
+        },
+        {
+          "name": "shows every PDF page even before an older upload has source locations",
+          "status": "passed"
+        },
+        {
+          "name": "never remaps a removed/reordered row by array position, or crosses documents",
+          "status": "passed"
+        },
+        {
+          "name": "keeps source navigation usable after the invoice form is locked",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/VisitPhotos.history.test.tsx",
+      "tests": [
+        {
+          "name": "shows previous visit and older unattached photos even when the current visit is empty",
+          "status": "passed"
+        },
+        {
+          "name": "shows a loading failure instead of falsely claiming no photos and supports retry",
+          "status": "passed"
+        },
+        {
+          "name": "does not hide successfully loaded visit photos when the draft archive request fails",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/src/components/appointments/DoctorDayCalendar.spec.tsx",
+      "tests": [
+        {
+          "name": "DoctorDayCalendar renders non-cancelled appointments from schedule",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/VisitsPage.history-navigation.test.tsx",
+      "tests": [
+        {
+          "name": "keeps setup and history accessible after selecting a patient",
+          "status": "passed"
+        },
+        {
+          "name": "opens a patient deep link and allows returning to setup",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/lib/whatsapp-settings.test.ts",
+      "tests": [
+        {
+          "name": "whatsapp settings helpers parses settings from string metadata safely",
+          "status": "passed"
+        },
+        {
+          "name": "whatsapp settings helpers builds unique selectable template options",
+          "status": "passed"
+        },
+        {
+          "name": "whatsapp settings helpers round-trips template selection values",
+          "status": "passed"
+        },
+        {
+          "name": "whatsapp settings helpers validates required template fields only when template mode is on",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/users/DoctorSignatureSettings.test.tsx",
+      "tests": [
+        {
+          "name": "uploads, previews, replaces and removes the current doctor\u2019s signature",
+          "status": "passed"
+        },
+        {
+          "name": "rejects signature.svg without uploading",
+          "status": "passed"
+        },
+        {
+          "name": "rejects large.png without uploading",
+          "status": "passed"
+        },
+        {
+          "name": "retains the saved signature when a replacement fails",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/WorkflowDocumentEditor.recovery.test.tsx",
+      "tests": [
+        {
+          "name": "starts a fresh count from DRAFT without saving old measurements",
+          "status": "passed"
+        },
+        {
+          "name": "starts a fresh count from CANCELLED without saving old measurements",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseOcrChecklist.test.tsx",
+      "tests": [
+        {
+          "name": "Purchase OCR review controls combines old AUTO/OCR duplicates and missing-field variants into one issue per line",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls never groups checks belonging to different invoice rows",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls confirms duplicate reasons for the same field together",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls requires the missing value and an explicit check before resolving a flag",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls hides retired missing-manufacturer checks while retaining a reported manufacturer disagreement",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls requires a valid GSTIN and credit due date before those checks can be confirmed",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls directs missing-page issues to a new upload instead of a confirmation that discards the issue",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase OCR review controls keeps confirmation disabled when the draft is locked or the user cannot edit",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/StockDetailsEditor.test.tsx",
+      "tests": [
+        {
+          "name": "compares corrections with the saved date and requires a reason before save",
+          "status": "passed"
+        },
+        {
+          "name": "ignores time-of-day differences and does not force unknown legacy details to be invented",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/prescription-learning.test.ts",
+      "tests": [
+        {
+          "name": "buildLearnedPrescriptionPlan prefers this patient\u2019s last similar plan over generic doctor patterns",
+          "status": "passed"
+        },
+        {
+          "name": "buildLearnedPrescriptionPlan learns the most common doctor combo when patient history is sparse",
+          "status": "passed"
+        },
+        {
+          "name": "buildLearnedPrescriptionPlan falls back to a saved server order set when live history is thin",
+          "status": "passed"
+        },
+        {
+          "name": "buildLearnedPrescriptionPlan matches dermatology shorthand so diagnosis autopilot still fires",
+          "status": "passed"
+        },
+        {
+          "name": "buildLearnedMedicationSuggestion prefills the usual sig from this patient\u2019s last similar plan",
+          "status": "passed"
+        },
+        {
+          "name": "buildLearnedMedicationSuggestion learns the most common doctor sig for the selected drug",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/PurchaseReviewSummary.test.tsx",
+      "tests": [
+        {
+          "name": "distinguishes missing totals, mismatches and matched totals without claiming human verification",
+          "status": "passed"
+        },
+        {
+          "name": "opens a collapsed correction target and moves keyboard focus to it",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/StocktakeTools.test.tsx",
+      "tests": [
+        {
+          "name": "exports the complete template and opens the imported draft for review",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/lib/api-diagnostics.test.ts",
+      "tests": [
+        {
+          "name": "connects a patient validation error to the server reference without recording private content",
+          "status": "passed"
+        },
+        {
+          "name": "keeps one reference across transient retries and records the recovered save",
+          "status": "passed"
+        },
+        {
+          "name": "times out a stalled patient save without blindly retrying the create",
+          "status": "passed"
+        },
+        {
+          "name": "keeps the timeout active while the response body is arriving",
+          "status": "passed"
+        },
+        {
+          "name": "does not impose the save timeout on transcription or override an explicit timeout",
+          "status": "passed"
+        },
+        {
+          "name": "records a final network failure even if an earlier retry received an HTTP response",
+          "status": "passed"
+        },
+        {
+          "name": "records network failures separately",
+          "status": "passed"
+        },
+        {
+          "name": "records invalid-json failures separately",
+          "status": "passed"
+        },
+        {
+          "name": "bounds and sanitizes stored diagnostics and tolerates storage failures",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/pharmacy/purchase-invoice-review.test.ts",
+      "tests": [
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"AUTO: Line 1: OCR confidence must be at least 98% for automatic stock intake; review this line manually.\",\"AUTO: Line 1: product master is incomplete for Moisturex; missing composition1, strength\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"AUTO: Header net payable mismatch: taxable+GST+TCS+rounding is 120, supplied net payable is 112\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"This historical invoice predates the stock snapshot.\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: []",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations labels saved blockers without asserting success: [\"Unexpected validation issue\"]",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations keeps a supplier identity mismatch distinct from a missing directory match",
+          "status": "passed"
+        },
+        {
+          "name": "purchase failure explanations never lets old blockers override a posted outcome or imply another stock receipt",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/save-error-message.test.ts",
+      "tests": [
+        {
+          "name": "Save API error messages turns a real API validation response into text while preserving every message",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages does not duplicate a reference or render an untrusted reference value",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages always returns text for {}",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages always returns text for {\"body\":{\"message\":\"Visit not found\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages always returns text for {\"body\":{\"message\":[]},\"message\":\"HTTP 400\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages always returns text for {\"body\":{\"message\":{\"unexpected\":true}}}",
+          "status": "passed"
+        },
+        {
+          "name": "Save API error messages always returns text for \"Plain error\"",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/history-visibility.test.ts",
+      "tests": [
+        {
+          "name": "hides only a past visit with no saved details",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"appointment\",\"createdAt\":\"2026-09-04T10:00:00Z\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"createdAt\":\"2026-09-04T10:00:00Z\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\",\"createdAt\":\"invalid\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\",\"createdAt\":\"2026-09-05T00:00:00Z\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\",\"createdAt\":\"2026-09-06T00:00:00Z\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\",\"createdAt\":\"2026-09-04T10:00:00Z\",\"appointment\":{\"date\":\"2026-09-05T00:00:00Z\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains appointments, unknown dates, and current/future visits: {\"entryType\":\"visit\",\"createdAt\":\"2026-09-04T10:00:00Z\",\"appointment\":{\"date\":\"invalid\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "uses the appointment day even when the visit was created later",
+          "status": "passed"
+        },
+        {
+          "name": "uses India midnight to distinguish past visits from today",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":[{\"complaint\":\"No new complaints\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":[{\"complaint\":\"General consultation\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":[{\"complaint\":\"Photo documentation visit\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":\"A brief complaint\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":{\"complaint\":\"Legacy complaint\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"history\":{\"fever\":false}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"labOrders\":[{\"tests\":[\"CBC\"]}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"deviceLogs\":[{\"deviceModel\":\"Recorded device\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"consents\":[{\"text\":\"Signed consent\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"appointmentNotes\":\"A saved note\"}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"history\":{\"pastHistory\":\"Recorded history\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":[{\"complaint\":\"Rash\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"complaints\":[{\"complaint\":\"General consultation\",\"notes\":\"Specific observation\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"plan\":{\"dermatology\":{\"labResults\":{\"CBC\":{\"value\":\"12\"}}}}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"exam\":{\"dermatology\":{\"itchScore\":0}}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"prescriptionItems\":[{\"drugName\":\"Medicine\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"photos\":1}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"scribeJson\":{\"notes\":\"Recorded text\"}}",
+          "status": "passed"
+        },
+        {
+          "name": "retains every record with saved content: {\"appointment\":{\"notes\":\"A saved booking note\"}}",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/lib/signature-images.test.ts",
+      "tests": [
+        {
+          "name": "waits for signature decoding before export",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an unreadable signature instead of silently exporting without it",
+          "status": "passed"
+        },
+        {
+          "name": "allows unsigned output without waiting for an image",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/prescription-learning.regression.test.ts",
+      "tests": [
+        {
+          "name": "accepts supported two-letter shorthand AV",
+          "status": "passed"
+        },
+        {
+          "name": "accepts supported two-letter shorthand AD",
+          "status": "passed"
+        },
+        {
+          "name": "accepts supported two-letter shorthand SD",
+          "status": "passed"
+        },
+        {
+          "name": "accepts supported two-letter shorthand LP",
+          "status": "passed"
+        },
+        {
+          "name": "reads legacy patient diagnosis from prescription notes",
+          "status": "passed"
+        },
+        {
+          "name": "excludes the current visit from the doctor history as well as patient history",
+          "status": "passed"
+        },
+        {
+          "name": "counts repeated complete regimens separately from a newer different dose",
+          "status": "passed"
+        },
+        {
+          "name": "changes plan identity when dosage or application instructions change",
+          "status": "passed"
+        },
+        {
+          "name": "does not borrow investigations or follow-up from a different regimen",
+          "status": "passed"
+        },
+        {
+          "name": "does not copy a sig between drug strengths or similar name prefixes",
+          "status": "passed"
+        },
+        {
+          "name": "requires review when only one diagnosis in a combined plan matches",
+          "status": "passed"
+        },
+        {
+          "name": "does not match negated diagnoses or erase severity for automatic application",
+          "status": "passed"
+        },
+        {
+          "name": "does not count the same prescription twice as independent evidence",
+          "status": "passed"
+        },
+        {
+          "name": "infers review intervals only from explicit follow-up instructions, not treatment duration or expiry",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/visits/patient-history-api.test.ts",
+      "tests": [
+        {
+          "name": "Complete patient history loading continues beyond one page and forwards appointment inclusion",
+          "status": "passed"
+        },
+        {
+          "name": "Complete patient history loading does not silently return a partial timeline when a later page fails",
+          "status": "passed"
+        },
+        {
+          "name": "Complete patient history loading does not turn empty draft controls into deletion of saved clinical fields",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/inventory/stock-batch-view.test.ts",
+      "tests": [
+        {
+          "name": "shows all batches by default and preserves an explicit view",
+          "status": "passed"
+        },
+        {
+          "name": "distinguishes depleted balances from expired, held and unverified stock without choosing by recency",
+          "status": "passed"
+        },
+        {
+          "name": "formats month-end expiry as the stored UTC calendar date, including in India",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "frontend/__tests__/lib/speech-to-text.test.ts",
+      "tests": [
+        {
+          "name": "speech-to-text helpers prefers the full transcript for doctor dictation fields",
+          "status": "passed"
+        },
+        {
+          "name": "speech-to-text helpers prefers patient-only text for patient-focused fields when available",
+          "status": "passed"
+        },
+        {
+          "name": "speech-to-text helpers appends text without leaving duplicate whitespace",
+          "status": "passed"
+        },
+        {
+          "name": "speech-to-text helpers formats server errors into user-facing messages",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

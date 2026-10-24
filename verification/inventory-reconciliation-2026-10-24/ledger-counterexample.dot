@@ -1,0 +1,18 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Explicit count checkpoint resolves the baseline, not unknown history";
+a [label="Before\nq=10, old ledger=8\nVerified physical P=7",fillcolor="#fef3c7"];
+b [label="Quantity adjustment alone\ndelta=−3\nq=7, old ledger=5\nHistorical gap stays 2",fillcolor="#fee2e2"];
+c [label="Same COUNT transaction\nCheckpoint quantity=7\nRecord covered movement IDs\nRetain old entries unchanged",fillcolor="#dbeafe"];
+d [label="Verified current ledger\nexpected = 7 + later signed deltas\nq=7, expected=7",fillcolor="#d1fae5"];
+e [label="Later stock drift or unknown sign\nDISCREPANCY / UNVERIFIED\nFresh count available",fillcolor="#fef3c7"];
+a -> b [label="Old quantity-only behavior"];
+a -> c [label="Current atomic behavior"];
+c -> d;
+d -> e [label="Independent comparison"];
+e -> c [label="New verified physical count"];
+
+}

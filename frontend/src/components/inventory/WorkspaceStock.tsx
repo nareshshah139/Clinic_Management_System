@@ -57,6 +57,11 @@ type Props = {
  * The stock list MUST use clinic inventory only and expose batch price/stock proposals to
  * submitting staff. Proposals MUST wait for approval; refresh events MUST reload server balances.
  */
+/**
+ * @cc [owner:nareshshah139] stock-recovery-evidence-ui
+ * The detail view MUST distinguish an unverified ledger from checkpoint agreement; resolving
+ * ambiguous product links MUST require an explicit product, revision, reason and confirmation.
+ */
 export function WorkspaceStock({
   query,
   navigate,
@@ -342,6 +347,33 @@ export function WorkspaceStock({
                 Margin {item.margin == null ? "unknown" : `${item.margin}%`}.{" "}
                 {item.priceBasis}.
               </p>
+              {item.drugs?.length > 1 && capabilities?.kinds?.COUNT?.write && (
+                <form key={`${item.id}:${item.updatedAt}`} className="space-y-3 rounded border p-4 print:hidden" onSubmit={async e => {
+                  e.preventDefault();
+                  const values = new FormData(e.currentTarget);
+                  setBusy(true); setError("");
+                  try {
+                    await apiClient.post("/inventory/workspace/stocktake/resolve-identity", {
+                      itemId: item.id, updatedAt: item.updatedAt, productId: values.get("productId"),
+                      reason: values.get("reason"), confirmed: values.get("confirmed") === "on",
+                    });
+                    await load();
+                    setNotice("Product identity resolved. Verify the physical count before using this batch.");
+                  } catch (error: any) { setError(error.message); }
+                  finally { setBusy(false); }
+                }}>
+                  <p className="font-medium">Resolve this batch’s product identity</p>
+                  <label className="block">Verified product
+                    <select name="productId" required className="ml-2 rounded border p-2" defaultValue="">
+                      <option value="" disabled>Select the product on the physical pack</option>
+                      {item.drugs.map((drug: any) => <option key={drug.id} value={drug.id}>{drug.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="block">Reason <input name="reason" required maxLength={500} className="ml-2 rounded border p-2" /></label>
+                  <label className="block"><input name="confirmed" type="checkbox" required /> I verified the physical product and the existing {item.unit} stock unit and pack size.</label>
+                  <Button disabled={busy}>Resolve product identity</Button>
+                </form>
+              )}
               <div className="flex flex-wrap gap-2 print:hidden">
                 {canSubmitEdits && <>
                   <Button variant="outline" onClick={() => setStockEdit({ item, field: 'stock' })}>Edit stock</Button>
@@ -594,10 +626,10 @@ export function WorkspaceStock({
               {["ledger", "sales"].includes(tab) && (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    Opening balance:{" "}
-                    {detail.openingBalance ??
-                      "Unresolved historical adjustment direction"}
-                    . Quantities use {item.unit}.
+                    {detail.ledger?.checkpoint
+                      ? `Verified count baseline: ${detail.ledger.checkpoint.quantity}. Ledger status: ${detail.ledger.status}. Expected stock: ${detail.ledger.expectedStock ?? "unknown"}. Difference: ${detail.ledger.difference ?? "unknown"}.`
+                      : "Ledger unverified: record a physical stock count to establish a baseline."}
+                    {" "}Quantities use {item.unit}. Earlier movements remain historical evidence.
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">

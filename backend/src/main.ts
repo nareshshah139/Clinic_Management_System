@@ -17,8 +17,8 @@ async function bootstrap() {
 
   if (useMinimal) {
     const mod = (await import(
-      './app.minimal.module'
-    )) as typeof import('./app.minimal.module');
+      './app.minimal.module.js'
+    )) as typeof import('./app.minimal.module.js');
     logger.log('Starting Clinic Management System backend (minimal mode)');
     const app = await NestFactory.create(
       mod.AppMinimalModule,
@@ -61,7 +61,7 @@ async function bootstrap() {
     return;
   }
 
-  const mod = (await import('./app.module')) as typeof import('./app.module');
+  const mod = (await import('./app.module.js')) as typeof import('./app.module.js');
   logger.log('Starting Clinic Management System backend');
   const app = await NestFactory.create(mod.AppModule, new ExpressAdapter());
   installHttpObservability(app);

@@ -1,0 +1,21 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Reviewed purchase recovery without double intake";
+draft [label="DRAFT / OCR review / reconciliation failed\nCorrect identity, receipt and quantities"];
+review [label="REVIEWED\nReceipt validated before locking",fillcolor="#dbeafe"];
+invalid [label="Legacy invalid REVIEWED\nor receipt changed after review",fillcolor="#fef3c7"];
+commit [label="STOCK_COMMITTED\nOne quantity effect\nLinked receipt: price update only",fillcolor="#d1fae5"];
+count [label="New physical count\nExplicit baseline if needed"];
+cancel [label="CANCELLED\nRetained historical record"];
+draft -> review [label="Resolve flags + validate receipt"];
+review -> commit [label="Validate again + commit once"];
+review -> draft [label="Reopen: audit + revision\ncreate AND review permission"];
+invalid -> draft [label="Same audited reopen"];
+review -> invalid [label="Dependency changed\nCommit fails atomically",style=dashed];
+commit -> count [label="Correction by linked workflow\nor verified physical count"];
+cancel -> draft [label="New intake for actual goods\nnew request identity",style=dashed];
+
+}

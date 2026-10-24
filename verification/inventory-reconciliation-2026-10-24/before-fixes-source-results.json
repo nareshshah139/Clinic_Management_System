@@ -1,0 +1,38 @@
+{
+  "scope": "Actual service methods with in-memory Prisma substitutes. No HTTP, real database, production data, or database concurrency test. Private helpers are exercised directly.",
+  "results": [
+    {
+      "status": "PASS",
+      "claim": "Real movement helper records signed deltas and rejects overdraft"
+    },
+    {
+      "status": "PASS",
+      "claim": "Real COUNT effect calculation reaches the target and does not duplicate the same effect"
+    },
+    {
+      "status": "PASS",
+      "claim": "Real posting validation rejects stale count snapshots"
+    },
+    {
+      "status": "CONFIRMED_GUARD",
+      "claim": "A count below held stock is blocked until holds are resolved"
+    },
+    {
+      "status": "CONFIRMED_COUNTEREXAMPLE",
+      "claim": "Releasing a partly consumed hold blocks its loss reversal; a fresh count repairs quantity but leaves loss provenance unchanged",
+      "trace": [
+        "(q=10,h=0)",
+        "HOLD 5 -> (10,5)",
+        "LOSS 3 from hold -> (7,2)",
+        "RELEASE residual 2 -> (7,0)",
+        "REVERSE loss rejected",
+        "REVERSE released hold rejected",
+        "COUNT physical 10 -> (10,0); loss remains POSTED"
+      ]
+    },
+    {
+      "status": "CONFIRMED_LIMIT",
+      "claim": "An unsigned historical adjustment cannot reconstruct a signed ledger"
+    }
+  ]
+}

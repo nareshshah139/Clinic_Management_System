@@ -33,6 +33,7 @@ describe('InventoryController (Integration)', () => {
     enableShutdownHooks: jest.fn(),
     $transaction: jest.fn(),
     inventoryWorkflowEffect: { count: jest.fn() },
+    inventoryStockOperation: { upsert: jest.fn() },
     inventoryItem: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -45,6 +46,7 @@ describe('InventoryController (Integration)', () => {
       aggregate: jest.fn(),
     },
     stockTransaction: {
+      findUnique: jest.fn(),
       create: jest.fn(),
       findMany: jest.fn(),
       findFirst: jest.fn(),
@@ -103,6 +105,11 @@ describe('InventoryController (Integration)', () => {
     mockAuthGuard.canActivate.mockReturnValue(true);
     mockPrismaService.$transaction.mockImplementation(work => work(mockPrismaService));
     mockPrismaService.inventoryWorkflowEffect.count.mockResolvedValue(0);
+    mockPrismaService.inventoryStockOperation.upsert.mockImplementation(async ({ create }) => create);
+    mockPrismaService.stockTransaction.findUnique.mockResolvedValue(null);
+    mockPrismaService.stockTransaction.update.mockImplementation(async ({ data }) => ({
+      ...(await mockPrismaService.stockTransaction.create.mock.results.at(-1)?.value), ...data,
+    }));
   });
 
   describe('/inventory/items (POST)', () => {
@@ -402,6 +409,7 @@ describe('InventoryController (Integration)', () => {
   describe('/inventory/transactions (POST)', () => {
     it('should create stock transaction', async () => {
       const createTransactionDto = {
+        operationId: 'integration-movement',
         itemId: '550e8400-e29b-41d4-a716-446655440000',
         type: TransactionType.PURCHASE,
         quantity: 20,
@@ -448,6 +456,7 @@ describe('InventoryController (Integration)', () => {
 
     it('should return 404 for non-existent item', async () => {
       const createTransactionDto = {
+        operationId: 'integration-movement',
         itemId: '550e8400-e29b-41d4-a716-446655440001',
         type: TransactionType.PURCHASE,
         quantity: 20,
@@ -521,6 +530,7 @@ describe('InventoryController (Integration)', () => {
   describe('/inventory/adjustments (POST)', () => {
     it('should adjust stock', async () => {
       const adjustmentDto = {
+        operationId: 'integration-adjustment',
         itemId: '550e8400-e29b-41d4-a716-446655440000',
         adjustmentQuantity: 10,
         reason: 'Stock adjustment',

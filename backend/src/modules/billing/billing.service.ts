@@ -23,6 +23,11 @@ import {
 export class BillingService {
   constructor(private prisma: PrismaService, private invoiceNumbers: InvoiceNumbersService) {}
 
+  /**
+   * @cc [owner:nareshshah139,label:security] invoice-visit-scope
+   * A supplied visit MUST belong to the invoice patient in the authenticated branch;
+   * a missing or mismatched visit MUST fail before any invoice is written.
+   */
   async createInvoice(createInvoiceDto: CreateInvoiceDto, branchId: string) {
     try {
       console.log('🔧 BillingService.createInvoice called with:', {
@@ -53,7 +58,7 @@ export class BillingService {
     // Verify visit exists and belongs to branch (if provided)
     if (visitId) {
       const visit = await this.prisma.visit.findFirst({
-        where: { id: visitId, branchId },
+        where: { id: visitId, patientId, patient: { branchId } },
       });
 
       if (!visit) {

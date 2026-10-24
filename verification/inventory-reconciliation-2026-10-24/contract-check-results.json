@@ -1,0 +1,200 @@
+{
+  "tool": "@spolu/cc-check@0.2.0",
+  "commands": [
+    "format",
+    "list"
+  ],
+  "files": [
+    {
+      "file": "backend/src/main.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/appointments/dto/update-appointment.dto.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/appointments/index.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/audit-logs/audit-logs.controller.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/audit-logs/audit-logs.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/auth/auth.controller.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/auth/strategies/jwt.strategy.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/billing/billing.controller.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/billing/billing.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/billing/dto/invoice.dto.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-identity-recovery.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-import.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-ledger.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-stocktake.controller.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-workflow.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-workflow.types.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory-workspace.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/inventory.module.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-import-recovery.database.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.integration.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/notifications/notifications.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/patients/patient-deduplication.service.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/patients/patient-deduplication.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/patients/patients.controller.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/patients/patients.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/prescriptions/dto/prescription.dto.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescription-pdf.pipeline.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/reports/dto/query-reports.dto.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/reports/reports.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/modules/users/users.service.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "backend/src/shared/tests/build-contract-regressions.spec.ts",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "frontend/__tests__/inventory/WorkflowDocumentEditor.recovery.test.tsx",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "frontend/__tests__/inventory/WorkspaceStock.batches.test.tsx",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "frontend/src/components/inventory/WorkflowDocumentEditor.tsx",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "frontend/src/components/inventory/WorkspaceStock.tsx",
+      "format": 0,
+      "list": 0
+    },
+    {
+      "file": "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx",
+      "format": 0,
+      "list": 0
+    }
+  ],
+  "scope": "Changed TS/TSX files on integrated branch; .cjs verification runner manually inspected"
+}

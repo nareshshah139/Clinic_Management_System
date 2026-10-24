@@ -741,6 +741,11 @@ export class InventoryImportService {
    * Existing-batch imports MUST NOT write stock balance or stock status, even when the workbook
    * matches the observed quantity; concurrent sales and adjustments remain authoritative.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] opening-existing-batch-identity-revision
+   * Existing-batch metadata updates MUST reject a changed revision or an additional product link;
+   * rejection MUST leave stock, product links and the row-success marker unchanged.
+   */
   private async upsertImportRow(
     row: InventoryStarterImportRow,
     branchId: string,
@@ -924,6 +929,8 @@ export class InventoryImportService {
           drugs: { some: { id: drug.id } },
         },
       });
+      if (await tx.inventoryItem.count({ where: { id: existingInventory.id, drugs: { some: { id: { not: drug.id } } } } }))
+        throw new BadRequestException('This batch is linked to another product. Review its product identity before importing.');
       const updatePayload: any = {
         name: row.name,
         description: row.description,
@@ -969,7 +976,9 @@ export class InventoryImportService {
       }
 
       await tx.inventoryItem.update({
-        where: { id: existingInventory.id },
+        where: { id: existingInventory.id, branchId, updatedAt: existingInventory.updatedAt,
+          currentStock: existingInventory.currentStock, heldStock: existingInventory.heldStock,
+          metadata: existingInventory.metadata },
         data: updatePayload,
       });
 
@@ -1005,7 +1014,7 @@ export class InventoryImportService {
       };
       await this.saveRowSuccess(tx, row, outcome);
       return outcome;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
   }
 
   /**

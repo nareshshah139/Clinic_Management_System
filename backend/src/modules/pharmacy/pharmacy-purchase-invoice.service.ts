@@ -1182,6 +1182,7 @@ export class PharmacyPurchaseInvoiceService {
       await this.resolvePurchaseLineDrug(prismaAny, item, branchId);
     }
 
+    await this.validateLinkedReceipt(prismaAny, invoice);
     const updated = await prismaAny.pharmacyPurchaseInvoice.update({
       where: { id, branchId, status: invoice.status, updatedAt: invoice.updatedAt },
       data: {
@@ -1328,13 +1329,7 @@ export class PharmacyPurchaseInvoiceService {
       );
     }
 
-    let receipt: any = null;
-    if (invoice.workflowReceiptId) {
-      receipt = await tx.inventoryWorkflowDocument.findFirst({where:{id:invoice.workflowReceiptId,branchId,kind:'INWARD_CHALLAN',status:'POSTED'}});
-      if (!receipt || receipt.supplierGstin !== invoice.distributorGstin) throw new BadRequestException('Select a posted inward challan for this supplier');
-      if (await tx.pharmacyPurchaseInvoice.count({where:{branchId,workflowReceiptId:receipt.id,status:'STOCK_COMMITTED',id:{not:id}}})) throw new ConflictException('This inward challan is already billed');
-      if (receipt.payload.lines.length !== invoice.items.length) throw new BadRequestException('The bill must contain every inward challan line exactly once');
-    }
+    const receipt = await this.validateLinkedReceipt(tx, invoice);
     const receivedIds = new Set<string>();
     const committedItems: Array<{
       lineNumber: number;
@@ -1427,6 +1422,42 @@ export class PharmacyPurchaseInvoiceService {
       ...this.formatPurchaseInvoice(updated),
       committedItems,
     };
+  }
+
+  /**
+   * @cc [owner:nareshshah139] linked-receipt-validation
+   * A linked receipt MUST belong to this branch, be posted and unbilled, and match every
+   * bill line's batch, quantities, expiry, MRP and stock unit before review or stock commit.
+   */
+  private async validateLinkedReceipt(tx: any, invoice: any) {
+    if (!invoice.workflowReceiptId) return null;
+    const receipt = await tx.inventoryWorkflowDocument.findFirst({ where: {
+      id: invoice.workflowReceiptId, branchId: invoice.branchId, kind: 'INWARD_CHALLAN', status: 'POSTED',
+    } });
+    if (!receipt || receipt.supplierGstin !== invoice.distributorGstin) {
+      throw new BadRequestException('Select a posted inward challan for this branch and supplier');
+    }
+    const billed = await tx.pharmacyPurchaseInvoice.count({ where: {
+      branchId: invoice.branchId, workflowReceiptId: receipt.id, status: 'STOCK_COMMITTED', id: { not: invoice.id },
+    } });
+    if (billed) throw new BadRequestException('Inward challan is already billed');
+    const lines = receipt.payload?.lines;
+    if (!Array.isArray(lines) || lines.length !== invoice.items.length) {
+      throw new BadRequestException('Bill lines must match the inward challan');
+    }
+    const used = new Set<string>();
+    for (const item of invoice.items) {
+      const line = lines.find((l: any) => !used.has(l.id) && normalizedIdentity(l.name) === normalizedIdentity(item.productName)
+        && l.batchNumber === item.batchNumber && l.quantity === item.quantityPurchased && (l.freeQuantity || 0) === item.freeQuantity);
+      if (!line) throw new BadRequestException('Bill product, batch, paid and free quantities must match the inward challan');
+      const batch = await tx.inventoryItem.findFirst({ where: { id: line.inventoryId, branchId: invoice.branchId } });
+      if (!batch || batch.unit !== this.mapUnitType(item.packUnitType, item.packSize)
+        || !this.isSamePurchaseBatch(batch, item, this.getExpiryDate(item))) {
+        throw new BadRequestException('Inward challan expiry, MRP or quantity unit differs from the bill');
+      }
+      used.add(line.id);
+    }
+    return receipt;
   }
 
   private async purchaseAudit(tx: any, id: string, branchId: string, userId: string | undefined, action: string, before: any, after: any) {

@@ -1,0 +1,25 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Supported recovery routes preserve document history";
+identity [label="Ambiguous linked products\nVerify physical product + unit"];
+resolved [label="Retain selected existing product\nRevision + reason + audit"];
+legacy [label="Unknown old ledger\nor independently detected drift"];
+count [label="Fresh COUNT\nCurrent snapshot + new observation",fillcolor="#dbeafe"];
+hold [label="Released hold with\nlinked consumer correction"];
+comp [label="Atomic compensation\nReopen original quarantine"];
+purchase [label="Invalid REVIEWED purchase"];
+draft [label="Audited reopen → DRAFT\nCorrect → review → commit"];
+goal [label="Verified inventory baseline\nq = P = checkpoint + later deltas",fillcolor="#d1fae5"];
+identity -> resolved [label="Authorized confirmation"];
+resolved -> count;
+legacy -> count;
+hold -> comp [label="Reverse loss / cancel return"];
+comp -> count [label="Disposition if P < held"];
+purchase -> draft [label="Unposted + current revision"];
+draft -> count [label="Actual goods received"];
+count -> goal [label="Required approval + atomic post"];
+
+}

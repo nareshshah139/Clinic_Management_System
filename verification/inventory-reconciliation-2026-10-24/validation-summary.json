@@ -1,0 +1,70 @@
+{
+  "scope": "Integrated branch based on main 4881ecfbb3d6efcc2568d6e43e67960b6f34fcd2; original checkout validation retained in before-main-* snapshots.",
+  "build": {
+    "command": "npm run build",
+    "result": "PASS",
+    "workspaces": [
+      "shared-types",
+      "frontend",
+      "backend"
+    ],
+    "strict_backend_typecheck": true
+  },
+  "backend": {
+    "passed": 884,
+    "failed": 0,
+    "skipped": 3,
+    "passed_suites": 84,
+    "postgresql_tests_passed": 88,
+    "skipped_tests": [
+      "Purchase invoice real Codex OAuth extraction reads invoice pixels and returns the actual quantities, batch and totals",
+      "Prescription -> saved readback -> PDF pipeline runs the Chromium prescription download workflow",
+      "Doctor signature authorization, uploads and exports runs browser upload, print, PDF, WhatsApp and Email using the supplied PNG"
+    ],
+    "existing_excluded_files": [
+      "<rootDir>/modules/appointments/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.integration.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.service.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.integration.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.service.spec.ts",
+      "<rootDir>/modules/prescriptions/tests/prescriptions.integration.spec.ts",
+      "<rootDir>/modules/reports/tests/reports.service.spec.ts",
+      "<rootDir>/modules/users/tests/users.integration.spec.ts",
+      "<rootDir>/modules/users/tests/users.service.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.integration.spec.ts"
+    ]
+  },
+  "frontend": {
+    "passed": 534,
+    "failed": 0,
+    "skipped": 0,
+    "passed_suites": 63
+  },
+  "contracts": {
+    "tool": "@spolu/cc-check@0.2.0",
+    "source_files": 38,
+    "format": "PASS",
+    "list": "PASS",
+    "semantics": "Changed obligations reviewed alongside implementation and regressions",
+    "unsupported": ".cjs proof runner manually reviewed"
+  },
+  "proofs": {
+    "states": 30,
+    "quantity_bound": 12,
+    "real_service_probes": 22,
+    "result": "PASS within explicit model assumptions",
+    "unconditional_completion": "Not claimed",
+    "historic_reconstruction": "Not claimed"
+  },
+  "node20_workspace_clean_install_dry_run": "PASS",
+  "limitations": [
+    "Three opt-in live/browser tests skipped",
+    "Thirteen legacy backend files remain excluded by existing Jest configuration",
+    "Existing Next.js build skips lint",
+    "Docker image and production deployment not verified"
+  ],
+  "node20_integrated_backend_build": "PASS (Prisma generation, strict tsc, SWC)"
+}
