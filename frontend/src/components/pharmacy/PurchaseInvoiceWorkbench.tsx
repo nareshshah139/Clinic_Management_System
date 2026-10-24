@@ -1075,6 +1075,8 @@ function PurchaseInvoiceEditor({
   const [unknownStockInvoiceId, setUnknownStockInvoiceId] = useState<
     string | null
   >(null);
+  const [importAttemptId, setImportAttemptId] = useState<string | null>(null);
+  const [resolvingImport, setResolvingImport] = useState(false);
   const unknownStockRef = useRef<string | null>(null);
   unknownStockRef.current = unknownStockInvoiceId;
   const importLock = useRef(false);
@@ -1227,6 +1229,7 @@ function PurchaseInvoiceEditor({
         );
         setEditingId(saved.editingId || null);
         setUnknownStockInvoiceId(saved.unknownStockInvoiceId || null);
+        setImportAttemptId(saved.importAttemptId || null);
         recoveredInvoiceId.current = saved.editingId || null;
         const revision =
           saved.draftServerRevision || saved.originalAmounts?.updatedAt || null;
@@ -1263,6 +1266,7 @@ function PurchaseInvoiceEditor({
         JSON.stringify({
           version: 1,
           unknownStockInvoiceId,
+          importAttemptId,
           header,
           lines: linesWithPendingChecks,
           editingId,
@@ -1286,6 +1290,7 @@ function PurchaseInvoiceEditor({
     recoveryKey,
     recoveryReady,
     unknownStockInvoiceId,
+    importAttemptId,
     header,
     linesWithPendingChecks,
     editingId,
@@ -1905,9 +1910,52 @@ function PurchaseInvoiceEditor({
   };
 
   /**
+   * @cc [owner:nareshshah139,label:state] import-outcome-authoritative-recovery
+   * An unknown import MUST stay locked until its matching durable attempt is fenced with no
+   * stock, or its exact saved invoice is read back. Failed or mismatched resolution MUST not unlock.
+   */
+  const acceptImportOutcome = async (result: any, expectedId: string) => {
+    if (result?.attemptId !== expectedId) throw new Error('Import recovery returned a different attempt. Keep this purchase locked.');
+    if (result.outcome === 'NO_STOCK_WRITTEN' && result.invoiceId === null) {
+      const retained = result.retained;
+      if (retained?.sourceDocument || retained?.sourceDocuments?.[0]) setSourceDocument(retained.sourceDocument || retained.sourceDocuments[0]);
+      if (Array.isArray(retained?.sourceDocuments)) setAdditionalSourceIds(retained.sourceDocuments.map((document: OriginalDocument) => document.id));
+      if (retained?.draft && !editingId) applyExtractedDraft(retained.draft, retained.extraction, retained.masterMatches);
+      setUnknownStockInvoiceId(null);
+      setImportAttemptId(null);
+      setShowIntakeHome(false);
+      setManualEntry(true);
+      setError(null);
+      setNotice(result.message || 'This import is stopped. It created no invoice or stock. Retry with a new attempt, enter the complete invoice manually, or reject the upload.');
+      return true;
+    }
+    if (['DRAFT_SAVED', 'STOCK_COMMITTED'].includes(result.outcome) && typeof result.invoiceId === 'string' && result.invoiceId) {
+      const invoice = await refreshStockStatus(result.invoiceId);
+      if (!invoice) return false;
+      setImportAttemptId(null);
+      if (!invoice.stockCommittedAt && invoice.status !== 'STOCK_COMMITTED') editSavedDraft(invoice);
+      return true;
+    }
+    throw new Error('This import outcome is still unverified. Resolve it again before another stock operation.');
+  };
+
+  const resolveInterruptedImport = async () => {
+    if (!importAttemptId || resolvingImport || !access.create) return;
+    const attempt = captureAttempt();
+    const id = importAttemptId;
+    setResolvingImport(true);
+    try {
+      const result = await apiClient.post(`/pharmacy/purchase-invoices/ocr/import-attempts/${encodeURIComponent(id)}/resolve`, {});
+      if (attemptCurrent(attempt)) await acceptImportOutcome(result, id);
+    } catch (err) { if (attemptCurrent(attempt)) setError(getErrorMessage(err)); }
+    finally { setResolvingImport(false); }
+  };
+
+  /**
    * @cc [owner:nareshshah139,label:state;product] purchase-import-outcome-unknown
    * Automatic import MUST lock further writes before dispatch. A lost or malformed response MUST
-   * retain that lock and offer handoff; only an explicit no-stock outcome or verified saved invoice MAY clear it.
+   * retain that lock and offer attempt resolution; only a matching fenced no-stock outcome, an
+   * explicit no-stock response, or a verified saved invoice MAY clear it.
    */
   const extractFromInvoiceFile = async (automate = false) => {
     if (!access.create || importLock.current || unknownStockRef.current || (automate && !access.automate)) return;
@@ -1918,6 +1966,8 @@ function PurchaseInvoiceEditor({
 
     importLock.current = true;
     let attempt = captureAttempt();
+    let dispatchedAttemptId: string | null = null;
+    let automaticDispatched = false;
     setExtracting(true);
     setNotice(null);
     setError(null);
@@ -1928,7 +1978,21 @@ function PurchaseInvoiceEditor({
       else form.append("file", ocrFile);
       if (automate && importReceivedDate)
         form.append("goodsReceivedDate", importReceivedDate);
-      if (automate) { setUnknownStockInvoiceId("unconfirmed-import"); setShowIntakeHome(false); }
+      if (automate) {
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+        const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+        dispatchedAttemptId = `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+        // Persist before dispatch, so reload and a lost response keep the same recovery identity.
+        if (!recoveryKey) throw new Error('Sign in before importing stock.');
+        const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || '{}');
+        sessionStorage.setItem(recoveryKey, JSON.stringify({ ...stored, version: 1, header, lines,
+          importAttemptId: dispatchedAttemptId, unknownStockInvoiceId: 'unconfirmed-import' }));
+        form.append('attemptId', dispatchedAttemptId);
+        setImportAttemptId(dispatchedAttemptId);
+        setUnknownStockInvoiceId('unconfirmed-import'); setShowIntakeHome(false);
+      }
+      automaticDispatched = automate;
       const response = await fetch(
         `/api/pharmacy/purchase-invoices/ocr/${ocrFiles.length > 1 ? "pages/" : ""}${automate ? "import" : "extract"}`,
         {
@@ -1969,6 +2033,12 @@ function PurchaseInvoiceEditor({
 
       const data = (await response.json()) as OcrExtractionResponse;
       if (!attemptCurrent(attempt)) return;
+      const importOutcome = (data as any)?.importAttempt;
+      if (automate && importOutcome && dispatchedAttemptId) {
+        if ((data as any).sourceDocument) setSourceDocument((data as any).sourceDocument);
+        await acceptImportOutcome(importOutcome, dispatchedAttemptId);
+        return;
+      }
       const draft = data?.draft;
       if (!draft) {
         throw new Error("No purchase invoice draft was extracted");
@@ -2021,7 +2091,7 @@ function PurchaseInvoiceEditor({
       );
     } catch (err) {
       if (!attemptCurrent(attempt)) return;
-      if (automate) {
+      if (automaticDispatched && dispatchedAttemptId) {
         setUnknownStockInvoiceId("unconfirmed-import");
         setShowIntakeHome(false);
         setNotice(null);
@@ -2471,7 +2541,7 @@ function PurchaseInvoiceEditor({
     setError(null);
   };
   const copyHandoff = async () => {
-    const id = recovery?.attempt.invoiceId || activeInvoice?.id;
+    const id = recovery?.attempt.invoiceId || activeInvoice?.id || (unknownStockInvoiceId !== 'unconfirmed-import' ? unknownStockInvoiceId : null);
     const invoiceLink = id ? `${window.location.origin}/dashboard/inventory?area=purchases&view=intake&invoice=${encodeURIComponent(id)}` : 'Unsaved purchase in this tab';
     const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink, recovery?.message || error || 'An authorized colleague is needed to continue this purchase.', recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
     try {
@@ -3085,8 +3155,41 @@ function PurchaseInvoiceEditor({
     if (issue.category === 'product') void openProductRecovery();
     requestAnimationFrame(() => focusPurchaseField(target));
   };
+  const rejectSavedInvoice = async () => {
+    if (!activeInvoice?.updatedAt || !access.create || !access.review || busy || draftWriteBlocked) return;
+    const reason = window.prompt('Why is this invoice being rejected? Its original and history will be retained.');
+    if (!reason?.trim()) return;
+    const attempt = captureAttempt();
+    setSaving(true);
+    try {
+      const result = await apiClient.post<PurchaseInvoice>(`/pharmacy/purchase-invoices/${activeInvoice.id}/reject`, { expectedUpdatedAt: activeInvoice.updatedAt, reason: reason.trim() });
+      if (!attemptCurrent(attempt)) return;
+      if (!isPurchaseReadback(result, activeInvoice.id) || result.status !== 'CANCELLED' || result.stockCommittedAt) throw new Error('Rejection was not confirmed. Reload this invoice.');
+      setActiveInvoice(result); setEditingId(null); setError(null); setNotice('Invoice rejected. No stock was added; the original and audit history are retained.');
+    } catch (err) { if (attemptCurrent(attempt)) { setError(getErrorMessage(err)); setRevisionConflict('Reload the saved invoice to confirm rejection before continuing.'); } }
+    finally { setSaving(false); }
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:product] complete-manual-transcription
+   * Switching an incomplete reading to manual entry MUST clear extracted values and prior checks,
+   * retain originals and any saved invoice identity/revision, and require a new final review.
+   */
+  const enterCompleteInvoiceManually = () => {
+    if (!access.create || busy || draftWriteBlocked || savedFormLocked) return;
+    if (!window.confirm('Discard the OCR reading and type every invoice row from the complete original? The original file and any saved invoice identity will be retained.')) return;
+    const original = sourceDocument, originals = additionalSourceIds;
+    const saved = activeInvoice, id = editingId, revision = draftServerRevision, receipt = workflowReceiptId;
+    resetDraft();
+    setSourceDocument(original); setAdditionalSourceIds(originals);
+    setActiveInvoice(saved); setEditingId(id); setDraftServerRevision(revision); setWorkflowReceiptId(receipt);
+    setHeader({ ...defaultHeader(), source: 'MANUAL' });
+    setManualEntry(true);
+    setNotice('Enter every row from the complete original, including all pages. Final review is required before adding stock.');
+  };
+
   const needsHandoff = !access.read || unknownStockInvoiceId === "unconfirmed-import" || recovery?.kind === 'permission' || recovery?.kind === 'locked' || !access.create || (activeInvoice?.status === 'REVIEWED' ? !access.commit : !access.review);
-  const recoveryPanel = !showIntakeHome && (recovery || comparison || pendingMismatch || unknownStockInvoiceId || (activeInvoice && !stockAdded) || (needsHandoff && !!error)) && (
+  const recoveryPanel = !showIntakeHome && (recovery || comparison || pendingMismatch || unknownStockInvoiceId || sourceDocument || (activeInvoice && !stockAdded) || (needsHandoff && !!error)) && (
     <section id="purchase-recovery-panel" aria-labelledby="purchase-recovery-title" className="space-y-4 rounded-md border p-4">
       <h3 id="purchase-recovery-title" className="font-semibold">Finish this purchase</h3>
       {recovery && <p className="text-sm">{recovery.message}</p>}
@@ -3094,6 +3197,7 @@ function PurchaseInvoiceEditor({
       {unknownStockInvoiceId && <div className="space-y-2">
         <p role="status">Stock status unknown. Check the saved purchase before trying another stock operation.</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
+        {importAttemptId && access.create && <Button variant="outline" disabled={resolvingImport || extracting} onClick={resolveInterruptedImport}>{resolvingImport ? 'Resolving import…' : 'Resolve interrupted import'}</Button>}
         {unknownStockInvoiceId !== "unconfirmed-import" && access.read && <Button variant="outline" disabled={busy} onClick={() => refreshStockStatus(unknownStockInvoiceId)}>Check saved status</Button>}
       </div>}
       {recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !comparison && !unknownStockInvoiceId && (
@@ -3136,6 +3240,11 @@ function PurchaseInvoiceEditor({
         {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && <Button variant="outline" disabled={busy} onClick={saveDraft}>Save corrections and check again</Button>}
         {(needsHandoff || (recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !recovery.existingInvoiceId)) && <Button variant="outline" onClick={copyHandoff}>Copy handoff details</Button>}
       </div>
+      {activeInvoice && !['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && !activeInvoice.stockCommittedAt && access.create && access.review && !draftWriteBlocked && <Button variant="outline" disabled={busy} onClick={rejectSavedInvoice}>Reject invoice</Button>}
+      {!unknownStockInvoiceId && sourceDocument && !stockAdded && !savedFormLocked && access.create && <div className="flex flex-wrap gap-2">
+        <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
+        {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => { if (window.confirm('Reject this upload without adding stock? Its archived original will be retained.')) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
+      </div>}
       {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing Add stock.</p>}
     </section>
   );
@@ -3951,6 +4060,7 @@ function PurchaseInvoiceEditor({
                               </Label>
                               <Input
                                 id="invoice-ocr-flags"
+                                readOnly
                                 disabled={
                                   savedFormLocked ||
                                   saving ||

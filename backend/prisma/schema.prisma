@@ -2469,3 +2469,20 @@ model InventoryMigrationRow {
   @@id([importId, sourceRow])
   @@map("inventory_migration_rows")
 }
+
+// Durable fence for OCR imports. An attempt never returns to RUNNING.
+model PharmacyPurchaseImportAttempt {
+  id                String   @id @db.Uuid
+  branchId          String
+  userId            String
+  requestHash       String?
+  status            String   @default("RUNNING")
+  purchaseInvoiceId String?
+  result            Json?
+  message           String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([branchId, userId, createdAt])
+  @@map("pharmacy_purchase_import_attempts")
+}

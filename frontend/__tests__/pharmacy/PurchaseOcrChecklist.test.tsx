@@ -118,3 +118,8 @@ it.each([['1', '2020'], ['12', '2100']])('allows valid expiry boundary %s/%s to 
   view.rerender(<PurchaseOcrChecklist {...props} flags={[]} />);
   expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'success');
 });
+
+it('treats legacy truncated-page results as requiring a replacement upload', () => {
+  const { purchaseReviewIssue } = require('@/lib/purchase-invoice-review');
+  expect(purchaseReviewIssue('pdf_truncated_to_5_pages')).toMatchObject({ requiresUpload: true, target: 'purchase-invoice-upload' });
+});

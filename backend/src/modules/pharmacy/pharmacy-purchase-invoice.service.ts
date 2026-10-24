@@ -1,3 +1,4 @@
+import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
 import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
@@ -360,28 +361,74 @@ export class PharmacyPurchaseInvoiceService {
   }
 
   /**
+   * @cc [owner:nareshshah139,label:state] durable-ocr-import
+   * HTTP automatic imports MUST register their client attempt before extraction. Saved invoices
+   * MUST bind to that attempt atomically; all retry responses MUST expose its durable outcome.
+   */
+  async importWithRecovery(files: Express.Multer.File[], attemptId: string, branchId: string, userId: string, receivedDate?: string, canReadExisting = false) {
+    if (!files?.length) throw new BadRequestException('Choose an invoice file');
+    const fence = { id: attemptId, branchId, userId };
+    const requestHash = createHash('sha256').update(JSON.stringify({ receivedDate: receivedDate || null,
+      files: files.map(file => ({ hash: createHash('sha256').update(file.buffer).digest('hex'), mime: file.mimetype })) })).digest('hex');
+    return new PurchaseImportRecovery(this.prisma).execute(fence, requestHash,
+      () => this.extractMany(files, branchId, userId, true, receivedDate, canReadExisting, fence));
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:state;atomicity] reject-unposted-purchase
+   * Rejection MUST require a current branch-local unposted revision, actor and reason, retain
+   * source/line history and audit CANCELLED atomically. Posted purchases MUST never be cancelled here.
+   */
+  async rejectUnpostedInvoice(id: string, branchId: string, userId: string, expectedUpdatedAt: string, reason: string) {
+    const revision = new Date(expectedUpdatedAt);
+    if (!userId || !reason?.trim() || reason.trim().length > 500 || !Number.isFinite(revision.getTime())) throw new BadRequestException('Current revision, authenticated actor and rejection reason are required');
+    return this.prisma.$transaction(async tx => {
+      const before = await tx.pharmacyPurchaseInvoice.findFirst({ where: { id, branchId } });
+      if (!before) throw new NotFoundException('Purchase invoice not found');
+      if (before.stockCommittedAt || before.status === 'STOCK_COMMITTED') throw new ConflictException('Posted stock cannot be rejected. Use a linked correction or physical reconciliation.');
+      const changed = await tx.pharmacyPurchaseInvoice.updateMany({ where: { id, branchId, stockCommittedAt: null, updatedAt: revision,
+        status: { in: ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED', 'REVIEWED'] } }, data: { status: 'CANCELLED' } });
+      if (changed.count !== 1) throw new ConflictException('Invoice changed or is already cancelled. Reload its saved status.');
+      await this.purchaseAudit(tx, id, branchId, userId, 'REJECTED', { status: before.status }, { status: 'CANCELLED', reason: reason.trim() });
+      const invoice = await tx.pharmacyPurchaseInvoice.findFirst({ where: { id, branchId }, include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } } });
+      return this.formatPurchaseInvoice(invoice);
+    });
+  }
+
+  resolveImportAttempt(id: string, branchId: string, userId: string) {
+    return new PurchaseImportRecovery(this.prisma).resolve({ id, branchId, userId });
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:product] multi-page-original-retention
    * Multi-file intake MUST retain each original byte stream before OCR. The assembled page order
    * MUST match upload order; all source documents MUST link to the saved invoice before processing.
    */
-  async extractMany(files: Express.Multer.File[], branchId: string, userId: string, automate = false, receivedDate?: string, canReadExisting = false) {
+  async extractMany(files: Express.Multer.File[], branchId: string, userId: string, automate = false, receivedDate?: string, canReadExisting = false, fence?: PurchaseImportFence) {
     if (!files?.length || files.length > 10 || files.reduce((n,f)=>n+f.size,0)>100*1024*1024) throw new BadRequestException('Choose 1–10 files totalling at most 100 MB');
-    if (files.length === 1) return automate ? this.importFromDocument(files[0],branchId,userId,receivedDate,[],canReadExisting) : this.extractDraftFromDocument(files[0],branchId,userId);
+    if (files.length === 1) return automate ? this.importFromDocument(files[0],branchId,userId,receivedDate,[],canReadExisting,fence) : this.extractDraftFromDocument(files[0],branchId,userId);
     const originals=[] as any[];for(const file of files)originals.push(await this.archiveOriginal(file,branchId,userId));
     if(originals.some(d=>d.purchaseInvoiceId))throw new ConflictException('A selected original is already linked to an invoice. Open that invoice from the register.');
     const PDFDocument=require('pdfkit');const pdf=new PDFDocument({autoFirstPage:false,info:{Title:'Assembled invoice pages'}}),chunks:Buffer[]=[];
     const complete=new Promise<Buffer>((resolve,reject)=>{pdf.on('data',(c:Buffer)=>chunks.push(c));pdf.on('end',()=>resolve(Buffer.concat(chunks)));pdf.on('error',reject)});
     for(const file of files){const pages=await this.buildOcrImageDataUrls(file);for(const dataUrl of pages.imageDataUrls){const data=Buffer.from(dataUrl.split(',')[1],'base64'),meta=await sharp(data).metadata();const width=meta.width||1200,height=meta.height||1600;pdf.addPage({size:[width,height],margin:0});pdf.image(data,0,0,{width,height});}}
     pdf.end();const buffer=await complete;const combined={...files[0],originalname:'Combined invoice pages.pdf',mimetype:'application/pdf',buffer,size:buffer.length};
-    const result=automate?await this.importFromDocument(combined,branchId,userId,receivedDate,originals.map(d=>d.id),canReadExisting):await this.extractDraftFromDocument(combined,branchId,userId);
-    return {...result,draft:{...result.draft,sourceDocumentIds:originals.map(d=>d.id)},sourceDocuments:originals};
+    try {
+      const result=automate?await this.importFromDocument(combined,branchId,userId,receivedDate,originals.map(d=>d.id),canReadExisting,fence):await this.extractDraftFromDocument(combined,branchId,userId);
+      return {...result,draft:{...result.draft,sourceDocumentIds:originals.map(d=>d.id)},sourceDocuments:originals};
+    } catch (error) {
+      const response = error instanceof HttpException ? error.getResponse() : null;
+      throw new HttpException({ ...(response && typeof response === 'object' ? response : {}),
+        message: error instanceof HttpException ? error.message : 'Page extraction failed. Originals are retained for manual review.',
+        sourceDocuments: originals }, error instanceof HttpException ? error.getStatus() : 500);
+    }
   }
 
   /**
    * @cc [owner:nareshshah139,label:security;product] purchase-import-duplicate-retained
    * Automatic import MAY return an existing invoice only with current read capability and an exact duplicate identity conflict or already-linked original. When import resolves to an existing invoice, a newly uploaded original MUST remain unlinked until deliberate attachment.
    */
-  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string, sourceDocumentIds: string[] = [], canReadExisting = false) {
+  async importFromDocument(file: Express.Multer.File, branchId: string, userId: string, goodsReceivedDate?: string, sourceDocumentIds: string[] = [], canReadExisting = false, fence?: PurchaseImportFence) {
     const sourceDocument = await this.archiveOriginal(file, branchId, userId);
     // A lost HTTP response must not trigger a new OCR interpretation of the same
     // already-linked bytes. Reopen the persisted invoice, including on retries.
@@ -401,7 +448,7 @@ export class PharmacyPurchaseInvoiceService {
 
     let invoice: any;
     try {
-      invoice = await this.createDraft(dto, branchId, userId, canReadExisting);
+      invoice = await this.createDraft(dto, branchId, userId, canReadExisting, fence);
     } catch (error) {
       const conflict = error instanceof ConflictException ? error.getResponse() : null;
       if (canReadExisting && conflict && typeof conflict === 'object' && 'code' in conflict && conflict.code === 'PURCHASE_DUPLICATE_INVOICE' && 'existingInvoiceId' in conflict && typeof conflict.existingInvoiceId === 'string') {
@@ -823,14 +870,17 @@ export class PharmacyPurchaseInvoiceService {
     branchId: string,
     userId?: string,
     canReadExisting = false,
+    fence?: PurchaseImportFence,
   ) {
     const prismaAny = this.prisma as any;
     try {
       const create = async (tx: any) => {
+        if (fence) await claimPurchaseImport(tx, fence);
         const created = await tx.pharmacyPurchaseInvoice.create({
           data: this.draftData(dto, branchId, userId),
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
+        if (fence) await bindPurchaseImport(tx, fence, created.id);
         const sources=[...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[];
         await this.purchaseAudit(tx, created.id, branchId, userId, 'CREATED', null, created);
         if(!sources.length)return created;
@@ -2173,6 +2223,16 @@ export class PharmacyPurchaseInvoiceService {
     };
   }
 
+  private async openOcrPdf(buffer: Buffer) {
+    const { pdf } = await import('pdf-to-img');
+    return pdf(buffer, { scale: 2 });
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:product] ocr-never-truncates-pages
+   * OCR MUST receive every page or reject before extraction. Over-limit originals MUST remain
+   * archived for complete manual transcription; a partial page set MUST NOT be posted as complete.
+   */
   private async buildOcrImageDataUrls(file: Express.Multer.File): Promise<{
     imageDataUrls: string[];
     pageCount: number;
@@ -2184,24 +2244,17 @@ export class PharmacyPurchaseInvoiceService {
       file.originalname?.toLowerCase().endsWith('.pdf');
 
     if (isPdf) {
-      const { pdf } = await import('pdf-to-img');
+      const pages = await this.openOcrPdf(file.buffer);
+      const maxPages = this.toPositiveInt(Number(process.env.PHARMACY_PURCHASE_OCR_MAX_PAGES || 5), 5);
+      if (pages.length === 0) throw new BadRequestException('PDF contains no pages');
+      if (pages.length > maxPages) {
+        throw new BadRequestException({ code: 'PURCHASE_OCR_PAGE_LIMIT', message: `This invoice has ${pages.length} pages; OCR supports at most ${maxPages}. The complete original is retained. Enter the entire invoice manually or provide a complete document within the limit.`, pageCount: pages.length, maxPages });
+      }
       const pageBuffers: Buffer[] = [];
-      for await (const image of await pdf(file.buffer, { scale: 2 })) {
-        pageBuffers.push(Buffer.from(image));
-      }
-      if (pageBuffers.length === 0) {
-        throw new BadRequestException('PDF contains no pages');
-      }
+      for await (const image of pages) pageBuffers.push(Buffer.from(image));
+      if (pageBuffers.length !== pages.length) throw new BadRequestException('Some invoice pages could not be rendered. Provide a complete readable original.');
 
-      const maxPages = this.toPositiveInt(
-        Number(process.env.PHARMACY_PURCHASE_OCR_MAX_PAGES || 5),
-        5,
-      );
-      if (pageBuffers.length > maxPages) {
-        flags.push(`pdf_truncated_to_${maxPages}_pages`);
-      }
-
-      const selectedPages = pageBuffers.slice(0, maxPages);
+      const selectedPages = pageBuffers;
       const imageDataUrls = await Promise.all(
         selectedPages.map((buffer) => this.bufferToVisionDataUrl(buffer)),
       );

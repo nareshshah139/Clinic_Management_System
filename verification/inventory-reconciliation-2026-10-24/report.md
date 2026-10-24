@@ -1,5 +1,7 @@
 # Inventory reconciliation: repaired recovery paths
 
+**OCR extension:** the [OCR lifecycle and interruption proofs](../inventory-ocr-recovery-2026-10-24/report.md) add durable import outcomes, complete-page rejection, manual recovery and audited rejection. The 30 states below cover inventory recovery; they are not exhaustive OCR lifecycle coverage.
+
 The identified gaps are fixed in the local working tree. Every state in the **supported recovery model** has an authorized path to a verified inventory balance. The guarantee is **reachability**, `AG EF Reconciled`, under the assumptions below. It is not a promise that every original document eventually posts or that missing historical facts can be reconstructed.
 
 This revision supersedes the initial audit. The original findings and evidence are retained in `before-fixes-*` as historical snapshots; their links may resolve to updated files. Nothing was deployed and production data was not changed. [Source fingerprints](source-baseline.json) identify the reviewed working tree; the checker rejects source drift.
@@ -133,7 +135,7 @@ A valid linked receipt must be a posted branch inward challan for the supplier, 
 - [Independent ledger](../../backend/src/modules/inventory/inventory-ledger.ts), consumed by the workspace item detail response.
 - [Existing-batch import guard](../../backend/src/modules/inventory/inventory-import.service.ts).
 - [Identity recovery](../../backend/src/modules/inventory/inventory-identity-recovery.service.ts) and the stocktake controller route `POST /inventory/workspace/stocktake/resolve-identity`.
-- [Purchase reopening](../../backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts), [receipt validation](../../backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts), and `POST /pharmacy/purchase-invoices/:id/reopen`.
+- [Purchase reopening](../../backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts), [receipt validation](../../backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts), and `POST /pharmacy/purchase-invoices/:id/reopen-review`.
 - Operator actions are in WorkflowDocumentEditor, WorkspaceStock and PurchaseInvoiceWorkbench. No schema migration is needed; checkpoint metadata and existing audit/event tables are used.
 
 ## Verification and limits

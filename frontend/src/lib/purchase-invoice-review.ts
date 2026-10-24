@@ -92,7 +92,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, label: 'line items', target: 'purchase-line-items', message: 'The OCR reads disagree on the number of invoice rows.',
       help: 'Count every row against the original, including repeated products with different batches. Restore missing rows or remove extra rows before confirming this check.' };
   }
-  if (/missing.?pages|document_completeness|cropped.*rows|not_a_purchase_invoice/i.test(body)) {
+  if (/missing.?pages|document_completeness|pdf_truncated|PURCHASE_OCR_PAGE_LIMIT|cropped.*rows|not_a_purchase_invoice/i.test(body)) {
     return { ...base, key: `${index ?? 'header'}:pages`, label: 'complete invoice', requiresUpload: true,
       message: `${prefix}The complete invoice could not be verified.`, target: 'purchase-invoice-upload',
       help: 'Upload a clear file containing every invoice page, then extract it again before approving stock.' };
