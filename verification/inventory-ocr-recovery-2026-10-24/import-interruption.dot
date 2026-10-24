@@ -1,0 +1,22 @@
+digraph Import {
+ graph [rankdir=LR,bgcolor="#f8fafc",pad=.35,nodesep=.4,ranksep=.65,fontname="Helvetica",fontsize=18,labelloc=t,label="Interrupted import: durable identity and a fenced recovery decision"];
+ node [shape=box,style="rounded,filled",fillcolor="#e2e8f0",color="#94a3b8",fontname="Helvetica",fontsize=11];
+ edge [fontname="Helvetica",fontsize=9,color="#475569"];
+ client [label="Persist attempt UUID\nBEFORE dispatch"];
+ running [label="RUNNING\nOriginal archive + OCR outside transaction"];
+ unknown [label="Lost response / reload / crash\nStock outcome unknown\nWrites remain locked",fillcolor="#fef3c7"];
+ resolve [label="Resolve exact attempt\nAuthenticated branch + actor",fillcolor="#dbeafe"];
+ stopped [label="NO_STOCK_WRITTEN\nTerminal tombstone / fence\nLate worker cannot create",fillcolor="#d1fae5"];
+ saved [label="INVOICE_SAVED\nAttempt + invoice in SAME transaction"];
+ readback [label="Read exact saved invoice\nDraft / cancelled / stock committed",fillcolor="#d1fae5"];
+ client -> running;
+ client -> unknown [label="Even if request never arrived"];
+ running -> unknown;
+ running -> saved [label="Lock RUNNING row\nCreate + bind atomically"];
+ unknown -> resolve;
+ resolve -> stopped [label="Absent: insert tombstone\nRunning: fence under row lock"];
+ resolve -> readback [label="Save won the row-lock race"];
+ saved -> readback [label="Commit or resume same invoice"];
+ stopped -> stopped [label="Delayed request / same-ID replay\nno new effects"];
+ readback -> readback [label="Repeated status check\nnever repeat intake"];
+}

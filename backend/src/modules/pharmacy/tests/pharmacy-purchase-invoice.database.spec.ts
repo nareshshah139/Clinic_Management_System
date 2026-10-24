@@ -45,6 +45,9 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     await prisma.$executeRawUnsafe('ALTER TABLE "pharmacy_purchase_invoice_items" DROP COLUMN "ocrSourceRef"');
     const sourceMigration=readFileSync(path.resolve('prisma/migrations/20260914100000_purchase_source_highlights/migration.sql'),'utf8');
     for(const statement of sourceMigration.split(';').filter(sql=>sql.trim())) await prisma.$executeRawUnsafe(statement);
+    await prisma.$executeRawUnsafe('DROP TABLE "pharmacy_purchase_import_attempts"');
+    const attemptMigration = readFileSync(path.resolve('prisma/migrations/20261024120000_purchase_import_recovery/migration.sql'), 'utf8');
+    for (const sql of attemptMigration.split(';').filter(sql => sql.trim())) await prisma.$executeRawUnsafe(sql);
     branchId = (await prisma.branch.create({ data: { name: 'Synthetic OCR Test', address: 'Synthetic' } })).id;
     userId = (await prisma.user.create({ data: {
       firstName: 'Synthetic', lastName: 'Operator', email: 'ocr-test@example.invalid', password: 'no-login-test-only',
@@ -260,4 +263,131 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     expect(await prisma.inventoryItem.count({ where: { batchNumber: draft.items[0].batchNumber } })).toBe(0);
     await expect(service.processInvoice(saved.id, 'another-branch', userId)).rejects.toThrow('Purchase invoice not found');
   });
+  it('rejects an incomplete draft atomically while retaining originals and blocks stale or posted rejection', async () => {
+    draft.ocrFlags = ['document_completeness_unconfirmed'];
+    const original = await service.archiveOriginal(upload, branchId, userId);
+    draft.sourceDocumentId = original.id;
+    const saved = await service.createDraft(draft, branchId, userId);
+    await expect(service.rejectUnpostedInvoice(saved.id, branchId, userId, '2000-01-01', 'Incomplete pages')).rejects.toThrow('changed');
+    const rejected = await service.rejectUnpostedInvoice(saved.id, branchId, userId, saved.updatedAt.toISOString(), 'Incomplete pages');
+    expect(rejected.status).toBe('CANCELLED');
+    expect(rejected.items).toHaveLength(1);
+    expect(rejected.documents[0].id).toBe(original.id);
+    expect(await prisma.auditLog.findFirst({ where: { entityId: saved.id, action: 'REJECTED' } })).toMatchObject({ userId });
+    expect((await service.processInvoice(saved.id, branchId, userId)).automation.status).toBe('SAVED_FOR_REVIEW');
+    const posted = await prisma.pharmacyPurchaseInvoice.findFirstOrThrow({ where: { branchId, status: 'STOCK_COMMITTED' } });
+    await expect(service.rejectUnpostedInvoice(posted.id, branchId, userId, posted.updatedAt.toISOString(), 'Not allowed')).rejects.toThrow('Posted stock');
+  });
+
+  it('durably resolves extraction failure without an invoice and retains the original', async () => {
+    jest.mocked(service.extractDocumentDraft).mockRejectedValueOnce(new ServiceUnavailableException('Synthetic OCR unavailable'));
+    const id = randomUUID();
+    const result = await service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true);
+    expect(result.importAttempt.outcome).toBe('NO_STOCK_WRITTEN');
+    expect((result.importAttempt as any).retained.sourceDocument.id).toBeTruthy();
+    expect(await service.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'NO_STOCK_WRITTEN', invoiceId: null });
+    expect(await prisma.pharmacyPurchaseInvoice.findFirst({ where: { branchId, invoiceNumber: draft.invoiceNumber } })).toBeNull();
+  });
+
+  it('retains every uploaded page identity when assembled-document extraction fails', async () => {
+    const buffer = await sharp({ create: { width: 10, height: 10, channels: 3, background: 'blue' } }).png().toBuffer();
+    const second = { buffer, size: buffer.length, mimetype: 'image/png', originalname: 'second-page.png' } as Express.Multer.File;
+    jest.mocked(service.extractDocumentDraft).mockRejectedValueOnce(new ServiceUnavailableException('Synthetic OCR unavailable'));
+    const result = await service.importWithRecovery([upload, second], randomUUID(), branchId, userId, '2026-01-02', true);
+    expect(result.importAttempt.outcome).toBe('NO_STOCK_WRITTEN');
+    const retained = (result.importAttempt as any).retained;
+    expect(retained.sourceDocument.mimeType).toBe('application/pdf');
+    expect(retained.sourceDocuments).toHaveLength(2);
+    expect(new Set(retained.sourceDocuments.map((document: any) => document.id)).size).toBe(2);
+    for (const document of retained.sourceDocuments) expect((await service.getOriginalDocument(document.id, branchId)).purchaseInvoiceId).toBeNull();
+  });
+
+  it('fences a request delayed before registration and rejects cross-actor resolution', async () => {
+    const id = randomUUID();
+    expect(await service.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'NO_STOCK_WRITTEN' });
+    const calls = jest.mocked(service.extractDocumentDraft).mock.calls.length;
+    expect((await service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true)).importAttempt.outcome).toBe('NO_STOCK_WRITTEN');
+    expect(jest.mocked(service.extractDocumentDraft).mock.calls.length).toBe(calls);
+    await expect(service.resolveImportAttempt(id, branchId, 'another-actor')).rejects.toThrow('not found');
+    await expect(service.resolveImportAttempt(id, 'another-branch', userId)).rejects.toThrow('not found');
+  });
+
+  it('stops a delayed OCR worker before it can create a draft or post stock', async () => {
+    let release!: () => void, ready!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { ready = resolve; });
+    jest.mocked(service.extractDocumentDraft).mockImplementationOnce(async () => { ready(); await gate; return { draft } as any; });
+    const id = randomUUID();
+    const pending = service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true);
+    await started;
+    expect(await service.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'NO_STOCK_WRITTEN' });
+    release();
+    expect((await pending).importAttempt.outcome).toBe('NO_STOCK_WRITTEN');
+    expect(await prisma.pharmacyPurchaseInvoice.findFirst({ where: { branchId, invoiceNumber: draft.invoiceNumber } })).toBeNull();
+  });
+
+  it('recovers a committed response after process restart and deduplicates concurrent retries', async () => {
+    const id = randomUUID();
+    const first = await service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true);
+    expect(first.importAttempt.outcome).toBe('STOCK_COMMITTED');
+    const restarted = new PharmacyPurchaseInvoiceService(prisma as PrismaService);
+    expect(await restarted.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'STOCK_COMMITTED', invoiceId: first.importAttempt.invoiceId });
+    const before = await prisma.stockTransaction.count({ where: { branchId } });
+    const results = await Promise.all([1, 2, 3].map(() => restarted.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true)));
+    expect(results.every(result => result.importAttempt.invoiceId === first.importAttempt.invoiceId)).toBe(true);
+    expect(await prisma.stockTransaction.count({ where: { branchId } })).toBe(before);
+    await expect(restarted.importWithRecovery([upload], id, branchId, userId, '2026-01-03', true)).rejects.toThrow('different files');
+  });
+
+  it('binds the saved draft before processing failure and resumes that exact invoice', async () => {
+    const process = jest.spyOn(service, 'processInvoice').mockRejectedValueOnce(new Error('synthetic interruption'));
+    const id = randomUUID();
+    const result = await service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true);
+    expect(result.importAttempt.outcome).toBe('DRAFT_SAVED');
+    expect(await service.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: result.importAttempt.invoiceId });
+    process.mockRestore();
+    expect((await service.processInvoice(result.importAttempt.invoiceId!, branchId, userId)).automation.status).toBe('STOCK_COMMITTED');
+    expect((await service.resolveImportAttempt(id, branchId, userId)).outcome).toBe('STOCK_COMMITTED');
+  });
+
+  it('serializes resolution against a draft transaction already holding the attempt fence', async () => {
+    let release!: () => void, ready!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { ready = resolve; });
+    const originalAudit = (service as any).purchaseAudit.bind(service);
+    const audit = jest.spyOn(service as any, 'purchaseAudit').mockImplementation(async (...args: any[]) => {
+      if (args[4] === 'CREATED') { ready(); await gate; }
+      return originalAudit(...args);
+    });
+    const id = randomUUID();
+    const pending = service.importWithRecovery([upload], id, branchId, userId, '2026-01-02', true);
+    await started;
+    const resolving = service.resolveImportAttempt(id, branchId, userId);
+    release();
+    const [result, outcome] = await Promise.all([pending, resolving]);
+    expect(['DRAFT_SAVED', 'STOCK_COMMITTED']).toContain(outcome.outcome);
+    expect(outcome.invoiceId).toBe(result.importAttempt.invoiceId);
+    audit.mockRestore();
+  });
+
+  it('rejects a six-page original without running partial OCR and retains all original bytes', async () => {
+    const PDFDocument = require('pdfkit');
+    const pdf = new PDFDocument({ autoFirstPage: false });
+    const chunks: Buffer[] = [];
+    const complete = new Promise<Buffer>(resolve => { pdf.on('data', (chunk: Buffer) => chunks.push(chunk)); pdf.on('end', () => resolve(Buffer.concat(chunks))); });
+    for (let page = 0; page < 6; page++) pdf.addPage().text(`Synthetic page ${page + 1}`);
+    pdf.end();
+    const buffer = await complete;
+    const real = new PharmacyPurchaseInvoiceService(prisma as PrismaService);
+    const extraction = jest.spyOn(real as any, 'extractPurchaseInvoiceJson');
+    const pixel = await sharp({ create: { width: 1, height: 1, channels: 3, background: 'white' } }).png().toBuffer();
+    jest.spyOn(real as any, 'openOcrPdf').mockResolvedValue(Array(6).fill(pixel));
+    const result = await real.importWithRecovery([{ buffer, size: buffer.length, mimetype: 'application/pdf', originalname: 'six-pages.pdf' } as Express.Multer.File], randomUUID(), branchId, userId, '2026-01-02', true);
+    expect(result.importAttempt).toMatchObject({ outcome: 'NO_STOCK_WRITTEN', message: expect.stringContaining('6 pages') });
+    expect(extraction).not.toHaveBeenCalled();
+    const retained = await real.getOriginalDocument((result.importAttempt as any).retained.sourceDocument.id, branchId);
+    expect(Buffer.from(retained.data)).toEqual(buffer);
+  });
+
+
 });

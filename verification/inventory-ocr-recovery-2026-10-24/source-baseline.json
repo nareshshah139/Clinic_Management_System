@@ -1,0 +1,19 @@
+{
+  "backend/prisma/schema.prisma": "d861bb0b0e5631eacfd5c6059116f580bbacd74ba8dcb9af526ac8bc0ac0f86b",
+  "backend/prisma/migrations/20261024120000_purchase_import_recovery/migration.sql": "c864375b975e6c32ee032e0631f16ad4f5ab63a9b698c419c273eaa580e25bfb",
+  "backend/src/modules/pharmacy/purchase-import-recovery.ts": "ff77b9f425c9db47f848097770e42b09796bc93941dd278eab3569f3a7c9df8f",
+  "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts": "cdcda338fda5bdc3307acbb5684cfae0598be9561c9799b290a0c51216fc297f",
+  "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts": "198583376aaec001171ac8264ecc8e6828b4de2ccf24f01d8b2c59b6af5b4fe7",
+  "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts": "ab87e183560e0dcd8db8ebb3447a8cdae22d1c6d1762085b05a341a112bf9f2f",
+  "backend/src/modules/pharmacy/purchase-invoice-identity.ts": "d7567478784e9909da62964bd0be48333c33a6ddbf656943dfe61c0a56375395",
+  "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts": "49ee51ae2743c3bb5868350593153b2399926a5788784125cb2e7fe3765951b8",
+  "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts": "a5a76f1272d9a787b47f744b6e5f0ba25acaa8160ec10bbcc80a956d35160534",
+  "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx": "a473b27c31202089696cf3ac84199b9447f48e1caad10ba6741a7171d59ad117",
+  "frontend/src/components/pharmacy/PurchaseFieldReview.tsx": "eb31d550a423905917bfe23125e80c197448d13a4d05354108a26a3d11968fe6",
+  "frontend/src/lib/purchase-invoice-review.ts": "b32f984e62d9ad3542a3b2a45de6beadbef2c931c6c00219034e55d29c460260",
+  "frontend/src/lib/purchase-invoice-recovery.ts": "21ef5698742fb0724e97050fd75cf7359bf6ba80d3e53b7115aa5facf9b5cd1d",
+  "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx": "b58141b2a74806ce9a21994d1d8ac6f4ab014b7abb35ee38f81d9ac0b33ac228",
+  "frontend/__tests__/pharmacy/PurchaseOcrChecklist.test.tsx": "e4f252516089ce77eff376df72002ae70521b093b7b7995b62c552fa4bd11e73",
+  "verification/inventory-ocr-recovery-2026-10-24/check_ocr_model.py": "8f1215ffa018dc53f8e46bdfeafd383798177ff13ff66a4a32db7f4c4ed19fe9",
+  "verification/inventory-ocr-recovery-2026-10-24/check_pdf_runtime.cjs": "6b6a74d29e7c2b47954d704f2451aa12a3871205847e19afdc3b101dd2b1ac44"
+}

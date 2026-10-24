@@ -1,0 +1,604 @@
+{
+  "passed": 894,
+  "failed": 0,
+  "skipped": 3,
+  "passedSuites": 84,
+  "failedSuites": 0,
+  "suites": [
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.live.spec.ts",
+      "status": "skipped",
+      "passed": 0,
+      "skipped": 1,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-read-query.database.spec.ts",
+      "status": "passed",
+      "passed": 15,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-payment-recovery.database.spec.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-import-recovery.database.spec.ts",
+      "status": "passed",
+      "passed": 12,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts",
+      "status": "passed",
+      "passed": 19,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.database.spec.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/lifecycle.database.spec.ts",
+      "status": "passed",
+      "passed": 26,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/lifecycle-migration.database.spec.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/purchase-supplier-gstin.database.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+      "status": "passed",
+      "passed": 22,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.integration.spec.ts",
+      "status": "passed",
+      "passed": 33,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescription-pdf.pipeline.spec.ts",
+      "status": "focused",
+      "passed": 1,
+      "skipped": 1,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/users/tests/doctor-signature.spec.ts",
+      "status": "focused",
+      "passed": 14,
+      "skipped": 1,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/tele-video-pdf.spec.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/tests/appointments.conflicts.integration.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy-agent/pharmacy-agent.service.spec.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescriptions.service.spec.ts",
+      "status": "passed",
+      "passed": 26,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation.spec.ts",
+      "status": "passed",
+      "passed": 31,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.access.spec.ts",
+      "status": "passed",
+      "passed": 40,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.controller.spec.ts",
+      "status": "passed",
+      "passed": 35,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.service.spec.ts",
+      "status": "passed",
+      "passed": 69,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/draft-branch.controller.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts",
+      "status": "passed",
+      "passed": 20,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.available-slots.spec.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.room-schedule.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/tests/appointments.conflicts.service.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.reschedule.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.enhancements.spec.ts",
+      "status": "passed",
+      "passed": 17,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.service.spec.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/tele-video-consultation.spec.ts",
+      "status": "passed",
+      "passed": 12,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-supplier.spec.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.doctor-schedule.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/users/tests/users.controller.spec.ts",
+      "status": "passed",
+      "passed": 30,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescriptions.controller.spec.ts",
+      "status": "passed",
+      "passed": 20,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/medicine-regimen-defaults.spec.ts",
+      "status": "passed",
+      "passed": 12,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.conflicts.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.alignment.spec.ts",
+      "status": "passed",
+      "passed": 17,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.bulk-update.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.remove.spec.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.find.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/purchase-supplier-gstin.spec.ts",
+      "status": "passed",
+      "passed": 21,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-import.service.spec.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/appointments.whatsapp.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/shared/logging/http-observability.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory.service.spec.ts",
+      "status": "passed",
+      "passed": 30,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescription-drug-search.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/purchase-invoice-source.spec.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/purchase-product-catalog.spec.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/prescription-clinical-transaction.spec.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/billing/tests/billing.controller.spec.ts",
+      "status": "passed",
+      "passed": 14,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/shared/tests/build-contract-regressions.spec.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-ledger.service.spec.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-inventory-consistency.spec.ts",
+      "status": "passed",
+      "passed": 15,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/reports/tests/reports.controller.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/purchase-invoice-identity.spec.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-prescription-queue.service.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-billing-pending.spec.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/visits.service.spec.ts",
+      "status": "passed",
+      "passed": 24,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/cr10-stock-identity.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/patients/patient-deduplication.service.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-payment-recovery.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-compliance.service.spec.ts",
+      "status": "passed",
+      "passed": 7,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-workflow-scheduler.spec.ts",
+      "status": "passed",
+      "passed": 8,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/personal-history.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-detail-corrections.spec.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-workspace-batches.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-regimen-defaults.spec.ts",
+      "status": "passed",
+      "passed": 10,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/patient-history.contract.spec.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/clinical-save-roundtrip.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/prescriptions/tests/lifecycle-dto.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-invoice.service.spec.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/inventory-batch-edits.spec.ts",
+      "status": "passed",
+      "passed": 11,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/drug.service.spec.ts",
+      "status": "passed",
+      "passed": 6,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/shared/interceptors/request-context.interceptor.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/visits/tests/draft-photo-history.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.service.spec.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.recovery.spec.ts",
+      "status": "passed",
+      "passed": 5,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/inventory/tests/inventory-observability.spec.ts",
+      "status": "passed",
+      "passed": 3,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/shared/guards/permissions.guard.spec.ts",
+      "status": "passed",
+      "passed": 4,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/whatsapp-templates/whatsapp-templates.service.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/app.controller.spec.ts",
+      "status": "passed",
+      "passed": 1,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/pharmacy/tests/drug-search.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/shared/search/product-search.spec.ts",
+      "status": "passed",
+      "passed": 9,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/notifications/notifications.service.spec.ts",
+      "status": "passed",
+      "passed": 2,
+      "skipped": 0,
+      "failures": []
+    },
+    {
+      "file": "backend/src/modules/appointments/tests/scheduling.utils.spec.ts",
+      "status": "passed",
+      "passed": 23,
+      "skipped": 0,
+      "failures": []
+    }
+  ]
+}

@@ -540,6 +540,70 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
   });
 
+  it('resolves an OCR failure without an invoice ID and unlocks retained-original manual recovery', async () => {
+    const document = { id: 'failed-ocr-document', fileName: 'unreadable.jpg', mimeType: 'image/jpeg', sizeBytes: 3000 };
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 503, json: async () => ({ message: 'Extraction unavailable', sourceDocument: document }) });
+    api.post.mockImplementation(async (url: any) => ({ attemptId: String(url).split('/').at(-2), outcome: 'NO_STOCK_WRITTEN', invoiceId: null }) as any);
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'unreadable.jpg', { type: 'image/jpeg' })] } });
+    importAutomatically();
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolve interrupted import' }));
+    await waitFor(() => expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument());
+    expect(screen.getByRole('link', { name: /Download original: unreadable.jpg/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Enter complete invoice manually' })).toBeEnabled();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it.each(['failed', 'wrong-attempt', 'unknown', 'malformed-no-stock'])('keeps interrupted import locked after %s resolution', async mode => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Lost response'));
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'invoice.jpg', { type: 'image/jpeg' })] } });
+    importAutomatically();
+    const button = await screen.findByRole('button', { name: 'Resolve interrupted import' });
+    api.post.mockImplementation(async (url: any) => {
+      if (mode === 'failed') throw new Error('Still offline');
+      return { attemptId: mode === 'wrong-attempt' ? 'foreign' : String(url).split('/').at(-2), outcome: mode === 'unknown' ? 'UNKNOWN' : 'NO_STOCK_WRITTEN' } as any;
+    });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it('persists the dispatched attempt across reload and recovers the exact committed invoice', async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error('Lost response'));
+    const first = render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'invoice.jpg', { type: 'image/jpeg' })] } });
+    importAutomatically();
+    await screen.findByRole('button', { name: 'Resolve interrupted import' });
+    const form = (global.fetch as jest.Mock).mock.calls[0][1].body as FormData;
+    const id = form.get('attemptId');
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    first.unmount();
+    api.post.mockResolvedValue({ attemptId: id, outcome: 'STOCK_COMMITTED', invoiceId: 'pinv-1' } as any);
+    api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-10-24T00:00:00Z' } as any);
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolve interrupted import' }));
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith(`/pharmacy/purchase-invoices/ocr/import-attempts/${id}/resolve`, {}));
+    await waitFor(() => expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument());
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('replaces an incomplete OCR reading with blank manual fields while retaining its original', async () => {
+    jest.spyOn(window, 'confirm').mockReturnValue(true);
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({ draft: { ...draftInvoice, ocrFlags: ['document_completeness_unconfirmed'] }, sourceDocument: { id: 'doc-1', fileName: 'incomplete.pdf', mimeType: 'application/pdf', sizeBytes: 100 } }) });
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'incomplete.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Scan bill' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Enter complete invoice manually' }));
+    expect(screen.getByLabelText('Invoice No.')).toHaveValue('');
+    expect(screen.getByRole('link', { name: /Download original: incomplete.pdf/ })).toBeVisible();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    jest.mocked(window.confirm).mockRestore();
+  });
+
   it('renders and saves all 20 OCR batch rows, including repeated products and a correction on the last row', async () => {
     const items = Array.from({ length: 20 }, (_, index) => ({
       ...draftInvoice.items[0], id: `line-${index + 1}`, lineNumber: index + 1, serialNumber: index + 1,

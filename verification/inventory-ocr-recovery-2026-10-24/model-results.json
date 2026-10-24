@@ -1,0 +1,217 @@
+{
+  "scope": "Finite transition abstraction; not OCR ground-truth or a whole-program refinement proof.",
+  "claims": {
+    "at_most_one_stock_effect": "PASS",
+    "no_stock_fence_excludes_invoice": "PASS",
+    "rejection_has_no_stock_effect": "PASS",
+    "AG_EF_verified_inventory_or_safe_rejection": "PASS_CONDITIONAL"
+  },
+  "race_states": 18,
+  "race_edges": 28,
+  "race_witnesses": {
+    "ABSENT / NOT_SENT / NONE": [
+      "Resolve: tombstone or fence"
+    ],
+    "RUNNING / CRASHED / NONE": [
+      "Resolve: tombstone or fence"
+    ],
+    "RUNNING / OCR / NONE": [
+      "Resolve: tombstone or fence"
+    ],
+    "RUNNING / READY / NONE": [
+      "Resolve: tombstone or fence"
+    ],
+    "SAVED / CRASHED / CANCELLED": [],
+    "SAVED / CRASHED / COMMITTED": [],
+    "SAVED / CRASHED / DRAFT": [
+      "Guarded stock transaction / resume exact invoice"
+    ],
+    "SAVED / DONE / CANCELLED": [],
+    "SAVED / DONE / COMMITTED": [],
+    "SAVED / DONE / DRAFT": [
+      "Guarded stock transaction / resume exact invoice"
+    ],
+    "SAVED / PROCESS / CANCELLED": [],
+    "SAVED / PROCESS / COMMITTED": [],
+    "SAVED / PROCESS / DRAFT": [
+      "Guarded stock transaction / resume exact invoice"
+    ],
+    "STOPPED / CRASHED / NONE": [],
+    "STOPPED / DONE / NONE": [],
+    "STOPPED / NOT_SENT / NONE": [],
+    "STOPPED / OCR / NONE": [],
+    "STOPPED / READY / NONE": []
+  },
+  "ocr_states": 39,
+  "ocr_witnesses": {
+    "UPLOAD_NOT_SENT": [
+      "UPLOAD_NOT_SENT \u2192 REGISTERED",
+      "REGISTERED \u2192 UNKNOWN_WITHOUT_INVOICE_ID",
+      "UNKNOWN_WITHOUT_INVOICE_ID \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "UPLOAD_REJECTED_FORMAT": [
+      "UPLOAD_REJECTED_FORMAT \u2192 SAFELY_REJECTED"
+    ],
+    "UPLOAD_REJECTED_SIZE": [
+      "UPLOAD_REJECTED_SIZE \u2192 SAFELY_REJECTED"
+    ],
+    "ORIGINAL_ARCHIVED": [
+      "ORIGINAL_ARCHIVED \u2192 EXTRACTING",
+      "EXTRACTING \u2192 INCOMPLETE_PAGES",
+      "INCOMPLETE_PAGES \u2192 SAFELY_REJECTED"
+    ],
+    "REGISTERED": [
+      "REGISTERED \u2192 UNKNOWN_WITHOUT_INVOICE_ID",
+      "UNKNOWN_WITHOUT_INVOICE_ID \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "EXTRACTING": [
+      "EXTRACTING \u2192 INCOMPLETE_PAGES",
+      "INCOMPLETE_PAGES \u2192 SAFELY_REJECTED"
+    ],
+    "OCR_UNAVAILABLE": [
+      "OCR_UNAVAILABLE \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "UNREADABLE_RESULT": [
+      "UNREADABLE_RESULT \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "EMPTY_RESULT": [
+      "EMPTY_RESULT \u2192 NOT_SAVED",
+      "NOT_SAVED \u2192 SAFELY_REJECTED"
+    ],
+    "INCOMPLETE_PAGES": [
+      "INCOMPLETE_PAGES \u2192 SAFELY_REJECTED"
+    ],
+    "PAGE_LIMIT_EXCEEDED": [
+      "PAGE_LIMIT_EXCEEDED \u2192 SAFELY_REJECTED"
+    ],
+    "LEGACY_TRUNCATED_RESULT": [
+      "LEGACY_TRUNCATED_RESULT \u2192 SAFELY_REJECTED"
+    ],
+    "ROW_COUNT_DISAGREEMENT": [
+      "ROW_COUNT_DISAGREEMENT \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "FIELD_DISAGREEMENT": [
+      "FIELD_DISAGREEMENT \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "LOW_CONFIDENCE": [
+      "LOW_CONFIDENCE \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "VERIFIER_UNAVAILABLE": [
+      "VERIFIER_UNAVAILABLE \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "SOURCE_HIGHLIGHTS_UNAVAILABLE": [
+      "SOURCE_HIGHLIGHTS_UNAVAILABLE \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "PRODUCT_OR_SUPPLIER_UNRESOLVED": [
+      "PRODUCT_OR_SUPPLIER_UNRESOLVED \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "TOTALS_MISMATCH": [
+      "TOTALS_MISMATCH \u2192 MANUAL_REVIEW",
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "EXTRACTED_VALID": [
+      "EXTRACTED_VALID \u2192 DRAFT",
+      "DRAFT \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "NOT_SAVED": [
+      "NOT_SAVED \u2192 SAFELY_REJECTED"
+    ],
+    "NO_STOCK_WRITTEN": [
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "FULL_MANUAL_ENTRY": [
+      "FULL_MANUAL_ENTRY \u2192 SAFELY_REJECTED"
+    ],
+    "MANUAL_REVIEW": [
+      "MANUAL_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "DRAFT": [
+      "DRAFT \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "OCR_REVIEW_REQUIRED": [
+      "OCR_REVIEW_REQUIRED \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "RECONCILIATION_FAILED": [
+      "RECONCILIATION_FAILED \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "SAVED_FOR_REVIEW": [
+      "SAVED_FOR_REVIEW \u2192 CANCELLED",
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "REVIEWED": [
+      "REVIEWED \u2192 STOCK_COMMITTED",
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "STALE_REVISION": [
+      "STALE_REVISION \u2192 DRAFT_SAVED",
+      "DRAFT_SAVED \u2192 STOCK_COMMITTED",
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "DUPLICATE": [
+      "DUPLICATE \u2192 DRAFT_SAVED",
+      "DRAFT_SAVED \u2192 STOCK_COMMITTED",
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "UNKNOWN_WITHOUT_INVOICE_ID": [
+      "UNKNOWN_WITHOUT_INVOICE_ID \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "UNKNOWN_WITH_INVOICE_ID": [
+      "UNKNOWN_WITH_INVOICE_ID \u2192 DRAFT_SAVED",
+      "DRAFT_SAVED \u2192 STOCK_COMMITTED",
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "WORKER_CRASHED": [
+      "WORKER_CRASHED \u2192 UNKNOWN_WITHOUT_INVOICE_ID",
+      "UNKNOWN_WITHOUT_INVOICE_ID \u2192 NO_STOCK_WRITTEN",
+      "NO_STOCK_WRITTEN \u2192 SAFELY_REJECTED"
+    ],
+    "DRAFT_SAVED": [
+      "DRAFT_SAVED \u2192 STOCK_COMMITTED",
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "STOCK_COMMITTED": [
+      "STOCK_COMMITTED \u2192 VERIFIED_INVENTORY"
+    ],
+    "CANCELLED": [
+      "CANCELLED \u2192 SAFELY_REJECTED"
+    ],
+    "SAFELY_REJECTED": [],
+    "VERIFIED_INVENTORY": []
+  },
+  "assumptions": [
+    "Retained branch-local records and valid current-version operations.",
+    "Physical evidence and eligible goods are required for inventory admission; absent evidence permits rejection.",
+    "Authorized actors and eventual database/read availability.",
+    "New automatic imports carry an attempt UUID persisted before dispatch; legacy uncorrelated requests must be drained before rollout.",
+    "Inventory endpoint invokes the previously checked physical reconciliation rules; financial corrections remain separate."
+  ],
+  "non_claims": [
+    "Automatic eventual completion",
+    "OCR factual accuracy or detection of two agreeing wrong reads",
+    "Historical accounting reconstruction",
+    "No-stock claims for missing linked records or arbitrary database corruption"
+  ]
+}

@@ -13,6 +13,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   Max,
   MaxLength,
@@ -88,6 +89,10 @@ const toOptionalNumber = ({ value }: { value: unknown }) => {
 };
 
 export class ImportPharmacyPurchaseInvoiceDto {
+  @ApiProperty({ description: 'Client-generated UUID persisted before dispatch, reused only for the same attempt' })
+  @IsUUID()
+  attemptId: string;
+
   @ApiPropertyOptional({ description: 'Operator-confirmed date the invoiced goods were received', example: '2026-09-12' })
   @IsOptional()
   @IsDateString()
@@ -657,4 +662,12 @@ export class ConfirmPharmacyPurchaseMasterDto {
   @ValidateNested()
   @Type(() => PurchaseProductCatalogDto)
   catalog?: PurchaseProductCatalogDto;
+}
+
+export class RejectPharmacyPurchaseInvoiceDto extends ReopenPharmacyPurchaseInvoiceDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(500)
+  reason: string;
 }
