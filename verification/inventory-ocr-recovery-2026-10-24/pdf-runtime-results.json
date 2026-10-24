@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "decoder": "real pdf-to-img",
+  "supportedPages": 2,
+  "includedPages": 2,
+  "rejectedPages": 6,
+  "limit": 5,
+  "externalOcrCalls": 0
+}

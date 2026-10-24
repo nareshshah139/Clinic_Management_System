@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importFromDocument: jest.fn().mockResolvedValue({}), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importWithRecovery: jest.fn().mockResolvedValue({}), resolveImportAttempt: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN' }), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -38,8 +38,21 @@ describe('Automatic intake HTTP permissions', () => {
   afterAll(async () => { await app?.close(); });
   beforeEach(() => { role = 'PHARMACIST'; permissions = [...required]; jest.clearAllMocks(); service.capabilities.mockResolvedValue({read:true}); });
   const upload = () => request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
+    .field('attemptId', '12345678-1234-4234-8234-123456789abc')
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
+
+  it('requires an attempt ID before automatic import and scopes recovery to the authenticated actor', async () => {
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')
+      .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' }).expect(400);
+    expect(service.importWithRecovery).not.toHaveBeenCalled();
+    const id = '12345678-1234-4234-8234-123456789abc';
+    await request(app.getHttpServer()).post(`/pharmacy/purchase-invoices/ocr/import-attempts/${id}/resolve`)
+      .send({ branchId: 'foreign', userId: 'foreign' }).expect(201);
+    expect(service.resolveImportAttempt).toHaveBeenCalledWith(id, 'branch-1', 'user-1');
+    permissions = [];
+    await request(app.getHttpServer()).post(`/pharmacy/purchase-invoices/ocr/import-attempts/${id}/resolve`).send({}).expect(403);
+  });
 
   it('allows source viewing with read permission and uses only the authenticated branch',async()=>{
     role='RECEPTION';permissions=['inventory:po:read'];
@@ -105,7 +118,7 @@ describe('Automatic intake HTTP permissions', () => {
 
   it('passes the file, confirmed receipt date and authenticated identity to automatic import', async () => {
     await upload().expect(201);
-    expect(service.importFromDocument).toHaveBeenCalledWith(expect.objectContaining({ originalname: 'test.jpg' }), 'branch-1', 'user-1', '2026-09-12', [], true);
+    expect(service.importWithRecovery).toHaveBeenCalledWith([expect.objectContaining({ originalname: 'test.jpg' })], '12345678-1234-4234-8234-123456789abc', 'branch-1', 'user-1', '2026-09-12', true);
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/invoice-1/process').send({}).expect(201);
     expect(service.processInvoice).toHaveBeenCalledWith('invoice-1', 'branch-1', 'user-1');
   });
@@ -114,14 +127,14 @@ describe('Automatic intake HTTP permissions', () => {
     service.capabilities.mockResolvedValue({read:false});
     await upload().expect(201);
     expect(service.capabilities).toHaveBeenCalledWith({id:'user-1',branchId:'branch-1',role:'PHARMACIST'});
-    expect(service.importFromDocument).toHaveBeenCalledWith(expect.objectContaining({originalname:'test.jpg'}),'branch-1','user-1','2026-09-12',[],false);
+    expect(service.importWithRecovery).toHaveBeenCalledWith([expect.objectContaining({originalname:'test.jpg'})],'12345678-1234-4234-8234-123456789abc','branch-1','user-1','2026-09-12',false);
   });
 
   it.each(required)('requires %s in addition to the other permissions', async (missing) => {
     permissions = required.filter((permission) => permission !== missing);
     await upload().expect(403);
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/invoice-1/process').send({}).expect(403);
-    expect(service.importFromDocument).not.toHaveBeenCalled();
+    expect(service.importWithRecovery).not.toHaveBeenCalled();
     expect(service.processInvoice).not.toHaveBeenCalled();
   });
 
@@ -135,6 +148,6 @@ describe('Automatic intake HTTP permissions', () => {
     role = 'RECEPTION';
     permissions = ['inventory:po:create', 'inventory:po:update', 'inventory:transaction:create'].filter((permission) => permission !== missing);
     await upload().expect(403);
-    expect(service.importFromDocument).not.toHaveBeenCalled();
+    expect(service.importWithRecovery).not.toHaveBeenCalled();
   });
 });
