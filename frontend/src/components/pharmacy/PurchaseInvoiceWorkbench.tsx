@@ -932,6 +932,11 @@ function canResumeManualReview(invoice: PurchaseInvoice) {
   );
 }
 
+/**
+ * @cc [owner:nareshshah139] receipt-correction-stock-intent
+ * Editable purchases MUST allow selecting a posted receipt; removing an existing link MUST
+ * explicitly confirm that posting will add stock. Locked or uncertain invoices cannot edit it.
+ */
 export function PurchaseInvoiceWorkbench({
   invoiceId,
   receiptId,
@@ -1057,6 +1062,8 @@ function PurchaseInvoiceEditor({
   const [serverDraft, setServerDraft] = useState<any>(null);
   const [serverDrafts, setServerDrafts] = useState<any[]>([]);
   const [workflowReceiptId, setWorkflowReceiptId] = useState("");
+  const [receiptOptions, setReceiptOptions] = useState<any[]>([]);
+  const [receiptSearch, setReceiptSearch] = useState("");
   const draftRequestKey = useRef("");
   const [recoveryReady, setRecoveryReady] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -2159,6 +2166,13 @@ function PurchaseInvoiceEditor({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139] reviewed-bill-recovery-ui
+   * Reopening MUST submit the saved revision and operator reason; an uncertain response MUST
+   * refresh server status before permitting further edits or stock commit.
+   */
+
+
   const commitStock = async () => {
     if (!access.commit || !activeInvoice || draftWriteBlocked) return;
     const confirmed = window.confirm(`Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`);
@@ -3139,6 +3153,7 @@ function PurchaseInvoiceEditor({
       ) : stockAdded ||
         activeInvoice.status === "CANCELLED" ? null : activeInvoice.status ===
         "REVIEWED" ? (
+        <>
         <Button onClick={commitStock} disabled={!canCommit || busy}>
           {committing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -3147,6 +3162,7 @@ function PurchaseInvoiceEditor({
           )}
           {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
         </Button>
+        </>
       ) : canReview && !access.commit ? (
         <Button onClick={reviewInvoice} disabled={busy}>
           Mark Reviewed
@@ -3312,6 +3328,38 @@ function PurchaseInvoiceEditor({
             Linked inward receipt: {workflowReceiptId}. Stock quantities are
             verified against that receipt before the bill is posted.
           </p>
+        )}
+        {activeInvoice && editingSelectedInvoice && !savedFormLocked && access.create && (
+          <section className="space-y-2 rounded-md border p-3 text-sm">
+            <p className="font-medium">Correct the earlier stock receipt</p>
+            <p>Choose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label>Receipt reference
+                <input className="ml-2 rounded border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
+              </label>
+              <Button type="button" variant="outline" disabled={busy} onClick={async () => {
+                try {
+                  const result = await apiClient.get<any>(`/inventory/workspace/documents?kind=INWARD_CHALLAN&status=POSTED&limit=100&search=${encodeURIComponent(receiptSearch)}`);
+                  setReceiptOptions(result.rows || []);
+                  if (!result.rows?.length) setNotice("No matching posted receipts. Check the reference and your receipt access.");
+                } catch (err) { setError(getErrorMessage(err)); }
+              }}>Find posted receipts</Button>
+              {!!receiptOptions.length && <label>Posted receipt
+                <select className="ml-2 rounded border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
+                  setWorkflowReceiptId(e.target.value); setReviewAccepted(false);
+                }}>
+                  <option value="" disabled>Select the receipt for these goods</option>
+                  {!receiptOptions.some(r => r.id === workflowReceiptId) && workflowReceiptId && <option value={workflowReceiptId}>Current receipt</option>}
+                  {receiptOptions.map(receipt => <option key={receipt.id} value={receipt.id}>{receipt.reference} · {receipt.supplierGstin}</option>)}
+                </select>
+              </label>}
+              {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={() => {
+                if (window.confirm("Remove the receipt link only if these goods have not already been added to inventory. Posting this bill will add stock. Continue?")) {
+                  setWorkflowReceiptId(""); setReviewAccepted(false);
+                }
+              }}>Remove incorrect receipt link</Button>}
+            </div>
+          </section>
         )}
         {!activeInvoice && serverDrafts.length > 0 && (
           <section className="space-y-2">

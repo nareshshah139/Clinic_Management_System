@@ -186,7 +186,7 @@ export class NotificationsService {
     formData.append('type', 'application/pdf');
     formData.append(
       'file',
-      new Blob([opts.pdfBuffer], { type: 'application/pdf' }),
+      new Blob([Uint8Array.from(opts.pdfBuffer)], { type: 'application/pdf' }),
       opts.fileName,
     );
 

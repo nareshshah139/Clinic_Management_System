@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-10-24T06:00:58.069Z",
+  "environment": "In-memory service probes; no database or network",
+  "passed": 7,
+  "failed": 2,
+  "results": [
+    {
+      "contract": "inventory-movement-atomic",
+      "name": "A failed stock update rolls back its movement",
+      "status": "PASS",
+      "evidence": "No movement or balance changed after failure"
+    },
+    {
+      "contract": "inventory-adjustment-direction",
+      "name": "Negative adjustments retain their signed stock effect",
+      "status": "PASS",
+      "evidence": "Signed movement equals balance delta"
+    },
+    {
+      "contract": "inventory-posted-movement-immutable",
+      "name": "Posted movement quantities cannot be edited in place",
+      "status": "PASS",
+      "evidence": "Edit rejected; original movement retained"
+    },
+    {
+      "contract": "inventory-outbound-no-clamping",
+      "name": "Insufficient stock rejects the whole outbound operation",
+      "status": "PASS",
+      "evidence": "No stock or movement change"
+    },
+    {
+      "contract": "inventory-po-no-stock",
+      "name": "Creating a purchase order does not receive stock",
+      "status": "PASS",
+      "evidence": "Order saved with total 125; stock 10 and no movements"
+    },
+    {
+      "contract": "purchase-payables-posted-only",
+      "name": "OCR drafts do not create supplier dues",
+      "status": "FAIL",
+      "evidence": "Cannot read properties of undefined (reading 'findMany')"
+    },
+    {
+      "contract": "inventory-audit-approval-before-post",
+      "name": "An adjustment requiring approval does not immediately change stock",
+      "status": "FAIL",
+      "evidence": "This audit submission has been retired. Open Counts & audit and start a reviewed count; no stock was changed."
+    },
+    {
+      "contract": "inventory-statistics-money",
+      "name": "Inventory total value is money, not a count of units",
+      "status": "PASS",
+      "evidence": "Value 250"
+    },
+    {
+      "contract": "sales-pending-confirmation-stock",
+      "name": "Confirming a pending sale cannot skip its stock effect",
+      "status": "PASS",
+      "evidence": "Pending-to-confirmed sale deducted its allocated batch"
+    }
+  ]
+}

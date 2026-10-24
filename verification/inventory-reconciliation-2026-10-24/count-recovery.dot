@@ -1,0 +1,21 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Every supported count state has a fresh recovery attempt";
+open [label="DRAFT · AWAITING_APPROVAL\nAPPROVED\n(including stale snapshots)"];
+terminal [label="REJECTED · CANCELLED\nPOSTED · REVERSED"];
+fresh [label="RECOUNT → linked DRAFT\nCurrent system snapshot\nNo copied physical measurements",fillcolor="#dbeafe"];
+observed [label="Record a new physical count\nResolve held-stock discrepancy"];
+approved [label="Required approval\nRecheck revision and balance"];
+posted [label="POSTED\nStock + movement + checkpoint\nApproval + audit + event",fillcolor="#d1fae5"];
+open -> fresh [label="Authorized + version matched"];
+terminal -> fresh [label="Original history retained"];
+fresh -> fresh [label="Same source/version retry\nreturns same attempt"];
+fresh -> observed;
+observed -> approved;
+approved -> posted [label="Atomic commit"];
+approved -> fresh [label="Conflict → refresh/recount",color="#b45309"];
+
+}

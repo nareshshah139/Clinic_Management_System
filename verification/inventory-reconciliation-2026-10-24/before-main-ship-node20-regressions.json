@@ -1,0 +1,195 @@
+{
+  "passed": 42,
+  "failed": 0,
+  "skipped": 0,
+  "suites": [
+    {
+      "file": "src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+      "tests": [
+        {
+          "name": "Inventory reconciliation recovery restores the correct source hold when reversing a loss after residual release",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery records direct manager approval and a physical ledger baseline even for a zero-delta count",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery rolls back the source reopening when compensation cannot complete",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery posts a nonzero count with its own movement inside the baseline, then detects later drift",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery reconciles physical stock below held stock through a verified source loss and fresh count",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery cancels a supplier return challan after release into its own source hold",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from DRAFT without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from AWAITING_APPROVAL without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from APPROVED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REJECTED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from CANCELLED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from POSTED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REVERSED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger does not assert agreement without a recorded baseline",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger preserves unknown old history while independently detecting later stock drift",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger rejects unknown subsequent signs and missing covered history",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation rejects a stock revision conflict instead of replacing a newer ledger checkpoint",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation rejects a second product identity instead of attaching it to an existing batch",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation does not overwrite a sale committed after the import read",
+          "status": "passed"
+        },
+        {
+          "name": "Reviewed purchase recovery rejects an invalid receipt before locking the invoice for review",
+          "status": "passed"
+        },
+        {
+          "name": "Reviewed purchase recovery reopens only an unchanged unposted reviewed invoice and records the reason",
+          "status": "passed"
+        },
+        {
+          "name": "Ambiguous batch identity recovery retains only a physically verified existing product without converting balances",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts",
+      "tests": [
+        {
+          "name": "Automatic purchase intake with real PostgreSQL saves, reviews and commits 20 legacy invoice rows with no manufacturer and retains the original",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL automatically commits a manufacturer-free product and rejects ambiguous or conflicting product identities",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL persists invoice details and stock once, including duplicate uploads and concurrent retries",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL serializes different invoices for the same batch without losing or duplicating received stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rolls back review and inventory writes if the stock transaction fails",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL retains exact PDF bytes after OCR failure, then links the upload on a corrected manual save",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rolls back invoice writes if the requested original belongs to another invoice or branch",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL keeps a second distinct scan of a duplicate invoice without replacing the first or adding stock twice",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rejects disguised executable content before archiving or invoking OCR",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL stores exceptions without stock and never processes another branch invoice",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "src/modules/patients/patient-deduplication.service.spec.ts",
+      "tests": [
+        {
+          "name": "PatientDeduplicationService skips the merge run when another instance holds the advisory lock",
+          "status": "passed"
+        },
+        {
+          "name": "PatientDeduplicationService merges duplicate patients and renumbers visits by date order",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "file": "src/shared/tests/build-contract-regressions.spec.ts",
+      "tests": [
+        {
+          "name": "Backend build contract regressions rejects startup without a JWT secret and accepts an explicit secret",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions applies permission filters and safe pagination when the query omits page and limit",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions serializes permission arrays, preserves omitted permissions, and honors explicit clearing",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions getUserStatistics keeps every aggregate in the authenticated branch and date window",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions getUserDashboard keeps every aggregate in the authenticated branch and date window",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions rejects an invoice visit outside its patient and branch before writing",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions validates invoice payment mode and tax fields without silently stripping valid updates",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions allocates partial payments over relational service lines without duplicating revenue or service quantities",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

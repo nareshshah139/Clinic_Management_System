@@ -443,7 +443,16 @@ databaseTests('Opening import recovery with PostgreSQL', () => {
       userId,
     );
     readBarrier.mockRestore();
-    expect(result).toMatchObject({ created: 0, updated: 1, skipped: 0 });
+    // A concurrent sale invalidates the metadata revision too; the rejected row must be retryable
+    // using a newly reviewed worksheet with the actual balance, without another stock receipt.
+    expect(result).toMatchObject({ created: 0, updated: 0, skipped: 1 });
+    const rejected = await db.inventoryItem.findUniqueOrThrow({ where: { id: item.id } });
+    expect(rejected).toMatchObject({ currentStock: 9, description: item.description });
+    const corrected = await service.importStarterExcel(workbook([
+      ['Drug name', 'Current stock', 'Reorder level', 'Description'],
+      ['Concurrent sale batch', 9, 9, 'Metadata correction'],
+    ]), branchId, userId);
+    expect(corrected).toMatchObject({ created: 0, updated: 1, skipped: 0 });
     const after = await db.inventoryItem.findUniqueOrThrow({
       where: { id: item.id },
     });

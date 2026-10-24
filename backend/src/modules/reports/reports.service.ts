@@ -208,28 +208,31 @@ export class ReportsService {
     return result;
   }
 
+  /**
+   * @cc [owner:nareshshah139] paid-service-revenue
+   * Service revenue MUST allocate each selected payment across its stored invoice lines;
+   * multiple partial payments cannot count the full invoice repeatedly or duplicate service counts.
+   */
   private async getServiceRevenueBreakdown(paymentWhere: any): Promise<ServiceRevenueDto[]> {
-    // Best-effort: parse invoice.items (JSON string) and aggregate by category/name
     const payments = await this.prisma.payment.findMany({
       where: paymentWhere,
-      include: { invoice: { select: { items: true } } },
+      include: { invoice: { select: { items: { include: { service: true } } } } },
     });
     const map = new Map<string, { revenue: number; count: number }>();
-    for (const p of payments) {
-      const itemsRaw = p.invoice?.items;
-      if (!itemsRaw) continue;
-      try {
-        const items = JSON.parse(itemsRaw) as Array<any>;
-        for (const it of items) {
-          const key = it.category || it.name || 'Unknown';
-          const total = (it.quantity || it.qty || 1) * (it.unitPrice || it.price || 0);
-          const current = map.get(key) || { revenue: 0, count: 0 };
-          current.revenue += total;
-          current.count += 1;
-          map.set(key, current);
+    const counted = new Set<string>();
+    for (const payment of payments) {
+      const items = payment.invoice?.items || [];
+      const total = items.reduce((sum, item) => sum + Math.max(0, item.total), 0);
+      if (total <= 0) continue;
+      for (const item of items) {
+        const key = item.service?.type || item.service?.name || 'Unknown';
+        const current = map.get(key) || { revenue: 0, count: 0 };
+        current.revenue += payment.amount * Math.max(0, item.total) / total;
+        if (!counted.has(item.id)) {
+          current.count += item.qty;
+          counted.add(item.id);
         }
-      } catch (_) {
-        // ignore parse errors
+        map.set(key, current);
       }
     }
     return Array.from(map.entries()).map(([serviceType, v]) => ({
@@ -985,10 +988,7 @@ export class ReportsService {
       fileName = `${fileBase}.xlsx`;
       fileSize = (excelBuffer as Buffer).length;
     } else {
-      // Minimal export simulation for other formats
-      fileUrl = `/exports/${reportType}-${timestamp}.${exportFormat.toLowerCase()}`;
-      fileName = `${fileBase}.${exportFormat.toLowerCase()}`;
-      fileSize = JSON.stringify(data).length;
+      throw new BadRequestException('Unsupported report export format');
     }
 
     return {

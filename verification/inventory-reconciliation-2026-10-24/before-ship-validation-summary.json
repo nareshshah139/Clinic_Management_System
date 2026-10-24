@@ -1,0 +1,28 @@
+{
+  "scope": "Selected local suites; no production data changes, deployment or live PostgreSQL concurrency test.",
+  "backend_service_tests": {
+    "passed": 101,
+    "failed": 0,
+    "reconciliation_regressions": 22,
+    "other_service_tests": 79
+  },
+  "backend_http_permission_tests": {
+    "passed": 31,
+    "failed": 0
+  },
+  "frontend_tests": {
+    "passed": 68,
+    "failed": 0,
+    "purchase_workbench": 61,
+    "stock_workspace": 5,
+    "count_recovery": 2
+  },
+  "frontend_application_typecheck": "PASS (tsconfig.build.json)",
+  "backend_typecheck": {
+    "affected_source_errors": 0,
+    "other_repository_errors": 60,
+    "full_build_certified": false
+  },
+  "contracts": "Manual syntax, ownership, attachment and obligation inspection; cc-check unavailable.",
+  "diagrams": "All six PNGs visually inspected; DOT and SVG retained."
+}

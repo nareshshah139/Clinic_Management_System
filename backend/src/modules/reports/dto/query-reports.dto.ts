@@ -42,10 +42,6 @@ export class QueryReportsDto {
   @IsString()
   patientId?: string;
 
-  @ApiPropertyOptional({ description: 'Export format', enum: ExportFormat, example: 'PDF' })
-  @IsOptional()
-  @IsEnum(ExportFormat)
-  exportFormat?: ExportFormat;
 
   @ApiPropertyOptional({ description: 'Include detailed breakdown', example: true })
   @IsOptional()

@@ -1,0 +1,117 @@
+{
+  "scope": "Real service methods with transactional in-memory test doubles. Not a live database proof.",
+  "passed": 22,
+  "failed": 0,
+  "tests": [
+    {
+      "name": "Inventory reconciliation recovery restores the correct source hold when reversing a loss after residual release",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery records direct manager approval and a physical ledger baseline even for a zero-delta count",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery rolls back the source reopening when compensation cannot complete",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery posts a nonzero count with its own movement inside the baseline, then detects later drift",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery reconciles physical stock below held stock through a verified source loss and fresh count",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery cancels a supplier return challan after release into its own source hold",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from DRAFT without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from AWAITING_APPROVAL without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from APPROVED without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REJECTED without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from CANCELLED without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from POSTED without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REVERSED without reusing stale measurements",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Independent count ledger does not assert agreement without a recorded baseline",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Independent count ledger preserves unknown old history while independently detecting later stock drift",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Independent count ledger rejects unknown subsequent signs and missing covered history",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Opening import reconciliation rejects a stock revision conflict instead of replacing a newer ledger checkpoint",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Opening import reconciliation rejects a second product identity instead of attaching it to an existing batch",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Opening import reconciliation does not overwrite a sale committed after the import read",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Reviewed purchase recovery rejects an invalid receipt before locking the invoice for review",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Reviewed purchase recovery reopens only an unchanged unposted reviewed invoice and records the actor",
+      "status": "passed",
+      "failures": []
+    },
+    {
+      "name": "Ambiguous batch identity recovery retains only a physically verified existing product without converting balances",
+      "status": "passed",
+      "failures": []
+    }
+  ]
+}

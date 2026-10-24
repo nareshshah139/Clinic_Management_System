@@ -1,5 +1,6 @@
 import { readStockPage } from './inventory-stock-query';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
+import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PharmacyPurchaseLedgerService } from '../pharmacy/pharmacy-purchase-ledger.service';
@@ -112,9 +113,10 @@ export class InventoryWorkspaceService {
     if(legacyPurchaseIds.length)purchases.push(...await this.prisma.pharmacyPurchaseInvoice.findMany({where:{branchId:actor.branchId,id:{in:legacyPurchaseIds}},include:{documents:{select:{id:true,fileName:true}},items:true},orderBy:{invoiceDate:'desc'}}));
     const caps=await this.workflow.capabilities(actor);
     const holds=['HOLD','SALES_RETURN'].some(k=>caps.kinds[k]?.read)?await this.holdSources(actor,{itemId:id,history:'true',internalAll:true}):{rows:[],restricted:true};
-    const sum=movements.reduce((n,m)=>n+(movementDelta(m)||0),0),unknown=movements.some(m=>movementDelta(m)==null);let closing=item.currentStock-sum;
-    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),batches:batches.map(i=>this.present(i)),openingBalance:unknown?null:closing,
-      movements:movements.map(m=>{const delta=movementDelta(m);closing+=delta||0;return {...m,owner:owners.get(m.id)||null,correctionAllowed:!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||''),delta,closing:unknown?null:closing};}),
+    const ledger = reconcileInventoryLedger(item, movements);
+    return {holds:holds.rows,holdsPagination:{total:(holds as any).total||0,page:(holds as any).page||1,totalPages:(holds as any).totalPages||0},holdsRestricted:'restricted' in holds&&holds.restricted,identityBasis:item.drugs.length===1?'One linked product identity, stock unit and exact pack':item.drugs.length?'Ambiguous linked products; selected batch only until mapping is reviewed':'Unmapped batch only; link a verified product to group sibling batches',item:this.present(item),batches:batches.map(i=>this.present(i)),openingBalance:null,
+      ledger: { ...ledger, movements: undefined },
+      movements:ledger.movements.map(m=>({...m,owner:owners.get(m.id)||null,correctionAllowed:!owners.has(m.id)&&!/^INV-|^PI-|^PINV-|^PURCHASE-|^WF-/.test(m.reference||'')})),
       history:effects.map(e=>({...e,document:{...e.document,totalAmount:Number(e.document.totalAmount)}})),purchases};
   }
   /**

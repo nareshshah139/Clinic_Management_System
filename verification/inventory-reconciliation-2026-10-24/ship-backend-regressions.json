@@ -1,0 +1,3980 @@
+{
+  "passed": 884,
+  "failed": 0,
+  "skipped": 3,
+  "suites": [
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-import-recovery.database.spec.ts",
+      "tests": [
+        {
+          "name": "Opening import recovery with PostgreSQL retries only failed rows after a database failure and preserves successful stock",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL deduplicates concurrent retries of the same failed row",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL recovers a lost summary after successful zero-stock and metadata rows without reapplying them",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL rolls back stock and catalogue changes when the durable success marker cannot be written",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL reconciles a complete legacy aggregate and retries only its recorded database failure",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL does not replay uncertain legacy outcomes {\"totalRows\":1,\"created\":0,\"updated\":0,\"skipped\":1,\"drugsCreated\":0,\"stockAdjusted\":0,\"errors\":[{\"row\":2,\"message\":\"Database could not finish saving this row (P2028).\"}]}",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL does not replay uncertain legacy outcomes null",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL does not replay uncertain legacy outcomes {\"totalRows\":1,\"created\":0,\"updated\":0,\"skipped\":1,\"drugsCreated\":0,\"stockAdjusted\":0,\"errors\":[]}",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL does not replay uncertain legacy outcomes {\"totalRows\":1,\"created\":0,\"updated\":0,\"skipped\":1,\"drugsCreated\":0,\"stockAdjusted\":0,\"errors\":[null]}",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL rejects lookup and retry from another branch",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL preserves real worksheet failure rows, logs only safe codes and keeps validation failures out of retries",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import recovery with PostgreSQL does not overwrite a sale committed after an existing batch was read",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.live.spec.ts",
+      "tests": [
+        {
+          "name": "Purchase invoice real Codex OAuth extraction reads invoice pixels and returns the actual quantities, batch and totals",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-read-query.database.spec.ts",
+      "tests": [
+        {
+          "name": "Inventory and queue reads with PostgreSQL filters complete live invoice coverage and staff workflow before pagination without writes",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL keeps query count bounded as the branch grows and hydrates only a page",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL preserves stock filters, missing values, global quality, valuation and fuzzy results across pages",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL scans fuzzy candidates in bounded batches without losing distant matches or loading full rows",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL retains source codes, reordered words, linked names and loose pack identity",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL uses the latest count document for audit filters and counts the full result",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL creates tasks only for explicit pull and preserves timestamps on repeated commands",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL preserves prescription line identity for legacy duplicates, stock, edits and removal",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL binds indistinguishable legacy prescription duplicates once each and retains their reviews",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL invalidates review for every persisted dispensing regimen change including route and timing",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL does not inherit incomplete legacy reviews when a persisted regimen was never captured",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL credits invoice quantities once across repeated prescription lines in detail and filtered pages",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL requires saved review of every available line before marking a task Ready",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL enforces stored lifecycle and validity before every prescription-backed command",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory and queue reads with PostgreSQL resolves pg_trgm operators through the disposable schema search path",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-payment-recovery.database.spec.ts",
+      "tests": [
+        {
+          "name": "Supplier payment recovery with real PostgreSQL replays concurrent reversal once, retains allocations and restores the exact balance with one audit event",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL reallocates concurrently to one replacement with unchanged total and leaves original allocations immutable",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL rolls back both reversal and replacement when the audit cannot persist",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL preserves historical balances before reversal while current statements include the reversing debit",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL rejects stale revisions, cross-branch corrections, changed totals and over-allocation after supplier credits",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL rejects changed creation payloads and accepts order-independent allocation retries",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL restores the balance used by supplier-credit allocation and keeps ledger totals reconciled",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL allows only one competing reallocation to consume the same outstanding balance",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier payment recovery with real PostgreSQL changes historical allocations at one boundary despite a deliberate transaction-to-reversal timestamp gap",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory.integration.spec.ts",
+      "tests": [
+        {
+          "name": "InventoryController (Integration) /inventory/items (POST) should create a new inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items (POST) should return 409 for duplicate SKU",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items (POST) should return 400 for invalid data",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items (GET) should return paginated inventory items",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items (GET) should filter items by type",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items (GET) should search items by name",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (GET) should return inventory item by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (GET) should return 404 for non-existent item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (PATCH) requires a linked correction to change posted purchase cost",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (PATCH) should update inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (DELETE) should delete inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/items/:id (DELETE) should return 400 if item has transactions",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transactions (POST) should create stock transaction",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transactions (POST) should return 404 for non-existent item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transactions (GET) should return paginated stock transactions",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transactions (GET) should filter transactions by type",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/adjustments (POST) should adjust stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transfers (POST) should transfer stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/transfers (POST) should return 400 for insufficient stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/purchase-orders (POST) should create purchase order",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/suppliers (POST) should create supplier",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/reports/stock (GET) should return stock report",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/statistics (GET) should return inventory statistics",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/alerts/low-stock (GET) should return low stock alerts",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/alerts/expiry (GET) should return expiry alerts",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/search/barcode (GET) should search item by barcode",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/search/barcode (GET) should return 404 for non-existent barcode",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/search/sku (GET) should search item by SKU",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/categories (GET) should return categories",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/manufacturers (GET) should return manufacturers",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/suppliers (GET) should return suppliers",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/storage-locations (GET) should return storage locations",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController (Integration) /inventory/dashboard (GET) should return inventory dashboard",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/lifecycle.database.spec.ts",
+      "tests": [
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL denies NURSE refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL denies RECEPTION refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL denies PHARMACIST refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL allows DOCTOR refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL allows ADMIN refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL allows OWNER refill decisions through the real HTTP role guards",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL preserves a deleted encounter while atomically reopening its appointment for exactly one restart",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL rolls back deletion and detachment if appointment reopening fails",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL omits stale deleted visit links from appointment reads even before legacy links are detached",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL filters deleted visits before selecting the latest five on the patient HTTP endpoint",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL excludes deleted encounters from both results and totals of recent-patient HTTP queries",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL persists walk-in completion and preserves the first timestamp and notes on retry",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL commits appointment completion with the visit and rolls both back on a database failure",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL hides deleted visits from every normal read while preserving clinical audit data",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL rejects deletion when a prescription or legacy attachment exists",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL preserves omission and persists exact clinical clears through validation and reload",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL rejects one of two saves based on the same visit snapshot",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL does not mutate saved attachment documents or timestamps while listing",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL acknowledges the exact visit version after photo mutations",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL authorizes every draft operation against the authenticated branch",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL imports real catalog fields within the branch and never fabricates stock",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL learns regimen defaults only from non-cancelled prescriptions on active visits",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL defaults to ACTIVE with no refill allowance or fabricated review-date expiry",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL audits cancellation, rejects pending refills, and exposes real status on all prescription reads",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL serializes concurrent requests and never approves beyond the explicit allowance",
+          "status": "passed"
+        },
+        {
+          "name": "Visit and prescription lifecycle against PostgreSQL rejects expired, deleted-visit and cross-branch prescription commands",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.database.spec.ts",
+      "tests": [
+        {
+          "name": "Partner stock recovery with PostgreSQL migrates a legacy partial sale and adds only its two outstanding units",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL deduplicates concurrent and lost-response retries",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL leaves held units untouched and requires a fresh revision after a partial response is lost",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL does not deduct a different medicine sharing a batch or the same medicine in a different batch",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL requires explicit selection when exact identity and batch match multiple inventory rows",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL keeps batch search and correction inside the staff branch and protects another partner sale",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL rolls back quantities, sale revision and line progress if a later movement write fails",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL does not infer a product from generic-only names or a missing batch",
+          "status": "passed"
+        },
+        {
+          "name": "Partner stock recovery with PostgreSQL excludes expired batches from automatic matching, search and explicit selection",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts",
+      "tests": [
+        {
+          "name": "Automatic purchase intake with real PostgreSQL saves, reviews and commits 20 legacy invoice rows with no manufacturer and retains the original",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL automatically commits a manufacturer-free product and rejects ambiguous or conflicting product identities",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL persists invoice details and stock once, including duplicate uploads and concurrent retries",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL serializes different invoices for the same batch without losing or duplicating received stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rolls back review and inventory writes if the stock transaction fails",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL retains exact PDF bytes after OCR failure, then links the upload on a corrected manual save",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rolls back invoice writes if the requested original belongs to another invoice or branch",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL keeps a second distinct scan of a duplicate invoice without replacing the first or adding stock twice",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL rejects disguised executable content before archiving or invoking OCR",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase intake with real PostgreSQL stores exceptions without stock and never processes another branch invoice",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyPurchaseInvoiceService restores persisted receipt quantities without repeating a stock commit (receipt null)",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService restores persisted receipt quantities without repeating a stock commit (receipt receipt-1)",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService stores a clean purchase invoice as a draft without stock mutation",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService saves incomplete descriptions as review issues and preserves header OCR flags",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService saves and reviews an invoice with manufacturer \"\"",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService saves and reviews an invoice with manufacturer undefined",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService saves and reviews an invoice with manufacturer null",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService allows review of a legacy draft blocked only by missing manufacturer without rewriting its lines",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps unrelated legacy OCR and reconciliation issues blocking review",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService replaces draft lines atomically and clears corrected review issues",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService refuses to overwrite reviewed, committed, or another branch invoices",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService marks OCR drafts as review-required while explicit flags remain",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService flags reconciliation mismatches before review",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService saves credit bills without due date for correction and blocks review",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService converts duplicate distributor invoice keys into conflict errors",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService identifies the actual unique constraint without guessing the conflicting purchase ([ 'branchId', 'distributorGstin', 'invoiceNumber' ])",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService identifies the actual unique constraint without guessing the conflicting purchase ([ 'branchId', 'workflowReceiptId' ])",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService does not disclose duplicate invoice identity without read capability",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService does not guess a purchase for an unknown unique constraint",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects review of a different observed revision before validation or effects",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService requires clear OCR and reconciliation state before review",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService marks clean purchase invoices reviewed only after goods are received",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps the draft editable when catalogue resolution is missing",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps the draft editable when catalogue resolution is ambiguous",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps the draft editable when catalogue resolution is incomplete",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService reviews a corrected catalogue match without adding stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService reopens only the expected reviewed revision and audits the transition without changing lines or stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService refuses reopening an ineligible invoice {\"status\": \"STOCK_COMMITTED\"}",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService refuses reopening an ineligible invoice {\"stockCommittedAt\": 2026-10-24T11:12:08.784Z}",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService refuses reopening an ineligible invoice {\"status\": \"CANCELLED\"}",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService refuses reopening an ineligible invoice {\"status\": \"DRAFT\"}",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects a stale revision or a concurrent stock claim without writing an audit",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService does not reopen invoices outside the selected branch",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: unrelated names and pack/form-only lines do not suggest Abzorb (Moisturex Hydra Gel Cream)",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: unrelated names and pack/form-only lines do not suggest Abzorb (Cream)",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: unrelated names and pack/form-only lines do not suggest Abzorb (50 ml)",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: rejects Moisturex to Abzorb confirmation before any catalogue or stock writes",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: guards kind and pack mismatches even with identical names",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: guards kind and pack mismatches even with identical names",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: audits original identity and explicit override without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: same normalized name is labelled Same product without a price or manufacturer boost",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService suggests nearest drug-master matches for OCR purchase lines",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService matches 20 OCR rows independently, excludes conflicting packs/strengths/forms and performs no writes",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService requests review of a weak candidate instead of recommending a new duplicate",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService updates an existing drug master only after a confirmed OCR match",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService creates a new drug master only after an explicit OCR create confirmation",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects malformed drug-master confirmation payloads without mutation",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects stock commit unless the purchase invoice is reviewed",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService blocks stock commit when product master is missing",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService CR-15: processing Moisturex creates its own stock without updating Abzorb",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService commits reviewed purchase stock into an existing batch exactly once",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService creates a new inventory batch when no matching active batch exists",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Pack unit for 30ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Tube unit for 30ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Vial unit for 10ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Ampoule unit for 2ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Syringe unit for 1ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Box unit for 50GM without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Kit unit for 30ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Bottle unit for 50GM without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Strip unit for 10'S without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Piece unit for 30ML without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService posts the declared Tablet unit for Strip of 10 without reinterpreting content size",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects a historical batch with a different declared unit instead of relabelling or adding stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService returns an already committed purchase invoice without mutating stock again",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService builds distributor analytics from posted purchase invoices only",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps the complete filtered ranking and separates product masters and declared pack units",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService keeps historical purchases without verifiable master identity visible but their comparable cost unknown",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseInvoiceService rejects distributor analytics with an inverted date range",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+      "tests": [
+        {
+          "name": "Inventory reconciliation recovery restores the correct source hold when reversing a loss after residual release",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery records direct manager approval and a physical ledger baseline even for a zero-delta count",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery rolls back the source reopening when compensation cannot complete",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery posts a nonzero count with its own movement inside the baseline, then detects later drift",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery reconciles physical stock below held stock through a verified source loss and fresh count",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery cancels a supplier return challan after release into its own source hold",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from DRAFT without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from AWAITING_APPROVAL without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from APPROVED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REJECTED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from CANCELLED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from POSTED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory reconciliation recovery starts a fresh uncounted attempt from REVERSED without reusing stale measurements",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger does not assert agreement without a recorded baseline",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger preserves unknown old history while independently detecting later stock drift",
+          "status": "passed"
+        },
+        {
+          "name": "Independent count ledger rejects unknown subsequent signs and missing covered history",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation rejects a stock revision conflict instead of replacing a newer ledger checkpoint",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation rejects a second product identity instead of attaching it to an existing batch",
+          "status": "passed"
+        },
+        {
+          "name": "Opening import reconciliation does not overwrite a sale committed after the import read",
+          "status": "passed"
+        },
+        {
+          "name": "Reviewed purchase recovery rejects an invalid receipt before locking the invoice for review",
+          "status": "passed"
+        },
+        {
+          "name": "Reviewed purchase recovery reopens only an unchanged unposted reviewed invoice and records the actor",
+          "status": "passed"
+        },
+        {
+          "name": "Ambiguous batch identity recovery retains only a physically verified existing product without converting balances",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/lifecycle-migration.database.spec.ts",
+      "tests": [
+        {
+          "name": "Additive lifecycle migration backfills only top-level boolean deletion independent of whitespace and retains audit timestamps",
+          "status": "passed"
+        },
+        {
+          "name": "Additive lifecycle migration uses only completed linked appointments as legacy completion evidence",
+          "status": "passed"
+        },
+        {
+          "name": "Additive lifecycle migration detaches legacy deleted appointment visits while preserving clinical history and cancellation state",
+          "status": "passed"
+        },
+        {
+          "name": "Additive lifecycle migration gives legacy prescriptions ACTIVE status, zero allowance and no inferred expiry",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/purchase-supplier-gstin.database.spec.ts",
+      "tests": [
+        {
+          "name": "Supplier GSTIN correction transactions persists one correction under concurrent retries and leaves the historical invoice unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier GSTIN correction transactions rolls back the supplier change when the audit insert fails",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier GSTIN correction transactions rejects conflicting simultaneous corrections instead of overwriting the first one",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/tests/appointments.conflicts.service.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService - Conflicts throws ConflictException when doctor has overlapping appointment",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService - Conflicts throws ConflictException when room is booked for same slot",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService - Conflicts returns suggestions in the ConflictException response payload (service-level)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/prescriptions.service.spec.ts",
+      "tests": [
+        {
+          "name": "PrescriptionsService createPrescription should create a prescription successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescription should throw NotFoundException if patient not found",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescription should throw NotFoundException if visit not found",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescription should throw NotFoundException if doctor not found",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescription should throw BadRequestException if no items provided",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescriptionPad should create a visit and prescription successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescriptionPad should rollback visit creation if prescription fails",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescriptionPad should validate patient and doctor branch membership",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService findAllPrescriptions should return paginated prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService findAllPrescriptions should apply filters correctly",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService findAllPrescriptions should normalize string pagination values from route query params",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService findPrescriptionById should return prescription by id with parsed JSON fields",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService findPrescriptionById should throw NotFoundException if prescription not found",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService updatePrescription should update prescription successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService updatePrescription should throw BadRequestException if trying to update completed prescription",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService requestRefill should request refill successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService requestRefill should throw BadRequestException if prescription is not active",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService requestRefill should throw BadRequestException if maximum refills exceeded",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService approveRefill should approve refill successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService approveRefill should throw NotFoundException if refill not found",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService searchDrugs should return search results for drugs",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService getPrescriptionStatistics groups real prescription records by Visit doctor and calendar day",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService getExpiringPrescriptions should return expiring prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescriptionTemplate should create prescription template successfully",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService createPrescriptionTemplate should throw ConflictException for duplicate template name (case-insensitive)",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsService generatePrescriptionPdf renders a non-empty PDF and records the download event",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/prescription-pdf.pipeline.spec.ts",
+      "tests": [
+        {
+          "name": "Prescription -> saved readback -> PDF pipeline runs the Chromium prescription download workflow",
+          "status": "pending"
+        },
+        {
+          "name": "Prescription -> saved readback -> PDF pipeline creates, reads back, retries, edits A -> B -> A, and renders current PDF contents",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/users/tests/doctor-signature.spec.ts",
+      "tests": [
+        {
+          "name": "Doctor signature authorization, uploads and exports serves the supplied default PNG only for Dr. Praneeta Jain in the requested branch",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports persists default removal and lets the doctor replace it with an upload",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports uses the default in signed PDFs without an upload and omits it when unticked",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports accepts PNG alpha, scopes ownership to the session, and replaces/removes only that doctor\u2019s signature",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects RECEPTION signature upload and removal",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects NURSE signature upload and removal",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects ADMIN signature upload and removal",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects OWNER signature upload and removal",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects unauthenticated and inactive doctors, and provides no endpoint to upload for another doctor",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports rejects missing, corrupt, oversized and disguised non-raster uploads",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports reads only the requested doctor in the current branch and rejects unsafe legacy URLs",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports prevents creating, retyping, or deleting signatures through generic assets",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports embeds the prescribing doctor\u2019s signature only when requested in generated PDF and server shares",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports attaches the exact preview PDF bytes in Email and WhatsApp, with branch checks before sending",
+          "status": "passed"
+        },
+        {
+          "name": "Doctor signature authorization, uploads and exports runs browser upload, print, PDF, WhatsApp and Email using the supplied PNG",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/patient-history.contract.spec.ts",
+      "tests": [
+        {
+          "name": "Patient history contracts preserves structured clinical data through the actual validation pipe",
+          "status": "passed"
+        },
+        {
+          "name": "Patient history contracts rejects malformed history and validates real query parameters",
+          "status": "passed"
+        },
+        {
+          "name": "Patient history contracts merges partial clinical fields without replacing unrelated data or legacy text",
+          "status": "passed"
+        },
+        {
+          "name": "Patient history contracts retains complaint and diagnosis annotations when labels are resubmitted",
+          "status": "passed"
+        },
+        {
+          "name": "Patient history contracts pages visits and appointment-only records together by encounter date, preserving content",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/tele-video-pdf.spec.ts",
+      "tests": [
+        {
+          "name": "includes the tele-video disclaimer in download PDFs and removes it for in-person",
+          "status": "passed"
+        },
+        {
+          "name": "includes the tele-video disclaimer in WHATSAPP PDFs and removes it for in-person",
+          "status": "passed"
+        },
+        {
+          "name": "includes the tele-video disclaimer in EMAIL PDFs and removes it for in-person",
+          "status": "passed"
+        },
+        {
+          "name": "rejects cross-branch prescriptions and invalid uploads before sharing",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/purchase-invoice-identity.spec.ts",
+      "tests": [
+        {
+          "name": "Purchase identity and access preserves all 20 batch rows, including repeated products, when independent reads agree",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access blocks a dropped final row without truncating the first 20-row read",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access blocks a changed productName even when batch and all numbers agree",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access blocks a changed packSize even when batch and all numbers agree",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access blocks a changed hsnCode even when batch and all numbers agree",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access keeps unknown payment terms blocked even if OCR omitted its uncertainty flag",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access does not erase a strength decimal point when comparing product names",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access blocks a second read that disagrees on GSTIN or batch without silently selecting a value",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access requires a complete page set and explicit quantities in the independent read",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access normalizes equivalent pack labels while preserving volume versus weight",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase identity and access uses role defaults and user permissions together for UI capabilities",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.whatsapp.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService WhatsApp flow uses WhatsApp template with components when available",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService WhatsApp flow supports object metadata and fills patient and clinic template variables",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService WhatsApp flow falls back to plain text when no template is resolved",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.service.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.create throws NotFound when patient not found",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create throws NotFound when doctor not found",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create throws NotFound when room provided but not found",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create throws BadRequest for invalid slot format",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create throws BadRequest when scheduling in the past",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create throws Conflict when scheduling conflicts exist",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.create creates appointment successfully and sends notifications",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/tests/appointments.conflicts.integration.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsController - Conflicts (Integration) POST /appointments returns 409 when doctor is already booked (overlapping slot)",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy-agent/pharmacy-agent.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyAgentService safety helpers redacts sensitive fields recursively before Codex or audit storage",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers normalizes proposal actions with required permissions",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers drops unsupported data requests before the second Codex pass",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers does not report Codex online when authenticated with an API key",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers reports Codex online when authenticated with ChatGPT access token auth",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers caches the Codex status check briefly",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers returns the drug catalog with prices and price sorting",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers reuses an empty active draft session instead of creating duplicates",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers shows one empty active draft and hides empty archived sessions",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers archives and restores agent threads through session status",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyAgentService safety helpers rejects writes to archived threads",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.conflicts.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService - conflict helpers detects doctor overlap conflict",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService - conflict helpers detects room overlap conflict",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService - conflict helpers suggests alternative slots",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-billing-pending.spec.ts",
+      "tests": [
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue exposes inferred prescription quantities to the bill loader",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue product lookup by ID returns Inventory GST 0",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue product lookup by ID returns Inventory GST 5",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue product lookup by ID returns Inventory GST null",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue excludes a saved partial bill even when the dispensing task is QUEUED",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue excludes a saved partial bill even when the dispensing task is IN_REVIEW",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue excludes a saved partial bill even when the dispensing task is READY_TO_BILL",
+          "status": "passed"
+        },
+        {
+          "name": "CR-09 billed prescriptions in the Pending queue excludes a saved partial bill even when the dispensing task is PAID",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/draft-branch.controller.spec.ts",
+      "tests": [
+        {
+          "name": "uses the active request branch for upload, list, binary and deletion before attachment access",
+          "status": "passed"
+        },
+        {
+          "name": "supports the existing authenticated user branch when no request branch is installed",
+          "status": "passed"
+        },
+        {
+          "name": "routes legacy deletion correctly and returns the mutation version instead of a later list version",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory.controller.spec.ts",
+      "tests": [
+        {
+          "name": "InventoryController createInventoryItem should create an inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findAllInventoryItems should return paginated inventory items",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findInventoryItemById should return inventory item by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController updateInventoryItem should update inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController deleteInventoryItem should delete inventory item",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController createStockTransaction should create stock transaction",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findAllStockTransactions should return paginated stock transactions",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findStockTransactionById should return stock transaction by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController updateStockTransaction should update stock transaction",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController deleteStockTransaction should delete stock transaction",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController bulkStockUpdate should perform bulk stock update",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController adjustStock should adjust stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController transferStock should transfer stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController createPurchaseOrder should create purchase order",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findAllPurchaseOrders should return paginated purchase orders",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findPurchaseOrderById should return purchase order by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController updatePurchaseOrder should update purchase order",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController deletePurchaseOrder should delete purchase order",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController createSupplier should create supplier",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findAllSuppliers should return paginated suppliers",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController findSupplierById should return supplier by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController updateSupplier should update supplier",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController deleteSupplier should delete supplier",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getStockReport should return stock report",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getInventoryStatistics should return inventory statistics",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getLowStockAlerts should return low stock alerts",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getExpiryAlerts should return expiry alerts",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getInventoryMovement should return inventory movement",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController searchByBarcode should search item by barcode",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController searchBySku should search item by SKU",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getCategories should return categories",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getManufacturers should return manufacturers",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getSuppliers should return suppliers",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getStorageLocations should return storage locations",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryController getInventoryDashboard should return inventory dashboard",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory.service.spec.ts",
+      "tests": [
+        {
+          "name": "InventoryService createInventoryItem should create an inventory item successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createInventoryItem should throw ConflictException if SKU already exists",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createInventoryItem should throw ConflictException if barcode already exists",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService findAllInventoryItems should return paginated inventory items",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService findAllInventoryItems should filter items by type",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService findAllInventoryItems should search items by name",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService findInventoryItemById should return inventory item by id",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService findInventoryItemById should throw NotFoundException if item not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService updateInventoryItem should update inventory item successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService updateInventoryItem should throw NotFoundException if item not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService rejects posted cost and unit changes in the item master",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService deleteInventoryItem should delete inventory item successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService deleteInventoryItem should throw NotFoundException if item not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService deleteInventoryItem should throw BadRequestException if item has transactions",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createStockTransaction should create stock transaction successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createStockTransaction should throw NotFoundException if item not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService adjustStock should adjust stock successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService transferStock should transfer stock successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService transferStock should throw BadRequestException if insufficient stock",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createPurchaseOrder should create purchase order successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService createSupplier should create supplier successfully",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService getStockReport should return stock report",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService getInventoryStatistics should return inventory statistics",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService getLowStockAlerts should return low stock items",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService getExpiryAlerts should return items expiring soon",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService searchByBarcode should find item by barcode",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService searchByBarcode should throw NotFoundException if barcode not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService searchBySku should find item by SKU",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService searchBySku should throw NotFoundException if SKU not found",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService getInventoryDashboard should return inventory dashboard data",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/users/tests/users.controller.spec.ts",
+      "tests": [
+        {
+          "name": "UsersController should be defined",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should create a user",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should find all users",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should find user by id",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should update user",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should delete user",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should change password",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should reset password",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should set password",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should update profile",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should assign role",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should update permissions",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController User Management should update user status",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Branch Management should create branch",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Branch Management should find all branches",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Branch Management should find branch by id",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Branch Management should update branch",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Branch Management should delete branch",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Permission Management should create permission",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Permission Management should find all permissions",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Permission Management should find permission by id",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Permission Management should update permission",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Permission Management should delete permission",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Role Management should create role",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Role Management should find all roles",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Role Management should find role by id",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Role Management should update role",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Role Management should delete role",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Statistics and Dashboard should get user statistics",
+          "status": "passed"
+        },
+        {
+          "name": "UsersController Statistics and Dashboard should get user dashboard",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-import.service.spec.ts",
+      "tests": [
+        {
+          "name": "Pharmacy stock export compatibility recognizes unnamed header null and preserves stock, MRP and expiry",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy stock export compatibility recognizes unnamed header  and preserves stock, MRP and expiry",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy stock export compatibility does not guess that an arbitrary unnamed column contains medicine names",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy stock export compatibility reads expiry month 02/28 as the end of that month",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy stock export compatibility reads expiry month 02/2029 as the end of that month",
+          "status": "passed"
+        },
+        {
+          "name": "Stock import continuation and duplicate handling appends composition-only export rows without creating extra stock rows",
+          "status": "passed"
+        },
+        {
+          "name": "Stock import continuation and duplicate handling rejects both conflicting opening stocks before writing either one, while allowing other batches",
+          "status": "passed"
+        },
+        {
+          "name": "Stock import continuation and duplicate handling does not match an inventory SKU from a different batch",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.access.spec.ts",
+      "tests": [
+        {
+          "name": "Purchase invoice access through HTTP requires create and review permissions to reopen ([])",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP requires create and review permissions to reopen ([\"pharmacy:purchase-invoice:create\"])",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP requires create and review permissions to reopen ([\"pharmacy:purchase-invoice:review\"])",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP requires create and review permissions to reopen ([\"pharmacy:purchase-invoice:create\", \"pharmacy:purchase-invoice:review\"])",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP requires create and review permissions to reopen ([\"inventory:po:create\", \"inventory:po:update\"])",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows staff to learn their capabilities before any purchase permissions are granted",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP lists branch suppliers only with purchase read or create access",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies supplier correction without both permissions: []",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies supplier correction without both permissions: [\"inventory:supplier:update\"]",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies supplier correction without both permissions: [\"inventory:po:create\"]",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows supplier correction with update and inventory:po:create access, scoped to the authenticated branch and actor",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows supplier correction with update and pharmacy:purchase-invoice:create access, scoped to the authenticated branch and actor",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP lets Reception with explicit purchase permission reach OCR",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP lets existing Reception inventory purchasing access reach OCR",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP serves original documents only with invoice read access, with private download headers",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception get ",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception get /draft-1",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception get /analytics/distributors",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception post /drafts",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception patch /drafts/draft-1",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception post /master-matches",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception post /master-confirmations",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception get /master-products?q=Abzorb",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception patch /draft-1/review",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP allows authorized Reception post /draft-1/commit-stock",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission get ",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission get /draft-1",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission get /analytics/distributors",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission post /drafts",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission patch /drafts/draft-1",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission post /master-matches",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission post /master-confirmations",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission get /master-products?q=Abzorb",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission patch /draft-1/review",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP denies Reception without permission post /draft-1/commit-stock",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP does not let OCR permission grant review or stock commit",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP does not grant PATIENT access through inventory permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP does not grant NURSE access through inventory permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP does not grant ACCOUNTANT access through inventory permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Purchase invoice access through HTTP keeps Pharmacist explicit purchase permissions working",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/billing/tests/billing.controller.spec.ts",
+      "tests": [
+        {
+          "name": "BillingController createInvoice should create an invoice",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController findAllInvoices should return paginated invoices",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController getOutstandingInvoices should return outstanding invoices",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController findInvoiceById should return invoice by id",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController updateInvoice should update invoice",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController cancelInvoice should cancel invoice",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController processPayment should process payment",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController processBulkPayment should process bulk payment",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController confirmPayment should confirm payment",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController findAllPayments should return paginated payments",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController getPaymentSummary should return payment summary",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController processRefund should process refund",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController getRevenueReport should return revenue report",
+          "status": "passed"
+        },
+        {
+          "name": "BillingController getStatistics should return statistics",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation.spec.ts",
+      "tests": [
+        {
+          "name": "Automatic purchase invoice intake normalizes absent manufacturer without an OCR blocker and preserves genuine identity uncertainty",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake commits a saved invoice with no manufacturer against one matching product and pack",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake imports and commits when both the invoice and saved product have no manufacturer",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake keeps ambiguous products blocked when manufacturer is omitted",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake preserves fractional quantities and blocks them before stock commit",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not require a doctor on a supplier purchase invoice",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not run OCR or add stock if original-file archiving fails",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves extracted headers and rows and commits fully validated stock in one operation",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves OCR flag for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves low confidence for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves missing confidence for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves mismatched totals for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves mismatched rate and quantity for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves expired batch for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves fractional stock for correction without changing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake enriches a uniquely matched product from its saved manufacturer and canonical pack",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake blocks a valid-looking GSTIN that disagrees with the saved supplier",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake keeps a header OCR issue once when automatic processing also reports it",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake preserves low OCR confidence after human correction while keeping automatic stock blocked",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not guess a missing receipt date",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves an invoice with missing product matches for review",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake saves an invoice with ambiguous product matches for review",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake returns an existing duplicate without overwriting or committing it",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not disclose a duplicate to importers without read capability",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not interpret unrelated conflicts as a duplicate",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake requires read capability before returning an already-linked original invoice",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake keeps the extracted form available if required identity or expiry is unreadable",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake leaves the saved draft unreviewed when stock writing fails",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake reprocessing an already committed invoice does not add stock again",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake does not invent an expiry date or round confidence upward during extraction normalization",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic purchase invoice intake flags missing printed amounts and quantities even when fallback arithmetic is possible",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts",
+      "tests": [
+        {
+          "name": "Automatic intake HTTP permissions allows source viewing with read permission and uses only the authenticated branch",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions denies source images and metadata without invoice read access",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions allows same-screen catalog correction only with invoice and product-edit permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions denies catalog correction without inventory:po:create",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions denies catalog correction without pharmacy:drug:update",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions validates the catalog kind and prescription boolean before saving",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions allows Reception to save suppliers only with the corresponding existing permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions rejects supplier saving without inventory:po:create",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions rejects supplier saving without inventory:supplier:create",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions rejects invalid GSTIN and missing verification before calling the supplier service",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions passes the file, confirmed receipt date and authenticated identity to automatic import",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions forwards denied read capability without widening automatic import permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions requires pharmacy:purchase-invoice:create in addition to the other permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions requires pharmacy:purchase-invoice:review in addition to the other permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions requires pharmacy:purchase-invoice:commit-stock in addition to the other permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions allows Reception with all three corresponding Inventory permissions",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions still requires Reception inventory:po:create",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions still requires Reception inventory:po:update",
+          "status": "passed"
+        },
+        {
+          "name": "Automatic intake HTTP permissions still requires Reception inventory:transaction:create",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/reports/tests/reports.controller.spec.ts",
+      "tests": [
+        {
+          "name": "ReportsController should be defined",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/tele-video-consultation.spec.ts",
+      "tests": [
+        {
+          "name": "rejects tele-video without explicit consent (undefined), before writes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects tele-video without explicit consent (false), before writes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects tele-video without explicit consent (\"true\"), before writes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects tele-video without explicit consent (1), before writes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects tele-video without explicit consent (null), before writes",
+          "status": "passed"
+        },
+        {
+          "name": "defaults existing and new visits to in-person without a consent receipt",
+          "status": "passed"
+        },
+        {
+          "name": "ignores forged receipt fields, records the actor/time, and preserves the first receipt on edits",
+          "status": "passed"
+        },
+        {
+          "name": "blocks unchecked consent on update; switching back to tele-video requires a new receipt",
+          "status": "passed"
+        },
+        {
+          "name": "rejects missing actors, invalid types and invalid consent at validation and service boundaries",
+          "status": "passed"
+        },
+        {
+          "name": "enforces consent and records the actor through prescription create clinicalData",
+          "status": "passed"
+        },
+        {
+          "name": "enforces consent and records the actor through prescription update clinicalData",
+          "status": "passed"
+        },
+        {
+          "name": "filters visits by consultation type within the authenticated branch",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/prescriptions.controller.spec.ts",
+      "tests": [
+        {
+          "name": "PrescriptionsController createPrescription should create a prescription",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController findAllPrescriptions should return paginated prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getPrescriptionHistory should return prescription history",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getExpiringPrescriptions should return expiring prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getPrescriptionStatistics should return prescription statistics",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController findPrescriptionById should return prescription by id",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController updatePrescription should update prescription",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController cancelPrescription should cancel prescription",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController requestRefill should request refill",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController approveRefill approves the route ID when a different refill ID is supplied in the body",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController approveRefill should approve refill",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController rejectRefill should reject refill",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController findAllRefills should return paginated refills",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController searchDrugs should return drug search results",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController createPrescriptionTemplate should create prescription template",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController findAllPrescriptionTemplates should return paginated prescription templates",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getPatientPrescriptions should return patient prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getPatientPrescriptionHistory should return patient prescription history",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getDoctorPrescriptions should return doctor prescriptions",
+          "status": "passed"
+        },
+        {
+          "name": "PrescriptionsController getDoctorPrescriptionStatistics should return doctor prescription statistics",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.available-slots.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.getAvailableSlots throws NotFound if doctor missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.getAvailableSlots returns all slots when no bookings",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.getAvailableSlots filters out overlapping booked slots (doctor)",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.getAvailableSlots merges room bookings when roomId provided",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.remove.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.remove rejects cancelling completed appointment",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.remove rejects cancelling in-progress appointment",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.remove cancels scheduled appointment",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.remove returns success message if appointment is already cancelled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.doctor-schedule.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.getDoctorSchedule throws NotFound if doctor missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.getDoctorSchedule returns ordered appointments with doctor name",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/shared/tests/build-contract-regressions.spec.ts",
+      "tests": [
+        {
+          "name": "Backend build contract regressions rejects startup without a JWT secret and accepts an explicit secret",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions applies permission filters and safe pagination when the query omits page and limit",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions serializes permission arrays, preserves omitted permissions, and honors explicit clearing",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions getUserStatistics keeps every aggregate in the authenticated branch and date window",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions getUserDashboard keeps every aggregate in the authenticated branch and date window",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions rejects an invoice visit outside its patient and branch before writing",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions validates invoice payment mode and tax fields without silently stripping valid updates",
+          "status": "passed"
+        },
+        {
+          "name": "Backend build contract regressions allocates partial payments over relational service lines without duplicating revenue or service quantities",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-supplier.spec.ts",
+      "tests": [
+        {
+          "name": "Verified supplier save from invoice review saves only a verified, active supplier in the authenticated branch",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review returns the same matching supplier on retry without creating or overwriting it",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review rejects conflicting or inactive records without changing them",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review rejects conflicting or inactive records without changing them",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review rejects conflicting or inactive records without changing them",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review rejects conflicting or inactive records without changing them",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review requires valid identity and explicit verification",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review requires valid identity and explicit verification",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review requires valid identity and explicit verification",
+          "status": "passed"
+        },
+        {
+          "name": "Verified supplier save from invoice review requires supplier creation permission in addition to invoice creation capability",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/shared/logging/http-observability.spec.ts",
+      "tests": [
+        {
+          "name": "HTTP diagnostics at the Nest boundary correlates a saved patient without logging patient data, tokens or the raw URL",
+          "status": "passed"
+        },
+        {
+          "name": "HTTP diagnostics at the Nest boundary records pipe validation and authentication failures with references and preserves public responses",
+          "status": "passed"
+        },
+        {
+          "name": "HTTP diagnostics at the Nest boundary replaces untrusted request IDs and removes unexpected exception details",
+          "status": "passed"
+        },
+        {
+          "name": "HTTP diagnostics at the Nest boundary does not log an unmatched URL containing patient information",
+          "status": "passed"
+        },
+        {
+          "name": "HTTP diagnostics at the Nest boundary preserves malformed JSON as a 400 without logging the rejected body",
+          "status": "passed"
+        },
+        {
+          "name": "logs a premature disconnect once as unknown and tolerates a broken log sink",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/purchase-invoice-source.spec.ts",
+      "tests": [
+        {
+          "name": "Invoice source evidence batches page-only reads, remaps page coordinates, and keeps final totals on the last page",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence keeps reliable pages if a different page fails, without moving those regions to the wrong page",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence uses the persisted source row order when a repeated extraction has reordered rows",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence joins reordered 20-row locations without accepting replacement prices or shifted row indexes",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence keeps persisted row references when the same image is extracted again in a different order",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence keeps extraction values and flags when the optional location pass fails and sends only original images",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence keeps valid printed regions and rejects invented keys, unprinted values and out-of-page coordinates",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence preserves all 20 repeated batch rows across two pages without merging or shifting their boxes",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence locates an older document without changing invoice values or stock, and reuses saved evidence",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence does not persist a failed location pass and lets it be retried",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice source evidence does not return another branch document or render invalid page numbers",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory.enhancements.spec.ts",
+      "tests": [
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Create inventory item with all required fields should create inventory item with only required fields",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Create inventory item with optional fields should create inventory item with all optional fields",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate SKU uniqueness per branch should throw ConflictException for duplicate SKU in same branch",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate SKU uniqueness per branch should allow same SKU in different branches",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate barcode uniqueness per branch should throw ConflictException for duplicate barcode in same branch",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate barcode uniqueness per branch should allow same barcode in different branches",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate enum values should accept valid InventoryItemType enum",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate enum values should accept valid UnitType enum",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Validate enum values should accept valid InventoryStatus enum",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test expiryDate conversion should convert expiryDate string to Date object on create",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test expiryDate conversion should convert expiryDate string to Date object on update",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test expiryDate conversion should handle undefined expiryDate",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test tags array serialization should serialize tags array to JSON string on create",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test tags array serialization should deserialize tags JSON string to array in result",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test tags array serialization should handle empty tags array",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test tags array serialization should handle null tags",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Enhanced Drug Addition Tests Test user relation in responses should include user with firstName and lastName in stock transactions",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/prescription-drug-search.spec.ts",
+      "tests": [
+        {
+          "name": "uses clinic inventory, carries its stable ID, and excludes held stock",
+          "status": "passed"
+        },
+        {
+          "name": "ranks before limiting and keeps duplicate products separate for review",
+          "status": "passed"
+        },
+        {
+          "name": "sums sibling batches once but does not combine packs or units",
+          "status": "passed"
+        },
+        {
+          "name": "never falls back to the full catalog for a missing medicine",
+          "status": "passed"
+        },
+        {
+          "name": "handles blank queries and rejects invalid scope/input",
+          "status": "passed"
+        },
+        {
+          "name": "passes the authenticated branch to the prescription service",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/medicine-regimen-defaults.spec.ts",
+      "tests": [
+        {
+          "name": "uses each field\u2019s mode in the doctor\u2019s history once three prescriptions exist",
+          "status": "passed"
+        },
+        {
+          "name": "uses clinic-wide history below the three-prescription threshold",
+          "status": "passed"
+        },
+        {
+          "name": "breaks ties per field with the most recent prescription, keeping duration units paired",
+          "status": "passed"
+        },
+        {
+          "name": "scopes catalog, history, date window and current-visit exclusion on the server",
+          "status": "passed"
+        },
+        {
+          "name": "clamps a leap-day anniversary to 12 calendar months",
+          "status": "passed"
+        },
+        {
+          "name": "matches catalog IDs first and exact legacy names without borrowing another strength or medicine",
+          "status": "passed"
+        },
+        {
+          "name": "does not count duplicate rows as multiple prescriptions or learn missing fields as blank modes",
+          "status": "passed"
+        },
+        {
+          "name": "streams beyond 500 prescriptions rather than sampling a recent subset",
+          "status": "passed"
+        },
+        {
+          "name": "uses optional inventory defaults only when there is no medicine history",
+          "status": "passed"
+        },
+        {
+          "name": "returns no invented defaults for a never-prescribed medicine",
+          "status": "passed"
+        },
+        {
+          "name": "rejects missing auth context or medicines outside the branch",
+          "status": "passed"
+        },
+        {
+          "name": "gets doctor and clinic identity from the authenticated request",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/purchase-supplier-gstin.spec.ts",
+      "tests": [
+        {
+          "name": "Saved supplier GSTIN corrections updates only GSTIN and writes the actor, old/new values and reason inside the same transaction",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects invalid or unverified input before any database operation: {\"verified\":false}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects invalid or unverified input before any database operation: {\"gstNumber\":\"invalid\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects invalid or unverified input before any database operation: {\"reason\":\" \"}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects invalid or unverified input before any database operation: {\"expectedUpdatedAt\":\"invalid\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects invalid or unverified input before any database operation: {}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections cannot correct an inactive supplier or a supplier in another branch",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections requires a fresh revision and old value: {\"expectedUpdatedAt\":\"2026-09-01T10:00:00Z\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections requires a fresh revision and old value: {\"expectedGstNumber\":\"different\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects a GSTIN already assigned to any other supplier, including inactive records",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections rejects a concurrent change at the write boundary without recording a correction",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections returns an already applied correction after a lost response without writing or auditing twice",
+          "status": "passed"
+        },
+        {
+          "name": "Saved supplier GSTIN corrections propagates audit failure out of the transaction so the database rolls back",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation exposes edit capability only with both permissions: [\"inventory:po:create\"]",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation exposes edit capability only with both permissions: [\"inventory:supplier:update\"]",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation exposes edit capability only with both permissions: [\"inventory:po:create\",\"inventory:supplier:update\"]",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation normalizes new GSTIN and reason while preserving the exact saved value for conflict detection",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation rejects malformed correction requests: {\"verified\":\"true\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation rejects malformed correction requests: {\"expectedUpdatedAt\":\"\"}",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation rejects malformed correction requests: {\"reason\":\" \"}",
+          "status": "passed"
+        },
+        {
+          "name": "Supplier correction capability and input validation rejects malformed correction requests: {\"gstNumber\":\"bad\"}",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory.alignment.spec.ts",
+      "tests": [
+        {
+          "name": "InventoryService - Alignment Tests Create inventory item with all required fields should create item with only required fields",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Create inventory item with optional fields should create item with all optional fields",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate SKU uniqueness per branch should throw ConflictException if SKU exists in same branch",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate SKU uniqueness per branch should allow same SKU in different branches",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate barcode uniqueness per branch should throw ConflictException if barcode exists in same branch",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate enum values should accept valid InventoryItemType enum values",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate enum values should accept valid UnitType enum values",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate enum values should accept valid InventoryStatus enum values",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate number ranges should accept valid positive prices",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate number ranges should accept valid stock level quantities",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Validate number ranges should accept GST rate within valid range (0-100)",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test expiryDate conversion should convert ISO date string to Date object",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test expiryDate conversion should handle null/undefined expiryDate",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test tags array serialization should serialize tags array to JSON string",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test tags array serialization should handle empty tags array",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test tags array serialization should handle null/undefined tags",
+          "status": "passed"
+        },
+        {
+          "name": "InventoryService - Alignment Tests Test user relation in responses should include user firstName and lastName (not name) in stock transaction response",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.find.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.findOne/findAll findOne throws NotFound when missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.findOne/findAll findOne returns appointment when present",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.findOne/findAll findAll returns paginated result",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.bulk-update.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.bulkUpdate throws NotFound if some appointments missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.bulkUpdate performs update when all appointments exist",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/visits.service.spec.ts",
+      "tests": [
+        {
+          "name": "VisitsService create should create a visit successfully",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create should throw NotFoundException if patient not found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create should throw NotFoundException if doctor not found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create should throw ConflictException if visit already exists for appointment",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create creates an empty draft with appointment undefined",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create creates an empty draft with appointment appointment-123",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create rejects non-array complaints: undefined",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create rejects non-array complaints: null",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create rejects non-array complaints: \"\"",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService create rejects non-array complaints: {}",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService findAll should return paginated visits",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService findAll should apply filters correctly",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService findOne should return visit by id with parsed JSON fields",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService findOne should throw NotFoundException if visit not found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService update returns the current visit instead of failing on an empty update payload",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService update should update visit successfully",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService complete returns the stored completion and retains other plan fields",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService remove should soft delete visit successfully",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService remove should throw BadRequestException if visit has prescription",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService getPatientVisitHistory should return patient visit history",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService getPatientVisitHistory should throw NotFoundException if patient not found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService getDoctorVisits should return doctor visits",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService getDoctorVisits should throw NotFoundException if doctor not found",
+          "status": "passed"
+        },
+        {
+          "name": "VisitsService getVisitStatistics should return visit statistics",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/prescription-clinical-transaction.spec.ts",
+      "tests": [
+        {
+          "name": "Prescription clinical transaction saves a manually entered medicine with a dose pattern and no numeric dosage",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction still rejects an explicit invalid dosage: 0",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction still rejects an explicit invalid dosage: -1",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction still rejects an explicit invalid dosage: invalid",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction validates and commits prescription plus clinical details without dropping prior fields",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction rolls back the clinical update if prescription insertion fails",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction rejects cross-patient linkage before any write",
+          "status": "passed"
+        },
+        {
+          "name": "Prescription clinical transaction updates an existing prescription using real schema fields and retains visit history",
+          "status": "passed"
+        },
+        {
+          "name": "Saved clinical details in history returns the complete validated prescription snapshot through the history service",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.reschedule.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.reschedule rejects when cannot reschedule due to status/time",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.reschedule throws Conflict when new slot conflicts",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.reschedule updates appointment on success",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/appointments.room-schedule.spec.ts",
+      "tests": [
+        {
+          "name": "AppointmentsService.getRoomSchedule throws NotFound if room missing",
+          "status": "passed"
+        },
+        {
+          "name": "AppointmentsService.getRoomSchedule returns room schedule payload when room exists",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/purchase-product-catalog.spec.ts",
+      "tests": [
+        {
+          "name": "Invoice product catalog correctness creates a cosmetic with unknown clinical fields left null and prescription not required",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness requires an explicit product kind instead of defaulting to medicine",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness requires actual medicine details instead of accepting inferred or placeholder values",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness persists explicitly entered medicine details and an OTC choice",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness allows cosmetic stock with absent clinical fields and preserves its non-medicine classification",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness blocks legacy generated medicine placeholders at the stock-commit boundary",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness repairs only an active product in the authenticated branch without writing stock",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness rejects correction of a product outside this branch",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness preserves the existing medicine system when correcting verified medicine details",
+          "status": "passed"
+        },
+        {
+          "name": "Invoice product catalog correctness honors an explicit non-prescription choice for a medicine when adding stock",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-purchase-ledger.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyPurchaseLedgerService records one payment allocated across multiple purchase invoices",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseLedgerService rejects allocation beyond the invoice outstanding balance",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseLedgerService rejects invoice allocations for a different distributor GSTIN",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseLedgerService derives distributor summary counts, overdue amounts, and TCS threshold state",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPurchaseLedgerService returns aging buckets and due alerts from outstanding invoices",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-inventory-consistency.spec.ts",
+      "tests": [
+        {
+          "name": "Inventory Updates stock integrity rejects a count that would consume held stock",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity records the signed balance change for count 90",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity records the signed balance change for count 110",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity rejects a stale count after sale",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity rejects a stale count after hold",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity rejects a stale count after revision",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity rejects a stale count after new batch",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity rejects aggregate counts across incompatible stock units",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity requires re-submission of legacy stock requests with no saved snapshot",
+          "status": "passed"
+        },
+        {
+          "name": "Inventory Updates stock integrity does not apply an already approved request twice",
+          "status": "passed"
+        },
+        {
+          "name": "Billing queue represents posted stock only keeps a prescription pending when its only invoice is DRAFT",
+          "status": "passed"
+        },
+        {
+          "name": "Billing queue represents posted stock only keeps a prescription pending when its only invoice is PENDING",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy alternative stock availability subtracts holds and retains stock expiring on the current calendar day",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy alternative stock availability does not recommend completely held or expired stock",
+          "status": "passed"
+        },
+        {
+          "name": "Pharmacy alternative stock availability does not add quantities across incompatible pack units",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/whatsapp-templates/whatsapp-templates.service.spec.ts",
+      "tests": [
+        {
+          "name": "WhatsAppTemplatesService rejects content placeholders not declared in variables",
+          "status": "passed"
+        },
+        {
+          "name": "WhatsAppTemplatesService sends test message with body components mapped to variable order",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-payment-recovery.spec.ts",
+      "tests": [
+        {
+          "name": "Supplier payment recovery rejects reuse of a payment request key for a changed amount instead of returning an unrelated success",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-invoice.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyInvoiceService defensive stock confirmation blocks confirmation when only expired or insufficient stock is available",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyInvoiceService defensive stock confirmation deducts stock in FEFO order and records batch metadata",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyInvoiceService defensive stock confirmation rejects invalid backwards status transitions without changing the invoice",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyInvoiceService defensive stock confirmation builds standardized print data with GST slab and batch allocations",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyInvoiceService defensive stock confirmation does not build print data for invoices outside the branch",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-prescription-queue.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyPrescriptionQueueService marks unlinked prescriptions older than 24 hours as expired",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPrescriptionQueueService marks linked invoices as partial when inferred quantities are not fully covered",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPrescriptionQueueService keeps cancelled linked invoices out of coverage without treating the prescription as pending",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPrescriptionQueueService marks a completed linked invoice as dispensed even when quantities are unknown",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPrescriptionQueueService returns FEFO available stock checks with low stock and near expiry",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPrescriptionQueueService throws not found for prescriptions outside the branch",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-workspace-batches.spec.ts",
+      "tests": [
+        {
+          "name": "stock batch identity and name corrections includes earlier batches of the same verified product and pack despite legacy category differences",
+          "status": "passed"
+        },
+        {
+          "name": "stock batch identity and name corrections makes subsequent manual name corrections visible, retains old aliases and audits only item metadata",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-compliance.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyComplianceService summarizes input GST, output GST, net payable, and slabs",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService returns expiry batches with quarantine action for expired stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService creates a parseable audit session using InventoryAudit rows",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService rejects retired direct audit submission for OWNER before any database access",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService rejects retired direct audit submission for ADMIN before any database access",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService rejects retired direct audit submission for MANAGER before any database access",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyComplianceService rejects retired direct audit submission for PHARMACIST before any database access",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/cr10-stock-identity.spec.ts",
+      "tests": [
+        {
+          "name": "CR-10 prescription stock identity uses the saved inventory identity even when the prescribed name differs",
+          "status": "passed"
+        },
+        {
+          "name": "honors expiry through its UTC calendar day and subtracts held units regardless of stale status",
+          "status": "passed"
+        },
+        {
+          "name": "does not replace an invalid explicit inventory ID with a same-name item",
+          "status": "passed"
+        },
+        {
+          "name": "rejects same-name products with different identities instead of taking the first",
+          "status": "passed"
+        },
+        {
+          "name": "sums sibling batches even when only one name matches the search query",
+          "status": "passed"
+        },
+        {
+          "name": "counts billed quantities by saved identity when the prescription display name is different",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/shared/search/product-search.spec.ts",
+      "tests": [
+        {
+          "name": "shared product matching orders exact codes, names, aliases, prefixes, words and typos consistently",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching corrects adjacent transpositions, joined brand words and known old names",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching supports word order, unit spacing, punctuation and query words across fields",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching does not fuzzy-correct numbers, decimal strength, dosage forms or short names",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching ranks the closer spelling above a different brand even when strength is in another field",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching honors name and ingredient mode without falling back to the other field",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching keeps pack dimensions and loose units distinct",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching bounds query work and never changes input objects",
+          "status": "passed"
+        },
+        {
+          "name": "shared product matching only omits the explicit supplier annotation for OCR suggestion lookup",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-observability.spec.ts",
+      "tests": [
+        {
+          "name": "inventory automation diagnostics logs safe HTTP and Prisma categories without business data or raw errors",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation diagnostics discards arbitrary metadata and malformed database codes",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation diagnostics does not throw when diagnostic output fails",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/personal-history.spec.ts",
+      "tests": [
+        {
+          "name": "saves personal history, exposes it for new visits and snapshots it into the next visit",
+          "status": "passed"
+        },
+        {
+          "name": "persists an explicit clear \"\" and carries it forward without reviving older text",
+          "status": "passed"
+        },
+        {
+          "name": "persists an explicit clear \"  \\n  \" and carries it forward without reviving older text",
+          "status": "passed"
+        },
+        {
+          "name": "prefers the new value, retains legacy text and isolates patients and branches",
+          "status": "passed"
+        },
+        {
+          "name": "returns no default history for a patient who has never recorded it",
+          "status": "passed"
+        },
+        {
+          "name": "carries personal history into a consented tele-video visit without bypassing the consent gate",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-detail-corrections.spec.ts",
+      "tests": [
+        {
+          "name": "saved batch corrections saves a verified batch/expiry with the actor, reason and old values, without moving stock",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects invalid dates without writing: 2027-02-29",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects invalid dates without writing: 2026-04-31",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects invalid dates without writing: not-a-date",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects invalid dates without writing: ",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects invalid dates without writing: 2028-01-01T00:00:00Z",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects missing reasons and stale records",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections does not rewrite the timestamp when the saved calendar day is unchanged",
+          "status": "passed"
+        },
+        {
+          "name": "saved batch corrections rejects a correction without item-write permission",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-workflow-scheduler.spec.ts",
+      "tests": [
+        {
+          "name": "inventory automation outcome logging links step outcomes to the persisted run without logging document or actor details",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging records rejected steps, continues remaining work, and marks the run failed",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging detects nested purchase-order failures even when the service resolves",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging logs history failures and rethrows without claiming a successful completed run",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging logs settings failures and still rejects unauthorized manual execution",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging records disabled runs without creating stock documents",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging logs a missing owner and continues after branch history persistence fails",
+          "status": "passed"
+        },
+        {
+          "name": "inventory automation outcome logging logs scheduler lookup failures and releases the running lock",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/patients/patient-deduplication.service.spec.ts",
+      "tests": [
+        {
+          "name": "PatientDeduplicationService skips the merge run when another instance holds the advisory lock",
+          "status": "passed"
+        },
+        {
+          "name": "PatientDeduplicationService merges duplicate patients and renumbers visits by date order",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/inventory/tests/inventory-regimen-defaults.spec.ts",
+      "tests": [
+        {
+          "name": "normalizes optional defaults and allows clearing without a fixed replacement",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultDuration\":0}",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultDuration\":1.5}",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultDuration\":\"oops\"}",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultDuration\":2}",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultDurationUnit\":\"bad\"}",
+          "status": "passed"
+        },
+        {
+          "name": "rejects invalid values: {\"defaultTiming\":12}",
+          "status": "passed"
+        },
+        {
+          "name": "keeps all default fields through DTO whitelisting on create and update",
+          "status": "passed"
+        },
+        {
+          "name": "persists defaults through the inventory create and update services",
+          "status": "passed"
+        },
+        {
+          "name": "persists and audits defaults in product details without changing stock",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/clinical-save-roundtrip.spec.ts",
+      "tests": [
+        {
+          "name": "round-trips every clinical document through validation, create, update and history without losing saved fields",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/prescriptions/tests/lifecycle-dto.spec.ts",
+      "tests": [
+        {
+          "name": "accepts generated CUIDs for refill commands and prescription query filters",
+          "status": "passed"
+        },
+        {
+          "name": "preserves false filters and rejects non-boolean lifecycle filters",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/inventory-batch-edits.spec.ts",
+      "tests": [
+        {
+          "name": "queues a batch count without changing stock, then approves only that batch (linked=true)",
+          "status": "passed"
+        },
+        {
+          "name": "queues a batch count without changing stock, then approves only that batch (linked=false)",
+          "status": "passed"
+        },
+        {
+          "name": "approves selling price and synchronizes only an existing unique drug link (linked=true)",
+          "status": "passed"
+        },
+        {
+          "name": "approves selling price and synchronizes only an existing unique drug link (linked=false)",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an approval after concurrent stock changes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an approval after concurrent held changes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an approval after concurrent revision changes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an approval after concurrent price changes",
+          "status": "passed"
+        },
+        {
+          "name": "rejects an approval after concurrent identity changes",
+          "status": "passed"
+        },
+        {
+          "name": "requires a reason, revision, whole nonnegative count and branch ownership",
+          "status": "passed"
+        },
+        {
+          "name": "blocks duplicate pending edits and ambiguous price links",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/app.controller.spec.ts",
+      "tests": [
+        {
+          "name": "AppController root should return \"Hello World!\"",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/drug.service.spec.ts",
+      "tests": [
+        {
+          "name": "DrugService inventory change approvals allows existing cosmetics to be edited without clinical placeholders",
+          "status": "passed"
+        },
+        {
+          "name": "DrugService inventory change approvals blocks direct pharmacist edits to drug prices",
+          "status": "passed"
+        },
+        {
+          "name": "DrugService inventory change approvals creates pending requests for changed prices and stock",
+          "status": "passed"
+        },
+        {
+          "name": "DrugService inventory change approvals rejects a proposal batch when a drug already has a pending request",
+          "status": "passed"
+        },
+        {
+          "name": "DrugService inventory change approvals approves a pending request and commits price plus stock",
+          "status": "passed"
+        },
+        {
+          "name": "DrugService inventory change approvals rejects a pending request without changing price or stock",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.service.spec.ts",
+      "tests": [
+        {
+          "name": "PharmacyPartnerSalesService submits a partner-scoped daily sale from metadata organization",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPartnerSalesService blocks partner users from submitting for another organization",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPartnerSalesService commits available stock and flags excess quantity without negative stock",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPartnerSalesService does not create stock transactions when inventory changes during commit",
+          "status": "passed"
+        },
+        {
+          "name": "PharmacyPartnerSalesService scopes partner list access to metadata organization",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/shared/guards/permissions.guard.spec.ts",
+      "tests": [
+        {
+          "name": "PermissionsGuard requirement groups keeps every existing string permission required",
+          "status": "passed"
+        },
+        {
+          "name": "PermissionsGuard requirement groups accepts an explicit alternative without relaxing other requirements",
+          "status": "passed"
+        },
+        {
+          "name": "PermissionsGuard requirement groups combines role and user grants while requiring every group",
+          "status": "passed"
+        },
+        {
+          "name": "PermissionsGuard requirement groups fails closed on an empty alternative group or ungranted wildcard",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.recovery.spec.ts",
+      "tests": [
+        {
+          "name": "Partner outstanding stock recovery retries a legacy partial commit without deducting its five previously committed units",
+          "status": "passed"
+        },
+        {
+          "name": "Partner outstanding stock recovery preserves held units and retries only the remainder after replenishment",
+          "status": "passed"
+        },
+        {
+          "name": "Partner outstanding stock recovery returns the existing completed outcome when the response is lost and the request is repeated",
+          "status": "passed"
+        },
+        {
+          "name": "Partner outstanding stock recovery audits an explicit correction without changing sold snapshots, prior match or stock",
+          "status": "passed"
+        },
+        {
+          "name": "Partner outstanding stock recovery rejects stale corrections, completed lines and nonstaff correction attempts",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/visits/tests/draft-photo-history.spec.ts",
+      "tests": [
+        {
+          "name": "lists drafts from every saved date with their original URLs and without modifying records",
+          "status": "passed"
+        },
+        {
+          "name": "does not expose another branch\u2019s draft photos",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/shared/interceptors/request-context.interceptor.spec.ts",
+      "tests": [
+        {
+          "name": "keeps each request context inside deferred handlers and their asynchronous work",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/pharmacy/tests/drug-search.spec.ts",
+      "tests": [
+        {
+          "name": "Drug Search shared ranking uses indexed candidate retrieval and ranks before limiting without writes",
+          "status": "passed"
+        },
+        {
+          "name": "Drug Search shared ranking uses only reviewed, unambiguous, same-branch aliases",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/notifications/notifications.service.spec.ts",
+      "tests": [
+        {
+          "name": "NotificationsService (WhatsApp) sends plain text WhatsApp with normalized phone",
+          "status": "passed"
+        },
+        {
+          "name": "NotificationsService (WhatsApp) sends template WhatsApp with overrides and components",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "name": "backend/src/modules/appointments/tests/scheduling.utils.spec.ts",
+      "tests": [
+        {
+          "name": "SchedulingUtils parseTimeSlot should parse time slot correctly",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils parseTimeSlot should handle different durations",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils doTimeSlotsOverlap should detect overlapping slots",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils doTimeSlotsOverlap should detect non-overlapping slots",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils doTimeSlotsOverlap should handle adjacent slots correctly",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils generateTimeSlots should generate time slots for default hours",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils generateTimeSlots should generate hourly slots",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils generateTimeSlots should generate 15-minute slots",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils findNextAvailableSlot should return requested slot if available",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils findNextAvailableSlot should find next available slot if requested is booked",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils findNextAvailableSlot should return null if no slots available",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils isValidTimeSlot should validate correct time slot format",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils isValidTimeSlot should reject invalid time slot formats",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils getAppointmentPriority should return correct priority for each status",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils suggestAlternativeSlots should suggest alternative slots",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils suggestAlternativeSlots should limit suggestions to requested count",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils canRescheduleAppointment should allow rescheduling of scheduled appointment with enough advance time",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils canRescheduleAppointment should not allow rescheduling of completed appointment",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils canRescheduleAppointment should not allow rescheduling of cancelled appointment",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils canRescheduleAppointment should not allow rescheduling within minimum advance hours",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils addBufferTime should add buffer time to slot",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils addBufferTime should add default buffer time",
+          "status": "passed"
+        },
+        {
+          "name": "SchedulingUtils addBufferTime should handle larger buffer times",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

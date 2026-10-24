@@ -1,0 +1,19 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Inventory safety and physical recovery";
+valid [label="Valid batch\n0 ≤ held ≤ on-hand"];
+check [label="Verified physical count P\nIdentity + unit confirmed",fillcolor="#fef3c7"];
+dispose [label="P < held\nVerify missing held units\nLinked LOSS against source",fillcolor="#fef3c7"];
+post [label="Fresh current COUNT\nRequired approval\ndelta = P − current on-hand"];
+goal [label="Reconciled inventory\non-hand = P\ncheckpoint = P\nheld ≤ P",fillcolor="#d1fae5"];
+valid -> check;
+check -> post [label="P ≥ held"];
+check -> dispose [label="P < held"];
+dispose -> post [label="Refresh after disposition"];
+post -> goal [label="One serializable transaction"];
+goal -> valid [label="Later signed movements"];
+
+}

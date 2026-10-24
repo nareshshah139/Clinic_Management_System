@@ -381,6 +381,11 @@ export function WorkflowDocumentEditor({
     ]);
     setSearch("");
   };
+  /**
+   * @cc [owner:nareshshah139] fresh-count-navigation
+   * Starting a fresh count MUST use the saved document revision and open the returned attempt
+   * without first saving or copying the old physical measurements.
+   */
   const perform = async (action?: string) => {
     if (lock.current) return;
     lock.current = true;
@@ -389,7 +394,7 @@ export function WorkflowDocumentEditor({
     setNotice("");
     let saved = doc;
     try {
-      if (editable && action !== "CANCEL" && action !== "REVERSE") {
+      if (editable && action !== "CANCEL" && action !== "REVERSE" && action !== "RECOUNT") {
         saved = doc
           ? await apiClient.patch<any>(
               `/inventory/workspace/documents/${doc.id}`,
@@ -408,7 +413,7 @@ export function WorkflowDocumentEditor({
             ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
           },
         );
-        if (["CREATE_PO", "CONVERT_SALE"].includes(action)) {
+        if (["CREATE_PO", "CONVERT_SALE", "RECOUNT"].includes(action)) {
           onOpen(saved.kind, saved.id);
           return;
         }
@@ -1208,6 +1213,11 @@ export function WorkflowDocumentEditor({
           >
             <Printer className="h-4 w-4" />
           </InventoryAction>
+          {kind === "COUNT" && canWrite && (
+            <Button variant="outline" onClick={() => perform("RECOUNT")} disabled={busy}>
+              Start fresh count
+            </Button>
+          )}
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&

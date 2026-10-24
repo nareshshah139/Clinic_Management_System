@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, ConflictException, BadRequestException, 
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
-import { UserRole, UserStatus } from '@prisma/client';
+import { Prisma, UserRole, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
 import { readDoctorSignature, signatureDataUrl } from './doctor-signature';
@@ -113,7 +113,7 @@ export class UsersService {
   }
 
   async findAllUsers(query: QueryUsersDto, branchId: string) {
-    const { page, limit, search, role, status, department, designation, dateFrom, dateTo, isActive } = query;
+    const { page = 1, limit = 10, search, role, status, department, designation, dateFrom, dateTo, isActive } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -461,7 +461,7 @@ export class UsersService {
   }
 
   // Branch Management Methods
-  async createBranch(createBranchDto: CreateBranchDto, _branchId: string) {
+  async createBranch(createBranchDto: CreateBranchDto) {
     // Check if branch name already exists
     const existingBranch = await this.prisma.branch.findFirst({
       where: { name: createBranchDto.name },
@@ -479,7 +479,7 @@ export class UsersService {
   }
 
   async findAllBranches(query: QueryBranchesDto) {
-    const { page, limit, search, city, state } = query;
+    const { page = 1, limit = 10, search, city, state } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -585,7 +585,7 @@ export class UsersService {
   }
 
   // Permission Management Methods
-  async createPermission(createPermissionDto: CreatePermissionDto, _branchId: string) {
+  async createPermission(createPermissionDto: CreatePermissionDto) {
     // Check if permission already exists
     const existingPermission = await this.prisma.permission.findFirst({
       where: { name: createPermissionDto.name },
@@ -604,11 +604,16 @@ export class UsersService {
     return permission;
   }
 
-  async findAllPermissions(query: QueryPermissionsDto, _branchId: string) {
-    const { page, limit, search, type } = query;
+  /**
+   * @cc [owner:nareshshah139] permission-query-schema
+   * Permission searches MUST apply resource, action and active filters to their stored fields;
+   * omitted pagination MUST default to page one with ten results.
+   */
+  async findAllPermissions(query: QueryPermissionsDto) {
+    const { page = 1, limit = 10, search, resource, action, isActive } = query;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: Prisma.PermissionWhereInput = {};
 
     if (search) {
       where.OR = [
@@ -617,7 +622,9 @@ export class UsersService {
       ];
     }
 
-    if (type) where.type = type;
+    if (resource) where.resource = resource;
+    if (action) where.action = action;
+    if (isActive !== undefined) where.isActive = isActive;
 
     const [permissions, total] = await Promise.all([
       this.prisma.permission.findMany({
@@ -686,6 +693,10 @@ export class UsersService {
   }
 
   // Role Management Methods
+  /**
+   * @cc [owner:nareshshah139] role-permissions-storage
+   * Role permission arrays MUST be persisted as JSON text consumable by the permission guard.
+   */
   async createRole(createRoleDto: CreateRoleDto) {
     const existingRole = await this.prisma.role.findFirst({
       where: { name: createRoleDto.name },
@@ -696,14 +707,14 @@ export class UsersService {
     }
 
     const role = await this.prisma.role.create({
-      data: createRoleDto,
+      data: { ...createRoleDto, permissions: createRoleDto.permissions === undefined ? null : JSON.stringify(createRoleDto.permissions) },
     });
 
     return role;
   }
 
   async findAllRoles(query: QueryRolesDto) {
-    const { page, limit, search } = query;
+    const { page = 1, limit = 10, search } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -748,6 +759,11 @@ export class UsersService {
     return role;
   }
 
+  /**
+   * @cc [owner:nareshshah139] role-permission-update
+   * Permission updates MUST serialize arrays, preserve omitted permissions and allow an empty
+   * array to clear permissions without granting fallback access.
+   */
   async updateRole(id: string, updateRoleDto: UpdateRoleDto) {
     const existingRole = await this.prisma.role.findUnique({
       where: { id },
@@ -773,7 +789,7 @@ export class UsersService {
 
     const role = await this.prisma.role.update({
       where: { id },
-      data: updateRoleDto,
+      data: { ...updateRoleDto, permissions: updateRoleDto.permissions === undefined ? undefined : JSON.stringify(updateRoleDto.permissions) },
     });
 
     return role;
@@ -796,7 +812,15 @@ export class UsersService {
   }
 
   // Statistics and Analytics Methods
-  async getUserStatistics(branchId: string): Promise<UserStatisticsDto> {
+  /**
+   * @cc [owner:nareshshah139] user-statistics-scope
+   * Statistics MUST use the authenticated branch and requested date bounds; a query branchId
+   * MUST NOT override the authenticated branch.
+   */
+  async getUserStatistics(query: UserStatisticsDto, branchId: string) {
+    const where: Prisma.UserWhereInput = { branchId, ...((query.startDate || query.endDate) ? {
+      createdAt: { ...(query.startDate ? { gte: new Date(query.startDate) } : {}), ...(query.endDate ? { lte: new Date(query.endDate) } : {}) },
+    } : {}) };
     const [
       totalUsers,
       activeUsers,
@@ -805,21 +829,21 @@ export class UsersService {
       departmentBreakdown,
       recentUsers,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { branchId } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.ACTIVE } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.INACTIVE } }),
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.ACTIVE } }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.INACTIVE } }),
       this.prisma.user.groupBy({
         by: ['role'],
-        where: { branchId },
+        where,
         _count: { role: true },
       }),
       this.prisma.user.groupBy({
         by: ['department'],
-        where: { branchId, department: { not: null } },
+        where: { ...where, department: { not: null } },
         _count: { department: true },
       }),
       this.prisma.user.findMany({
-        where: { branchId },
+        where,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -843,7 +867,15 @@ export class UsersService {
     };
   }
 
-  async getUserDashboard(branchId: string): Promise<UserDashboardDto> {
+  /**
+   * @cc [owner:nareshshah139] user-dashboard-scope
+   * Dashboard aggregates MUST use the authenticated branch and requested date bounds;
+   * caller-supplied branch IDs cannot broaden that scope.
+   */
+  async getUserDashboard(query: UserDashboardDto, branchId: string) {
+    const where: Prisma.UserWhereInput = { branchId, ...((query.startDate || query.endDate) ? {
+      createdAt: { ...(query.startDate ? { gte: new Date(query.startDate) } : {}), ...(query.endDate ? { lte: new Date(query.endDate) } : {}) },
+    } : {}) };
     const [
       totalUsers,
       activeUsers,
@@ -852,11 +884,11 @@ export class UsersService {
       roleBreakdown,
       topDepartments,
     ] = await Promise.all([
-      this.prisma.user.count({ where: { branchId } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.ACTIVE } }),
-      this.prisma.user.count({ where: { branchId, status: UserStatus.INACTIVE } }),
+      this.prisma.user.count({ where }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.ACTIVE } }),
+      this.prisma.user.count({ where: { ...where, status: UserStatus.INACTIVE } }),
       this.prisma.user.findMany({
-        where: { branchId },
+        where,
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -870,12 +902,12 @@ export class UsersService {
       }),
       this.prisma.user.groupBy({
         by: ['role'],
-        where: { branchId },
+        where,
         _count: { role: true },
       }),
       this.prisma.user.groupBy({
         by: ['department'],
-        where: { branchId, department: { not: null } },
+        where: { ...where, department: { not: null } },
         _count: { department: true },
         orderBy: { _count: { department: 'desc' } },
         take: 5,

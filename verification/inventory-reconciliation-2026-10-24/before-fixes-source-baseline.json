@@ -1,0 +1,20 @@
+{
+  "backend/prisma/schema.prisma": "b2c3330ef924ca0b71893abb5fcf29c0bbfacd5fc28153d9749e61eba342ae42",
+  "backend/src/modules/inventory/inventory-stock.ts": "a2126db68106410541e944da85345b9c535be09487f165963937c953b02342d7",
+  "backend/src/modules/inventory/inventory-workflow.service.ts": "047be6242808f9711fb628a24fb8e67fdf66db2db16cf4347928718d4e87fea3",
+  "backend/src/modules/inventory/inventory-stocktake.service.ts": "7a8710cac6eb9cf62d0b2cf0714eb149e816dcd65b7cc35bd6e33760fcbff633",
+  "backend/src/modules/inventory/inventory-workspace.service.ts": "1b3de59fea74c8ed585f87bff8975472507aa4c8be5a2571e0d000fb687f80dd",
+  "backend/src/modules/inventory/inventory.service.ts": "15303dd3992cf47979d9e6f31c4372cbe9ee98b264d719b1981994d821faebef",
+  "backend/src/modules/inventory/inventory-intake.service.ts": "170247b55bac7598cdc92e59bc84874881b4fd929592d14138a096c2854f6a53",
+  "backend/src/modules/inventory/inventory-import.service.ts": "2a85410f5baf5716b9c2d7fbe199069194d1f56c441418c310b31735d510845d",
+  "backend/src/modules/inventory/inventory-purchase-actions.service.ts": "9cf44c980eb1dc50dddd6c0e8237ec21d8109a052bf663c13a1ae41ea3ffd2d5",
+  "backend/src/modules/inventory/inventory-identity-merge.service.ts": "f402da4b47bca7cba5cc9e98d3c3a230078a48f1599b3dc08260b3fe09492f17",
+  "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts": "ad54fd9107acd234780422e9c6767cbd9edf3d1fb6aaf526cab6930e00d582ab",
+  "frontend/src/components/inventory/StocktakeTools.tsx": "4179a9be30f15155510de8eb23ba5a32e50b689fecba096f3397344d8f78e2b3",
+  "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts": "c3f22dd5d85990a8a66f634b21b5fae218fa75fc42bf64026626856f7053dc24",
+  "backend/src/shared/database/prisma.service.ts": "8b1c8922af01a8ae6397635e554c26fba5c9b45da0172dfc6f5f5ff2797822b7",
+  "backend/src/modules/inventory/inventory-purchase-actions.controller.ts": "a47af71dfc5b4007970919ecd1a11eac83103a82a6f82bd44a7f133b1eba68e5",
+  "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx": "2ee93c21ac280e8225ea1cd97cdb5787e6bf579a4fdb31ddb6abdf96ff0c3836",
+  "frontend/src/components/inventory/WorkflowDocumentEditor.tsx": "bc5711277ae67e0eca521f98e5d949ffef99c7dc13b5b19bb71dfb5da7e6f55d",
+  "frontend/src/components/inventory/WorkspaceStock.tsx": "c45da25c978da5a815a437e822ba9417421f5ec1d663c35f702ee4b2dbd3084d"
+}

@@ -1,0 +1,324 @@
+{
+  "scope": "Finite mathematical abstraction, not a refinement or production/database proof.",
+  "bound": 12,
+  "assumptions": [
+    "Valid representable integer quantities and branch-local retained batch/source records.",
+    "Verified physical identity, stock units and count; each held unit has an attributable source.",
+    "Authorized staff can resolve dependencies and provide any required approval.",
+    "A finite recovery sequence gets a stable interval and successful serializable commits.",
+    "Purchase intake represents actual valid received goods; ledger scope starts at a physical checkpoint."
+  ],
+  "results": [
+    {
+      "claim": "Accepted movements preserve 0 <= held <= on_hand",
+      "status": "PASS_BOUNDED",
+      "cases": 8190
+    },
+    {
+      "claim": "Fresh approved count sets on_hand = physical when physical >= held",
+      "status": "PASS_BOUNDED",
+      "cases": 819
+    },
+    {
+      "claim": "Verified disposition of missing held units then fresh count is safe",
+      "status": "PASS_BOUNDED",
+      "cases": 1183
+    },
+    {
+      "claim": "Linked compensation after residual release restores only its original quarantine",
+      "status": "PASS_BOUNDED",
+      "cases": 1820
+    },
+    {
+      "claim": "AG EF reconciled under edge preconditions",
+      "status": "PASS_FINITE_ABSTRACTION",
+      "states": 30,
+      "witness_paths": {
+        "COUNT:DRAFT": [
+          "COUNT:DRAFT",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:AWAITING_APPROVAL": [
+          "COUNT:AWAITING_APPROVAL",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:APPROVED": [
+          "COUNT:APPROVED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:REJECTED": [
+          "COUNT:REJECTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:CANCELLED": [
+          "COUNT:CANCELLED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:POSTED": [
+          "COUNT:POSTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:REVERSED": [
+          "COUNT:REVERSED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "STALE_COUNT": [
+          "STALE_COUNT",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "AMBIGUOUS_EXISTING_LINKS": [
+          "AMBIGUOUS_EXISTING_LINKS",
+          "VERIFIED_IDENTITY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "VERIFIED_IDENTITY": [
+          "VERIFIED_IDENTITY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "UNVERIFIED_LEDGER": [
+          "UNVERIFIED_LEDGER",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "LEDGER_DISCREPANCY": [
+          "LEDGER_DISCREPANCY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "INACTIVE_BATCH": [
+          "INACTIVE_BATCH",
+          "ACTIVE_VERIFIED_BATCH",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "ACTIVE_VERIFIED_BATCH": [
+          "ACTIVE_VERIFIED_BATCH",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PHYSICAL_BELOW_HELD": [
+          "PHYSICAL_BELOW_HELD",
+          "VERIFIED_SOURCE_DISPOSITION",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "VERIFIED_SOURCE_DISPOSITION": [
+          "VERIFIED_SOURCE_DISPOSITION",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RELEASED_SOURCE_WITH_POSTED_LOSS": [
+          "RELEASED_SOURCE_WITH_POSTED_LOSS",
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RELEASED_SOURCE_WITH_RETURN_CHALLAN": [
+          "RELEASED_SOURCE_WITH_RETURN_CHALLAN",
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RESTORED_ORIGINAL_QUARANTINE": [
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:REVIEWED_INVALID": [
+          "PURCHASE:REVIEWED_INVALID",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:DRAFT": [
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:OCR_REVIEW_REQUIRED": [
+          "PURCHASE:OCR_REVIEW_REQUIRED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:RECONCILIATION_FAILED": [
+          "PURCHASE:RECONCILIATION_FAILED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:REVIEWED_VALID": [
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:STOCK_COMMITTED": [
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:CANCELLED": [
+          "PURCHASE:CANCELLED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "FRESH_UNCOUNTED_DRAFT": [
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PHYSICAL_OBSERVATION": [
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "REVIEWED_CURRENT_COUNT": [
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RECONCILED": [
+          "RECONCILED"
+        ]
+      }
+    },
+    {
+      "claim": "Checkpoint establishes independent ledger agreement and preserves subsequent signed changes",
+      "status": "PASS_BOUNDED",
+      "cases": 2197
+    },
+    {
+      "claim": "Unconditional AF reconciled",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "AWAITING_APPROVAL",
+        "wait forever"
+      ],
+      "reason": "Requires authority, evidence, scheduling and a successful stable transaction interval"
+    },
+    {
+      "claim": "COUNT reconstructs unknown historical movements",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "q=10,L=8,P=7",
+        "delta=-3",
+        "q=7,L=5"
+      ],
+      "reason": "Historical gap stays 2; checkpoint explicitly starts a new verified baseline"
+    },
+    {
+      "claim": "Every original terminal document eventually posts",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "DRAFT",
+        "CANCELLED"
+      ],
+      "reason": "Recovery creates a linked count or a new purchase; immutable history is retained"
+    }
+  ],
+  "source_sha256": {
+    "backend/prisma/schema.prisma": "b2c3330ef924ca0b71893abb5fcf29c0bbfacd5fc28153d9749e61eba342ae42",
+    "backend/src/modules/inventory/inventory-identity-merge.service.ts": "64eb8b05e1a70352888edac97bb497bb3cd09b797783aa3677c5d95ba4d78257",
+    "backend/src/modules/inventory/inventory-import.service.ts": "73a07414baaff930be0efcb96d038a702b6a8ed2ff5e2e6a6b34464946187fb6",
+    "backend/src/modules/inventory/inventory-intake.service.ts": "170247b55bac7598cdc92e59bc84874881b4fd929592d14138a096c2854f6a53",
+    "backend/src/modules/inventory/inventory-ledger.ts": "6d6b5032f3e29831825b0240006f26842b04d30436d08f7d2351d57642a330f7",
+    "backend/src/modules/inventory/inventory-purchase-actions.controller.ts": "a47af71dfc5b4007970919ecd1a11eac83103a82a6f82bd44a7f133b1eba68e5",
+    "backend/src/modules/inventory/inventory-purchase-actions.service.ts": "9cf44c980eb1dc50dddd6c0e8237ec21d8109a052bf663c13a1ae41ea3ffd2d5",
+    "backend/src/modules/inventory/inventory-stock.ts": "a2126db68106410541e944da85345b9c535be09487f165963937c953b02342d7",
+    "backend/src/modules/inventory/inventory-stocktake.controller.ts": "81b432b4d4b16574b81977578fd38a90f4f806690c07ca8e95f4ec38b00b3837",
+    "backend/src/modules/inventory/inventory-stocktake.service.ts": "7a8710cac6eb9cf62d0b2cf0714eb149e816dcd65b7cc35bd6e33760fcbff633",
+    "backend/src/modules/inventory/inventory-workflow.service.ts": "2d01fc9b9f24eaf0c683a3602aa0e2723e0594501be70f88f96dfd458cb9d19a",
+    "backend/src/modules/inventory/inventory-workspace.service.ts": "8c1af4e7ebf91804bff4abcb59c41a4df284bcbd5b5aaacf679e1837058ef7c4",
+    "backend/src/modules/inventory/inventory.service.ts": "15303dd3992cf47979d9e6f31c4372cbe9ee98b264d719b1981994d821faebef",
+    "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts": "0bf8384d93e79fee4eb6264876ca3fef90a502271649c58dab7313e1f436a062",
+    "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts": "edc20b30039596bf4698b15e53d37706a6460efd91921b796e86d62411391e12",
+    "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts": "c892d819448dfa350ecf10ca90e028874846886c2cfc978c74ec7f53f32f9e22",
+    "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts": "2e1d0e81838c698f8651d102f1bd4f272833239ac8cf61e5c95e890e5e8599ad",
+    "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.access.spec.ts": "e6f25b3bc034ce745ae1b0c32d738ecf5a1aee8a255d09f6c84a044bfc44a5ac",
+    "backend/src/shared/database/prisma.service.ts": "8b1c8922af01a8ae6397635e554c26fba5c9b45da0172dfc6f5f5ff2797822b7",
+    "frontend/__tests__/inventory/WorkflowDocumentEditor.recovery.test.tsx": "dbf710340ce08069665db0d039850bdc1f03520493b6ccf42df562d61b41368b",
+    "frontend/__tests__/inventory/WorkspaceStock.batches.test.tsx": "a8f374b5aed661b57a22f53ff73b96fe850be0a4d72e19d2ceb6fb7677d32f68",
+    "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx": "8eeccb8f3b4d861db8fe2e2ce7435d24f908c79babcbd8bd911f27bffc083956",
+    "frontend/src/components/inventory/StocktakeTools.tsx": "4179a9be30f15155510de8eb23ba5a32e50b689fecba096f3397344d8f78e2b3",
+    "frontend/src/components/inventory/WorkflowDocumentEditor.tsx": "cd9edbd131821868122094d735ed487d5c79f4dbf474d6a0007895c72c5fc9c3",
+    "frontend/src/components/inventory/WorkspaceStock.tsx": "2544e26b96d67208af86de337db02b7973b59d9d45ae8b17b54360abbd4c1b69",
+    "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx": "1e58b38f4eee7472d8e11a7ad16907c6ed561a5c8a69e2d8ac2b69b5b2086797",
+    "verification/inventory-reconciliation-2026-10-24/check_model.py": "69d85e7c8ede7d60b8211813f165c50aa414c60327572ff05e3e74c299c336ce",
+    "verification/inventory-reconciliation-2026-10-24/render_graphs.py": "3a94a37dae58767b125ad9473104b13636993c29a4eb1add4c2a666bd851790c",
+    "verification/inventory-reconciliation-2026-10-24/source_probes.cjs": "8051a21848796af13914b04e7455fea30411fe86aa617ad3b39f37fdef8994cd"
+  }
+}

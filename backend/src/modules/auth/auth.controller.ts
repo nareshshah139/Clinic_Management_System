@@ -1,6 +1,6 @@
 import { Body, Controller, HttpException, HttpStatus, Post, Res, SetMetadata, Get, Request, Param } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { Response } from 'express';
+import type { Response } from 'express';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { exec } from 'child_process';

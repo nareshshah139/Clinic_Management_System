@@ -1,0 +1,18 @@
+digraph G {
+graph [rankdir=LR, bgcolor="#f8fafc", pad="0.35", nodesep="0.45", ranksep="0.65", fontname="Helvetica", fontsize=19, labelloc=t];
+node [shape=box, style="rounded,filled", fillcolor="#e2e8f0", color="#94a3b8", fontname="Helvetica", fontsize=12, margin="0.16,0.1"];
+edge [fontname="Helvetica", fontsize=10, color="#475569", arrowsize=0.7];
+
+label="Former blocked hold sequence now has a safe compensation path";
+a [label="Start\nq=10, held=0"];
+b [label="HOLD H posts 5\nq=10, held=5"];
+c [label="LOSS L consumes 3 from H\nq=7, held=2"];
+d [label="Release residual 2 from H\nq=7, held=0\nH=RELEASED"];
+e [label="Reverse L atomically\nH=POSTED + versioned event\nq=10, held=3",fillcolor="#d1fae5"];
+f [label="Verify disposition\nRelease original H if saleable\nq=10, held=0",fillcolor="#d1fae5"];
+a -> b -> c -> d;
+d -> e [label="Restore SAME source\nInverse stock + hold effects"];
+e -> f;
+e -> d [label="Any failure rolls back\nthe whole compensation",style=dashed,color="#b45309"];
+
+}

@@ -1,0 +1,105 @@
+{
+  "scope": "Full configured Jest suites, including an isolated PostgreSQL cluster. No production data changes or deployment.",
+  "build": {
+    "command": "npm run build",
+    "status": "PASS",
+    "workspaces": [
+      "shared-types",
+      "frontend",
+      "backend"
+    ],
+    "node": "25.1.0",
+    "npm": "11.6.2",
+    "lint": "Skipped by existing Next.js build configuration"
+  },
+  "backend_typecheck": {
+    "command": "npm run typecheck --workspace=backend",
+    "initial_errors": 60,
+    "remaining_errors": 0,
+    "enforced_by_build": true
+  },
+  "backend_tests": {
+    "passed": 775,
+    "failed": 0,
+    "skipped": 3,
+    "passed_suites": 74,
+    "skipped_tests": [
+      "Purchase invoice real Codex OAuth extraction reads invoice pixels and returns the actual quantities, batch and totals",
+      "Prescription -> saved readback -> PDF pipeline runs the Chromium prescription download workflow",
+      "Doctor signature authorization, uploads and exports runs browser upload, print, PDF, WhatsApp and Email using the supplied PNG"
+    ],
+    "existing_excluded_legacy_test_files": [
+      "<rootDir>/modules/appointments/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.controller.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.integration.spec.ts",
+      "<rootDir>/modules/appointments/tests/appointments.service.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.integration.spec.ts",
+      "<rootDir>/modules/billing/tests/billing.service.spec.ts",
+      "<rootDir>/modules/prescriptions/tests/prescriptions.integration.spec.ts",
+      "<rootDir>/modules/reports/tests/reports.service.spec.ts",
+      "<rootDir>/modules/users/tests/users.integration.spec.ts",
+      "<rootDir>/modules/users/tests/users.service.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.controller.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.e2e.spec.ts",
+      "<rootDir>/modules/visits/tests/visits.integration.spec.ts"
+    ]
+  },
+  "frontend_tests": {
+    "passed": 465,
+    "failed": 0,
+    "skipped": 0,
+    "passed_suites": 63
+  },
+  "postgresql_tests": {
+    "passed": 10,
+    "failed": 0,
+    "included_in_backend_total": true,
+    "isolation": "Fresh temporary PostgreSQL cluster; random test schema removed; cluster stopped",
+    "coverage": [
+      "Concurrent duplicate commits",
+      "Concurrent receipts for the same batch",
+      "Transactional rollback",
+      "Cross-branch rejection",
+      "Original source retention",
+      "Ambiguous identity rejection"
+    ]
+  },
+  "new_backend_regressions": {
+    "passed": 8,
+    "failed": 0,
+    "file": "backend/src/shared/tests/build-contract-regressions.spec.ts"
+  },
+  "contracts": {
+    "tool": "@spolu/cc-check@0.2.0",
+    "format": "PASS",
+    "list": "PASS",
+    "source_files": 50,
+    "semantic_review": "Affected obligations reviewed with the implementation and regressions; format/list do not prove semantic compliance",
+    "unsupported": "Verification runner .cjs is unsupported by cc-check 0.2.0; manually reviewed"
+  },
+  "recovery_evidence": {
+    "service_regressions": 22,
+    "model_states": 30,
+    "bound": 12,
+    "model_scope": "Finite mathematical abstraction with explicit assumptions, not a production refinement proof",
+    "source_fingerprints": "Unchanged and checked by check_model.py"
+  },
+  "diagrams": "All six previously inspected diagrams remain valid; recovery transition code is unchanged by build fixes.",
+  "standalone_backend": {
+    "runtime": "Node 20.20.2 / npm 10.9.9",
+    "clean_install": "PASS (npm ci --ignore-scripts; Prisma generation executed explicitly during build)",
+    "build": "PASS (Prisma generation, strict tsc, Nest SWC)",
+    "regressions": {
+      "passed": 42,
+      "failed": 0,
+      "suites": 4,
+      "overlap_with_full_suite": true
+    },
+    "direct_dependency_versions": "Match the verified workspace lockfile",
+    "docker_image": "Not built; Docker daemon unavailable. Runtime/install/build verified in an isolated temporary directory."
+  },
+  "workspace_lockfile": {
+    "npm_11_dry_run": "PASS",
+    "node_20_npm_10_dry_run": "PASS"
+  }
+}

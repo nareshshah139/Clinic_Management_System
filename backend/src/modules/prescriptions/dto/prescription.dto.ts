@@ -121,10 +121,6 @@ export class PrescriptionItemDto {
   quantity?: number;
 
   @IsOptional()
-  @IsString()
-  notes?: string;
-
-  @IsOptional()
   @IsBoolean()
   isGeneric?: boolean = true;
 

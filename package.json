@@ -20,11 +20,14 @@
     "dev:minimal": "concurrently \"npm run dev --workspace=frontend\" \"MINIMAL_BOOT=true npm run start:dev --workspace=backend\"",
     "dev:fe": "npm run dev --workspace=frontend",
     "dev:be:minimal": "MINIMAL_BOOT=true npm run start:dev --workspace=backend",
-    "test:recovery:e2e": "node e2e/recovery/run.cjs"
+    "test:recovery:e2e": "node e2e/recovery/run.cjs",
+    "contracts:format": "cc-check format",
+    "contracts:list": "cc-check list"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
-    "puppeteer-core": "24.31.0"
+    "puppeteer-core": "24.31.0",
+    "@spolu/cc-check": "0.2.0"
   },
   "keywords": [
     "clinic",
