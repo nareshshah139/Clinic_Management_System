@@ -42,6 +42,16 @@ jobs:
           RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
         run: npm run test:recovery:e2e
+      - name: Verify state explanations and interrupted-write recovery
+        env:
+          RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
+        run: node verification/inventory-state-clarity-fix-2026-10-25/check_browser.cjs --chromium
+      - name: Verify prior import and count recovery paths
+        env:
+          RECOVERY_E2E_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          RECOVERY_E2E_BROWSER_EXECUTABLE: /usr/bin/google-chrome
+        run: node verification/inventory-state-clarity-fix-2026-10-25/check_prior_browser.cjs --chromium
       - name: Upload recovery results and screenshots
         if: always()
         uses: actions/upload-artifact@v4

@@ -5,4 +5,13 @@ shared-types build.
 
 @cc [owner:nareshshah139,label:infra] generated-backend-test-client
 In tests.yml, the backend Prisma client MUST be generated from the backend schema before the
-appointment tests run, so a clean dependency install exposes the schema's enums and client types.
+backend tests run, so a clean dependency install exposes the schema's enums and client types.
+
+@cc [owner:nareshshah139,label:verification] inventory-recovery-ci-coverage
+Every pull request, regardless of target branch, MUST build all workspaces, run both full test
+suites with the inventory recovery PostgreSQL gate enabled, and fail when executable state
+presentations or recovery proofs fail.
+
+@cc [owner:nareshshah139,label:verification] inventory-recovery-browser-gates
+Recovery CI MUST run the interrupted-write and prior import/count browser scenarios against an
+isolated loopback database and retain their diagnostics even when a scenario fails.
