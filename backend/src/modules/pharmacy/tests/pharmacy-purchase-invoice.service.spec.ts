@@ -259,6 +259,28 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.reconciliationIssues.join(' ')).toContain('net payable');
   });
 
+  it.each([
+    [0.04, 'DRAFT'], [-0.04, 'DRAFT'], [1, 'DRAFT'], [-1, 'DRAFT'],
+    [1.01, 'RECONCILIATION_FAILED'], [-1.01, 'RECONCILIATION_FAILED'],
+  ])('reconciles a %s rupee difference with the UI tolerance without changing the reported amount', async (difference, status) => {
+    const dto = validDto();
+    dto.netPayable += Number(difference);
+    prisma.pharmacyPurchaseInvoice.create.mockImplementation(({ data }: any) => ({
+      id: 'purchase-1', ...data,
+      items: data.items.create.map((item: any) => ({ id: `item-${item.lineNumber}`, ...item })),
+    }));
+
+    const saved = await service.createDraft(dto, branchId, userId);
+
+    expect(saved.status).toBe(status);
+    expect(Number(saved.netPayable)).toBe(dto.netPayable);
+    if (status === 'DRAFT') expect(saved.reconciliationIssues).toEqual([]);
+    else expect(saved.reconciliationIssues.join(' ')).toContain('net payable');
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.create).not.toHaveBeenCalled();
+    expect(prisma.inventoryItem.update).not.toHaveBeenCalled();
+  });
+
   it('saves credit bills without due date for correction and blocks review', async () => {
     const dto = validDto();
     dto.billType = PharmacyPurchaseBillTypeDto.CREDIT;
