@@ -1,7 +1,7 @@
 import { exposeTestTrigramOperator } from '../../../shared/testing/local-database';
 import {normalizePurchaseSource} from '../purchase-invoice-source';
 import { PrismaClient } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 import { execFileSync } from 'child_process';
 import * as path from 'path';
 import sharp from 'sharp';
@@ -16,6 +16,8 @@ const databaseTests = process.env.PURCHASE_AUTOMATION_TEST_DATABASE_URL ? descri
 databaseTests('Automatic purchase intake with real PostgreSQL', () => {
   let admin: PrismaClient;
   let prisma: PrismaClient;
+  const orphanAttemptId = randomUUID();
+  const orphanInvoiceId = `missing-${randomUUID()}`;
   let service: PharmacyPurchaseInvoiceService;
   let branchId: string;
   let userId: string;
@@ -63,6 +65,11 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     await prisma.$executeRawUnsafe('ALTER TABLE "drugs" DROP COLUMN "requiresPrescription"');
     await prisma.$executeRawUnsafe(readFileSync(path.resolve('prisma/migrations/20260914080000_drug_prescription_requirement/migration.sql'), 'utf8'));
     expect(await prisma.drug.findUniqueOrThrow({ where: { id: legacyBefore.id } })).toEqual(legacyBefore);
+    // Existing orphan survives the NOT VALID migration; new orphan links are forbidden.
+    await prisma.pharmacyPurchaseImportAttempt.create({ data: { id: orphanAttemptId, branchId, userId,
+      status: 'INVOICE_SAVED', purchaseInvoiceId: orphanInvoiceId } });
+    const recoveryMigration = readFileSync(path.resolve('prisma/migrations/20261024150000_unlinked_purchase_recovery/migration.sql'), 'utf8');
+    for (const sql of recoveryMigration.split('-- statement-breakpoint').filter(sql => sql.trim())) await prisma.$executeRawUnsafe(sql);
     service = new PharmacyPurchaseInvoiceService(prisma as PrismaService);
     jest.spyOn(service, 'extractDocumentDraft').mockImplementation(async () => ({ draft, extraction: { provider: 'synthetic-database-test' } } as any));
   }, 60000);
@@ -300,6 +307,116 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     expect(retained.sourceDocuments).toHaveLength(2);
     expect(new Set(retained.sourceDocuments.map((document: any) => document.id)).size).toBe(2);
     for (const document of retained.sourceDocuments) expect((await service.getOriginalDocument(document.id, branchId)).purchaseInvoiceId).toBeNull();
+  });
+
+  it('recovers a legacy import from its exact retained original without repeating intake', async () => {
+    const source = await service.archiveOriginal(upload, branchId, userId);
+    const invoice = await service.createDraft({ ...draft, sourceDocumentId: source.id }, branchId, userId, true);
+    const id = randomUUID();
+    const input = { legacy: true, sourceDocumentIds: [source.id], reason: 'Lost legacy response' };
+    expect(await service.recoverUnlinkedImport(id, branchId, userId, input)).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: invoice.id });
+    expect(await service.recoverUnlinkedImport(id, branchId, userId, input)).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: invoice.id });
+    expect(await prisma.pharmacyPurchaseInvoice.count({ where: { branchId, invoiceNumber: draft.invoiceNumber } })).toBe(1);
+  });
+
+  it('rejects an unlinked legacy retry durably and blocks both old workers and new source reuse', async () => {
+    const source = await service.archiveOriginal(upload, branchId, userId);
+    const id = randomUUID();
+    const input = { legacy: true, sourceDocumentIds: [source.id], reason: 'Unknown legacy outcome' };
+    expect(await service.recoverUnlinkedImport(id, branchId, userId, input)).toMatchObject({ outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED' });
+    expect(await service.resolveImportAttempt(id, branchId, userId)).toMatchObject({ outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED' });
+    await service.recoverUnlinkedImport(id, branchId, userId, input);
+    expect(await prisma.auditLog.count({ where: { entityId: id, action: 'RETRY_REJECTED' } })).toBe(1);
+    await expect(prisma.pharmacyPurchaseInvoice.create({ data: (service as any).draftData(draft, branchId, userId) })).rejects.toThrow('predates durable recovery');
+    await expect(service.createDraft({ ...draft, sourceDocumentId: source.id }, branchId, userId, true)).rejects.toThrow('rejected uncertain import');
+    expect(await prisma.pharmacyPurchaseInvoice.count({ where: { branchId, invoiceNumber: draft.invoiceNumber } })).toBe(0);
+    expect(await prisma.pharmacyPurchaseInvoiceDocument.findUnique({ where: { id: source.id } })).not.toBeNull();
+  });
+
+  it('provides safe retry rejection without inventing evidence when a legacy session has no retained identity', async () => {
+    expect(await service.recoverUnlinkedImport(randomUUID(), branchId, userId, { legacy: true, reason: 'No retained identity in old session' }))
+      .toMatchObject({ outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED', invoiceId: null });
+  });
+
+  it('preserves a pre-migration orphan identity and rejects further intake without claiming no stock', async () => {
+    const original = await service.archiveOriginal(upload, branchId, userId);
+    const historicalStock = await prisma.inventoryItem.create({ data: { branchId, name: 'Historical orphan stock',
+      batchNumber: randomUUID(), currentStock: 17, costPrice: 1, sellingPrice: 2, mrp: 2, type: 'MEDICINE', unit: 'PIECES' } });
+    const historicalReceipt = await prisma.stockTransaction.create({ data: { branchId, itemId: historicalStock.id, userId,
+      type: 'PURCHASE', quantity: 17, quantityDelta: 17, unitPrice: 1, totalAmount: 17, reference: orphanInvoiceId } });
+    await prisma.pharmacyPurchaseImportAttempt.update({ where: { id: orphanAttemptId }, data: { result: { sourceDocumentIds: [original.id] } } });
+    expect(await service.resolveImportAttempt(orphanAttemptId, branchId, userId)).toMatchObject({ outcome: 'UNKNOWN', invoiceId: orphanInvoiceId });
+    expect(await service.recoverUnlinkedImport(orphanAttemptId, branchId, userId, { legacy: false, reason: 'Linked invoice missing' }))
+      .toMatchObject({ outcome: 'RETRY_REJECTED', invoiceId: orphanInvoiceId, stockOutcome: 'UNVERIFIED' });
+    const row = await prisma.pharmacyPurchaseImportAttempt.findUniqueOrThrow({ where: { id: orphanAttemptId } });
+    expect(row.purchaseInvoiceId).toBe(orphanInvoiceId);
+    expect(row.status).toBe('RETRY_REJECTED');
+    expect((await prisma.inventoryItem.findUniqueOrThrow({ where: { id: historicalStock.id } })).currentStock).toBe(17);
+    expect(await prisma.stockTransaction.findUniqueOrThrow({ where: { id: historicalReceipt.id } })).toEqual(historicalReceipt);
+    await expect(service.createDraft({ ...draft, sourceDocumentId: original.id }, branchId, userId, true)).rejects.toThrow('rejected uncertain import');
+  });
+
+  it('serializes legacy recovery with invoice creation and resumes the winning saved identity', async () => {
+    const source = await service.archiveOriginal(upload, branchId, userId);
+    let release!: () => void, ready!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { ready = resolve; });
+    const originalAudit = (service as any).purchaseAudit.bind(service);
+    const audit = jest.spyOn(service as any, 'purchaseAudit').mockImplementation(async (...args: any[]) => {
+      if (args[4] === 'CREATED') { ready(); await gate; }
+      return originalAudit(...args);
+    });
+    const saving = service.createDraft({ ...draft, sourceDocumentId: source.id }, branchId, userId, true);
+    await started;
+    const recovering = service.recoverUnlinkedImport(randomUUID(), branchId, userId,
+      { legacy: true, sourceDocumentIds: [source.id], reason: 'Concurrent recovery' });
+    release();
+    const [invoice, outcome] = await Promise.all([saving, recovering]);
+    expect(outcome).toMatchObject({ outcome: 'DRAFT_SAVED', invoiceId: invoice.id });
+    audit.mockRestore();
+  });
+
+  it('blocks an in-flight current worker when legacy rejection wins before source binding', async () => {
+    let release!: () => void, ready!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { ready = resolve; });
+    jest.mocked(service.extractDocumentDraft).mockImplementationOnce(async () => { ready(); await gate; return { draft } as any; });
+    const working = service.importWithRecovery([upload], randomUUID(), branchId, userId, '2026-01-02', true);
+    await started;
+    const original = await prisma.pharmacyPurchaseInvoiceDocument.findFirstOrThrow({ where: { branchId, sha256: createHash('sha256').update(upload.buffer).digest('hex') } });
+    expect(await service.recoverUnlinkedImport(randomUUID(), branchId, userId,
+      { legacy: true, sourceDocumentIds: [original.id], reason: 'Uncertain source must not be received again' })).toMatchObject({ outcome: 'RETRY_REJECTED' });
+    release();
+    const result = await working;
+    expect(result.importAttempt.outcome).toBe('NO_STOCK_WRITTEN');
+    expect(await prisma.pharmacyPurchaseInvoice.count({ where: { branchId, invoiceNumber: draft.invoiceNumber } })).toBe(0);
+  });
+
+  it('prevents future orphan links and deletion of bound invoices', async () => {
+    await expect(prisma.pharmacyPurchaseImportAttempt.create({ data: { id: randomUUID(), branchId, userId, status: 'INVOICE_SAVED', purchaseInvoiceId: 'absent' } })).rejects.toThrow();
+    const invoice = await service.createDraft(draft, branchId, userId, true);
+    await prisma.pharmacyPurchaseImportAttempt.create({ data: { id: randomUUID(), branchId, userId, status: 'INVOICE_SAVED', purchaseInvoiceId: invoice.id } });
+    await expect(prisma.pharmacyPurchaseInvoice.delete({ where: { id: invoice.id } })).rejects.toThrow();
+    await expect(prisma.pharmacyPurchaseInvoice.update({ where: { id: invoice.id }, data: { stockCommittedAt: new Date(), status: 'STOCK_COMMITTED' } })).rejects.toThrow('predates durable recovery');
+    // A legacy posted row can lack its timestamp; accounting-only changes are not new stock admission.
+    await prisma.$transaction(async tx => {
+      await tx.$executeRaw`SELECT set_config('app.purchase_recovery_protocol', '2', true)`;
+      await tx.pharmacyPurchaseInvoice.update({ where: { id: invoice.id }, data: { status: 'STOCK_COMMITTED' } });
+    });
+    expect((await prisma.pharmacyPurchaseInvoice.update({ where: { id: invoice.id }, data: { creditApplied: 5 } })).creditApplied).toBe(5);
+  });
+
+  it('rejects foreign evidence, running attempts and replacement invoice identities', async () => {
+    const id = randomUUID();
+    await expect(service.recoverUnlinkedImport(id, branchId, userId, { legacy: true, sourceDocumentIds: ['foreign-document'], reason: 'Recovery' })).rejects.toThrow('not found');
+    expect(await prisma.pharmacyPurchaseImportAttempt.findUnique({ where: { id } })).toBeNull();
+    await prisma.pharmacyPurchaseImportAttempt.create({ data: { id, branchId, userId } });
+    await expect(service.recoverUnlinkedImport(id, branchId, userId, { legacy: false, reason: 'Recovery' })).rejects.toThrow('Resolve the running');
+    await expect(service.recoverUnlinkedImport(orphanAttemptId, branchId, 'foreign-actor', { legacy: false, reason: 'Recovery' })).rejects.toThrow('not found');
+    const invoice = await service.createDraft(draft, branchId, userId, true);
+    const bound = randomUUID();
+    await prisma.pharmacyPurchaseImportAttempt.create({ data: { id: bound, branchId, userId, status: 'INVOICE_SAVED', purchaseInvoiceId: invoice.id } });
+    await expect(service.recoverUnlinkedImport(bound, branchId, userId, { legacy: false, invoiceId: 'replacement', reason: 'Recovery' })).rejects.toThrow('cannot be replaced');
   });
 
   it('fences a request delayed before registration and rejects cross-actor resolution', async () => {

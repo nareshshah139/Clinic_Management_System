@@ -1,0 +1,186 @@
+[
+  {
+    "file": "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/purchase-import-recovery.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/purchase-import-recovery.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation.spec.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation.spec.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.service.spec.ts",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.service.spec.ts",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "e2e/recovery/run.cjs",
+    "check": "format",
+    "exitCode": null,
+    "method": "Manual declaration/consumer review; installed cc-check does not support JavaScript extensions",
+    "sourceSha256": "3b352821b1a01a4ced47ee333d9e1c5c6087510666e9b7a98a4c262dd17b9dbd",
+    "status": "MANUAL_PASS",
+    "toolStatus": "UNSUPPORTED",
+    "toolExitCode": 1
+  },
+  {
+    "file": "e2e/recovery/run.cjs",
+    "check": "list",
+    "exitCode": null,
+    "method": "Manual declaration/consumer review; installed cc-check does not support JavaScript extensions",
+    "sourceSha256": "3b352821b1a01a4ced47ee333d9e1c5c6087510666e9b7a98a4c262dd17b9dbd",
+    "status": "MANUAL_PASS",
+    "toolStatus": "UNSUPPORTED",
+    "toolExitCode": 1
+  },
+  {
+    "file": "e2e/recovery/scenarios.cjs",
+    "check": "format",
+    "exitCode": null,
+    "method": "Manual declaration/consumer review; installed cc-check does not support JavaScript extensions",
+    "sourceSha256": "b15dc9342697d8ae9bb03b7f7e2fbd07d6d29593a766b3b58bee790463b594a5",
+    "status": "MANUAL_PASS",
+    "toolStatus": "UNSUPPORTED",
+    "toolExitCode": 1
+  },
+  {
+    "file": "e2e/recovery/scenarios.cjs",
+    "check": "list",
+    "exitCode": null,
+    "method": "Manual declaration/consumer review; installed cc-check does not support JavaScript extensions",
+    "sourceSha256": "b15dc9342697d8ae9bb03b7f7e2fbd07d6d29593a766b3b58bee790463b594a5",
+    "status": "MANUAL_PASS",
+    "toolStatus": "UNSUPPORTED",
+    "toolExitCode": 1
+  },
+  {
+    "file": "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/CONTRACTS",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/CONTRACTS",
+    "check": "list",
+    "exitCode": null,
+    "method": "Manual directory applicability review; direct cc-check list does not support CONTRACTS files",
+    "status": "MANUAL_PASS",
+    "toolStatus": "UNSUPPORTED",
+    "toolExitCode": 1
+  },
+  {
+    "file": "verification/inventory-ocr-legacy-recovery-2026-10-24/check_ocr_model.py",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "verification/inventory-ocr-legacy-recovery-2026-10-24/check_ocr_model.py",
+    "check": "list",
+    "exitCode": 0
+  },
+  {
+    "file": "verification/inventory-ocr-legacy-recovery-2026-10-24/check_inventory_model.py",
+    "check": "format",
+    "exitCode": 0
+  },
+  {
+    "file": "verification/inventory-ocr-legacy-recovery-2026-10-24/check_inventory_model.py",
+    "check": "list",
+    "exitCode": 0
+  }
+]

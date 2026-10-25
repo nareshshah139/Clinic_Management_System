@@ -1,4 +1,4 @@
-import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport } from './purchase-import-recovery';
+import { PurchaseImportRecovery, PurchaseImportFence, claimPurchaseImport, bindPurchaseImport, preparePurchaseWrite } from './purchase-import-recovery';
 import { checkedProductQuery, matchProductSearch, normalizeProductSearch, ocrProductSearchQuery, searchPackKey } from '../../shared/search/product-search';
 import { autocompleteDrugCatalog, findDrugSearchCandidates, loadReviewedProductAliases, searchableDrug, DrugSearchCandidate } from '../../shared/search/drug-search';
 import { hasPurchaseNameEvidence, purchaseMatchMismatches } from './purchase-match-safety';
@@ -395,6 +395,10 @@ export class PharmacyPurchaseInvoiceService {
     });
   }
 
+  recoverUnlinkedImport(id: string, branchId: string, userId: string, input: { legacy: boolean; invoiceId?: string; sourceDocumentIds?: string[]; reason: string }) {
+    return new PurchaseImportRecovery(this.prisma).recoverUnlinked({ id, branchId, userId }, input);
+  }
+
   resolveImportAttempt(id: string, branchId: string, userId: string) {
     return new PurchaseImportRecovery(this.prisma).resolve({ id, branchId, userId });
   }
@@ -479,6 +483,7 @@ export class PharmacyPurchaseInvoiceService {
     if (!userId) throw new BadRequestException('Authenticated user is required to process purchase stock');
     try {
       return await this.prisma.$transaction(async (tx) => {
+        await preparePurchaseWrite(tx, branchId);
         const invoice = await tx.pharmacyPurchaseInvoice.findFirst({
           where: { id, branchId }, include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
@@ -875,13 +880,14 @@ export class PharmacyPurchaseInvoiceService {
     const prismaAny = this.prisma as any;
     try {
       const create = async (tx: any) => {
+        await preparePurchaseWrite(tx, branchId);
         if (fence) await claimPurchaseImport(tx, fence);
         const created = await tx.pharmacyPurchaseInvoice.create({
           data: this.draftData(dto, branchId, userId),
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
         });
-        if (fence) await bindPurchaseImport(tx, fence, created.id);
         const sources=[...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[];
+        if (fence) await bindPurchaseImport(tx, fence, created.id, sources);
         await this.purchaseAudit(tx, created.id, branchId, userId, 'CREATED', null, created);
         if(!sources.length)return created;
         for (const sourceId of sources) await this.linkOriginal(tx, sourceId, created.id, branchId);
@@ -1322,6 +1328,7 @@ export class PharmacyPurchaseInvoiceService {
    * tax-exclusive cost per received paid-plus-free unit. The original receipt effects stay intact.
    */
   private async commitStockInTransaction(tx: any, id: string, branchId: string, userId: string) {
+    await preparePurchaseWrite(tx, branchId);
     const invoice = await tx.pharmacyPurchaseInvoice.findFirst({
       where: { id, branchId },
       include: {

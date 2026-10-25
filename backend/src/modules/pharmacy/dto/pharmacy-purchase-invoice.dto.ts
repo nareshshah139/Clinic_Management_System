@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   ArrayMinSize,
+  ArrayMaxSize,
   Equals,
   IsArray,
   IsBoolean,
@@ -670,4 +671,18 @@ export class RejectPharmacyPurchaseInvoiceDto extends ReopenPharmacyPurchaseInvo
   @MinLength(1)
   @MaxLength(500)
   reason: string;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:validation] unlinked-import-evidence
+ * Unlinked recovery MUST carry a persisted UUID, explicit legacy intent and a nonempty reason;
+ * original references MUST be bounded and validated against the authenticated branch by the service.
+ */
+export class RecoverUnlinkedPurchaseImportDto {
+  @IsUUID() recoveryId: string;
+  @IsBoolean() legacy: boolean;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(128) invoiceId?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MaxLength(128, { each: true }) sourceDocumentIds?: string[];
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(1) @MaxLength(500) reason: string;
 }

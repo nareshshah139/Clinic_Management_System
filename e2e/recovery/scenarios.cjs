@@ -1,3 +1,12 @@
+/**
+ * @cc [owner:nareshshah139,label:testing] purchase-fixture-protocol
+ * Synthetic purchase fixtures MUST opt into the same transaction protocol as production writes;
+ * recovery triggers MUST remain enabled during browser scenarios.
+ */
+const purchaseFixture = (f, args) => f.db.$transaction(async tx => {
+  await tx.$executeRaw`SELECT set_config('app.purchase_recovery_protocol', '2', true)`;
+  return tx.pharmacyPurchaseInvoice.create(args);
+});
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -231,7 +240,7 @@ exports.partner = async (f, s) => {
 exports.supplier = async (f, s) => {
   const gstin = "36ABCDE1234F1Z5";
   const invoice = (invoiceNumber) =>
-    f.db.pharmacyPurchaseInvoice.create({
+    purchaseFixture(f, {
       data: {
         branchId: f.branch.id,
         distributorName: "Recovery Supplier",
@@ -1016,7 +1025,7 @@ exports.stock = async (f, s) => {
  * Duplicate recovery MUST retain attempted corrections until an explicit choice and persist them only to the deliberately selected editable invoice without stock effects.
  */
 exports.purchase = async (f, s) => {
-  const makeInvoice = (invoiceNumber) => f.db.pharmacyPurchaseInvoice.create({ data: {
+  const makeInvoice = (invoiceNumber) => purchaseFixture(f, { data: {
     branchId: f.branch.id, distributorName: "Recovery Purchase Supplier",
     distributorGstin: "36ABCDE1234F1Z5", distributorDlNo: "Synthetic license",
     invoiceNumber, invoiceDate: new Date("2026-10-01"), goodsReceivedDate: new Date("2026-10-02"),

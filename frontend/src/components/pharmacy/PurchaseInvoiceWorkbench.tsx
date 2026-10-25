@@ -1076,11 +1076,13 @@ function PurchaseInvoiceEditor({
     string | null
   >(null);
   const [importAttemptId, setImportAttemptId] = useState<string | null>(null);
+  const [unlinkedRecoveryId, setUnlinkedRecoveryId] = useState<string | null>(null);
+  const [rejectedImportId, setRejectedImportId] = useState<string | null>(null);
   const [resolvingImport, setResolvingImport] = useState(false);
   const unknownStockRef = useRef<string | null>(null);
   unknownStockRef.current = unknownStockInvoiceId;
   const importLock = useRef(false);
-  const draftWriteBlocked = revisionChecking || !!revisionConflict || !!unknownStockInvoiceId;
+  const draftWriteBlocked = revisionChecking || !!revisionConflict || !!unknownStockInvoiceId || !!rejectedImportId;
   const recoveredRevision = useRef<string | null>(null);
   const initializedReceipt = useRef<string | null>(null);
   const recoveredIntake = useRef<string | null>(null);
@@ -1230,6 +1232,8 @@ function PurchaseInvoiceEditor({
         setEditingId(saved.editingId || null);
         setUnknownStockInvoiceId(saved.unknownStockInvoiceId || null);
         setImportAttemptId(saved.importAttemptId || null);
+        setUnlinkedRecoveryId(saved.unlinkedRecoveryId || null);
+        setRejectedImportId(saved.rejectedImportId || null);
         recoveredInvoiceId.current = saved.editingId || null;
         const revision =
           saved.draftServerRevision || saved.originalAmounts?.updatedAt || null;
@@ -1267,6 +1271,8 @@ function PurchaseInvoiceEditor({
           version: 1,
           unknownStockInvoiceId,
           importAttemptId,
+          unlinkedRecoveryId,
+          rejectedImportId,
           header,
           lines: linesWithPendingChecks,
           editingId,
@@ -1291,6 +1297,8 @@ function PurchaseInvoiceEditor({
     recoveryReady,
     unknownStockInvoiceId,
     importAttemptId,
+    unlinkedRecoveryId,
+    rejectedImportId,
     header,
     linesWithPendingChecks,
     editingId,
@@ -1916,6 +1924,13 @@ function PurchaseInvoiceEditor({
    */
   const acceptImportOutcome = async (result: any, expectedId: string) => {
     if (result?.attemptId !== expectedId) throw new Error('Import recovery returned a different attempt. Keep this purchase locked.');
+    if (result.outcome === 'RETRY_REJECTED' && result.stockOutcome === 'UNVERIFIED') {
+      setRejectedImportId(expectedId);
+      setUnknownStockInvoiceId(result.invoiceId || 'unconfirmed-import');
+      setError(null);
+      setNotice('Further intake rejected. Historical stock remains unverified. Use Counts & audit to reconcile physical inventory.');
+      return true;
+    }
     if (result.outcome === 'NO_STOCK_WRITTEN' && result.invoiceId === null) {
       const retained = result.retained;
       if (retained?.sourceDocument || retained?.sourceDocuments?.[0]) setSourceDocument(retained.sourceDocument || retained.sourceDocuments[0]);
@@ -1946,6 +1961,37 @@ function PurchaseInvoiceEditor({
     setResolvingImport(true);
     try {
       const result = await apiClient.post(`/pharmacy/purchase-invoices/ocr/import-attempts/${encodeURIComponent(id)}/resolve`, {});
+      if (attemptCurrent(attempt)) await acceptImportOutcome(result, id);
+    } catch (err) { if (attemptCurrent(attempt)) setError(getErrorMessage(err)); }
+    finally { setResolvingImport(false); }
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:state] unlinked-recovery-keeps-stock-unknown
+   * Legacy/missing-link recovery MUST persist its identity before dispatch. RETRY_REJECTED
+   * MUST keep intake locked, retain the draft, and offer physical reconciliation without claiming no stock.
+   */
+  const recoverUnlinkedImport = async () => {
+    if (!unknownStockInvoiceId || resolvingImport || !access.create || !access.read || !access.review) return;
+    const reason = window.prompt('Explain the interrupted import. If no exact saved invoice can be recovered, further intake will be rejected and physical stock must be reconciled.');
+    if (!reason?.trim()) return;
+    const attempt = captureAttempt();
+    setResolvingImport(true);
+    try {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+      const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+      const id = importAttemptId || unlinkedRecoveryId || `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+      if (!recoveryKey) throw new Error('Sign in before recovering this import.');
+      const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || '{}');
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ ...stored, version: 1, header, lines,
+        unknownStockInvoiceId, unlinkedRecoveryId: id }));
+      setUnlinkedRecoveryId(id);
+      const result = await apiClient.post('/pharmacy/purchase-invoices/ocr/recover-unlinked', {
+        recoveryId: id, legacy: !importAttemptId, reason: reason.trim(),
+        ...(unknownStockInvoiceId !== 'unconfirmed-import' ? { invoiceId: unknownStockInvoiceId } : {}),
+        sourceDocumentIds: [...new Set([sourceDocument?.id, ...additionalSourceIds].filter(Boolean))],
+      });
       if (attemptCurrent(attempt)) await acceptImportOutcome(result, id);
     } catch (err) { if (attemptCurrent(attempt)) setError(getErrorMessage(err)); }
     finally { setResolvingImport(false); }
@@ -3194,9 +3240,18 @@ function PurchaseInvoiceEditor({
       <h3 id="purchase-recovery-title" className="font-semibold">Finish this purchase</h3>
       {recovery && <p className="text-sm">{recovery.message}</p>}
       {recovery?.reference && <p className="break-all text-sm">Reference: {recovery.reference}</p>}
-      {unknownStockInvoiceId && <div className="space-y-2">
+      {rejectedImportId && <div className="space-y-2" role="region" aria-label="Rejected uncertain import">
+        <p>Further intake rejected. Historical stock remains unverified; this does not mean no stock was posted.</p>
+        <p className="break-all text-sm">Recovery reference: {rejectedImportId}</p>
+        {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
+        <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Counts &amp; audit</a>
+        <p className="text-sm">Keep this invoice out of new intake. Verify physical quantities and product identities, then record an independent checkpoint. Supplier accounting remains separate.</p>
+      </div>}
+      {unknownStockInvoiceId && !rejectedImportId && <div className="space-y-2">
         <p role="status">Stock status unknown. Check the saved purchase before trying another stock operation.</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
+        {access.create && access.read && access.review && <Button variant="outline" disabled={resolvingImport || extracting} onClick={recoverUnlinkedImport}>Recover legacy or missing invoice</Button>}
+        {!(access.create && access.read && access.review) && <p>An authorized colleague with purchase read, create and review access can recover this legacy or missing invoice.</p>}
         {importAttemptId && access.create && <Button variant="outline" disabled={resolvingImport || extracting} onClick={resolveInterruptedImport}>{resolvingImport ? 'Resolving import…' : 'Resolve interrupted import'}</Button>}
         {unknownStockInvoiceId !== "unconfirmed-import" && access.read && <Button variant="outline" disabled={busy} onClick={() => refreshStockStatus(unknownStockInvoiceId)}>Check saved status</Button>}
       </div>}

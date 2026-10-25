@@ -64,6 +64,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     prisma = {
       $queryRaw: jest.fn().mockResolvedValue([{id:'drug-1'},{id:'drug-2'}]),
       auditLog: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $transaction: jest.fn((callback: any) => callback(prisma)),
       pharmacyPurchaseInvoice: {
         create: jest.fn(),

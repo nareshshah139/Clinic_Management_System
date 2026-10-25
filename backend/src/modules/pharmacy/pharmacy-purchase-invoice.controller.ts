@@ -35,6 +35,7 @@ import {
   CreatePharmacyPurchaseInvoiceDto,
   ImportPharmacyPurchaseInvoiceDto,
   RejectPharmacyPurchaseInvoiceDto,
+  RecoverUnlinkedPurchaseImportDto,
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
@@ -251,6 +252,14 @@ export class PharmacyPurchaseInvoiceController {
   @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
   rejectInvoice(@Param('id') id: string, @Body() dto: RejectPharmacyPurchaseInvoiceDto, @Request() req: any) {
     return this.purchaseInvoiceService.rejectUnpostedInvoice(id, req.user.branchId, req.user.id, dto.expectedUpdatedAt, dto.reason);
+  }
+
+  @Post('ocr/recover-unlinked')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'],
+    ['pharmacy:purchase-invoice:read', 'inventory:po:read'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
+  recoverUnlinked(@Body() dto: RecoverUnlinkedPurchaseImportDto, @Request() req: any) {
+    return this.purchaseInvoiceService.recoverUnlinkedImport(dto.recoveryId, req.user.branchId, req.user.id, dto);
   }
 
   @Post('ocr/import-attempts/:attemptId/resolve')

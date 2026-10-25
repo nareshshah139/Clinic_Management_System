@@ -1,5 +1,6 @@
 # OCR recovery, safe rejection and inventory reconciliation
 
+Latest extension: [legacy and missing-invoice recovery](../inventory-ocr-legacy-recovery-2026-10-24/report.md). Earlier validation below is historical; the extension records the current source and verification results.
 This extends the [inventory proofs](../inventory-reconciliation-2026-10-24/report.md). The earlier 30-state abstraction did not prove the complete OCR lifecycle. This revision explicitly covers extraction, page completeness, persisted automation outcomes, response loss, worker interruption, manual transcription and rejection.
 
 ## Claim and scope

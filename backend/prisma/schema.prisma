@@ -1493,6 +1493,7 @@ model PharmacyPurchaseInvoice {
   updatedAt              DateTime                      @updatedAt
 
   branch             Branch                              @relation(fields: [branchId], references: [id])
+  importAttempts     PharmacyPurchaseImportAttempt[]
   items              PharmacyPurchaseInvoiceItem[]
   documents          PharmacyPurchaseInvoiceDocument[]
   paymentAllocations PharmacyPurchasePaymentAllocation[]
@@ -2483,6 +2484,9 @@ model PharmacyPurchaseImportAttempt {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
+  purchaseInvoice PharmacyPurchaseInvoice? @relation(fields: [purchaseInvoiceId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, status])
   @@index([branchId, userId, createdAt])
   @@map("pharmacy_purchase_import_attempts")
 }
