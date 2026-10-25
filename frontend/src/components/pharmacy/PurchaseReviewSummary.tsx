@@ -13,7 +13,8 @@ const money = (value: number) =>
  * @cc [owner:nareshshah139,label:product] invoice-verification-summary
  * Only a server-confirmed stock commit may show the final step as complete. Zero OCR flags MUST
  * NOT imply human verification. Missing printed totals MUST stay unknown; a difference exceeding
- * one paise MUST be shown with its amount. Section links MUST reveal their target before focusing.
+ * one paise MUST be shown with its amount. Linked receipts MUST name the final action Post bill
+ * rather than Add stock. Section links MUST reveal their target before focusing.
  */
 export function PurchaseReviewSummary({
   hasContent,
@@ -21,6 +22,7 @@ export function PurchaseReviewSummary({
   committed,
   cancelled,
   unknown,
+  stockReceivedEarlier = false,
   checks,
   lines,
   calculated,
@@ -31,6 +33,7 @@ export function PurchaseReviewSummary({
   committed: boolean;
   cancelled: boolean;
   unknown: boolean;
+  stockReceivedEarlier?: boolean;
   checks: number;
   lines: number;
   calculated: number;
@@ -49,7 +52,7 @@ export function PurchaseReviewSummary({
   return (
     <section aria-label="Invoice progress" className="space-y-3 border-y py-4">
       <ol className="grid grid-cols-3 gap-3 text-sm">
-        {["Scan or type", "Check details", "Add stock"].map((label, index) => {
+        {["Scan or type", "Check details", stockReceivedEarlier ? "Post bill" : "Add stock"].map((label, index) => {
           const complete = !paused && current > index;
           const Icon = complete
             ? CheckCircle2

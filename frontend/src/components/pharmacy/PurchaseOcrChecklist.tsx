@@ -13,6 +13,7 @@ import { focusPurchaseField, groupPurchaseOcrFlags, purchaseBlockingIssues, purc
  * Missing or invalid flagged values MUST show correction state; unchecked OCR values MUST show
  * review state. Green Checked MUST follow an explicit confirmation of the current values in this
  * editor session. Changed values or reintroduced flags MUST remove that success state.
+ * Upload-only issues MUST keep confirmation unavailable and name the cause-specific upload action.
  */
 export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disabled, onResolve, onResolveMany, checked: controlledChecked, onChecked }: {
   flags: string[];
@@ -55,7 +56,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, disable
             {invalid && !issue.requiresUpload && <p className="mt-1 text-sm">Enter a valid {issue.field === 'billType' && values.billType === 'CREDIT' && !values.dueDate ? 'due date' : issue.label} to confirm.</p>}
           </div>
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            {target && <a aria-label={issue.requiresUpload ? 'Upload pages for complete invoice' : `Edit ${label}`} className="inline-flex min-h-8 items-center text-sm underline underline-offset-4" href={`#${target}`} onClick={() => focusPurchaseField(target)}>{issue.requiresUpload ? 'Upload pages' : 'Correct'}</a>}
+            {target && <a aria-label={issue.requiresUpload ? issue.uploadLabel?.accessibleName || 'Upload pages for complete invoice' : `Edit ${label}`} className="inline-flex min-h-8 items-center text-sm underline underline-offset-4" href={`#${target}`} onClick={() => focusPurchaseField(target)}>{issue.requiresUpload ? issue.uploadLabel?.text || 'Upload pages' : 'Correct'}</a>}
             {!issue.requiresUpload && !verified && <Button type="button" variant="outline" size="sm" className="h-auto min-h-9 whitespace-normal text-left text-foreground"
               aria-label={`Confirm ${label} checked`} disabled={disabled || invalid} onClick={() => {
                 const next = { ...checked, [key]: { flags: group, snapshot } };

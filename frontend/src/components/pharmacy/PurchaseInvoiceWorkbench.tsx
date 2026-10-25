@@ -1024,7 +1024,8 @@ export function PurchaseInvoiceWorkbench({
  * @cc [owner:nareshshah139,label:product] purchase-check-before-stock
  * The primary scan and save actions MUST retain a reviewable draft without adding stock.
  * Adding stock MUST be a separately labelled action; automatic processing MUST stay an explicit
- * secondary choice. Editing reviewed values MUST clear the final human confirmation.
+ * secondary choice. Linked receipts MUST use Post bill in instructions and progress and explain
+ * that posting adds no further stock. Editing reviewed values MUST clear the final human confirmation.
  */
 /**
  * @cc [owner:nareshshah139,label:product] invoice-field-color-evidence
@@ -1039,6 +1040,12 @@ export function PurchaseInvoiceWorkbench({
  * Catalogue rejections MUST offer in-place name correction, catalogue creation and manual matching
  * to authorized editors. Reviewed bills MUST reopen through the revision-checked API before edits;
  * posted or unknown stock outcomes MUST stay locked. Reopening and corrections MUST clear final approval.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] historical-stock-recovery-guidance
+ * Historical-stock holds with a confirmed unposted invoice status MUST offer Counts & audit
+ * and a copyable invoice handoff.
+ * Guidance MUST retain stock uncertainty and distinguish physical reconciliation from supplier accounting.
  */
 /**
  * @cc [owner:nareshshah139,label:state] purchase-recovery-editor-identities
@@ -1967,6 +1974,8 @@ function PurchaseInvoiceEditor({
    * @cc [owner:nareshshah139,label:state] import-outcome-authoritative-recovery
    * An unknown import MUST stay locked until its matching durable attempt is fenced with no
    * stock, or its exact saved invoice is read back. Failed or mismatched resolution MUST not unlock.
+   * A fenced no-stock result MUST explain that no invoice or stock was created and name available
+   * recovery controls even when the server supplies only a diagnostic message.
    */
   const acceptImportOutcome = async (result: any, expectedId: string) => {
     if (result?.attemptId !== expectedId) throw new Error('Import recovery returned a different attempt. Keep this purchase locked.');
@@ -1988,7 +1997,10 @@ function PurchaseInvoiceEditor({
       setShowIntakeHome(false);
       setManualEntry(true);
       setError(null);
-      setNotice(result.message || 'This import is stopped. It created no invoice or stock. Retry with a new attempt, enter the complete invoice manually, or reject the upload.');
+      const retainedOriginal = retained?.sourceDocument || retained?.sourceDocuments?.[0] || sourceDocument;
+      setNotice('This import is stopped. It created no invoice or stock. ' + (retainedOriginal
+        ? 'Choose Enter complete invoice manually to type and verify the original, or Reject this upload to keep it out of intake. To scan again, select the complete invoice file and choose Scan bill.'
+        : 'Type the complete invoice below and review it, or select the complete invoice file and choose Scan bill.'));
       return true;
     }
     if (['DRAFT_SAVED', 'STOCK_COMMITTED'].includes(result.outcome) && typeof result.invoiceId === 'string' && result.invoiceId) {
@@ -2697,7 +2709,9 @@ function PurchaseInvoiceEditor({
     const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink,
       attemptId ? `Import attempt: ${attemptId}` : '', ownerId ? `Original operator: ${ownerId}` : '',
       id ? `Exact invoice: ${id}` : '', sourceIds.length ? `Original documents: ${sourceIds.join(', ')}` : '',
-      recovery?.message || error || 'A colleague with purchase read, create and review access can open this link to recover the import.',
+      historicalStockHold ? 'Ask an inventory administrator to compare this invoice with opening-stock records and verify a physical count. Do not add it as a new receipt. Supplier accounting remains separate.' :
+        recovery?.message || error || 'A colleague with purchase read, create and review access can open this link to recover the import.',
+      historicalStockHold ? `${window.location.origin}/dashboard/inventory?area=stock&view=COUNT` : '',
       recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
@@ -2859,8 +2873,8 @@ function PurchaseInvoiceEditor({
   const stockStatusUnknown = !!unknownStockInvoiceId;
   const stockAdded = !stockStatusUnknown &&
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
-  const stockReceivedEarlier =
-    stockAdded && !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
+  const linkedReceipt = !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
+  const stockReceivedEarlier = stockAdded && linkedReceipt;
   const committedLabel = stockReceivedEarlier
     ? "Invoice posted · stock received earlier"
     : "Stock added";
@@ -3365,6 +3379,15 @@ function PurchaseInvoiceEditor({
         <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Counts &amp; audit</a>
         <p className="text-sm">Keep this invoice out of new intake. Verify physical quantities and product identities, then record an independent checkpoint. Supplier accounting remains separate.</p>
       </div>}
+      {historicalStockHold && !stockAdded && !stockStatusUnknown && <section className="space-y-2" aria-label="Historical stock recovery">
+        <p>This invoice may already be included in opening stock. Its historical stock outcome needs verification; do not add it as a new receipt.</p>
+        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Counts &amp; audit. Supplier accounting remains separate.</p>
+        <p className="break-all text-sm">Invoice reference: {activeInvoice?.invoiceNumber || activeInvoice?.id}</p>
+        <div className="flex flex-wrap gap-2">
+          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Counts &amp; audit</a>
+          <Button variant="outline" onClick={copyHandoff}>Copy historical stock handoff</Button>
+        </div>
+      </section>}
       {unknownStockInvoiceId && !rejectedImportId && <div className="space-y-2">
         <p role="status">Stock status unknown. Check the saved purchase before trying another stock operation.</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
@@ -3418,7 +3441,7 @@ function PurchaseInvoiceEditor({
         <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
         {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => { if (window.confirm('Reject this upload without adding stock? Its archived original will be retained.')) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
       </div>}
-      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing Add stock.</p>}
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing {linkedReceipt ? "Post bill" : "Add stock"}.</p>}
     </section>
   );
 
@@ -3854,6 +3877,7 @@ function PurchaseInvoiceEditor({
         {!showIntakeHome && <ReviewLegend />}
         {!showIntakeHome && <PurchaseReviewSummary
           hasContent={hasDraftContent}
+          stockReceivedEarlier={linkedReceipt}
           saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
           checks={checksRemaining} lines={sourceLines.length}
           calculated={viewingSavedInvoice ? calculateTotals(sourceHeader as HeaderForm, sourceLines).netPayable : totals.netPayable}
@@ -3986,15 +4010,17 @@ function PurchaseInvoiceEditor({
                       {stockStatusUnknown
                         ? "The request was interrupted. Refresh stock status to confirm the saved outcome before continuing."
                         : activeInvoice.status === "REVIEWED"
-                          ? "Review complete. Choose Add stock when ready."
+                          ? linkedReceipt
+                            ? "These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added."
+                            : "Review complete. Choose Add stock when ready."
                           : historicalStockHold
                             ? "Check this bill against opening stock with an inventory administrator before proceeding."
                           : awaitingManualReview
-                            ? "Confirm your review below, then add stock."
+                            ? linkedReceipt ? "Confirm your review below, then choose Post bill. No additional stock will be added." : "Confirm your review below, then add stock."
                             : editingSelectedInvoice && access.automate
                               ? "Correct the highlighted details, then save corrections."
                               : canReview
-                                ? "Confirm your review below, then add stock."
+                                ? linkedReceipt ? "Confirm your review below, then choose Post bill. No additional stock will be added." : "Confirm your review below, then add stock."
                                 : "Check highlighted details, then save corrections."}
                     </p>
                     <div className="flex flex-wrap items-end justify-between gap-4">
