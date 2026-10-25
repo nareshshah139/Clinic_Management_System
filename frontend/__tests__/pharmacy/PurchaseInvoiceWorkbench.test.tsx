@@ -347,6 +347,37 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
+  it('explains a reviewed linked receipt using the Post bill action and no additional stock', async () => {
+    renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED', workflowReceiptId: 'receipt-1' });
+    await screen.findByRole('button', { name: 'Post bill' });
+    expect(screen.getByText('These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added.')).toBeVisible();
+    const progress = screen.getByRole('region', { name: 'Invoice progress' });
+    expect(within(progress).getByText('3. Post bill')).toBeVisible();
+    expect(within(progress).queryByText(/Add stock/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Review complete. Choose Add stock when ready.')).not.toBeInTheDocument();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('offers historical stock reconciliation and a copyable invoice handoff without promising supplier accounting', async () => {
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderSavedInvoice({ ...draftInvoice, status: 'RECONCILIATION_FAILED', reconciliationIssues: [
+      'This historical invoice predates the stock snapshot. Its stock may already be included in the inventory backfill.',
+    ] });
+    await editSelectedInvoice();
+    const recovery = screen.getByRole('region', { name: 'Historical stock recovery' });
+    expect(within(recovery).getByRole('link', { name: 'Open Counts & audit' })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+    expect(within(recovery).getByText(/Supplier accounting remains separate/)).toBeVisible();
+    expect(within(recovery).getByText(/inventory administrator.*physical count/i)).toBeVisible();
+    fireEvent.click(within(recovery).getByRole('button', { name: 'Copy historical stock handoff' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = writeText.mock.calls[0][0];
+    expect(copied).toContain('Exact invoice: pinv-1');
+    expect(copied).toContain('/dashboard/inventory?area=stock&view=COUNT');
+    expect(copied).toContain('Supplier accounting remains separate');
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('gives historical invoices a stock-backfill check instead of retry instructions', async () => {
     renderSavedInvoice({ ...draftInvoice, status: 'RECONCILIATION_FAILED', reconciliationIssues: [
       'This historical invoice predates the 14-Sep-2026 eVitalRx stock snapshot. Its stock may already be included in the inventory backfill.',
@@ -640,7 +671,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     const first = render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" recoverySourceIds={['source-1']} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Continue the interrupted shift' } });
     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
-    expect(await screen.findByText('Stopped safely before invoice creation.')).toBeVisible();
+    expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).unknownStockInvoiceId).toBeNull());
     first.unmount();
     render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" />);
@@ -673,6 +704,23 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
+  it('keeps safe-stop stock outcome and usable next steps when the backend supplies only a diagnostic', async () => {
+    const document = { id: 'stopped-document', fileName: 'supplier.jpg', mimeType: 'image/jpeg', sizeBytes: 3000 };
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 503, json: async () => ({ message: 'Extraction unavailable', sourceDocument: document }) });
+    api.post.mockImplementation(async (url: any) => ({ attemptId: String(url).split('/').at(-2), outcome: 'NO_STOCK_WRITTEN', invoiceId: null, message: 'Interrupted import stopped safely before invoice creation.' }) as any);
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'supplier.jpg', { type: 'image/jpeg' })] } });
+    importAutomatically();
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolve interrupted import' }));
+    expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
+    expect(screen.getByText(/Enter complete invoice manually/,{ selector: '[role="status"]' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Enter complete invoice manually' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Reject this upload' })).toBeEnabled();
+    expect(screen.getByLabelText('Upload invoice PDF or image')).toBeEnabled();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it.each(['failed', 'wrong-attempt', 'unknown', 'malformed-no-stock'])('retains the original lock after %s delegated recovery', async outcome => {
     const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
     if (outcome === 'failed') api.post.mockRejectedValue(new Error('Lost response'));
@@ -701,7 +749,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(reference).toBeEnabled();
     fireEvent.change(reference, { target: { value: id } });
     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
-    expect(await screen.findByText('Corrected reference recovered safely.')).toBeVisible();
+    expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
     expect(api.post).toHaveBeenCalledTimes(1);
   });
 
@@ -734,7 +782,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench recoveryAttemptId={previousId} recoveryActorId="previous-operator" recoverySourceIds={['previous-source']} />);
     fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Recover the old interrupted attempt' } });
     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
-    await screen.findByText('Previous attempt stopped safely.');
+    await screen.findByText(/This import is stopped. It created no invoice or stock/);
     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).delegatedRecovery.originalActorId).toBe('previous-operator'));
     let persistedAtDispatch: any;
     let sentAttemptId: FormDataEntryValue | null = null;
