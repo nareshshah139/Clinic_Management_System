@@ -1,0 +1,12 @@
+      at Object.<anonymous> (__tests__/visits/save-error-message.test.ts:12:21)
+
+PASS __tests__/visits/patient-history-api.test.ts
+PASS __tests__/pharmacy/purchase-invoice-recovery.test.ts
+PASS __tests__/lib/signature-images.test.ts
+
+Test Suites: 65 passed, 65 total
+Tests:       638 passed, 638 total
+Snapshots:   0 total
+Time:        141.34 s
+Ran all test suites.
+Test results written to: ../../../../../../../tmp/clarity-full-frontend.json

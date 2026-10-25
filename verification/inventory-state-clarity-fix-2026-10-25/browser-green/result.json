@@ -1,0 +1,130 @@
+{
+  "runId": "2026-10-25T06-49-35-837Z-22c7074c",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "d3256c7acacc8ae698713ff5bc37f449fa9a2921",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "unknown-loss",
+        "recovered-loss",
+        "failed-load"
+      ],
+      "status": "passed",
+      "assertions": [
+        {
+          "label": "real stock loss committed before response fault",
+          "expected": 4,
+          "actual": 4
+        },
+        {
+          "label": "unknown result never claims no stock change",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "unknown result exposes explicit status check",
+          "expected": true,
+          "actual": true
+        },
+        {
+          "label": "unknown result blocks stock command",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "status check retains exact posted document",
+          "expected": "cmvngwvnc0000agxpfmwzwyq1",
+          "actual": "cmvngwvnc0000agxpfmwzwyq1"
+        },
+        {
+          "label": "status check does not duplicate loss",
+          "expected": 4,
+          "actual": 4
+        },
+        {
+          "label": "failed existing load never looks unsaved",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "failed existing load blocks save",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "retry preserves stock",
+          "expected": 4,
+          "actual": 4
+        }
+      ],
+      "screenshots": [
+        {
+          "checkpoint": "unknown-loss",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-unknown-loss-1280.png"
+        },
+        {
+          "checkpoint": "unknown-loss",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-unknown-loss-390.png"
+        },
+        {
+          "checkpoint": "recovered-loss",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-recovered-loss-1280.png"
+        },
+        {
+          "checkpoint": "recovered-loss",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-recovered-loss-390.png"
+        },
+        {
+          "checkpoint": "failed-load",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-failed-load-1280.png"
+        },
+        {
+          "checkpoint": "failed-load",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-failed-load-390.png"
+        }
+      ]
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ]
+  },
+  "status": "passed"
+}

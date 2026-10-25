@@ -1,0 +1,9 @@
+abstract_edge	production_boundary	regression_evidence	limit
+unconfirmed write -> authoritative lookup	WorkflowDocumentEditor.tsx; inventory-workflow.controller.ts GET by-request	WorkflowDocumentEditor.clarity.test.tsx; inventory-workflow-request-recovery.spec.ts; browser-green/result.json	Missing or same-version read does not establish no write
+unconfirmed transition -> revision resolution	inventory-workflow.service.ts resolveOutcome	inventory-workflow-recovery.database.spec.ts both competing transaction orders and rollback	Applies to original-version guarded writes, not cancellation of no-stock child creation
+failed record/source read -> retry	WorkflowDocumentEditor.tsx	WorkflowDocumentEditor.clarity.test.tsx; browser-green/result.json	Requires a successful service interval
+read-only unresolved -> authorized handoff	WorkflowDocumentEditor.tsx; stock-recovery.ts	WorkflowDocumentEditor.clarity.test.tsx; InventoryWorkspace.permissions.test.tsx	Handoff retains exact reference; authority is external to the current actor
+stale permissions -> retry capabilities	InventoryWorkspace.tsx	InventoryWorkspace.permissions.test.tsx	Unavailable service preserves blocked state
+stock discrepancy -> truthful count	WorkspaceStock.tsx; inventory-stock.ts	inventory-reconciliation.spec.ts; browser-prior-regressions/result.json	Physical evidence and appropriate count/approval authority required
+OCR wrong document -> correct upload	PurchaseInvoiceWorkbench.tsx; purchase-invoice-review.ts	PurchaseInvoiceWorkbench.test.tsx	Upload control availability is tested; OCR factual accuracy is not proved
+historical intake uncertainty -> safe rejection/audit	PurchaseInvoiceWorkbench.tsx; purchase-import-recovery.ts	PurchaseInvoiceWorkbench.test.tsx; browser-prior-regressions/result.json	Safe rejection resolves intake without asserting that historical stock is reconciled

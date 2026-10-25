@@ -1,0 +1,29 @@
+digraph knowledge {
+ graph [rankdir=TB, bgcolor="white", fontname="Arial", label="Inventory UI knowledge and safe recovery", labelloc=t];
+ node [shape=box, style="rounded,filled", fillcolor="#eef4ff", fontname="Arial"];
+ edge [fontname="Arial", fontsize=10];
+ new [label="New draft\nNo submitted operation"];
+ known [label="Authoritative saved record\nExplain kind + status + effects"];
+ pending [label="Operation dispatched\nRetain exact request identity", fillcolor="#fff4d6"];
+ unknown [label="Outcome unconfirmed\nStock effect unknown; writes blocked", fillcolor="#ffe8e6"];
+ failed [label="Existing record cannot load\nKeep requested ID; writes blocked", fillcolor="#ffe8e6"];
+ check [label="Check saved status / Retry loading\nRead advanced revision / fence pending version\nExact ID or request-key lookup"];
+ handoff [label="Authorized colleague handoff\nRetained record / batch / attempt reference", fillcolor="#f1edf9"];
+ count [label="Fresh physical count\nObserve truthfully; resolve source holds"];
+ settled [label="Posted / verified / safely rejected\nOriginal evidence and history retained", fillcolor="#e6f5e9"];
+ new -> pending [label="Save / submit"];
+ known -> pending [label="Authorized action"];
+ pending -> known [label="Authoritative readback"];
+ pending -> unknown [label="Response / readback lost"];
+ unknown -> check [label="Visible status-check action"];
+ failed -> check [label="Visible retry action"];
+ check -> known [label="Confirmed advanced or fenced record"];
+ check -> unknown [label="Still unavailable; retain evidence"];
+ unknown -> handoff [label="No required authority"];
+ failed -> handoff [label="Missing / inaccessible record"];
+ known -> handoff [label="Required action not permitted"];
+ handoff -> check [label="Colleague has full required authority"];
+ known -> count [label="Start fresh count / Count this batch"];
+ count -> settled [label="Valid evidence + authority + successful commit"];
+ known -> settled [label="Existing final outcome explained"];
+}

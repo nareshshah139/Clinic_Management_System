@@ -1,0 +1,1273 @@
+
+> frontend@0.1.0 test
+> jest --runInBand __tests__/inventory/WorkspaceStock.batches.test.tsx __tests__/inventory/InventoryWorkspace.permissions.test.tsx
+
+   Using tsconfig file: tsconfig.build.json
+FAIL __tests__/inventory/InventoryWorkspace.permissions.test.tsx
+  ● retries failed permissions from a named control and renders the recovered access
+
+    expect(element).toHaveTextContent()
+
+    Expected element to have text content:
+      Inventory permissions could not be loaded
+    Received:
+      Network unavailable
+
+      10 |   (apiClient.get as jest.Mock).mockRejectedValueOnce(new Error('Network unavailable')).mockResolvedValue({kinds:{COUNT:{write:true}}});
+      11 |   render(<InventoryWorkspace/>);
+    > 12 |   expect(await screen.findByRole('alert')).toHaveTextContent('Inventory permissions could not be loaded');
+         |                                            ^
+      13 |   expect(screen.getByRole('alert')).toHaveTextContent('Loading permissions does not change stock');
+      14 |   fireEvent.click(screen.getByRole('button',{name:'Retry permissions'}));
+      15 |   expect(await screen.findByText('Count access available')).toBeInTheDocument();
+
+      at Object.toHaveTextContent (__tests__/inventory/InventoryWorkspace.permissions.test.tsx:12:44)
+
+  ● refreshes permissions and removes stale access if the request fails
+
+    Unable to find role="button" and name "Retry permissions"
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<main[39m
+          [33mclass[39m=[32m"inventory-surface min-w-0 space-y-5 pb-12 dark:bg-background dark:text-foreground"[39m
+        [36m>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-3"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h1[39m
+                [33mclass[39m=[32m"text-3xl font-semibold tracking-tight"[39m
+              [36m>[39m
+                [0mInventory[0m
+              [36m</h1>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"mt-1 text-muted-foreground"[39m
+              [36m>[39m
+                [0mReceive, review and manage pharmacy stock.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33maria-label[39m=[32m"Refresh inventory"[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+              [33mdata-state[39m=[32m"closed"[39m
+              [33mtitle[39m=[32m"Refresh inventory"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-refresh-cw h-4 w-4"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 3v5h-5"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M8 16H3v5"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+              [36m</span>[39m
+            [36m</button>[39m
+          [36m</header>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Inventory areas"[39m
+            [33mclass[39m=[32m"flex flex-wrap gap-1 border-b pb-2 print:hidden"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 py-2 has-[>svg]:px-3 min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mToday[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 py-2 has-[>svg]:px-3 min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mPurchases[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33maria-current[39m=[32m"page"[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 py-2 has-[>svg]:px-3 min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mStock[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 py-2 has-[>svg]:px-3 min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mSales[0m
+            [36m</button>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 py-2 has-[>svg]:px-3 min-w-24 flex-1 px-2 text-xs sm:flex-none sm:text-sm"[39m
+              [33mdata-slot[39m=...
+
+      21 |   await screen.findByText('Count access available');
+      22 |   fireEvent.click(screen.getByRole('button',{name:'Refresh inventory'}));
+    > 23 |   await screen.findByRole('button',{name:'Retry permissions'});
+         |                ^
+      24 |   expect(screen.queryByText('Count access available')).not.toBeInTheDocument();
+      25 |   fireEvent.click(screen.getByRole('button',{name:'Retry permissions'}));
+      26 |   await waitFor(()=>expect(screen.getByText('Count access unavailable')).toBeInTheDocument());
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByRole (__tests__/inventory/InventoryWorkspace.permissions.test.tsx:23:16)
+
+FAIL __tests__/inventory/WorkspaceStock.batches.test.tsx
+  ● explains ledger evidence {"checkpoint": null, "status": "UNVERIFIED"} without claiming the view changed stock
+
+    TestingLibraryElementError: Unable to find an element with the text: /No verified physical count/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mBack to stock list[0m
+          [36m</button>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"text-2xl font-semibold"[39m
+              [36m>[39m
+                [0mMax Rich Yu Cream[0m
+              [36m</h2>[39m
+              [36m<p>[39m
+                [0m100 Gm[0m
+                [0m · Stock counted in [0m
+                [0mPACKS[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+                  [33mdata-review-state[39m=[32m"success"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check h-4 w-4 shrink-0"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<span>[39m
+                    [0mCurrent / on hand[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-muted-foreground"[39m
+              [36m>[39m
+                [0mB1[0m
+                [0m · Expiry[0m
+                [0m [0m
+                [0m31/5/2028[0m
+                [0m ·[0m
+                [0m [0m
+                [0mLocation not assigned[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Print batch label"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mdata-state[39m=[32m"closed"[39m
+                [33mtitle[39m=[32m"Print batch label"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-printer h-4 w-4"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"[39m
+                    [36m/>[39m
+                    [36m<rect[39m
+                      [33mheight[39m=[32m"8"[39m
+                      [33mrx[39m=[32m"1"[39m
+                      [33mwidth[39m=[32m"12"[39m
+                      [33mx[39m=[32m"6"[39m
+                      [33my[39m=[32m"14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"...
+
+      73 |   render(<WorkspaceStock {...props} itemId={item.id}/>);
+      74 |   fireEvent.click(await screen.findByRole('button',{name:'Ledger'}));
+    > 75 |   expect(screen.getByText(new RegExp(explanation))).toBeInTheDocument();
+         |                 ^
+      76 |   expect(screen.getByText(/Viewing this ledger does not change stock/)).toBeInTheDocument();
+      77 |   expect(screen.getByRole('button',{name:action})).toBeEnabled();
+      78 | });
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at getByText (__tests__/inventory/WorkspaceStock.batches.test.tsx:75:17)
+
+  ● explains ledger evidence {"checkpoint": [Object], "difference": null, "expectedStock": null, "missingHistory": true, "status": "UNVERIFIED"} without claiming the view changed stock
+
+    TestingLibraryElementError: Unable to find an element with the text: /Movement history is incomplete/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mBack to stock list[0m
+          [36m</button>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"text-2xl font-semibold"[39m
+              [36m>[39m
+                [0mMax Rich Yu Cream[0m
+              [36m</h2>[39m
+              [36m<p>[39m
+                [0m100 Gm[0m
+                [0m · Stock counted in [0m
+                [0mPACKS[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+                  [33mdata-review-state[39m=[32m"success"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check h-4 w-4 shrink-0"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<span>[39m
+                    [0mCurrent / on hand[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-muted-foreground"[39m
+              [36m>[39m
+                [0mB1[0m
+                [0m · Expiry[0m
+                [0m [0m
+                [0m31/5/2028[0m
+                [0m ·[0m
+                [0m [0m
+                [0mLocation not assigned[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Print batch label"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mdata-state[39m=[32m"closed"[39m
+                [33mtitle[39m=[32m"Print batch label"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-printer h-4 w-4"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"[39m
+                    [36m/>[39m
+                    [36m<rect[39m
+                      [33mheight[39m=[32m"8"[39m
+                      [33mrx[39m=[32m"1"[39m
+                      [33mwidth[39m=[32m"12"[39m
+                      [33mx[39m=[32m"6"[39m
+                      [33my[39m=[32m"14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"...
+
+      73 |   render(<WorkspaceStock {...props} itemId={item.id}/>);
+      74 |   fireEvent.click(await screen.findByRole('button',{name:'Ledger'}));
+    > 75 |   expect(screen.getByText(new RegExp(explanation))).toBeInTheDocument();
+         |                 ^
+      76 |   expect(screen.getByText(/Viewing this ledger does not change stock/)).toBeInTheDocument();
+      77 |   expect(screen.getByRole('button',{name:action})).toBeEnabled();
+      78 | });
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at getByText (__tests__/inventory/WorkspaceStock.batches.test.tsx:75:17)
+
+  ● explains ledger evidence {"checkpoint": [Object], "difference": -2, "expectedStock": 19, "status": "DISCREPANCY"} without claiming the view changed stock
+
+    TestingLibraryElementError: Unable to find an element with the text: /Recorded stock is 2 PACKS below the ledger balance of 19 PACKS/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mBack to stock list[0m
+          [36m</button>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"text-2xl font-semibold"[39m
+              [36m>[39m
+                [0mMax Rich Yu Cream[0m
+              [36m</h2>[39m
+              [36m<p>[39m
+                [0m100 Gm[0m
+                [0m · Stock counted in [0m
+                [0mPACKS[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+                  [33mdata-review-state[39m=[32m"success"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check h-4 w-4 shrink-0"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<span>[39m
+                    [0mCurrent / on hand[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-muted-foreground"[39m
+              [36m>[39m
+                [0mB1[0m
+                [0m · Expiry[0m
+                [0m [0m
+                [0m31/5/2028[0m
+                [0m ·[0m
+                [0m [0m
+                [0mLocation not assigned[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Print batch label"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mdata-state[39m=[32m"closed"[39m
+                [33mtitle[39m=[32m"Print batch label"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-printer h-4 w-4"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"[39m
+                    [36m/>[39m
+                    [36m<rect[39m
+                      [33mheight[39m=[32m"8"[39m
+                      [33mrx[39m=[32m"1"[39m
+                      [33mwidth[39m=[32m"12"[39m
+                      [33mx[39m=[32m"6"[39m
+                      [33my[39m=[32m"14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"...
+
+      73 |   render(<WorkspaceStock {...props} itemId={item.id}/>);
+      74 |   fireEvent.click(await screen.findByRole('button',{name:'Ledger'}));
+    > 75 |   expect(screen.getByText(new RegExp(explanation))).toBeInTheDocument();
+         |                 ^
+      76 |   expect(screen.getByText(/Viewing this ledger does not change stock/)).toBeInTheDocument();
+      77 |   expect(screen.getByRole('button',{name:action})).toBeEnabled();
+      78 | });
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at getByText (__tests__/inventory/WorkspaceStock.batches.test.tsx:75:17)
+
+  ● explains ledger evidence {"checkpoint": [Object], "difference": 0, "expectedStock": 17, "status": "RECONCILED"} without claiming the view changed stock
+
+    TestingLibraryElementError: Unable to find an element with the text: /Recorded stock agrees with the ledger balance of 17 PACKS/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mBack to stock list[0m
+          [36m</button>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"text-2xl font-semibold"[39m
+              [36m>[39m
+                [0mMax Rich Yu Cream[0m
+              [36m</h2>[39m
+              [36m<p>[39m
+                [0m100 Gm[0m
+                [0m · Stock counted in [0m
+                [0mPACKS[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+                  [33mdata-review-state[39m=[32m"success"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check h-4 w-4 shrink-0"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<span>[39m
+                    [0mCurrent / on hand[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-muted-foreground"[39m
+              [36m>[39m
+                [0mB1[0m
+                [0m · Expiry[0m
+                [0m [0m
+                [0m31/5/2028[0m
+                [0m ·[0m
+                [0m [0m
+                [0mLocation not assigned[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Print batch label"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mdata-state[39m=[32m"closed"[39m
+                [33mtitle[39m=[32m"Print batch label"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-printer h-4 w-4"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"[39m
+                    [36m/>[39m
+                    [36m<rect[39m
+                      [33mheight[39m=[32m"8"[39m
+                      [33mrx[39m=[32m"1"[39m
+                      [33mwidth[39m=[32m"12"[39m
+                      [33mx[39m=[32m"6"[39m
+                      [33my[39m=[32m"14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"...
+
+      73 |   render(<WorkspaceStock {...props} itemId={item.id}/>);
+      74 |   fireEvent.click(await screen.findByRole('button',{name:'Ledger'}));
+    > 75 |   expect(screen.getByText(new RegExp(explanation))).toBeInTheDocument();
+         |                 ^
+      76 |   expect(screen.getByText(/Viewing this ledger does not change stock/)).toBeInTheDocument();
+      77 |   expect(screen.getByRole('button',{name:action})).toBeEnabled();
+      78 | });
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at getByText (__tests__/inventory/WorkspaceStock.batches.test.tsx:75:17)
+
+  ● provides a batch reference and authorized colleague handoff for read-only reconciliation and ambiguous identity
+
+    Unable to find an element with the text: /This batch is linked to more than one product/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5"[39m
+        [36m>[39m
+          [36m<button[39m
+            [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+            [33mdata-slot[39m=[32m"button"[39m
+          [36m>[39m
+            [36m<svg[39m
+              [33maria-hidden[39m=[32m"true"[39m
+              [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+              [33mfill[39m=[32m"none"[39m
+              [33mheight[39m=[32m"24"[39m
+              [33mstroke[39m=[32m"currentColor"[39m
+              [33mstroke-linecap[39m=[32m"round"[39m
+              [33mstroke-linejoin[39m=[32m"round"[39m
+              [33mstroke-width[39m=[32m"2"[39m
+              [33mviewBox[39m=[32m"0 0 24 24"[39m
+              [33mwidth[39m=[32m"24"[39m
+              [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+            [36m>[39m
+              [36m<path[39m
+                [33md[39m=[32m"m12 19-7-7 7-7"[39m
+              [36m/>[39m
+              [36m<path[39m
+                [33md[39m=[32m"M19 12H5"[39m
+              [36m/>[39m
+            [36m</svg>[39m
+            [0mBack to stock list[0m
+          [36m</button>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"flex flex-wrap items-start justify-between gap-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h2[39m
+                [33mclass[39m=[32m"text-2xl font-semibold"[39m
+              [36m>[39m
+                [0mMax Rich Yu Cream[0m
+              [36m</h2>[39m
+              [36m<p>[39m
+                [0m100 Gm[0m
+                [0m · Stock counted in [0m
+                [0mPACKS[0m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"inline-flex max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-sm font-medium border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+                  [33mdata-review-state[39m=[32m"success"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-circle-check h-4 w-4 shrink-0"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<circle[39m
+                      [33mcx[39m=[32m"12"[39m
+                      [33mcy[39m=[32m"12"[39m
+                      [33mr[39m=[32m"10"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"m9 12 2 2 4-4"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                  [36m<span>[39m
+                    [0mCurrent / on hand[0m
+                  [36m</span>[39m
+                [36m</span>[39m
+              [36m</p>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-muted-foreground"[39m
+              [36m>[39m
+                [0mB1[0m
+                [0m · Expiry[0m
+                [0m [0m
+                [0m31/5/2028[0m
+                [0m ·[0m
+                [0m [0m
+                [0mLocation not assigned[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33maria-label[39m=[32m"Print batch label"[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 size-9 h-10 w-10 shrink-0"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mdata-state[39m=[32m"closed"[39m
+                [33mtitle[39m=[32m"Print batch label"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                [36m>[39m
+                  [36m<svg[39m
+                    [33maria-hidden[39m=[32m"true"[39m
+                    [33mclass[39m=[32m"lucide lucide-printer h-4 w-4"[39m
+                    [33mfill[39m=[32m"none"[39m
+                    [33mheight[39m=[32m"24"[39m
+                    [33mstroke[39m=[32m"currentColor"[39m
+                    [33mstroke-linecap[39m=[32m"round"[39m
+                    [33mstroke-linejoin[39m=[32m"round"[39m
+                    [33mstroke-width[39m=[32m"2"[39m
+                    [33mviewBox[39m=[32m"0 0 24 24"[39m
+                    [33mwidth[39m=[32m"24"[39m
+                    [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                  [36m>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"[39m
+                    [36m/>[39m
+                    [36m<path[39m
+                      [33md[39m=[32m"M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"[39m
+                    [36m/>[39m
+                    [36m<rect[39m
+                      [33mheight[39m=[32m"8"[39m
+                      [33mrx[39m=[32m"1"[39m
+                      [33mwidth[39m=[32m"12"[39m
+                      [33mx[39m=[32m"6"[39m
+                      [33my[39m=[32m"14"[39m
+                    [36m/>[39m
+                  [36m</svg>[39m
+                [36m</span>[39m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</header>[39m
+          [36m<dl[39m
+            [33mclass[39m=[32m"grid grid-cols-2 gap-x-8 gap-y-4 border-y py-5 sm:grid-cols-4"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<dt[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"...
+
+      82 |   (apiClient.get as jest.Mock).mockResolvedValue({item,batches:[item],movements:[],history:[],purchases:[],holds:[],ledger:{status:'UNVERIFIED',checkpoint:null}});
+      83 |   render(<WorkspaceStock {...props} capabilities={{kinds:{COUNT:{write:false}}}} itemId={item.id}/>);
+    > 84 |   expect(await screen.findByText(/This batch is linked to more than one product/)).toBeInTheDocument();
+         |                       ^
+      85 |   expect(screen.getByText(/Ask a colleague with Counts & audit write access/)).toBeInTheDocument();
+      86 |   expect(screen.getByLabelText('Batch recovery reference')).toHaveValue(expect.stringContaining('item=stock'));
+      87 |   expect(screen.queryByRole('button',{name:'Count this batch'})).not.toBeInTheDocument();
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByText (__tests__/inventory/WorkspaceStock.batches.test.tsx:84:23)
+
+Test Suites: 2 failed, 2 total
+Tests:       7 failed, 5 passed, 12 total
+Snapshots:   0 total
+Time:        2.863 s
+Ran all test suites matching /__tests__\/inventory\/WorkspaceStock.batches.test.tsx|__tests__\/inventory\/InventoryWorkspace.permissions.test.tsx/i.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error workspace frontend@0.1.0
+npm error location /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error command failed
+npm error command sh -c jest --runInBand __tests__/inventory/WorkspaceStock.batches.test.tsx __tests__/inventory/InventoryWorkspace.permissions.test.tsx
+
+
+> backend@0.0.1 test
+> jest --runInBand src/modules/inventory/tests/inventory-reconciliation.spec.ts
+
+(node:2668) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/modules/inventory/tests/inventory-reconciliation.spec.ts
+  Inventory reconciliation recovery
+    ✓ restores the correct source hold when reversing a loss after residual release (19 ms)
+    ✓ records direct manager approval and a physical ledger baseline even for a zero-delta count (1 ms)
+    ✓ rolls back the source reopening when compensation cannot complete (1 ms)
+    ✓ posts a nonzero count with its own movement inside the baseline, then detects later drift (1 ms)
+    ✓ reconciles physical stock below held stock through a verified source loss and fresh count (3 ms)
+    ✓ cancels a supplier return challan after release into its own source hold
+    ✓ starts a fresh uncounted attempt from DRAFT without reusing stale measurements (1 ms)
+    ✓ starts a fresh uncounted attempt from AWAITING_APPROVAL without reusing stale measurements
+    ✓ starts a fresh uncounted attempt from APPROVED without reusing stale measurements (1 ms)
+    ✓ starts a fresh uncounted attempt from REJECTED without reusing stale measurements (2 ms)
+    ✓ starts a fresh uncounted attempt from CANCELLED without reusing stale measurements (1 ms)
+    ✓ starts a fresh uncounted attempt from POSTED without reusing stale measurements
+    ✓ starts a fresh uncounted attempt from REVERSED without reusing stale measurements (1 ms)
+  Independent count ledger
+    ✓ does not assert agreement without a recorded baseline
+    ✓ preserves unknown old history while independently detecting later stock drift
+    ✓ rejects unknown subsequent signs and missing covered history
+  Opening import reconciliation
+    ✓ rejects a stock revision conflict instead of replacing a newer ledger checkpoint (6 ms)
+    ✓ rejects a second product identity instead of attaching it to an existing batch (1 ms)
+    ✓ does not overwrite a sale committed after the import read
+  Reviewed purchase recovery
+    ✓ rejects an invalid receipt before locking the invoice for review (16 ms)
+    ✓ reopens only an unchanged unposted reviewed invoice and records the actor (1 ms)
+  Ambiguous batch identity recovery
+    ✓ retains only a physically verified existing product without converting balances (1 ms)
+  Actionable inventory guard evidence
+    ✕ names the protected batch balances when a real count is below held stock (2 ms)
+    ✕ identifies a stale count row and requires a fresh physical observation (1 ms)
+    ✕ returns the actual source and remaining capacity rather than another hold on the batch
+    ✕ links the exact active downstream record that blocks reversal (1 ms)
+    ✕ identifies an inconsistent source balance without releasing another hold
+    ✕ returns the batch recovery destination for a concurrent stock change (1 ms)
+    ✕ names the row for invalid physical count -1 without saving it
+    ✕ names the row for invalid physical count 1.5 without saving it
+
+  ● Actionable inventory guard evidence › names the protected batch balances when a real count is below held stock
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 12
+    + Received  +  3
+
+      Object {
+    -   "code": "INVENTORY_HELD_STOCK",
+    -   "recovery": Object {
+    -     "action": "REVIEW_BATCH",
+    -     "inventoryId": "batch",
+    -     "quantities": Object {
+    -       "available": 5,
+    -       "held": 5,
+    -       "onHand": 10,
+    -       "requested": 8,
+    -     },
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Bad Request",
+    +   "message": "Insufficient available stock; inspect the batch balance and holds",
+    +   "statusCode": 400,
+      }
+
+      314 |     add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:10,physicalStock:2}]});
+      315 |     const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
+    > 316 |     expect(body).toMatchObject({code:'INVENTORY_HELD_STOCK',stockEffect:'NONE',recovery:{action:'REVIEW_BATCH',inventoryId:'batch',quantities:{onHand:10,held:5,available:5,requested:8}}});
+          |                  ^
+      317 |     expect(body.message).toContain('Do not change the physical observation');
+      318 |     expect([state.item.currentStock,state.item.heldStock,state.movements.length]).toEqual([10,5,0]);
+      319 |   });
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:316:18)
+
+  ● Actionable inventory guard evidence › identifies a stale count row and requires a fresh physical observation
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 9
+    + Received  + 3
+
+      Object {
+    -   "code": "INVENTORY_STALE_COUNT",
+    -   "recovery": Object {
+    -     "action": "START_FRESH_COUNT",
+    -     "inventoryId": "batch",
+    -     "quantities": Object {
+    -       "onHand": 10,
+    -     },
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Conflict",
+    +   "message": "Product: stock changed since the count started. Recount using the current balance.",
+    +   "statusCode": 409,
+      }
+
+      322 |     add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:9,physicalStock:2}]});
+      323 |     const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
+    > 324 |     expect(body).toMatchObject({code:'INVENTORY_STALE_COUNT',stockEffect:'NONE',recovery:{action:'START_FRESH_COUNT',inventoryId:'batch',quantities:{onHand:10}}});
+          |                  ^
+      325 |     expect(body.message).toContain('Start fresh count');
+      326 |     expect(state.movements).toEqual([]);
+      327 |   });
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:324:18)
+
+  ● Actionable inventory guard evidence › returns the actual source and remaining capacity rather than another hold on the batch
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 12
+    + Received  +  3
+
+      Object {
+    -   "code": "INVENTORY_SOURCE_CAPACITY",
+    -   "recovery": Object {
+    -     "action": "REVIEW_SOURCE",
+    -     "inventoryId": "batch",
+    -     "quantities": Object {
+    -       "remaining": 3,
+    -       "requested": 4,
+    -     },
+    -     "sourceId": "hold",
+    -     "sourceKind": "HOLD",
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Bad Request",
+    +   "message": "Quantity exceeds this source hold for the batch",
+    +   "statusCode": 400,
+      }
+
+      331 |     add('loss','LOSS',4,{sourceHoldId:'hold'});
+      332 |     const body=await rejectedResponse(service.transition(actor,'loss',{version:1,action:'POST'}));
+    > 333 |     expect(body).toMatchObject({code:'INVENTORY_SOURCE_CAPACITY',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:3,requested:4}}});
+          |                  ^
+      334 |     expect([state.item.currentStock,state.item.heldStock]).toEqual([10,3]);
+      335 |   });
+      336 |   it('links the exact active downstream record that blocks reversal',async()=>{
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:333:18)
+
+  ● Actionable inventory guard evidence › links the exact active downstream record that blocks reversal
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 12
+    + Received  +  3
+
+      Object {
+    -   "code": "INVENTORY_REVERSAL_BLOCKED",
+    -   "recovery": Object {
+    -     "action": "REVERSE_DEPENDENCIES",
+    -     "documents": Array [
+    -       Object {
+    -         "id": "loss",
+    -         "kind": "LOSS",
+    -         "reference": "loss",
+    -       },
+    -     ],
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Bad Request",
+    +   "message": "Reverse the linked hold disposals or returns first",
+    +   "statusCode": 400,
+      }
+
+      339 |     add('loss','LOSS',2,{sourceHoldId:'hold'});await service.transition(actor,'loss',{version:1,action:'POST'});
+      340 |     const body=await rejectedResponse(service.transition(actor,'hold',{version:2,action:'REVERSE',reason:'Review correction'}));
+    > 341 |     expect(body).toMatchObject({code:'INVENTORY_REVERSAL_BLOCKED',stockEffect:'NONE',recovery:{action:'REVERSE_DEPENDENCIES',documents:[{id:'loss',kind:'LOSS',reference:'loss'}]}});
+          |                  ^
+      342 |     expect([state.item.currentStock,state.item.heldStock]).toEqual([8,3]);
+      343 |   });
+      344 |   it('identifies an inconsistent source balance without releasing another hold',async()=>{
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:341:18)
+
+  ● Actionable inventory guard evidence › identifies an inconsistent source balance without releasing another hold
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 11
+    + Received  +  3
+
+      Object {
+    -   "code": "INVENTORY_SOURCE_INCONSISTENT",
+    -   "recovery": Object {
+    -     "action": "REVIEW_SOURCE",
+    -     "inventoryId": "batch",
+    -     "quantities": Object {
+    -       "remaining": -2,
+    -     },
+    -     "sourceId": "hold",
+    -     "sourceKind": "HOLD",
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Conflict",
+    +   "message": "The source hold has an inconsistent balance",
+    +   "statusCode": 409,
+      }
+
+      348 |     state.effects.push({id:'legacy-consumption',branchId:'branch',documentId:'old-loss',inventoryId:'batch',heldDelta:-5});
+      349 |     const body=await rejectedResponse(service.transition(actor,'hold',{version:2,action:'RELEASE'}));
+    > 350 |     expect(body).toMatchObject({code:'INVENTORY_SOURCE_INCONSISTENT',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:-2}}});
+          |                  ^
+      351 |     expect(body.message).toContain('review its linked disposals or returns');
+      352 |     expect([state.item.currentStock,state.item.heldStock]).toEqual([10,3]);
+      353 |   });
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:350:18)
+
+  ● Actionable inventory guard evidence › returns the batch recovery destination for a concurrent stock change
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 6
+    + Received  + 3
+
+      Object {
+    -   "code": "INVENTORY_BATCH_CHANGED",
+    -   "recovery": Object {
+    -     "action": "REVIEW_BATCH",
+    -     "inventoryId": "batch",
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Conflict",
+    +   "message": "Stock changed. Refresh the batch and retry.",
+    +   "statusCode": 409,
+      }
+
+      357 |     jest.spyOn(tx.inventoryItem,'update').mockRejectedValueOnce(Object.assign(new Error('changed'),{code:'P2025'}));
+      358 |     const body=await rejectedResponse(service.transition(actor,'loss',{version:1,action:'POST'}));
+    > 359 |     expect(body).toMatchObject({code:'INVENTORY_BATCH_CHANGED',stockEffect:'NONE',recovery:{action:'REVIEW_BATCH',inventoryId:'batch'}});
+          |                  ^
+      360 |     expect(state.movements).toEqual([]);
+      361 |   });
+      362 |   it.each([-1,1.5])('names the row for invalid physical count %s without saving it',async physicalStock=>{
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-reconciliation.spec.ts:359:18)
+
+  ● Actionable inventory guard evidence › names the row for invalid physical count -1 without saving it
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 7
+    + Received  + 3
+
+      Object {
+    -   "code": "INVENTORY_INVALID_COUNT",
+    -   "recovery": Object {
+    -     "action": "CORRECT_FIELD",
+    -     "field": "physicalStock",
+    -     "inventoryId": "batch",
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Bad Request",
+    +   "message": "Physical count must be a whole number of at least 0",
+    +   "statusCode": 400,
+      }
+
+      363 |     const {state,service}=fixture();
+      364 |     const body=await rejectedResponse(service.saveDocument(actor,{kind:'COUNT',reference:'Count check',requestKey:'invalid-count',payload:{date:'2026-10-24',reason:'Observed',lines:[{id:'observed',inventoryId:'batch',quantity:0,physicalStock}]}}));
+    > 365 |     expect(body).toMatchObject({code:'INVENTORY_INVALID_COUNT',stockEffect:'NONE',recovery:{action:'CORRECT_FIELD',inventoryId:'batch',field:'physicalStock'}});
+          |                  ^
+      366 |     expect(body.message).toContain('Product');
+      367 |     expect(body.message).toContain('whole number');
+      368 |     expect(state.documents).toEqual([]);
+
+      at modules/inventory/tests/inventory-reconciliation.spec.ts:365:18
+
+  ● Actionable inventory guard evidence › names the row for invalid physical count 1.5 without saving it
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 7
+    + Received  + 3
+
+      Object {
+    -   "code": "INVENTORY_INVALID_COUNT",
+    -   "recovery": Object {
+    -     "action": "CORRECT_FIELD",
+    -     "field": "physicalStock",
+    -     "inventoryId": "batch",
+    -   },
+    -   "stockEffect": "NONE",
+    +   "error": "Bad Request",
+    +   "message": "Physical count must be a whole number of at least 0",
+    +   "statusCode": 400,
+      }
+
+      363 |     const {state,service}=fixture();
+      364 |     const body=await rejectedResponse(service.saveDocument(actor,{kind:'COUNT',reference:'Count check',requestKey:'invalid-count',payload:{date:'2026-10-24',reason:'Observed',lines:[{id:'observed',inventoryId:'batch',quantity:0,physicalStock}]}}));
+    > 365 |     expect(body).toMatchObject({code:'INVENTORY_INVALID_COUNT',stockEffect:'NONE',recovery:{action:'CORRECT_FIELD',inventoryId:'batch',field:'physicalStock'}});
+          |                  ^
+      366 |     expect(body.message).toContain('Product');
+      367 |     expect(body.message).toContain('whole number');
+      368 |     expect(state.documents).toEqual([]);
+
+      at modules/inventory/tests/inventory-reconciliation.spec.ts:365:18
+
+Test Suites: 1 failed, 1 total
+Tests:       8 failed, 22 passed, 30 total
+Snapshots:   0 total
+Time:        0.733 s, estimated 1 s
+Ran all test suites matching src/modules/inventory/tests/inventory-reconciliation.spec.ts.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend
+npm error workspace backend@0.0.1
+npm error location /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend
+npm error command failed
+npm error command sh -c jest --runInBand src/modules/inventory/tests/inventory-reconciliation.spec.ts

@@ -1,0 +1,9 @@
+step	decision	evidence	result
+baseline	Preserve previous audit as immutable pre-fix evidence	../inventory-state-clarity-2026-10-25/report.md	47 state families
+reproduce	Drop response after real LOSS commit then block authoritative readback	browser-red.json	Stock 5 to 4; false unchanged copy and enabled post reproduced
+design	Explicit certainty union and existing context helpers; avoid broad reducer migration	plan.md	Same-key creation recovery; no automatic transition replay
+scope	All 47 audited families retained in coverage; new proof distinguishes knowledge from domain status	../inventory-state-clarity-2026-10-25/state-matrix.tsv	No unconditional eventual-recovery claim
+concurrency	Retain uncertainty on unchanged reads; explicitly fence the pending revision	PostgreSQL tests cover both race schedules and audit rollback	No duplicate stock effect; no-stock child creation remains separately idempotent
+review	Fix source retry, wrong-kind states, readonly handoff, cancellation receipts, and unsupported reversal guidance	independent-review.md	PASS with no blocking findings
+verification	Run full suites, browser regressions, production presentation matrix and bounded models	test-results.json; model-results.json; knowledge-results.json	Build PASS; 1579 tests pass; 3 skipped; 29 browser assertions pass
+delivery	Keep changes on the current local branch	report.md	No push, PR, merge or deployment requested by this task

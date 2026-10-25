@@ -1,0 +1,12 @@
+PASS src/modules/notifications/notifications.service.spec.ts
+PASS src/app.controller.spec.ts
+PASS src/modules/pharmacy/tests/drug-search.spec.ts
+PASS src/shared/search/product-search.spec.ts
+PASS src/modules/appointments/tests/scheduling.utils.spec.ts
+
+Test Suites: 1 skipped, 87 passed, 87 of 88 total
+Tests:       3 skipped, 941 passed, 944 total
+Snapshots:   0 total
+Time:        33.816 s
+Ran all test suites.
+Test results written to: ../../../../../../../tmp/clarity-full-backend.json
