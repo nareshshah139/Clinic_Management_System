@@ -322,12 +322,32 @@ export class PharmacyPurchaseInvoiceService {
     return Buffer.from((await this.bufferToVisionDataUrl(buffer)).split(',')[1],'base64');
   }
 
-  private async linkOriginal(tx: any, documentId: string, invoiceId: string, branchId: string) {
+  private readonly conflictInvoiceMetadata = { id: true, invoiceNumber: true, distributorName: true, status: true, workflowReceiptId: true } as const;
+
+  /**
+   * @cc [owner:nareshshah139,label:security;state] purchase-source-conflict-recovery
+   * A source already owned by another invoice MUST reject the transaction without moving it.
+   * Recovery identity and status MUST be disclosed only with read capability and both records in the current branch;
+   * unavailable or inaccessible sources MUST return a conflict without invoice details.
+   */
+  private async linkOriginal(tx: any, documentId: string, invoiceId: string, branchId: string, canReadExisting = false) {
     const linked = await tx.pharmacyPurchaseInvoiceDocument.updateMany({
       where: { id: documentId, branchId, OR: [{ purchaseInvoiceId: null }, { purchaseInvoiceId: invoiceId }] },
       data: { purchaseInvoiceId: invoiceId },
     });
-    if (linked.count !== 1) throw new ConflictException('Original document is unavailable or already linked to another invoice.');
+    if (linked.count === 1) return;
+    const document = canReadExisting ? await tx.pharmacyPurchaseInvoiceDocument.findFirst({
+      where: { id: documentId, branchId }, select: { purchaseInvoiceId: true },
+    }) : null;
+    const existing = document?.purchaseInvoiceId ? await tx.pharmacyPurchaseInvoice.findFirst({
+      where: { id: document.purchaseInvoiceId, branchId }, select: this.conflictInvoiceMetadata,
+    }) : null;
+    if (existing) throw new ConflictException({
+      code: 'PURCHASE_SOURCE_ALREADY_LINKED',
+      message: 'This PDF or image is already attached to an existing invoice. Open that invoice to continue; it cannot be attached to a new invoice.',
+      existingInvoiceId: existing.id, existingInvoice: existing,
+    });
+    throw new ConflictException({ code: 'PURCHASE_SOURCE_UNAVAILABLE', message: 'The original document is unavailable or already attached to another invoice. Ask a colleague with invoice read permission to check it.' });
   }
 
   private async extractArchivedDocument(file: Express.Multer.File, branchId: string, sourceDocument: Awaited<ReturnType<PharmacyPurchaseInvoiceService['archiveOriginal']>>) {
@@ -890,7 +910,7 @@ export class PharmacyPurchaseInvoiceService {
         if (fence) await bindPurchaseImport(tx, fence, created.id, sources);
         await this.purchaseAudit(tx, created.id, branchId, userId, 'CREATED', null, created);
         if(!sources.length)return created;
-        for (const sourceId of sources) await this.linkOriginal(tx, sourceId, created.id, branchId);
+        for (const sourceId of sources) await this.linkOriginal(tx, sourceId, created.id, branchId, canReadExisting);
         return tx.pharmacyPurchaseInvoice.findFirst({
           where: { id: created.id, branchId },
           include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
@@ -985,7 +1005,7 @@ export class PharmacyPurchaseInvoiceService {
         }
         const historicalHolds = this.parseIssues(before?.reconciliationIssues).filter(issue => /historical|stock snapshot|inventory backfill/i.test(issue));
         const retainedIssues = [...new Set([...this.parseIssues(data.reconciliationIssues), ...historicalHolds])];
-        for (const sourceId of [...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[]) await this.linkOriginal(tx, sourceId, id, branchId);
+        for (const sourceId of [...new Set([dto.sourceDocumentId,...(dto.sourceDocumentIds||[])].filter(Boolean))] as string[]) await this.linkOriginal(tx, sourceId, id, branchId, canReadExisting);
         const updated = await tx.pharmacyPurchaseInvoice.update({
           where: { id },
           data: { ...data, ...(historicalHolds.length ? { status: 'RECONCILIATION_FAILED' } : {}), workflowReceiptId: before?.workflowReceiptId || dto.workflowReceiptId, reconciliationIssues: this.stringifyIssues(retainedIssues) ?? null, items: { deleteMany: {}, create: data.items.create } },
@@ -3049,7 +3069,7 @@ export class PharmacyPurchaseInvoiceService {
 
   /**
    * @cc [owner:nareshshah139,label:security] purchase-conflict-disclosure
-   * Duplicate recovery MUST identify the actual unique key and disclose only an invoice in the authenticated branch after current read capability is checked. Unknown keys and denied reads MUST NOT disclose or guess an invoice ID.
+   * Duplicate recovery MUST identify the actual unique key and disclose invoice identity and status only in the authenticated branch after current read capability is checked. Unknown keys and denied reads MUST NOT disclose or guess invoice details.
    */
   private async draftConflict(error: any, dto: CreatePharmacyPurchaseInvoiceDto, branchId: string, canReadExisting: boolean) {
     const target = error?.meta?.target;
@@ -3057,10 +3077,10 @@ export class PharmacyPurchaseInvoiceService {
     const receipt = matches(['branchId', 'workflowReceiptId']);
     const duplicate = matches(['branchId', 'distributorGstin', 'invoiceNumber']);
     const code = receipt ? 'PURCHASE_RECEIPT_ALREADY_LINKED' : duplicate ? 'PURCHASE_DUPLICATE_INVOICE' : 'PURCHASE_CONFLICT';
-    const message = receipt ? 'This inward receipt is already linked to a purchase invoice. Open that bill to check it; stock must not be received again.' : duplicate ? 'Purchase invoice already exists for this distributor GSTIN and invoice number' : 'The purchase conflicts with a saved record. Ask an authorized colleague to check it before trying again.';
+    const message = receipt ? 'This inward receipt is already linked to a purchase invoice. Open that bill to check it; stock must not be received again.' : duplicate ? 'An invoice with this supplier GSTIN and invoice number is already saved. Open the existing invoice to continue.' : 'The purchase conflicts with a saved record. Ask an authorized colleague to check it before trying again.';
     const where = duplicate ? { branchId, distributorGstin: dto.distributorGstin.trim().toUpperCase(), invoiceNumber: dto.invoiceNumber.trim() } : receipt && dto.workflowReceiptId ? { branchId, workflowReceiptId: dto.workflowReceiptId } : null;
-    const existing = canReadExisting && where ? await (this.prisma as any).pharmacyPurchaseInvoice.findFirst({ where, select: { id: true } }) : null;
-    return new ConflictException({ code, message, ...(existing ? { existingInvoiceId: existing.id } : {}) });
+    const existing = canReadExisting && where ? await (this.prisma as any).pharmacyPurchaseInvoice.findFirst({ where, select: this.conflictInvoiceMetadata }) : null;
+    return new ConflictException({ code, message, ...(existing ? { existingInvoiceId: existing.id, existingInvoice: existing } : {}) });
   }
 
   private isUniqueConstraintError(error: any): boolean {

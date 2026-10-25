@@ -282,10 +282,10 @@ describe('PharmacyPurchaseInvoiceService', () => {
     [['branchId', 'workflowReceiptId'], 'PURCHASE_RECEIPT_ALREADY_LINKED', { branchId, workflowReceiptId: 'receipt-1' }],
   ])('identifies the actual unique constraint without guessing the conflicting purchase (%s)', async (target, code, where) => {
     prisma.pharmacyPurchaseInvoice.create.mockRejectedValue({ code: 'P2002', meta: { target } });
-    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({ id: 'existing-1' });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue({ id: 'existing-1', invoiceNumber: 'LD-001', distributorName: 'Linae Distributors', status: 'REVIEWED', workflowReceiptId: null });
     const error = await service.createDraft({ ...validDto(), workflowReceiptId: 'receipt-1' }, branchId, userId, true).catch(e => e);
-    expect(error.getResponse()).toMatchObject({ code, existingInvoiceId: 'existing-1' });
-    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith({ where, select: { id: true } });
+    expect(error.getResponse()).toMatchObject({ code, existingInvoiceId: 'existing-1', existingInvoice: { id: 'existing-1', invoiceNumber: 'LD-001', distributorName: 'Linae Distributors', status: 'REVIEWED' } });
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith({ where, select: { id: true, invoiceNumber: true, distributorName: true, status: true, workflowReceiptId: true } });
   });
 
   it('does not disclose duplicate invoice identity without read capability', async () => {
@@ -294,6 +294,38 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_DUPLICATE_INVOICE' });
     expect(error.getResponse()).not.toHaveProperty('existingInvoiceId');
     expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+  });
+
+  it.each(['create', 'update'])('returns the linked PDF owner and status when %s is blocked, without reassigning it', async operation => {
+    const existing = { id: 'existing-1', invoiceNumber: 'A003906', distributorName: 'Saved supplier', status: 'DRAFT', workflowReceiptId: null };
+    prisma.pharmacyPurchaseInvoiceDocument = { updateMany: jest.fn().mockResolvedValue({ count: 0 }), findFirst: jest.fn().mockResolvedValue({ purchaseInvoiceId: existing.id }) };
+    prisma.pharmacyPurchaseInvoice.create.mockResolvedValue({ id: 'attempt-1', items: [] });
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    if (operation === 'update') prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValueOnce({ id: 'attempt-1', status: 'DRAFT', items: [] });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(existing);
+    const dto = { ...validDto(), sourceDocumentId: 'original-1' };
+    const error = await (operation === 'create' ? service.createDraft(dto, branchId, userId, true) : service.updateDraft('attempt-1', dto, branchId, userId, true)).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_SOURCE_ALREADY_LINKED', message: expect.stringContaining('already attached'), existingInvoiceId: existing.id, existingInvoice: existing });
+    expect(prisma.pharmacyPurchaseInvoiceDocument.findFirst).toHaveBeenCalledWith({ where: { id: 'original-1', branchId }, select: { purchaseInvoiceId: true } });
+    expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenLastCalledWith({ where: { id: existing.id, branchId }, select: { id: true, invoiceNumber: true, distributorName: true, status: true, workflowReceiptId: true } });
+    expect(prisma.pharmacyPurchaseInvoiceDocument.updateMany).toHaveBeenCalledTimes(1);
+    expect(prisma.pharmacyPurchaseInvoiceDocument.updateMany).toHaveBeenCalledWith({ where: { id: 'original-1', branchId, OR: [{ purchaseInvoiceId: null }, { purchaseInvoiceId: 'attempt-1' }] }, data: { purchaseInvoiceId: 'attempt-1' } });
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it.each(['denied', 'missing-document', 'different-branch'])('does not expose PDF owner details for %s', async scenario => {
+    prisma.pharmacyPurchaseInvoiceDocument = { updateMany: jest.fn().mockResolvedValue({ count: 0 }), findFirst: jest.fn().mockResolvedValue(scenario === 'missing-document' ? null : { purchaseInvoiceId: 'other-1' }) };
+    prisma.pharmacyPurchaseInvoice.create.mockResolvedValue({ id: 'attempt-1', items: [] });
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(null);
+    const error = await service.createDraft({ ...validDto(), sourceDocumentId: 'original-1' }, branchId, userId, scenario !== 'denied').catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_SOURCE_UNAVAILABLE' });
+    expect(error.getResponse()).not.toHaveProperty('existingInvoice');
+    expect(error.getResponse()).not.toHaveProperty('existingInvoiceId');
+    if (scenario === 'denied') {
+      expect(prisma.pharmacyPurchaseInvoiceDocument.findFirst).not.toHaveBeenCalled();
+      expect(prisma.pharmacyPurchaseInvoice.findFirst).not.toHaveBeenCalled();
+    }
   });
 
   it('does not guess a purchase for an unknown unique constraint', async () => {

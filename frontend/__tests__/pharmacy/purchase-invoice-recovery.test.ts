@@ -8,6 +8,16 @@ describe('purchase recovery boundary', () => {
   it('rejects unsafe identifiers and retains receipt-specific recovery', () => {
     expect(purchaseRecovery({ body: { code: 'PURCHASE_RECEIPT_ALREADY_LINKED', existingInvoiceId: '../other', message: 'Receipt already linked' } }, attempt)).toEqual({ kind: 'receipt', message: 'Receipt already linked', existingInvoiceId: undefined, attempt, reference: undefined });
   });
+  it('accepts linked-source recovery only with an identity-matched, known saved status', () => {
+    const existingInvoice = { id: 'saved-1', invoiceNumber: 'A003906', distributorName: 'Supplier', status: 'DRAFT', workflowReceiptId: null };
+    const body = { code: 'PURCHASE_SOURCE_ALREADY_LINKED', message: 'PDF already attached', existingInvoiceId: 'saved-1', existingInvoice };
+    expect(purchaseRecovery({ body }, attempt)).toMatchObject({ kind: 'duplicate', existingInvoiceId: 'saved-1', existingInvoice });
+    for (const invalid of [{ ...existingInvoice, id: 'other' }, { ...existingInvoice, status: 'SUCCESS' }, { ...existingInvoice, invoiceNumber: null }]) {
+      expect(purchaseRecovery({ body: { ...body, existingInvoice: invalid } }, attempt)).not.toHaveProperty('existingInvoice');
+    }
+    expect(purchaseRecovery({ status: 403, body }, attempt)).toMatchObject({ kind: 'permission' });
+    expect(purchaseRecovery({ status: 403, body }, attempt)).not.toHaveProperty('existingInvoice');
+  });
   it('focuses the observed stable line key for a structured review issue', () => {
     const recovery = purchaseRecovery({body:{code:'PURCHASE_REVIEW_REQUIRED',issues:[{message:'Line 1: batchNumber is required'}]}},attempt);
     if (recovery.kind !== 'review') throw new Error('Expected review recovery');

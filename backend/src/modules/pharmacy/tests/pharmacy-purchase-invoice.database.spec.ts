@@ -233,8 +233,16 @@ databaseTests('Automatic purchase intake with real PostgreSQL', () => {
     const original = await service.archiveOriginal(upload, branchId, userId);
     const first = await service.createDraft({ ...draft, sourceDocumentId: original.id }, branchId, userId);
     const invoiceNumber = randomUUID();
-    await expect(service.createDraft({ ...draft, invoiceNumber, sourceDocumentId: original.id }, branchId, userId)).rejects.toThrow('already linked');
+    const error = await service.createDraft({ ...draft, invoiceNumber, sourceDocumentId: original.id }, branchId, userId, true).catch(e => e);
+    expect(error.getResponse()).toMatchObject({ code: 'PURCHASE_SOURCE_ALREADY_LINKED', existingInvoiceId: first.id,
+      existingInvoice: { id: first.id, invoiceNumber: first.invoiceNumber, status: 'DRAFT' } });
     expect(await prisma.pharmacyPurchaseInvoice.count({ where: { invoiceNumber } })).toBe(0);
+    const editable = await service.createDraft({ ...draft, invoiceNumber }, branchId, userId);
+    const before = await service.findOne(editable.id, branchId);
+    const auditsBefore = await prisma.auditLog.count({ where: { entityId: editable.id } });
+    await expect(service.updateDraft(editable.id, { ...draft, invoiceNumber, sourceDocumentId: original.id, handwrittenNotes: 'Rejected correction' }, branchId, userId, true)).rejects.toThrow('already attached');
+    expect(await service.findOne(editable.id, branchId)).toEqual(before);
+    expect(await prisma.auditLog.count({ where: { entityId: editable.id } })).toBe(auditsBefore);
     const otherBranch = await prisma.branch.create({ data: { name: 'Synthetic other branch', address: 'Synthetic' } });
     await expect(service.createDraft({ ...draft, sourceDocumentId: original.id }, otherBranch.id, userId)).rejects.toThrow('unavailable');
     expect(await prisma.pharmacyPurchaseInvoice.count({ where: { branchId: otherBranch.id } })).toBe(0);

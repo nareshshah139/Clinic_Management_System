@@ -123,6 +123,62 @@ describe('PurchaseInvoiceWorkbench', () => {
     (global as any).fetch = jest.fn();
   });
 
+  it('removes confirmed OCR warnings from the scan summary and keeps them cleared after restoring intake', async () => {
+    const extraction = { fileName: 'approval.pdf', flags: ['uncertain_bill_type'] };
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, json: async () => ({
+      draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02', ocrFlags: extraction.flags }, extraction,
+    }) });
+    const view = render(<PurchaseInvoiceWorkbench />);
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['test'], 'approval.pdf', { type: 'application/pdf' })] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Scan bill' }));
+    await screen.findByDisplayValue('APX-001');
+    expect(screen.getByText('uncertain bill type')).toBeInTheDocument();
+    const scrollIntoView = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = jest.fn();
+    try {
+      fireEvent.keyDown(screen.getByLabelText('Bill Type'), { key: 'ArrowDown' });
+      fireEvent.click(await screen.findByRole('option', { name: 'Cash' }));
+    } finally {
+      HTMLElement.prototype.scrollIntoView = scrollIntoView;
+    }
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm bill type checked' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm bill type checked' }));
+    expect(screen.queryByText('uncertain bill type')).not.toBeInTheDocument();
+    const recovered = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:new')!);
+    expect(recovered.ocrSummary.flags).toEqual(['uncertain_bill_type']);
+    expect(recovered.headerFlags).toBe('');
+    view.unmount();
+    render(<PurchaseInvoiceWorkbench />);
+    await screen.findByDisplayValue('APX-001');
+    expect(screen.queryByText('uncertain bill type')).not.toBeInTheDocument();
+    saveCurrentInvoice();
+    await waitFor(() => expect(api.createPharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith(expect.objectContaining({ billType: 'CASH', ocrFlags: [] })));
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['PURCHASE_DUPLICATE_INVOICE', 'LSS7809', 'REVIEWED', 'Ready to add stock', 'An invoice with this supplier GSTIN and invoice number is already saved.'],
+    ['PURCHASE_SOURCE_ALREADY_LINKED', 'A003906', 'DRAFT', 'Draft', 'This PDF or image is already attached to an existing invoice.'],
+  ])('shows the actual %s blocker and saved status before opening the invoice', async (code, invoiceNumber, status, label, message) => {
+    const existing = { ...draftInvoice, id: 'existing-1', invoiceNumber, status };
+    api.updatePharmacyPurchaseInvoiceDraft.mockRejectedValueOnce(Object.assign(new Error(message), { status: 409, body: { code, message, existingInvoiceId: existing.id, existingInvoice: { id: existing.id, invoiceNumber, distributorName: existing.distributorName, status, workflowReceiptId: null } } }));
+    renderSavedInvoice(); await editSelectedInvoice();
+    fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'My correction' } });
+    saveCurrentInvoice();
+    const panel = await screen.findByRole('region', { name: 'Finish this purchase' });
+    expect(within(panel).getByText(message)).toBeInTheDocument();
+    expect(within(panel).getByText(`Existing invoice: ${invoiceNumber}`)).toBeInTheDocument();
+    expect(within(panel).getByText(`Status: ${label}`)).toBeInTheDocument();
+    api.getPharmacyPurchaseInvoiceById.mockResolvedValueOnce(existing);
+    fireEvent.click(within(panel).getByRole('button', { name: 'Open existing invoice' }));
+    await screen.findByText('Compare with saved invoice');
+    expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenLastCalledWith(existing.id);
+    expect(screen.getByLabelText('Notes')).toHaveValue('My correction');
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('keeps local values when opening a duplicate and adopts only the explicitly selected editable record', async () => {
     const existing = { ...draftInvoice, id: 'existing-1', invoiceNumber: 'EXISTING', updatedAt: '2026-10-19T00:00:00Z', handwrittenNotes: 'Saved notes' };
     api.updatePharmacyPurchaseInvoiceDraft.mockRejectedValueOnce(Object.assign(new Error('Invoice already exists'), { status:409, requestId:'96bd0ce3-0000-4000-8000-000000000000', body:{ code:'PURCHASE_DUPLICATE_INVOICE', existingInvoiceId:'existing-1' } }));
