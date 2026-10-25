@@ -596,6 +596,35 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
   });
 
+  it('recovers a missing invoice opened directly and retains an inventory reconciliation path', async () => {
+    api.getPharmacyPurchaseInvoiceById.mockRejectedValue(Object.assign(new Error('Invoice not found'), { status: 404 }));
+    const prompt = jest.spyOn(window, 'prompt').mockReturnValue('Missing saved invoice opened from handoff');
+    api.post.mockImplementation(async (url, body: any) => {
+      expect(url).toBe('/pharmacy/purchase-invoices/ocr/recover-unlinked');
+      expect(body).toEqual(expect.objectContaining({ legacy: true, invoiceId: 'missing-invoice', reason: 'Missing saved invoice opened from handoff' }));
+      expect(JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:missing-invoice')!).unlinkedRecoveryId).toBe(body.recoveryId);
+      return { attemptId: body.recoveryId, outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED', invoiceId: 'missing-invoice' } as any;
+    });
+    try {
+      render(<PurchaseInvoiceWorkbench invoiceId="missing-invoice" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Recover legacy or missing invoice' }));
+      expect(await screen.findByRole('region', { name: 'Rejected uncertain import' })).toHaveTextContent('does not mean no stock was posted');
+      expect(screen.getByRole('link', { name: /Reconcile physical inventory/ })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+      expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+      expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    } finally { prompt.mockRestore(); }
+  });
+
+  it('opens interrupted import recovery from a fresh intake without browser draft state', async () => {
+    render(<PurchaseInvoiceWorkbench />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Recover interrupted import' }));
+    const input = screen.getByRole('textbox', { name: 'Import attempt ID' });
+    fireEvent.change(input, { target: { value: 'ec73be65-0152-4bb1-8be6-399d78901a57' } });
+    expect(input).toHaveValue('ec73be65-0152-4bb1-8be6-399d78901a57');
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('recovers a legacy session without an attempt ID and persists rejection across reloads', async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error('Lost response'));
     const first = render(<PurchaseInvoiceWorkbench />);
