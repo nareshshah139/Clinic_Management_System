@@ -1,0 +1,9 @@
+BOOT PASS: real login, identity, capabilities and mounted opening page
+stock: AssertionError [ERR_ASSERTION]: fresh missing-invoice URL exposes unlinked recovery action
+
+false !== true
+
+    at Object.check (/Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/e2e/recovery/run.cjs:563:14)
+    at exports.stock (/Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/verification/inventory-ui-recovery-fix-2026-10-25/browser_scenarios.cjs:75:5)
+    at async /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/e2e/recovery/run.cjs:656:9
+Evidence: /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/output/diagnostics/recovery-e2e/2026-10-25T05-55-15-229Z-4cd8474e
