@@ -4,12 +4,28 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: recovery_test
+          POSTGRES_PASSWORD: recovery_test
+          POSTGRES_DB: clinic_recovery
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U recovery_test -d clinic_recovery"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     strategy:
       matrix:
         node-version: [20.x]
@@ -24,21 +40,39 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
 
+      - name: Install PDF regression dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends poppler-utils
+          pdftotext -v
+
       - name: Install root deps
         run: npm ci
 
-      - name: Build shared types
-        working-directory: shared-types
+      - name: Build all workspaces and generate the backend client
         run: npm run build
-
-      - name: Generate backend Prisma client
-        working-directory: backend
-        run: npx prisma generate
 
       - name: Run frontend tests
         working-directory: frontend
         run: npm test -- --ci --runInBand
 
-      - name: Run backend appointments tests
+      - name: Run all backend tests with recovery database coverage
         working-directory: backend
-        run: npm run test:appointments --silent
+        env:
+          PURCHASE_DELEGATION_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PURCHASE_AUTOMATION_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          INVENTORY_READ_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          OPENING_IMPORT_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PAYMENT_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          PARTNER_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          VISIT_LIFECYCLE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          INVENTORY_WORKFLOW_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+        run: npm test -- --ci --runInBand
+
+      - name: Verify inventory state presentations and recovery proofs
+        run: |
+          python3 -m venv /tmp/inventory-proof
+          /tmp/inventory-proof/bin/pip install z3-solver==5.3.1.0
+          node verification/inventory-state-clarity-fix-2026-10-25/check_presentations.cjs
+          /tmp/inventory-proof/bin/python verification/inventory-state-clarity-fix-2026-10-25/check_knowledge.py
+          /tmp/inventory-proof/bin/python verification/inventory-state-clarity-fix-2026-10-25/check_model.py
