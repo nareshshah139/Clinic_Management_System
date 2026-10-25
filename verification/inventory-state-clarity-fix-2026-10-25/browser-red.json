@@ -1,0 +1,63 @@
+{
+  "runId": "2026-10-25T06-32-22-475Z-27a466d3",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "a28f6b32c621159579ac28e181eb78e74e317c53",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "unknown-loss",
+        "recovered-loss",
+        "failed-load"
+      ],
+      "status": "failed",
+      "assertions": [
+        {
+          "label": "real stock loss committed before response fault",
+          "expected": 4,
+          "actual": 4
+        }
+      ],
+      "screenshots": [
+        {
+          "checkpoint": "unknown-loss",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-unknown-loss-1280.png"
+        },
+        {
+          "checkpoint": "unknown-loss",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-unknown-loss-390.png"
+        }
+      ],
+      "error": "unknown result never claims no stock change\n\ntrue !== false\n"
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ]
+  },
+  "status": "failed"
+}
