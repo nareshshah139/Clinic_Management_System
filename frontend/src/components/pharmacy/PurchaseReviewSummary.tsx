@@ -4,6 +4,9 @@ import { AlertTriangle, CheckCircle2, Circle, FileSearch } from "lucide-react";
 import { ReviewStatus, reviewColors } from "@/components/ui/ReviewStatus";
 import { focusPurchaseField } from "@/lib/purchase-invoice-review";
 
+// Keep aligned with PharmacyPurchaseInvoiceService's reconciliation tolerance.
+const reconciliationTolerance = 1;
+
 const money = (value: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
     value,
@@ -15,6 +18,13 @@ const money = (value: number) =>
  * NOT imply human verification. Missing printed totals MUST stay unknown; a difference exceeding
  * one paise MUST be shown with its amount. Linked receipts MUST name the final action Post bill
  * rather than Add stock. Section links MUST reveal their target before focusing.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] invoice-total-tolerance
+ * Nonzero differences up to and including INR 1 MUST show their amount and tolerance as
+ * informational, not as an error or human verification. Larger differences MUST request correction.
+ * Proceed guidance applies only to this comparison and MUST be absent for posted, cancelled or
+ * unknown outcomes; other invoice checks and final approval remain required.
  */
 export function PurchaseReviewSummary({
   hasContent,
@@ -45,8 +55,9 @@ export function PurchaseReviewSummary({
     printed !== "" &&
     Number.isFinite(Number(printed));
   const difference = hasPrinted && Number.isFinite(calculated)
-    ? Math.round((calculated - Number(printed)) * 100) / 100
+    ? (Math.round(calculated * 100) - Math.round(Number(printed) * 100)) / 100
     : null;
+  const withinTolerance = difference !== null && Math.abs(difference) <= reconciliationTolerance;
   const current = committed && !unknown ? 3 : saved ? 2 : hasContent ? 1 : 0;
   const paused = unknown || cancelled;
   return (
@@ -127,13 +138,20 @@ export function PurchaseReviewSummary({
           <div>
             <dt className="text-muted-foreground">Difference</dt>
             <dd className="mt-1">
-              <ReviewStatus tone={difference === null ? "warning" : Math.abs(difference) <= 0.01 ? "success" : "error"}>
+              <ReviewStatus tone={difference === null ? "warning" : difference === 0 ? "success" : withinTolerance ? "neutral" : "error"}>
                 {difference === null
                   ? "Enter bill total to compare"
-                  : Math.abs(difference) <= 0.01
+                  : difference === 0
                     ? "Totals match"
-                    : `${money(difference)} — check amounts`}
+                    : withinTolerance
+                      ? `${money(difference)} — within ${money(reconciliationTolerance)} tolerance`
+                      : `${money(difference)} — check amounts`}
               </ReviewStatus>
+              {withinTolerance && difference !== 0 && !paused && !committed && (
+                <p className="mt-1 text-muted-foreground">
+                  You can proceed with review. Other checks still apply.
+                </p>
+              )}
             </dd>
           </div>
         </dl>

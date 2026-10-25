@@ -92,6 +92,11 @@ type MasterMatchDrug = {
 
 @Injectable()
 export class PharmacyPurchaseInvoiceService {
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-reconciliation-tolerance
+   * Monetary reconciliation MUST accept differences up to and including INR 1 after rounding
+   * each amount to paise. PurchaseReviewSummary MUST use the same limit for its comparison notice.
+   */
   private readonly tolerance = 1;
   private readonly logger = new Logger(PharmacyPurchaseInvoiceService.name);
   private readonly documentMetadata = {
