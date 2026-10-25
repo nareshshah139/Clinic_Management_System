@@ -625,6 +625,162 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
+  it('recovers a colleague handoff through a durable matching no-stock result', async () => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    const key = `purchase-intake:branch-1:user-1:${id}`;
+    api.post.mockImplementation(async (url, body: any) => {
+      expect(url).toBe('/pharmacy/purchase-invoices/ocr/recover-delegated');
+      expect(body).toEqual({ attemptId: id, originalActorId: 'original-operator', reason: 'Continue the interrupted shift', sourceDocumentIds: ['source-1'] });
+      const saved = JSON.parse(sessionStorage.getItem(key)!);
+      expect(saved.importAttemptId).toBe(id);
+      expect(saved.unknownStockInvoiceId).toBe('unconfirmed-import');
+      expect(saved.delegatedRecovery.originalActorId).toBe('original-operator');
+      return { attemptId: id, outcome: 'NO_STOCK_WRITTEN', invoiceId: null, message: 'Stopped safely before invoice creation.' } as any;
+    });
+    const first = render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" recoverySourceIds={['source-1']} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Continue the interrupted shift' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    expect(await screen.findByText('Stopped safely before invoice creation.')).toBeVisible();
+    await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).unknownStockInvoiceId).toBeNull());
+    first.unmount();
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" />);
+    expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('keeps delegated missing-invoice rejection locked and offers physical reconciliation', async () => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    api.post.mockResolvedValue({ attemptId: id, outcome: 'RETRY_REJECTED', stockOutcome: 'UNVERIFIED', invoiceId: 'missing-invoice' } as any);
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} invoiceId="missing-invoice" />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Saved invoice is missing' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    expect(await screen.findByRole('region', { name: 'Rejected uncertain import' })).toHaveTextContent('does not mean no stock was posted');
+    expect(screen.getByRole('link', { name: /Reconcile physical inventory/ })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+    expect(api.getPharmacyPurchaseInvoiceById).not.toHaveBeenCalled();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it('opens only the exact invoice returned by delegated recovery', async () => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    api.post.mockResolvedValue({ attemptId: id, outcome: 'DRAFT_SAVED', invoiceId: 'pinv-1' } as any);
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Find the invoice already saved' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    await waitFor(() => expect(screen.getByLabelText('Invoice No.')).toHaveValue('APX-001'));
+    expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenCalledWith('pinv-1');
+    expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it.each(['failed', 'wrong-attempt', 'unknown', 'malformed-no-stock'])('retains the original lock after %s delegated recovery', async outcome => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    if (outcome === 'failed') api.post.mockRejectedValue(new Error('Lost response'));
+    else api.post.mockResolvedValue({ attemptId: outcome === 'wrong-attempt' ? 'different-attempt' : id,
+      outcome: outcome === 'unknown' ? 'UNKNOWN' : 'NO_STOCK_WRITTEN', invoiceId: outcome === 'malformed-no-stock' ? 'invoice-unknown' : null } as any);
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Check the interrupted import' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Recover import outcome' })).toBeEnabled());
+    expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
+    expect(JSON.parse(sessionStorage.getItem(`purchase-intake:branch-1:user-1:${id}`)!).importAttemptId).toBe(id);
+    expect(screen.queryByRole('link', { name: 'Open another recovery page' })).not.toBeInTheDocument();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('lets a malformed recovery reference be corrected before any dispatch', async () => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    api.post.mockResolvedValue({ attemptId: id, outcome: 'NO_STOCK_WRITTEN', invoiceId: null, message: 'Corrected reference recovered safely.' } as any);
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId="mistyped-reference" />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Recover the intended attempt' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    expect(await screen.findByText('Enter a valid import attempt ID from the handoff.')).toBeVisible();
+    expect(api.post).not.toHaveBeenCalled();
+    const reference = screen.getByRole('textbox', { name: 'Import attempt ID' });
+    expect(reference).toBeEnabled();
+    fireEvent.change(reference, { target: { value: id } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    expect(await screen.findByText('Corrected reference recovered safely.')).toBeVisible();
+    expect(api.post).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks a malformed handoff invoice until exact readback and keeps the attempt reference editable', async () => {
+    let finishRead!: (value: unknown) => void;
+    api.getPharmacyPurchaseInvoiceById.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId="mistyped-reference" invoiceId="known-invoice" />);
+    const reference = screen.getByRole('textbox', { name: 'Import attempt ID' });
+    expect(reference).toBeEnabled();
+    fireEvent.change(reference, { target: { value: 'ec73be65-0152-4bb1-8be6-399d78901a57' } });
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'must-not-import.jpg', { type: 'image/jpeg' })] } });
+    fireEvent.click(screen.getByText('Automatic import'));
+    expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
+    const importButton = screen.queryByRole('button', { name: 'Import & Add Stock' });
+    if (importButton) { expect(importButton).toBeDisabled(); fireEvent.click(importButton); }
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    await waitFor(() => expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenCalledWith('known-invoice'));
+    await act(async () => finishRead({ ...draftInvoice, id: 'known-invoice', invoiceNumber: 'KNOWN-001' }));
+    await waitFor(() => expect(screen.getByLabelText('Invoice No.')).toHaveValue('KNOWN-001'));
+    expect(screen.queryByText(/Stock status unknown. Check the saved purchase/)).not.toBeInTheDocument();
+    expect(reference).toHaveValue('ec73be65-0152-4bb1-8be6-399d78901a57');
+    expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+  });
+
+  it('persists fresh automatic retry attribution before dispatch after colleague recovery', async () => {
+    const previousId = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    const key = `purchase-intake:branch-1:user-1:${previousId}`;
+    api.post.mockResolvedValue({ attemptId: previousId, outcome: 'NO_STOCK_WRITTEN', invoiceId: null, message: 'Previous attempt stopped safely.' } as any);
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={previousId} recoveryActorId="previous-operator" recoverySourceIds={['previous-source']} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Recover the old interrupted attempt' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    await screen.findByText('Previous attempt stopped safely.');
+    await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).delegatedRecovery.originalActorId).toBe('previous-operator'));
+    let persistedAtDispatch: any;
+    let sentAttemptId: FormDataEntryValue | null = null;
+    (global.fetch as jest.Mock).mockImplementation((_url, request) => {
+      sentAttemptId = (request.body as FormData).get('attemptId');
+      persistedAtDispatch = JSON.parse(sessionStorage.getItem(key)!);
+      return Promise.reject(new Error('New response interrupted'));
+    });
+    fireEvent.change(screen.getByLabelText('Upload invoice PDF or image'), { target: { files: [new File(['synthetic'], 'new-attempt.jpg', { type: 'image/jpeg' })] } });
+    importAutomatically();
+    await screen.findByText(/The automatic import outcome could not be confirmed/);
+    expect(sentAttemptId).not.toBe(previousId);
+    expect(persistedAtDispatch.importAttemptId).toBe(sentAttemptId);
+    expect(persistedAtDispatch.delegatedRecovery).toEqual({ attemptId: sentAttemptId, originalActorId: 'user-1', invoiceId: '', sourceDocumentIds: [], reason: '' });
+    expect(persistedAtDispatch.unknownStockInvoiceId).toBe('unconfirmed-import');
+  });
+
+  it('keeps a rejected reference while opening a separate page for a correction', async () => {
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    api.post.mockRejectedValue(Object.assign(new Error('Import attempt not found'), { status: 404 }));
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Check this handoff' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    const separate = await screen.findByRole('link', { name: 'Open another recovery page' });
+    expect(separate).toHaveAttribute('target', '_blank');
+    expect(separate).toHaveAttribute('href', `/dashboard/inventory?area=purchases&view=intake&new=recovery-${id}`);
+    expect(screen.getByText(/Stock status unknown. Check the saved purchase/)).toBeVisible();
+    expect(JSON.parse(sessionStorage.getItem(`purchase-intake:branch-1:user-1:${id}`)!).importAttemptId).toBe(id);
+  });
+
+  it.each(['read', 'create', 'review'] as const)('offers copyable handoff without mutating when purchase %s access is absent', async missing => {
+    mockPurchaseAccess[missing] = false;
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: jest.fn().mockRejectedValue(new Error('Clipboard blocked')) } });
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" invoiceId="missing-invoice" recoverySourceIds={['source-1', 'source-2']} />);
+    expect(screen.queryByRole('button', { name: 'Recover import outcome' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy recovery handoff' }));
+    const fallback = await screen.findByText(/Could not copy. Select and copy these details instead:/);
+    expect(fallback).toHaveTextContent(`Import attempt: ${id}`);
+    expect(fallback).toHaveTextContent('Original operator: original-operator');
+    expect(fallback).toHaveTextContent('Exact invoice: missing-invoice');
+    expect(fallback).toHaveTextContent('Original documents: source-1, source-2');
+    expect(fallback).toHaveTextContent(`attempt=${id}&actor=original-operator&sources=source-1%2Csource-2`);
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   it('recovers a legacy session without an attempt ID and persists rejection across reloads', async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error('Lost response'));
     const first = render(<PurchaseInvoiceWorkbench />);

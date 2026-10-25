@@ -1,0 +1,153 @@
+{
+  "runId": "2026-10-25T05-55-15-229Z-4cd8474e",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "f63e24bd113fa296b6694bf4109dcb3e30c0b971",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "stale-count",
+        "posted-count",
+        "fresh-count",
+        "missing-invoice"
+      ],
+      "status": "failed",
+      "assertions": [
+        {
+          "label": "stale observation does not overwrite concurrent stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "stale count remains draft",
+          "expected": "DRAFT",
+          "actual": "DRAFT"
+        },
+        {
+          "label": "fresh count clears old physical observation",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh count snapshots current stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "fresh count retains source identity",
+          "expected": "cmvneyxd60000agrp28vsg570",
+          "actual": "cmvneyxd60000agrp28vsg570"
+        },
+        {
+          "label": "posted count has verified quantity and held safety",
+          "expected": {
+            "q": 6,
+            "h": 0
+          },
+          "actual": {
+            "q": 6,
+            "h": 0
+          }
+        },
+        {
+          "label": "independent ledger after count",
+          "expected": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvneyydh000iagrpadytl2q7"
+          },
+          "actual": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvneyydh000iagrpadytl2q7"
+          }
+        },
+        {
+          "label": "recount replay opens existing posted child",
+          "expected": "cmvneyydh000iagrpadytl2q7",
+          "actual": "cmvneyydh000iagrpadytl2q7"
+        },
+        {
+          "label": "posted count can start another blank count",
+          "expected": "",
+          "actual": ""
+        }
+      ],
+      "screenshots": [
+        {
+          "checkpoint": "stale-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-stale-count-1280.png"
+        },
+        {
+          "checkpoint": "stale-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-stale-count-390.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-posted-count-1280.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-posted-count-390.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-fresh-count-1280.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-fresh-count-390.png"
+        }
+      ],
+      "error": "fresh missing-invoice URL exposes unlinked recovery action\n\nfalse !== true\n"
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  "status": "failed"
+}

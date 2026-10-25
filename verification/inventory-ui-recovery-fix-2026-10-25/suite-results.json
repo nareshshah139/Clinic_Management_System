@@ -1,0 +1,58 @@
+{
+  "backend": {
+    "success": true,
+    "numPassedTests": 845,
+    "numFailedTests": 0,
+    "numPendingTests": 78,
+    "numPassedTestSuites": 79,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 7,
+    "skipped": [
+      {
+        "file": "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.live.spec.ts",
+        "count": 1
+      },
+      {
+        "file": "backend/src/modules/inventory/tests/inventory-read-query.database.spec.ts",
+        "count": 15
+      },
+      {
+        "file": "backend/src/modules/pharmacy/tests/pharmacy-payment-recovery.database.spec.ts",
+        "count": 9
+      },
+      {
+        "file": "backend/src/modules/inventory/tests/inventory-import-recovery.database.spec.ts",
+        "count": 12
+      },
+      {
+        "file": "backend/src/modules/visits/tests/lifecycle.database.spec.ts",
+        "count": 26
+      },
+      {
+        "file": "backend/src/modules/pharmacy/tests/pharmacy-partner-sales.database.spec.ts",
+        "count": 9
+      },
+      {
+        "file": "backend/src/modules/visits/tests/lifecycle-migration.database.spec.ts",
+        "count": 4
+      },
+      {
+        "file": "backend/src/modules/users/tests/doctor-signature.spec.ts",
+        "count": 1
+      },
+      {
+        "file": "backend/src/modules/prescriptions/tests/prescription-pdf.pipeline.spec.ts",
+        "count": 1
+      }
+    ]
+  },
+  "frontend": {
+    "success": true,
+    "numPassedTests": 563,
+    "numFailedTests": 0,
+    "numPendingTests": 0,
+    "numPassedTestSuites": 63,
+    "numFailedTestSuites": 0,
+    "numPendingTestSuites": 0
+  }
+}

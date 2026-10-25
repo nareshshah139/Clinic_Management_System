@@ -419,6 +419,12 @@ export class PharmacyPurchaseInvoiceService {
     return new PurchaseImportRecovery(this.prisma).recoverUnlinked({ id, branchId, userId }, input);
   }
 
+  recoverDelegatedImport(actor: { branchId: string; userId: string }, input: {
+    attemptId: string; originalActorId?: string; invoiceId?: string; sourceDocumentIds?: string[]; reason: string;
+  }) {
+    return new PurchaseImportRecovery(this.prisma).recoverDelegated(actor, input);
+  }
+
   resolveImportAttempt(id: string, branchId: string, userId: string) {
     return new PurchaseImportRecovery(this.prisma).resolve({ id, branchId, userId });
   }

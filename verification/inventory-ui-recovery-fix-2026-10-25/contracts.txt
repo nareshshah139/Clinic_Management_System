@@ -1,0 +1,498 @@
+format backend/src/modules/pharmacy/purchase-import-recovery.ts
+format backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts
+format frontend/src/components/inventory/InventoryWorkspace.tsx
+format frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx
+format backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts
+format backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts
+format backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts
+format frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx
+format backend/src/modules/pharmacy/tests/purchase-import-delegation.database.spec.ts
+format verification/inventory-ui-recovery-fix-2026-10-25/check_model.py
+format verification/inventory-ui-recovery-fix-2026-10-25/reconciliation-ui.test.tsx
+list backend/src/modules/pharmacy/purchase-import-recovery.ts
+=> backend/src/modules/pharmacy/purchase-import-recovery.ts <=
+
+◆ import-attempt-monotonic-fence:9
+  scope:declaration class `PurchaseImportRecovery` · owner:nareshshah139 · label:state
+
+  > Each branch/actor-scoped attempt MUST execute at most once. NO_STOCK_WRITTEN is terminal;
+  > draft creation MUST lock a RUNNING attempt and record its invoice in the same transaction.
+  > Resolving an absent attempt MUST create a terminal tombstone before reporting no stock.
+
+◆ uncertain-import-rejection:41
+  scope:declaration method `recoverUnlinked` · owner:nareshshah139 · label:state
+
+  > Legacy and orphaned imports MUST either resume an exact branch-local invoice or permanently
+  > reject further intake with an audit. Rejection MUST preserve unknown historical stock effects;
+  > it MUST NOT claim no stock, remove evidence, or repeat invoice creation.
+
+◆ delegated-import-owner-boundary:83
+  scope:declaration method `recoverDelegated` · owner:nareshshah139 · label:security
+
+  > Delegated recovery MUST preserve an existing attempt owner and stay within the authenticated
+  > branch. An absent attempt MUST require a branch-local original actor; that supplied identity
+  > is attribution, not proof of historical ownership. Original actor APIs MUST remain scoped.
+
+◆ delegated-import-recovery-atomicity:89
+  scope:declaration method `recoverDelegated` · owner:nareshshah139 · label:atomicity
+
+  > Recovery MUST serialize against purchase admission and atomically record its terminal decision
+  > and the recovering actor's audit. A saved invoice MUST win by exact identity; a fenced worker
+  > MUST NOT write later. Unknown history MUST stay UNVERIFIED and terminal replay MUST retain evidence.
+
+◆ import-resolution-no-late-writes:207
+  scope:declaration method `resolve` · owner:nareshshah139 · label:atomicity
+
+  > Resolution MUST fence not-yet-saved work, including requests delayed before registration.
+  > A concurrently saved invoice MUST be returned by identity; it MUST NOT be reported as no stock.
+
+◆ import-draft-fence:225
+  scope:declaration function `claimPurchaseImport` · owner:nareshshah139 · label:atomicity
+
+  > A stopped or foreign import MUST NOT create an invoice. The attempt row lock MUST be held
+  > through invoice creation and binding; cancellation and creation cannot both win.
+
+◆ import-invoice-binding:235
+  scope:declaration function `bindPurchaseImport` · owner:nareshshah139 · label:atomicity
+
+  > Binding MUST run in the transaction that claimed the attempt and created the invoice;
+  > a committed draft MUST never leave its attempt without the saved invoice identity.
+
+◆ purchase-recovery-serialization:244
+  scope:declaration function `lockPurchaseRecovery` · owner:nareshshah139 · label:atomicity
+
+  > Recovery decisions and purchase admission MUST serialize within the branch so rejection
+  > cannot race a source link or stock commit. Database triggers enforce the same lock for old workers.
+
+◆ purchase-write-protocol:253
+  scope:declaration function `preparePurchaseWrite` · owner:nareshshah139 · label:atomicity
+
+  > New invoice creation and stock posting MUST opt into the recovery protocol within their
+  > transaction. Unmodified workers MUST fail the database guard after migration.
+list backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts
+=> backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts <=
+
+◆ purchase-role-permission-boundary:69
+  scope:declaration class `PharmacyPurchaseInvoiceController` · owner:nareshshah139 · label:product;target
+
+  > Invoice endpoints MUST enforce both the allowed role and corresponding existing permission
+  > using the authenticated branch; Reception access MUST NOT grant unrelated stock, payment or
+  > administrative powers.
+  > Acceptance: INV-40. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ delegated-recovery-permissions:266
+  scope:declaration method `recoverDelegated` · owner:nareshshah139 · label:security
+
+  > Recovering another operator's import MUST require purchase read, create and review access;
+  > the recovering actor and branch MUST come from authentication, never the submitted handoff.
+
+◆ purchase-reopen-permissions:407
+  scope:declaration method `reopenReview` · owner:nareshshah139 · label:security
+
+  > Reopening review MUST require both draft-edit and review permissions and use the authenticated branch.
+list frontend/src/components/inventory/InventoryWorkspace.tsx
+=> frontend/src/components/inventory/InventoryWorkspace.tsx <=
+
+◆ workspace-named-task-navigation:82
+  scope:declaration function `InventoryWorkspace` · owner:nareshshah139 · label:product
+
+  > Every inventory task MUST have an in-app route back to its list; area, view, page and filters
+  > MUST survive item-detail navigation and browser back. Posted outcomes come from the server.
+
+◆ inventory-workspace-navigation:87
+  scope:declaration function `InventoryWorkspace` · owner:nareshshah139 · label:product;target
+
+  > The inventory workspace MUST expose named, reachable destinations for Today, Purchases,
+  > Stock, Sales and Reorder; the user MUST be able to return to the originating list without
+  > browser-only navigation.
+  > Acceptance: INV-01. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ inventory-readable-scope:95
+  scope:declaration function `InventoryWorkspace` · owner:nareshshah139 · label:accessibility
+
+  > Inventory content MUST use scalable text of at least 14px at the default root size,
+  > with 18px phone inputs. Increasing text size MUST leave actions reachable and wide tables
+  > scrollable within the workspace, without changing typography on unrelated routes.
+
+◆ inventory-daily-action-queues:499
+  scope:declaration function `WorkspaceToday` · owner:nareshshah139 · label:product;target
+
+  > The daily view MUST distinguish unresolved receipts, low stock, expiring stock, unfinished
+  > returns and overdue supplier balances, with each count opening its matching records.
+  > Acceptance: INV-02. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-register-complete:703
+  scope:declaration function `PurchaseRegister` · owner:nareshshah139 · label:product;target
+
+  > The purchase register MUST allow retrieval of every authorized saved invoice and unfinished
+  > upload, including records beyond the recent-preview limit, with status and source retained.
+  > Acceptance: INV-18. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+list frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx
+=> frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx <=
+
+◆ purchase-receipt-margin-basis:568
+  scope:declaration function `calculateReceiptSummary` · owner:nareshshah139 · label:calculation
+
+  > Quantity summaries MUST use paid plus free quantities in each declared stock unit, without
+  > multiplying by pack contents. Indicative margin MUST compare tax-exclusive MRP sales for
+  > those received units with taxable line cost; missing MRP MUST remain unknown.
+
+◆ purchase-recovery-entry-and-handoff:937
+  scope:declaration function `PurchaseInvoiceWorkbench` · owner:nareshshah139 · label:product
+
+  > Missing-invoice read failures and fresh intake MUST expose recovery in the UI. A malformed
+  > attempt reference MUST NOT skip exact invoice readback or unlock its stock outcome. Handoffs MUST
+  > retain exact attempt, original-operator, invoice and original-document references when known;
+  > denied access or clipboard failure MUST leave a usable, copyable recovery route.
+
+◆ receipt-correction-stock-intent:944
+  scope:declaration function `PurchaseInvoiceWorkbench` · owner:nareshshah139
+
+  > Editable purchases MUST allow selecting a posted receipt; removing an existing link MUST
+  > explicitly confirm that posting will add stock. Locked or uncertain invoices cannot edit it.
+
+◆ purchase-entry-field-coverage:999
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product;target
+
+  > The purchase editor MUST retain the supplier header, batch receipt quantities and commercial
+  > terms needed to reconstruct the printed bill; unsupported printed terms MUST be shown as
+  > unresolved instead of discarded.
+  > Acceptance: INV-14. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-required-controls-visible:1007
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product;target
+
+  > All controls required to resolve the active invoice’s blockers MUST remain discoverable and
+  > keyboard reachable, with the next action and persisted stock state visible without expanding
+  > unrelated sections.
+  > Acceptance: INV-41. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-match-labels-and-fallback:1015
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product
+
+  > Authorized editors with catalogue support MUST see Not in inventory, Create new item and
+  > manual search when no candidate exists or the response recommends CREATE_NEW; such responses
+  > MUST NOT expose a suggested saved product or Confirm Match button. Suggestions MUST use plain
+  > identity labels rather than numeric confidence. Editing a name or pack, or removing a line,
+  > MUST discard previous suggested and confirmed mappings before they can be reused.
+
+◆ purchase-check-before-stock:1023
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product
+
+  > The primary scan and save actions MUST retain a reviewable draft without adding stock.
+  > Adding stock MUST be a separately labelled action; automatic processing MUST stay an explicit
+  > secondary choice. Editing reviewed values MUST clear the final human confirmation.
+
+◆ invoice-field-color-evidence:1029
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product
+
+  > Unresolved field errors MUST override green verification. Empty OCR flags MUST NOT make fields
+  > green; success requires final human confirmation or a server-reviewed/committed invoice.
+  > Changed OCR checks MUST restore pending counts and field colors and block final approval,
+  > including after saving or recovering a draft. Unknown stock outcome or a stale revision
+  > MUST suppress that global success state.
+
+◆ purchase-inline-catalogue-recovery:1037
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:product
+
+  > Catalogue rejections MUST offer in-place name correction, catalogue creation and manual matching
+  > to authorized editors. Reviewed bills MUST reopen through the revision-checked API before edits;
+  > posted or unknown stock outcomes MUST stay locked. Reopening and corrections MUST clear final approval.
+
+◆ purchase-recovery-editor-identities:1043
+  scope:declaration function `PurchaseInvoiceEditor` · owner:nareshshah139 · label:state
+
+  > Name correction and manual matching for an invoice line MUST have distinct stable React
+  > identities, so rerendering either editor cannot reuse its sibling's local state.
+
+◆ purchase-mismatch-warning-before-retry:1704
+  scope:declaration variable `confirmMasterLine` · owner:nareshshah139 · label:product
+
+  > A server-reported product mismatch MUST display the different-products warning and both
+  > identities before retrying with acknowledgement. Cancelling MUST leave the line unchanged.
+
+◆ purchase-process-visible-outcome:1875
+  scope:declaration variable `processSavedInvoice` · owner:nareshshah139 · label:product;target
+
+  > Save & Process MUST save the current corrections and then show the server-confirmed outcome for
+  > that invoice: stock added, saved with actionable blockers, or status could not be confirmed.
+  > Acceptance: INV-16. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ import-outcome-authoritative-recovery:1956
+  scope:declaration variable `acceptImportOutcome` · owner:nareshshah139 · label:state
+
+  > An unknown import MUST stay locked until its matching durable attempt is fenced with no
+  > stock, or its exact saved invoice is read back. Failed or mismatched resolution MUST not unlock.
+
+◆ delegated-recovery-durable-reference:1994
+  scope:declaration variable `recoverDelegatedImport` · owner:nareshshah139 · label:state
+
+  > Delegated recovery MUST persist the attempt and original reference before dispatch and keep
+  > intake locked on failure or mismatched response. It MUST require read/create/review access;
+  > a matching terminal outcome or exact saved invoice readback alone MAY unlock intake.
+
+◆ unlinked-recovery-keeps-stock-unknown:2053
+  scope:declaration variable `recoverUnlinkedImport` · owner:nareshshah139 · label:state
+
+  > Legacy/missing-link recovery MUST persist its identity before dispatch. RETRY_REJECTED
+  > MUST keep intake locked, retain the draft, and offer physical reconciliation without claiming no stock.
+
+◆ purchase-import-outcome-unknown:2084
+  scope:declaration variable `extractFromInvoiceFile` · owner:nareshshah139 · label:state;product
+
+  > Automatic import MUST persist its new attempt and current actor/source reference together
+  > and lock further writes before dispatch. A lost or malformed response MUST
+  > retain that lock and offer attempt resolution; only a matching fenced no-stock outcome, an
+  > explicit no-stock response, or a verified saved invoice MAY clear it.
+
+◆ reviewed-bill-recovery-ui:2372
+  scope:declaration variable `commitStock` · owner:nareshshah139
+
+  > Reopening MUST submit the saved revision and operator reason; an uncertain response MUST
+  > refresh server status before permitting further edits or stock commit.
+
+◆ purchase-recovery-server-revision:2602
+  scope:declaration variable `acceptRecoveredInvoice` · owner:nareshshah139 · label:state
+
+  > Recovered fields MUST retain the revision they were edited from. A changed or unknown
+  > revision MUST block saving, reviewing and posting while retaining local fields until an
+  > explicit comparison choice adopts the saved revision. Background list reads MUST NOT advance this baseline.
+
+◆ purchase-comparison-preserves-local:2623
+  scope:declaration variable `compareSavedInvoice` · owner:nareshshah139 · label:state
+
+  > Reading a comparison MUST NOT replace fields or advance the saved revision. Only an explicit choice MAY adopt the compared record; local corrections MUST retain the selected saved identity and original receipt/document links.
+
+◆ complete-manual-transcription:3320
+  scope:declaration variable `enterCompleteInvoiceManually` · owner:nareshshah139 · label:product
+
+  > Switching an incomplete reading to manual entry MUST clear extracted values and prior checks,
+  > retain originals and any saved invoice identity/revision, and require a new final review.
+
+◆ purchase-summary-full-values:5821
+  scope:declaration function `SummaryValue` · owner:nareshshah139 · label:accessibility
+
+  > Receipt summary amounts and quantities MUST remain fully visible without ellipses when the
+  > containing panel narrows or text is enlarged. Supporting explanations may use help tooltips.
+
+◆ invoice-name-correction-explicit:5869
+  scope:declaration function `PurchaseLineNameCorrection` · owner:nareshshah139 · label:product
+
+  > Typing or cancelling a name correction MUST leave the invoice untouched; applying a nonblank
+  > name MUST change only that invoice line through the parent and MUST NOT rename a catalogue record.
+list backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts
+=> backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts <=
+
+◆ supplier-directory-revision:126
+  scope:declaration method `purchaseSuppliers` · owner:nareshshah139 · label:security;product
+
+  > Invoice supplier choices MUST include only active records in the requested branch and their
+  > saved revision so corrections can detect intervening edits.
+
+◆ supplier-gstin-correction-boundary:136
+  scope:declaration method `correctPurchaseSupplierGstin` · owner:nareshshah139 · label:security;product
+
+  > A verified correction MUST affect only the active supplier in the authenticated branch.
+  > Stale revisions and GSTINs assigned to another branch-local supplier MUST fail before writes.
+  > Retrying an already-applied GSTIN MUST NOT write another correction.
+
+◆ supplier-gstin-correction-audit:142
+  scope:declaration method `correctPurchaseSupplierGstin` · owner:nareshshah139 · label:product
+
+  > The supplier GSTIN and its actor, reason, previous value and new value audit MUST commit
+  > atomically. Existing invoices, payments, balances and stock MUST remain unchanged.
+
+◆ verified-supplier-save:183
+  scope:declaration method `savePurchaseSupplier` · owner:nareshshah139 · label:product
+
+  > A verified supplier save MUST reuse one exact active identity or create a new branch-local
+  > identity, returning its revision. Conflicting or inactive identities MUST fail without writes.
+
+◆ purchase-original-byte-retention:243
+  scope:declaration method `archiveOriginal` · owner:nareshshah139 · label:product;target
+
+  > An accepted invoice upload MUST retain the exact original bytes with branch, hash and file
+  > metadata before extraction; OCR failure MUST NOT discard the archived source.
+  > Acceptance: INV-10. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ durable-ocr-import:363
+  scope:declaration method `importWithRecovery` · owner:nareshshah139 · label:state
+
+  > HTTP automatic imports MUST register their client attempt before extraction. Saved invoices
+  > MUST bind to that attempt atomically; all retry responses MUST expose its durable outcome.
+
+◆ reject-unposted-purchase:377
+  scope:declaration method `rejectUnpostedInvoice` · owner:nareshshah139 · label:state;atomicity
+
+  > Rejection MUST require a current branch-local unposted revision, actor and reason, retain
+  > source/line history and audit CANCELLED atomically. Posted purchases MUST never be cancelled here.
+
+◆ multi-page-original-retention:412
+  scope:declaration method `extractMany` · owner:nareshshah139 · label:product
+
+  > Multi-file intake MUST retain each original byte stream before OCR. The assembled page order
+  > MUST match upload order; all source documents MUST link to the saved invoice before processing.
+
+◆ purchase-import-duplicate-retained:437
+  scope:declaration method `importFromDocument` · owner:nareshshah139 · label:security;product
+
+  > Automatic import MAY return an existing invoice only with current read capability and an exact duplicate identity conflict or already-linked original. When import resolves to an existing invoice, a newly uploaded original MUST remain unlinked until deliberate attachment.
+
+◆ purchase-ocr-completeness-before-auto:627
+  scope:declaration method `extractDocumentDraft` · owner:nareshshah139 · label:product;target
+
+  > OCR extraction MUST preserve all detected invoice rows and surface unreadable or disagreeing
+  > values as review issues; model confidence alone MUST NOT authorize stock posting.
+  > Acceptance: INV-11. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-manual-search-scope:691
+  scope:declaration method `searchMasterProducts` · owner:nareshshah139 · label:security
+
+  > Manual selection search MUST return only active products in the caller's branch and MUST NOT
+  > mutate catalogue or stock. An empty query MUST return no products.
+
+◆ purchase-match-identity-before-stock:739
+  scope:declaration method `confirmMasterRecord` · owner:nareshshah139 · label:product;target
+
+  > A purchase line MUST NOT be automatically mapped to a different product strength, form, pack or
+  > branch; ambiguous matches MUST require an explicit reviewer selection.
+  > Acceptance: INV-13. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-mismatch-explicit-acknowledgement:746
+  scope:declaration method `confirmMasterRecord` · owner:nareshshah139 · label:product
+
+  > Matching different names, known kinds, strengths or pack dimensions MUST fail before writes
+  > unless mismatchAcknowledged is true. A successful match MUST atomically retain the original
+  > line, selected product, mismatch reasons and acknowledgement in audit history with catalogue
+  > updates; confirming a match MUST NOT change stock.
+
+◆ purchase-draft-stale-write-rejected:973
+  scope:declaration method `updateDraft` · owner:nareshshah139 · label:product
+
+  > An expectedUpdatedAt value MUST match the saved draft before replacing lines; reviewed or
+  > posted purchases MUST NOT be edited here. The correction and its audit record commit together.
+
+◆ purchase-analytics-compatible-posted-set:1079
+  scope:declaration method `getDistributorAnalytics` · owner:nareshshah139 · label:calculation
+
+  > Totals and complete rankings MUST use the same filtered posted invoice lines. Product and
+  > discount comparisons MUST preserve master identity, pack and declared stock unit. A blended
+  > effective unit cost across incompatible product bases MUST be unknown rather than numeric.
+
+◆ purchase-review-blockers-enforced:1190
+  scope:declaration method `markReviewed` · owner:nareshshah139 · label:product;target
+
+  > Review MUST reject unresolved OCR flags, unreconciled totals, missing receipt details or unresolved
+  > catalogue products (missing, ambiguous or incomplete) before locking the editable draft, even
+  > when invoked directly through the API; saving a draft MUST NOT count as resolving those issues.
+  > A supplied expectedUpdatedAt MUST match inside the transaction before any review effects.
+  > Acceptance: INV-15. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ purchase-review-reopen-before-stock:1273
+  scope:declaration method `reopenReview` · owner:nareshshah139 · label:product;security
+
+  > Reopening MUST atomically change only the caller branch's unposted REVIEWED invoice at the
+  > supplied revision to DRAFT and record REVIEW_REOPENED. Stale revisions or a concurrent stock
+  > claim MUST fail without changing invoice lines, catalogue records or inventory quantities.
+
+◆ purchase-commit-once-atomic:1309
+  scope:declaration method `commitStock` · owner:nareshshah139 · label:product;target
+
+  > A validated purchase receipt MUST atomically create its batch stock effects and posted invoice
+  > state at most once; retries or a failure partway through MUST NOT duplicate or partially add
+  > stock.
+  > Acceptance: INV-17. Validation and open gaps:
+  > docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
+
+◆ receipt-linked-purchase-bill-only:1330
+  scope:declaration method `commitStockInTransaction` · owner:nareshshah139 · label:product
+
+  > Billing a posted inward challan MUST match each product, batch, expiry, MRP and paid/free
+  > stock unit exactly once, add zero additional stock, and retain the verified invoice rate and
+  > tax-exclusive cost per received paid-plus-free unit. The original receipt effects stay intact.
+
+◆ linked-receipt-validation:1490
+  scope:declaration method `validateLinkedReceipt` · owner:nareshshah139
+
+  > A linked receipt MUST belong to this branch, be posted and unbilled, and match every
+  > bill line's batch, quantities, expiry, MRP and stock unit before review or stock commit.
+
+◆ purchase-declared-stock-unit-precedence:2094
+  scope:declaration method `mapUnitType` · owner:nareshshah139 · label:product;calculation
+
+  > A recognized explicit stock unit MUST determine the inventory unit before pack-size
+  > inference. Pack contents such as ML or GM MUST NOT override Pack, Tube, Vial, Box,
+  > or another declared unit. Mapping MUST NOT rescale paid/free quantities or rewrite
+  > historical batches; incompatible existing batch units remain blocking errors.
+
+◆ ocr-shared-search-suggestions-only:2152
+  scope:declaration method `rankMasterMatchCandidates` · owner:nareshshah139 · label:product
+
+  > OCR suggestions MUST use shared name/alias scoring, exclude known strength, dosage-form and
+  > pack conflicts, and break score ties deterministically. Suggesting a product MUST NOT write
+  > catalogue, invoice or stock data or bypass explicit selection and exact commitment checks.
+  > A low-confidence candidate MUST request review instead of recommending a duplicate new record.
+  > Every candidate MUST have distinguishing name/alias evidence; generic forms or pack metadata
+  > alone MUST produce no candidates, regardless of manufacturer, price or combined score.
+
+◆ ocr-never-truncates-pages:2244
+  scope:declaration method `buildOcrImageDataUrls` · owner:nareshshah139 · label:product
+
+  > OCR MUST receive every page or reject before extraction. Over-limit originals MUST remain
+  > archived for complete manual transcription; a partial page set MUST NOT be posted as complete.
+
+◆ purchase-conflict-disclosure:3056
+  scope:declaration method `draftConflict` · owner:nareshshah139 · label:security
+
+  > Duplicate recovery MUST identify the actual unique key and disclose only an invoice in the authenticated branch after current read capability is checked. Unknown keys and denied reads MUST NOT disclose or guess an invoice ID.
+list backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts
+=> backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts <=
+
+◆ unlinked-import-evidence:676
+  scope:declaration class `RecoverUnlinkedPurchaseImportDto` · owner:nareshshah139 · label:validation
+
+  > Unlinked recovery MUST carry a persisted UUID, explicit legacy intent and a nonempty reason;
+  > original references MUST be bounded and validated against the authenticated branch by the service.
+list backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts
+list frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx
+list backend/src/modules/pharmacy/tests/purchase-import-delegation.database.spec.ts
+=> backend/src/modules/pharmacy/tests/purchase-import-delegation.database.spec.ts <=
+
+◆ delegated-recovery-database-witness:16
+  scope:declaration function `delegatedRecoveryDatabaseTests` · owner:nareshshah139 · label:testing
+
+  > The regression suite MUST exercise persisted recovery fences and competing workers in its own
+  > disposable loopback schema. Recovery MUST retain the original owner and leave stock unchanged.
+list verification/inventory-ui-recovery-fix-2026-10-25/check_model.py
+=> verification/inventory-ui-recovery-fix-2026-10-25/check_model.py <=
+
+◆ intake-evidence-partition:159
+  scope:declaration function `intake` · owner:nareshshah139 · label:verification
+
+  > Each delegated evidence state MUST have only its compatible outcome. Missing or conflicting
+  > historical links and lost originals without an exact invoice MUST NOT witness no-stock success.
+
+◆ ui-recovery-model-scope:341
+  scope:declaration function `main` · owner:nareshshah139 · label:verification
+
+  > This checker MUST gate every modeled stock action by UI authority and data guards, retain
+  > counterexamples, and distinguish bounded control-state checks from unbounded SMT obligations.
+list verification/inventory-ui-recovery-fix-2026-10-25/reconciliation-ui.test.tsx
+=> verification/inventory-ui-recovery-fix-2026-10-25/reconciliation-ui.test.tsx <=
+
+◆ count-ui-recovery-witness:21
+  scope:declaration function `assertRecovery` · owner:nareshshah139 · label:verification
+
+  > Every supported saved COUNT status MUST expose a fresh-count command for a permitted writer,
+  > send the retained source version, and open the returned draft without resaving old observations.

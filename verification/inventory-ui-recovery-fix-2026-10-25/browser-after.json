@@ -1,0 +1,290 @@
+{
+  "runId": "2026-10-25T06-12-09-129Z-3cfb2cc3",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "9e8756de418470c323e370c9be0283c13f1fb2b1",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "stale-count",
+        "posted-count",
+        "fresh-count",
+        "missing-invoice",
+        "delegated-recovered",
+        "delegated-rejected"
+      ],
+      "status": "passed",
+      "assertions": [
+        {
+          "label": "stale observation does not overwrite concurrent stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "stale count remains draft",
+          "expected": "DRAFT",
+          "actual": "DRAFT"
+        },
+        {
+          "label": "fresh count clears old physical observation",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh count snapshots current stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "fresh count retains source identity",
+          "expected": "cmvnfkokg0000agqhpbjsex2n",
+          "actual": "cmvnfkokg0000agqhpbjsex2n"
+        },
+        {
+          "label": "posted count has verified quantity and held safety",
+          "expected": {
+            "q": 6,
+            "h": 0
+          },
+          "actual": {
+            "q": 6,
+            "h": 0
+          }
+        },
+        {
+          "label": "independent ledger after count",
+          "expected": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvnfkpnq000iagqhb9e6r282"
+          },
+          "actual": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvnfkpnq000iagqhb9e6r282"
+          }
+        },
+        {
+          "label": "recount replay opens existing posted child",
+          "expected": "cmvnfkpnq000iagqhb9e6r282",
+          "actual": "cmvnfkpnq000iagqhb9e6r282"
+        },
+        {
+          "label": "posted count can start another blank count",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh missing-invoice URL exposes unlinked recovery action",
+          "expected": true,
+          "actual": true
+        },
+        {
+          "label": "UI missing-reference recovery records uncertain historical stock",
+          "expected": [
+            {
+              "status": "RETRY_REJECTED",
+              "stock": "UNVERIFIED"
+            }
+          ],
+          "actual": [
+            {
+              "status": "RETRY_REJECTED",
+              "stock": "UNVERIFIED"
+            }
+          ]
+        },
+        {
+          "label": "intake rejection does not alter counted stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "rejected intake UI link reaches a fresh physical count",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "original owner endpoint remains actor scoped",
+          "expected": 404,
+          "actual": 404
+        },
+        {
+          "label": "invalid recovery reference is editable",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "colleague UI recovery preserves owner and fences unfinished work",
+          "expected": {
+            "owner": "cmvnfkuux0006agkpogc15y27",
+            "status": "NO_STOCK_WRITTEN"
+          },
+          "actual": {
+            "owner": "cmvnfkuux0006agkpogc15y27",
+            "status": "NO_STOCK_WRITTEN"
+          }
+        },
+        {
+          "label": "colleague UI recovery is audited without stock effects",
+          "expected": [
+            {
+              "actor": "cmvnfkfe40002agkpdr979vn8",
+              "owner": "cmvnfkuux0006agkpogc15y27",
+              "stockEffect": 0
+            }
+          ],
+          "actual": [
+            {
+              "actor": "cmvnfkfe40002agkpdr979vn8",
+              "owner": "cmvnfkuux0006agkpogc15y27",
+              "stockEffect": 0
+            }
+          ]
+        },
+        {
+          "label": "delegated missing-invoice recovery keeps history unverified",
+          "expected": {
+            "status": "RETRY_REJECTED",
+            "stock": "UNVERIFIED",
+            "owner": "cmvnfkuux0006agkpogc15y27"
+          },
+          "actual": {
+            "status": "RETRY_REJECTED",
+            "stock": "UNVERIFIED",
+            "owner": "cmvnfkuux0006agkpogc15y27"
+          }
+        },
+        {
+          "label": "delegated rejection offers a working UI reconciliation path",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "all intake recovery actions preserve existing inventory",
+          "expected": 6,
+          "actual": 6
+        }
+      ],
+      "screenshots": [
+        {
+          "checkpoint": "stale-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-stale-count-1280.png"
+        },
+        {
+          "checkpoint": "stale-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-stale-count-390.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-posted-count-1280.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-posted-count-390.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-fresh-count-1280.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-fresh-count-390.png"
+        },
+        {
+          "checkpoint": "missing-invoice",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-missing-invoice-1280.png"
+        },
+        {
+          "checkpoint": "missing-invoice",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-missing-invoice-390.png"
+        },
+        {
+          "checkpoint": "delegated-recovered",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-delegated-recovered-1280.png"
+        },
+        {
+          "checkpoint": "delegated-recovered",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-delegated-recovered-390.png"
+        },
+        {
+          "checkpoint": "delegated-rejected",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-delegated-rejected-1280.png"
+        },
+        {
+          "checkpoint": "delegated-rejected",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-delegated-rejected-390.png"
+        }
+      ]
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ]
+  },
+  "status": "passed"
+}

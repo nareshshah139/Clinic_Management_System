@@ -686,3 +686,12 @@ export class RecoverUnlinkedPurchaseImportDto {
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @MinLength(1) @MaxLength(500) reason: string;
 }
+
+export class RecoverDelegatedPurchaseImportDto {
+  @IsUUID() attemptId: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(128) originalActorId?: string;
+  @IsOptional() @IsString() @MinLength(1) @MaxLength(128) invoiceId?: string;
+  @IsOptional() @IsArray() @ArrayMaxSize(20) @IsString({ each: true }) @MinLength(1, { each: true }) @MaxLength(128, { each: true }) sourceDocumentIds?: string[];
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @MinLength(1) @MaxLength(500) reason: string;
+}

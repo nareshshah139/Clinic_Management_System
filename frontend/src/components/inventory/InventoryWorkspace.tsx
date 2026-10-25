@@ -116,6 +116,9 @@ export function InventoryWorkspace() {
       const next = new URLSearchParams(params.toString());
       for (const [key, val] of Object.entries(changes))
         val ? next.set(key, val) : next.delete(key);
+      if ('invoice' in changes || 'new' in changes || (changes.view && changes.view !== 'intake')) {
+        for (const key of ['attempt', 'actor', 'sources']) if (!(key in changes)) next.delete(key);
+      }
       router.push(`${path}?${next.toString()}`, { scroll: false });
     },
     [params, path, router],
@@ -327,6 +330,9 @@ export function InventoryWorkspace() {
           {area === "purchases" && view === "intake" && (
             <PurchaseInvoiceWorkbench
               invoiceId={query.invoice}
+              recoveryAttemptId={query.attempt}
+              recoveryActorId={query.actor}
+              recoverySourceIds={query.sources?.split(",").filter(Boolean)}
               receiptId={query.receipt}
               intakeId={query.intake}
               importedDraft={importedDraft}

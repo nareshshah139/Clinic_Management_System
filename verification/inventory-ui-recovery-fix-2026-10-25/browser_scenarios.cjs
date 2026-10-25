@@ -13,6 +13,15 @@ async function fill(page, selector, value) {
   await page.keyboard.press('Backspace');
   await field.type(String(value));
 }
+async function fillLabel(page, text, value) {
+  await page.waitForFunction(t => [...document.querySelectorAll('label')].some(label => [...label.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() === t && label.querySelector('input,textarea')), {}, text);
+  const handle = await page.evaluateHandle(t => [...document.querySelectorAll('label')].find(label => [...label.childNodes].filter(node => node.nodeType === Node.TEXT_NODE).map(node => node.textContent).join('').trim() === t).querySelector('input,textarea'), text);
+  const field = handle.asElement();
+  await field.click({clickCount:3});
+  await page.keyboard.press('Backspace');
+  await field.type(String(value));
+  await handle.dispose();
+}
 async function until(read, predicate) {
   for (let i=0;i<100;i++) {
     const value=await read();
@@ -73,22 +82,48 @@ exports.stock = async (f,s) => {
   await f.page.waitForFunction(()=>document.body.innerText.includes('not found') || document.body.innerText.includes('Not found'));
   const actions=await f.page.$$eval('button',buttons=>buttons.map(b=>b.textContent.trim()));
   f.check(s,'fresh missing-invoice URL exposes unlinked recovery action',actions.includes('Recover legacy or missing invoice'),true);
-  s.assertions.push({label:'missing-invoice visible actions',actual:actions.filter(t=>/saved|compare|recover|stock|count/i.test(t))});
   await f.capture(s,'missing-invoice');
-  const manualRecovery=await f.call('POST','/pharmacy/purchase-invoices/ocr/recover-unlinked',{recoveryId:f.randomUUID(),legacy:true,invoiceId:missing,reason:'Proof of backend recovery omitted by direct URL UI'});
-  f.check(s,'missing-reference backend recovery exists',{status:manualRecovery.status,outcome:manualRecovery.body.outcome,stock:manualRecovery.body.stockOutcome},{status:201,outcome:'RETRY_REJECTED',stock:'UNVERIFIED'});
+  f.page.once('dialog', dialog => dialog.accept('Recover missing invoice from its direct UI link'));
+  await click(f.page,'Recover legacy or missing invoice');
+  await f.page.waitForSelector('[aria-label="Rejected uncertain import"]');
+  const rejectedMissing=await f.db.pharmacyPurchaseImportAttempt.findMany({where:{branchId:f.branch.id,status:'RETRY_REJECTED'}});
+  const missingOutcome=rejectedMissing.filter(row=>row.result?.historicalInvoiceIds?.includes(missing));
+  f.check(s,'UI missing-reference recovery records uncertain historical stock',missingOutcome.map(row=>({status:row.status,stock:row.result.stockOutcome})),[{status:'RETRY_REJECTED',stock:'UNVERIFIED'}]);
   f.check(s,'intake rejection does not alter counted stock',(await f.db.inventoryItem.findUniqueOrThrow({where:{id:item.id}})).currentStock,6);
-  const priorUser=await f.db.user.create({data:{branchId:f.branch.id,email:'prior-operator@example.invalid',firstName:'Prior',lastName:'Operator',role:'PHARMACIST',password:savedUser.password,permissions:savedUser.permissions}});
-  const attempt=await f.db.pharmacyPurchaseImportAttempt.create({data:{id:f.randomUUID(),branchId:f.branch.id,userId:priorUser.id,status:'RUNNING'}});
-  const handoff=await f.call('POST','/pharmacy/purchase-invoices/ocr/recover-unlinked',{recoveryId:attempt.id,legacy:false,reason:'Authorized colleague tries advertised handoff'});
-  f.check(s,'counterexample: colleague cannot resolve original actor attempt',handoff.status,404);
-  const resolve=await f.call('POST',`/pharmacy/purchase-invoices/ocr/import-attempts/${attempt.id}/resolve`,{});
-  f.check(s,'colleague cannot resolve running original attempt',resolve.status,404);
-  const retained=await f.db.pharmacyPurchaseImportAttempt.findUniqueOrThrow({where:{id:attempt.id}});
-  f.check(s,'failed handoff leaves original attempt unresolved',{owner:retained.userId,status:retained.status},{owner:priorUser.id,status:'RUNNING'});
-  await click(f.page,'Stock');
-  await click(f.page,'Counts & audit');
+  await f.page.click('a[href="/dashboard/inventory?area=stock&view=COUNT"]');
   await click(f.page,'Start stock count');
   await f.page.waitForSelector('[aria-label="Physical count 1"]');
-  f.check(s,'missing-invoice global UI escape reaches a fresh physical count',await f.page.$eval('[aria-label="Physical count 1"]',e=>e.value),'');
+  f.check(s,'rejected intake UI link reaches a fresh physical count',await f.page.$eval('[aria-label="Physical count 1"]',e=>e.value),'');
+  const priorUser=await f.db.user.create({data:{branchId:f.branch.id,email:'prior-operator@example.invalid',firstName:'Prior',lastName:'Operator',role:'PHARMACIST',password:savedUser.password,permissions:savedUser.permissions}});
+  const attempt=await f.db.pharmacyPurchaseImportAttempt.create({data:{id:f.randomUUID(),branchId:f.branch.id,userId:priorUser.id,status:'RUNNING'}});
+  const oldEndpoint=await f.call('POST',`/pharmacy/purchase-invoices/ocr/import-attempts/${attempt.id}/resolve`,{});
+  f.check(s,'original owner endpoint remains actor scoped',oldEndpoint.status,404);
+  await f.page.goto(f.base+`/dashboard/inventory?area=purchases&view=intake&new=${f.randomUUID()}`,{waitUntil:'networkidle0'});
+  await click(f.page,'Recover interrupted import');
+  await fillLabel(f.page,'Import attempt ID','mistyped-reference');
+  await fillLabel(f.page,'Recovery reason','Correct a mistyped recovery reference');
+  await click(f.page,'Recover import outcome');
+  await f.page.waitForFunction(()=>document.body.innerText.includes('valid') && document.body.innerText.includes('attempt'));
+  f.check(s,'invalid recovery reference is editable',await f.page.$$eval('label',labels=>[...labels].find(label=>label.textContent.trim()==='Import attempt ID').querySelector('input').disabled),false);
+  await fillLabel(f.page,'Import attempt ID',attempt.id);
+  await fillLabel(f.page,'Recovery reason','Authorized colleague recovers interrupted import');
+  await click(f.page,'Recover import outcome');
+  const recovered=await until(()=>f.db.pharmacyPurchaseImportAttempt.findUniqueOrThrow({where:{id:attempt.id}}),row=>row.status==='NO_STOCK_WRITTEN');
+  f.check(s,'colleague UI recovery preserves owner and fences unfinished work',{owner:recovered.userId,status:recovered.status},{owner:priorUser.id,status:'NO_STOCK_WRITTEN'});
+  const audit=await f.db.auditLog.findMany({where:{entityId:attempt.id,action:'DELEGATED_RECOVERY'}});
+  f.check(s,'colleague UI recovery is audited without stock effects',audit.map(row=>({actor:row.userId,owner:JSON.parse(row.newValues).originalActorId,stockEffect:JSON.parse(row.newValues).stockEffect})),[{actor:f.user.id,owner:priorUser.id,stockEffect:0}]);
+  await f.capture(s,'delegated-recovered');
+  const orphan=await f.db.pharmacyPurchaseImportAttempt.update({where:{id:'aa000000-0000-4000-8000-000000000001'},data:{branchId:f.branch.id,userId:priorUser.id}});
+  await f.page.goto(f.base+`/dashboard/inventory?area=purchases&view=intake&attempt=${orphan.id}`,{waitUntil:'networkidle0'});
+  await fillLabel(f.page,'Recovery reason','Recover missing linked invoice for colleague');
+  await click(f.page,'Recover import outcome');
+  await f.page.waitForSelector('[aria-label="Rejected uncertain import"]');
+  const rejected=await f.db.pharmacyPurchaseImportAttempt.findUniqueOrThrow({where:{id:orphan.id}});
+  f.check(s,'delegated missing-invoice recovery keeps history unverified',{status:rejected.status,stock:rejected.result.stockOutcome,owner:rejected.userId},{status:'RETRY_REJECTED',stock:'UNVERIFIED',owner:priorUser.id});
+  await f.capture(s,'delegated-rejected');
+  await f.page.click('a[href="/dashboard/inventory?area=stock&view=COUNT"]');
+  await click(f.page,'Start stock count');
+  await f.page.waitForSelector('[aria-label="Physical count 1"]');
+  f.check(s,'delegated rejection offers a working UI reconciliation path',await f.page.$eval('[aria-label="Physical count 1"]',e=>e.value),'');
+  f.check(s,'all intake recovery actions preserve existing inventory',(await f.db.inventoryItem.findUniqueOrThrow({where:{id:item.id}})).currentStock,6);
 };

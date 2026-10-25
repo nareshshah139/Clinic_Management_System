@@ -80,6 +80,100 @@ export class PurchaseImportRecovery {
     return this.read(fence);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] delegated-import-owner-boundary
+   * Delegated recovery MUST preserve an existing attempt owner and stay within the authenticated
+   * branch. An absent attempt MUST require a branch-local original actor; that supplied identity
+   * is attribution, not proof of historical ownership. Original actor APIs MUST remain scoped.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:atomicity] delegated-import-recovery-atomicity
+   * Recovery MUST serialize against purchase admission and atomically record its terminal decision
+   * and the recovering actor's audit. A saved invoice MUST win by exact identity; a fenced worker
+   * MUST NOT write later. Unknown history MUST stay UNVERIFIED and terminal replay MUST retain evidence.
+   */
+  async recoverDelegated(actor: { branchId: string; userId: string }, input: {
+    attemptId: string; originalActorId?: string; invoiceId?: string; sourceDocumentIds?: string[]; reason: string;
+  }) {
+    this.validate({ id: input.attemptId, ...actor });
+    const reason = input.reason?.trim();
+    if (!reason || reason.length > 500) throw new BadRequestException('A recovery reason is required (maximum 500 characters)');
+    let ownerId: string | undefined;
+    for (let registrationRace = 0; registrationRace < 2; registrationRace += 1) {
+      try {
+        ownerId = await this.prisma.$transaction(async tx => {
+          await lockPurchaseRecovery(tx, actor.branchId);
+          await tx.$queryRaw`SELECT id FROM pharmacy_purchase_import_attempts WHERE id = ${input.attemptId}::uuid AND "branchId" = ${actor.branchId} FOR UPDATE`;
+          const prior = await tx.pharmacyPurchaseImportAttempt.findUnique({ where: { id: input.attemptId } });
+          if (prior && prior.branchId !== actor.branchId) throw new NotFoundException('Import attempt not found');
+          if (prior && input.originalActorId && prior.userId !== input.originalActorId) throw new ConflictException('The original operator does not match this import attempt');
+          const originalActorId = prior?.userId || input.originalActorId;
+          if (!originalActorId) throw new BadRequestException('This attempt is not registered. Enter the original operator ID from the handoff before recovering it.');
+          if (!prior && !await tx.user.findFirst({ where: { id: originalActorId, branchId: actor.branchId }, select: { id: true } })) {
+            throw new NotFoundException('Original operator not found in this branch');
+          }
+          if (prior?.purchaseInvoiceId && input.invoiceId && prior.purchaseInvoiceId !== input.invoiceId) throw new ConflictException('The saved invoice identity cannot be replaced');
+          const retained = (prior?.result || {}) as {
+            sourceDocumentIds?: string[]; rejectedSourceDocumentIds?: string[];
+            sourceDocument?: { id?: string }; sourceDocuments?: { id?: string }[];
+          };
+          const retainedSourceIds = [...new Set([
+            ...(retained.sourceDocumentIds || []), ...(retained.rejectedSourceDocumentIds || []),
+            ...(retained.sourceDocument?.id ? [retained.sourceDocument.id] : []),
+            ...(retained.sourceDocuments || []).map(document => document.id).filter((id): id is string => !!id),
+          ])];
+          const sourceIds = [...new Set([...retainedSourceIds, ...(input.sourceDocumentIds || [])])];
+          if (sourceIds.length > 20 || sourceIds.some(id => typeof id !== 'string' || !id)) throw new BadRequestException('Invalid original document references');
+          const suppliedNewIds = (input.sourceDocumentIds || []).filter(id => !retainedSourceIds.includes(id));
+          const newDocuments = await tx.pharmacyPurchaseInvoiceDocument.findMany({
+            where: { id: { in: [...new Set(suppliedNewIds)] }, branchId: actor.branchId },
+            select: { id: true, purchaseInvoiceId: true },
+          });
+          if (newDocuments.length !== new Set(suppliedNewIds).size) throw new NotFoundException('Original document not found in this branch');
+          if (prior && ['NO_STOCK_WRITTEN', 'RETRY_REJECTED'].includes(prior.status)) return originalActorId;
+          if (prior?.status === 'INVOICE_SAVED' && (prior.result as { recoveredBy?: string } | null)?.recoveredBy
+            && prior.purchaseInvoiceId && newDocuments.length === 0
+            && await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: prior.purchaseInvoiceId, branchId: actor.branchId }, select: { id: true } })) {
+            return originalActorId;
+          }
+          const documents = await tx.pharmacyPurchaseInvoiceDocument.findMany({
+            where: { id: { in: sourceIds }, branchId: actor.branchId },
+            select: { id: true, purchaseInvoiceId: true, fileName: true, mimeType: true, sizeBytes: true },
+          });
+          const invoiceIds = [...new Set([prior?.purchaseInvoiceId || input.invoiceId, ...documents.map(document => document.purchaseInvoiceId)].filter(Boolean))] as string[];
+          const invoice = invoiceIds.length === 1 ? await tx.pharmacyPurchaseInvoice.findFirst({
+            where: { id: invoiceIds[0], branchId: actor.branchId }, select: { id: true },
+          }) : null;
+          const noHistoricalWrite = (!prior || prior.status === 'RUNNING') && invoiceIds.length === 0 && documents.length === sourceIds.length;
+          const status = invoice ? 'INVOICE_SAVED' : noHistoricalWrite ? 'NO_STOCK_WRITTEN' : 'RETRY_REJECTED';
+          const recovery = { reason, originalActorId, originalActorAttribution: prior ? 'persisted' : 'supplied',
+            recoveredBy: actor.userId, sourceDocumentIds: sourceIds, stockEffect: 0 };
+          const result = status === 'RETRY_REJECTED'
+            ? { ...retained, ...recovery, rejectedSourceDocumentIds: sourceIds, historicalInvoiceIds: invoiceIds,
+              recoveryKind: 'DELEGATED_MISSING_LINK', stockOutcome: 'UNVERIFIED' }
+            : { ...retained, ...recovery, sourceDocuments: documents };
+          const message = status === 'RETRY_REJECTED'
+            ? 'Further intake rejected. Historical stock remains unverified; use physical inventory reconciliation. Accepted originals and history are retained.'
+            : status === 'NO_STOCK_WRITTEN' ? 'Interrupted import stopped safely before invoice creation.' : 'The exact saved invoice was recovered.';
+          const data = { status, result: json(result), message, ...(invoice ? { purchaseInvoiceId: invoice.id } : {}) };
+          if (prior) await tx.pharmacyPurchaseImportAttempt.update({ where: { id: prior.id }, data });
+          else await tx.pharmacyPurchaseImportAttempt.create({ data: { id: input.attemptId, branchId: actor.branchId, userId: originalActorId, ...data } });
+          await tx.auditLog.create({ data: {
+            entity: 'PharmacyPurchaseImportAttempt', entityId: input.attemptId, userId: actor.userId, action: 'DELEGATED_RECOVERY',
+            newValues: JSON.stringify({ branchId: actor.branchId, ...recovery, priorStatus: prior?.status || 'ABSENT',
+              outcome: status, invoiceId: invoice?.id || prior?.purchaseInvoiceId || null,
+              ...(status === 'RETRY_REJECTED' ? { historicalInvoiceIds: invoiceIds, stockOutcome: 'UNVERIFIED' } : {}) }),
+          } });
+          return originalActorId;
+        });
+        break;
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'P2002' || registrationRace > 0) throw error;
+      }
+    }
+    return this.read({ id: input.attemptId, branchId: actor.branchId, userId: ownerId! });
+  }
+
   async execute(fence: PurchaseImportFence, requestHash: string, run: () => Promise<any>) {
     this.validate(fence);
     try {

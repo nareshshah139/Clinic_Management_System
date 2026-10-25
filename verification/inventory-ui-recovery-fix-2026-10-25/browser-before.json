@@ -1,0 +1,226 @@
+{
+  "runId": "2026-10-25T05-52-15-260Z-3ab7738f",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "f63e24bd113fa296b6694bf4109dcb3e30c0b971",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "stale-count",
+        "posted-count",
+        "fresh-count",
+        "missing-invoice"
+      ],
+      "status": "passed",
+      "assertions": [
+        {
+          "label": "stale observation does not overwrite concurrent stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "stale count remains draft",
+          "expected": "DRAFT",
+          "actual": "DRAFT"
+        },
+        {
+          "label": "fresh count clears old physical observation",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh count snapshots current stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "fresh count retains source identity",
+          "expected": "cmvnev3k50000agu9qsw252ep",
+          "actual": "cmvnev3k50000agu9qsw252ep"
+        },
+        {
+          "label": "posted count has verified quantity and held safety",
+          "expected": {
+            "q": 6,
+            "h": 0
+          },
+          "actual": {
+            "q": 6,
+            "h": 0
+          }
+        },
+        {
+          "label": "independent ledger after count",
+          "expected": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvnev4kv000iagu9pklxd2cv"
+          },
+          "actual": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmvnev4kv000iagu9pklxd2cv"
+          }
+        },
+        {
+          "label": "recount replay opens existing posted child",
+          "expected": "cmvnev4kv000iagu9pklxd2cv",
+          "actual": "cmvnev4kv000iagu9pklxd2cv"
+        },
+        {
+          "label": "posted count can start another blank count",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "counterexample: fresh missing-invoice URL lacks unlinked recovery action",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "missing-invoice visible actions",
+          "actual": [
+            "Stock",
+            "Saved bills",
+            "Compare with saved version",
+            "Import & Add Stock"
+          ]
+        },
+        {
+          "label": "missing-reference backend recovery exists",
+          "expected": {
+            "status": 201,
+            "outcome": "RETRY_REJECTED",
+            "stock": "UNVERIFIED"
+          },
+          "actual": {
+            "status": 201,
+            "outcome": "RETRY_REJECTED",
+            "stock": "UNVERIFIED"
+          }
+        },
+        {
+          "label": "intake rejection does not alter counted stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "counterexample: colleague cannot resolve original actor attempt",
+          "expected": 404,
+          "actual": 404
+        },
+        {
+          "label": "colleague cannot resolve running original attempt",
+          "expected": 404,
+          "actual": 404
+        },
+        {
+          "label": "failed handoff leaves original attempt unresolved",
+          "expected": {
+            "owner": "cmvnev9010006agmtot3l7tu1",
+            "status": "RUNNING"
+          },
+          "actual": {
+            "owner": "cmvnev9010006agmtot3l7tu1",
+            "status": "RUNNING"
+          }
+        },
+        {
+          "label": "missing-invoice global UI escape reaches a fresh physical count",
+          "expected": "",
+          "actual": ""
+        }
+      ],
+      "screenshots": [
+        {
+          "checkpoint": "stale-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-stale-count-1280.png"
+        },
+        {
+          "checkpoint": "stale-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-stale-count-390.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-posted-count-1280.png"
+        },
+        {
+          "checkpoint": "posted-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-posted-count-390.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-fresh-count-1280.png"
+        },
+        {
+          "checkpoint": "fresh-count",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-fresh-count-390.png"
+        },
+        {
+          "checkpoint": "missing-invoice",
+          "width": 1280,
+          "height": 1000,
+          "category": "production-ui",
+          "file": "stock-missing-invoice-1280.png"
+        },
+        {
+          "checkpoint": "missing-invoice",
+          "width": 390,
+          "height": 1200,
+          "category": "production-ui",
+          "file": "stock-missing-invoice-390.png"
+        }
+      ]
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 409 (Conflict)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ]
+  },
+  "status": "passed"
+}

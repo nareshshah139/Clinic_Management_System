@@ -1,0 +1,32 @@
+{
+  "runId": "2026-10-25T05-32-55-777Z-15cce2a4",
+  "nodeVersion": "v25.1.0",
+  "sourceDirty": true,
+  "sourceRevision": "f63e24bd113fa296b6694bf4109dcb3e30c0b971",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "browser": "Chrome/145.0.0.0",
+  "setup": {
+    "status": "failed",
+    "error": "Protocol error (Runtime.callFunctionOn): Runtime.callFunctionOn exceeded 30000ms timeout"
+  },
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "checkpoints": [
+        "stale-count",
+        "posted-count",
+        "fresh-count",
+        "missing-invoice"
+      ],
+      "status": "pending",
+      "assertions": [],
+      "screenshots": []
+    }
+  ],
+  "browserDiagnostics": {
+    "pageErrors": [],
+    "consoleErrors": []
+  },
+  "status": "failed"
+}
