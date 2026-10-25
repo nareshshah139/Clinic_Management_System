@@ -1044,7 +1044,8 @@ exports.purchase = async (f, s) => {
   await fill(f.page, "#purchase-notes", "Keep this attempted correction");
   f.check(s, "attempted note entered before rejection", await f.page.$eval("#purchase-notes", e => e.value), "Keep this attempted correction");
   await click(f.page, "Save corrections");
-  await visible(f.page, "already exists");
+  await visible(f.page, "An invoice with this supplier GSTIN and invoice number is already saved.");
+  f.check(s, "conflict shows saved invoice number and status before opening", await f.page.$eval("#purchase-recovery-panel", el => el.innerText.includes("Existing invoice: RECOVERY-PURCHASE-EXISTING") && el.innerText.includes("Status: Draft")), true);
   await f.capture(s, "duplicate");
   await click(f.page, "Open existing invoice");
   await visible(f.page, "Compare with saved invoice");

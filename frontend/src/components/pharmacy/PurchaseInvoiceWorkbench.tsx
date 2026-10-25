@@ -1027,6 +1027,16 @@ export function PurchaseInvoiceWorkbench({
  * Name correction and manual matching for an invoice line MUST have distinct stable React
  * identities, so rerendering either editor cannot reuse its sibling's local state.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-ocr-summary-current-checks
+ * Scan-summary warnings MUST reflect unresolved header checks. Confirmed checks MUST disappear
+ * from the summary, including after draft recovery, without erasing the original extraction flags.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product;security] purchase-conflict-visible-recovery
+ * Recognized save conflicts MUST show their blocker and authorized saved invoice identity and status.
+ * Opening the existing invoice MUST retain attempted edits and re-read it before offering corrections.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -2104,7 +2114,7 @@ function PurchaseInvoiceEditor({
       if (automate) {
         if (data.automation?.status === "DUPLICATE" && data.invoice?.id) {
           setUnknownStockInvoiceId(null);
-          setRecovery(purchaseRecovery({ body: { code: 'PURCHASE_DUPLICATE_INVOICE', existingInvoiceId: data.invoice.id, message: 'This invoice is already saved. Compare it before applying corrections. Your extracted entry and original are kept here.' } }, captureAttempt()));
+          setRecovery(purchaseRecovery({ body: { code: 'PURCHASE_DUPLICATE_INVOICE', existingInvoiceId: data.invoice.id, existingInvoice: data.invoice, message: 'This invoice is already saved. Compare it before applying corrections. Your extracted entry and original are kept here.' } }, captureAttempt()));
           setNotice(null);
           return;
         }
@@ -3239,6 +3249,13 @@ function PurchaseInvoiceEditor({
     <section id="purchase-recovery-panel" aria-labelledby="purchase-recovery-title" className="space-y-4 rounded-md border p-4">
       <h3 id="purchase-recovery-title" className="font-semibold">Finish this purchase</h3>
       {recovery && <p className="text-sm">{recovery.message}</p>}
+      {access.read && recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && recovery.existingInvoice && !comparison && (
+        <div className="space-y-1 rounded-md bg-muted p-3 text-sm" aria-label="Existing invoice details">
+          <p className="font-medium">Existing invoice: {recovery.existingInvoice.invoiceNumber}</p>
+          <p>{recovery.existingInvoice.distributorName}</p>
+          <p>Status: {purchaseInvoiceStatusLabel(recovery.existingInvoice)}</p>
+        </div>
+      )}
       {recovery?.reference && <p className="break-all text-sm">Reference: {recovery.reference}</p>}
       {rejectedImportId && <div className="space-y-2" role="region" aria-label="Rejected uncertain import">
         <p>Further intake rejected. Historical stock remains unverified; this does not mean no stock was posted.</p>
@@ -4064,9 +4081,9 @@ function PurchaseInvoiceEditor({
                           {(ocrSummary.includedPageCount || 1) === 1 ? "" : "s"}
                           .
                         </span>
-                        {ocrSummary.flags?.length ? (
+                        {currentHeaderFlags.length ? (
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {ocrSummary.flags.map((flag) => (
+                            {currentHeaderFlags.map((flag) => (
                               <Badge key={flag} variant="destructive">
                                 {flag.replaceAll("_", " ")}
                               </Badge>

@@ -8,9 +8,11 @@ export type PurchaseAttempt = Readonly<{
   lineKeys: readonly string[];
 }>;
 
+type ExistingPurchaseInvoice = Readonly<{ id: string; invoiceNumber: string; distributorName: string; status: string; workflowReceiptId?: string | null }>;
+
 type RecoveryBase = Readonly<{ message: string; attempt: PurchaseAttempt; reference?: string }>;
 export type PurchaseRecovery = RecoveryBase & (
-  | { kind: 'duplicate' | 'receipt'; existingInvoiceId?: string }
+  | { kind: 'duplicate' | 'receipt'; existingInvoiceId?: string; existingInvoice?: ExistingPurchaseInvoice }
   | { kind: 'review' | 'catalogue'; issues: readonly PurchaseReviewIssue[] }
   | { kind: 'stale' | 'locked' | 'permission' | 'unknown' }
 );
@@ -19,14 +21,22 @@ const safeId = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{
 
 /**
  * @cc [owner:nareshshah139,label:state;security] purchase-recovery-error-boundary
- * Unknown API bodies MUST remain non-mutating recovery messages. Only recognized structured conflicts with a valid identifier MAY offer a saved-invoice comparison; review targets MUST use the existing field registry.
+ * Unknown API bodies MUST remain non-mutating recovery messages. Only recognized structured conflicts with a valid identifier MAY offer a saved-invoice comparison; saved summaries MUST match that identifier and a known status; review targets MUST use the existing field registry.
  */
 export function purchaseRecovery(error: unknown, attempt: PurchaseAttempt): PurchaseRecovery {
   const outer = record(error), body = record(outer.body);
   const message = typeof body.message === 'string' ? body.message : typeof outer.message === 'string' ? outer.message : 'The purchase could not be completed. Check the saved status before trying again.';
   const base = { message, attempt, reference: safeId(body.requestId) || safeId(outer.requestId) };
   if (outer.status === 403) return { ...base, kind: 'permission' };
-  if (body.code === 'PURCHASE_DUPLICATE_INVOICE' || body.code === 'PURCHASE_RECEIPT_ALREADY_LINKED') return { ...base, kind: body.code === 'PURCHASE_DUPLICATE_INVOICE' ? 'duplicate' : 'receipt', existingInvoiceId: safeId(body.existingInvoiceId) };
+  if (['PURCHASE_DUPLICATE_INVOICE', 'PURCHASE_RECEIPT_ALREADY_LINKED', 'PURCHASE_SOURCE_ALREADY_LINKED'].includes(String(body.code))) {
+    const existingInvoiceId = safeId(body.existingInvoiceId);
+    const saved = record(body.existingInvoice);
+    const existingInvoice: ExistingPurchaseInvoice | undefined = existingInvoiceId && saved.id === existingInvoiceId &&
+      typeof saved.invoiceNumber === 'string' && typeof saved.distributorName === 'string' &&
+      typeof saved.status === 'string' && ['DRAFT', 'OCR_REVIEW_REQUIRED', 'RECONCILIATION_FAILED', 'REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(saved.status)
+      ? { id: existingInvoiceId, invoiceNumber: saved.invoiceNumber, distributorName: saved.distributorName, status: saved.status, workflowReceiptId: safeId(saved.workflowReceiptId) || null } : undefined;
+    return { ...base, kind: body.code === 'PURCHASE_RECEIPT_ALREADY_LINKED' ? 'receipt' : 'duplicate', existingInvoiceId, ...(existingInvoice ? { existingInvoice } : {}) };
+  }
   if (body.code === 'PURCHASE_STALE_REVISION') return { ...base, kind: 'stale' };
   if (body.code === 'PURCHASE_LOCKED') return { ...base, kind: 'locked' };
   if (body.code === 'PURCHASE_REVIEW_REQUIRED' || body.code === 'PURCHASE_CATALOG_REVIEW_REQUIRED') {
