@@ -15,3 +15,7 @@ presentations or recovery proofs fail.
 @cc [owner:nareshshah139,label:verification] inventory-recovery-browser-gates
 Recovery CI MUST run the interrupted-write and prior import/count browser scenarios against an
 isolated loopback database and retain their diagnostics even when a scenario fails.
+
+@cc [owner:nareshshah139,label:verification] pdf-regression-runtime
+The full backend test job MUST provide pdftotext before running PDF regressions, so generated
+PDF contents are validated without skipping or replacing the extraction assertions.
