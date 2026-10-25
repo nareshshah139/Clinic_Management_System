@@ -4,6 +4,12 @@ All 47 families from the preceding state audit now have a documented explanation
 
 Production source commit: `beb627c7529808acc7ba8a17dc3f4b729b0c2624`, on `codex/inventory-ui-recovery`. The work is committed locally. No new database migration is required. Existing import-recovery migrations remain covered by the browser harness and database tests. Nothing was pushed, merged, or deployed in this task.
 
+## Shipping validation after integrating main
+
+The branch was rebased onto main `16610895a705c1d726f01d3c74beb7eb469420be`, incorporating the newer invoice-save blocker and existing-status fix. The delivered production tree is identified by `source-revision.txt`; source fingerprints and all formal checks were refreshed against that tree. The original local verification counts below remain historical evidence. The shipping PR records the new complete-suite and browser results.
+
+An expansion of CI to the full build, all backend/database tests, proofs, and additional browser scenarios was prepared locally. GitHub rejected publication because the local token lacks workflow scope and the connected integration also lacks workflow-write permission. Those workflow edits are retained only in local commit `9a384814c042ff0b9f78e237e11b7724c390f9e5` on `codex/inventory-ui-recovery`; they are excluded from this shipping branch. Existing CI must pass before merge. Full local validation and independent browser review remain additional merge prerequisites.
+
 ## Changes and coverage
 
 The root cause was the conflation of a document's business status with the client's knowledge of the write outcome. A failed response could leave a locally displayed DRAFT even after a stock-changing transaction committed. That produced a false “no stock change” explanation and an enabled mutation control.
