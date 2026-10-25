@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { StockDetailsEditor } from "./StockDetailsEditor";
 import { AddInventoryItemDialog } from "./AddInventoryItemDialog";
 import { StockEditDialog } from "./StockEditDialog";
+import { stockLedgerExplanation } from "./stock-recovery";
 import { ReviewStatus } from "@/components/ui/ReviewStatus";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
@@ -61,6 +62,11 @@ type Props = {
  * @cc [owner:nareshshah139] stock-recovery-evidence-ui
  * The detail view MUST distinguish an unverified ledger from checkpoint agreement; resolving
  * ambiguous product links MUST require an explicit product, revision, reason and confirmation.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] stock-recovery-permission-handoff
+ * A batch that needs a count or identity correction MUST show its recovery reference and the
+ * required colleague access when the current user lacks count-write permission.
  */
 export function WorkspaceStock({
   query,
@@ -347,6 +353,15 @@ export function WorkspaceStock({
                 Margin {item.margin == null ? "unknown" : `${item.margin}%`}.{" "}
                 {item.priceBasis}.
               </p>
+              {!capabilities?.kinds?.COUNT?.write && (
+                <section className="space-y-2 rounded border p-4" aria-label="Batch recovery handoff">
+                  {item.drugs?.length > 1 && <p>This batch is linked to more than one product. Its physical product must be verified before reconciliation.</p>}
+                  <p>Ask a colleague with Counts &amp; audit write access to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
+                  <label className="block">Batch recovery reference
+                    <input className="mt-1 w-full rounded border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
+                  </label>
+                </section>
+              )}
               {item.drugs?.length > 1 && capabilities?.kinds?.COUNT?.write && (
                 <form key={`${item.id}:${item.updatedAt}`} className="space-y-3 rounded border p-4 print:hidden" onSubmit={async e => {
                   e.preventDefault();
@@ -358,11 +373,12 @@ export function WorkspaceStock({
                       reason: values.get("reason"), confirmed: values.get("confirmed") === "on",
                     });
                     await load();
-                    setNotice("Product identity resolved. Verify the physical count before using this batch.");
+                    setNotice("Product identity resolved. Stock quantity has not changed. Verify the physical count before using this batch.");
                   } catch (error: any) { setError(error.message); }
                   finally { setBusy(false); }
                 }}>
                   <p className="font-medium">Resolve this batch’s product identity</p>
+                  <p>This batch is linked to more than one product. Verify the physical pack before choosing its product. Resolving the link does not change the stock quantity.</p>
                   <label className="block">Verified product
                     <select name="productId" required className="ml-2 rounded border p-2" defaultValue="">
                       <option value="" disabled>Select the product on the physical pack</option>
@@ -626,10 +642,10 @@ export function WorkspaceStock({
               {["ledger", "sales"].includes(tab) && (
                 <>
                   <p className="text-sm text-muted-foreground">
-                    {detail.ledger?.checkpoint
-                      ? `Verified count baseline: ${detail.ledger.checkpoint.quantity}. Ledger status: ${detail.ledger.status}. Expected stock: ${detail.ledger.expectedStock ?? "unknown"}. Difference: ${detail.ledger.difference ?? "unknown"}.`
-                      : "Ledger unverified: record a physical stock count to establish a baseline."}
-                    {" "}Quantities use {item.unit}. Earlier movements remain historical evidence.
+                    {stockLedgerExplanation(detail.ledger, item.unit)}{" "}
+                    {capabilities?.kinds?.COUNT?.write
+                      ? "Use Count this batch to record a fresh physical observation. Applying an approved count may adjust stock; starting a count does not."
+                      : "Use the batch recovery reference above to ask an authorized colleague to review the evidence and record a fresh count."}
                   </p>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">

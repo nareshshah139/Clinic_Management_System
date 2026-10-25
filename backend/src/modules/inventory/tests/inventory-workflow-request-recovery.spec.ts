@@ -70,4 +70,9 @@ describe('Workflow request recovery lookup', () => {
     expect(response.body.kind).toBe('CREDIT_NOTE');
     expect(mutate).not.toHaveBeenCalled();
   });
+  it.each([{}, {version:0}, {version:-1}, {version:1.5}])('rejects an invalid fence revision %p without writes', async body => {
+    await request(app.getHttpServer()).post('/inventory/workspace/documents/saved-loss/resolve').send(body).expect(400);
+    expect(mutate).not.toHaveBeenCalled();
+  });
+
 });

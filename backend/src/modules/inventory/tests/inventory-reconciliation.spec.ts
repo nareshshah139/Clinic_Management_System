@@ -347,7 +347,7 @@ describe('Actionable inventory guard evidence', () => {
     const linked=add('old-loss','LOSS',5,{sourceHoldId:'hold'});linked.status='POSTED';
     state.effects.push({id:'legacy-consumption',branchId:'branch',documentId:'old-loss',inventoryId:'batch',heldDelta:-5});
     const body=await rejectedResponse(service.transition(actor,'hold',{version:2,action:'RELEASE'}));
-    expect(body).toMatchObject({code:'INVENTORY_SOURCE_INCONSISTENT',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:-2}}});
+    expect(body).toMatchObject({code:'INVENTORY_SOURCE_INCONSISTENT',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:-2},documents:[{id:'old-loss',kind:'LOSS',reference:'old-loss'}]}});
     expect(body.message).toContain('review its linked disposals or returns');
     expect([state.item.currentStock,state.item.heldStock]).toEqual([10,3]);
   });

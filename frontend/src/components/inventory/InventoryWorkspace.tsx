@@ -1,6 +1,6 @@
 "use client";
 import "./inventory-readability.css";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, RefreshCw, Plus, FileDown } from "lucide-react";
 import { InventoryAction } from "./InventoryPresentation";
@@ -98,6 +98,11 @@ const menus: Record<string, string[][]> = {
  * with 18px phone inputs. Increasing text size MUST leave actions reachable and wide tables
  * scrollable within the workspace, without changing typography on unrelated routes.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] inventory-permission-retry
+ * Failed capability reads MUST hide stale access and expose an explicit retry. Refresh and
+ * actor changes MUST fetch capabilities again; older responses cannot restore superseded access.
+ */
 export function InventoryWorkspace() {
   const { user } = useDashboardUser();
   const canReadEdits = ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"].includes(user?.role || "");
@@ -116,6 +121,9 @@ export function InventoryWorkspace() {
       const next = new URLSearchParams(params.toString());
       for (const [key, val] of Object.entries(changes))
         val ? next.set(key, val) : next.delete(key);
+      if ('document' in changes || 'new' in changes || 'invoice' in changes || 'item' in changes || 'view' in changes) {
+        for (const key of ['recoverRequest', 'recoverVersion', 'recoverOperation']) if (!(key in changes)) next.delete(key);
+      }
       if ('invoice' in changes || 'new' in changes || (changes.view && changes.view !== 'intake')) {
         for (const key of ['attempt', 'actor', 'sources']) if (!(key in changes)) next.delete(key);
       }
@@ -195,16 +203,26 @@ export function InventoryWorkspace() {
       purchaseInvoiceId: "",
     });
   };
+  const permissionRequest = useRef(0);
+  const loadPermissions = useCallback(async () => {
+    const request = ++permissionRequest.current;
+    setCaps(null);
+    setError("");
+    try {
+      const capabilities = await apiClient.get("/inventory/workspace/capabilities");
+      if (request === permissionRequest.current) setCaps(capabilities);
+    } catch {
+      if (request === permissionRequest.current) setError("Inventory permissions could not be loaded. Loading permissions does not change stock. Retry when your connection is available; if access remains unavailable, ask an inventory administrator to check your account.");
+    }
+  }, [user?.id, user?.branchId]);
   useEffect(() => {
-    apiClient
-      .get("/inventory/workspace/capabilities")
-      .then(setCaps)
-      .catch((e: any) => setError(e.message));
-  }, []);
+    void loadPermissions();
+    return () => { permissionRequest.current += 1; };
+  }, [loadPermissions]);
   const availableTasks = (menus[area] || []).filter(([id]) => id !== "approvals" || canReadEdits);
   const primaryTasks = availableTasks.slice(0, 3);
   const moreTasks = availableTasks.slice(3);
-  const switchTask = (id: string) => navigate({ view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
+  const switchTask = (id: string) => navigate({ sourceId: "", view: id, document: "", new: "", invoice: "", item: "", receipt: "", intake: "", return: "", status: "", page: "1" });
   const switchArea = (a: string) => {
     router.push(`${path}?area=${a}`, { scroll: false });
     setInitial(null);
@@ -221,6 +239,7 @@ export function InventoryWorkspace() {
         <InventoryAction
           label="Refresh inventory"
           onClick={() => {
+            void loadPermissions();
             router.refresh();
             window.dispatchEvent(
               new CustomEvent("inventory-workspace-refresh"),
@@ -297,7 +316,8 @@ export function InventoryWorkspace() {
           role="alert"
           className="border border-destructive p-3 text-destructive"
         >
-          {error}
+          {error}{" "}
+          <Button variant="outline" onClick={() => void loadPermissions()}>Retry permissions</Button>
         </p>
       )}
       {!caps && !error && <p role="status">Loading inventory permissions…</p>}
@@ -415,12 +435,15 @@ export function InventoryWorkspace() {
 
           {view !== "TARGET_REVIEW" &&
           workflowKinds[view] &&
-          (query.document || query.new) ? (
+          (query.document || query.new || query.recoverRequest) ? (
             <WorkflowDocumentEditor
-              key={query.document || view + "-" + query.new}
+              key={`${query.document || view + "-" + (query.new || query.recoverRequest)}:${query.recoverVersion || ""}:${query.recoverOperation || ""}`}
               kind={view}
               id={query.document}
               draftKey={query.new}
+              recoveryRequestKey={query.recoverRequest || undefined}
+              recoveryVersion={query.recoverVersion?.trim() && Number.isSafeInteger(Number(query.recoverVersion)) && Number(query.recoverVersion) > 0 ? Number(query.recoverVersion) : undefined}
+              recoveryOperation={query.recoverOperation === "save" || query.recoverOperation === "transition" ? query.recoverOperation : undefined}
               initial={
                 initial ||
                 (query.purchaseInvoiceId
@@ -954,7 +977,7 @@ function WorkflowRegister({
               page: query.page || "1",
               ...(query.status ? { status: query.status } : {}),
               ...Object.fromEntries(
-                ["search", "from", "to", "gstin"]
+                ["search", "from", "to", "gstin", "sourceId"]
                   .filter((k) => query[k])
                   .map((k) => [k, query[k]]),
               ),
@@ -975,6 +998,7 @@ function WorkflowRegister({
     query.from,
     query.to,
     query.gstin,
+    query.sourceId,
   ]);
   const generate = async () => {
     setBusy(true);
@@ -1008,6 +1032,12 @@ function WorkflowRegister({
     );
   return (
     <section className="space-y-4">
+      {query.sourceId && (
+        <p className="flex flex-wrap items-center gap-2 text-sm">
+          Showing records linked to the selected source document.
+          <Button variant="outline" onClick={() => navigate({ sourceId: "", page: "1" })}>Show all records</Button>
+        </p>
+      )}
       <header className="flex flex-wrap justify-between gap-3">
         <div>
           <h2 className="text-2xl font-semibold">{definition.label}</h2>

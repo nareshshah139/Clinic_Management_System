@@ -48,6 +48,8 @@ databaseTests('Workflow recovery fences with PostgreSQL', () => {
     const original = await pending;
     if (resolutionError) throw resolutionError;
     expect(original).toHaveProperty('error');
+    expect((original as {error:any}).error.getStatus()).toBe(409);
+    expect((original as {error:any}).error.message).toBe('This document changed. Reload to confirm its current status.');
     expect(settled).toMatchObject({id:document.id,status:'DRAFT',version:2,effects:[]});
     expect(settled.events).toEqual([expect.objectContaining({action:'RESOLVE_OUTCOME',fromStatus:'DRAFT',toStatus:'DRAFT',version:2,actorId:actor.id,detail:expect.objectContaining({stockEffect:false,fencedVersion:1})})]);
     expect((await prisma.inventoryItem.findUniqueOrThrow({where:{id:itemId}})).currentStock).toBe(10);
@@ -56,9 +58,23 @@ databaseTests('Workflow recovery fences with PostgreSQL', () => {
     expect(repeated.version).toBe(2);
     expect(repeated.events).toHaveLength(1);
   });
-  it('returns an already committed transition without adding a second effect or recovery event', async () => {
-    await writer.transition(actor,document.id,{version:1,action:'POST'});
-    const settled = await (recovery as any).resolveOutcome(actor,document.id,{version:1});
+  it('returns the committed transition when it wins against a fence paused after the old-version read', async () => {
+    let reached: ()=>void = ()=>{}, release: ()=>void = ()=>{};
+    const reading = new Promise<void>(resolve=>{reached=resolve;});
+    const resume = new Promise<void>(resolve=>{release=resolve;});
+    const authorize = recovery.authorize.bind(recovery);
+    let first = true;
+    jest.spyOn(recovery,'authorize').mockImplementation(async (...args) => {
+      await authorize(...args);
+      if(first){first=false;reached();await resume;}
+    });
+    const pending = (recovery as any).resolveOutcome(actor,document.id,{version:1}).then((value:any)=>({value}),(error:any)=>({error}));
+    await reading;
+    try { await writer.transition(actor,document.id,{version:1,action:'POST'}); }
+    finally { release(); }
+    const outcome = await pending;
+    if (outcome.error) throw outcome.error;
+    const settled = outcome.value;
     expect(settled).toMatchObject({id:document.id,status:'POSTED',version:2});
     expect(settled.events.map((event:any)=>event.action)).toEqual(['POST']);
     expect(settled.effects).toHaveLength(1);
@@ -80,5 +96,24 @@ databaseTests('Workflow recovery fences with PostgreSQL', () => {
     await expect((recovery as any).resolveOutcome(readActor,document.id,{version:1})).rejects.toThrow('inventory:transaction:create');
     expect((await prisma.inventoryWorkflowDocument.findUniqueOrThrow({where:{id:document.id}})).version).toBe(1);
     expect(await prisma.inventoryWorkflowEvent.count({where:{documentId:document.id}})).toBe(0);
+    await prisma.user.update({where:{id:reader.id},data:{permissions:JSON.stringify(['inventory:transaction:create'])}});
+    await expect((recovery as any).resolveOutcome(readActor,document.id,{version:1})).rejects.toThrow('inventory:item:read');
+    expect((await prisma.inventoryWorkflowDocument.findUniqueOrThrow({where:{id:document.id}})).version).toBe(1);
   });
+  it('rolls back the revision fence if its recovery event cannot be recorded', async () => {
+    await prisma.$executeRawUnsafe(`CREATE FUNCTION reject_workflow_recovery() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action = 'RESOLVE_OUTCOME' THEN RAISE EXCEPTION 'synthetic recovery audit failure'; END IF; RETURN NEW; END $$`);
+    await prisma.$executeRawUnsafe('CREATE TRIGGER reject_workflow_recovery BEFORE INSERT ON inventory_workflow_events FOR EACH ROW EXECUTE FUNCTION reject_workflow_recovery()');
+    try {
+      await expect((recovery as any).resolveOutcome(actor,document.id,{version:1})).rejects.toThrow();
+      expect((await prisma.inventoryWorkflowDocument.findUniqueOrThrow({where:{id:document.id}})).version).toBe(1);
+      expect(await prisma.inventoryWorkflowEvent.count({where:{documentId:document.id}})).toBe(0);
+      expect((await prisma.inventoryItem.findUniqueOrThrow({where:{id:itemId}})).currentStock).toBe(10);
+    } finally {
+      await prisma.$executeRawUnsafe('DROP TRIGGER reject_workflow_recovery ON inventory_workflow_events');
+      await prisma.$executeRawUnsafe('DROP FUNCTION reject_workflow_recovery()');
+    }
+    await writer.transition(actor,document.id,{version:1,action:'POST'});
+    expect((await prisma.inventoryItem.findUniqueOrThrow({where:{id:itemId}})).currentStock).toBe(8);
+  });
+
 });

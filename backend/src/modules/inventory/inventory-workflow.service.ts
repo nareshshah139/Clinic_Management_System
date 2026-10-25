@@ -278,6 +278,11 @@ export class InventoryWorkflowService {
    * Acceptance: INV-38. Validation and open gaps:
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
+  /**
+   * @cc [owner:nareshshah139,label:product] count-input-recovery
+   * Invalid physical counts MUST identify the batch and field, preserve blank as uncounted,
+   * and reject the save without changing stock or retaining a partial draft.
+   */
   async saveDocument(
     actor: WorkflowActor,
     dto: SaveWorkflowDocumentDto,
@@ -550,12 +555,16 @@ export class InventoryWorkflowService {
           fefoOverrideReason: clean(line.fefoOverrideReason),
         };
         if (kind === 'COUNT') {
-          l.physicalStock =
-            line.physicalStock === '' ||
-            line.physicalStock === undefined ||
-            line.physicalStock === null
-              ? undefined
-              : integer(line.physicalStock, 'Physical count');
+          const count = line.physicalStock === '' || line.physicalStock == null
+            ? undefined : Number(line.physicalStock);
+          if (count !== undefined && (!Number.isSafeInteger(count) || count < 0))
+            throw new BadRequestException({
+              code: 'INVENTORY_INVALID_COUNT',
+              message: `${item?.name || 'Selected batch'}: physical count must be a whole number of at least 0. Enter the observed quantity; leave the field blank if this batch has not been counted.`,
+              stockEffect: 'NONE',
+              recovery: { action: 'CORRECT_FIELD', inventoryId, field: 'physicalStock' },
+            });
+          l.physicalStock = count;
           l.systemStock = oldById.get(id)?.systemStock ?? item?.currentStock;
         }
         if (kind === 'SALES_RETURN') {
@@ -697,6 +706,58 @@ export class InventoryWorkflowService {
       totalPages: Math.ceil(total / limit),
     };
   }
+  /**
+   * @cc [owner:nareshshah139,label:product] workflow-request-recovery-lookup
+   * Request-key lookup MUST resolve only the active branch and require read access to the saved
+   * document's actual kind before returning history or effects. Absence never proves no write occurred.
+   */
+  async documentByRequest(actor: WorkflowActor, requestKey: string) {
+    const found = await this.prisma.inventoryWorkflowDocument.findUnique({
+      where: { branchId_requestKey: { branchId: actor.branchId, requestKey } },
+      select: { id: true },
+    });
+    if (!found)
+      throw new NotFoundException('No saved document is visible for this recovery reference. Its outcome remains unconfirmed; do not create another attempt.');
+    return this.document(actor, found.id);
+  }
+  /**
+   * @cc [owner:nareshshah139,label:product] workflow-pending-write-fence
+   * Resolution MUST require read and write access to the saved kind. In one serializable
+   * transaction, an unchanged expected revision MUST advance with a same-status recovery event
+   * and no stock effects, fencing pending draft patches and stock-changing transitions that compare
+   * that revision. It does not cancel creation of linked drafts such as RECOUNT. Advanced revisions
+   * return their actual history unchanged; future expected revisions reject. Retrying the same revision
+   * MUST not append another event or effect.
+   */
+  async resolveOutcome(actor: WorkflowActor, id: string, input: { version: number }) {
+    if (!input || !Number.isSafeInteger(input.version) || input.version < 1)
+      throw new BadRequestException('A positive whole-number document revision is required to resolve this attempt.');
+    return this.transaction(async (tx) => {
+      const doc = await tx.inventoryWorkflowDocument.findFirst({
+        where: { id, branchId: actor.branchId },
+        include: { events: { orderBy: { version: 'asc' } }, effects: true },
+      });
+      if (!doc) throw new NotFoundException('Document not found. The interrupted outcome remains unconfirmed.');
+      await this.authorize(actor, doc.kind);
+      await this.authorize(actor, doc.kind, true);
+      if (doc.version < input.version)
+        throw new ConflictException('The saved document revision is older than the recovery reference. Keep this reference and ask an inventory administrator to investigate.');
+      if (doc.version > input.version) return this.plain(doc);
+      const settled = await tx.inventoryWorkflowDocument.update({
+        where: { id, branchId: actor.branchId, version: input.version },
+        data: { version: { increment: 1 } },
+      });
+      await this.event(tx, settled, actor, 'RESOLVE_OUTCOME', doc.status, {
+        reason: 'Checked the interrupted save or stock change before retrying.',
+        fencedVersion: input.version,
+        stockEffect: false,
+      });
+      return this.plain(await tx.inventoryWorkflowDocument.findFirst({
+        where: { id, branchId: actor.branchId },
+        include: { events: { orderBy: { version: 'asc' } }, effects: true },
+      }));
+    });
+  }
   async document(actor: WorkflowActor, id: string) {
     const doc = await this.prisma.inventoryWorkflowDocument.findFirst({
       where: { id, branchId: actor.branchId },
@@ -725,6 +786,11 @@ export class InventoryWorkflowService {
    * Every posted physical count, including zero variance, MUST record its resulting quantity,
    * actor, document and covered movement identities atomically. Prior unknown history remains
    * unchanged; later ledger agreement MUST be measured against this checkpoint.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:product] workflow-rejection-recovery-evidence
+   * Stale counts, source capacity errors and blocked reversals MUST identify affected batch or
+   * source records and a safe correction action. A rejected transition MUST change no stock.
    */
   async transition(
     actor: WorkflowActor,
@@ -1049,9 +1115,12 @@ export class InventoryWorkflowService {
         line.physicalStock !== undefined &&
         line.systemStock !== item.currentStock
       )
-        throw new ConflictException(
-          `${item.name}: stock changed since the count started. Recount using the current balance.`,
-        );
+        throw new ConflictException({
+          code: 'INVENTORY_STALE_COUNT',
+          message: `${item.name}: stock changed since the count started from ${line.systemStock} to ${item.currentStock} ${item.unit}. Choose Start fresh count and record a new physical observation. The earlier observation remains in this record.`,
+          stockEffect: 'NONE',
+          recovery: { action: 'START_FRESH_COUNT', inventoryId: item.id, quantities: { onHand: item.currentStock } },
+        });
       if (
         doc.kind === 'OPENING_STOCK' &&
         (item.currentStock !== 0 ||
@@ -1462,10 +1531,16 @@ export class InventoryWorkflowService {
         if (
           (heldByItem.get(line.inventoryId) || 0) >
           (sourceHold.get(line.inventoryId) || 0)
-        )
-          throw new BadRequestException(
-            'Quantity exceeds this source hold for the batch',
-          );
+        ) {
+          const source = await tx.inventoryWorkflowDocument.findFirst({ where: { id: doc.payload.sourceHoldId, branchId: actor.branchId } });
+          const remaining = sourceHold.get(line.inventoryId) || 0;
+          throw new BadRequestException({
+            code: 'INVENTORY_SOURCE_CAPACITY',
+            message: `${line.name || 'Selected batch'}: quantity exceeds this source hold for the batch. This action requests ${heldByItem.get(line.inventoryId)} units; ${remaining} remain in ${source?.reference || 'the selected source'}. Open the source and its linked disposals or returns to verify the remaining goods before correcting the selected source or quantity. Another hold cannot cover this shortage.`,
+            stockEffect: 'NONE',
+            recovery: { action: 'REVIEW_SOURCE', inventoryId: line.inventoryId, sourceId: source?.id, sourceKind: source?.kind, quantities: { remaining, requested: heldByItem.get(line.inventoryId) } },
+          });
+        }
       }
       const delta = target - (deltas.get(line.id) || 0),
         heldDelta = held - (holds.get(line.id) || 0);
@@ -1573,10 +1648,18 @@ export class InventoryWorkflowService {
       true,
     );
     for (const [inventoryId, quantity] of balances) {
-      if (quantity < 0)
-        throw new ConflictException(
-          'The source hold has an inconsistent balance',
-        );
+      if (quantity < 0) {
+        const consumers = await tx.inventoryWorkflowDocument.findMany({ where: {
+          branchId: actor.branchId, status: { in: ['POSTED', 'CHALLAN'] },
+          payload: { path: ['sourceHoldId'], equals: doc.id },
+        }, select: { id: true, kind: true, reference: true } });
+        throw new ConflictException({
+          code: 'INVENTORY_SOURCE_INCONSISTENT',
+          message: `The source hold has an inconsistent balance of ${quantity} units for batch ${inventoryId}. Open ${doc.reference} and review its linked disposals or returns with an inventory manager. Correct invalid downstream records before trying a release; do not release another hold to cover this difference.`,
+          stockEffect: 'NONE',
+          recovery: { action: 'REVIEW_SOURCE', inventoryId, sourceId: doc.id, sourceKind: doc.kind, quantities: { remaining: quantity }, documents: consumers.map(({ id, kind, reference }: any) => ({ id, kind, reference })) },
+        });
+      }
       if (quantity)
         await this.effect(
           tx,
@@ -1681,17 +1764,21 @@ export class InventoryWorkflowService {
       throw new BadRequestException(
         'This receipt is billed. Correct the linked purchase first.',
       );
-    const consumers = await tx.inventoryWorkflowDocument.count({
+    const consumers = await tx.inventoryWorkflowDocument.findMany({
       where: {
         branchId: actor.branchId,
         status: { in: ['POSTED', 'CHALLAN'] },
         payload: { path: ['sourceHoldId'], equals: doc.id },
       },
+      select: { id: true, kind: true, reference: true },
     });
-    if (consumers)
-      throw new BadRequestException(
-        'Reverse the linked hold disposals or returns first',
-      );
+    if (consumers.length)
+      throw new BadRequestException({
+        code: 'INVENTORY_REVERSAL_BLOCKED',
+        message: 'Reverse the linked hold disposals or returns first only if their recorded outcome needs correction. Open the blocking records and ask an inventory manager to verify their effects before reversing; then retry this reversal.',
+        stockEffect: 'NONE',
+        recovery: { action: 'REVERSE_DEPENDENCIES', documents: consumers.map(({ id, kind, reference }: any) => ({ id, kind, reference })) },
+      });
     if (doc.payload.sourceHoldId) {
       await this.restoreHoldSource(tx, actor, doc);
       await this.holdBalances(tx, actor, doc.payload.sourceHoldId, doc.id);

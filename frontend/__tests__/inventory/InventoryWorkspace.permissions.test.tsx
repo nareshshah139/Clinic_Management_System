@@ -67,3 +67,10 @@ it('forwards the exact pending version and operation for a saved-document handof
   render(<InventoryWorkspace/>);
   expect(await screen.findByText('Recovery version 1 operation transition')).toBeInTheDocument();
 });
+
+it.each(['', '0', '-1', '1.5', 'invalid'])('does not invent a pending revision from invalid recovery version %s',async version=>{
+  mockQuery=`area=stock&view=LOSS&document=saved-loss&recoverVersion=${version}&recoverOperation=transition`;
+  (apiClient.get as jest.Mock).mockResolvedValue({kinds:{LOSS:{read:true,write:false}}});
+  render(<InventoryWorkspace/>);
+  expect(await screen.findByText('Recovery version missing operation transition')).toBeInTheDocument();
+});

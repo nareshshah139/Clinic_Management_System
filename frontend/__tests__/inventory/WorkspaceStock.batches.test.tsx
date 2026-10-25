@@ -58,13 +58,14 @@ it('shows an unverified ledger and submits confirmed identity recovery with its 
     itemId: item.id, productId: 'correct', updatedAt: item.updatedAt, reason: 'Checked the physical pack', confirmed: true,
   }));
   fireEvent.click(screen.getByRole('button', { name: 'Ledger' }));
-  expect(screen.getByText(/Ledger unverified: record a physical stock count/)).toBeInTheDocument();
+  expect(screen.getByText(/No verified physical count/)).toBeInTheDocument();
 });
 
 
 it.each([
   [{status:'UNVERIFIED',checkpoint:null}, 'No verified physical count', 'Count this batch'],
   [{status:'UNVERIFIED',checkpoint:{quantity:17},expectedStock:null,difference:null,missingHistory:true}, 'Movement history is incomplete', 'Count this batch'],
+  [{status:'UNVERIFIED',checkpoint:{quantity:17},expectedStock:null,difference:null,missingHistory:false}, 'A movement after the saved count has no reliable stock change', 'Count this batch'],
   [{status:'DISCREPANCY',checkpoint:{quantity:17},expectedStock:19,difference:-2}, 'Recorded stock is 2 PACKS below the ledger balance of 19 PACKS', 'Count this batch'],
   [{status:'RECONCILED',checkpoint:{quantity:17},expectedStock:17,difference:0}, 'Recorded stock agrees with the ledger balance of 17 PACKS', 'Count this batch'],
 ])('explains ledger evidence %p without claiming the view changed stock', async (ledger, explanation, action) => {
@@ -83,7 +84,7 @@ it('provides a batch reference and authorized colleague handoff for read-only re
   render(<WorkspaceStock {...props} capabilities={{kinds:{COUNT:{write:false}}}} itemId={item.id}/>);
   expect(await screen.findByText(/This batch is linked to more than one product/)).toBeInTheDocument();
   expect(screen.getByText(/Ask a colleague with Counts & audit write access/)).toBeInTheDocument();
-  expect(screen.getByLabelText('Batch recovery reference')).toHaveValue(expect.stringContaining('item=stock'));
+  expect(screen.getByLabelText('Batch recovery reference')).toHaveValue('/dashboard/inventory?area=stock&view=list&item=stock');
   expect(screen.queryByRole('button',{name:'Count this batch'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Ledger'}));
   expect(screen.getByText(/Use the batch recovery reference above/)).toBeInTheDocument();
