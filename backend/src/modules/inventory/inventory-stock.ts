@@ -46,6 +46,11 @@ export function movementDelta(row: any): number | null {
  * insufficient available units or a concurrent change MUST fail before a movement is returned.
  * The caller MUST run this function inside the same transaction as its document transition.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] inventory-stock-rejection-evidence
+ * Insufficient available stock and concurrent balance changes MUST identify the batch and a
+ * safe review action. NONE describes this rejected transaction, never the batch's earlier history.
+ */
 export async function writeStockMovement(
   tx: any,
   input: {
@@ -80,9 +85,14 @@ export async function writeStockMovement(
     throw new BadRequestException('Invalid held stock quantity');
   const afterStock = item.currentStock + input.delta;
   if (!Number.isSafeInteger(afterStock) || afterStock < held - release)
-    throw new BadRequestException(
-      'Insufficient available stock; inspect the batch balance and holds',
-    );
+    throw new BadRequestException({
+      code: 'INVENTORY_HELD_STOCK',
+      message: `${item.name}: insufficient available stock. On hand ${item.currentStock}, held ${held}, available ${item.currentStock - held} ${item.unit}; this action removes ${Math.max(0, -input.delta)}. Review the batch and its blocked-stock sources. Release only goods verified as usable, or record a verified loss or supplier return from the correct source, then start a fresh count. Do not change the physical observation to bypass this check.`,
+      stockEffect: 'NONE',
+      recovery: { action: 'REVIEW_BATCH', inventoryId: item.id, quantities: {
+        onHand: item.currentStock, held, available: item.currentStock - held, requested: Math.max(0, -input.delta),
+      } },
+    });
   const unitPrice = input.unitPrice ?? item.costPrice;
   if (!Number.isFinite(unitPrice) || unitPrice < 0)
     throw new BadRequestException('Unit price must be a nonnegative number');
@@ -102,9 +112,12 @@ export async function writeStockMovement(
     });
   } catch (error) {
     if ((error as any)?.code === 'P2025')
-      throw new ConflictException(
-        'Stock changed. Refresh the batch and retry.',
-      );
+      throw new ConflictException({
+        code: 'INVENTORY_BATCH_CHANGED',
+        message: 'Stock changed while this action was being saved. Open the batch and review its current balance before retrying; for a physical count, start a fresh count and observe the goods again.',
+        stockEffect: 'NONE',
+        recovery: { action: 'REVIEW_BATCH', inventoryId: item.id },
+      });
     throw error;
   }
   return tx.stockTransaction.create({

@@ -1,0 +1,9 @@
+BOOT PASS: real login, identity, capabilities and mounted opening page
+stock: AssertionError [ERR_ASSERTION]: unknown result never claims no stock change
+
+true !== false
+
+    at Object.check (/Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/e2e/recovery/run.cjs:566:14)
+    at exports.stock (/Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/verification/inventory-state-clarity-fix-2026-10-25/browser_scenarios.cjs:63:4)
+    at async /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/e2e/recovery/run.cjs:659:9
+Evidence: /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/output/diagnostics/recovery-e2e/2026-10-25T06-32-22-475Z-27a466d3

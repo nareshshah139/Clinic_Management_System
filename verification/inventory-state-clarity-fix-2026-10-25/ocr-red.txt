@@ -1,0 +1,1971 @@
+
+> frontend@0.1.0 test
+> jest --runInBand --runTestsByPath __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx __tests__/pharmacy/purchase-invoice-review.test.ts -t reviewed linked receipt|historical stock reconciliation|safe-stop stock outcome|wrong document|durable matching no-stock|malformed recovery reference|fresh automatic retry attribution
+
+   Using tsconfig file: tsconfig.build.json
+FAIL __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx (7.373 s)
+  ● PurchaseInvoiceWorkbench › explains a reviewed linked receipt using the Post bill action and no additional stock
+
+    TestingLibraryElementError: Unable to find an element with the text: These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<p[39m
+            [33mclass[39m=[32m"rounded-md border p-3 text-sm"[39m
+          [36m>[39m
+            [0mLinked inward receipt: [0m
+            [0mreceipt-1[0m
+            [0m. Stock quantities are verified against that receipt before the bill is posted.[0m
+          [36m</p>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Invoice navigation"[39m
+            [33mclass[39m=[32m"sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-background py-3"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"24"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"24"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m12 19-7-7 7-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 12H5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mBack to Invoice OCR[0m
+            [36m</button>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"Stock status"[39m
+              [33mclass[39m=[32m"min-w-0 rounded-md border px-3 py-2 text-sm border-slate-500 bg-slate-50 text-slate-800 dark:border-slate-400 dark:bg-slate-900 dark:text-slate-100"[39m
+              [33mrole[39m=[32m"status"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-semibold"[39m
+              [36m>[39m
+                [0mStock not added[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mNew invoice[0m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-package-plus h-4 w-4"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M16 16h6"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M19 13v6"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"m7.5 4.27 9 5.15"[39m
+                  [36m/>[39m
+                  [36m<polyline[39m
+                    [33mpoints[39m=[32m"3.29 7 12 12 20.71 7"[39m
+                  [36m/>[39m
+                  [36m<line[39m
+                    [33mx1[39m=[32m"12"[39m
+                    [33mx2[39m=[32m"12"[39m
+                    [33my1[39m=[32m"22"[39m
+                    [33my2[39m=[32m"12"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mPost bill[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</nav>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col gap-3 md:flex-row md:items-start md:justify-between"[39m
+            [33mhidden[39m=[32m""[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-xl font-semibold tracking-tight"[39m
+                [33mtabindex[39m=[32m"-1"[39m
+              [36m>[39m
+                [0mScan or enter bill[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mUpload every page. Check the reading. Add stock when ready.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex item...
+
+      295 |     renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED', workflowReceiptId: 'receipt-1' });
+      296 |     await screen.findByRole('button', { name: 'Post bill' });
+    > 297 |     expect(screen.getByText('These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added.')).toBeVisible();
+          |                   ^
+      298 |     const progress = screen.getByRole('region', { name: 'Invoice progress' });
+      299 |     expect(within(progress).getByText('3. Post bill')).toBeVisible();
+      300 |     expect(within(progress).queryByText(/Add stock/)).not.toBeInTheDocument();
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at Object.getByText (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:297:19)
+
+  ● PurchaseInvoiceWorkbench › offers historical stock reconciliation and a copyable invoice handoff without promising supplier accounting
+
+    TestingLibraryElementError: Unable to find an accessible element with the role "region" and name "Historical stock recovery"
+
+    Here are the accessible roles:
+
+      textbox:
+
+      Name "Receipt reference":
+      [36m<input[39m
+        [33mclass[39m=[32m"ml-2 rounded border p-2"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Distributor":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"distributor-name"[39m
+        [33mvalue[39m=[32m"Apex Distributors"[39m
+      [36m/>[39m
+
+      Name "GSTIN":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"distributor-gstin"[39m
+        [33mplaceholder[39m=[32m"36ABCDE1234F1Z5"[39m
+        [33mvalue[39m=[32m"36ABCDE1234F1Z5"[39m
+      [36m/>[39m
+
+      Name "DL No.":
+      [36m<input[39m
+        [33maria-describedby[39m=[32m"distributor-dl-review-state"[39m
+        [33maria-invalid[39m=[32m"true"[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-red-600 bg-red-50 text-red-900 dark:border-red-400 dark:bg-red-950 dark:text-red-100"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"distributor-dl"[39m
+        [33mplaceholder[39m=[32m"Drug license number"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Invoice No.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"invoice-number"[39m
+        [33mvalue[39m=[32m"APX-001"[39m
+      [36m/>[39m
+
+      Name "Food License":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"food-license"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Doctor / Reg. No. (optional)":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"doctor-reg"[39m
+        [33mplaceholder[39m=[32m"Doctor name or registration"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "E-Way Bill":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"eway-bill"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "LR No.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"lr-no"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Buyer Code":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"buyer-code"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "URC Code":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"urc-code"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Salesman":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"salesman"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Salesman Contact":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"salesman-contact"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Distributor Address":
+      [36m<textarea[39m
+        [33mclass[39m=[32m"border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"[39m
+        [33mdata-slot[39m=[32m"textarea"[39m
+        [33mid[39m=[32m"distributor-address"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+      [36m/>[39m
+
+      Name "Notes":
+      [36m<textarea[39m
+        [33mclass[39m=[32m"border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 flex field-sizing-content min-h-16 w-full rounded-md border bg-transparent px-3 py-2 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"[39m
+        [33mdata-slot[39m=[32m"textarea"[39m
+        [33mid[39m=[32m"purchase-notes"[39m
+        [33mplaceholder[39m=[32m"Handwritten or OCR notes"[39m
+      [36m/>[39m
+
+      Name "Product":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-product"[39m
+        [33mvalue[39m=[32m"Azithral 500 Tablet"[39m
+      [36m/>[39m
+
+      Name "Manufacturer (optional)":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-manufacturer"[39m
+        [33mvalue[39m=[32m"Alembic"[39m
+      [36m/>[39m
+
+      Name "Pack Size":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-pack-size"[39m
+        [33mplaceholder[39m=[32m"Strip of 10"[39m
+        [33mvalue[39m=[32m"Strip of 3"[39m
+      [36m/>[39m
+
+      Name "Stock unit":
+      [36m<input[39m
+        [33maria-describedby[39m=[32m"line-1792910022209-swhxd9uzey-unit-review-state"[39m
+        [33maria-invalid[39m=[32m"true"[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground flex h-9 w-full min-w-0 rounded-md border px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border-red-600 bg-red-50 text-red-900 dark:border-red-400 dark:bg-red-950 dark:text-red-100"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-unit"[39m
+        [33mplaceholder[39m=[32m"Bottle, Tube or Strip"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "HSN":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-hsn"[39m
+        [33mvalue[39m=[32m"3004"[39m
+      [36m/>[39m
+
+      Name "Batch":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-batch"[39m
+        [33mvalue[39m=[32m"AZT2401"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      button:
+
+      Name "Find posted receipts":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Back to Invoice OCR":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "New invoice":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Save corrections":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Save draft for later":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Save & Process":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Recover interrupted import":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Correct supplier drug license":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Correct line 1 stock unit":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Save corrections and check again":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Reject invoice":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Help: Review checks":
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Help: Review checks"[39m
+        [33mclass[39m=[32m"inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Help: historical stock correction":
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Help: historical stock correction"[39m
+        [33mclass[39m=[32m"inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Help: supplier drug license correction":
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Help: supplier drug license correction"[39m
+        [33mclass[39m=[32m"inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Help: Line 1 stock unit correction":
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Help: Line 1 stock unit correction"[39m
+        [33mclass[39m=[32m"inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Help: Invoice import":
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-label[39m=[32m"Help: Invoice import"[39m
+        [33mclass[39m=[32m"inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Scan bill":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3 w-full md:w-auto"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mdisabled[39m=[32m""[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Import & Add Stock":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mdisabled[39m=[32m""[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Refresh Matches":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Add Line":
+      [36m<button[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+      [36m/>[39m
+
+      Name "Remove line 1":
+      [36m<button[39m
+        [33maria-label[39m=[32m"Remove line 1"[39m
+        [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5"[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mdisabled[39m=[32m""[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      navigation:
+
+      Name "Invoice navigation":
+      [36m<nav[39m
+        [33maria-label[39m=[32m"Invoice navigation"[39m
+        [33mclass[39m=[32m"sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-background py-3"[39m
+      [36m/>[39m
+
+      Name "Invoice sections":
+      [36m<nav[39m
+        [33maria-label[39m=[32m"Invoice sections"[39m
+        [33mclass[39m=[32m"flex flex-wrap gap-4 text-sm"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      status:
+
+      Name "Stock status":
+      [36m<div[39m
+        [33maria-label[39m=[32m"Stock status"[39m
+        [33mclass[39m=[32m"min-w-0 rounded-md border px-3 py-2 text-sm border-slate-500 bg-slate-50 text-slate-800 dark:border-slate-400 dark:bg-slate-900 dark:text-slate-100"[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<p[39m
+        [33mclass[39m=[32m"text-sm"[39m
+        [33mrole[39m=[32m"status"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      group:
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details />[39m
+
+      Name "":
+      [36m<details />[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"rounded-lg border p-4"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<fieldset[39m
+        [33mclass[39m=[32m"mt-4 space-y-5 min-w-0"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"border-t pt-3"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"border-t pt-3"[39m
+        [33mopen[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"rounded-md border p-3"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details />[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"rounded-md border p-3"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<details[39m
+        [33mclass[39m=[32m"rounded-lg border p-4"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      region:
+
+      Name "Invoice progress":
+      [36m<section[39m
+        [33maria-label[39m=[32m"Invoice progress"[39m
+        [33mclass[39m=[32m"space-y-3 border-y py-4"[39m
+      [36m/>[39m
+
+      Name "Interrupted import recovery":
+      [36m<section[39m
+        [33maria-label[39m=[32m"Interrupted import recovery"[39m
+        [33mclass[39m=[32m"space-y-3 rounded-md border p-3"[39m
+      [36m/>[39m
+
+      Name "Finish this purchase":
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"purchase-recovery-title"[39m
+        [33mclass[39m=[32m"space-y-4 rounded-md border p-4"[39m
+        [33mid[39m=[32m"purchase-recovery-panel"[39m
+      [36m/>[39m
+
+      Name "Finish invoice review":
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"purchase-review-title"[39m
+        [33mclass[39m=[32m"space-y-4"[39m
+      [36m/>[39m
+
+      Name "Check before adding stock":
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"purchase-review-checklist-title"[39m
+        [33mclass[39m=[32m"space-y-4 border-t pt-4"[39m
+        [33mid[39m=[32m"purchase-review-checklist"[39m
+      [36m/>[39m
+
+      Name "Supplier":
+      [36m<section[39m
+        [33maria-labelledby[39m=[32m"purchase-supplier-title"[39m
+        [33mclass[39m=[32m"space-y-3 border-b pb-4"[39m
+      [36m/>[39m
+
+      Name "Invoice details and products":
+      [36m<section[39m
+        [33maria-label[39m=[32m"Invoice details and products"[39m
+      [36m/>[39m
+
+      Name "Product line 1":
+      [36m<section[39m
+        [33maria-label[39m=[32m"Product line 1"[39m
+        [33mclass[39m=[32m"rounded-lg border"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-review"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      list:
+
+      Name "":
+      [36m<ol[39m
+        [33mclass[39m=[32m"grid grid-cols-3 gap-3 text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<ul[39m
+        [33mclass[39m=[32m"space-y-2"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<ul[39m
+        [33mclass[39m=[32m"space-y-2 text-sm"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      listitem:
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"flex items-center gap-2 rounded-md border p-2 border-emerald-600 bg-emerald-50 text-emerald-900 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33maria-current[39m=[32m"step"[39m
+        [33mclass[39m=[32m"flex items-center gap-2 rounded-md border p-2 border-amber-600 bg-amber-50 text-amber-900 dark:border-amber-400 dark:bg-amber-950 dark:text-amber-100"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"flex items-center gap-2 rounded-md border p-2 border-slate-500 bg-slate-50 text-slate-800 dark:border-slate-400 dark:bg-slate-900 dark:text-slate-100"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-1 text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-1 text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-1 text-sm"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-2 rounded-md border p-3 border-amber-600 bg-amber-50 text-amber-900 dark:border-amber-400 dark:bg-amber-950 dark:text-amber-100"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-2 rounded-md border p-3 border-red-600 bg-red-50 text-red-900 dark:border-red-400 dark:bg-red-950 dark:text-red-100"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<li[39m
+        [33mclass[39m=[32m"space-y-2 rounded-md border p-3 border-red-600 bg-red-50 text-red-900 dark:border-red-400 dark:bg-red-950 dark:text-red-100"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      link:
+
+      Name "3 checks left":
+      [36m<a[39m
+        [33mclass[39m=[32m"flex items-center gap-2 underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#purchase-review-checklist"[39m
+      [36m/>[39m
+
+      Name "1 product":
+      [36m<a[39m
+        [33mclass[39m=[32m"underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#purchase-line-items"[39m
+      [36m/>[39m
+
+      Name "Check total":
+      [36m<a[39m
+        [33mclass[39m=[32m"underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#purchase-totals"[39m
+      [36m/>[39m
+
+      Name "Invoice details":
+      [36m<a[39m
+        [33mclass[39m=[32m"underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#distributor-name"[39m
+      [36m/>[39m
+
+      Name "Products (1)":
+      [36m<a[39m
+        [33mclass[39m=[32m"underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#purchase-line-items"[39m
+      [36m/>[39m
+
+      Name "Totals":
+      [36m<a[39m
+        [33mclass[39m=[32m"underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#purchase-totals"[39m
+      [36m/>[39m
+
+      Name "Go to supplier drug license":
+      [36m<a[39m
+        [33mclass[39m=[32m"inline-block underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#distributor-dl"[39m
+      [36m/>[39m
+
+      Name "Go to stock unit":
+      [36m<a[39m
+        [33mclass[39m=[32m"inline-block underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#line-1792910022209-swhxd9uzey-unit"[39m
+      [36m/>[39m
+
+      Name "Type instead":
+      [36m<a[39m
+        [33mclass[39m=[32m"text-center text-sm underline underline-offset-4"[39m
+        [33mhref[39m=[32m"#distributor-name"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      term:
+
+      Name "":
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-muted-foreground"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-muted-foreground"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<dt[39m
+        [33mclass[39m=[32m"text-muted-foreground"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      definition:
+
+      Name "":
+      [36m<dd[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<dd[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<dd[39m
+        [33mclass[39m=[32m"mt-1"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      heading:
+
+      Name "Finish this purchase":
+      [36m<h3[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+        [33mid[39m=[32m"purchase-recovery-title"[39m
+      [36m/>[39m
+
+      Name "Finish invoice review":
+      [36m<h4[39m
+        [33mclass[39m=[32m"text-lg font-semibold"[39m
+        [33mid[39m=[32m"purchase-review-title"[39m
+      [36m/>[39m
+
+      Name "Check before adding stock":
+      [36m<h4[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+        [33mid[39m=[32m"purchase-review-checklist-title"[39m
+      [36m/>[39m
+
+      Name "Supplier":
+      [36m<h5[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+        [33mid[39m=[32m"purchase-supplier-title"[39m
+      [36m/>[39m
+
+      Name "Products on this bill":
+      [36m<h4[39m
+        [33mclass[39m=[32m"font-semibold"[39m
+      [36m/>[39m
+
+      Name "Lines":
+      [36m<h5[39m
+        [33mclass[39m=[32m"text-sm font-medium"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      combobox:
+
+      Name "Saved supplier":
+      [36m<select[39m
+        [33mclass[39m=[32m"mt-2 block w-full min-w-0 rounded-md border bg-background p-2 text-sm"[39m
+        [33mid[39m=[32m"saved-purchase-supplier"[39m
+      [36m/>[39m
+
+      Name "Bill Type":
+      [36m<button[39m
+        [33maria-autocomplete[39m=[32m"none"[39m
+        [33maria-controls[39m=[32m"radix-«r5»"[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33mclass[39m=[32m"border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 w-full"[39m
+        [33mdata-size[39m=[32m"default"[39m
+        [33mdata-slot[39m=[32m"select-trigger"[39m
+        [33mdata-state[39m=[32m"closed"[39m
+        [33mdir[39m=[32m"ltr"[39m
+        [33mid[39m=[32m"bill-type"[39m
+        [33mrole[39m=[32m"combobox"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      option:
+
+      Name "No saved suppliers yet":
+      [36m<option[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      spinbutton:
+
+      Name "Exp. Month":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-expiry-month"[39m
+        [33mmax[39m=[32m"12"[39m
+        [33mmin[39m=[32m"1"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"12"[39m
+      [36m/>[39m
+
+      Name "Exp. Year":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-expiry-year"[39m
+        [33mmax[39m=[32m"2100"[39m
+        [33mmin[39m=[32m"2020"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"2027"[39m
+      [36m/>[39m
+
+      Name "Paid Qty":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-qty"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+
+      Name "Free Qty":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-free-qty"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Rate":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-rate"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"100"[39m
+      [36m/>[39m
+
+      Name "MRP":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-mrp"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"120"[39m
+      [36m/>[39m
+
+      Name "Old MRP":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-old-mrp"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mplaceholder[39m=[32m"Optional"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Disc %":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-discount"[39m
+        [33mmax[39m=[32m"100"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Special %":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-special-discount"[39m
+        [33mmax[39m=[32m"100"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Scheme amount (₹)":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-scheme"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "CGST %":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-cgst"[39m
+        [33mmax[39m=[32m"100"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"6"[39m
+      [36m/>[39m
+
+      Name "SGST %":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-sgst"[39m
+        [33mmax[39m=[32m"100"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"6"[39m
+      [36m/>[39m
+
+      Name "IGST %":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-igst"[39m
+        [33mmax[39m=[32m"100"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "OCR Confidence":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-confidence"[39m
+        [33mmax[39m=[32m"1"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mplaceholder[39m=[32m"Manual entry"[39m
+        [33mreadonly[39m=[32m""[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m""[39m
+      [36m/>[39m
+
+      Name "Reported Taxable":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-reported-taxableAmount"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"100"[39m
+      [36m/>[39m
+
+      Name "Reported GST":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-reported-gstAmount"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"12"[39m
+      [36m/>[39m
+
+      Name "Reported Line total":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"line-1792910022209-swhxd9uzey-reported-lineTotal"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"112"[39m
+      [36m/>[39m
+
+      Name "Trade Disc.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"trade-discount"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Special Disc.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"special-discount"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Cash Disc.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"cash-discount"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Damage Adj.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"damage-adjustment"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Visibility":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"visibility-amount"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Cr/Db Adj.":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"credit-debit-adjustment"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "TCS":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"tcs-amount"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Rounding":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"rounding"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"0"[39m
+      [36m/>[39m
+
+      Name "Reported Gross":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"invoice-reported-grossAmount"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"100"[39m
+      [36m/>[39m
+
+      Name "Reported Taxable":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"invoice-reported-taxableAmount"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"100"[39m
+      [36m/>[39m
+
+      Name "Reported GST total":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"invoice-reported-totalGst"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"12"[39m
+      [36m/>[39m
+
+      Name "Reported Net payable":
+      [36m<input[39m
+        [33mclass[39m=[32m"file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-md border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive"[39m
+        [33mdata-slot[39m=[32m"input"[39m
+        [33mid[39m=[32m"invoice-reported-netPayable"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"0.01"[39m
+        [33mtype[39m=[32m"number"[39m
+        [33mvalue[39m=[32m"112"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      complementary:
+
+      Name "":
+      [36m<aside[39m
+        [33mclass[39m=[32m"space-y-5 min-w-0"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      table:
+
+      Name "":
+      [36m<table[39m
+        [33mclass[39m=[32m"w-full caption-bottom text-sm"[39m
+        [33mdata-slot[39m=[32m"table"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      rowgroup:
+
+      Name "":
+      [36m<thead[39m
+        [33mclass[39m=[32m"[&_tr]:border-b"[39m
+        [33mdata-slot[39m=[32m"table-header"[39m
+      [36m/>[39m
+
+      Name "":
+      [36m<tbody[39m
+        [33mclass[39m=[32m"[&_tr:last-child]:border-0"[39m
+        [33mdata-slot[39m=[32m"table-body"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      row:
+
+      Name "Product Qty Total":
+      [36m<tr[39m
+        [33mclass[39m=[32m"hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors"[39m
+        [33mdata-slot[39m=[32m"table-row"[39m
+      [36m/>[39m
+
+      Name "Azithral 500 Tablet AZT2401 · Exp 12/2027 1 ₹112.00":
+      [36m<tr[39m
+        [33mclass[39m=[32m"hover:bg-muted/50 data-[state=selected]:bg-muted border-b transition-colors"[39m
+        [33mdata-slot[39m=[32m"table-row"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      columnheader:
+
+      Name "Product":
+      [36m<th[39m
+        [33mclass[39m=[32m"text-foreground h-10 px-2 text-left align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]"[39m
+        [33mdata-slot[39m=[32m"table-head"[39m
+      [36m/>[39m
+
+      Name "Qty":
+      [36m<th[39m
+        [33mclass[39m=[32m"text-foreground h-10 px-2 align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] text-right"[39m
+        [33mdata-slot[39m=[32m"table-head"[39m
+      [36m/>[39m
+
+      Name "Total":
+      [36m<th[39m
+        [33mclass[39m=[32m"text-foreground h-10 px-2 align-middle font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] text-right"[39m
+        [33mdata-slot[39m=[32m"table-head"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+      cell:
+
+      Name "Azithral 500 Tablet AZT2401 · Exp 12/2027":
+      [36m<td[39m
+        [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]"[39m
+        [33mdata-slot[39m=[32m"table-cell"[39m
+      [36m/>[39m
+
+      Name "1":
+      [36m<td[39m
+        [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] text-right"[39m
+        [33mdata-slot[39m=[32m"table-cell"[39m
+      [36m/>[39m
+
+      Name "₹112.00":
+      [36m<td[39m
+        [33mclass[39m=[32m"p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px] text-right"[39m
+        [33mdata-slot[39m=[32m"table-cell"[39m
+      [36m/>[39m
+
+      --------------------------------------------------
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<section[39m
+            [33mclass[39m=[32m"space-y-2 rounded-md border p-3 text-sm"[39m
+          [36m>[39m
+            [36m<p[39m
+              [33mclass[39m=[32m"font-medium"[39m
+            [36m>[39m
+              [0mCorrect the earlier stock receipt[0m
+            [36m</p>[39m
+            [36m<p>[39m
+              [0mChoose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.[0m
+            [36m</p>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap items-end gap-2"[39m
+            [36m>[39m
+              [36m<label>[39m
+                [0mReceipt reference[0m
+                [36m<input[39m
+                  [33mclass[39m=[32m"ml-2 rounded border p-2"[39m
+                  [33mvalue[39m=[32m""[39m
+                [36m/>[39m
+              [36m</label>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+                [33mtype[39m=[32m"button"[39m
+              [36m>[39m
+                [0mFind posted receipts[0m
+              [36m</button>[39m
+            [36m</div>[39m
+          [36m</section>[39m
+          [36m<nav[39m
+            [33maria-label[39m=[32m"Invoice navigation"[39m
+            [33mclass[39m=[32m"sticky top-0 z-20 flex flex-wrap items-center justify-between gap-2 border-b bg-background py-3"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<svg[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"lucide lucide-arrow-left h-4 w-4"[39m
+                [33mfill[39m=[32m"none"[39m
+                [33mheight[39m=[32m"24"[39m
+                [33mstroke[39m=[32m"currentColor"[39m
+                [33mstroke-linecap[39m=[32m"round"[39m
+                [33mstroke-linejoin[39m=[32m"round"[39m
+                [33mstroke-width[39m=[32m"2"[39m
+                [33mviewBox[39m=[32m"0 0 24 24"[39m
+                [33mwidth[39m=[32m"24"[39m
+                [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+              [36m>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"m12 19-7-7 7-7"[39m
+                [36m/>[39m
+                [36m<path[39m
+                  [33md[39m=[32m"M19 12H5"[39m
+                [36m/>[39m
+              [36m</svg>[39m
+              [0mBack to Invoice OCR[0m
+            [36m</button>[39m
+            [36m<div[39m
+              [33maria-label[39m=[32m"Stock status"[39m
+              [33mclass[39m=[32m"min-w-0 rounded-md border px-3 py-2 text-sm border-slate-500 bg-slate-50 text-slate-800 dark:border-slate-400 dark:bg-slate-900 dark:text-slate-100"[39m
+              [33mrole[39m=[32m"status"[39m
+            [36m>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"font-semibold"[39m
+              [36m>[39m
+                [0mStock not added[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<button[39m
+              [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+              [33mdata-slot[39m=[32m"button"[39m
+            [36m>[39m
+              [0mNew invoice[0m
+            [36m</button>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap items-center gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mSave corrections[0m
+              [36m</button>[39m
+              [36m<details[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<summary[39m
+                  [33mclass[39m=[32m"cursor-pointer py-2"[39m
+                [36m>[39m
+                  [0mMore options[0m
+                [36m</summary>[39m
+                [36m<div[39m
+                  [33mclass[39m=[32m"space-y-3 py-2"[39m
+                [36m>[39m
+                  [36m<button[39m
+                    [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hove...
+
+      310 |     ] });
+      311 |     await editSelectedInvoice();
+    > 312 |     const recovery = screen.getByRole('region', { name: 'Historical stock recovery' });
+          |                             ^
+      313 |     expect(within(recovery).getByRole('link', { name: 'Open Counts & audit' })).toHaveAttribute('href', '/dashboard/inventory?area=stock&view=COUNT');
+      314 |     expect(within(recovery).getByText(/Supplier accounting remains separate/)).toBeVisible();
+      315 |     expect(within(recovery).getByText(/inventory administrator.*physical count/i)).toBeVisible();
+
+      at Object.getElementError (../node_modules/@testing-library/dom/dist/config.js:37:19)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+      at Object.getByRole (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:312:29)
+
+  ● PurchaseInvoiceWorkbench › recovers a colleague handoff through a durable matching no-stock result
+
+    Unable to find an element with the text: /This import is stopped. It created no invoice or stock/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col gap-3 md:flex-row md:items-start md:justify-between"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-xl font-semibold tracking-tight"[39m
+                [33mtabindex[39m=[32m"-1"[39m
+              [36m>[39m
+                [0mScan or enter bill[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mUpload every page. Check the reading. Add stock when ready.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mNew invoice[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-save h-4 w-4 mr-2"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M7 3v4a1 1 0 0 0 1 1h7"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mSave Draft[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mSave invoice[0m
+              [36m</button>[39m
+              [36m<details[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<summary[39m
+                  [33mclass[39m=[32m"cursor-pointer py-2"[39m
+                [36m>[39m
+                  [0mAutomatic processing[0m
+                [36m</summary>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"my-2 max-w-prose text-muted-foreground"[39m
+                [36m>[39m
+                  [0mSaves corrections and adds stock if every automatic check passes.[0m
+                [36m</p>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                  [33mdata-slot[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave & Process[0m
+                [36m</button>[39m
+              [36m</details>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<details[39m
+            [33mclass[39m=[32m"rounded-lg border p-4"[39m
+          [36m>[39m
+            [36m<summary[39m
+              [33mclass[39m=[32m"cursor-pointer text-sm font-medium"[39m
+            [36m>[39m
+              [0mRecent invoices ([0m
+              [0m0[0m
+              [0m)[0m
+            [36m</summary>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"text-muted-foreground text-sm"[39m
+                    [33mdata-slot[39m=[32m"card-description"[39m
+                  [36m>[39m
+                    [0mLatest branch purchase invoices[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Refresh purchase invoices"[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-mediu...
+
+      616 |     fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Continue the interrupted shift' } });
+      617 |     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    > 618 |     expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
+          |                         ^
+      619 |     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).unknownStockInvoiceId).toBeNull());
+      620 |     first.unmount();
+      621 |     render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" />);
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByText (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:618:25)
+
+  ● PurchaseInvoiceWorkbench › keeps safe-stop stock outcome and usable next steps when the backend supplies only a diagnostic
+
+    Unable to find an element with the text: /This import is stopped. It created no invoice or stock/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col gap-3 md:flex-row md:items-start md:justify-between"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-xl font-semibold tracking-tight"[39m
+                [33mtabindex[39m=[32m"-1"[39m
+              [36m>[39m
+                [0mScan or enter bill[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mUpload every page. Check the reading. Add stock when ready.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mNew invoice[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-save h-4 w-4 mr-2"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M7 3v4a1 1 0 0 0 1 1h7"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mSave Draft[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mSave invoice[0m
+              [36m</button>[39m
+              [36m<details[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<summary[39m
+                  [33mclass[39m=[32m"cursor-pointer py-2"[39m
+                [36m>[39m
+                  [0mAutomatic processing[0m
+                [36m</summary>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"my-2 max-w-prose text-muted-foreground"[39m
+                [36m>[39m
+                  [0mSaves corrections and adds stock if every automatic check passes.[0m
+                [36m</p>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                  [33mdata-slot[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave & Process[0m
+                [36m</button>[39m
+              [36m</details>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<details[39m
+            [33mclass[39m=[32m"rounded-lg border p-4"[39m
+          [36m>[39m
+            [36m<summary[39m
+              [33mclass[39m=[32m"cursor-pointer text-sm font-medium"[39m
+            [36m>[39m
+              [0mRecent invoices ([0m
+              [0m0[0m
+              [0m)[0m
+            [36m</summary>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"text-muted-foreground text-sm"[39m
+                    [33mdata-slot[39m=[32m"card-description"[39m
+                  [36m>[39m
+                    [0mLatest branch purchase invoices[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Refresh purchase invoices"[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-mediu...
+
+      657 |     importAutomatically();
+      658 |     fireEvent.click(await screen.findByRole('button', { name: 'Resolve interrupted import' }));
+    > 659 |     expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
+          |                         ^
+      660 |     expect(screen.getByText(/Enter complete invoice manually/,{ selector: '[role="status"]' })).toBeVisible();
+      661 |     expect(screen.getByRole('button', { name: 'Enter complete invoice manually' })).toBeEnabled();
+      662 |     expect(screen.getByRole('button', { name: 'Reject this upload' })).toBeEnabled();
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByText (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:659:25)
+
+  ● PurchaseInvoiceWorkbench › lets a malformed recovery reference be corrected before any dispatch
+
+    Unable to find an element with the text: /This import is stopped. It created no invoice or stock/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col gap-3 md:flex-row md:items-start md:justify-between"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-xl font-semibold tracking-tight"[39m
+                [33mtabindex[39m=[32m"-1"[39m
+              [36m>[39m
+                [0mScan or enter bill[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mUpload every page. Check the reading. Add stock when ready.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mNew invoice[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-save h-4 w-4 mr-2"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M7 3v4a1 1 0 0 0 1 1h7"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mSave Draft[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mSave invoice[0m
+              [36m</button>[39m
+              [36m<details[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<summary[39m
+                  [33mclass[39m=[32m"cursor-pointer py-2"[39m
+                [36m>[39m
+                  [0mAutomatic processing[0m
+                [36m</summary>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"my-2 max-w-prose text-muted-foreground"[39m
+                [36m>[39m
+                  [0mSaves corrections and adds stock if every automatic check passes.[0m
+                [36m</p>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                  [33mdata-slot[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave & Process[0m
+                [36m</button>[39m
+              [36m</details>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<details[39m
+            [33mclass[39m=[32m"rounded-lg border p-4"[39m
+          [36m>[39m
+            [36m<summary[39m
+              [33mclass[39m=[32m"cursor-pointer text-sm font-medium"[39m
+            [36m>[39m
+              [0mRecent invoices ([0m
+              [0m0[0m
+              [0m)[0m
+            [36m</summary>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"text-muted-foreground text-sm"[39m
+                    [33mdata-slot[39m=[32m"card-description"[39m
+                  [36m>[39m
+                    [0mLatest branch purchase invoices[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Refresh purchase invoices"[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-mediu...
+
+      694 |     fireEvent.change(reference, { target: { value: id } });
+      695 |     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    > 696 |     expect(await screen.findByText(/This import is stopped. It created no invoice or stock/)).toBeVisible();
+          |                         ^
+      697 |     expect(api.post).toHaveBeenCalledTimes(1);
+      698 |   });
+      699 |
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByText (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:696:25)
+
+  ● PurchaseInvoiceWorkbench › persists fresh automatic retry attribution before dispatch after colleague recovery
+
+    Unable to find an element with the text: /This import is stopped. It created no invoice or stock/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+    Ignored nodes: comments, script, style
+    [36m<body>[39m
+      [36m<div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"[39m
+        [36m>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"flex flex-col gap-3 md:flex-row md:items-start md:justify-between"[39m
+          [36m>[39m
+            [36m<div>[39m
+              [36m<h3[39m
+                [33mclass[39m=[32m"text-xl font-semibold tracking-tight"[39m
+                [33mtabindex[39m=[32m"-1"[39m
+              [36m>[39m
+                [0mScan or enter bill[0m
+              [36m</h3>[39m
+              [36m<p[39m
+                [33mclass[39m=[32m"text-sm text-muted-foreground"[39m
+              [36m>[39m
+                [0mUpload every page. Check the reading. Add stock when ready.[0m
+              [36m</p>[39m
+            [36m</div>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"flex flex-wrap gap-2"[39m
+            [36m>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mNew invoice[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [36m<svg[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"lucide lucide-save h-4 w-4 mr-2"[39m
+                  [33mfill[39m=[32m"none"[39m
+                  [33mheight[39m=[32m"24"[39m
+                  [33mstroke[39m=[32m"currentColor"[39m
+                  [33mstroke-linecap[39m=[32m"round"[39m
+                  [33mstroke-linejoin[39m=[32m"round"[39m
+                  [33mstroke-width[39m=[32m"2"[39m
+                  [33mviewBox[39m=[32m"0 0 24 24"[39m
+                  [33mwidth[39m=[32m"24"[39m
+                  [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+                [36m>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"[39m
+                  [36m/>[39m
+                  [36m<path[39m
+                    [33md[39m=[32m"M7 3v4a1 1 0 0 0 1 1h7"[39m
+                  [36m/>[39m
+                [36m</svg>[39m
+                [0mSave Draft[0m
+              [36m</button>[39m
+              [36m<button[39m
+                [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                [33mdata-slot[39m=[32m"button"[39m
+              [36m>[39m
+                [0mSave invoice[0m
+              [36m</button>[39m
+              [36m<details[39m
+                [33mclass[39m=[32m"text-sm"[39m
+              [36m>[39m
+                [36m<summary[39m
+                  [33mclass[39m=[32m"cursor-pointer py-2"[39m
+                [36m>[39m
+                  [0mAutomatic processing[0m
+                [36m</summary>[39m
+                [36m<p[39m
+                  [33mclass[39m=[32m"my-2 max-w-prose text-muted-foreground"[39m
+                [36m>[39m
+                  [0mSaves corrections and adds stock if every automatic check passes.[0m
+                [36m</p>[39m
+                [36m<button[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3"[39m
+                  [33mdata-slot[39m=[32m"button"[39m
+                [36m>[39m
+                  [0mSave & Process[0m
+                [36m</button>[39m
+              [36m</details>[39m
+            [36m</div>[39m
+          [36m</div>[39m
+          [36m<details[39m
+            [33mclass[39m=[32m"rounded-lg border p-4"[39m
+          [36m>[39m
+            [36m<summary[39m
+              [33mclass[39m=[32m"cursor-pointer text-sm font-medium"[39m
+            [36m>[39m
+              [0mRecent invoices ([0m
+              [0m0[0m
+              [0m)[0m
+            [36m</summary>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"py-3"[39m
+            [36m>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"flex items-center justify-between gap-3"[39m
+              [36m>[39m
+                [36m<div>[39m
+                  [36m<div[39m
+                    [33mclass[39m=[32m"text-muted-foreground text-sm"[39m
+                    [33mdata-slot[39m=[32m"card-description"[39m
+                  [36m>[39m
+                    [0mLatest branch purchase invoices[0m
+                  [36m</div>[39m
+                [36m</div>[39m
+                [36m<button[39m
+                  [33maria-label[39m=[32m"Refresh purchase invoices"[39m
+                  [33mclass[39m=[32m"inline-flex items-center justify-center whitespace-nowrap text-sm font-mediu...
+
+      727 |     fireEvent.change(screen.getByRole('textbox', { name: 'Recovery reason' }), { target: { value: 'Recover the old interrupted attempt' } });
+      728 |     fireEvent.click(screen.getByRole('button', { name: 'Recover import outcome' }));
+    > 729 |     await screen.findByText(/This import is stopped. It created no invoice or stock/);
+          |                  ^
+      730 |     await waitFor(() => expect(JSON.parse(sessionStorage.getItem(key)!).delegatedRecovery.originalActorId).toBe('previous-operator'));
+      731 |     let persistedAtDispatch: any;
+      732 |     let sentAttemptId: FormDataEntryValue | null = null;
+
+      at waitForWrapper (../node_modules/@testing-library/dom/dist/wait-for.js:163:27)
+      at ../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+      at Object.findByText (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:729:18)
+
+FAIL __tests__/pharmacy/purchase-invoice-review.test.ts
+  ● keeps a wrong document distinct from missing pages and names the correct replacement
+
+    expect(received).toMatchObject(expected)
+
+    - Expected  - 3
+    + Received  + 3
+
+      Object {
+    -   "key": "header:wrong-document",
+    -   "label": "supplier invoice",
+    -   "message": "This document was not recognized as a supplier purchase invoice.",
+    +   "key": "header:pages",
+    +   "label": "complete invoice",
+    +   "message": "The complete invoice could not be verified.",
+        "requiresUpload": true,
+        "target": "purchase-invoice-upload",
+      }
+
+      40 |
+      41 | it('keeps a wrong document distinct from missing pages and names the correct replacement', () => {
+    > 42 |   expect(purchaseReviewIssue('OCR: not_a_purchase_invoice')).toMatchObject({
+         |                                                              ^
+      43 |     key: 'header:wrong-document', label: 'supplier invoice', requiresUpload: true,
+      44 |     message: 'This document was not recognized as a supplier purchase invoice.',
+      45 |     target: 'purchase-invoice-upload',
+
+      at Object.toMatchObject (__tests__/pharmacy/purchase-invoice-review.test.ts:42:62)
+
+Test Suites: 2 failed, 2 total
+Tests:       7 failed, 120 skipped, 127 total
+Snapshots:   0 total
+Time:        7.652 s, estimated 57 s
+Ran all test suites within paths "__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx", "__tests__/pharmacy/purchase-invoice-review.test.ts".
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error workspace frontend@0.1.0
+npm error location /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error command failed
+npm error command sh -c jest --runInBand --runTestsByPath __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx __tests__/pharmacy/purchase-invoice-review.test.ts -t 'reviewed linked receipt|historical stock reconciliation|safe-stop stock outcome|wrong document|durable matching no-stock|malformed recovery reference|fresh automatic retry attribution'

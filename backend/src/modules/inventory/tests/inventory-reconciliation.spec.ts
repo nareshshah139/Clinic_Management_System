@@ -301,3 +301,70 @@ describe('Ambiguous batch identity recovery', () => {
     expect(audit).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'INVENTORY_IDENTITY_RESOLVED' }) }));
   });
 });
+
+
+describe('Actionable inventory guard evidence', () => {
+  async function rejectedResponse(promise: Promise<unknown>) {
+    try { await promise; throw new Error('Expected operation to reject'); }
+    catch (error: any) { if (!error.getResponse) throw error; return error.getResponse(); }
+  }
+  it('names the protected batch balances when a real count is below held stock', async () => {
+    const {state, service, add}=fixture();
+    add('hold','HOLD',5); await service.transition(actor,'hold',{version:1,action:'POST'});
+    add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:10,physicalStock:2}]});
+    const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
+    expect(body).toMatchObject({code:'INVENTORY_HELD_STOCK',stockEffect:'NONE',recovery:{action:'REVIEW_BATCH',inventoryId:'batch',quantities:{onHand:10,held:5,available:5,requested:8}}});
+    expect(body.message).toContain('Do not change the physical observation');
+    expect([state.item.currentStock,state.item.heldStock,state.movements.length]).toEqual([10,5,0]);
+  });
+  it('identifies a stale count row and requires a fresh physical observation',async()=>{
+    const {state,service,add}=fixture();
+    add('count','COUNT',0,{lines:[{id:'observed',inventoryId:'batch',quantity:0,unitPrice:1,systemStock:9,physicalStock:2}]});
+    const body=await rejectedResponse(service.transition(actor,'count',{version:1,action:'POST'}));
+    expect(body).toMatchObject({code:'INVENTORY_STALE_COUNT',stockEffect:'NONE',recovery:{action:'START_FRESH_COUNT',inventoryId:'batch',quantities:{onHand:10}}});
+    expect(body.message).toContain('Start fresh count');
+    expect(state.movements).toEqual([]);
+  });
+  it('returns the actual source and remaining capacity rather than another hold on the batch',async()=>{
+    const {state,service,add}=fixture();
+    add('hold','HOLD',3); await service.transition(actor,'hold',{version:1,action:'POST'});
+    add('loss','LOSS',4,{sourceHoldId:'hold'});
+    const body=await rejectedResponse(service.transition(actor,'loss',{version:1,action:'POST'}));
+    expect(body).toMatchObject({code:'INVENTORY_SOURCE_CAPACITY',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:3,requested:4}}});
+    expect([state.item.currentStock,state.item.heldStock]).toEqual([10,3]);
+  });
+  it('links the exact active downstream record that blocks reversal',async()=>{
+    const {state,service,add}=fixture();
+    add('hold','HOLD',5); await service.transition(actor,'hold',{version:1,action:'POST'});
+    add('loss','LOSS',2,{sourceHoldId:'hold'});await service.transition(actor,'loss',{version:1,action:'POST'});
+    const body=await rejectedResponse(service.transition(actor,'hold',{version:2,action:'REVERSE',reason:'Review correction'}));
+    expect(body).toMatchObject({code:'INVENTORY_REVERSAL_BLOCKED',stockEffect:'NONE',recovery:{action:'REVERSE_DEPENDENCIES',documents:[{id:'loss',kind:'LOSS',reference:'loss'}]}});
+    expect([state.item.currentStock,state.item.heldStock]).toEqual([8,3]);
+  });
+  it('identifies an inconsistent source balance without releasing another hold',async()=>{
+    const {state,service,add}=fixture();
+    add('hold','HOLD',3); await service.transition(actor,'hold',{version:1,action:'POST'});
+    const linked=add('old-loss','LOSS',5,{sourceHoldId:'hold'});linked.status='POSTED';
+    state.effects.push({id:'legacy-consumption',branchId:'branch',documentId:'old-loss',inventoryId:'batch',heldDelta:-5});
+    const body=await rejectedResponse(service.transition(actor,'hold',{version:2,action:'RELEASE'}));
+    expect(body).toMatchObject({code:'INVENTORY_SOURCE_INCONSISTENT',stockEffect:'NONE',recovery:{action:'REVIEW_SOURCE',inventoryId:'batch',sourceId:'hold',sourceKind:'HOLD',quantities:{remaining:-2},documents:[{id:'old-loss',kind:'LOSS',reference:'old-loss'}]}});
+    expect(body.message).toContain('review its linked disposals or returns');
+    expect([state.item.currentStock,state.item.heldStock]).toEqual([10,3]);
+  });
+  it('returns the batch recovery destination for a concurrent stock change',async()=>{
+    const {state,service,tx,add}=fixture();
+    add('loss','LOSS',2);
+    jest.spyOn(tx.inventoryItem,'update').mockRejectedValueOnce(Object.assign(new Error('changed'),{code:'P2025'}));
+    const body=await rejectedResponse(service.transition(actor,'loss',{version:1,action:'POST'}));
+    expect(body).toMatchObject({code:'INVENTORY_BATCH_CHANGED',stockEffect:'NONE',recovery:{action:'REVIEW_BATCH',inventoryId:'batch'}});
+    expect(state.movements).toEqual([]);
+  });
+  it.each([-1,1.5])('names the row for invalid physical count %s without saving it',async physicalStock=>{
+    const {state,service}=fixture();
+    const body=await rejectedResponse(service.saveDocument(actor,{kind:'COUNT',reference:'Count check',requestKey:'invalid-count',payload:{date:'2026-10-24',reason:'Observed',lines:[{id:'observed',inventoryId:'batch',quantity:0,physicalStock}]}}));
+    expect(body).toMatchObject({code:'INVENTORY_INVALID_COUNT',stockEffect:'NONE',recovery:{action:'CORRECT_FIELD',inventoryId:'batch',field:'physicalStock'}});
+    expect(body.message).toContain('Product');
+    expect(body.message).toContain('whole number');
+    expect(state.documents).toEqual([]);
+  });
+});

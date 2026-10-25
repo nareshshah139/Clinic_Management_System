@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
+import { workflowDocumentPresentation, type DocumentKnowledge, type DocumentReference } from "./workflow-document-state";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -26,6 +27,9 @@ type Props = {
   kind: string;
   id?: string;
   draftKey?: string;
+  recoveryRequestKey?: string;
+  recoveryVersion?: number;
+  recoveryOperation?: "save" | "transition";
   initial?: any;
   capabilities: any;
   onBack: () => void;
@@ -69,10 +73,20 @@ type Props = {
  * Acceptance: INV-31.2. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139] document-operation-recovery-envelope
+ * Before dispatch, retain the exact creation request or saved ID and mark the outcome pending.
+ * Recovery MUST read the saved ID, replay only the same idempotent creation, or fence a pending
+ * revision. The fence may append a recovery event and advance revision, but MUST NOT repeat a
+ * stock transition or change stock. An unchanged read alone MUST NOT settle an unknown write.
+ */
 export function WorkflowDocumentEditor({
   kind,
   id,
   draftKey,
+  recoveryRequestKey,
+  recoveryVersion,
+  recoveryOperation,
   initial,
   capabilities,
   onBack,
@@ -80,10 +94,16 @@ export function WorkflowDocumentEditor({
   onInvoice,
 }: Props) {
   const { user } = useDashboardUser();
-  const recoveryKey = `inventory-document:${user?.branchId}:${user?.id}:${kind}:${id || draftKey || "new"}:${initial?.purchaseInvoiceId || initial?.sourceId || ""}`;
+  const recoveryKey = `inventory-document:${user?.branchId}:${user?.id}:${kind}:${id || draftKey || recoveryRequestKey || "new"}:${initial?.purchaseInvoiceId || initial?.sourceId || ""}`;
   const [ready, setReady] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [knowledge, setKnowledge] = useState<DocumentKnowledge>(id ? { state: "loading", ref: { kind: "saved", id } } : { state: "new" });
+  const doc = knowledge.state === "known" ? knowledge.document : knowledge.state === "unconfirmed" ? knowledge.lastKnown : null;
+  const pendingRecovery = useRef<any>(null);
+  const routeGeneration = useRef(0);
+  const loadedRecoveryKey = useRef<string | null>(null);
+  const [guard, setGuard] = useState<any>(null);
   const definition = workflowKinds[kind],
-    [doc, setDoc] = useState<any>(null),
     [linkedSource, setLinkedSource] = useState<any>(null),
     [form, setForm] = useState<any>(() => ({
       kind,
@@ -116,10 +136,17 @@ export function WorkflowDocumentEditor({
     [showReverse, setShowReverse] = useState(false);
   const lock = useRef(false),
     feedback = useRef<HTMLDivElement>(null);
-  const canWrite = !!capabilities?.kinds?.[kind]?.write,
-    editable = canWrite && (!doc || ["DRAFT", "CHALLAN"].includes(doc.status));
+  const canWrite = !!capabilities?.kinds?.[kind]?.write;
+  const presentation = workflowDocumentPresentation(kind, knowledge, { write: canWrite, approve: !!capabilities?.approve });
+  const editable = presentation.canEdit;
   const apply = (v: any) => {
-    setDoc(v);
+    if (!v?.id || !Array.isArray(v.payload?.lines) || typeof v.version !== "number") throw new Error("The server returned an incomplete document. Check saved status before continuing.");
+    if (v.kind !== kind) {
+      if (workflowKinds[v.kind]) onOpen(v.kind, v.id);
+      throw new Error("This reference belongs to a different inventory workflow. Open that saved record before taking another action.");
+    }
+    pendingRecovery.current = null;
+    setKnowledge({ state: "known", document: v });
     setForm({
       kind: v.kind,
       reference: v.reference,
@@ -135,21 +162,37 @@ export function WorkflowDocumentEditor({
   };
   useEffect(() => {
     let active = true;
+    const generation = ++routeGeneration.current;
+    setReady(false);
+    loadedRecoveryKey.current = null;
+    setError("");
+    setNotice("");
+    setGuard(null);
+    pendingRecovery.current = null;
+    setKnowledge(id ? { state: "loading", ref: { kind: "saved", id } } : { state: "new" });
     const initialise = async () => {
       let recovered: any = null;
       try {
         recovered = JSON.parse(sessionStorage.getItem(recoveryKey) || "null");
       } catch {
-        setNotice(
-          "Browser draft recovery is unavailable. Save the draft before leaving.",
-        );
+        recovered = { invalid: true };
       }
+      const restoredId = id || recovered?.documentId;
+      const validRecoveryForm = (value: any) => value && value.kind === kind && typeof value.requestKey === "string" && value.requestKey.length > 0 && Array.isArray(value.payload?.lines) && value.payload.lines.every((line: any) => line && typeof line === "object" && !Array.isArray(line));
       try {
-        if (id) {
+        if (restoredId) {
+          const ref: DocumentReference = { kind: "saved", id: restoredId };
+          pendingRecovery.current = recovered?.pending ? { ...recovered, documentId: restoredId } : recoveryOperation ? { documentId: restoredId, documentVersion: recoveryVersion, form, pending: { operation: recoveryOperation } } : null;
+          setKnowledge({ state: "loading", ref });
           const saved = await apiClient.get<any>(
-            `/inventory/workspace/documents/${id}`,
+            `/inventory/workspace/documents/${restoredId}`,
           );
           if (!active) return;
+          const pending = pendingRecovery.current;
+          if (pending && !(typeof pending.documentVersion === "number" && saved.version > pending.documentVersion)) {
+            setKnowledge({ state: "unconfirmed", ref, operation: pending.pending.operation, lastKnown: saved });
+            return;
+          }
           apply(saved);
           if (saved.sourceId)
             apiClient
@@ -157,19 +200,37 @@ export function WorkflowDocumentEditor({
               .then((v) => {
                 if (active) setLinkedSource(v);
               })
-              .catch((e: any) => setError(e.message));
+              .catch((e: any) => { if (active) setError(e.message); });
           if (
-            recovered?.version === saved.version &&
+            validRecoveryForm(recovered?.form) &&
+            (recovered?.documentVersion ?? recovered?.version) === saved.version &&
             ["DRAFT", "CHALLAN"].includes(saved.status)
           ) {
             setForm(recovered.form);
             setNotice("Restored unsaved edits from this tab.");
           }
+        } else if (recoveryRequestKey) {
+          const saved = await apiClient.get<any>(`/inventory/workspace/documents/by-request/${encodeURIComponent(recoveryRequestKey)}`);
+          if (!active) return;
+          if (recoveryOperation && !(typeof recoveryVersion === "number" && saved.version > recoveryVersion)) {
+            pendingRecovery.current = { documentId: saved.id, documentVersion: recoveryVersion, form, pending: { operation: recoveryOperation } };
+            setKnowledge({ state: "unconfirmed", ref: { kind: "saved", id: saved.id }, operation: recoveryOperation, lastKnown: saved });
+          } else apply(saved);
+        } else if (recovered?.invalid || (recovered && (!validRecoveryForm(recovered.form) || (recovered.pending?.creation && !validRecoveryForm(recovered.pending.creation))))) {
+          setKnowledge({ state: "unconfirmed", ref: { kind: "request", requestKey: "", creation: null }, operation: "create" });
+          setError("The browser recovery record cannot be read. Keep the original evidence and ask an inventory administrator to inspect the saved records and Counts & audit before another stock operation.");
         } else if (recovered?.form) {
           setForm(recovered.form);
-          setNotice(
-            "Restored this unfinished document. Stock has not changed.",
-          );
+          if (recovered.pending || recovered.schemaVersion !== 2) {
+            const creation = recovered.pending?.creation || recovered.form;
+            const ref: DocumentReference = { kind: "request", requestKey: creation.requestKey, creation };
+            const operation = recovered.pending?.operation || (typeof recovered.version === "number" ? "transition" : "create");
+            pendingRecovery.current = { ...recovered, schemaVersion: 2, documentVersion: recovered.documentVersion ?? recovered.version, pending: { operation, creation } };
+            setKnowledge({ state: "unconfirmed", ref, operation });
+          } else {
+            setKnowledge({ state: "new" });
+            setNotice("Restored unsaved draft details. This draft has not been submitted.");
+          }
         } else if (initial?.purchaseInvoiceId) {
           const invoice = await apiClient.get<any>(
             `/pharmacy/purchase-invoices/${initial.purchaseInvoiceId}`,
@@ -221,9 +282,18 @@ export function WorkflowDocumentEditor({
           }));
         }
       } catch (e: any) {
+        if (!active) return;
         setError(e.message);
+        if (restoredId) {
+          const ref: DocumentReference = { kind: "saved", id: restoredId };
+          setKnowledge(pendingRecovery.current ? { state: "unconfirmed", ref, operation: pendingRecovery.current.pending.operation || "save" } : { state: "load-failed", ref });
+        } else if (recoveryRequestKey) {
+          setKnowledge({ state: "unconfirmed", ref: { kind: "request", requestKey: recoveryRequestKey, creation: null }, operation: "create" });
+        } else if (initial?.purchaseInvoiceId) {
+          setKnowledge({ state: "load-failed", ref: { kind: "invoice", id: initial.purchaseInvoiceId } });
+        }
       } finally {
-        if (active) setReady(true);
+        if (active && generation === routeGeneration.current) { loadedRecoveryKey.current = recoveryKey; setReady(true); }
       }
     };
     void initialise();
@@ -253,7 +323,7 @@ export function WorkflowDocumentEditor({
               ["APPROVED", "SENT", "PART_RECEIVED"].includes(d.status),
             ),
           );
-      })().catch((e: any) => setError(e.message));
+      })().catch((e: any) => { if (active) setError(e.message); });
     if (["LOSS", "SUPPLIER_RETURN"].includes(kind))
       (async () => {
         const rows: any[] = [];
@@ -265,26 +335,24 @@ export function WorkflowDocumentEditor({
           if (page >= r.totalPages) break;
         }
         if (active) setHolds(rows);
-      })().catch((e: any) => setError(e.message));
+      })().catch((e: any) => { if (active) setError(e.message); });
     return () => {
       active = false;
+      routeGeneration.current++;
     };
-  }, [id, recoveryKey]);
+  }, [id, recoveryKey, loadAttempt, recoveryRequestKey, recoveryVersion, recoveryOperation]);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || loadedRecoveryKey.current !== recoveryKey) return;
     try {
-      if (editable)
-        sessionStorage.setItem(
-          recoveryKey,
-          JSON.stringify({ version: doc?.version, form }),
-        );
-      else sessionStorage.removeItem(recoveryKey);
+      if (pendingRecovery.current) {
+        sessionStorage.setItem(recoveryKey, JSON.stringify(pendingRecovery.current));
+      } else if (knowledge.state === "new" || knowledge.state === "known") {
+        sessionStorage.setItem(recoveryKey, JSON.stringify({ schemaVersion: 2, documentId: doc?.id, documentVersion: doc?.version, form }));
+      }
     } catch {
-      setNotice(
-        "Browser draft recovery is unavailable. Save the draft before leaving.",
-      );
+      setNotice("Browser recovery is unavailable. Restore browser storage before submitting a new operation.");
     }
-  }, [ready, recoveryKey, form, editable, doc?.version]);
+  }, [ready, knowledge, form, recoveryKey]);
   useEffect(() => {
     let active = true;
     const timer = setTimeout(() => {
@@ -304,7 +372,7 @@ export function WorkflowDocumentEditor({
               ),
             );
         })
-        .catch((e: any) => setError(e.message));
+        .catch((e: any) => { if (active) setError(e.message); });
     }, 250);
     return () => {
       active = false;
@@ -325,7 +393,7 @@ export function WorkflowDocumentEditor({
             setSalePages(r.totalPages);
           }
         })
-        .catch((e: any) => setError(e.message));
+        .catch((e: any) => { if (active) setError(e.message); });
     }, 200);
     return () => {
       active = false;
@@ -381,99 +449,154 @@ export function WorkflowDocumentEditor({
     ]);
     setSearch("");
   };
+  const markPending = (operation: "create" | "save" | "transition", saved: any, creation = form, action?: string) => {
+    const envelope = { schemaVersion: 2, documentId: saved?.id, documentVersion: saved?.version, form: creation, pending: { operation, creation, action, reason: reversal || form.payload.reason } };
+    sessionStorage.setItem(recoveryKey, JSON.stringify(envelope));
+    pendingRecovery.current = envelope;
+    setKnowledge({ state: "unconfirmed", ref: saved?.id ? { kind: "saved", id: saved.id } : { kind: "request", requestKey: creation.requestKey, creation }, operation, lastKnown: saved || undefined });
+  };
+  const checkSavedStatus = async () => {
+    if (lock.current) return;
+    const ref = knowledge.state === "known" ? { kind: "saved" as const, id: knowledge.document.id } : knowledge.state !== "new" ? knowledge.ref : null;
+    if (!ref) return;
+    if (ref.kind === "invoice") {
+      setLoadAttempt(value => value + 1);
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const generation = routeGeneration.current;
+    try {
+      let savedId = ref.kind === "saved" ? ref.id : undefined;
+      const pending = pendingRecovery.current;
+      const expectedVersion = pending?.documentVersion ?? (knowledge.state === "unconfirmed" ? knowledge.lastKnown?.version : undefined);
+      const needsSettlement = knowledge.state === "unconfirmed" && knowledge.operation !== "create";
+      if (!savedId && ref.kind === "request") {
+        if (!ref.requestKey) throw new Error("The retained request reference is missing. Share the original document and recovery handoff with an inventory administrator.");
+        let saved: any;
+        try {
+          saved = await apiClient.get<any>(`/inventory/workspace/documents/by-request/${encodeURIComponent(ref.requestKey)}`);
+        } catch (lookupError: any) {
+          if (lookupError.status !== 404 || !canWrite || !ref.creation) throw lookupError;
+          saved = await apiClient.post<any>("/inventory/workspace/documents", ref.creation);
+        }
+        savedId = saved?.id;
+        if (!savedId) throw new Error("The server did not return a saved document reference. Keep this request reference for an authorized colleague.");
+        if (generation !== routeGeneration.current) return;
+        pendingRecovery.current = { schemaVersion: 2, documentId: savedId, documentVersion: expectedVersion, form: ref.creation || form, pending: { operation: needsSettlement ? "save" : "create" } };
+        setKnowledge({ state: "unconfirmed", ref: { kind: "saved", id: savedId }, operation: needsSettlement ? "save" : "create" });
+      }
+      let latest = await apiClient.get<any>(`/inventory/workspace/documents/${savedId}`);
+      if (generation !== routeGeneration.current) return;
+      if (needsSettlement && !(typeof expectedVersion === "number" && latest.version > expectedVersion)) {
+        if (!canWrite) {
+          setError("The saved revision has not advanced, so the interrupted request may still finish. Ask a colleague with this workflow's write permission to Check saved status using the recovery handoff.");
+          return;
+        }
+        const fencedVersion = expectedVersion ?? latest.version;
+        latest = await apiClient.post<any>(`/inventory/workspace/documents/${savedId}/resolve`, { version: fencedVersion });
+        if (generation !== routeGeneration.current) return;
+        if (!(latest?.version > fencedVersion)) throw new Error("The interrupted request has not been settled. Keep the recovery reference and check saved status again.");
+      }
+      apply(latest);
+      setGuard(null);
+      setNotice("Saved status checked. Review the confirmed outcome before another operation.");
+      window.dispatchEvent(new CustomEvent("inventory-workspace-refresh"));
+    } catch (e: any) {
+      if (generation === routeGeneration.current) setError(e.message);
+    } finally {
+      lock.current = false;
+      if (generation === routeGeneration.current) setBusy(false);
+    }
+  };
   /**
    * @cc [owner:nareshshah139] fresh-count-navigation
    * Starting a fresh count MUST use the saved document revision and open the returned attempt
    * without first saving or copying the old physical measurements.
    */
   const perform = async (action?: string) => {
-    if (lock.current) return;
+    if (lock.current || !presentation.canMutate) return;
     lock.current = true;
     setBusy(true);
     setError("");
     setNotice("");
+    setGuard(null);
+    const generation = routeGeneration.current;
     let saved = doc;
+    let dispatched = false;
     try {
       if (editable && action !== "CANCEL" && action !== "REVERSE" && action !== "RECOUNT") {
+        markPending(doc ? "save" : "create", doc);
+        dispatched = true;
         saved = doc
-          ? await apiClient.patch<any>(
-              `/inventory/workspace/documents/${doc.id}`,
-              { ...form, version: doc.version },
-            )
+          ? await apiClient.patch<any>(`/inventory/workspace/documents/${doc.id}`, { ...form, version: doc.version })
           : await apiClient.post<any>("/inventory/workspace/documents", form);
+        if (generation !== routeGeneration.current) return;
         apply(saved);
+        sessionStorage.setItem(recoveryKey, JSON.stringify({ schemaVersion: 2, documentId: saved.id, documentVersion: saved.version, form }));
       }
       if (action) {
-        saved = await apiClient.post<any>(
-          `/inventory/workspace/documents/${saved.id}/transition`,
-          {
-            version: saved.version,
-            action,
-            reason: reversal || form.payload.reason,
-            ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
-          },
-        );
+        markPending("transition", saved, form, action);
+        dispatched = true;
+        const result = await apiClient.post<any>(`/inventory/workspace/documents/${saved.id}/transition`, {
+          version: saved.version, action, reason: reversal || form.payload.reason,
+          ...(kind === "TARGET_REVIEW" ? { lineIds: selected } : {}),
+        });
+        if (generation !== routeGeneration.current) return;
         if (["CREATE_PO", "CONVERT_SALE", "RECOUNT"].includes(action)) {
-          onOpen(saved.kind, saved.id);
+          pendingRecovery.current = null;
+          sessionStorage.removeItem(recoveryKey);
+          onOpen(result.kind, result.id);
           return;
         }
-        apply(
-          await apiClient.get(`/inventory/workspace/documents/${saved.id}`),
-        );
+        const latest = await apiClient.get<any>(`/inventory/workspace/documents/${saved.id}`);
+        if (generation !== routeGeneration.current) return;
+        if (latest.version <= saved.version) throw new Error("The saved revision has not advanced. Check saved status to settle the interrupted operation before retrying.");
+        saved = latest;
+        apply(saved);
       }
-      if (saved?.id && !id) {
-        sessionStorage.removeItem(recoveryKey);
-        onOpen(saved.kind, saved.id);
-      }
+      if (saved?.id && !id) onOpen(saved.kind, saved.id);
       window.dispatchEvent(new CustomEvent("inventory-workspace-refresh"));
-      setNotice(
-        action
-          ? `Confirmed: ${labelStatus(saved.status)}. ${["DRAFT", "AWAITING_APPROVAL", "APPROVED"].includes(saved.status) ? "Stock has not changed." : kind === "GATE_PASS" ? "Delivery record saved; stock unchanged." : kind === "CREDIT_NOTE" ? "Supplier credit is available for allocation." : "The saved history below shows the exact stock effects."}`
-          : "Draft saved. Stock and supplier balances have not changed.",
-      );
+      setNotice(action ? "Saved status confirmed. Review the outcome and recorded effects below." : "Document saved. Review the confirmed document status below.");
     } catch (e: any) {
-      setError(e.message);
+      if (generation !== routeGeneration.current) return;
+      setError(dispatched ? e.message : `Browser recovery could not be saved. No request was sent. Restore browser storage before retrying. ${e.message}`);
       if (saved?.id) {
         try {
-          const latest = await apiClient.get<any>(
-            `/inventory/workspace/documents/${saved.id}`,
-          );
-          setDoc(latest);
-          if (latest.status !== "DRAFT") apply(latest);
+          const latest = await apiClient.get<any>(`/inventory/workspace/documents/${saved.id}`);
+          if (generation !== routeGeneration.current) return;
+          const expectedVersion = pendingRecovery.current?.documentVersion ?? saved.version;
+          if ([400, 403, 409, 422].includes(e.status) || latest.version > expectedVersion || !dispatched) {
+            apply(latest);
+            if ([400, 403, 422].includes(e.status) && latest.version === expectedVersion && ["DRAFT", "CHALLAN"].includes(latest.status)) {
+              setForm({ ...form, version: latest.version });
+              setNotice("Your attempted edits remain in the form and have not been saved. Correct the reported issue before trying again.");
+            }
+            if (e.body?.recovery) setGuard(e.body);
+          } else {
+            setKnowledge({ state: "unconfirmed", ref: { kind: "saved", id: saved.id }, operation: action ? "transition" : "save", lastKnown: saved });
+          }
         } catch {
-          setError(
-            `${e.message} Current status could not be confirmed. Reload this record before retrying.`,
-          );
+          if (generation !== routeGeneration.current) return;
+          setKnowledge({ state: "unconfirmed", ref: { kind: "saved", id: saved.id }, operation: action ? "transition" : "save", lastKnown: saved });
         }
+      } else if (dispatched && [400, 403, 422].includes(e.status)) {
+        pendingRecovery.current = null;
+        setKnowledge({ state: "new" });
+        setGuard(e.body?.recovery ? e.body : null);
       }
     } finally {
       lock.current = false;
-      setBusy(false);
-      feedback.current?.focus();
+      if (generation === routeGeneration.current) {
+        setBusy(false);
+        feedback.current?.focus();
+      }
     }
   };
-  const primary = () => {
-    if (!doc || doc.status === "DRAFT") {
-      if (kind === "SUPPLIER_RETURN") return "CHALLAN";
-      if (kind === "PURCHASE_ORDER") return "SUBMIT";
-      if (kind === "SHORTBOOK") return "CREATE_PO";
-      if (kind === "QUOTATION") return "CONVERT_SALE";
-      if (kind === "TARGET_REVIEW") return "ACCEPT";
-      return "POST";
-    }
-    if (doc.status === "CHALLAN") return "POST";
-    if (doc.status === "AWAITING_APPROVAL")
-      return capabilities?.approve ? "APPROVE" : null;
-    if (doc.status === "APPROVED" && kind !== "PURCHASE_ORDER") return "POST";
-    return null;
-  };
-  const action = primary();
-  const primaryText =
-    doc?.status === "CHALLAN"
-      ? "Finalise supplier credit"
-      : doc?.status === "AWAITING_APPROVAL"
-        ? "Approve document"
-        : definition.primary;
+  const action = presentation.primaryAction;
+  const primaryText = presentation.primaryLabel;
   const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
   const totals = form.payload.lines.reduce(
     (t: any, l: any) => {
@@ -504,7 +627,7 @@ export function WorkflowDocumentEditor({
     },
     { taxable: 0, tax: 0 },
   );
-  if (!ready) return <p role="status">Loading document…</p>;
+  if (!ready || loadedRecoveryKey.current !== recoveryKey) return <p role="status">Loading document…</p>;
   return (
     <div className="space-y-5">
       <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-3 print:hidden">
@@ -512,7 +635,7 @@ export function WorkflowDocumentEditor({
           <ArrowLeft className="h-4 w-4" />
         </InventoryAction>
         <span role="status" className="text-sm font-semibold">
-          {doc ? labelStatus(doc.status) : "Unsaved draft • no stock change"}
+          {presentation.heading}
         </span>
         <div className="flex flex-wrap gap-2">
           {canWrite && editable && (
@@ -531,6 +654,44 @@ export function WorkflowDocumentEditor({
           )}
         </div>
       </div>
+      <section aria-label="Document outcome" className="space-y-2 rounded-md border p-4">
+        <p>{presentation.happened}</p>
+        <p>{presentation.stockExplanation}</p>
+        <p>{presentation.recovery}</p>
+        {presentation.checkLabel && (
+          <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>{presentation.checkLabel}</Button>
+        )}
+        {knowledge.state === "known" && <Button variant="outline" onClick={checkSavedStatus} disabled={busy}>Reload saved record</Button>}
+        {doc && (["ORDERED", "CONVERTED"].includes(doc.status) || (doc.kind === "SHORTBOOK" && ["PART_RECEIVED", "RECEIVED", "CANCELLED"].includes(doc.status))) && (() => {
+          const destinationEvent = [...(doc.events || [])].reverse().find((event: any) => event.detail?.destinationId || event.detail?.orderId);
+          const destination = destinationEvent?.detail?.destinationId || destinationEvent?.detail?.orderId;
+          const destinationKind = doc.kind === "SHORTBOOK" ? "PURCHASE_ORDER" : "COUNTER_SALE";
+          return destination ? <Button variant="outline" onClick={() => onOpen(destinationKind, destination)}>Open linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</Button> : <a className="block underline" href={`?area=${destinationKind === "PURCHASE_ORDER" ? "reorder" : "sales"}&view=${destinationKind}&search=${encodeURIComponent(doc.reference)}`}>Find the linked {destinationKind === "PURCHASE_ORDER" ? "purchase order" : "sale draft"}</a>;
+        })()}
+        {doc?.status === "REVERSED" && (() => {
+          const correction = [...(doc.events || [])].reverse().find((event: any) => event.detail?.correctionId)?.detail?.correctionId;
+          return correction ? <Button variant="outline" onClick={() => onOpen("CORRECTION", correction)}>Open linked correction</Button> : null;
+        })()}
+        {doc?.kind === "PURCHASE_ORDER" && ["APPROVED", "PART_RECEIVED", "RECEIVED", "CANCELLED", "SENT"].includes(doc.status) && <a className="block underline" href={`?area=purchases&view=INWARD_CHALLAN&sourceId=${encodeURIComponent(doc.id)}`}>Review linked receipts</a>}
+        {(presentation.stockEffect === "unknown" || presentation.auditRecovery) && <a className="block underline" href="?area=stock&view=COUNT">Open Counts &amp; audit</a>}
+        {kind === "TARGET_REVIEW" && <a className="block underline" href="?area=reorder&view=TARGET_REVIEW">Open Reorder target review</a>}
+        {(!canWrite || presentation.stockEffect === "unknown" || error) && (
+          <label className="block text-sm">Recovery handoff
+            <textarea readOnly className={inputClass + " h-24"} value={`Branch ${user?.branchId || "unknown"}; ${kind}; document ${doc?.id || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "saved" ? knowledge.ref.id : id || "not yet confirmed")}; request ${knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey || "missing" : form.requestKey || "unknown"}; reference ${form.reference || "unknown"}${initial?.purchaseInvoiceId ? `; source invoice ${initial.purchaseInvoiceId}` : ""}. ${presentation.stockExplanation} ${presentation.recovery}${pendingRecovery.current?.pending ? ` Pending action: ${pendingRecovery.current.pending.action || pendingRecovery.current.pending.operation}. ${pendingRecovery.current.pending.reason || ""}` : ""} Recovery link: ${typeof window === "undefined" ? "" : window.location.origin + window.location.pathname}?area=${workflowKinds[kind]?.area || "stock"}&view=${encodeURIComponent(kind)}&${doc?.id || id ? `document=${encodeURIComponent(doc?.id || id!)}` : `recoverRequest=${encodeURIComponent(recoveryRequestKey || (knowledge.state !== "new" && knowledge.state !== "known" && knowledge.ref.kind === "request" ? knowledge.ref.requestKey : form.requestKey) || "")}`}${pendingRecovery.current?.pending?.operation && pendingRecovery.current.pending.operation !== "create" ? `&recoverOperation=${pendingRecovery.current.pending.operation}&recoverVersion=${pendingRecovery.current.documentVersion ?? doc?.version ?? ""}` : ""}`} />
+          </label>
+        )}
+      </section>
+      {guard?.recovery && (
+        <section aria-label="Recovery steps" className="space-y-2 rounded-md border p-4">
+          {guard.stockEffect === "NONE" && <p>This rejected attempt made no stock change. Earlier recorded movements remain unchanged.</p>}
+          <p>{guard.recovery.action === "START_FRESH_COUNT" ? "Choose Start fresh count and physically recount using current balances." : guard.recovery.action === "CORRECT_FIELD" ? "Correct the identified count using the actual observed quantity. Do not change a truthful observation to bypass a stock guard." : "Inspect the linked batch and blocking records. Confirm a real release, loss or supplier return before starting a fresh physical count. Do not change a truthful observation to bypass a stock guard."}</p>
+          {guard.recovery.inventoryId && <a className="underline" href={`?area=stock&view=list&item=${encodeURIComponent(guard.recovery.inventoryId)}`}>Inspect batch balance and holds</a>}
+          {guard.recovery.sourceId && <Button variant="link" onClick={() => onOpen(guard.recovery.sourceKind || "HOLD", guard.recovery.sourceId)}>Open blocking source hold</Button>}
+          {(guard.recovery.documents || []).map((entry: any) => <Button key={entry.id} variant="link" onClick={() => onOpen(entry.kind, entry.id)}>Open {entry.reference || entry.id}</Button>)}
+          {guard.recovery.action === "REVERSE_DEPENDENCIES" && <p>A manager must inspect and reverse only the incorrect downstream returns or disposals before reversing this record.</p>}
+          {!canWrite && <p>Share this record with a colleague who has the required inventory write or approval permission.</p>}
+        </section>
+      )}
       {linkedSource && (
         <Button
           variant="link"
@@ -1213,7 +1374,7 @@ export function WorkflowDocumentEditor({
           >
             <Printer className="h-4 w-4" />
           </InventoryAction>
-          {kind === "COUNT" && canWrite && (
+          {kind === "COUNT" && canWrite && presentation.canMutate && (
             <Button variant="outline" onClick={() => perform("RECOUNT")} disabled={busy}>
               Start fresh count
             </Button>
@@ -1221,12 +1382,12 @@ export function WorkflowDocumentEditor({
           {["HOLD", "SALES_RETURN"].includes(kind) &&
             doc.status === "POSTED" &&
             doc.effects?.some((e: any) => e.heldDelta > 0) &&
-            canWrite && (
+            canWrite && presentation.canMutate && (
               <Button onClick={() => perform("RELEASE")} disabled={busy}>
                 Release held stock
               </Button>
             )}
-          {kind === "INWARD_CHALLAN" && doc.status === "POSTED" && (
+          {kind === "INWARD_CHALLAN" && doc.status === "POSTED" && presentation.canMutate && (
             <Button onClick={() => onInvoice(doc)}>
               Create linked purchase bill
             </Button>
@@ -1234,7 +1395,7 @@ export function WorkflowDocumentEditor({
           {["DRAFT", "AWAITING_APPROVAL", "APPROVED", "CHALLAN"].includes(
             doc.status,
           ) &&
-            canWrite && (
+            canWrite && presentation.canMutate && (
               <Button
                 variant="outline"
                 onClick={() => perform("CANCEL")}
@@ -1245,7 +1406,7 @@ export function WorkflowDocumentEditor({
                   : "Cancel document"}
               </Button>
             )}
-          {doc.status === "AWAITING_APPROVAL" && capabilities?.approve && (
+          {doc.status === "AWAITING_APPROVAL" && capabilities?.approve && presentation.canMutate && (
             <Button
               variant="outline"
               onClick={() => perform("REJECT")}
@@ -1256,7 +1417,7 @@ export function WorkflowDocumentEditor({
           )}
           {(["POSTED", "CHALLAN"].includes(doc.status) ||
             (kind === "SALES_RETURN" && doc.status === "RELEASED")) &&
-            capabilities?.approve &&
+            capabilities?.approve && presentation.canMutate &&
             !["CORRECTION", "TARGET_REVIEW"].includes(kind) && (
               <Button
                 variant="outline"
@@ -1267,7 +1428,7 @@ export function WorkflowDocumentEditor({
             )}
         </div>
       )}
-      {showReverse && (
+      {showReverse && presentation.canMutate && (
         <div className="flex flex-wrap gap-3 rounded-md border p-4">
           <label className="min-w-0 basis-64 flex-1 text-sm">
             Reversal reason
@@ -1335,7 +1496,7 @@ export function WorkflowDocumentEditor({
             {doc.events.map((e: any) => (
               <li key={e.id} className="py-3 text-sm">
                 {new Date(e.createdAt).toLocaleString("en-IN")} ·{" "}
-                {e.actorName || e.actorId} · {e.action} ·{" "}
+                {e.actorName || e.actorId} · {e.action === "RESOLVE_OUTCOME" ? "Interrupted attempt resolved" : e.action} ·{" "}
                 {labelStatus(e.toStatus)}
                 {e.reason && ` · ${e.reason}`}
                 {e.detail && (

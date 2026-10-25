@@ -932,6 +932,15 @@ function canResumeManualReview(invoice: PurchaseInvoice) {
   );
 }
 
+const importAttemptIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-recovery-entry-and-handoff
+ * Missing-invoice read failures and fresh intake MUST expose recovery in the UI. A malformed
+ * attempt reference MUST NOT skip exact invoice readback or unlock its stock outcome. Handoffs MUST
+ * retain exact attempt, original-operator, invoice and original-document references when known;
+ * denied access or clipboard failure MUST leave a usable, copyable recovery route.
+ */
 /**
  * @cc [owner:nareshshah139] receipt-correction-stock-intent
  * Editable purchases MUST allow selecting a posted receipt; removing an existing link MUST
@@ -939,6 +948,9 @@ function canResumeManualReview(invoice: PurchaseInvoice) {
  */
 export function PurchaseInvoiceWorkbench({
   invoiceId,
+  recoveryAttemptId,
+  recoveryActorId,
+  recoverySourceIds,
   receiptId,
   intakeId,
   importedDraft,
@@ -949,6 +961,9 @@ export function PurchaseInvoiceWorkbench({
   onNew,
 }: {
   invoiceId?: string;
+  recoveryAttemptId?: string;
+  recoveryActorId?: string;
+  recoverySourceIds?: string[];
   receiptId?: string;
   intakeId?: string;
   importedDraft?: any;
@@ -960,13 +975,16 @@ export function PurchaseInvoiceWorkbench({
 } = {}) {
   const { user } = useDashboardUser();
   const recoveryKey = user
-    ? `purchase-intake:${user.branchId}:${user.id}:${invoiceId || receiptId || intakeId || draftKey || "new"}`
+    ? `purchase-intake:${user.branchId}:${user.id}:${recoveryAttemptId || invoiceId || receiptId || intakeId || draftKey || "new"}`
     : null;
   return (
     <PurchaseInvoiceEditor
       key={recoveryKey || "anonymous"}
       recoveryKey={recoveryKey}
       invoiceId={invoiceId}
+      recoveryAttemptId={recoveryAttemptId}
+      recoveryActorId={recoveryActorId}
+      recoverySourceIds={recoverySourceIds}
       receiptId={receiptId}
       intakeId={intakeId}
       importedDraft={importedDraft}
@@ -1006,7 +1024,8 @@ export function PurchaseInvoiceWorkbench({
  * @cc [owner:nareshshah139,label:product] purchase-check-before-stock
  * The primary scan and save actions MUST retain a reviewable draft without adding stock.
  * Adding stock MUST be a separately labelled action; automatic processing MUST stay an explicit
- * secondary choice. Editing reviewed values MUST clear the final human confirmation.
+ * secondary choice. Linked receipts MUST use Post bill in instructions and progress and explain
+ * that posting adds no further stock. Editing reviewed values MUST clear the final human confirmation.
  */
 /**
  * @cc [owner:nareshshah139,label:product] invoice-field-color-evidence
@@ -1021,6 +1040,12 @@ export function PurchaseInvoiceWorkbench({
  * Catalogue rejections MUST offer in-place name correction, catalogue creation and manual matching
  * to authorized editors. Reviewed bills MUST reopen through the revision-checked API before edits;
  * posted or unknown stock outcomes MUST stay locked. Reopening and corrections MUST clear final approval.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] historical-stock-recovery-guidance
+ * Historical-stock holds with a confirmed unposted invoice status MUST offer Counts & audit
+ * and a copyable invoice handoff.
+ * Guidance MUST retain stock uncertainty and distinguish physical reconciliation from supplier accounting.
  */
 /**
  * @cc [owner:nareshshah139,label:state] purchase-recovery-editor-identities
@@ -1040,6 +1065,9 @@ export function PurchaseInvoiceWorkbench({
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
+  recoveryAttemptId,
+  recoveryActorId,
+  recoverySourceIds,
   receiptId,
   intakeId,
   importedDraft,
@@ -1051,6 +1079,9 @@ function PurchaseInvoiceEditor({
 }: {
   recoveryKey: string | null;
   invoiceId?: string;
+  recoveryAttemptId?: string;
+  recoveryActorId?: string;
+  recoverySourceIds?: string[];
   receiptId?: string;
   intakeId?: string;
   importedDraft?: any;
@@ -1084,8 +1115,14 @@ function PurchaseInvoiceEditor({
   const [revisionConflict, setRevisionConflict] = useState<string | null>(null);
   const [unknownStockInvoiceId, setUnknownStockInvoiceId] = useState<
     string | null
-  >(null);
-  const [importAttemptId, setImportAttemptId] = useState<string | null>(null);
+  >(recoveryAttemptId ? invoiceId || (importAttemptIdPattern.test(recoveryAttemptId) ? 'unconfirmed-import' : null) : null);
+  const [importAttemptId, setImportAttemptId] = useState<string | null>(importAttemptIdPattern.test(recoveryAttemptId || '') ? recoveryAttemptId! : null);
+  const [delegatedRecovery, setDelegatedRecovery] = useState({
+    attemptId: recoveryAttemptId || '', originalActorId: recoveryActorId || '',
+    invoiceId: invoiceId || '', sourceDocumentIds: recoverySourceIds || [], reason: '',
+  });
+  const [showDelegatedRecovery, setShowDelegatedRecovery] = useState(!!recoveryAttemptId);
+  const [rejectedRecoveryReference, setRejectedRecoveryReference] = useState<string | null>(null);
   const [unlinkedRecoveryId, setUnlinkedRecoveryId] = useState<string | null>(null);
   const [rejectedImportId, setRejectedImportId] = useState<string | null>(null);
   const [resolvingImport, setResolvingImport] = useState(false);
@@ -1242,6 +1279,10 @@ function PurchaseInvoiceEditor({
         setEditingId(saved.editingId || null);
         setUnknownStockInvoiceId(saved.unknownStockInvoiceId || null);
         setImportAttemptId(saved.importAttemptId || null);
+        if (saved.delegatedRecovery) setDelegatedRecovery(saved.delegatedRecovery);
+        else if (saved.importAttemptId) setDelegatedRecovery({ attemptId: saved.importAttemptId,
+          originalActorId: user?.id || '', invoiceId: saved.unknownStockInvoiceId === 'unconfirmed-import' ? '' : saved.unknownStockInvoiceId || '',
+          sourceDocumentIds: saved.additionalSourceIds || [], reason: '' });
         setUnlinkedRecoveryId(saved.unlinkedRecoveryId || null);
         setRejectedImportId(saved.rejectedImportId || null);
         recoveredInvoiceId.current = saved.editingId || null;
@@ -1281,6 +1322,7 @@ function PurchaseInvoiceEditor({
           version: 1,
           unknownStockInvoiceId,
           importAttemptId,
+          delegatedRecovery,
           unlinkedRecoveryId,
           rejectedImportId,
           header,
@@ -1307,6 +1349,7 @@ function PurchaseInvoiceEditor({
     recoveryReady,
     unknownStockInvoiceId,
     importAttemptId,
+    delegatedRecovery,
     unlinkedRecoveryId,
     rejectedImportId,
     header,
@@ -1931,6 +1974,8 @@ function PurchaseInvoiceEditor({
    * @cc [owner:nareshshah139,label:state] import-outcome-authoritative-recovery
    * An unknown import MUST stay locked until its matching durable attempt is fenced with no
    * stock, or its exact saved invoice is read back. Failed or mismatched resolution MUST not unlock.
+   * A fenced no-stock result MUST explain that no invoice or stock was created and name available
+   * recovery controls even when the server supplies only a diagnostic message.
    */
   const acceptImportOutcome = async (result: any, expectedId: string) => {
     if (result?.attemptId !== expectedId) throw new Error('Import recovery returned a different attempt. Keep this purchase locked.');
@@ -1948,10 +1993,14 @@ function PurchaseInvoiceEditor({
       if (retained?.draft && !editingId) applyExtractedDraft(retained.draft, retained.extraction, retained.masterMatches);
       setUnknownStockInvoiceId(null);
       setImportAttemptId(null);
+      setRevisionConflict(null);
       setShowIntakeHome(false);
       setManualEntry(true);
       setError(null);
-      setNotice(result.message || 'This import is stopped. It created no invoice or stock. Retry with a new attempt, enter the complete invoice manually, or reject the upload.');
+      const retainedOriginal = retained?.sourceDocument || retained?.sourceDocuments?.[0] || sourceDocument;
+      setNotice('This import is stopped. It created no invoice or stock. ' + (retainedOriginal
+        ? 'Choose Enter complete invoice manually to type and verify the original, or Reject this upload to keep it out of intake. To scan again, select the complete invoice file and choose Scan bill.'
+        : 'Type the complete invoice below and review it, or select the complete invoice file and choose Scan bill.'));
       return true;
     }
     if (['DRAFT_SAVED', 'STOCK_COMMITTED'].includes(result.outcome) && typeof result.invoiceId === 'string' && result.invoiceId) {
@@ -1962,6 +2011,53 @@ function PurchaseInvoiceEditor({
       return true;
     }
     throw new Error('This import outcome is still unverified. Resolve it again before another stock operation.');
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:state] delegated-recovery-durable-reference
+   * Delegated recovery MUST persist the attempt and original reference before dispatch and keep
+   * intake locked on failure or mismatched response. It MUST require read/create/review access;
+   * a matching terminal outcome or exact saved invoice readback alone MAY unlock intake.
+   */
+  const recoverDelegatedImport = async () => {
+    if (resolvingImport || !access.read || !access.create || !access.review) return;
+    const id = delegatedRecovery.attemptId.trim();
+    const reason = delegatedRecovery.reason.trim();
+    if (!importAttemptIdPattern.test(id)) { setError('Enter a valid import attempt ID from the handoff.'); return; }
+    if (!reason) { setError('Enter a recovery reason.'); return; }
+    if (unknownStockInvoiceId && importAttemptId !== id) {
+      setError('Recover the current unknown purchase before opening a different import attempt.'); return;
+    }
+    const attempt = captureAttempt();
+    const reference = { ...delegatedRecovery, attemptId: id, reason,
+      originalActorId: delegatedRecovery.originalActorId.trim(),
+      invoiceId: delegatedRecovery.invoiceId.trim(),
+      sourceDocumentIds: [...new Set([...delegatedRecovery.sourceDocumentIds, sourceDocument?.id, ...additionalSourceIds].filter((value): value is string => !!value))],
+    };
+    setResolvingImport(true);
+    try {
+      if (!recoveryKey) throw new Error('Sign in before recovering this import.');
+      const unknownInvoice = reference.invoiceId || 'unconfirmed-import';
+      const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || '{}');
+      sessionStorage.setItem(recoveryKey, JSON.stringify({ ...stored, version: 1, header, lines,
+        unknownStockInvoiceId: unknownInvoice, importAttemptId: id, delegatedRecovery: reference }));
+      setDelegatedRecovery(reference);
+      setRejectedRecoveryReference(null);
+      setImportAttemptId(id);
+      setUnknownStockInvoiceId(unknownInvoice);
+      setShowIntakeHome(false);
+      const result = await apiClient.post('/pharmacy/purchase-invoices/ocr/recover-delegated', {
+        attemptId: id, reason, ...(reference.originalActorId ? { originalActorId: reference.originalActorId } : {}),
+        ...(reference.invoiceId ? { invoiceId: reference.invoiceId } : {}), sourceDocumentIds: reference.sourceDocumentIds,
+      });
+      if (attemptCurrent(attempt) && await acceptImportOutcome(result, id)) setShowDelegatedRecovery(false);
+    } catch (err) {
+      if (attemptCurrent(attempt)) {
+        setError(getErrorMessage(err));
+        if ([400, 404, 409].includes((err as { status?: number })?.status || 0)) setRejectedRecoveryReference(id);
+      }
+    }
+    finally { setResolvingImport(false); }
   };
 
   const resolveInterruptedImport = async () => {
@@ -2009,7 +2105,8 @@ function PurchaseInvoiceEditor({
 
   /**
    * @cc [owner:nareshshah139,label:state;product] purchase-import-outcome-unknown
-   * Automatic import MUST lock further writes before dispatch. A lost or malformed response MUST
+   * Automatic import MUST persist its new attempt and current actor/source reference together
+   * and lock further writes before dispatch. A lost or malformed response MUST
    * retain that lock and offer attempt resolution; only a matching fenced no-stock outcome, an
    * explicit no-stock response, or a verified saved invoice MAY clear it.
    */
@@ -2042,10 +2139,12 @@ function PurchaseInvoiceEditor({
         // Persist before dispatch, so reload and a lost response keep the same recovery identity.
         if (!recoveryKey) throw new Error('Sign in before importing stock.');
         const stored = JSON.parse(sessionStorage.getItem(recoveryKey) || '{}');
+        const nextRecovery = { attemptId: dispatchedAttemptId, originalActorId: user?.id || '', invoiceId: '', sourceDocumentIds: [], reason: '' };
         sessionStorage.setItem(recoveryKey, JSON.stringify({ ...stored, version: 1, header, lines,
-          importAttemptId: dispatchedAttemptId, unknownStockInvoiceId: 'unconfirmed-import' }));
+          importAttemptId: dispatchedAttemptId, delegatedRecovery: nextRecovery, unknownStockInvoiceId: 'unconfirmed-import' }));
         form.append('attemptId', dispatchedAttemptId);
         setImportAttemptId(dispatchedAttemptId);
+        setDelegatedRecovery(nextRecovery);
         setUnknownStockInvoiceId('unconfirmed-import'); setShowIntakeHome(false);
       }
       automaticDispatched = automate;
@@ -2597,9 +2696,23 @@ function PurchaseInvoiceEditor({
     setError(null);
   };
   const copyHandoff = async () => {
-    const id = recovery?.attempt.invoiceId || activeInvoice?.id || (unknownStockInvoiceId !== 'unconfirmed-import' ? unknownStockInvoiceId : null);
-    const invoiceLink = id ? `${window.location.origin}/dashboard/inventory?area=purchases&view=intake&invoice=${encodeURIComponent(id)}` : 'Unsaved purchase in this tab';
-    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink, recovery?.message || error || 'An authorized colleague is needed to continue this purchase.', recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
+    const id = recovery?.attempt.invoiceId || activeInvoice?.id || (unknownStockInvoiceId !== 'unconfirmed-import' ? unknownStockInvoiceId : null) || delegatedRecovery.invoiceId;
+    const attemptId = importAttemptId || unlinkedRecoveryId || rejectedImportId || delegatedRecovery.attemptId;
+    const ownerId = delegatedRecovery.originalActorId || (!recoveryAttemptId && (importAttemptId || unlinkedRecoveryId || rejectedImportId) ? user?.id : undefined);
+    const sourceIds = [...new Set([...delegatedRecovery.sourceDocumentIds, sourceDocument?.id, ...additionalSourceIds].filter((value): value is string => !!value))];
+    const params = new URLSearchParams({ area: 'purchases', view: 'intake' });
+    if (id) params.set('invoice', id);
+    if (attemptId) params.set('attempt', attemptId);
+    if (ownerId) params.set('actor', ownerId);
+    if (sourceIds.length) params.set('sources', sourceIds.join(','));
+    const invoiceLink = `${window.location.origin}/dashboard/inventory?${params.toString()}`;
+    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink,
+      attemptId ? `Import attempt: ${attemptId}` : '', ownerId ? `Original operator: ${ownerId}` : '',
+      id ? `Exact invoice: ${id}` : '', sourceIds.length ? `Original documents: ${sourceIds.join(', ')}` : '',
+      historicalStockHold ? 'Ask an inventory administrator to compare this invoice with opening-stock records and verify a physical count. Do not add it as a new receipt. Supplier accounting remains separate.' :
+        recovery?.message || error || 'A colleague with purchase read, create and review access can open this link to recover the import.',
+      historicalStockHold ? `${window.location.origin}/dashboard/inventory?area=stock&view=COUNT` : '',
+      recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
     try {
       if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
       await navigator.clipboard.writeText(text);
@@ -2607,7 +2720,7 @@ function PurchaseInvoiceEditor({
     } catch { setError(`Could not copy. Select and copy these details instead:\n${text}`); }
   };
   useEffect(() => {
-    if (!access.read || !recoveryReady) return;
+    if (!access.read || !recoveryReady || importAttemptIdPattern.test(recoveryAttemptId || '')) return;
     const id = recoveredInvoiceId.current || invoiceId;
     if (!id) return;
     let cancelled = false;
@@ -2627,6 +2740,8 @@ function PurchaseInvoiceEditor({
       .catch((err) => {
         if (cancelled) return;
         setError(getErrorMessage(err));
+        setUnknownStockInvoiceId(id);
+        setShowIntakeHome(false);
         setRevisionConflict(
           "The saved invoice version could not be checked. Your local fields are retained; reload the saved invoice before saving or adding stock.",
         );
@@ -2637,7 +2752,7 @@ function PurchaseInvoiceEditor({
     return () => {
       cancelled = true;
     };
-  }, [access.read, invoiceId, recoveryReady]);
+  }, [access.read, invoiceId, recoveryReady, recoveryAttemptId]);
   useEffect(() => {
     if (
       !receiptId ||
@@ -2758,8 +2873,8 @@ function PurchaseInvoiceEditor({
   const stockStatusUnknown = !!unknownStockInvoiceId;
   const stockAdded = !stockStatusUnknown &&
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
-  const stockReceivedEarlier =
-    stockAdded && !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
+  const linkedReceipt = !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
+  const stockReceivedEarlier = stockAdded && linkedReceipt;
   const committedLabel = stockReceivedEarlier
     ? "Invoice posted · stock received earlier"
     : "Stock added";
@@ -3264,6 +3379,15 @@ function PurchaseInvoiceEditor({
         <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Reconcile physical inventory in Counts &amp; audit</a>
         <p className="text-sm">Keep this invoice out of new intake. Verify physical quantities and product identities, then record an independent checkpoint. Supplier accounting remains separate.</p>
       </div>}
+      {historicalStockHold && !stockAdded && !stockStatusUnknown && <section className="space-y-2" aria-label="Historical stock recovery">
+        <p>This invoice may already be included in opening stock. Its historical stock outcome needs verification; do not add it as a new receipt.</p>
+        <p className="text-sm">Ask an inventory administrator to compare this bill with opening-stock records and verify a physical count in Counts &amp; audit. Supplier accounting remains separate.</p>
+        <p className="break-all text-sm">Invoice reference: {activeInvoice?.invoiceNumber || activeInvoice?.id}</p>
+        <div className="flex flex-wrap gap-2">
+          <a className="text-primary underline" href="/dashboard/inventory?area=stock&view=COUNT">Open Counts &amp; audit</a>
+          <Button variant="outline" onClick={copyHandoff}>Copy historical stock handoff</Button>
+        </div>
+      </section>}
       {unknownStockInvoiceId && !rejectedImportId && <div className="space-y-2">
         <p role="status">Stock status unknown. Check the saved purchase before trying another stock operation.</p>
         {sourceDocument && access.read && <OriginalDocumentLink document={sourceDocument} />}
@@ -3317,7 +3441,7 @@ function PurchaseInvoiceEditor({
         <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
         {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => { if (window.confirm('Reject this upload without adding stock? Its archived original will be retained.')) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
       </div>}
-      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing Add stock.</p>}
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing {linkedReceipt ? "Post bill" : "Add stock"}.</p>}
     </section>
   );
 
@@ -3753,6 +3877,7 @@ function PurchaseInvoiceEditor({
         {!showIntakeHome && <ReviewLegend />}
         {!showIntakeHome && <PurchaseReviewSummary
           hasContent={hasDraftContent}
+          stockReceivedEarlier={linkedReceipt}
           saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
           checks={checksRemaining} lines={sourceLines.length}
           calculated={viewingSavedInvoice ? calculateTotals(sourceHeader as HeaderForm, sourceLines).netPayable : totals.netPayable}
@@ -3765,6 +3890,31 @@ function PurchaseInvoiceEditor({
           tabIndex={-1}
           className="space-y-3"
         >
+          <section aria-label="Interrupted import recovery" className="space-y-3 rounded-md border p-3">
+            <Button type="button" variant="outline" disabled={resolvingImport} onClick={() => {
+              setDelegatedRecovery(current => ({ ...current, attemptId: importAttemptId || current.attemptId,
+                originalActorId: current.originalActorId || (!recoveryAttemptId && importAttemptId ? user?.id || '' : ''),
+                invoiceId: unknownStockInvoiceId && unknownStockInvoiceId !== 'unconfirmed-import' ? unknownStockInvoiceId : current.invoiceId }));
+              setShowDelegatedRecovery(true);
+            }}>Recover interrupted import</Button>
+            {showDelegatedRecovery && <div className="space-y-3">
+              <p className="text-sm">Use the reference from the original operator's handoff. Recovery checks the exact invoice or stops unfinished work. Unknown historical stock stays locked for physical reconciliation.</p>
+              <label className="block">Import attempt ID
+                <input className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.attemptId} disabled={resolvingImport || !!importAttemptId} onChange={event => setDelegatedRecovery(current => ({ ...current, attemptId: event.target.value }))} />
+              </label>
+              <label className="block">Original operator ID (optional)
+                <input className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.originalActorId} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, originalActorId: event.target.value }))} />
+              </label>
+              <p className="text-sm">If the attempt has not registered yet, enter the original operator ID exactly as shown in their handoff.</p>
+              <label className="block">Recovery reason
+                <textarea className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.reason} maxLength={500} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, reason: event.target.value }))} />
+              </label>
+              {access.read && access.create && access.review ? <Button type="button" disabled={resolvingImport || extracting || !delegatedRecovery.attemptId.trim() || !delegatedRecovery.reason.trim()} onClick={recoverDelegatedImport}>Recover import outcome</Button>
+                : <p>A colleague with purchase read, create and review access can recover this import using these details.</p>}
+              <Button type="button" variant="outline" onClick={copyHandoff}>Copy recovery handoff</Button>
+              {rejectedRecoveryReference && <p className="text-sm">This recovery reference was not accepted. This tab keeps the original reference and its stock lock. <a className="text-primary underline" target="_blank" rel="noopener noreferrer" href={`/dashboard/inventory?area=purchases&view=intake&new=recovery-${encodeURIComponent(rejectedRecoveryReference)}`}>Open another recovery page</a> to enter a corrected reference separately.</p>}
+            </div>}
+          </section>
           {recoveryPanel}
           {notice && !(stockAdded && notice.startsWith("Restored")) && (
             <p role="status" className="flex items-start gap-2 text-sm">
@@ -3860,15 +4010,17 @@ function PurchaseInvoiceEditor({
                       {stockStatusUnknown
                         ? "The request was interrupted. Refresh stock status to confirm the saved outcome before continuing."
                         : activeInvoice.status === "REVIEWED"
-                          ? "Review complete. Choose Add stock when ready."
+                          ? linkedReceipt
+                            ? "These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added."
+                            : "Review complete. Choose Add stock when ready."
                           : historicalStockHold
                             ? "Check this bill against opening stock with an inventory administrator before proceeding."
                           : awaitingManualReview
-                            ? "Confirm your review below, then add stock."
+                            ? linkedReceipt ? "Confirm your review below, then choose Post bill. No additional stock will be added." : "Confirm your review below, then add stock."
                             : editingSelectedInvoice && access.automate
                               ? "Correct the highlighted details, then save corrections."
                               : canReview
-                                ? "Confirm your review below, then add stock."
+                                ? linkedReceipt ? "Confirm your review below, then choose Post bill. No additional stock will be added." : "Confirm your review below, then add stock."
                                 : "Check highlighted details, then save corrections."}
                     </p>
                     <div className="flex flex-wrap items-end justify-between gap-4">

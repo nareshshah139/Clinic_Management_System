@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { recoverUnlinkedImport: jest.fn().mockResolvedValue({ outcome: 'RETRY_REJECTED' }), capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importWithRecovery: jest.fn().mockResolvedValue({}), resolveImportAttempt: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN' }), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { recoverDelegatedImport: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN', invoiceId: null }), recoverUnlinkedImport: jest.fn().mockResolvedValue({ outcome: 'RETRY_REJECTED' }), capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importWithRecovery: jest.fn().mockResolvedValue({}), resolveImportAttempt: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN' }), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -51,6 +51,33 @@ describe('Automatic intake HTTP permissions', () => {
     expect(service.recoverUnlinkedImport).toHaveBeenCalledWith(dto.recoveryId, 'branch-1', 'user-1', expect.objectContaining(dto));
     permissions = ['pharmacy:purchase-invoice:read', 'pharmacy:purchase-invoice:create'];
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked').send(dto).expect(403);
+  });
+
+  it('recovers a colleague import with read/create/review access and authenticated audit identity', async () => {
+    permissions = ['inventory:po:read', 'inventory:po:create', 'inventory:po:update'];
+    const dto = { attemptId: '12345678-1234-4234-8234-123456789abc', originalActorId: 'original-operator', reason: 'Recover the interrupted colleague import', sourceDocumentIds: ['source-1'] };
+    const response = await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-delegated')
+      .send({ ...dto, branchId: 'foreign', userId: 'impersonated-user' }).expect(201);
+    expect(response.body).toEqual({ outcome: 'NO_STOCK_WRITTEN', invoiceId: null });
+    expect(service.recoverDelegatedImport).toHaveBeenCalledWith({ branchId: 'branch-1', userId: 'user-1' }, dto);
+  });
+
+  it.each(['read', 'create', 'review'])('denies delegated recovery without purchase %s permission', async missing => {
+    permissions = ['read', 'create', 'review'].filter(value => value !== missing).map(value => `pharmacy:purchase-invoice:${value}`);
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-delegated')
+      .send({ attemptId: '12345678-1234-4234-8234-123456789abc', reason: 'Restore interrupted work' }).expect(403);
+    expect(service.recoverDelegatedImport).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { attemptId: 'not-a-uuid', reason: 'Recover' },
+    { attemptId: '12345678-1234-4234-8234-123456789abc', reason: ' ' },
+    { attemptId: '12345678-1234-4234-8234-123456789abc', reason: 'Recover', sourceDocumentIds: [''] },
+    { attemptId: '12345678-1234-4234-8234-123456789abc', reason: 'Recover', originalActorId: '' },
+  ])('rejects malformed delegated recovery input before mutation (%j)', async dto => {
+    permissions = ['inventory:po:read', 'inventory:po:create', 'inventory:po:update'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-delegated').send(dto).expect(400);
+    expect(service.recoverDelegatedImport).not.toHaveBeenCalled();
   });
 
   it('requires an attempt ID before automatic import and scopes recovery to the authenticated actor', async () => {

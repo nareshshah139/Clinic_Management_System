@@ -1,0 +1,81 @@
+
+> backend@0.0.1 test
+> jest --runInBand src/modules/inventory/tests/inventory-workflow-recovery.database.spec.ts
+
+(node:19472) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+FAIL src/modules/inventory/tests/inventory-workflow-recovery.database.spec.ts
+  Workflow recovery fences with PostgreSQL
+    ✕ fences a transition paused after its old-version read without changing stock (19 ms)
+    ✕ returns an already committed transition without adding a second effect or recovery event (7 ms)
+    ✕ rejects an impossible future revision and missing branch without modifying the document (1 ms)
+    ✕ requires actual-kind write permission to fence while retaining read-only lookup access (2 ms)
+
+  ● Workflow recovery fences with PostgreSQL › fences a transition paused after its old-version read without changing stock
+
+    TypeError: recovery.resolveOutcome is not a function
+
+      43 |     await reading;
+      44 |     let settled: any, resolutionError: unknown;
+    > 45 |     try { settled = await (recovery as any).resolveOutcome(actor,document.id,{version:1}); }
+         |                                             ^
+      46 |     catch (error) { resolutionError = error; }
+      47 |     finally { release(); }
+      48 |     const original = await pending;
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-workflow-recovery.database.spec.ts:45:45)
+
+  ● Workflow recovery fences with PostgreSQL › returns an already committed transition without adding a second effect or recovery event
+
+    TypeError: recovery.resolveOutcome is not a function
+
+      59 |   it('returns an already committed transition without adding a second effect or recovery event', async () => {
+      60 |     await writer.transition(actor,document.id,{version:1,action:'POST'});
+    > 61 |     const settled = await (recovery as any).resolveOutcome(actor,document.id,{version:1});
+         |                                             ^
+      62 |     expect(settled).toMatchObject({id:document.id,status:'POSTED',version:2});
+      63 |     expect(settled.events.map((event:any)=>event.action)).toEqual(['POST']);
+      64 |     expect(settled.effects).toHaveLength(1);
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-workflow-recovery.database.spec.ts:61:45)
+
+  ● Workflow recovery fences with PostgreSQL › rejects an impossible future revision and missing branch without modifying the document
+
+    TypeError: recovery.resolveOutcome is not a function
+
+      67 |   });
+      68 |   it('rejects an impossible future revision and missing branch without modifying the document', async () => {
+    > 69 |     await expect((recovery as any).resolveOutcome(actor,document.id,{version:2})).rejects.toThrow('revision');
+         |                                    ^
+      70 |     await expect((recovery as any).resolveOutcome({...actor,branchId:'unrelated-branch'},document.id,{version:1})).rejects.toThrow();
+      71 |     expect((await prisma.inventoryWorkflowDocument.findUniqueOrThrow({where:{id:document.id}})).version).toBe(1);
+      72 |     expect(await prisma.inventoryWorkflowEvent.count({where:{documentId:document.id}})).toBe(0);
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-workflow-recovery.database.spec.ts:69:36)
+
+  ● Workflow recovery fences with PostgreSQL › requires actual-kind write permission to fence while retaining read-only lookup access
+
+    TypeError: recovery.documentByRequest is not a function
+
+      76 |     const reader = await prisma.user.create({data:{email:`reader-${randomUUID()}@example.invalid`,password:'no-login',firstName:'Synthetic',lastName:'Recovery',role:'PHARMACIST',branchId:actor.branchId,permissions:JSON.stringify(['inventory:item:read'])}});
+      77 |     const readActor={id:reader.id,branchId:actor.branchId,role:'PHARMACIST'};
+    > 78 |     const found=await (recovery as any).documentByRequest(readActor,document.requestKey);
+         |                                         ^
+      79 |     expect(found.id).toBe(document.id);
+      80 |     await expect((recovery as any).resolveOutcome(readActor,document.id,{version:1})).rejects.toThrow('inventory:transaction:create');
+      81 |     expect((await prisma.inventoryWorkflowDocument.findUniqueOrThrow({where:{id:document.id}})).version).toBe(1);
+
+      at Object.<anonymous> (modules/inventory/tests/inventory-workflow-recovery.database.spec.ts:78:41)
+
+Test Suites: 1 failed, 1 total
+Tests:       4 failed, 4 total
+Snapshots:   0 total
+Time:        1.79 s, estimated 3 s
+Ran all test suites matching src/modules/inventory/tests/inventory-workflow-recovery.database.spec.ts.
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend
+npm error workspace backend@0.0.1
+npm error location /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend
+npm error command failed
+npm error command sh -c jest --runInBand src/modules/inventory/tests/inventory-workflow-recovery.database.spec.ts

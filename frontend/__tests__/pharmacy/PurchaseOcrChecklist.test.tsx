@@ -123,3 +123,14 @@ it('treats legacy truncated-page results as requiring a replacement upload', () 
   const { purchaseReviewIssue } = require('@/lib/purchase-invoice-review');
   expect(purchaseReviewIssue('pdf_truncated_to_5_pages')).toMatchObject({ requiresUpload: true, target: 'purchase-invoice-upload' });
 });
+
+it('directs a wrong document to the correct invoice upload without allowing confirmation', () => {
+  render(<><PurchaseOcrChecklist flags={['not_a_purchase_invoice']} values={{}} disabled={false} onResolve={jest.fn()} /><input id="purchase-invoice-upload" aria-label="Invoice upload" /></>);
+  expect(screen.getByText('This document was not recognized as a supplier purchase invoice.')).toBeVisible();
+  const upload = screen.getByRole('link', { name: 'Upload correct supplier invoice' });
+  expect(upload).toHaveTextContent('Upload correct invoice');
+  fireEvent.click(upload);
+  expect(screen.getByRole('textbox', { name: 'Invoice upload' })).toHaveFocus();
+  expect(screen.queryByRole('button', { name: /^Confirm / })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Upload pages for complete invoice' })).not.toBeInTheDocument();
+});

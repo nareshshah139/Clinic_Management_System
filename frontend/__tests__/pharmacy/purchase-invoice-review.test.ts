@@ -37,3 +37,15 @@ it('distinguishes verified invoices from failed, unchecked and cancelled states'
   expect(purchaseInvoiceReviewTone({ status: 'STOCK_COMMITTED' })).toBe('success');
   expect(purchaseInvoiceReviewTone({ status: 'CANCELLED' })).toBe('neutral');
 });
+
+it('keeps a wrong document distinct from missing pages and names the correct replacement', () => {
+  expect(purchaseReviewIssue('OCR: not_a_purchase_invoice')).toMatchObject({
+    key: 'header:wrong-document', label: 'supplier invoice', requiresUpload: true,
+    message: 'This document was not recognized as a supplier purchase invoice.',
+    target: 'purchase-invoice-upload',
+  });
+  expect(purchaseReviewIssue('OCR: not_a_purchase_invoice').help).toContain('correct supplier invoice');
+  expect(purchaseReviewIssue('OCR: not_a_purchase_invoice').help).toContain('Enter complete invoice manually');
+  expect(purchaseReviewIssue('OCR: missing_pages').message).toBe('The complete invoice could not be verified.');
+  expect(purchaseReviewIssue('OCR: missing_pages').help).toContain('every invoice page');
+});

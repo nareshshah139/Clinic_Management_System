@@ -1,0 +1,39 @@
+digraph intake {
+rankdir=TB; graph [fontname="Arial",bgcolor="white",label="Guarded UI recovery. Evidence determines the outcome.",labelloc=t]; node [shape=box,style="rounded,filled",fontname="Arial",fillcolor="#eaf2ff"]; edge [fontname="Arial",fontsize=10];
+missing [label="Fresh missing-invoice URL"];
+unknown [label="Exact invoice retained as unknown
+Check saved status / recover missing invoice"];
+interrupted [label="Interrupted or unknown import
+Original operator or authorized colleague"];
+entry [label="Recover interrupted import
+Retain exact attempt, original operator and sources"];
+recovery [label="Recover import outcome, or
+Recover legacy or missing invoice + reason
+Read + create + review; correct branch
+Immutable owner; branch lock; atomic audit"];
+none [label="Modern RUNNING / absent attempt
+No historical invoice link
+All retained sources found"];
+draft [label="One exact surviving draft invoice"];
+committed [label="One exact surviving committed invoice"];
+history [label="Missing or conflicting historical links"];
+lost [label="Lost retained original
+No exact surviving invoice"];
+noStock [label="NO_STOCK_WRITTEN
+Worker fenced",fillcolor="#daf2dd"];
+saved [label="DRAFT_REVIEW
+Review complete originals or reject",fillcolor="#daf2dd"];
+posted [label="COMMITTED
+Exact saved stock outcome",fillcolor="#daf2dd"];
+rejected [label="RETRY_REJECTED
+Historical stock remains UNVERIFIED",fillcolor="#fff0cc"];
+correct [label="Invalid reference or missing attribution
+Correct fields or open separate recovery page",fillcolor="#fff0cc"];
+count [label="Reconcile physical inventory in Counts & audit
+Fresh count under quantity recovery guards",fillcolor="#daf2dd"];
+missing->unknown; unknown->recovery; interrupted->entry; entry->recovery;
+recovery->none; recovery->draft; recovery->committed; recovery->history; recovery->lost;
+none->noStock; draft->saved; committed->posted; history->rejected; lost->rejected;
+recovery->correct [label="input / authority guard"]; correct->entry [label="authorized operator + reliable reference",constraint=false];
+rejected->count [label="visible UI link"];
+}

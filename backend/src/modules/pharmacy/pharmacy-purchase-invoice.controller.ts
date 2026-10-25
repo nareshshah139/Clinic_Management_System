@@ -36,6 +36,7 @@ import {
   ImportPharmacyPurchaseInvoiceDto,
   RejectPharmacyPurchaseInvoiceDto,
   RecoverUnlinkedPurchaseImportDto,
+  RecoverDelegatedPurchaseImportDto,
   QueryPharmacyPurchaseAnalyticsDto,
   QueryPharmacyPurchaseInvoiceDto,
   ReviewPharmacyPurchaseInvoiceDto,
@@ -260,6 +261,19 @@ export class PharmacyPurchaseInvoiceController {
     ['pharmacy:purchase-invoice:read', 'inventory:po:read'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
   recoverUnlinked(@Body() dto: RecoverUnlinkedPurchaseImportDto, @Request() req: any) {
     return this.purchaseInvoiceService.recoverUnlinkedImport(dto.recoveryId, req.user.branchId, req.user.id, dto);
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:security] delegated-recovery-permissions
+   * Recovering another operator's import MUST require purchase read, create and review access;
+   * the recovering actor and branch MUST come from authentication, never the submitted handoff.
+   */
+  @Post('ocr/recover-delegated')
+  @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'],
+    ['pharmacy:purchase-invoice:read', 'inventory:po:read'], ['pharmacy:purchase-invoice:review', 'inventory:po:update'])
+  recoverDelegated(@Body() dto: RecoverDelegatedPurchaseImportDto, @Request() req: any) {
+    return this.purchaseInvoiceService.recoverDelegatedImport({ branchId: req.user.branchId, userId: req.user.id }, dto);
   }
 
   @Post('ocr/import-attempts/:attemptId/resolve')

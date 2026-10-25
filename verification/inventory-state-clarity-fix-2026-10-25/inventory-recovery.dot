@@ -1,0 +1,32 @@
+digraph reconciliation {
+rankdir=TB; graph [fontname="Arial", bgcolor="white", nodesep=.25, ranksep=.55, label="Physical inventory recovery. Guards apply to every edge.", labelloc=t]; node [shape=box, style="rounded,filled", fontname="Arial", fontsize=12, fillcolor="#eaf2ff"]; edge [fontname="Arial", fontsize=10];
+entry [label="Stock discrepancy, unverified ledger,
+terminal document, or rejected OCR intake"];
+access [label="Inventory read + audit authority
+Shared branch count; approver when needed",fillcolor="#fff0cc"];
+count [label="Count this batch / Counts & audit
+DRAFT with current snapshot; no observation"];
+observe [label="Enter truthful physical count P
+and required reason. Blank is uncounted"];
+stale [label="Snapshot or version changed
+No stock write",fillcolor="#fff0cc"];
+held [label="P below held stock
+Selectable source capacity
+and disposition authority",fillcolor="#fff0cc"];
+dispose [label="Source-linked loss for missing held units
+Fresh observation required afterward"];
+approve [label="AWAITING_APPROVAL -> APPROVED
+Authorized approver + count permission"];
+post [label="POST atomically
+q = P; held <= q; physical checkpoint",fillcolor="#daf2dd"];
+terminal [label="Any saved COUNT status
+All seven states, including terminal states"];
+blocked [label="No authority, missing evidence,
+unattributed holds, permanent outage
+No unconditional recovery theorem",fillcolor="#ffdada"];
+entry->access; access->count [label="UI action enabled"]; access->blocked [label="precondition absent"];
+count->observe; observe->stale [label="changed snapshot"]; stale->count [constraint=false,label="Reload + fresh count"];
+observe->held [label="P < held"]; held->dispose [label="verified disposition"]; held->blocked [label="no source or authority"]; dispose->count [constraint=false];
+observe->approve [label="policy needs approval"]; approve->post; observe->post [label="current, authorized, P >= held"];
+terminal->count [label="Follow recount chain to fresh draft"]; post->terminal [constraint=false,label="Another count remains available"];
+}

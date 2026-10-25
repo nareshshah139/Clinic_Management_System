@@ -1,0 +1,23 @@
+   Using tsconfig file: tsconfig.build.json
+PASS __tests__/inventory/ReconciliationUiProof.generated.test.tsx
+  ✓ exposes a usable fresh-count action from DRAFT (66 ms)
+  ✓ exposes a usable fresh-count action from AWAITING_APPROVAL (21 ms)
+  ✓ exposes a usable fresh-count action from APPROVED (21 ms)
+  ✓ exposes a usable fresh-count action from POSTED (18 ms)
+  ✓ exposes a usable fresh-count action from REJECTED (16 ms)
+  ✓ exposes a usable fresh-count action from CANCELLED (17 ms)
+  ✓ exposes a usable fresh-count action from REVERSED (18 ms)
+  ✓ does not offer unauthorized recovery from DRAFT (11 ms)
+  ✓ does not offer unauthorized recovery from AWAITING_APPROVAL (11 ms)
+  ✓ does not offer unauthorized recovery from APPROVED (10 ms)
+  ✓ does not offer unauthorized recovery from POSTED (10 ms)
+  ✓ does not offer unauthorized recovery from REJECTED (9 ms)
+  ✓ does not offer unauthorized recovery from CANCELLED (10 ms)
+  ✓ does not offer unauthorized recovery from REVERSED (9 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       14 passed, 14 total
+Snapshots:   0 total
+Time:        0.993 s, estimated 1 s
+Ran all test suites within paths "/Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend/__tests__/inventory/ReconciliationUiProof.generated.test.tsx".
+Test results written to: ../verification/inventory-ui-recovery-fix-2026-10-25/component-results.json

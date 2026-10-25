@@ -7,6 +7,7 @@ export type PurchaseReviewIssue = {
   target?: string;
   lineIndex?: number;
   requiresUpload?: boolean;
+  uploadLabel?: { text: string; accessibleName: string };
   category?: 'manual' | 'supplier' | 'product' | 'totals' | 'historical';
 };
 
@@ -67,7 +68,8 @@ export function purchaseReviewField(field: string, lineIndex?: number) {
  * @cc [owner:nareshshah139,label:product] purchase-blocker-explanation
  * Known review issues MUST retain their specific cause and correction path. Supplier GSTIN
  * mismatches and missing product fields MUST NOT become generic matching instructions;
- * historical-stock holds MUST NOT recommend posting the invoice as a new receipt.
+ * historical-stock holds MUST NOT recommend posting the invoice as a new receipt. Wrong-document
+ * readings MUST request the correct supplier invoice rather than implying only pages are missing.
  */
 export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseReviewIssue {
   const text = raw.trim().replace(/^(?:(?:AUTO|OCR):\s*)+/i, '');
@@ -79,7 +81,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   if (/historical invoice|historical before.*stock|already.*inventory backfill/i.test(body)) {
     return { ...base, category: 'historical', label: 'historical stock',
       message: 'This invoice may already be included in opening stock.',
-      help: 'Ask an inventory administrator to compare this bill with the stock backfill and reconcile it as historical. Do not add it as a new receipt.' };
+      help: 'Open Counts & audit to compare this bill, the opening-stock records and current physical quantities with an inventory administrator. Do not add it as a new receipt. Supplier accounting remains separate.' };
   }
   if (/Supplier GSTIN does not match the saved supplier/i.test(body)) {
     const savedGstin = /saved supplier\s*\(([^)]+)\)/i.exec(body)?.[1];
@@ -92,7 +94,13 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, label: 'line items', target: 'purchase-line-items', message: 'The OCR reads disagree on the number of invoice rows.',
       help: 'Count every row against the original, including repeated products with different batches. Restore missing rows or remove extra rows before confirming this check.' };
   }
-  if (/missing.?pages|document_completeness|pdf_truncated|PURCHASE_OCR_PAGE_LIMIT|cropped.*rows|not_a_purchase_invoice/i.test(body)) {
+  if (/not_a_purchase_invoice/i.test(body)) {
+    return { ...base, key: `${index ?? 'header'}:wrong-document`, label: 'supplier invoice', requiresUpload: true,
+      uploadLabel: { text: 'Upload correct invoice', accessibleName: 'Upload correct supplier invoice' },
+      message: `${prefix}This document was not recognized as a supplier purchase invoice.`, target: 'purchase-invoice-upload',
+      help: 'Upload the correct supplier invoice, including every page, then scan it again. If the document is a supplier invoice and OCR misclassified it, choose Enter complete invoice manually and verify every row against the original before review.' };
+  }
+  if (/missing.?pages|document_completeness|pdf_truncated|PURCHASE_OCR_PAGE_LIMIT|cropped.*rows/i.test(body)) {
     return { ...base, key: `${index ?? 'header'}:pages`, label: 'complete invoice', requiresUpload: true,
       message: `${prefix}The complete invoice could not be verified.`, target: 'purchase-invoice-upload',
       help: 'Upload a clear file containing every invoice page, then extract it again before approving stock.' };

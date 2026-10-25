@@ -1,0 +1,349 @@
+
+> frontend@0.1.0 test
+> jest --runInBand --runTestsByPath __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx --testNamePattern=locks a malformed handoff invoice|persists fresh automatic retry
+
+   Using tsconfig file: tsconfig.build.json
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      1356 |       const documents =
+      1357 |         await apiClient.getUnlinkedPurchaseDocuments<OriginalDocument[]>();
+    > 1358 |       setUnlinkedUploads(Array.isArray(documents) ? documents : []);
+           |       ^
+      1359 |       setUploadListError(null);
+      1360 |     } catch (err) {
+      1361 |       setUploadListError(getErrorMessage(err));
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setUnlinkedUploads (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:1358:7)
+
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      1357 |         await apiClient.getUnlinkedPurchaseDocuments<OriginalDocument[]>();
+      1358 |       setUnlinkedUploads(Array.isArray(documents) ? documents : []);
+    > 1359 |       setUploadListError(null);
+           |       ^
+      1360 |     } catch (err) {
+      1361 |       setUploadListError(getErrorMessage(err));
+      1362 |     }
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setUploadListError (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:1359:7)
+
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      1379 |         });
+      1380 |       const rows = Array.isArray(response?.data) ? response.data : [];
+    > 1381 |       setRecent(rows);
+           |       ^
+      1382 |       setActiveInvoice((current) => {
+      1383 |         if (!current) {
+      1384 |           const draft = draftSelection.current;
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setRecent (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:1381:7)
+
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      1380 |       const rows = Array.isArray(response?.data) ? response.data : [];
+      1381 |       setRecent(rows);
+    > 1382 |       setActiveInvoice((current) => {
+           |       ^
+      1383 |         if (!current) {
+      1384 |           const draft = draftSelection.current;
+      1385 |           if (draft.editingId)
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setActiveInvoice (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:1382:7)
+
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      1394 |       setError(getErrorMessage(err));
+      1395 |     } finally {
+    > 1396 |       setLoadingList(false);
+           |       ^
+      1397 |     }
+      1398 |   }, [access.read]);
+      1399 |
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setLoadingList (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:1396:7)
+
+  console.error
+    An update to PurchaseInvoiceEditor inside a test was not wrapped in act(...).
+
+    When testing, code that causes React state updates should be wrapped into act(...):
+
+    act(() => {
+      /* fire events that update state */
+    });
+    /* assert on the output */
+
+    This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+      2589 |       .get<any[]>("/inventory/workspace/intake")
+      2590 |       .then((rows) => {
+    > 2591 |         setServerDrafts(rows);
+           |         ^
+      2592 |         if (intakeId && recoveredIntake.current !== intakeId) {
+      2593 |           const saved = rows.find((d) => d.id === intakeId);
+      2594 |           if (saved) restoreServerDraft(saved);
+
+      at ../node_modules/react-dom/cjs/react-dom-client.development.js:16023:19
+      at runWithFiberInDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:1522:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../node_modules/react-dom/cjs/react-dom-client.development.js:16022:9)
+      at scheduleUpdateOnFiber (../node_modules/react-dom/cjs/react-dom-client.development.js:14396:11)
+      at dispatchSetStateInternal (../node_modules/react-dom/cjs/react-dom-client.development.js:6969:13)
+      at dispatchSetState (../node_modules/react-dom/cjs/react-dom-client.development.js:6927:7)
+      at setServerDrafts (src/components/pharmacy/PurchaseInvoiceWorkbench.tsx:2591:9)
+
+FAIL __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx
+  PurchaseInvoiceWorkbench
+    ✕ locks a malformed handoff invoice until exact readback and keeps the attempt reference editable (441 ms)
+    ✕ persists fresh automatic retry attribution before dispatch after colleague recovery (400 ms)
+    ○ skipped keeps local values when opening a duplicate and adopts only the explicitly selected editable record
+    ○ skipped discards a comparison response after an ordinary local edit
+    ○ skipped discards a comparison response after an ordinary local remove
+    ○ skipped focuses the goods receipt date from a structured review rejection
+    ○ skipped keeps stock outcome unknown after apparent success and failed readback
+    ○ skipped keeps stock outcome unknown after apparent success and wrong-id readback
+    ○ skipped keeps stock outcome unknown after apparent success and malformed readback
+    ○ skipped does not show automatic stock success when saved readback remains uncommitted
+    ○ skipped invalidates product acknowledgement after edit
+    ○ skipped invalidates product acknowledgement after remove
+    ○ skipped invalidates product acknowledgement after refresh
+    ○ skipped reports clipboard failure with copyable handoff and the rejected request reference
+    ○ skipped scans and saves for human checking without invoking automatic processing or changing stock
+    ○ skipped requires a fresh final confirmation after correcting a printed amount
+    ○ skipped clears final green verification when a product line is removed
+    ○ skipped explains the recent supplier, catalogue and confidence blockers without enabling stock approval
+    ○ skipped gives historical invoices a stock-backfill check instead of retry instructions
+    ○ skipped CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (false)
+    ○ skipped CR-15: no-match state hides legacy Abzorb suggestion and manual mismatch requires acknowledgement (true)
+    ○ skipped offers inline catalogue recovery after a review rejection without committing stock
+    ○ skipped reopens a reviewed unposted bill and offers add, match and name correction in place
+    ○ skipped keeps a reviewed bill locked when reopening fails and offers a saved-status reload
+    ○ skipped does not offer reopening without eligibility: {"create": true, "reopenReview": true, "review": true, "status": "STOCK_COMMITTED", "stockCommittedAt": "2026-10-19T00:00:00Z"}
+    ○ skipped does not offer reopening without eligibility: {"create": true, "reopenReview": false, "review": true, "status": "REVIEWED"}
+    ○ skipped does not offer reopening without eligibility: {"create": false, "reopenReview": true, "review": true, "status": "REVIEWED"}
+    ○ skipped does not offer reopening without eligibility: {"create": true, "reopenReview": true, "review": false, "status": "REVIEWED"}
+    ○ skipped summarizes paid plus free stock units and tax-exclusive indicative margin without pack multiplication
+    ○ skipped saves a new cosmetic through the invoice page with blank clinical fields
+    ○ skipped enforces saved product edit capability (true) on the invoice screen
+    ○ skipped enforces saved product edit capability (false) on the invoice screen
+    ○ skipped keeps Save & Process as the action when product records still block intake
+    ○ skipped saves a verified supplier in the checklist without changing stock and restores Save & Process
+    ○ skipped disables stock actions for create-only staff and does not fetch forbidden lists
+    ○ skipped keeps read-only invoice users from editing or saving
+    ○ skipped links the archived original when a preview is saved, and shows the download on the saved invoice
+    ○ skipped retains a saved original after OCR failure and recovers its link on remount
+    ○ skipped recovers a missing invoice opened directly and retains an inventory reconciliation path
+    ○ skipped opens interrupted import recovery from a fresh intake without browser draft state
+    ○ skipped recovers a colleague handoff through a durable matching no-stock result
+    ○ skipped keeps delegated missing-invoice rejection locked and offers physical reconciliation
+    ○ skipped opens only the exact invoice returned by delegated recovery
+    ○ skipped retains the original lock after failed delegated recovery
+    ○ skipped retains the original lock after wrong-attempt delegated recovery
+    ○ skipped retains the original lock after unknown delegated recovery
+    ○ skipped retains the original lock after malformed-no-stock delegated recovery
+    ○ skipped lets a malformed recovery reference be corrected before any dispatch
+    ○ skipped keeps a rejected reference while opening a separate page for a correction
+    ○ skipped offers copyable handoff without mutating when purchase read access is absent
+    ○ skipped offers copyable handoff without mutating when purchase create access is absent
+    ○ skipped offers copyable handoff without mutating when purchase review access is absent
+    ○ skipped recovers a legacy session without an attempt ID and persists rejection across reloads
+    ○ skipped keeps an orphan import locked after wrong-id recovery
+    ○ skipped keeps an orphan import locked after missing-stock-qualification recovery
+    ○ skipped keeps an orphan import locked after failed recovery
+    ○ skipped resumes the exact recovered legacy invoice without creating another receipt
+    ○ skipped resolves an OCR failure without an invoice ID and unlocks retained-original manual recovery
+    ○ skipped keeps interrupted import locked after failed resolution
+    ○ skipped keeps interrupted import locked after wrong-attempt resolution
+    ○ skipped keeps interrupted import locked after unknown resolution
+    ○ skipped keeps interrupted import locked after malformed-no-stock resolution
+    ○ skipped persists the dispatched attempt across reload and recovers the exact committed invoice
+    ○ skipped replaces an incomplete OCR reading with blank manual fields while retaining its original
+    ○ skipped renders and saves all 20 OCR batch rows, including repeated products and a correction on the last row
+    ○ skipped lets staff attach a previously unlinked upload while correcting a saved draft
+    ○ skipped starts a new invoice without keeping the previous selection or committing stock
+    ○ skipped shows a replacement extraction as a new unsaved draft instead of hiding it behind the old selection
+    ○ skipped blocks invalid purchase drafts before calling the API
+    ○ skipped provides a correction-to-commit path for an approval bill blocked by OCR and low confidence
+    ○ skipped imports and adds stock in one request, displaying the persisted result without an extra save or confirmation
+    ○ skipped retains a saved exception and updates that same invoice after correction
+    ○ skipped keeps the active import isolated from a newly supplied draft while its response is pending
+    ○ skipped locks writes and offers handoff after a lost automatic import response
+    ○ skipped locks writes and offers handoff after a failed automatic import response
+    ○ skipped locks writes and offers handoff after a malformed automatic import response
+    ○ skipped offers handoff when automatic intake cannot read an existing saved invoice
+    ○ skipped keeps unsaved OCR fields editable and clearly reports failure to save
+    ○ skipped saves corrections and then processes in one action without erasing reported totals
+    ○ skipped keeps a single save-only action for staff without automatic stock permissions
+    ○ skipped saves once before processing even when the button is clicked rapidly
+    ○ skipped returns to Save & Process when fields change after an automatic review exception
+    ○ skipped saves current corrections before manually marking a draft reviewed
+    ○ skipped keeps printed totals when a rate and a reported total are corrected together
+    ○ skipped processes the selected saved invoice and does not show committed stock as editable
+    ○ skipped lets staff correct a reported total before saving and processing, and rejects clearing it
+    ○ skipped submits a valid draft with calculated line and header totals
+    ○ skipped prefills purchase intake from invoice OCR before saving the reviewed draft
+    ○ skipped saves OCR with missing descriptive fields and updates the same draft on a second save
+    ○ skipped reopens a saved draft with header flags and retains edits after a failed update
+    ○ skipped recovers unfinished OCR edits after remount without hiding them behind another recent invoice
+    ○ skipped returns to Invoice OCR and resumes the same corrections without saving or processing
+    ○ skipped keeps all product fields and confirmation controls visible in one review checklist
+    ○ skipped restores manual review after reopening an invoice held only by supplier matching and OCR confidence
+    ○ skipped checks saved stock status after a lost processing response instead of reporting stock was not added
+    ○ skipped checks saved stock status after a empty processing response instead of reporting stock was not added
+    ○ skipped does not claim stock is uncommitted when both processing and the status check fail
+    ○ skipped recovers the manual-review action when a lost response left a saved review exception
+    ○ skipped keeps unknown automatic exceptions blocked instead of treating them as manual-review-only checks
+    ○ skipped confirms a successful commit from the server when the commit response is lost
+    ○ skipped reviews a clean draft and commits reviewed stock explicitly
+    ○ skipped shows backend reconciliation problems and keeps review disabled
+    ○ skipped saves incomplete intake for later without creating or processing an invoice and reuses its request key
+    ○ skipped corrects a NOT_SAVED OCR result and uses the new primary to save and process its retained original once
+    ○ skipped keeps New invoice visible on a posted receipt and starts clean intake without changing posted stock
+    ○ skipped isolates unsaved recovery by invoice ID when switching records and remounting the first invoice
+    ○ skipped retains bill corrections when reopening intake linked to the same inward receipt
+    ○ skipped checks the newly created invoice after a lost process response from the new-intake primary
+    ○ skipped checks the newly created invoice after a empty process response from the new-intake primary
+    ○ skipped blocks stale recovered corrections until explicitly reloading the changed saved invoice
+    ○ skipped restores edited OCR checks in field colors, counts, saved drafts and final approval
+    ○ skipped restores a checked supplier GSTIN when its dependent supplier name changes
+    ○ skipped keeps invalid expiry red and unconfirmable while preserving the save validation
+
+  ● PurchaseInvoiceWorkbench › locks a malformed handoff invoice until exact readback and keeps the attempt reference editable
+
+    expect(element).toBeDisabled()
+
+    Received element is not disabled:
+      <button class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 h-9 px-4 py-2 has-[>svg]:px-3" data-slot="button" type="button" />
+
+      660 |     fireEvent.click(screen.getByText('Automatic import'));
+      661 |     const importButton = screen.getByRole('button', { name: 'Import & Add Stock' });
+    > 662 |     expect(importButton).toBeDisabled();
+          |                          ^
+      663 |     fireEvent.click(importButton);
+      664 |     expect(global.fetch).not.toHaveBeenCalled();
+      665 |     expect(api.createPharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+
+      at Object.toBeDisabled (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:662:26)
+
+  ● PurchaseInvoiceWorkbench › persists fresh automatic retry attribution before dispatch after colleague recovery
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 6
+
+      Object {
+    -   "attemptId": "9e2d93df-34df-4302-80f1-fbdaf3a17041",
+    +   "attemptId": "ec73be65-0152-4bb1-8be6-399d78901a57",
+        "invoiceId": "",
+    -   "originalActorId": "user-1",
+    -   "reason": "",
+    -   "sourceDocumentIds": Array [],
+    +   "originalActorId": "previous-operator",
+    +   "reason": "Recover the old interrupted attempt",
+    +   "sourceDocumentIds": Array [
+    +     "previous-source",
+    +   ],
+      }
+
+      693 |     expect(sentAttemptId).not.toBe(previousId);
+      694 |     expect(persistedAtDispatch.importAttemptId).toBe(sentAttemptId);
+    > 695 |     expect(persistedAtDispatch.delegatedRecovery).toEqual({ attemptId: sentAttemptId, originalActorId: 'user-1', invoiceId: '', sourceDocumentIds: [], reason: '' });
+          |                                                   ^
+      696 |     expect(persistedAtDispatch.unknownStockInvoiceId).toBe('unconfirmed-import');
+      697 |   });
+      698 |
+
+      at Object.toEqual (__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx:695:51)
+
+Test Suites: 1 failed, 1 total
+Tests:       2 failed, 111 skipped, 113 total
+Snapshots:   0 total
+Time:        1.501 s, estimated 51 s
+Ran all test suites within paths "__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx".
+npm error Lifecycle script `test` failed with error:
+npm error code 1
+npm error path /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error workspace frontend@0.1.0
+npm error location /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/frontend
+npm error command failed
+npm error command sh -c jest --runInBand --runTestsByPath __tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx '--testNamePattern=locks a malformed handoff invoice|persists fresh automatic retry'

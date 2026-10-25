@@ -184,6 +184,19 @@ export class InventoryWorkflowController {
   @Get('documents') documents(@Request() r: any, @Query() q: any) {
     return this.workflow.documents(r.user, q);
   }
+  @Get('documents/by-request/:requestKey') documentByRequest(
+    @Request() r: any,
+    @Param('requestKey') requestKey: string,
+  ) {
+    return this.workflow.documentByRequest(r.user, requestKey);
+  }
+  @Post('documents/:id/resolve') resolveOutcome(
+    @Request() r: any,
+    @Param('id') id: string,
+    @Body() input: { version: number },
+  ) {
+    return this.workflow.resolveOutcome(r.user, id, input);
+  }
   @Get('documents/:id') document(@Request() r: any, @Param('id') id: string) {
     return this.workflow.document(r.user, id);
   }
