@@ -20,14 +20,14 @@
  ✓ Compiled successfully in 3.3s
    Skipping linting
    Checking validity of types ...
-   
+
 Your tsconfig.json extends another configuration, which means we cannot add the Next.js TypeScript plugin automatically. To improve your development experience, we recommend adding the Next.js plugin (`"plugins": [{ "name": "next" }]`) manually to your TypeScript configuration. Learn more: https://nextjs.org/docs/app/api-reference/config/typescript#the-typescript-plugin
 
    Collecting page data ...
    Generating static pages (0/24) ...
-   Generating static pages (6/24) 
-   Generating static pages (12/24) 
-   Generating static pages (18/24) 
+   Generating static pages (6/24)
+   Generating static pages (12/24)
+   Generating static pages (18/24)
  ✓ Generating static pages (24/24)
    Finalizing page optimization ...
    Collecting build traces ...

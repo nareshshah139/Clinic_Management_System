@@ -605,4 +605,3 @@ list verification/inventory-state-clarity-fix-2026-10-25/check_knowledge.py
 
   > The checker MUST reject production-source drift and every emitted uncertainty or permission
   > counterexample. Recovery reachability MUST remain conditional on exact identity and available authority.
-
