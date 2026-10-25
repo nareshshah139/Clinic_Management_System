@@ -1,0 +1,41 @@
+{
+  "status": "PASS",
+  "browser": "Chrome/155.0.8059.86",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "purchase",
+      "status": "passed"
+    },
+    {
+      "id": "partner",
+      "status": "passed"
+    },
+    {
+      "id": "supplier",
+      "status": "passed"
+    },
+    {
+      "id": "opening",
+      "status": "passed"
+    },
+    {
+      "id": "stock",
+      "status": "passed"
+    }
+  ],
+  "evidence": "output/diagnostics/recovery-e2e/2026-10-24T15-05-41-165Z-dc851e43/result.json",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "databaseGuards": "Installed from final migration SQL; browser fixtures use the current transaction protocol"
+}

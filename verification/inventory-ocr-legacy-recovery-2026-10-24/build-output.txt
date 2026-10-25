@@ -1,0 +1,88 @@
+
+> clinic_management_system@1.0.0 build
+> npm run build --workspace=shared-types && npm run build --workspace=frontend && npm run build --workspace=backend
+
+
+> @cms/shared-types@1.0.0 build
+> tsc -p tsconfig.json
+
+
+> frontend@0.1.0 build
+> next build
+
+   ▲ Next.js 15.5.9
+   - Experiments (use with caution):
+     ✓ externalDir
+     · proxyTimeout: 300000
+
+   Creating an optimized production build ...
+   Using tsconfig file: tsconfig.build.json
+ ✓ Compiled successfully in 2.6s
+   Skipping linting
+   Checking validity of types ...
+
+Your tsconfig.json extends another configuration, which means we cannot add the Next.js TypeScript plugin automatically. To improve your development experience, we recommend adding the Next.js plugin (`"plugins": [{ "name": "next" }]`) manually to your TypeScript configuration. Learn more: https://nextjs.org/docs/app/api-reference/config/typescript#the-typescript-plugin
+
+   Collecting page data ...
+   Generating static pages (0/24) ...
+   Generating static pages (6/24)
+   Generating static pages (12/24)
+   Generating static pages (18/24)
+ ✓ Generating static pages (24/24)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                     Size  First Load JS
+┌ ○ /                                          143 B         103 kB
+├ ○ /_not-found                                 1 kB         104 kB
+├ ○ /dashboard                                8.6 kB         138 kB
+├ ○ /dashboard/appointments                  23.7 kB         174 kB
+├ ○ /dashboard/appointments/google-callback  1.29 kB         121 kB
+├ ○ /dashboard/billing                         143 B         103 kB
+├ ○ /dashboard/inventory                      104 kB         268 kB
+├ ○ /dashboard/inventory-updates               143 B         103 kB
+├ ○ /dashboard/patients                      12.9 kB         171 kB
+├ ƒ /dashboard/patients/[id]                 4.74 kB         178 kB
+├ ○ /dashboard/pharmacy                      45.7 kB         199 kB
+├ ○ /dashboard/pharmacy/drugs                7.25 kB         158 kB
+├ ○ /dashboard/pharmacy/invoices             3.46 kB         158 kB
+├ ○ /dashboard/prescriptions                   143 B         103 kB
+├ ○ /dashboard/procedures                    11.6 kB         162 kB
+├ ○ /dashboard/reports                       9.33 kB         160 kB
+├ ○ /dashboard/rooms                         12.8 kB         166 kB
+├ ○ /dashboard/stock-predictions               143 B         103 kB
+├ ○ /dashboard/users                         9.64 kB         163 kB
+├ ○ /dashboard/visits                        94.3 kB         292 kB
+├ ○ /login                                   5.25 kB         125 kB
+└ ○ /test-transcribe                         12.2 kB         127 kB
++ First Load JS shared by all                 103 kB
+  ├ chunks/3131-f1debb6c6ac38a80.js            46 kB
+  ├ chunks/c7879cf7-9feafa87d60caa99.js      54.2 kB
+  └ other shared chunks (total)              2.31 kB
+
+
+ƒ Middleware                                 33.8 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
+
+> backend@0.0.1 build
+> npx prisma generate && npm run typecheck && nest build
+
+npm warn config ignoring workspace config at /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend/.npmrc
+Prisma schema loaded from prisma/schema.prisma
+
+✔ Generated Prisma Client (v6.16.3) to ./../node_modules/@prisma/client in 229ms
+
+Start by importing your Prisma Client (See: https://pris.ly/d/importing-client)
+
+Tip: Want to turn off tips and other hints? https://pris.ly/tip-4-nohints
+
+npm warn config ignoring workspace config at /Users/nshah/.codex/worktrees/inventory-recovery-ship/Clinic_Management_System/backend/.npmrc
+
+> backend@0.0.1 typecheck
+> tsc --noEmit -p tsconfig.build.json
+
+>  SWC  Running...
+Successfully compiled: 265 files with swc (177.89ms)

@@ -1,0 +1,107 @@
+{
+  "validatedAt": "2026-10-24T15:07:09.822214+00:00",
+  "baseCommit": "dd7a6175a149e0ee7576e87ce10ad0a30c96bc53",
+  "branch": "codex/ocr-legacy-recovery",
+  "build": {
+    "command": "npm run build",
+    "status": "PASS",
+    "includes": [
+      "shared-types",
+      "Next.js frontend and TypeScript",
+      "Prisma generation",
+      "strict backend TypeScript",
+      "SWC backend"
+    ]
+  },
+  "backend": {
+    "passed": 903,
+    "failed": 0,
+    "skipped": 3,
+    "passedSuites": 84,
+    "failedSuites": 0
+  },
+  "frontend": {
+    "passed": 547,
+    "failed": 0,
+    "skipped": 0,
+    "passedSuites": 63,
+    "failedSuites": 0
+  },
+  "postgresql": {
+    "suites": 8,
+    "passed": 105,
+    "scope": "Disposable local PostgreSQL; included in backend count. Full new migration applied to a pre-existing orphan. Both source recovery race orders verified."
+  },
+  "proofModels": {
+    "status": "PASS_CONDITIONAL_FINITE_ABSTRACTION",
+    "ocrClasses": 46,
+    "attemptInterruptionStates": 18,
+    "attemptTransitions": 28,
+    "legacyOrphanStates": 30,
+    "legacyOrphanTransitions": 55,
+    "inventoryStates": 30,
+    "inventoryQuantityBound": 12,
+    "serviceRecoveryProbes": 22
+  },
+  "contracts": {
+    "automatedPassed": 27,
+    "manualChecks": 5,
+    "failed": 0,
+    "limits": "Installed cc-check supports TypeScript/Python but not JavaScript extensions or direct CONTRACTS listing. Browser harness contracts and SQL directory applicability reviewed manually."
+  },
+  "limits": [
+    "Three opt-in tests skipped: live Codex OCR, prescription browser pipeline, signature browser workflow.",
+    "Thirteen legacy backend test files remain excluded by existing Jest configuration.",
+    "Next.js build skips lint under existing configuration.",
+    "Finite models are not whole-program refinement proofs or evidence of OCR factual correctness.",
+    "Historical stock remains UNVERIFIED after RETRY_REJECTED; additional intake is blocked and physical reconciliation remains necessary.",
+    "Apply both migrations before rollout. Old binaries cannot create or post purchases after the protocol trigger is installed.",
+    "No production database writes or live OCR-provider transmissions were performed."
+  ],
+  "rerunNotes": [
+    "An earlier full backend run returned HTTP 426 in one unchanged inventory integration test. Its isolated 33 tests and subsequent complete 903-test runs passed."
+  ],
+  "sourceManifest": "source-baseline.json",
+  "sourceManifestSha256": "a616231a048c213ae10ea9392044c2b08d00b5585b9845d052314ff92b6b2a77",
+  "browserRecovery": {
+    "status": "PASS",
+    "browser": "Chrome/155.0.8059.86",
+    "setup": {
+      "status": "passed",
+      "checks": [
+        "private Prisma alias",
+        "real HttpOnly cookie login",
+        "auth/me",
+        "workspace capabilities",
+        "mounted opening import page",
+        "unauthenticated HTTP 401",
+        "pharmacist without permission HTTP 403"
+      ]
+    },
+    "scenarios": [
+      {
+        "id": "purchase",
+        "status": "passed"
+      },
+      {
+        "id": "partner",
+        "status": "passed"
+      },
+      {
+        "id": "supplier",
+        "status": "passed"
+      },
+      {
+        "id": "opening",
+        "status": "passed"
+      },
+      {
+        "id": "stock",
+        "status": "passed"
+      }
+    ],
+    "evidence": "output/diagnostics/recovery-e2e/2026-10-24T15-05-41-165Z-dc851e43/result.json",
+    "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+    "databaseGuards": "Installed from final migration SQL; browser fixtures use the current transaction protocol"
+  }
+}

@@ -1,5 +1,6 @@
 # Inventory reconciliation: repaired recovery paths
 
+Latest extension: [legacy and missing-invoice recovery](../inventory-ocr-legacy-recovery-2026-10-24/report.md). Earlier validation below is historical; the extension records the current source and verification results.
 **OCR extension:** the [OCR lifecycle and interruption proofs](../inventory-ocr-recovery-2026-10-24/report.md) add durable import outcomes, complete-page rejection, manual recovery and audited rejection. The 30 states below cover inventory recovery; they are not exhaustive OCR lifecycle coverage.
 
 The identified gaps are fixed in the local working tree. Every state in the **supported recovery model** has an authorized path to a verified inventory balance. The guarantee is **reachability**, `AG EF Reconciled`, under the assumptions below. It is not a promise that every original document eventually posts or that missing historical facts can be reconstructed.

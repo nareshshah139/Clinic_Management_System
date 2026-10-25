@@ -13,7 +13,7 @@ describe('Automatic intake HTTP permissions', () => {
   let permissions: string[];
   let role: string;
   const required = ['create', 'review', 'commit-stock'].map((action) => `pharmacy:purchase-invoice:${action}`);
-  const service = { capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importWithRecovery: jest.fn().mockResolvedValue({}), resolveImportAttempt: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN' }), processInvoice: jest.fn().mockResolvedValue({}) };
+  const service = { recoverUnlinkedImport: jest.fn().mockResolvedValue({ outcome: 'RETRY_REJECTED' }), capabilities:jest.fn().mockResolvedValue({read:true}), getSourceMap:jest.fn().mockResolvedValue({sourceMap:null}), locateDocumentSources:jest.fn().mockResolvedValue({version:1}), getDocumentPreview:jest.fn().mockResolvedValue(Buffer.from('image')), updateProductCatalog: jest.fn().mockResolvedValue({ id: 'product-1' }), savePurchaseSupplier: jest.fn().mockResolvedValue({ id: 'supplier-1' }), importWithRecovery: jest.fn().mockResolvedValue({}), resolveImportAttempt: jest.fn().mockResolvedValue({ outcome: 'NO_STOCK_WRITTEN' }), processInvoice: jest.fn().mockResolvedValue({}) };
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
@@ -41,6 +41,17 @@ describe('Automatic intake HTTP permissions', () => {
     .field('attemptId', '12345678-1234-4234-8234-123456789abc')
     .field('goodsReceivedDate', '2026-09-12')
     .attach('file', Buffer.from('synthetic'), { filename: 'test.jpg', contentType: 'image/jpeg' });
+
+  it('requires read/create/review permission and a reason for unlinked recovery', async () => {
+    const dto = { recoveryId: '12345678-1234-4234-8234-123456789abc', legacy: true, reason: 'Lost legacy response' };
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked').send(dto).expect(403);
+    permissions.push('pharmacy:purchase-invoice:read');
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked').send({ ...dto, reason: ' ' }).expect(400);
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked').send({ ...dto, branchId: 'foreign' }).expect(201);
+    expect(service.recoverUnlinkedImport).toHaveBeenCalledWith(dto.recoveryId, 'branch-1', 'user-1', expect.objectContaining(dto));
+    permissions = ['pharmacy:purchase-invoice:read', 'pharmacy:purchase-invoice:create'];
+    await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/recover-unlinked').send(dto).expect(403);
+  });
 
   it('requires an attempt ID before automatic import and scopes recovery to the authenticated actor', async () => {
     await request(app.getHttpServer()).post('/pharmacy/purchase-invoices/ocr/import')

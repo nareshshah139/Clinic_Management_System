@@ -1,0 +1,325 @@
+{
+  "scope": "Finite mathematical abstraction, not a refinement or production/database proof.",
+  "bound": 12,
+  "assumptions": [
+    "Valid representable integer quantities and branch-local retained batch/source records.",
+    "Verified physical identity, stock units and count; each held unit has an attributable source.",
+    "Authorized staff can resolve dependencies and provide any required approval.",
+    "A finite recovery sequence gets a stable interval and successful serializable commits.",
+    "Purchase intake represents actual valid received goods; ledger scope starts at a physical checkpoint."
+  ],
+  "results": [
+    {
+      "claim": "Accepted movements preserve 0 <= held <= on_hand",
+      "status": "PASS_BOUNDED",
+      "cases": 8190
+    },
+    {
+      "claim": "Fresh approved count sets on_hand = physical when physical >= held",
+      "status": "PASS_BOUNDED",
+      "cases": 819
+    },
+    {
+      "claim": "Verified disposition of missing held units then fresh count is safe",
+      "status": "PASS_BOUNDED",
+      "cases": 1183
+    },
+    {
+      "claim": "Linked compensation after residual release restores only its original quarantine",
+      "status": "PASS_BOUNDED",
+      "cases": 1820
+    },
+    {
+      "claim": "AG EF reconciled under edge preconditions",
+      "status": "PASS_FINITE_ABSTRACTION",
+      "states": 30,
+      "witness_paths": {
+        "COUNT:DRAFT": [
+          "COUNT:DRAFT",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:AWAITING_APPROVAL": [
+          "COUNT:AWAITING_APPROVAL",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:APPROVED": [
+          "COUNT:APPROVED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:REJECTED": [
+          "COUNT:REJECTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:CANCELLED": [
+          "COUNT:CANCELLED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:POSTED": [
+          "COUNT:POSTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "COUNT:REVERSED": [
+          "COUNT:REVERSED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "STALE_COUNT": [
+          "STALE_COUNT",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "AMBIGUOUS_EXISTING_LINKS": [
+          "AMBIGUOUS_EXISTING_LINKS",
+          "VERIFIED_IDENTITY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "VERIFIED_IDENTITY": [
+          "VERIFIED_IDENTITY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "UNVERIFIED_LEDGER": [
+          "UNVERIFIED_LEDGER",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "LEDGER_DISCREPANCY": [
+          "LEDGER_DISCREPANCY",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "INACTIVE_BATCH": [
+          "INACTIVE_BATCH",
+          "ACTIVE_VERIFIED_BATCH",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "ACTIVE_VERIFIED_BATCH": [
+          "ACTIVE_VERIFIED_BATCH",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PHYSICAL_BELOW_HELD": [
+          "PHYSICAL_BELOW_HELD",
+          "VERIFIED_SOURCE_DISPOSITION",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "VERIFIED_SOURCE_DISPOSITION": [
+          "VERIFIED_SOURCE_DISPOSITION",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RELEASED_SOURCE_WITH_POSTED_LOSS": [
+          "RELEASED_SOURCE_WITH_POSTED_LOSS",
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RELEASED_SOURCE_WITH_RETURN_CHALLAN": [
+          "RELEASED_SOURCE_WITH_RETURN_CHALLAN",
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RESTORED_ORIGINAL_QUARANTINE": [
+          "RESTORED_ORIGINAL_QUARANTINE",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:REVIEWED_INVALID": [
+          "PURCHASE:REVIEWED_INVALID",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:DRAFT": [
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:OCR_REVIEW_REQUIRED": [
+          "PURCHASE:OCR_REVIEW_REQUIRED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:RECONCILIATION_FAILED": [
+          "PURCHASE:RECONCILIATION_FAILED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:REVIEWED_VALID": [
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:STOCK_COMMITTED": [
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PURCHASE:CANCELLED": [
+          "PURCHASE:CANCELLED",
+          "PURCHASE:DRAFT",
+          "PURCHASE:REVIEWED_VALID",
+          "PURCHASE:STOCK_COMMITTED",
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "FRESH_UNCOUNTED_DRAFT": [
+          "FRESH_UNCOUNTED_DRAFT",
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "PHYSICAL_OBSERVATION": [
+          "PHYSICAL_OBSERVATION",
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "REVIEWED_CURRENT_COUNT": [
+          "REVIEWED_CURRENT_COUNT",
+          "RECONCILED"
+        ],
+        "RECONCILED": [
+          "RECONCILED"
+        ]
+      }
+    },
+    {
+      "claim": "Checkpoint establishes independent ledger agreement and preserves subsequent signed changes",
+      "status": "PASS_BOUNDED",
+      "cases": 2197
+    },
+    {
+      "claim": "Unconditional AF reconciled",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "AWAITING_APPROVAL",
+        "wait forever"
+      ],
+      "reason": "Requires authority, evidence, scheduling and a successful stable transaction interval"
+    },
+    {
+      "claim": "COUNT reconstructs unknown historical movements",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "q=10,L=8,P=7",
+        "delta=-3",
+        "q=7,L=5"
+      ],
+      "reason": "Historical gap stays 2; checkpoint explicitly starts a new verified baseline"
+    },
+    {
+      "claim": "Every original terminal document eventually posts",
+      "status": "COUNTEREXAMPLE",
+      "trace": [
+        "DRAFT",
+        "CANCELLED"
+      ],
+      "reason": "Recovery creates a linked count or a new purchase; immutable history is retained"
+    }
+  ],
+  "source_sha256": {
+    "backend/prisma/schema.prisma": "fd4a2dc9a09e550049ff8e0f72b26c057d72c993c02ac72622089d9b8c3a0e40",
+    "backend/prisma/migrations/20261024120000_purchase_import_recovery/migration.sql": "c864375b975e6c32ee032e0631f16ad4f5ab63a9b698c419c273eaa580e25bfb",
+    "backend/src/modules/pharmacy/purchase-import-recovery.ts": "7814004d9cb222755cacb653f72328adbb7251131896fcda29297d7ecd734fda",
+    "backend/src/modules/pharmacy/pharmacy-purchase-invoice.service.ts": "03ab89f3b5ac31b7ff6ee6287d65d371dbc04ff1ec7a5ff0a315fea4542a1812",
+    "backend/src/modules/pharmacy/pharmacy-purchase-invoice.controller.ts": "9dcdcbb5c61b76dba1f264eccc731be57ba5e099bffb4147332a579f9e116ca9",
+    "backend/src/modules/pharmacy/dto/pharmacy-purchase-invoice.dto.ts": "8a8f8e82652e703fc88126229d7a9dcf192f0a5060518dbb7c6280a3e2367e5c",
+    "backend/src/modules/pharmacy/purchase-invoice-identity.ts": "d7567478784e9909da62964bd0be48333c33a6ddbf656943dfe61c0a56375395",
+    "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.database.spec.ts": "ac395aee1218c99cb3d17a3b1be4f0d0f80f4c04eda8abf75ba840a34bb8c5bc",
+    "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation-access.spec.ts": "30f25cd4735a27d924cc10be9fec294a2e7f60318abfadb9a9106ea6c86c468c",
+    "frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx": "906bfc47392dfa71698c4f5b39863512e5f9cad4dfbb7f0420958a879ee4da4e",
+    "frontend/src/components/pharmacy/PurchaseFieldReview.tsx": "eb31d550a423905917bfe23125e80c197448d13a4d05354108a26a3d11968fe6",
+    "frontend/src/lib/purchase-invoice-review.ts": "b32f984e62d9ad3542a3b2a45de6beadbef2c931c6c00219034e55d29c460260",
+    "frontend/src/lib/purchase-invoice-recovery.ts": "21ef5698742fb0724e97050fd75cf7359bf6ba80d3e53b7115aa5facf9b5cd1d",
+    "frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx": "39b1be9d5fc1f6b6115acf7d846d27f844e8577ad2b64b816138335a44df2933",
+    "frontend/__tests__/pharmacy/PurchaseOcrChecklist.test.tsx": "e4f252516089ce77eff376df72002ae70521b093b7b7995b62c552fa4bd11e73",
+    "verification/inventory-ocr-recovery-2026-10-24/check_ocr_model.py": "8f1215ffa018dc53f8e46bdfeafd383798177ff13ff66a4a32db7f4c4ed19fe9",
+    "verification/inventory-ocr-recovery-2026-10-24/check_pdf_runtime.cjs": "6b6a74d29e7c2b47954d704f2451aa12a3871205847e19afdc3b101dd2b1ac44",
+    "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/migration.sql": "024348921f77f71aad0555a361fc1b714e7a201270897494a2b3c0978bc3acc5",
+    "e2e/recovery/run.cjs": "3b352821b1a01a4ced47ee333d9e1c5c6087510666e9b7a98a4c262dd17b9dbd",
+    "e2e/recovery/scenarios.cjs": "b15dc9342697d8ae9bb03b7f7e2fbd07d6d29593a766b3b58bee790463b594a5",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/check_ocr_model.py": "777214a3f681b17b68f818d2c2f41f23db9288c78d35ddcfe373bf80ce1b43d7",
+    "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.service.spec.ts": "fa3f1eb5ceda9f8c81b803ba6cb6a4cb660525459568281841b6f032b3ac39e4",
+    "backend/src/modules/pharmacy/tests/pharmacy-purchase-invoice.automation.spec.ts": "18a169e85c5a3fe301b6a64d5c77bb7084c65a0d8191fc852262b1092fb3c9ec",
+    "backend/src/modules/inventory/tests/inventory-reconciliation.spec.ts": "ec263ca464176c498ba490f9af6e191c1ff1df7bd8453b30f4d7b1726f5a5438",
+    "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/CONTRACTS": "f9a7bee8cb7a1f4b219d96ed6b053b3607665ae02b2084fa53223884bb92d877",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/check_inventory_model.py": "429db3a40b500b7c05d6ad5b75680116bd4757e98c97ee4791a2231d190b37b8",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/check_pdf_runtime.cjs": "6b6a74d29e7c2b47954d704f2451aa12a3871205847e19afdc3b101dd2b1ac44",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/ocr-lifecycle.dot": "3c19157f90c7090b35abaaa90e8ae8edf3d8ce2a42593daab1e7ea8ad75ed5c8",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/import-interruption.dot": "a229371c8d38927e0e37c1aa54c6f7b21717ac9ff7ae5a1c9b41782a04ba2ec1",
+    "verification/inventory-ocr-legacy-recovery-2026-10-24/report.md": "f487b76e8f35aafdd5cb8436af5ea7a8f3c8a3aace5efaa08c14fd6c874aa7e7"
+  }
+}

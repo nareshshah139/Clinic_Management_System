@@ -28,12 +28,56 @@ export class PurchaseImportRecovery {
     const invoice = attempt.purchaseInvoiceId ? await this.prisma.pharmacyPurchaseInvoice.findFirst({
       where: { id: attempt.purchaseInvoiceId, branchId: fence.branchId }, select: { id: true, status: true, stockCommittedAt: true },
     }) : null;
+    if (attempt.status === 'RETRY_REJECTED') return { attemptId: attempt.id, outcome: 'RETRY_REJECTED',
+      invoiceId: attempt.purchaseInvoiceId, stockOutcome: 'UNVERIFIED', retained: attempt.result, message: attempt.message };
     // A missing linked record is not evidence of no stock. Preserve the lock.
     const outcome = attempt.status === 'INVOICE_SAVED'
       ? !invoice ? 'UNKNOWN' : invoice.stockCommittedAt || invoice.status === 'STOCK_COMMITTED' ? 'STOCK_COMMITTED' : 'DRAFT_SAVED'
       : attempt.status;
     return { attemptId: attempt.id, outcome, invoiceId: attempt.purchaseInvoiceId, message: attempt.message,
       ...(attempt.status === 'NO_STOCK_WRITTEN' && attempt.result ? { retained: attempt.result } : {}) };
+  }
+
+  /**
+   * @cc [owner:nareshshah139,label:state] uncertain-import-rejection
+   * Legacy and orphaned imports MUST either resume an exact branch-local invoice or permanently
+   * reject further intake with an audit. Rejection MUST preserve unknown historical stock effects;
+   * it MUST NOT claim no stock, remove evidence, or repeat invoice creation.
+   */
+  async recoverUnlinked(fence: PurchaseImportFence, input: { legacy: boolean; invoiceId?: string; sourceDocumentIds?: string[]; reason: string }) {
+    this.validate(fence);
+    if (!input.reason?.trim() || input.reason.trim().length > 500) throw new BadRequestException('A recovery reason is required (maximum 500 characters)');
+    await this.prisma.$transaction(async tx => {
+      await lockPurchaseRecovery(tx, fence.branchId);
+      const prior = await tx.pharmacyPurchaseImportAttempt.findUnique({ where: { id: fence.id } });
+      if (prior && (prior.branchId !== fence.branchId || prior.userId !== fence.userId)) throw new NotFoundException('Import attempt not found');
+      if (!prior && !input.legacy) throw new NotFoundException('Import attempt not found');
+      if (prior?.status === 'RUNNING') throw new ConflictException('Resolve the running attempt before recovering an unlinked import');
+      if (prior && ['NO_STOCK_WRITTEN', 'RETRY_REJECTED'].includes(prior.status)) return;
+      if (prior?.purchaseInvoiceId && input.invoiceId && prior.purchaseInvoiceId !== input.invoiceId) throw new ConflictException('The saved invoice identity cannot be replaced');
+      const priorSources = (prior?.result as { sourceDocumentIds?: string[] } | null)?.sourceDocumentIds || [];
+      const sourceIds = [...new Set([...priorSources, ...(input.sourceDocumentIds || [])])];
+      if (sourceIds.length > 20 || sourceIds.some(id => typeof id !== 'string' || !id)) throw new BadRequestException('Invalid original document references');
+      const documents = await tx.pharmacyPurchaseInvoiceDocument.findMany({ where: { id: { in: sourceIds }, branchId: fence.branchId }, select: { id: true, purchaseInvoiceId: true } });
+      if (documents.length !== sourceIds.length) throw new NotFoundException('Original document not found in this branch');
+      const invoiceId = prior?.purchaseInvoiceId || input.invoiceId || null;
+      const candidates = [...new Set([invoiceId, ...documents.map(d => d.purchaseInvoiceId)].filter(Boolean))] as string[];
+      const existing = candidates.length === 1 ? await tx.pharmacyPurchaseInvoice.findFirst({ where: { id: candidates[0], branchId: fence.branchId }, select: { id: true } }) : null;
+      if (existing) {
+        if (!prior) await tx.pharmacyPurchaseImportAttempt.create({ data: { ...scope(fence), status: 'INVOICE_SAVED', purchaseInvoiceId: existing.id } });
+        return;
+      }
+      // Never guess an invoice from supplier/number similarity. Conflicting or missing links reject retry.
+      const retained = { rejectedSourceDocumentIds: sourceIds, historicalInvoiceIds: candidates,
+        recoveryKind: prior ? 'MISSING_LINK' : 'LEGACY', reason: input.reason.trim(), stockOutcome: 'UNVERIFIED' };
+      const data = { status: 'RETRY_REJECTED', result: json(retained),
+        message: 'Further intake rejected. Historical stock remains unverified; use physical inventory reconciliation. Accepted originals and history are retained.' };
+      if (prior) await tx.pharmacyPurchaseImportAttempt.update({ where: { id: fence.id }, data });
+      else await tx.pharmacyPurchaseImportAttempt.create({ data: { ...scope(fence), ...data } });
+      await tx.auditLog.create({ data: { entity: 'PharmacyPurchaseImportAttempt', entityId: fence.id, userId: fence.userId,
+        action: 'RETRY_REJECTED', newValues: JSON.stringify({ branchId: fence.branchId, ...retained, stockEffect: 0 }) } });
+    });
+    return this.read(fence);
   }
 
   async execute(fence: PurchaseImportFence, requestHash: string, run: () => Promise<any>) {
@@ -99,6 +143,25 @@ export async function claimPurchaseImport(tx: Prisma.TransactionClient, fence: P
  * Binding MUST run in the transaction that claimed the attempt and created the invoice;
  * a committed draft MUST never leave its attempt without the saved invoice identity.
  */
-export async function bindPurchaseImport(tx: Prisma.TransactionClient, fence: PurchaseImportFence, invoiceId: string) {
-  await tx.pharmacyPurchaseImportAttempt.update({ where: { id: fence.id }, data: { status: 'INVOICE_SAVED', purchaseInvoiceId: invoiceId } });
+export async function bindPurchaseImport(tx: Prisma.TransactionClient, fence: PurchaseImportFence, invoiceId: string, sourceDocumentIds: string[] = []) {
+  await tx.pharmacyPurchaseImportAttempt.update({ where: { id: fence.id }, data: { status: 'INVOICE_SAVED', purchaseInvoiceId: invoiceId, result: { sourceDocumentIds } } });
+}
+
+/**
+ * @cc [owner:nareshshah139,label:atomicity] purchase-recovery-serialization
+ * Recovery decisions and purchase admission MUST serialize within the branch so rejection
+ * cannot race a source link or stock commit. Database triggers enforce the same lock for old workers.
+ */
+export async function lockPurchaseRecovery(tx: Prisma.TransactionClient, branchId: string) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${'purchase-recovery:' + branchId}, 0))`;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:atomicity] purchase-write-protocol
+ * New invoice creation and stock posting MUST opt into the recovery protocol within their
+ * transaction. Unmodified workers MUST fail the database guard after migration.
+ */
+export async function preparePurchaseWrite(tx: Prisma.TransactionClient, branchId: string) {
+  await lockPurchaseRecovery(tx, branchId);
+  await tx.$executeRaw`SELECT set_config('app.purchase_recovery_protocol', '2', true)`;
 }

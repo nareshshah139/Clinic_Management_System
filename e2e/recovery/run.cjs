@@ -169,6 +169,12 @@ async function setup() {
   checkCancelled();
   prisma("db", "push", "--skip-generate", "--schema", schemaFile);
   owned.db = new PrismaClient({ datasourceUrl: env.DATABASE_URL });
+  // db push creates relations, but PostgreSQL recovery triggers require the deployment SQL.
+  const recoverySql = fs.readFileSync(path.join(root, "backend/prisma/migrations/20261024150000_unlinked_purchase_recovery/migration.sql"), "utf8");
+  for (const statement of recoverySql.split("-- statement-breakpoint")) {
+    if (/^\s*CREATE (FUNCTION|TRIGGER) /.test(statement)) await owned.db.$executeRawUnsafe(statement);
+  }
+
   const branch = await owned.db.branch.create({
     data: { name: "Recovery Test Clinic", address: "Synthetic E2E" },
   });

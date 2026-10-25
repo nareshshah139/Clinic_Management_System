@@ -1,0 +1,35 @@
+digraph Import {
+ graph [rankdir=TB,bgcolor="#f8fafc",pad=.35,nodesep=.4,ranksep=.5,fontname="Helvetica",fontsize=18,labelloc=t,label="Interrupted import: durable attempts and legacy/orphan recovery"];
+ node [shape=box,style="rounded,filled",fillcolor="#e2e8f0",color="#94a3b8",fontname="Helvetica",fontsize=12];
+ edge [fontname="Helvetica",fontsize=10,color="#475569"];
+ client [label="Persist attempt UUID\nBEFORE dispatch"];
+ running [label="RUNNING\nOriginal archive + OCR outside transaction"];
+ unknown [label="Lost response / reload / crash\nStock outcome unknown\nWrites remain locked",fillcolor="#fef3c7"];
+ resolve [label="Resolve exact attempt\nAuthenticated branch + actor",fillcolor="#dbeafe"];
+ stopped [label="NO_STOCK_WRITTEN\nTerminal tombstone / fence\nLate worker cannot create",fillcolor="#d1fae5"];
+ saved [label="INVOICE_SAVED\nAttempt + invoice in SAME transaction"];
+ readback [label="Read exact saved invoice\nDraft / cancelled / stock committed",fillcolor="#d1fae5"];
+ client -> running;
+ client -> unknown [label="Even if request never arrived"];
+ running -> unknown;
+ running -> saved [label="Lock RUNNING row\nCreate + bind atomically"];
+ unknown -> resolve;
+ resolve -> stopped [label="Absent: insert tombstone\nRunning: fence under row lock"];
+ resolve -> readback [label="Save won the row-lock race"];
+ saved -> readback [label="Commit or resume same invoice"];
+ stopped -> stopped [label="Delayed request / same-ID replay\nno new effects"];
+ readback -> readback [label="Repeated status check\nnever repeat intake"];
+ legacy [label="Old session: no attempt ID",fillcolor="#fef3c7"];
+ orphan [label="Saved identity; invoice missing",fillcolor="#fef3c7"];
+ recover [label="Persist recovery UUID before request\nRecover exact originals / invoice\nBranch lock + permission + reason"];
+ rejected [label="RETRY_REJECTED\nDurable audit and source/identity fence\nHistorical stock stays UNVERIFIED",fillcolor="#fee2e2"];
+ inventory [label="Physical inventory reconciliation\nCount + independent checkpoint",fillcolor="#d1fae5"];
+ protocol [label="Migration database guard\nOld worker cannot create or post"];
+ legacy -> recover; saved -> orphan [label="Pre-existing orphan link"];
+ orphan -> recover;
+ recover -> readback [label="Exact existing branch-local invoice"];
+ recover -> rejected [label="No exact invoice"];
+ rejected -> inventory [label="Never repeat purchase intake"];
+ rejected -> rejected [label="Same recovery ID / rejected original\nno new intake"];
+ protocol -> rejected [label="Late legacy write blocked",style=dashed];
+}

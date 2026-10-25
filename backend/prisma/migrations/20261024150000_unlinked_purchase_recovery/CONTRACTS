@@ -1,0 +1,8 @@
+@cc [owner:nareshshah139,label:atomicity] legacy-write-fence
+After migration, invoice creation and first stock posting MUST require the transaction-local recovery protocol. Old workers MUST fail before creating additional purchase stock effects.
+
+@cc [owner:nareshshah139,label:state] rejected-identity-fence
+Source binding and purchase posting MUST serialize with recovery and reject RETRY_REJECTED source or invoice identities. Historical stock effects MUST remain untouched.
+
+@cc [owner:nareshshah139,label:integrity] orphan-link-prevention
+Existing orphan attempt identities MUST survive migration for audited recovery. Future saved links MUST reference an existing invoice, and deletion of referenced invoices MUST be restricted.

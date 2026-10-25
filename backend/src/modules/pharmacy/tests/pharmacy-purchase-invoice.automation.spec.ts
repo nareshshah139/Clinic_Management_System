@@ -49,6 +49,7 @@ describe('Automatic purchase invoice intake', () => {
       },
       inventoryItem: { findMany: jest.fn(async () => []), create: jest.fn(async () => ({ id: 'stock-1' })), update: jest.fn() },
       stockTransaction: { create: jest.fn() },
+      $executeRaw: jest.fn().mockResolvedValue(1),
       $transaction: jest.fn(async (callback: any) => {
         const previous = structuredClone(stored);
         try { return await callback(prisma); } catch (error) { stored = previous; throw error; }
