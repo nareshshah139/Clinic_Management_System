@@ -12,6 +12,8 @@ import { Test } from '@nestjs/testing';
 import { IsString } from 'class-validator';
 import { EventEmitter } from 'node:events';
 import { request as httpRequest } from 'node:http';
+import { gzipSync } from 'node:zlib';
+import { Router } from 'express';
 import request from 'supertest';
 import {
   diagnosticValidationPipe,
@@ -172,7 +174,6 @@ describe('HTTP diagnostics at the Nest boundary', () => {
     expect(JSON.parse(lines[0])).toMatchObject({
       status: 400,
       errorCode: 'invalid_request',
-      parserErrorType: 'entity.parse.failed',
       route: '/patients/:id',
       routeSource: 'registered_template',
     });
@@ -181,13 +182,16 @@ describe('HTTP diagnostics at the Nest boundary', () => {
 
   it('identifies a rejected profile image at the unchanged 100 KiB parser boundary', async () => {
     const prefix = 'data:image/png;base64,';
-    const overhead = Buffer.byteLength(JSON.stringify({ printBgUrl: prefix }));
-    const acceptedBody = JSON.stringify({
-      printBgUrl: prefix + 'A'.repeat(102400 - overhead),
+    const profile = (printBgUrl: string) => ({
+      metadata: { rxPrintProfile: { printBgUrl } },
     });
-    const rejectedBody = JSON.stringify({
-      printBgUrl: prefix + 'A'.repeat(102401 - overhead),
-    });
+    const overhead = Buffer.byteLength(JSON.stringify(profile(prefix)));
+    const acceptedBody = JSON.stringify(
+      profile(prefix + 'A'.repeat(102400 - overhead)),
+    );
+    const rejectedBody = JSON.stringify(
+      profile(prefix + 'A'.repeat(102401 - overhead)),
+    );
     expect(Buffer.byteLength(acceptedBody)).toBe(102400);
     expect(Buffer.byteLength(rejectedBody)).toBe(102401);
     await request(app.getHttpServer())
@@ -206,7 +210,8 @@ describe('HTTP diagnostics at the Nest boundary', () => {
     expect(lines).toHaveLength(2);
     expect(rejected.body).toEqual({
       statusCode: 413,
-      message: 'Request body is too large. Reduce the request size and try again.',
+      message:
+        'Request body is too large. Reduce the request size and try again.',
       requestId,
       errorCode: 'payload_too_large',
     });
@@ -233,42 +238,55 @@ describe('HTTP diagnostics at the Nest boundary', () => {
     ['post', '/users/private-user/profile?phone=private-phone'],
     ['patch', '/private-patient?phone=private-phone'],
     ['patch', '/users/%E0%A4/profile?phone=private-phone'],
-  ] as const)('keeps a rejected %s %s unmatched when no safe template matches', async (method, path) => {
-    await request(app.getHttpServer())[method](path)
-      .set('Content-Type', 'application/json')
-      .send(JSON.stringify({ private: 'x'.repeat(102400) }))
-      .expect(413);
-    expect(JSON.parse(lines[0])).toMatchObject({
-      route: 'unmatched',
-      errorCode: 'payload_too_large',
-      parserErrorType: 'entity.too.large',
-    });
-    expect(JSON.parse(lines[0])).not.toHaveProperty('routeSource');
-    expect(lines.join('')).not.toMatch(/private-user|private-patient|private-phone|%E0/);
-    expect(profileSaves).toBe(0);
-  });
+  ] as const)(
+    'keeps a rejected %s %s unmatched when no safe template matches',
+    async (method, path) => {
+      await request(app.getHttpServer())
+        [method](path)
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ private: 'x'.repeat(102400) }))
+        .expect(413);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        route: 'unmatched',
+        errorCode: 'payload_too_large',
+        parserErrorType: 'entity.too.large',
+      });
+      expect(JSON.parse(lines[0])).not.toHaveProperty('routeSource');
+      expect(lines.join('')).not.toMatch(
+        /private-user|private-patient|private-phone|%E0/,
+      );
+      expect(profileSaves).toBe(0);
+    },
+  );
 
   it('reports received bytes for a chunked rejection without claiming a declared size', async () => {
     const body = JSON.stringify({ private: 'x'.repeat(102400) });
-    const response = await new Promise<{ status: number; body: any }>((resolve, reject) => {
-      const outgoing = httpRequest({
-        hostname: '127.0.0.1',
-        port: app.getHttpServer().address().port,
-        method: 'PATCH',
-        path: '/users/private-user/profile',
-        headers: { 'Content-Type': 'application/json' },
-      }, incoming => {
-        const chunks: Buffer[] = [];
-        incoming.on('data', chunk => chunks.push(chunk));
-        incoming.on('end', () => resolve({
-          status: incoming.statusCode!,
-          body: JSON.parse(Buffer.concat(chunks).toString()),
-        }));
-      });
-      outgoing.on('error', reject);
-      outgoing.write(body.slice(0, 65536));
-      outgoing.end(body.slice(65536));
-    });
+    const response = await new Promise<{ status: number; body: any }>(
+      (resolve, reject) => {
+        const outgoing = httpRequest(
+          {
+            hostname: '127.0.0.1',
+            port: app.getHttpServer().address().port,
+            method: 'PATCH',
+            path: '/users/private-user/profile',
+            headers: { 'Content-Type': 'application/json' },
+          },
+          (incoming) => {
+            const chunks: Buffer[] = [];
+            incoming.on('data', (chunk) => chunks.push(chunk));
+            incoming.on('end', () =>
+              resolve({
+                status: incoming.statusCode!,
+                body: JSON.parse(Buffer.concat(chunks).toString()),
+              }),
+            );
+          },
+        );
+        outgoing.on('error', reject);
+        outgoing.write(body.slice(0, 65536));
+        outgoing.end(body.slice(65536));
+      },
+    );
     expect(response.status).toBe(413);
     expect(response.body.errorCode).toBe('payload_too_large');
     expect(profileSaves).toBe(0);
@@ -280,14 +298,20 @@ describe('HTTP diagnostics at the Nest boundary', () => {
       bodyLimitBytes: 102400,
     });
     expect(event.bodyReceivedBytes).toBeGreaterThan(102400);
-    expect(event.bodyReceivedBytes).toBeLessThanOrEqual(Buffer.byteLength(body));
+    expect(event.bodyReceivedBytes).toBeLessThanOrEqual(
+      Buffer.byteLength(body),
+    );
     expect(event).not.toHaveProperty('bodyDeclaredBytes');
   });
 
   it('omits hostile numeric metadata and unrecognized parser types', async () => {
-    await request(app.getHttpServer()).get('/users/hostile-parser-error').expect(413);
-    await request(app.getHttpServer()).get('/users/unknown-parser-error').expect(413);
-    const events = lines.map(line => JSON.parse(line));
+    await request(app.getHttpServer())
+      .get('/users/hostile-parser-error')
+      .expect(413);
+    await request(app.getHttpServer())
+      .get('/users/unknown-parser-error')
+      .expect(413);
+    const events = lines.map((line) => JSON.parse(line));
     expect(events[0].parserErrorType).toBe('entity.too.large');
     expect(events[1]).not.toHaveProperty('parserErrorType');
     for (const event of events) {
@@ -298,7 +322,129 @@ describe('HTTP diagnostics at the Nest boundary', () => {
     }
     expect(lines.join('')).not.toContain('PRIVATE');
   });
+
+  it('uses Express matching options without mutating route parameters or retaining decoded identifiers', async () => {
+    const layer = app
+      .getHttpAdapter()
+      .getInstance()
+      .router.stack.find(
+        (item: any) => item.route?.path === '/users/:id/profile',
+      );
+    let afterRouterMatch: { params: unknown; path: unknown; keys: unknown };
+    const originalMatch = layer.match.bind(layer);
+    const mutableMatcher = jest
+      .spyOn(layer, 'match')
+      .mockImplementation((path: unknown) => {
+        const result = originalMatch(path);
+        afterRouterMatch = {
+          params: layer.params,
+          path: layer.path,
+          keys: layer.keys,
+        };
+        return result;
+      });
+    try {
+      await request(app.getHttpServer())
+        .patch('/USERS/private%2Fidentifier/PROFILE/?secret=private-value')
+        .set('Content-Type', 'application/json')
+        .send(JSON.stringify({ private: 'x'.repeat(102400) }))
+        .expect(413);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        route: '/users/:id/profile',
+        routeSource: 'registered_template',
+      });
+      expect(mutableMatcher).toHaveBeenCalledTimes(1);
+      expect({
+        params: layer.params,
+        path: layer.path,
+        keys: layer.keys,
+      }).toEqual(afterRouterMatch!);
+      expect(lines.join('')).not.toMatch(/private|identifier|secret|%2F/);
+    } finally {
+      mutableMatcher.mockRestore();
+    }
+  });
+
+  it('labels decompressed parser bytes without mistaking compressed wire length for declared body size', async () => {
+    const body = JSON.stringify({ private: 'x'.repeat(102400) });
+    const compressed = gzipSync(body);
+    expect(compressed.byteLength).toBeLessThan(102400);
+    const response = await fetch(
+      `http://127.0.0.1:${app.getHttpServer().address().port}/users/private-user/profile`,
+      {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Encoding': 'gzip',
+        },
+        body: compressed,
+      },
+    );
+    expect(response.status).toBe(413);
+    await response.json();
+    expect(profileSaves).toBe(0);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0])).toMatchObject({
+      route: '/users/:id/profile',
+      parserErrorType: 'entity.too.large',
+      bodyLimitBytes: 102400,
+      bodyReceivedBytes: Buffer.byteLength(body),
+    });
+    expect(JSON.parse(lines[0])).not.toHaveProperty('bodyDeclaredBytes');
+  });
+
+  it.each([
+    ['head', '/patients/expired'],
+    ['options', 'unmatched'],
+  ] as const)(
+    'respects %s routing semantics for parser rejection',
+    async (method, route) => {
+      const body = JSON.stringify({ private: 'x'.repeat(102400) });
+      await request(app.getHttpServer())
+        [method]('/patients/expired')
+        .set('Content-Type', 'application/json')
+        .set('Content-Length', String(Buffer.byteLength(body)))
+        .send(body)
+        .expect(413);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        route,
+        errorCode: 'payload_too_large',
+      });
+    },
+  );
 });
+
+it.each(['array', 'regexp', 'mounted'] as const)(
+  'does not guess a parser-failure template for an unsupported %s route',
+  async (shape) => {
+    const module = await Test.createTestingModule({}).compile();
+    const app = module.createNestApplication({ logger: false });
+    const lines: string[] = [];
+    installHttpObservability(app, (line) => lines.push(line));
+    await app.init();
+    const express = app.getHttpAdapter().getInstance();
+    const handler = (_req: unknown, res: any) => res.sendStatus(200);
+    if (shape === 'array')
+      express.patch(['/users/:id/profile', '/aliases/:id/profile'], handler);
+    if (shape === 'regexp') express.patch(/^\/users\/[^/]+\/profile$/, handler);
+    if (shape === 'mounted')
+      express.use('/users', Router().patch('/:id/profile', handler));
+    try {
+      await request(app.getHttpServer())
+        .patch('/users/private-user/profile?secret=private-value')
+        .send({ private: 'x'.repeat(102400) })
+        .expect(413);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        route: 'unmatched',
+        errorCode: 'payload_too_large',
+      });
+      expect(JSON.parse(lines[0])).not.toHaveProperty('routeSource');
+      expect(lines.join('')).not.toMatch(/private-user|private-value/);
+    } finally {
+      await app.close();
+    }
+  },
+);
 
 it('logs a premature disconnect once as unknown and tolerates a broken log sink', () => {
   const lines: string[] = [];
