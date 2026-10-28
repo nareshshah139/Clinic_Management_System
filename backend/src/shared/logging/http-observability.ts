@@ -30,13 +30,33 @@ type Failure =
   | 'conflict'
   | 'timeout'
   | 'rate_limited'
+  | 'payload_too_large'
   | 'server_error'
   | 'request_rejected';
-interface RequestDiagnostic {
+const PARSER_ERROR_STATUSES = {
+  'entity.too.large': 413,
+  'entity.parse.failed': 400,
+  'entity.verify.failed': 403,
+  'encoding.unsupported': 415,
+  'charset.unsupported': 415,
+  'parameters.too.many': 413,
+  'request.aborted': 400,
+  'request.size.invalid': 400,
+  'stream.encoding.set': 500,
+  'stream.not.readable': 500,
+} as const;
+interface ParserDiagnostic {
+  parserErrorType?: keyof typeof PARSER_ERROR_STATUSES;
+  bodyLimitBytes?: number;
+  bodyDeclaredBytes?: number;
+  bodyReceivedBytes?: number;
+}
+interface RequestDiagnostic extends ParserDiagnostic {
   requestId: string;
   errorCode?: Failure;
   databaseCode?: string;
   validation?: Array<{ field: string; rules: string[] }>;
+  routeCandidate?: string;
 }
 const diagnostics = new WeakMap<Request, RequestDiagnostic>();
 const validationDiagnostics = new WeakMap<
@@ -44,6 +64,96 @@ const validationDiagnostics = new WeakMap<
   NonNullable<RequestDiagnostic['validation']>
 >();
 export type LogSink = (line: string) => void;
+
+/**
+ * @cc [owner:nareshshah139,label:security] parser-diagnostic-allowlist
+ * Parser metadata MUST contain only an allowlisted type with its matching status and
+ * nonnegative safe integer byte counts. Unknown types and invalid counts are omitted.
+ * Counts describe the parser stream, which may be decompressed, rather than wire bytes.
+ */
+function parserDiagnostic(
+  exception: unknown,
+  status: number,
+): ParserDiagnostic {
+  try {
+    if (!(exception instanceof Error)) return {};
+    const properties = Object.getOwnPropertyDescriptors(exception);
+    const type = properties.type?.value;
+    if (
+      typeof type !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(PARSER_ERROR_STATUSES, type) ||
+      PARSER_ERROR_STATUSES[type as keyof typeof PARSER_ERROR_STATUSES] !==
+        status
+    )
+      return {};
+    const result: ParserDiagnostic = {
+      parserErrorType: type as keyof typeof PARSER_ERROR_STATUSES,
+    };
+    const byteFields = {
+      limit: 'bodyLimitBytes',
+      length: 'bodyDeclaredBytes',
+      received: 'bodyReceivedBytes',
+    } as const;
+    for (const [source, target] of Object.entries(byteFields)) {
+      const value = properties[source]?.value;
+      if (
+        typeof value === 'number' &&
+        Number.isSafeInteger(value) &&
+        value >= 0
+      )
+        result[target] = value;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * @cc [owner:nareshshah139,label:security] pre-routing-template-candidate
+ * Pre-routing attribution MUST emit only a server-registered root route template whose
+ * method and pure Express matcher accept the request. It is a candidate, not proof of
+ * handler execution. Unsupported route shapes, mounted routers and matcher errors
+ * MUST yield no candidate; routing state, captured parameters and URLs MUST NOT be retained.
+ */
+function registeredRouteCandidate(
+  app: INestApplication,
+  req: Request,
+): string | undefined {
+  try {
+    if (!METHODS.has(req.method)) return;
+    const stack: unknown = app.getHttpAdapter().getInstance()?.router?.stack;
+    if (!Array.isArray(stack)) return;
+    for (const layer of stack) {
+      if (!layer || typeof layer !== 'object') return;
+      if (!layer.route) {
+        if (Array.isArray(layer.handle?.stack)) return;
+        continue;
+      }
+      const route = layer.route;
+      if (!route.methods || typeof route.methods !== 'object') return;
+      const method = req.method.toLowerCase();
+      const accepted =
+        route.methods._all === true ||
+        route.methods[method] === true ||
+        (method === 'head' &&
+          !route.methods.head &&
+          route.methods.get === true);
+      if (!accepted) continue;
+      if (
+        typeof route.path !== 'string' ||
+        !route.path.startsWith('/') ||
+        !Array.isArray(layer.matchers) ||
+        layer.matchers.length !== 1 ||
+        typeof layer.matchers[0] !== 'function'
+      )
+        return;
+      if (layer.matchers[0](req.path)) return route.path;
+    }
+  } catch {
+    return;
+  }
+}
 
 /**
  * @cc [owner:nareshshah139,label:security] validation-log-metadata
@@ -106,6 +216,7 @@ export function failureCode(status: number): Failure {
   if (status === 409) return 'conflict';
   if (status === 408 || status === 504) return 'timeout';
   if (status === 429) return 'rate_limited';
+  if (status === 413) return 'payload_too_large';
   return status >= 500 ? 'server_error' : 'request_rejected';
 }
 
@@ -134,8 +245,9 @@ function writeEvent(
 
 /**
  * @cc [owner:nareshshah139,label:security] request-log-privacy
- * Request diagnostics MUST contain only a UUID reference, method, registered route template,
- * status, duration, attempt, declared validation fields/rules and fixed error codes; never bodies, URL parameters, headers,
+ * Request diagnostics MUST contain only a UUID reference, method, registered route template
+ * and attribution source, status, duration, attempt, declared validation fields/rules,
+ * fixed error/parser codes and bounded parser byte counts; never bodies, URL parameters, headers,
  * credentials, patient identifiers, exception messages or stacks. Sink errors MUST NOT affect requests.
  */
 /**
@@ -184,7 +296,12 @@ export function requestDiagnostics(
           method,
           // Express assigns this from application route declarations, not the incoming URL.
           route:
-            typeof req.route?.path === 'string' ? req.route.path : 'unmatched',
+            typeof req.route?.path === 'string'
+              ? req.route.path
+              : diagnostic.routeCandidate || 'unmatched',
+          ...(typeof req.route?.path !== 'string' && diagnostic.routeCandidate
+            ? { routeSource: 'registered_template' }
+            : {}),
           status,
           durationMs,
           attempt,
@@ -204,6 +321,14 @@ export function requestDiagnostics(
           ...(diagnostic.validation?.length
             ? { validation: diagnostic.validation }
             : {}),
+          ...(diagnostic.parserErrorType
+            ? {
+                parserErrorType: diagnostic.parserErrorType,
+                bodyLimitBytes: diagnostic.bodyLimitBytes,
+                bodyDeclaredBytes: diagnostic.bodyDeclaredBytes,
+                bodyReceivedBytes: diagnostic.bodyReceivedBytes,
+              }
+            : {}),
         },
         level,
       );
@@ -217,17 +342,25 @@ export function requestDiagnostics(
 /**
  * @cc [owner:nareshshah139,label:security] safe-error-response
  * HTTP exception status and public response fields MUST be preserved with a request reference.
- * Parser error statuses are preserved with a generic message; other unexpected exceptions return
+ * Parser error statuses are preserved with a generic message and allowlisted metadata.
+ * Oversized body-parser errors MUST return payload_too_large and a fixed actionable message;
+ * no limit is raised and rejected requests MUST NOT reach handlers. Other unexpected exceptions return
  * a generic 500. Raw database messages and stacks MUST NOT be logged
  * or returned. Only syntactically valid Prisma error codes may enter the diagnostic record.
  */
 @Catch()
 export class DiagnosticExceptionFilter implements ExceptionFilter {
+  constructor(
+    private readonly routeCandidate?: (req: Request) => string | undefined,
+  ) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const http = host.switchToHttp();
     const req = http.getRequest<Request>();
     const res = http.getResponse<Response>();
-    const diagnostic = diagnostics.get(req) || { requestId: randomUUID() };
+    const diagnostic: RequestDiagnostic = diagnostics.get(req) || {
+      requestId: randomUUID(),
+    };
     diagnostics.set(req, diagnostic);
     // Express body-parser errors use status/statusCode rather than HttpException.
     const parserStatus =
@@ -244,6 +377,9 @@ export class DiagnosticExceptionFilter implements ExceptionFilter {
           ? parserStatus
           : 500;
     diagnostic.errorCode = failureCode(status);
+    Object.assign(diagnostic, parserDiagnostic(exception, status));
+    if (typeof req.route?.path !== 'string')
+      diagnostic.routeCandidate = this.routeCandidate?.(req);
     const code = (exception as { code?: unknown })?.code;
     if (typeof code === 'string' && /^P\d{4}$/.test(code))
       diagnostic.databaseCode = code;
@@ -257,7 +393,11 @@ export class DiagnosticExceptionFilter implements ExceptionFilter {
         : {
             statusCode: status,
             message:
-              status >= 500 ? 'Internal server error' : 'Request rejected',
+              status === 413
+                ? 'Request body is too large. Reduce the request size and try again.'
+                : status >= 500
+                  ? 'Internal server error'
+                  : 'Request rejected',
           };
     res.status(status).json({
       ...(typeof original === 'string'
@@ -279,5 +419,7 @@ export function installHttpObservability(
   sink?: LogSink,
 ) {
   app.use(requestDiagnostics(sink));
-  app.useGlobalFilters(new DiagnosticExceptionFilter());
+  app.useGlobalFilters(
+    new DiagnosticExceptionFilter((req) => registeredRouteCandidate(app, req)),
+  );
 }
