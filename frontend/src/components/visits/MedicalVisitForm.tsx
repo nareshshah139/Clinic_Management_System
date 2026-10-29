@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -402,11 +403,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
   // Print customization (moved from PrescriptionBuilder)
-  const [printBgUrl, setPrintBgUrl] = useState<string>('/letterhead.png');
-  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(150);
+  const [printBgUrl, setPrintBgUrl] = useState<string>(PRESCRIPTION_LETTERHEAD_URL);
+  const [printTopMarginPx, setPrintTopMarginPx] = useState<number>(PRESCRIPTION_TOP_MARGIN_PX);
   const [printLeftMarginPx, setPrintLeftMarginPx] = useState<number>(45);
   const [printRightMarginPx, setPrintRightMarginPx] = useState<number>(45);
-  const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(45);
+  const [printBottomMarginPx, setPrintBottomMarginPx] = useState<number>(PRESCRIPTION_BOTTOM_MARGIN_PX);
   const [contentOffsetXPx, setContentOffsetXPx] = useState<number>(0);
   const [contentOffsetYPx, setContentOffsetYPx] = useState<number>(0);
   const [designAidsEnabled, setDesignAidsEnabled] = useState<boolean>(false);
@@ -449,7 +450,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       const frames = localStorage.getItem('rx_frames_enabled');
       const headerMm = localStorage.getItem('rx_header_mm');
       const footerMm = localStorage.getItem('rx_footer_mm');
-      if (bg) setPrintBgUrl(bg);
+      if (bg) setPrintBgUrl(prescriptionLetterheadUrl(bg));
       if (top) setPrintTopMarginPx(Number(top));
       if (left) setPrintLeftMarginPx(Number(left));
       if (right) setPrintRightMarginPx(Number(right));

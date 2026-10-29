@@ -3,6 +3,7 @@ import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationTy
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { VisitDetails } from '@/lib/types';
 import { encounterTime } from '@/lib/patient-history';
+import { PRESCRIPTION_LETTERHEAD_URL, prescriptionLetterheadUrl, prescriptionPageMargin } from '@/lib/prescription-letterhead';
 import { compactClinicalPatch, useClinicalState, acknowledgedVisitVersion } from '@/lib/clinical-patch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -170,6 +171,12 @@ const CollapsibleSection = React.memo(function CollapsibleSection({
  * Follow-up labels beside their values, with wrapped text aligned under the
  * value. Disabling it MUST restore the stacked headings and original labels;
  * fields without values MUST remain omitted in both layouts.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] built-in-letterhead-page-flow
+ * The supplied Dr. Praneeta Jain letterhead MUST repeat on every preview and export
+ * page. Its continuation pages MUST use the same pagination margins without an
+ * automatic downward shift; explicit user content offsets remain available.
  */
 /**
  * @cc [owner:nareshshah139,label:product] optional-dose-and-review-date
@@ -690,8 +697,9 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const [renderedSignatureUrl, setRenderedSignatureUrl] = useState<string | null>(null);
   const pagedJsProcessRef = useRef<(() => Promise<void>) | null>(null);
   const [sharingEmail, setSharingEmail] = useState(false);
-  // Letterhead selection: 'default' uses printBgUrl prop or /letterhead.png, 'none' removes it
+  // Default uses the supplied LINAE letterhead; explicit custom backgrounds remain available.
   const [letterheadOption, setLetterheadOption] = useState<'default' | 'none'>('default');
+  const resolvedPrintBgUrl = prescriptionLetterheadUrl(printBgUrl);
   const useLetterheadForDownload = useMemo(() => letterheadOption !== 'none', [letterheadOption]);
   // Live margin overrides (px). Null -> use printer profile or provided defaults
   const [overrideTopMarginPx, setOverrideTopMarginPx] = useState<number | null>(null);
@@ -2371,7 +2379,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
       max-height: ${pagedPrintPageHeight} !important;
       overflow: hidden !important;
       box-sizing: border-box !important;
-      background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+      background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
       background-repeat: no-repeat;
       background-position: top left;
       background-size: ${pagedPrintPageWidth} ${pagedPrintPageHeight};
@@ -3136,27 +3144,18 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   // Computed effective margins (depend on printer profile and overrides)
   const effectiveTopMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return (overrideTopMarginPx ?? (prof.topMarginPx ?? printTopMarginPx ?? 170)) as number;
-  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx]);
+    return prescriptionPageMargin(overrideTopMarginPx ?? prof.topMarginPx ?? printTopMarginPx, 'top', printBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideTopMarginPx, printTopMarginPx, printBgUrl, useLetterheadForDownload]);
   const effectiveBottomMarginPx = useMemo(() => {
     const prof = activeProfileId ? (printerProfiles.find((p: any) => p.id === activeProfileId) || {}) : {};
-    return (overrideBottomMarginPx ?? (prof.bottomMarginPx ?? printBottomMarginPx ?? 45)) as number;
-  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx]);
+    return prescriptionPageMargin(overrideBottomMarginPx ?? prof.bottomMarginPx ?? printBottomMarginPx, 'bottom', printBgUrl, useLetterheadForDownload);
+  }, [activeProfileId, printerProfiles, overrideBottomMarginPx, printBottomMarginPx, printBgUrl, useLetterheadForDownload]);
   const effectiveTopMarginMm = useMemo(() => Math.max(0, Math.round((effectiveTopMarginPx / 3.78) * 10) / 10), [effectiveTopMarginPx]);
   const effectiveBottomMarginMm = useMemo(() => Math.max(0, Math.round((effectiveBottomMarginPx / 3.78) * 10) / 10), [effectiveBottomMarginPx]);
 
-  // Memoize slider values to prevent frequent re-renders of sidebar
-  const activeProfile = useMemo(() => {
-    return activeProfileId ? printerProfiles.find((p:any)=>p.id===activeProfileId) : null;
-  }, [activeProfileId, printerProfiles]);
-
-  const topMarginSliderValue = useMemo(() => {
-    return overrideTopMarginPx ?? (activeProfile?.topMarginPx ?? printTopMarginPx ?? 170);
-  }, [overrideTopMarginPx, activeProfile, printTopMarginPx]);
-
-  const bottomMarginSliderValue = useMemo(() => {
-    return overrideBottomMarginPx ?? (activeProfile?.bottomMarginPx ?? printBottomMarginPx ?? 45);
-  }, [overrideBottomMarginPx, activeProfile, printBottomMarginPx]);
+  // Show the same protected margins that pagination uses.
+  const topMarginSliderValue = effectiveTopMarginPx;
+  const bottomMarginSliderValue = effectiveBottomMarginPx;
 
   useEffect(() => {
     (async () => {
@@ -3800,7 +3799,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
             const offsetX = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetXPx ?? contentOffsetXPx ?? 0) : (contentOffsetXPx ?? 0);
             const baseOffsetY = activeProfileId ? (printerProfiles.find((p:any)=>p.id===activeProfileId)?.contentOffsetYPx ?? contentOffsetYPx ?? 0) : (contentOffsetYPx ?? 0);
             let continuationOffsetY = 0;
-            if (idx > 0 && firstPageTextOffsetPx > 0) {
+            if (idx > 0 && firstPageTextOffsetPx > 0 && !(useLetterheadForDownload && resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL)) {
               const pageBox = page.querySelector('.pagedjs_pagebox') as HTMLElement | null;
               const firstText = findFirstTextElement(contentArea as HTMLElement);
               if (pageBox && firstText) {
@@ -3998,7 +3997,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [isTeleVideo, previewOpen, autoPreview, itemsStringified, diagnosis, chiefComplaints, personalHistory, spaceOptimized, investigationsStringified, customSectionsStringified, followUpInstructions,
       paperPreset, effectiveTopMarginMm, effectiveBottomMarginMm, overrideTopMarginPx, overrideBottomMarginPx,
       activeProfileId, printerProfiles, printLeftMarginPx, printRightMarginPx, contentOffsetXPx, contentOffsetYPx, 
-      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
+      designAids, frames, bleedSafe, showRefillStamp, printedSignatureUrl, letterheadOption, resolvedPrintBgUrl, grayscale, translationsMap]); // Added translationsMap to re-process when translations complete
 
   // Handle page navigation
   useEffect(() => {
@@ -5480,7 +5479,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 
                 #pagedjs-container .pagedjs_pagebox,
                 #prescription-print-host .prescription-print-pages .pagedjs_pagebox {
-                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${printBgUrl ?? '/letterhead.png'}')`};
+                  background-image: ${letterheadOption === 'none' ? 'none' : `url('${resolvedPrintBgUrl}')`};
                   background-repeat: no-repeat;
                   background-position: top left;
                   background-size: ${paperPreset === 'LETTER' ? '216mm 279mm' : '210mm 297mm'};
@@ -6054,7 +6053,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <SelectValue placeholder="Select letterhead" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="default">Letterhead ({printBgUrl ? 'Custom' : 'letterhead.png'})</SelectItem>
+                        <SelectItem value="default">Letterhead ({resolvedPrintBgUrl === PRESCRIPTION_LETTERHEAD_URL ? 'Dr. Praneeta Jain' : 'Custom'})</SelectItem>
                         <SelectItem value="none">None (Plain)</SelectItem>
                       </SelectContent>
                     </Select>
