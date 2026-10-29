@@ -1,15 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppMinimalModule } from './app.minimal.module';
-import { ExpressAdapter } from '@nestjs/platform-express';
+import { ExpressAdapter, type NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from '@nestjs/common';
 import { installHttpObservability } from './shared/logging/http-observability';
+import { configureRequestBody } from './shared/http/request-body';
 
 async function bootstrap() {
   const logger = new Logger('BootstrapMinimal');
   logger.log('Starting Clinic Management System backend (minimal entry)');
-  const app = await NestFactory.create(AppMinimalModule, new ExpressAdapter());
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppMinimalModule,
+    new ExpressAdapter(),
+  );
   installHttpObservability(app);
+  configureRequestBody(app);
   app.enableCors({
     origin: [/^http:\/\/localhost:(3000|3001|3002)$/],
     credentials: true,
