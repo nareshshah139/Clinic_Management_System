@@ -307,6 +307,29 @@ async function settlePreviewPagination() {
 }
 
 describe('PrescriptionBuilder - Paged.js margin wiring', () => {
+  it('migrates the legacy letterhead and keeps saved printer margins clear of its header and footer', async () => {
+    render(<PrescriptionBuilder patientId="letterhead-proof" doctorId="d1" printBgUrl="/letterhead.png" printTopMarginPx={150} printBottomMarginPx={45} />);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(200)}mm`);
+    expect(lastPagedCssText).toContain(`margin-bottom: ${pxToMm(86)}mm`);
+    const styles = Array.from(document.querySelectorAll('style')).map(style => style.textContent).join('\n');
+    expect(styles).toContain("url('/prescription-letterhead-praneeta.jpg')");
+    expect(styles).not.toContain("url('/letterhead.png')");
+    const pages = document.querySelectorAll('#pagedjs-container .pagedjs_page_content');
+    expect(pages.length).toBe(2);
+    pages.forEach(page => expect((page as HTMLElement).style.transform).toBe('translate(0px, 0px)'));
+  });
+
+  it('preserves explicit custom letterheads and their margins', async () => {
+    render(<PrescriptionBuilder patientId="custom-letterhead" doctorId="d1" printBgUrl="/custom-clinic.jpg" printTopMarginPx={170} printBottomMarginPx={45} />);
+    await openPreview();
+    await settlePreviewPagination();
+    expect(lastPagedCssText).toContain(`margin-top: ${pxToMm(170)}mm`);
+    expect(lastPagedCssText).toContain(`margin-bottom: ${pxToMm(45)}mm`);
+    expect(Array.from(document.querySelectorAll('style')).some(style => style.textContent?.includes("url('/custom-clinic.jpg')"))).toBe(true);
+  });
+
   it('applies @page margin-top from the Top margin slider (UI -> Paged.js)', async () => {
     render(<PrescriptionBuilder patientId="p1" doctorId="d1" /> as any);
 
@@ -372,8 +395,8 @@ describe('PrescriptionBuilder - Paged.js margin wiring', () => {
     printSpy.mockRestore();
   });
 
-  it('copies the first text offset from page 1 onto continuation pages', async () => {
-    render(<PrescriptionBuilder patientId="p4" doctorId="d4" /> as any);
+  it('preserves custom-letterhead continuation offsets', async () => {
+    render(<PrescriptionBuilder patientId="p4" doctorId="d4" printBgUrl="/custom-clinic.jpg" /> as any);
 
     await openPreview();
     await settlePreviewPagination();
