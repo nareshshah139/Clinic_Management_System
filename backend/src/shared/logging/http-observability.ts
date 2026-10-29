@@ -344,7 +344,8 @@ export function requestDiagnostics(
  * HTTP exception status and public response fields MUST be preserved with a request reference.
  * Parser error statuses are preserved with a generic message and allowlisted metadata.
  * Oversized body-parser errors MUST return payload_too_large and a fixed actionable message;
- * no limit is raised and rejected requests MUST NOT reach handlers. Other unexpected exceptions return
+ * the exception filter MUST NOT raise configured parser limits, and rejected requests MUST NOT
+ * reach handlers. Other unexpected exceptions return
  * a generic 500. Raw database messages and stacks MUST NOT be logged
  * or returned. Only syntactically valid Prisma error codes may enter the diagnostic record.
  */

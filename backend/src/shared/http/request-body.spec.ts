@@ -28,8 +28,18 @@ function saveDocument(id: string, body: Record<string, unknown>) {
   return { saved: true };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:testing] synthetic-save-readback
+ * Fixture saves retain parsed bodies only in memory, and readback returns the same
+ * values without querying production services or data.
+ */
 @Controller()
 class SaveController {
+  @Post('patients')
+  createPatient(@Body() body: Record<string, unknown>) {
+    return saveDocument('synthetic-id', body);
+  }
+
   @Patch('patients/:id')
   patient(@Param('id') id: string, @Body() body: Record<string, unknown>) {
     return saveDocument(id, body);
@@ -71,11 +81,6 @@ function jsonOfSize(size: number): string {
   return JSON.stringify({ note: 'x'.repeat(size - 11) });
 }
 
-/**
- * @cc [owner:nareshshah139,label:testing] save-transport-boundary
- * Real HTTP saves preserve JSON values through readback up to 5242880 bytes;
- * larger decoded bodies return 413 before handlers with private data absent from diagnostics.
- */
 describe('Configured save request bodies', () => {
   let app: NestExpressApplication;
   let lines: string[];
@@ -138,7 +143,7 @@ describe('Configured save request bodies', () => {
     );
   }
 
-  it.each([
+  it.each<[string, string, Record<string, unknown>]>([
     [
       'patient details',
       '/patients/synthetic-id',
@@ -157,8 +162,16 @@ describe('Configured save request bodies', () => {
       'duplicated prescription history',
       '/prescriptions/synthetic-id',
       {
-        history: 'SYNTHETIC_CLINICAL_CONTENT' + 'a'.repeat(60000),
-        metadata: { history: 'SYNTHETIC_CLINICAL_CONTENT' + 'a'.repeat(60000) },
+        clinicalData: {
+          history: {
+            personalHistory: 'SYNTHETIC_CLINICAL_CONTENT' + 'a'.repeat(60000),
+          },
+        },
+        metadata: {
+          histories: {
+            personalHistory: 'SYNTHETIC_CLINICAL_CONTENT' + 'a'.repeat(60000),
+          },
+        },
       },
     ],
     [
@@ -179,7 +192,7 @@ describe('Configured save request bodies', () => {
     async (_label, route, body) => {
       expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(102400);
       await request(app.getHttpServer())
-        .patch(route as string)
+        .patch(route)
         .send(body)
         .expect(200, { saved: true });
       const saved = await request(app.getHttpServer())
@@ -193,6 +206,26 @@ describe('Configured save request bodies', () => {
       expect(lines.join('')).not.toContain('synthetic-id');
     },
   );
+
+  it('registers a patient with details above the former 100 KiB ceiling', async () => {
+    const body = { medicalHistory: 'SYNTHETIC_CLINICAL_CONTENT'.repeat(6000) };
+    expect(Buffer.byteLength(JSON.stringify(body))).toBeGreaterThan(102400);
+    await request(app.getHttpServer())
+      .post('/patients')
+      .send(body)
+      .expect(201, { saved: true });
+    const saved = await request(app.getHttpServer())
+      .get('/saved/synthetic-id')
+      .expect(200);
+    expect(saved.body).toEqual(body);
+    expect(handlerCalls).toBe(1);
+    expect(lines).toHaveLength(2);
+    expect(JSON.parse(lines[0])).toMatchObject({
+      route: '/patients',
+      status: 201,
+    });
+    expect(lines.join('')).not.toContain('SYNTHETIC_CLINICAL_CONTENT');
+  });
 
   it('preserves a JSON body of exactly 5242880 bytes', async () => {
     const body = jsonOfSize(5242880);
