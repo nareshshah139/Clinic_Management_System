@@ -1,0 +1,923 @@
+{
+  "blocked": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "AskColleague",
+        "from": "blocked",
+        "state": "6813389483470275614",
+        "to": "handoff"
+      },
+      {
+        "action": "ColleagueCorrects",
+        "from": "handoff",
+        "state": "4129716299488437310",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "-3009023146883124904",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "-6298109687517359442",
+        "to": "ready"
+      }
+    ],
+    "start": "-1058420778987057283",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": false,
+      "complete": false,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "review"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "blocked",
+      "result": "incomplete",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "checkFailed": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "BeginCheck",
+        "from": "checkFailed",
+        "state": "978274938202451639",
+        "to": "checking"
+      },
+      {
+        "action": "CheckBlocked",
+        "from": "checking",
+        "state": "-1406922446701747941",
+        "to": "blocked"
+      },
+      {
+        "action": "CorrectInvoice",
+        "from": "blocked",
+        "state": "7974635359415565473",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "3638846773855311694",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "8048177284830979198",
+        "to": "ready"
+      }
+    ],
+    "start": "-1037965309640416765",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": false,
+      "complete": false,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "commit"
+        }
+      ],
+      "phase": "checkFailed",
+      "result": "incomplete",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "checking": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "CheckBlocked",
+        "from": "checking",
+        "state": "3944939334256256776",
+        "to": "blocked"
+      },
+      {
+        "action": "CorrectInvoice",
+        "from": "blocked",
+        "state": "-167721809873377536",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "-8479210250674303800",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "-992667160485916183",
+        "to": "ready"
+      }
+    ],
+    "start": "-1004253747853623150",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": false,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "check"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "saveDraft"
+        }
+      ],
+      "phase": "checking",
+      "result": "malformed",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "committed": {
+    "invoice": "B",
+    "path": [],
+    "start": "-1027600022227568737",
+    "state": {
+      "approved": true,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": true,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "readback"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "committed",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": true,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 1,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "committing": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "CommitSuccess",
+        "from": "committing",
+        "state": "-3373087693362641168",
+        "to": "readingBack"
+      },
+      {
+        "action": "ReadbackSuccess",
+        "from": "readingBack",
+        "state": "2007575940728040552",
+        "to": "committed"
+      }
+    ],
+    "start": "-1068489442882108721",
+    "state": {
+      "approved": true,
+      "busy": true,
+      "canEdit": true,
+      "complete": true,
+      "exact": true,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "commit"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "committing",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "editing": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "BeginSave",
+        "from": "editing",
+        "state": "-6688411453129437875",
+        "to": "saving"
+      },
+      {
+        "action": "SaveSuccess",
+        "from": "saving",
+        "state": "3752286174359733290",
+        "to": "savedChecking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "savedChecking",
+        "state": "5189580459962880731",
+        "to": "ready"
+      }
+    ],
+    "start": "-1088224899255046791",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": true,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "commit"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "editing",
+      "result": "incomplete",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "handoff": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "ColleagueCorrects",
+        "from": "handoff",
+        "state": "1239791034263232389",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "8137209503892192910",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "858866426737716187",
+        "to": "ready"
+      }
+    ],
+    "start": "-1035014314229360848",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": false,
+      "complete": true,
+      "exact": false,
+      "focus": true,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "reviewCleanup"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "handoff",
+      "result": "missing",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "readingBack": {
+    "invoice": "A",
+    "path": [
+      {
+        "action": "ReadbackSuccess",
+        "from": "readingBack",
+        "state": "2198439811348544774",
+        "to": "ready"
+      }
+    ],
+    "start": "-1011465594191930761",
+    "state": {
+      "approved": true,
+      "busy": true,
+      "canEdit": false,
+      "complete": true,
+      "exact": true,
+      "focus": false,
+      "invoice": "A",
+      "ops": [
+        {
+          "current": true,
+          "invoice": "A",
+          "kind": "readback"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "check"
+        }
+      ],
+      "phase": "readingBack",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "ready": {
+    "invoice": "B",
+    "path": [],
+    "start": "-1016831671425285964",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": false,
+      "complete": true,
+      "exact": true,
+      "focus": true,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        },
+        {
+          "current": false,
+          "invoice": "B",
+          "kind": "reviewError"
+        }
+      ],
+      "phase": "ready",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "reviewFailed": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "ReviewCleanup",
+        "from": "reviewFailed",
+        "state": "8566542243951096058",
+        "to": "reviewFailed"
+      },
+      {
+        "action": "FocusCallback",
+        "from": "reviewFailed",
+        "state": "-7564522919900655999",
+        "to": "reviewFailed"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "reviewFailed",
+        "state": "-7794599450095732585",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "-4702788998187728772",
+        "to": "ready"
+      }
+    ],
+    "start": "-1002335170148079148",
+    "state": {
+      "approved": false,
+      "busy": true,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "saveDraft"
+        },
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "reviewCleanup"
+        }
+      ],
+      "phase": "reviewFailed",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "reviewing": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "ReviewCatch",
+        "from": "reviewing",
+        "state": "8027967721604820442",
+        "to": "reviewFailed"
+      },
+      {
+        "action": "ReviewCleanup",
+        "from": "reviewFailed",
+        "state": "-7974926016529906050",
+        "to": "reviewFailed"
+      },
+      {
+        "action": "FocusCallback",
+        "from": "reviewFailed",
+        "state": "5792531187283929710",
+        "to": "reviewFailed"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "reviewFailed",
+        "state": "-4495221828059471010",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "-4425936676269374236",
+        "to": "ready"
+      }
+    ],
+    "start": "-1003178869822633818",
+    "state": {
+      "approved": true,
+      "busy": true,
+      "canEdit": true,
+      "complete": true,
+      "exact": true,
+      "focus": true,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "reviewError"
+        },
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "reviewError"
+        }
+      ],
+      "phase": "reviewing",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "saveFailed": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "EditProduct",
+        "from": "saveFailed",
+        "state": "-5049081626796529324",
+        "to": "editing"
+      },
+      {
+        "action": "BeginSave",
+        "from": "editing",
+        "state": "1934721779153008563",
+        "to": "saving"
+      },
+      {
+        "action": "SaveSuccess",
+        "from": "saving",
+        "state": "-707245202696437739",
+        "to": "savedChecking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "savedChecking",
+        "state": "1032274161674444694",
+        "to": "ready"
+      }
+    ],
+    "start": "-1009226149713957193",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": true,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        },
+        {
+          "current": false,
+          "invoice": "B",
+          "kind": "check"
+        }
+      ],
+      "phase": "saveFailed",
+      "result": "incomplete",
+      "reviewSafe": true,
+      "saved": true,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "savedCheckFailed": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "BeginCheck",
+        "from": "savedCheckFailed",
+        "state": "1177560098039870720",
+        "to": "savedChecking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "savedChecking",
+        "state": "3663292088399908306",
+        "to": "ready"
+      }
+    ],
+    "start": "-1004298580690882118",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "reviewError"
+        }
+      ],
+      "phase": "savedCheckFailed",
+      "result": "missing",
+      "reviewSafe": true,
+      "saved": true,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "savedChecking": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "CheckReady",
+        "from": "savedChecking",
+        "state": "2572686411913162660",
+        "to": "ready"
+      }
+    ],
+    "start": "-1003354362719059241",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "B",
+          "kind": "saveDraft"
+        },
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "check"
+        }
+      ],
+      "phase": "savedChecking",
+      "result": "ambiguous",
+      "reviewSafe": true,
+      "saved": true,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "saving": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "SaveSuccess",
+        "from": "saving",
+        "state": "-4464673731086269460",
+        "to": "savedChecking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "savedChecking",
+        "state": "2603037584079082520",
+        "to": "ready"
+      }
+    ],
+    "start": "-1027319480328772692",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": true,
+          "invoice": "B",
+          "kind": "save"
+        },
+        {
+          "current": false,
+          "invoice": "B",
+          "kind": "focus"
+        }
+      ],
+      "phase": "saving",
+      "result": "ambiguous",
+      "reviewSafe": true,
+      "saved": true,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": true
+    }
+  },
+  "stockUnknown": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "RetryReadback",
+        "from": "stockUnknown",
+        "state": "1907344537552725972",
+        "to": "readingBack"
+      },
+      {
+        "action": "ReadbackSuccess",
+        "from": "readingBack",
+        "state": "-7405166153182888278",
+        "to": "committed"
+      }
+    ],
+    "start": "-1006734704897703082",
+    "state": {
+      "approved": true,
+      "busy": false,
+      "canEdit": true,
+      "complete": true,
+      "exact": true,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "B",
+          "kind": "review"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "none"
+        }
+      ],
+      "phase": "stockUnknown",
+      "result": "ready",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 1,
+      "stockB": 1,
+      "stockSafe": true,
+      "typed": false
+    }
+  },
+  "unchecked": {
+    "invoice": "B",
+    "path": [
+      {
+        "action": "ReviewCatch",
+        "from": "unchecked",
+        "state": "-6180299328038029432",
+        "to": "unchecked"
+      },
+      {
+        "action": "ReviewCleanup",
+        "from": "unchecked",
+        "state": "-2982130171791163516",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "-2026540302512253509",
+        "to": "checking"
+      },
+      {
+        "action": "CheckBlocked",
+        "from": "checking",
+        "state": "-2281073074838456620",
+        "to": "blocked"
+      },
+      {
+        "action": "CorrectInvoice",
+        "from": "blocked",
+        "state": "2983359002731828581",
+        "to": "unchecked"
+      },
+      {
+        "action": "BeginCheck",
+        "from": "unchecked",
+        "state": "2024954108818784090",
+        "to": "checking"
+      },
+      {
+        "action": "CheckReady",
+        "from": "checking",
+        "state": "-3772504070516649196",
+        "to": "ready"
+      }
+    ],
+    "start": "-1977185292695408907",
+    "state": {
+      "approved": false,
+      "busy": false,
+      "canEdit": false,
+      "complete": false,
+      "exact": false,
+      "focus": false,
+      "invoice": "B",
+      "ops": [
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "reviewError"
+        },
+        {
+          "current": false,
+          "invoice": "A",
+          "kind": "reviewError"
+        }
+      ],
+      "phase": "unchecked",
+      "result": "unchecked",
+      "reviewSafe": true,
+      "saved": false,
+      "savedSafe": true,
+      "staleSafe": true,
+      "stockA": 0,
+      "stockB": 0,
+      "stockSafe": true,
+      "typed": false
+    }
+  }
+}

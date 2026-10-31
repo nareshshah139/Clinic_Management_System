@@ -1,0 +1,9 @@
+@cc [owner:nareshshah139,label:verification] complete-bounded-exploration
+Verification MUST fail unless the pinned TLC checker completes the declared finite model without
+invariant violations and every exported concrete state has a same-invoice recovery path to ready
+or committed. Editor replacement and invalidation MUST NOT count as recovery edges.
+
+@cc [owner:nareshshah139,label:verification] graph-derived-evidence
+Published graph nodes MUST derive from the completed TLC graph. A projected node MAY be marked
+recoverable only when every represented concrete state has passed the recovery check. Mutant
+runs MUST fail for stale publication, premature review, stock writes from checking, and lost saved facts.

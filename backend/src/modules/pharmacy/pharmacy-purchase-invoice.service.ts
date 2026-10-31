@@ -737,14 +737,15 @@ export class PharmacyPurchaseInvoiceService {
     for (const item of items) checkedProductQuery(item.productName);
     const aliases = await loadReviewedProductAliases(this.prisma, branchId);
     const candidates = new Map<string, Promise<DrugSearchCandidate[]>>();
-    const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[] }[] = [];
+    const matches: { lineIndex: number; ocr: ReturnType<PharmacyPurchaseInvoiceService['masterLineSummary']>; candidates: any[]; catalogueResolution: Awaited<ReturnType<PharmacyPurchaseInvoiceService['inspectPurchaseLineDrug']>> }[] = [];
     for (let offset = 0; offset < items.length; offset += 4) {
       matches.push(...await Promise.all(items.slice(offset, offset + 4).map(async (item, index) => {
         const { query } = ocrProductSearchQuery(item.productName);
         const key = normalizeProductSearch(query);
         if (!candidates.has(key)) candidates.set(key, findDrugSearchCandidates(this.prisma, query, branchId, 'name', aliases));
         return { lineIndex: offset + index, ocr: this.masterLineSummary(item),
-          candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!) };
+          candidates: this.rankMasterMatchCandidates(item, await candidates.get(key)!),
+          catalogueResolution: await this.inspectPurchaseLineDrug(this.prisma, item, branchId) };
       })));
     }
 
@@ -753,6 +754,9 @@ export class PharmacyPurchaseInvoiceService {
         const best = match.candidates[0];
         return {
           ...match,
+          catalogueResolution: 'product' in match.catalogueResolution
+            ? { state: match.catalogueResolution.state, product: match.catalogueResolution.product, ...('missingFields' in match.catalogueResolution ? { missingFields: match.catalogueResolution.missingFields } : {}) }
+            : { state: match.catalogueResolution.state },
           matchLabel: best ? best.mismatches.length === 0 && best.searchMatch.kind === 'exact' ? 'Same product' : 'Possible match' : 'Not in inventory',
           recommendedAction:
             best ? best.score >= 65 ? 'MATCH_EXISTING' : 'REVIEW_MATCHES' : 'CREATE_NEW',
@@ -1808,7 +1812,13 @@ export class PharmacyPurchaseInvoiceService {
       .sort((a: any, b: any) => b.dropPercent - a.dropPercent);
   }
 
-  private async resolvePurchaseLineDrug(
+  /**
+   * @cc [owner:nareshshah139,label:product] exact-catalogue-readiness
+   * Inspection MUST use the same active branch, exact name/manufacturer and canonical pack rules
+   * as final review, report every missing required field, and perform no catalogue, invoice or stock writes.
+   * Ranked suggestions MUST NOT determine readiness.
+   */
+  private async inspectPurchaseLineDrug(
     tx: any,
     item: any,
     branchId: string,
@@ -1845,30 +1855,40 @@ export class PharmacyPurchaseInvoiceService {
     });
 
     const candidates = rawCandidates.filter((drug: any) => canonicalPurchasePack(drug.packSizeLabel || '') === canonicalPurchasePack(item.packSize, item.packUnitType));
-    if (candidates.length === 0) {
+    if (candidates.length === 0) return { state: 'missing' as const };
+    if (candidates.length > 1) return { state: 'ambiguous' as const };
+    const drug = candidates[0];
+    const missingFields = purchaseCatalogIssues(drug);
+    const product = this.masterDrugSummary(drug);
+    return missingFields.length
+      ? { state: 'incomplete' as const, product, missingFields, drug }
+      : { state: 'ready' as const, product, drug };
+  }
+
+  private async resolvePurchaseLineDrug(tx: any, item: any, branchId: string) {
+    const resolution = await this.inspectPurchaseLineDrug(tx, item, branchId);
+    if (resolution.state === 'missing') {
       throw new BadRequestException({
         code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'missing', lineNumber: item.lineNumber,
         message: `${this.lineLabel(item)}: product master is missing or inactive. Correct the invoice name, choose an existing product or add it to the catalogue here before adding stock.`,
       });
     }
-    if (candidates.length > 1) {
+    if (resolution.state === 'ambiguous') {
       throw new ConflictException({
         code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'ambiguous', lineNumber: item.lineNumber,
         message: `${this.lineLabel(item)}: multiple active product master records match. Correct the name, manufacturer or pack to identify one product, or ask a catalogue editor to resolve duplicates.`,
       });
     }
 
-    const drug = candidates[0];
-    const missing = purchaseCatalogIssues(drug);
-
-    if (missing.length > 0) {
+    if (resolution.state === 'incomplete') {
+      const missing = resolution.missingFields;
       throw new BadRequestException({
         code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'incomplete', lineNumber: item.lineNumber, missingFields: missing,
         message: `${this.lineLabel(item)}: product master is incomplete; missing ${missing.join(', ')}. Complete its catalogue details here before adding stock.`,
       });
     }
 
-    return drug;
+    return resolution.drug;
   }
 
   private async applyPurchaseLineToInventory(

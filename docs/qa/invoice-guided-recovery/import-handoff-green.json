@@ -1,0 +1,24 @@
+{
+  "browser": "Chrome",
+  "baseline": false,
+  "passed": true,
+  "checks": [
+    "Automatic product check names Cosglo and opens its exact missing composition field",
+    "Product editor remains usable at 390px without horizontal page overflow",
+    "Saving a chosen product type rechecks without posting stock",
+    "Final approval stays checked after requests settle and does not itself add stock",
+    "Saved/check-failed feedback offers a retry that performs no additional writes",
+    "Restricted operator can copy invoice, product and missing fields without editing or posting stock",
+    "Interrupted import handoff retains its recovery URL before an invoice exists without writing stock"
+  ],
+  "writes": [
+    {
+      "action": "product",
+      "productId": "cosglo-proof"
+    },
+    {
+      "action": "product",
+      "productId": "cosglo-proof"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { catalogueFields, catalogueFieldLabels } from './purchase-invoice-catalogue';
 import { purchaseReviewIssue, purchaseReviewField, type PurchaseReviewIssue } from './purchase-invoice-review';
 
 export type PurchaseAttempt = Readonly<{
@@ -40,13 +41,21 @@ export function purchaseRecovery(error: unknown, attempt: PurchaseAttempt): Purc
   if (body.code === 'PURCHASE_STALE_REVISION') return { ...base, kind: 'stale' };
   if (body.code === 'PURCHASE_LOCKED') return { ...base, kind: 'locked' };
   if (body.code === 'PURCHASE_REVIEW_REQUIRED' || body.code === 'PURCHASE_CATALOG_REVIEW_REQUIRED') {
-    const rawIssues = Array.isArray(body.issues) && body.issues.length ? body.issues : [message];
+    const rawIssues = Array.isArray(body.issues) && body.issues.length ? body.issues : [{ ...body, message }];
     const issues = rawIssues.flatMap(value => {
       const item = record(value);
       const text = typeof value === 'string' ? value : typeof item.message === 'string' ? item.message : undefined;
       if (!text) return [];
-      const lineIndex = typeof item.lineNumber === 'number' && Number.isInteger(item.lineNumber) && item.lineNumber > 0 ? item.lineNumber - 1 : undefined;
-      const issue = purchaseReviewIssue(text, lineIndex);
+      const structuredIndex = typeof item.lineNumber === 'number' && Number.isInteger(item.lineNumber) && item.lineNumber > 0 ? item.lineNumber - 1 : undefined;
+      const issue = purchaseReviewIssue(text, structuredIndex);
+      const lineIndex = structuredIndex ?? issue.lineIndex;
+      if (body.code === 'PURCHASE_CATALOG_REVIEW_REQUIRED' && ['missing', 'ambiguous', 'incomplete'].includes(String(item.reason))) {
+        const missingFields = catalogueFields(item.missingFields);
+        return [{ ...issue, lineIndex, category: 'product' as const, label: 'product details', target: 'purchase-master-matching',
+          catalogueReason: item.reason as 'missing' | 'ambiguous' | 'incomplete', missingFields,
+          message: item.reason === 'incomplete' && missingFields.length ? `${lineIndex === undefined ? '' : `Line ${lineIndex + 1}: `}Saved product is missing ${missingFields.map(field => catalogueFieldLabels[field]).join(', ')}.` : text,
+        }];
+      }
       const field = typeof item.field === 'string' ? purchaseReviewField(item.field, lineIndex) : undefined;
       return [{ ...issue, ...field, ...(lineIndex !== undefined ? { lineIndex } : {}) }];
     });

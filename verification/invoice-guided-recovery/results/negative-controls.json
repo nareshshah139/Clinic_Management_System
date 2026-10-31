@@ -1,0 +1,730 @@
+[
+  {
+    "detected": true,
+    "mutant": "stalePublish",
+    "observer": "staleSafe",
+    "trace": [
+      {
+        "action": "Initial predicate",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": true,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "unchecked",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 1
+      },
+      {
+        "action": "BeginCheck line 41, col 5 to line 46, col 41 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": true,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "check"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "checking",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 2
+      },
+      {
+        "action": "CheckReady line 49, col 5 to line 53, col 53 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": true,
+          "exact": true,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "ready",
+          "result": "ready",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 3
+      },
+      {
+        "action": "Approve line 106, col 5 to line 107, col 68 of module InvoiceRecovery",
+        "state": {
+          "approved": true,
+          "busy": false,
+          "canEdit": false,
+          "complete": true,
+          "exact": true,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "ready",
+          "result": "ready",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 4
+      },
+      {
+        "action": "BeginReview line 110, col 5 to line 114, col 39 of module InvoiceRecovery",
+        "state": {
+          "approved": true,
+          "busy": true,
+          "canEdit": false,
+          "complete": true,
+          "exact": true,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "saveDraft"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "reviewing",
+          "result": "ready",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 5
+      },
+      {
+        "action": "DraftFailure line 122, col 5 to line 123, col 87 of module InvoiceRecovery",
+        "state": {
+          "approved": true,
+          "busy": true,
+          "canEdit": false,
+          "complete": true,
+          "exact": true,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "reviewError"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "reviewing",
+          "result": "ready",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 6
+      },
+      {
+        "action": "ReplaceEditor line 186, col 5 to line 191, col 39 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "B",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "reviewError"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "unchecked",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 7
+      },
+      {
+        "action": "ReviewCatch line 130, col 5 to line 135, col 59 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "B",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "reviewCleanup"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "reviewFailed",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": false,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 8
+      }
+    ]
+  },
+  {
+    "detected": true,
+    "mutant": "prematureReview",
+    "observer": "reviewSafe",
+    "trace": [
+      {
+        "action": "Initial predicate",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "unchecked",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 1
+      },
+      {
+        "action": "BeginReview line 110, col 5 to line 114, col 39 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": true,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "saveDraft"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "reviewing",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 2
+      },
+      {
+        "action": "DraftSaved line 117, col 5 to line 119, col 59 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": true,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "review"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "reviewing",
+          "result": "unchecked",
+          "reviewSafe": false,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 3
+      }
+    ]
+  },
+  {
+    "detected": true,
+    "mutant": "retryStock",
+    "observer": "stockSafe",
+    "trace": [
+      {
+        "action": "Initial predicate",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "unchecked",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 1
+      },
+      {
+        "action": "BeginCheck line 41, col 5 to line 46, col 41 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": false,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "check"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "checking",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 1,
+          "stockB": 0,
+          "stockSafe": false,
+          "typed": false
+        },
+        "step": 2
+      }
+    ]
+  },
+  {
+    "detected": true,
+    "mutant": "loseSaved",
+    "observer": "savedSafe",
+    "trace": [
+      {
+        "action": "Initial predicate",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "unchecked",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 1
+      },
+      {
+        "action": "BeginCheck line 41, col 5 to line 46, col 41 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "check"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "checking",
+          "result": "unchecked",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 2
+      },
+      {
+        "action": "CheckBlocked line 56, col 5 to line 60, col 53 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "blocked",
+          "result": "incomplete",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": false
+        },
+        "step": 3
+      },
+      {
+        "action": "EditProduct line 72, col 5 to line 73, col 106 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "editing",
+          "result": "incomplete",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": true
+        },
+        "step": 4
+      },
+      {
+        "action": "BeginSave line 76, col 5 to line 78, col 80 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": false,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "save"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "saving",
+          "result": "incomplete",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": true
+        },
+        "step": 5
+      },
+      {
+        "action": "SaveSuccess line 81, col 5 to line 85, col 53 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": true,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": true,
+              "invoice": "A",
+              "kind": "check"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "savedChecking",
+          "result": "incomplete",
+          "reviewSafe": true,
+          "saved": true,
+          "savedSafe": true,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": true
+        },
+        "step": 6
+      },
+      {
+        "action": "CheckFailure line 63, col 5 to line 69, col 53 of module InvoiceRecovery",
+        "state": {
+          "approved": false,
+          "busy": false,
+          "canEdit": true,
+          "complete": true,
+          "exact": false,
+          "focus": false,
+          "invoice": "A",
+          "ops": [
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            },
+            {
+              "current": false,
+              "invoice": "A",
+              "kind": "none"
+            }
+          ],
+          "phase": "savedCheckFailed",
+          "result": "incomplete",
+          "reviewSafe": true,
+          "saved": false,
+          "savedSafe": false,
+          "staleSafe": true,
+          "stockA": 0,
+          "stockB": 0,
+          "stockSafe": true,
+          "typed": true
+        },
+        "step": 7
+      }
+    ]
+  }
+]

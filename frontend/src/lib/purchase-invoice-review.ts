@@ -1,4 +1,6 @@
 export type PurchaseReviewIssue = {
+  catalogueReason?: 'missing' | 'ambiguous' | 'incomplete';
+  missingFields?: readonly string[];
   key: string;
   message: string;
   label: string;

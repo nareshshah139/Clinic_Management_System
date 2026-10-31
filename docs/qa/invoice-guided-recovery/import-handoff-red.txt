@@ -1,0 +1,9 @@
+AssertionError [ERR_ASSERTION]: An interrupted import without an invoice retains its recovery URL
+    at main (/private/tmp/cms-invoice-release-head/scripts/diagnostics/invoice-handoff-regression.cjs:230:12) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

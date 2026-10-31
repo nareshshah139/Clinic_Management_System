@@ -24,13 +24,21 @@ type CatalogProduct = {
  * Medicine-only requirements MUST be explained beside the product kind. Classification changes
  * MUST remain an explicit user choice; the interface MUST NOT suggest inventing clinical values.
  */
-export function PurchaseProductDetails({ id, product, disabled, onSave, createLabel = 'Save new product', onKindChange }: {
+/**
+ * @cc [owner:nareshshah139,label:state] product-save-feedback
+ * Failed saves MUST retain entered values. A null save outcome denotes an obsolete editor request
+ * and MUST NOT display success or error feedback. The form MUST never submit an invoice or stock action.
+ */
+export function PurchaseProductDetails({ id, product, disabled, onSave, createLabel = 'Save new product', onKindChange, missingFields = [], saveLabel, savedMessage = 'Product details saved.' }: {
   id: string;
   product?: CatalogProduct;
   disabled: boolean;
   createLabel?: string;
+  saveLabel?: string;
+  savedMessage?: string;
+  missingFields?: readonly string[];
   onKindChange?: (kind: PurchaseProductCatalog['productKind'] | '') => void;
-  onSave: (catalog: PurchaseProductCatalog) => Promise<string | undefined>;
+  onSave: (catalog: PurchaseProductCatalog) => Promise<string | null | undefined>;
 }) {
   const [kind, setKind] = useState<PurchaseProductCatalog['productKind'] | ''>(product?.productKind || (product ? product.type === 'cosmetic' ? 'COSMETIC' : product.type === 'consumable' ? 'CONSUMABLE' : 'MEDICINE' : ''));
   const [fields, setFields] = useState({ category: product?.category || '', composition1: product?.composition1 || '', dosageForm: product?.dosageForm || '', strength: product?.strength || '' });
@@ -47,11 +55,12 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
     lock.current = true; setSaving(true); setError(''); setSaved(false);
     try {
       const message = await onSave({ ...fields, productKind: kind as PurchaseProductCatalog['productKind'], requiresPrescription: medicine ? prescription === 'true' : false });
+      if (message === null) return;
       if (message) setError(message); else setSaved(true);
     } catch { setError('Product save could not be confirmed. Check the invoice status and retry.'); }
     finally { lock.current = false; setSaving(false); }
   };
-  return <section aria-label={product ? 'Edit saved product details' : 'New product details'} className="space-y-3 border-t pt-3 text-sm">
+  return <section data-purchase-catalogue-editor aria-label={product ? 'Edit saved product details' : 'New product details'} className="space-y-3 border-t pt-3 text-sm">
     <p className="font-medium">{product ? 'Edit saved product details' : 'New product details'}</p>
     <p className="text-muted-foreground">Choose the product kind after checking its label or saved catalog. Enter known details only. Invoice pack size is not medicine strength.</p>
     <fieldset disabled={disabled || saving} className="space-y-3">
@@ -75,8 +84,8 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
         {!medicine && <p>Composition, strength and form are optional. Unknown values stay blank. This product will be stocked as a non-prescription consumable.</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           {(['category', 'composition1', 'dosageForm', 'strength'] as const).map(field => <div key={field}>
-            <Label htmlFor={`${id}-${field}`}>{({ category: 'Category', composition1: 'Composition', dosageForm: medicine ? 'Dosage form' : 'Product form', strength: 'Strength' })[field]}{medicine ? ' (required)' : ' (optional)'}</Label>
-            <Input id={`${id}-${field}`} value={fields[field]} onChange={event => { setFields(current => ({ ...current, [field]: event.target.value })); setSaved(false); }} />
+            <Label htmlFor={`${id}-${field}`}>{({ category: 'Category', composition1: 'Composition', dosageForm: medicine ? 'Dosage form' : 'Product form', strength: 'Strength' })[field]}{medicine || field === 'category' ? ' (required)' : ' (optional)'}</Label>
+            <Input id={`${id}-${field}`} aria-invalid={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) || undefined} className={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) ? 'border-amber-600' : undefined} value={fields[field]} onChange={event => { setFields(current => ({ ...current, [field]: event.target.value })); setSaved(false); }} />
           </div>)}
         </div>
         {medicine && <div><Label htmlFor={`${id}-prescription`}>Prescription required</Label>
@@ -86,9 +95,9 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
         </div>}
       </>}
       {!ready && <p className="text-muted-foreground">{!kind ? 'Choose a product kind to continue.' : 'Enter the required medicine details and prescription requirement. Placeholder values cannot be used.'}</p>}
-      <Button type="button" disabled={!ready || saved} onClick={save}>{saving ? 'Saving product…' : product ? 'Save product details' : createLabel}</Button>
+      <Button type="button" disabled={!ready || saved} onClick={save}>{saving ? 'Saving product…' : product ? saveLabel || 'Save product details' : createLabel}</Button>
     </fieldset>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    {saved && <p role="status">Product details saved. Continue with Save & Process to check the invoice again.</p>}
+    {saved && <p role="status">{savedMessage}</p>}
   </section>;
 }
