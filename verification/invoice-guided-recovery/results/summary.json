@@ -1,0 +1,209 @@
+{
+  "assumptions": [
+    "A later successful service response remains possible. Permanent outages are outside the recovery claim.",
+    "Correct product details or an authorized colleague's assistance are available. Handoff alone is not recovery.",
+    "The exact catalogue endpoint truthfully reports completeness for every current invoice line.",
+    "The stock endpoint is authorized, atomic and idempotent per invoice. This model does not prove database transactions.",
+    "Stock readback can eventually return a decisive status. Lost responses do not justify another stock attempt before readback."
+  ],
+  "bounds": {
+    "aggregate_invoice_readiness": "all current lines exact and complete",
+    "editor_replacements": 1,
+    "identity_abstraction": "current versus permanently stale captured identity",
+    "invoice_identities": 2,
+    "operation_slots": 2,
+    "permission_profiles": 2,
+    "retry_limit": null
+  },
+  "edge_checks": {
+    "authorized_review_dispatch_edges": 636,
+    "failed_save_retains_entries_edges": 1520,
+    "recovery_without_stock_edges": 115611,
+    "saved_fact_preserved_edges": 26986,
+    "stale_callback_edges": 64642,
+    "stock_commit_edges": 2848
+  },
+  "edges": 150745,
+  "graph_sha256": "4638badc07730824724e8b27296c95506e5ff7adbe7c958caf65b4ce28fdd919",
+  "initial_states": 4,
+  "jar_sha256": "936a262061c914694dfd669a543be24573c45d5aa0ff20a8b96b23d01e050e88",
+  "max_shortest_recovery_steps": 7,
+  "method": "Finite-state TLA+ model checking and independent same-invoice graph reachability",
+  "negative_controls": [
+    {
+      "detected": true,
+      "mutant": "stalePublish",
+      "observer": "staleSafe"
+    },
+    {
+      "detected": true,
+      "mutant": "prematureReview",
+      "observer": "reviewSafe"
+    },
+    {
+      "detected": true,
+      "mutant": "retryStock",
+      "observer": "stockSafe"
+    },
+    {
+      "detected": true,
+      "mutant": "loseSaved",
+      "observer": "savedSafe"
+    }
+  ],
+  "nodes": [
+    {
+      "all_recoverable": true,
+      "label": "Needs product check",
+      "max_shortest_recovery_steps": 7,
+      "phase": "unchecked",
+      "recoverable": 2716,
+      "states": 2716
+    },
+    {
+      "all_recoverable": true,
+      "label": "Checking products",
+      "max_shortest_recovery_steps": 4,
+      "phase": "checking",
+      "recoverable": 3302,
+      "states": 3302
+    },
+    {
+      "all_recoverable": true,
+      "label": "Product details need attention",
+      "max_shortest_recovery_steps": 4,
+      "phase": "blocked",
+      "recoverable": 2800,
+      "states": 2800
+    },
+    {
+      "all_recoverable": true,
+      "label": "Editing product details",
+      "max_shortest_recovery_steps": 3,
+      "phase": "editing",
+      "recoverable": 1460,
+      "states": 1460
+    },
+    {
+      "all_recoverable": true,
+      "label": "Saving product details",
+      "max_shortest_recovery_steps": 2,
+      "phase": "saving",
+      "recoverable": 1520,
+      "states": 1520
+    },
+    {
+      "all_recoverable": true,
+      "label": "Save failed; entries retained",
+      "max_shortest_recovery_steps": 4,
+      "phase": "saveFailed",
+      "recoverable": 1460,
+      "states": 1460
+    },
+    {
+      "all_recoverable": true,
+      "label": "Details saved; checking again",
+      "max_shortest_recovery_steps": 1,
+      "phase": "savedChecking",
+      "recoverable": 820,
+      "states": 820
+    },
+    {
+      "all_recoverable": true,
+      "label": "Product check failed",
+      "max_shortest_recovery_steps": 5,
+      "phase": "checkFailed",
+      "recoverable": 3164,
+      "states": 3164
+    },
+    {
+      "all_recoverable": true,
+      "label": "Details saved; check failed",
+      "max_shortest_recovery_steps": 2,
+      "phase": "savedCheckFailed",
+      "recoverable": 790,
+      "states": 790
+    },
+    {
+      "all_recoverable": true,
+      "label": "Ready for final review",
+      "max_shortest_recovery_steps": 0,
+      "phase": "ready",
+      "recoverable": 1224,
+      "states": 1224
+    },
+    {
+      "all_recoverable": true,
+      "label": "Saving draft / reviewing",
+      "max_shortest_recovery_steps": 5,
+      "phase": "reviewing",
+      "recoverable": 1908,
+      "states": 1908
+    },
+    {
+      "all_recoverable": true,
+      "label": "Review needs correction",
+      "max_shortest_recovery_steps": 4,
+      "phase": "reviewFailed",
+      "recoverable": 1884,
+      "states": 1884
+    },
+    {
+      "all_recoverable": true,
+      "label": "Adding stock",
+      "max_shortest_recovery_steps": 2,
+      "phase": "committing",
+      "recoverable": 636,
+      "states": 636
+    },
+    {
+      "all_recoverable": true,
+      "label": "Stock outcome unknown",
+      "max_shortest_recovery_steps": 2,
+      "phase": "stockUnknown",
+      "recoverable": 1224,
+      "states": 1224
+    },
+    {
+      "all_recoverable": true,
+      "label": "Confirming stock status",
+      "max_shortest_recovery_steps": 1,
+      "phase": "readingBack",
+      "recoverable": 1272,
+      "states": 1272
+    },
+    {
+      "all_recoverable": true,
+      "label": "Stock confirmed",
+      "max_shortest_recovery_steps": 0,
+      "phase": "committed",
+      "recoverable": 612,
+      "states": 612
+    },
+    {
+      "all_recoverable": true,
+      "label": "Awaiting authorized colleague",
+      "max_shortest_recovery_steps": 3,
+      "phase": "handoff",
+      "recoverable": 708,
+      "states": 708
+    }
+  ],
+  "property": "AG EF (ready or committed), over recovery edges excluding editor replacement and invalidation",
+  "recoverable_states": 27500,
+  "recovery_edges": 122048,
+  "source_sha256": {
+    "CONTRACTS": "7103bf81208f70b98ce1f4b423f09be4b318338459b58e418069d19a7f911c2e",
+    "InvoiceRecovery.cfg": "5c8876e6f72f5030d0f06048821a152d5a8267a366e0333ab035ea1eb1b9beda",
+    "InvoiceRecovery.tla": "1c5e24797840a1e5998072db69d3f9fc5e7cb89fdea388d7ace84816182e63b0",
+    "test_verify.py": "cc26efb5aa73a9c157ab6376651da3e8f7934e2ea5bd9b196ba7968cddc2f033",
+    "verify.py": "fe4ed2e5f11be6d644ddc5503d76b7f3f991c6dd8add933823008a0248d5702b"
+  },
+  "status": "verified",
+  "tlc": {
+    "depth": 43,
+    "distinct": 27500,
+    "generated": 150749,
+    "version": "TLC2 Version 2.19 of 08 August 2024 (rev: 5a47802)"
+  }
+}

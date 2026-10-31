@@ -19,3 +19,7 @@ isolated loopback database and retain their diagnostics even when a scenario fai
 @cc [owner:nareshshah139,label:verification] pdf-regression-runtime
 The full backend test job MUST provide pdftotext before running PDF regressions, so generated
 PDF contents are validated without skipping or replacing the extraction assertions.
+
+@cc [owner:nareshshah139,label:verification] invoice-recovery-formal-gate
+Every pull request and main push MUST run the pinned invoice recovery model checker, verify
+same-invoice recovery paths and negative controls, and retain diagnostics even on failure.
