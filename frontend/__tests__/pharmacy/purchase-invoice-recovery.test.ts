@@ -31,6 +31,13 @@ describe('purchase recovery boundary', () => {
     if (recovery.kind !== 'review') throw new Error('Expected review recovery');
     expect(recovery.issues.map(issue=>purchaseRecoveryTarget(issue,attempt.lineKeys))).toEqual(['goods-date','line-a-batch']);
   });
+  it('uses structured catalogue fields without inventing a line or losing a parsed line', () => {
+    for (const [message, lineIndex] of [['Product details incomplete', undefined], ['Line 3: product master incomplete', 2]] as const) {
+      const result = purchaseRecovery({ body: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'incomplete', missingFields: ['composition1', 'strength'], message } }, attempt);
+      if (result.kind !== 'catalogue') throw new Error('Expected catalogue recovery');
+      expect(result.issues[0]).toMatchObject({ lineIndex, missingFields: ['composition1', 'strength'], catalogueReason: 'incomplete', message: `${lineIndex === undefined ? '' : 'Line 3: '}Saved product is missing composition, strength.` });
+    }
+  });
   it('requires same invoice and complete saved state for stock proof', () => {
     const saved = {id:'invoice-1',status:'STOCK_COMMITTED',stockCommittedAt:'2026-10-01T00:00:00Z',items:[],updatedAt:'2026-10-01T00:00:00Z'};
     expect(isPurchaseReadback(saved,'invoice-1')).toBe(true);

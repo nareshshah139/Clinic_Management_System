@@ -1,5 +1,6 @@
 "use client";
 
+import { assessCatalogue, catalogueFieldLabels, catalogueFingerprint, sameCatalogueRequest, type CatalogueAssessment, type CatalogueProduct, type CatalogueRequest, type CatalogueResolution, type CatalogueRow } from '@/lib/purchase-invoice-catalogue';
 import { PurchaseDocumentActions } from "@/components/inventory/PurchaseDocumentActions";
 import {
   useCallback,
@@ -294,21 +295,7 @@ type OcrExtractionResponse = {
   };
 };
 
-type MasterDrug = {
-  type?: string;
-  productKind?: PurchaseProductCatalog["productKind"];
-  requiresPrescription?: boolean | null;
-  catalogIssues?: string[];
-  id: string;
-  name: string;
-  price: number;
-  manufacturerName: string;
-  packSizeLabel: string;
-  composition1?: string | null;
-  category?: string | null;
-  dosageForm?: string | null;
-  strength?: string | null;
-};
+type MasterDrug = CatalogueProduct;
 
 type MasterCandidate = {
   drug: MasterDrug;
@@ -318,6 +305,7 @@ type MasterCandidate = {
 };
 
 type MasterMatch = {
+  catalogueResolution?: CatalogueResolution;
   matchLabel?: "Same product" | "Possible match" | "Not in inventory";
   lineIndex: number;
   ocr: Record<string, unknown>;
@@ -1032,7 +1020,8 @@ export function PurchaseInvoiceWorkbench({
  * Unresolved field errors MUST override green verification. Empty OCR flags MUST NOT make fields
  * green; success requires final human confirmation or a server-reviewed/committed invoice.
  * Changed OCR checks MUST restore pending counts and field colors and block final approval,
- * including after saving or recovering a draft. Unknown stock outcome or a stale revision
+ * including after saving or recovering a draft. Confirming final approval MUST NOT invalidate a current
+ * successful catalogue check. Unknown stock outcome or a stale revision
  * MUST suppress that global success state.
  */
 /**
@@ -1175,10 +1164,17 @@ function PurchaseInvoiceEditor({
   const [masterRefreshing, setMasterRefreshing] = useState(false);
   const [reopeningReview, setReopeningReview] = useState(false);
   const [catalogueIssue, setCatalogueIssue] = useState(false);
+  const [catalogue, setCatalogue] = useState<CatalogueAssessment>({ state: 'unchecked' });
+  const [productFocus, setProductFocus] = useState<{ request: CatalogueRequest; lineIndex: number; productId: string; field: string } | null>(null);
+  const catalogueSequence = useRef(0);
+  const catalogueTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const catalogueRequested = useRef<CatalogueRequest | null>(null);
+  const savedCatalogueProduct = useRef<CatalogueRequest | null>(null);
   const captureCatalogueFailure = (err: unknown) => {
     if ((err as { body?: { code?: string } })?.body?.code === "PURCHASE_CATALOG_REVIEW_REQUIRED") {
       setCatalogueIssue(true);
       setReviewAccepted(false);
+      void refreshMasterMatches();
     }
   };
   const focusProductMatching = () => requestAnimationFrame(() => {
@@ -1205,6 +1201,10 @@ function PurchaseInvoiceEditor({
     attempt: PurchaseAttempt; match: MasterMatch; candidate: MasterCandidate; line: LineForm; mismatches: string[]; reference?: string;
   } | null>(null);
   const editorGeneration = useRef(0);
+  const catalogueIdentity = { generation: editorGeneration.current, scope: recoveryKey || 'purchase', invoiceId: editingId || activeInvoice?.id, fingerprint: catalogueFingerprint(lines), sequence: catalogueSequence.current };
+  const catalogueIdentityRef = useRef(catalogueIdentity);
+  catalogueIdentityRef.current = catalogueIdentity;
+  const catalogueCurrent = useCallback((request: CatalogueRequest) => mounted.current && sameCatalogueRequest(request, { ...catalogueIdentityRef.current, generation: editorGeneration.current, sequence: catalogueSequence.current }), []);
   const comparisonRequest = useRef(0);
   const matchRequest = useRef(0);
   const mounted = useRef(true);
@@ -1215,6 +1215,11 @@ function PurchaseInvoiceEditor({
     editorGeneration.current += 1;
     comparisonRequest.current += 1;
     matchRequest.current += 1;
+    catalogueSequence.current += 1;
+    setCatalogue({ state: 'unchecked' });
+    setMasterRefreshing(false);
+    setMasterConfirming(null);
+    setProductFocus(null);
     setPendingMismatch(null);
     setComparison(null);
     setRecovery(null);
@@ -1692,30 +1697,71 @@ function PurchaseInvoiceEditor({
     );
   };
 
-  const refreshMasterMatches = async (sourceLines: LineForm[] = lines) => {
-    if (!access.create) return;
-    invalidatePending();
-    const attempt = captureAttempt();
+  /**
+   * @cc [owner:nareshshah139,label:state;product] current-invoice-catalogue-check
+   * Only the current generation, invoice, line identities and request sequence MAY publish checks,
+   * errors or busy cleanup. Failed or absent metadata MUST block final review. Checking MUST NOT save,
+   * review or commit an invoice.
+   */
+  const refreshMasterMatches = async (sourceLines: LineForm[] = lines, productSaved = false, existingRequest?: CatalogueRequest) => {
+    if (!access.create && !access.review) return false;
+    if (catalogueTimer.current) clearTimeout(catalogueTimer.current);
+    const request = existingRequest || { ...catalogueIdentityRef.current, generation: editorGeneration.current, fingerprint: catalogueFingerprint(sourceLines), sequence: ++catalogueSequence.current };
+    catalogueRequested.current = request;
+    productSaved = productSaved || !!savedCatalogueProduct.current && sameCatalogueRequest({ ...savedCatalogueProduct.current, sequence: request.sequence }, request);
+    setCatalogue({ state: 'pending', request });
+    setPendingMismatch(null);
+    matchRequest.current += 1;
+    setReviewAccepted(false);
     setMasterRefreshing(true);
-    setError(null);
     try {
-      const response =
-        await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>(
-          {
-            items: sourceLines.map(linePayload),
-          },
-        );
-      if (!attemptCurrent(attempt)) return;
-      setMasterMatches(response.matches || []);
-      setMasterStatuses({});
-      setNotice(
-        `Refreshed drug master suggestions for ${sourceLines.length} line${sourceLines.length === 1 ? "" : "s"}.`,
-      );
-    } catch (err) {
-      setError(getErrorMessage(err));
+      const response = await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>({ items: sourceLines.map(linePayload) });
+      if (!catalogueCurrent(request)) return false;
+      const rows = assessCatalogue(sourceLines, response);
+      const matches = Array.isArray(response?.matches) ? response.matches : [];
+      setMasterMatches(matches.filter(match => match && Number.isInteger(match.lineIndex) && sourceLines[match.lineIndex] && Array.isArray(match.candidates) && matches.filter(other => other?.lineIndex === match.lineIndex).length === 1).map(match => ({
+        ...match,
+        candidates: match.candidates.filter(candidate => candidate?.drug && typeof candidate.drug.id === 'string' && typeof candidate.drug.name === 'string'),
+        catalogueResolution: rows[match.lineIndex].resolution,
+      })));
+
+      setCatalogue({ state: 'assessed', request, rows });
+      setCatalogueIssue(rows.some(row => row.resolution.state !== 'ready'));
+      if (productSaved) setNotice('Product details saved. Invoice products checked again. Complete the final review before adding stock.');
+      return rows.every(row => row.resolution.state === 'ready');
+    } catch {
+      if (!catalogueCurrent(request)) return false;
+      setCatalogue({ state: 'failed', request, productSaved });
+      if (productSaved) setNotice('Product details saved. Invoice check could not finish. Retry the product check.');
+      return false;
     } finally {
-      setMasterRefreshing(false);
+      if (catalogueCurrent(request)) setMasterRefreshing(false);
     }
+  };
+  const catalogueKey = JSON.stringify([catalogueIdentity.generation, catalogueIdentity.scope, catalogueIdentity.invoiceId, catalogueIdentity.fingerprint]);
+  const canCheckCatalogue = recoveryReady && (access.create || access.review) && lines.some(line => line.productName.trim()) && !activeInvoice?.stockCommittedAt && activeInvoice?.status !== 'CANCELLED';
+  const refreshCatalogueRef = useRef(refreshMasterMatches);
+  refreshCatalogueRef.current = refreshMasterMatches;
+  useEffect(() => {
+    if (!canCheckCatalogue || catalogueRequested.current && sameCatalogueRequest(catalogueRequested.current, { ...catalogueIdentityRef.current, generation: editorGeneration.current, sequence: catalogueSequence.current })) return;
+    const sequence = catalogueSequence.current;
+    catalogueTimer.current = setTimeout(() => {
+      if (sequence === catalogueSequence.current) void refreshCatalogueRef.current();
+    }, 150);
+    return () => { if (catalogueTimer.current) clearTimeout(catalogueTimer.current); };
+  }, [catalogueKey, canCheckCatalogue]);
+  useEffect(() => {
+    if (!productFocus || !catalogueCurrent(productFocus.request)) return;
+    const frame = requestAnimationFrame(() => {
+      if (catalogueCurrent(productFocus.request)) focusPurchaseField(`product-${productFocus.lineIndex}-edit-${productFocus.field}`);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [productFocus, catalogueCurrent]);
+
+  const openCatalogueDetails = (row: CatalogueRow) => {
+    if (catalogue.state !== 'assessed' || !catalogueCurrent(catalogue.request) || row.resolution.state !== 'incomplete') return;
+    setShowIntakeHome(false);
+    setProductFocus({ request: catalogue.request, lineIndex: row.lineIndex, productId: row.resolution.product.id, field: row.resolution.missingFields[0] });
   };
 
   /**
@@ -1790,48 +1836,43 @@ function PurchaseInvoiceEditor({
     }
   };
 
-  const saveProductDetails = async (
-    drug: MasterDrug,
-    catalog: PurchaseProductCatalog,
-  ): Promise<string | undefined> => {
-    if (!access.editProduct)
-      return "Product-edit permission is required to correct this saved product.";
+  /**
+   * @cc [owner:nareshshah139,label:product;state] catalogue-save-and-recheck
+   * Saving details MUST invalidate approval before PATCH, refresh every occurrence of the saved
+   * product and recheck current lines without invoice or stock writes. Stale completions MUST NOT
+   * alter another editor. Failed saves MUST retain form entries; failed checks MUST offer check-only retry.
+   */
+  const saveProductDetails = async (drug: MasterDrug, catalog: PurchaseProductCatalog): Promise<string | null | undefined> => {
+    if (!access.editProduct) return 'Product-edit permission is required to correct this saved product.';
+    if (catalogueTimer.current) clearTimeout(catalogueTimer.current);
+    const request = { ...catalogueIdentityRef.current, generation: editorGeneration.current, sequence: ++catalogueSequence.current };
+    const sourceLines = lines;
+    setCatalogue({ state: 'pending', request });
+    setReviewAccepted(false);
     setMasterConfirming(`edit:${drug.id}`);
+    setProductFocus(null);
     setError(null);
+    let updated: MasterDrug;
     try {
-      const updated = await apiClient.patch<MasterDrug>(
-        `/pharmacy/purchase-invoices/master-records/${drug.id}`,
-        catalog,
-      );
-      setMasterMatches((current) =>
-        current.map((match) => ({
-          ...match,
-          candidates: match.candidates.map((candidate) =>
-            candidate.drug.id === drug.id
-              ? { ...candidate, drug: updated }
-              : candidate,
-          ),
-        })),
-      );
-      setMasterStatuses((current) =>
-        Object.fromEntries(
-          Object.entries(current).map(([key, status]) => [
-            key,
-            status.drug.id === drug.id ? { ...status, drug: updated } : status,
-          ]),
-        ),
-      );
-      setManualReviewCandidateId(null);
-      setNotice(
-        `Saved product details for ${updated.name}. Choose Save & Process to check the invoice again.`,
-      );
+      updated = await apiClient.patch<MasterDrug>(`/pharmacy/purchase-invoices/master-records/${drug.id}`, catalog);
+      if (!catalogueCurrent(request)) return null;
+      savedCatalogueProduct.current = request;
+      setMasterMatches(current => current.map(match => ({ ...match,
+        candidates: match.candidates.map(candidate => candidate.drug.id === drug.id ? { ...candidate, drug: updated } : candidate),
+        catalogueResolution: match.catalogueResolution && 'product' in match.catalogueResolution && match.catalogueResolution.product.id === drug.id
+          ? { ...match.catalogueResolution, product: updated } : match.catalogueResolution,
+      })));
+      setMasterStatuses(current => Object.fromEntries(Object.entries(current).map(([key, status]) => [key, status.drug.id === drug.id ? { ...status, drug: updated } : status])));
+      setNotice('Product details saved. Checking invoice products…');
     } catch (err) {
-      const message = getErrorMessage(err);
-      setError(message);
-      return message;
+      if (!catalogueCurrent(request)) return null;
+      setCatalogue({ state: 'unchecked' });
+      return `Product details could not be saved. Your entries are still here. ${getErrorMessage(err)}`;
     } finally {
-      setMasterConfirming(null);
+      if (catalogueCurrent(request)) setMasterConfirming(null);
     }
+    await refreshMasterMatches(sourceLines, true, request);
+    if (!catalogueCurrent(request)) return null;
   };
 
   const applyAutomationResult = (
@@ -1910,6 +1951,7 @@ function PurchaseInvoiceEditor({
         await reviewAndCommit();
         return;
       }
+      const productsReady = catalogueReady || await refreshMasterMatches();
       let savedForReview: PurchaseInvoice | undefined;
       if (
         !activeInvoice ||
@@ -1924,6 +1966,10 @@ function PurchaseInvoiceEditor({
         savedForReview = saved;
       }
       if (!targetInvoiceId) return;
+      if (!productsReady) {
+        setNotice('Invoice saved. Finish the product checks before processing or final review.');
+        return;
+      }
       setUnknownStockInvoiceId(targetInvoiceId);
       const result =
         await apiClient.processPharmacyPurchaseInvoice<OcrExtractionResponse>(
@@ -2349,7 +2395,7 @@ function PurchaseInvoiceEditor({
   };
 
   const reviewInvoice = async () => {
-    if (!access.review || !activeInvoice || reviewing || draftWriteBlocked)
+    if (!access.review || !activeInvoice || reviewing || draftWriteBlocked || !catalogueReady)
       return;
     setNotice(null);
     setError(null);
@@ -2706,11 +2752,16 @@ function PurchaseInvoiceEditor({
     if (ownerId) params.set('actor', ownerId);
     if (sourceIds.length) params.set('sources', sourceIds.join(','));
     const invoiceLink = `${window.location.origin}/dashboard/inventory?${params.toString()}`;
-    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, invoiceLink,
+    const productRows = catalogue.state === 'assessed' && catalogueCurrent(catalogue.request) ? catalogue.rows.filter(row => row.resolution.state !== 'ready') : [];
+    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, id ? invoiceLink : '',
+      `Supplier: ${header.distributorName || activeInvoice?.distributorName || 'Not recorded'}`,
+      stockStatusUnknown ? 'Stock status is unknown. Check the saved invoice before any stock action.' : stockAdded ? 'Stock is already posted.' : 'Stock has not been added by this invoice.',
+      ...productRows.map(row => row.resolution.state === 'incomplete' ? `Line ${row.lineIndex + 1}: ${row.resolution.product.name}; product ID ${row.resolution.product.id}; pack ${row.resolution.product.packSizeLabel || 'not recorded'}; missing ${row.resolution.missingFields.map(field => catalogueFieldLabels[field]).join(', ')}` : `Line ${row.lineIndex + 1}: ${row.name}; product check ${row.resolution.state}`),
       attemptId ? `Import attempt: ${attemptId}` : '', ownerId ? `Original operator: ${ownerId}` : '',
       id ? `Exact invoice: ${id}` : '', sourceIds.length ? `Original documents: ${sourceIds.join(', ')}` : '',
       historicalStockHold ? 'Ask an inventory administrator to compare this invoice with opening-stock records and verify a physical count. Do not add it as a new receipt. Supplier accounting remains separate.' :
-        recovery?.message || error || 'A colleague with purchase read, create and review access can open this link to recover the import.',
+        productRows.length ? 'Ask a colleague with product-edit permission to complete or resolve these saved products, then retry the invoice product check. The final stock action still requires approval.' :
+        recovery?.message || error || (id ? 'A colleague with purchase read, create and review access can open this link to recover the import.' : 'Ask a colleague with purchase access to help check this unsaved invoice.'),
       historicalStockHold ? `${window.location.origin}/dashboard/inventory?area=stock&view=COUNT` : '',
       recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
     try {
@@ -2812,6 +2863,7 @@ function PurchaseInvoiceEditor({
       !access.review ||
       !access.commit ||
       !reviewAccepted ||
+      !catalogueReady ||
       draftWriteBlocked
     )
       return;
@@ -2885,7 +2937,12 @@ function PurchaseInvoiceEditor({
   const historicalStockHold = activeIssues.some(issue => purchaseReviewIssue(issue).category === "historical");
   const awaitingManualReview =
     !!activeInvoice && manualReviewCandidateId === activeInvoice.id;
+  const catalogueRows = catalogue.state === 'assessed' && catalogueCurrent(catalogue.request) ? catalogue.rows : [];
+  const catalogueReady = catalogueRows.length === lines.length && catalogueRows.length > 0 && catalogueRows.every(row => row.resolution.state === 'ready');
+  const catalogueBlockers = catalogueRows.filter(row => row.resolution.state !== 'ready');
+  const catalogueChecks = stockAdded || activeInvoice?.status === 'CANCELLED' ? 0 : catalogueReady ? 0 : Math.max(1, catalogueBlockers.length);
   const canReview =
+    catalogueReady &&
     access.review &&
     !!activeInvoice &&
     !stockStatusUnknown &&
@@ -3112,7 +3169,7 @@ function PurchaseInvoiceEditor({
   // Evidence wins over a previous confirmation: unresolved corrections stay red or amber.
   const fieldTones: Record<string, ReviewTone> = {};
   const invoiceVerified = !stockStatusUnknown && !draftWriteBlocked &&
-    ((reviewAccepted && confirmationCount === 0) || activeInvoice?.status === "REVIEWED" || stockAdded);
+    ((reviewAccepted && catalogueReady && confirmationCount === 0) || activeInvoice?.status === "REVIEWED" || stockAdded);
   if (invoiceVerified) sourceTargets.forEach(target => { fieldTones[target.id] = "success"; });
   const markField = (issue: ReturnType<typeof purchaseReviewIssue>, tone: ReviewTone) => {
     if (!issue.target) return;
@@ -3127,7 +3184,7 @@ function PurchaseInvoiceEditor({
   }
   correctionIssues.forEach(issue => markField(issue, issue.category === "historical" || issue.category === "manual" ? "warning" : "error"));
   const checkSession = `${previewDocument?.id || "manual"}:${activeInvoice?.id || "new"}`;
-  const checksRemaining = confirmationCount + correctionIssues.length + manualConfidenceLines.length;
+  const checksRemaining = confirmationCount + correctionIssues.length + manualConfidenceLines.length + catalogueChecks;
   const reviewChecklist = (
     <section
       id="purchase-review-checklist"
@@ -3145,6 +3202,24 @@ function PurchaseInvoiceEditor({
           <PurchaseHelp label="Review checks">Compare flagged values with the original, correct them if needed, then confirm each check. Corrections and field confirmations are separate from the final stock review.</PurchaseHelp>
         </div>
       </div>
+      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
+        <h5 className="font-semibold">{catalogue.state === 'pending' ? 'Checking invoice products…' : 'Products need attention'}</h5>
+        {catalogue.state === 'failed' && <p role="alert">{catalogue.productSaved ? 'Product details saved. Invoice check could not finish. Retry the check without saving again.' : 'Invoice products could not be checked. Retry the check before final review.'}</p>}
+        {catalogueBlockers.map(row => <div key={row.localId} className="space-y-2">
+          <p className="font-medium">Line {row.lineIndex + 1} · {row.resolution.state === 'incomplete' ? row.resolution.product.name : row.name}</p>
+          {row.resolution.state === 'incomplete' ? <>
+            <p>Missing {row.resolution.missingFields.map(field => catalogueFieldLabels[field]).join(', ')}.</p>
+            <p>Check the product type first. Enter verified details from the product label.</p>
+            {access.editProduct && !savedFormLocked && !draftWriteBlocked ? <Button type="button" variant="outline" disabled={busy || masterRefreshing || masterConfirming !== null} onClick={() => openCatalogueDetails(row)}>Complete {row.resolution.product.name} details</Button> : <p>A colleague with product-edit permission must complete this saved product.</p>}
+          </> : <p>{row.resolution.state === 'missing' ? 'No exact active product matches this name and pack. Correct the invoice identity or choose an existing product. Create a product only if none exists.' : row.resolution.state === 'ambiguous' ? 'More than one active product has this identity. Correct the manufacturer or pack, or ask a catalogue editor to resolve duplicate records.' : 'This product has not been checked. Retry before final review.'}</p>}
+          {row.resolution.state !== 'incomplete' && access.create && !savedFormLocked && <Button type="button" variant="outline" disabled={busy} onClick={() => focusPurchaseField('purchase-master-matching')}>Resolve line {row.lineIndex + 1} product</Button>}
+        </div>)}
+        {catalogue.state !== 'pending' && !catalogueBlockers.length && <p>Check the saved products before final review. Your invoice entries are retained.</p>}
+        <div className="flex flex-wrap gap-2">
+          {(access.create || access.review) && <Button type="button" variant="outline" disabled={busy || masterRefreshing || masterConfirming !== null} onClick={() => refreshMasterMatches()}>Retry product check</Button>}
+          <Button type="button" variant="outline" onClick={copyHandoff}>Copy product handoff</Button>
+        </div>
+      </section>}
       <PurchaseSupplierReview
         name={
           !activeInvoice || editingSelectedInvoice
@@ -3289,6 +3364,7 @@ function PurchaseInvoiceEditor({
         <div className="flex items-start gap-1 rounded-md border p-4 text-sm">
           <label className="flex items-start gap-3">
             <input
+              id="purchase-final-approval"
               type="checkbox"
               className="mt-1"
               checked={reviewAccepted}
@@ -3319,6 +3395,8 @@ function PurchaseInvoiceEditor({
     { header: Object.fromEntries(Object.entries(comparison.local.header).map(([key]) => [key, ['invoiceDate', 'goodsReceivedDate', 'dueDate'].includes(key) ? dateInputFromIso(comparison.saved[key as keyof PurchaseInvoice] as string) : formString(comparison.saved[key as keyof PurchaseInvoice], defaultHeader()[key as keyof HeaderForm])])), lines: (comparison.saved.items || []).map((line, index) => lineFromExtracted(line as unknown as ExtractedPurchaseLine, index)) },
   ) : [];
   const focusRecoveryIssue = (issue: ReturnType<typeof purchaseReviewIssue>) => {
+    const productRow = catalogueRows.find(row => row.lineIndex === issue.lineIndex && row.resolution.state === 'incomplete');
+    if (issue.category === 'product' && productRow) { openCatalogueDetails(productRow); return; }
     const target = purchaseRecoveryTarget(issue, lines.map(line => line.localId));
     if (!target) return;
     setShowIntakeHome(false);
@@ -3606,7 +3684,12 @@ function PurchaseInvoiceEditor({
       }}
     >
       <div
-        onChangeCapture={invalidatePending}
+        onChangeCapture={event => {
+          const target = event.target as HTMLElement;
+          if (target.id === 'purchase-final-approval') return;
+          if (target.closest('[data-purchase-catalogue-editor]')) { setReviewAccepted(false); return; }
+          invalidatePending();
+        }}
         onFocusCapture={(event) => {
           const id = (event.target as HTMLElement).id;
           if (sourceTargets.some((target) => target.id === id))
@@ -4597,7 +4680,8 @@ function PurchaseInvoiceEditor({
                               const best = match.recommendedAction === "CREATE_NEW" ? undefined : match.candidates[0];
                               const status = masterStatuses[match.lineIndex];
                               const confirmMatchKey = `${match.lineIndex}:MATCH_EXISTING`;
-                              const savedProduct = status?.drug || best?.drug;
+                              const exactProduct = match.catalogueResolution && 'product' in match.catalogueResolution ? match.catalogueResolution.product : undefined;
+                              const savedProduct = exactProduct || status?.drug || best?.drug;
                               return (
                                 <div
                                   key={`${match.lineIndex}-${fieldValue(match.ocr?.productName)}`}
@@ -4805,7 +4889,7 @@ function PurchaseInvoiceEditor({
                                     <details
                                       className="mt-3"
                                       open={
-                                        !!savedProduct.catalogIssues?.length &&
+                                        productFocus?.productId === savedProduct.id || !!savedProduct.catalogIssues?.length &&
                                         (status ||
                                           match.recommendedAction ===
                                             "MATCH_EXISTING")
@@ -4831,9 +4915,12 @@ function PurchaseInvoiceEditor({
                                       )}
                                       {access.editProduct ? (
                                         <PurchaseProductDetails
-                                          key={JSON.stringify(savedProduct)}
+                                          key={`${catalogueIdentity.scope}:${catalogueIdentity.invoiceId || "new"}:${line?.localId}:${JSON.stringify(savedProduct)}`}
                                           id={`product-${match.lineIndex}-edit`}
                                           product={savedProduct}
+                                          missingFields={match.catalogueResolution?.state === 'incomplete' ? match.catalogueResolution.missingFields : []}
+                                          saveLabel="Save details and recheck invoice"
+                                          savedMessage="Product details saved. See the invoice product check above."
                                           disabled={
                                             busy || masterConfirming !== null
                                           }
