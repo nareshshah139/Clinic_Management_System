@@ -1143,14 +1143,21 @@ function PurchaseInvoiceEditor({
   >(null);
   const [refreshingStockStatus, setRefreshingStockStatus] = useState(false);
   const actionFeedbackRef = useRef<HTMLDivElement>(null);
-  const focusActionFeedback = () =>
+  /**
+   * @cc [owner:nareshshah139,label:state] current-feedback-focus
+   * Queued feedback focus MUST be discarded after an editor change or unmount.
+   */
+  const focusActionFeedback = () => {
+    const generation = editorGeneration.current;
     requestAnimationFrame(() => {
+      if (!mounted.current || generation !== editorGeneration.current) return;
       actionFeedbackRef.current?.focus({ preventScroll: true });
       actionFeedbackRef.current?.scrollIntoView?.({
         behavior: "smooth",
         block: "start",
       });
     });
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [headerFlags, setHeaderFlags] = useState("");
   const [ocrFiles, setOcrFiles] = useState<File[]>([]);
@@ -1170,7 +1177,13 @@ function PurchaseInvoiceEditor({
   const catalogueTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const catalogueRequested = useRef<CatalogueRequest | null>(null);
   const savedCatalogueProduct = useRef<CatalogueRequest | null>(null);
-  const captureCatalogueFailure = (err: unknown) => {
+  /**
+   * @cc [owner:nareshshah139,label:state] current-review-catalogue-recovery
+   * An obsolete review or commit failure MUST NOT invalidate approval, start a catalogue check,
+   * or publish recovery in the current editor.
+   */
+  const captureCatalogueFailure = (err: unknown, attempt: PurchaseAttempt) => {
+    if (!attemptCurrent(attempt)) return;
     if ((err as { body?: { code?: string } })?.body?.code === "PURCHASE_CATALOG_REVIEW_REQUIRED") {
       setCatalogueIssue(true);
       setReviewAccepted(false);
@@ -1219,6 +1232,8 @@ function PurchaseInvoiceEditor({
     setCatalogue({ state: 'unchecked' });
     setMasterRefreshing(false);
     setMasterConfirming(null);
+    setReviewing(false);
+    setCommitting(false);
     setProductFocus(null);
     setPendingMismatch(null);
     setComparison(null);
@@ -1739,7 +1754,11 @@ function PurchaseInvoiceEditor({
     }
   };
   const catalogueKey = JSON.stringify([catalogueIdentity.generation, catalogueIdentity.scope, catalogueIdentity.invoiceId, catalogueIdentity.fingerprint]);
-  const canCheckCatalogue = recoveryReady && (access.create || access.review) && lines.some(line => line.productName.trim()) && !activeInvoice?.stockCommittedAt && activeInvoice?.status !== 'CANCELLED';
+  /**
+   * @cc [owner:nareshshah139,label:state] editable-auto-catalogue-check
+   * Automatic checks MUST wait while the draft is locked or reviewed; a confirmed reopen MAY resume them.
+   */
+  const canCheckCatalogue = recoveryReady && !draftWriteBlocked && (access.create || access.review) && lines.some(line => line.productName.trim()) && !activeInvoice?.stockCommittedAt && !['REVIEWED', 'STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice?.status || '');
   const refreshCatalogueRef = useRef(refreshMasterMatches);
   refreshCatalogueRef.current = refreshMasterMatches;
   useEffect(() => {
@@ -1952,6 +1971,7 @@ function PurchaseInvoiceEditor({
         return;
       }
       const productsReady = catalogueReady || await refreshMasterMatches();
+      if (!attemptCurrent(attempt)) return;
       let savedForReview: PurchaseInvoice | undefined;
       if (
         !activeInvoice ||
@@ -1961,7 +1981,7 @@ function PurchaseInvoiceEditor({
           ))
       ) {
         const saved = await saveDraft();
-        if (!saved) return;
+        if (!saved || !attemptCurrent(attempt)) return;
         targetInvoiceId = saved.id;
         savedForReview = saved;
       }
@@ -2012,7 +2032,7 @@ function PurchaseInvoiceEditor({
     } finally {
       processLock.current = false;
       setProcessing(false);
-      focusActionFeedback();
+      if (attemptCurrent(attempt)) focusActionFeedback();
     }
   };
 
@@ -2390,7 +2410,7 @@ function PurchaseInvoiceEditor({
     } finally {
       saveLock.current = false;
       setSaving(false);
-      focusActionFeedback();
+      if (attemptCurrent(attempt)) focusActionFeedback();
     }
   };
 
@@ -2411,7 +2431,7 @@ function PurchaseInvoiceEditor({
         )
       ) {
         const saved = await saveDraft();
-        if (!saved) return;
+        if (!saved || !attemptCurrent(attempt)) return;
         invoiceToReview = saved;
       }
       const reviewed =
@@ -2430,10 +2450,12 @@ function PurchaseInvoiceEditor({
       await loadRecent();
     } catch (err) {
       captureRecovery(err, attempt);
-      captureCatalogueFailure(err);
+      captureCatalogueFailure(err, attempt);
     } finally {
-      setReviewing(false);
-      focusActionFeedback();
+      if (attemptCurrent(attempt)) {
+        setReviewing(false);
+        focusActionFeedback();
+      }
     }
   };
 
@@ -2458,11 +2480,13 @@ function PurchaseInvoiceEditor({
       await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
     } catch (err) {
       captureRecovery(err, attempt);
-      captureCatalogueFailure(err);
+      captureCatalogueFailure(err, attempt);
     } finally {
       if (attemptCurrent(attempt)) await refreshStockStatus(id);
-      setCommitting(false);
-      focusActionFeedback();
+      if (attemptCurrent(attempt)) {
+        setCommitting(false);
+        focusActionFeedback();
+      }
     }
   };
 
@@ -2875,7 +2899,7 @@ function PurchaseInvoiceEditor({
     try {
       const saved =
         editingId === activeInvoice.id ? await saveDraft() : activeInvoice;
-      if (!saved) return;
+      if (!saved || !attemptCurrent(attempt)) return;
       await apiClient.reviewPharmacyPurchaseInvoice(saved.id, {
         expectedUpdatedAt: saved.updatedAt,
         goodsReceivedDate: reviewDate,
@@ -2887,12 +2911,14 @@ function PurchaseInvoiceEditor({
       await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
     } catch (err) {
       captureRecovery(err, attempt);
-      captureCatalogueFailure(err);
+      captureCatalogueFailure(err, attempt);
 
     } finally {
       if (stockAttempted && attemptCurrent(attempt)) await refreshStockStatus(id);
-      setReviewing(false);
-      focusActionFeedback();
+      if (attemptCurrent(attempt)) {
+        setReviewing(false);
+        focusActionFeedback();
+      }
     }
   };
 

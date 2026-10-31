@@ -249,6 +249,52 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
+  it.each(['review', 'review-and-commit'])('ignores an obsolete %s failure after a newer invoice edit', async mode => {
+    let rejectReview!: (error: Error) => void;
+    api.reviewPharmacyPurchaseInvoice.mockImplementation(() => new Promise((_, reject) => { rejectReview = reject; }));
+    const view = renderSavedInvoice();
+    fireEvent.click(await reviewConfirmation());
+    if (mode === 'review') fireEvent.click(screen.getByRole('button', { name: 'Complete review' }));
+    else processCurrentInvoice();
+    await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
+    if (mode === 'review-and-commit') {
+      api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, id: 'invoice-b', invoiceNumber: 'OTHER-002' });
+      view.rerender(<PurchaseInvoiceWorkbench invoiceId="invoice-b" />);
+      await screen.findByDisplayValue('OTHER-002');
+    }
+    const batch = screen.getByLabelText('Batch');
+    fireEvent.change(batch, { target: { value: 'CORRECTED-BATCH' } });
+    await reviewConfirmation();
+    const checks = api.suggestPharmacyPurchaseMasterMatches.mock.calls.length;
+    act(() => batch.focus());
+    await act(async () => { rejectReview(Object.assign(new Error('Old catalogue failure'), { body: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED' } })); });
+    expect(api.suggestPharmacyPurchaseMasterMatches).toHaveBeenCalledTimes(checks);
+    expect(batch).toHaveValue('CORRECTED-BATCH');
+    expect(batch).toHaveFocus();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('keeps a newer review busy when an earlier review rejects', async () => {
+    let rejectOld!: (error: Error) => void;
+    let finishCurrent!: (value: unknown) => void;
+    api.reviewPharmacyPurchaseInvoice
+      .mockImplementationOnce(() => new Promise((_, reject) => { rejectOld = reject; }))
+      .mockImplementationOnce(() => new Promise(resolve => { finishCurrent = resolve; }));
+    renderSavedInvoice();
+    fireEvent.click(await reviewConfirmation());
+    fireEvent.click(screen.getByRole('button', { name: 'Complete review' }));
+    await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'CORRECTED-BATCH' } });
+    fireEvent.click(await reviewConfirmation());
+    fireEvent.click(screen.getByRole('button', { name: 'Complete review' }));
+    await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(2));
+    await act(async () => { rejectOld(Object.assign(new Error('Old catalogue failure'), { body: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED' } })); });
+    expect(screen.getByRole('button', { name: 'Complete review' })).toBeDisabled();
+    await act(async () => { finishCurrent({ ...draftInvoice, status: 'REVIEWED' }); });
+    expect(await screen.findByRole('button', { name: 'Add stock' })).toBeEnabled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('retains entered product details and suppresses stale save feedback after another invoice correction', async () => {
     mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, editProduct: true } as typeof mockPurchaseAccess;
     let finishSave!: (product: unknown) => void;

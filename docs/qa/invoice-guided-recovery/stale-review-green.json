@@ -1,0 +1,21 @@
+{
+  "browser": "Chrome",
+  "passed": true,
+  "checks": [
+    "Automatic product check names Cosglo and opens its exact missing composition field",
+    "Product editor remains usable at 390px without horizontal page overflow",
+    "Saving a chosen product type rechecks without posting stock",
+    "Final approval stays checked after requests settle and does not itself add stock",
+    "Delayed review rejection cannot recheck or move focus after a newer correction"
+  ],
+  "writes": [
+    {
+      "action": "product",
+      "productId": "cosglo-proof"
+    },
+    {
+      "action": "invoice",
+      "invoiceId": "invoice-proof"
+    }
+  ]
+}

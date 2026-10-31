@@ -14,6 +14,7 @@ const frontendPort = 3117, apiPort = 4017, browserPort = 9317;
 const base = `http://127.0.0.1:${frontendPort}`;
 const baseline = process.argv.includes('--baseline');
 const chrome = process.argv.includes('--chrome');
+const staleReview = process.argv.includes('--stale-review');
 const user = { id: 'invoice-proof-user', firstName: 'Test', lastName: 'Pharmacist', role: 'OWNER', branchId: 'invoice-proof-branch', isActive: true };
 const item = { lineNumber: 1, productName: 'Cosglo New Cream', manufacturer: 'Synthetic manufacturer', packSize: '30 gm', packUnitType: 'Tube', hsnCode: '3304', batchNumber: 'SYNTHETIC', expiryMonth: 12, expiryYear: 2027, quantityPurchased: 1, freeQuantity: 0, mrp: 118, purchaseRate: 100, taxableAmount: 100, cgstPercent: 9, sgstPercent: 9, igstPercent: 0, gstAmount: 18, lineTotal: 118 };
 const invoice = { id: 'invoice-proof', invoiceNumber: 'SYNTHETIC-UX-001', distributorName: 'Synthetic supplier', distributorGstin: '36ABCDE1234F1Z5', distributorDlNo: 'SYNTHETIC-DL', invoiceDate: '2026-10-31', goodsReceivedDate: '2026-10-31', billType: 'CASH', status: 'DRAFT', updatedAt: '2026-10-31T08:00:00Z', grossAmount: 100, taxableAmount: 100, totalCgst: 9, totalSgst: 9, totalGst: 18, netPayable: 118, unresolvedOcrFlags: 0, reconciliationIssues: [], items: [item], documents: [] };
@@ -21,6 +22,7 @@ const product = { id: 'cosglo-proof', name: item.productName, manufacturerName: 
 const initialProduct = { ...product };
 const requests = [], writes = [], checks = [], children = [];
 let editProduct = true, failChecks = false, failAfterSave = false;
+let releaseReview;
 const db = {
   $queryRaw: async () => [{ id: product.id }],
   drug: { findMany: async () => [product], findFirst: async () => product },
@@ -37,6 +39,15 @@ const server = http.createServer(async (req, res) => {
     else if (route === '/pharmacy/purchase-invoices/capabilities') body = { read: true, create: true, review: true, commit: true, automate: true, catalogDetails: true, editProduct };
     else if (route === '/inventory/workspace/capabilities') body = {};
     else if (route === '/pharmacy/purchase-invoices/invoice-proof' && req.method === 'GET') body = invoice;
+    else if (staleReview && route === '/pharmacy/purchase-invoices/drafts/invoice-proof' && req.method === 'PATCH') {
+      Object.assign(invoice, payload, { updatedAt: '2026-10-31T09:00:00Z' });
+      body = invoice;
+      writes.push({ action: 'invoice', invoiceId: invoice.id });
+    }
+    else if (staleReview && route === '/pharmacy/purchase-invoices/invoice-proof/review') {
+      await new Promise(resolve => { releaseReview = resolve; });
+      status = 400; body = { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', message: 'Synthetic delayed catalogue failure' };
+    }
     else if (route === '/pharmacy/purchase-invoices' && req.method === 'GET') body = { data: [invoice], total: 1 };
     else if (route === '/pharmacy/purchase-invoices/master-matches') {
       if (failChecks) { status = 503; body = { message: 'Synthetic catalogue check unavailable' }; }
@@ -149,6 +160,33 @@ async function main() {
     assert.equal(await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.includes('I verified the invoice against the original.'))?.querySelector('input[type="checkbox"]')?.checked), true);
     assert.equal(writes.length, 1);
     checks.push('Final approval stays checked after requests settle and does not itself add stock');
+    if (staleReview) {
+      await clickText(page, 'Complete review');
+      await new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => releaseReview ? resolve() : Date.now() > deadline ? reject(new Error('Review was not held')) : setTimeout(check, 25);
+        check();
+      });
+      const batchId = await page.evaluate(() => [...document.querySelectorAll('label')].find(label => label.textContent.trim() === 'Batch')?.htmlFor);
+      assert(batchId, 'Batch correction control exists');
+      await page.focus(`[id="${batchId}"]`);
+      await page.$eval(`[id="${batchId}"]`, input => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, 'CORRECTED-BATCH');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await page.waitForFunction(() => !document.querySelector('[aria-label="Invoice product checks"]'));
+      const checksBefore = requests.filter(request => request.route.endsWith('/master-matches')).length;
+      await page.focus(`[id="${batchId}"]`);
+      assert.equal(await page.evaluate(() => document.activeElement?.id), batchId, 'Correction is focused before the old response arrives');
+      releaseReview();
+      await page.waitForNetworkIdle({ idleTime: 1000 });
+      assert.equal(requests.filter(request => request.route.endsWith('/master-matches')).length, checksBefore, 'Obsolete review rejection must not launch another catalogue check');
+      assert.equal(await page.evaluate(() => document.activeElement?.id), batchId, 'Obsolete review cleanup must retain correction focus');
+      assert.equal(writes.filter(write => !['product', 'invoice'].includes(write.action)).length, 0);
+      await page.screenshot({ path: path.join(output, 'obsolete-review-ignored.png') });
+      checks.push('Delayed review rejection cannot recheck or move focus after a newer correction');
+      passed = true; return;
+    }
     Object.assign(product, initialProduct); failAfterSave = true;
     await page.reload({ waitUntil: 'networkidle2' });
     await clickText(page, 'Complete Cosglo New Cream details');
@@ -183,6 +221,7 @@ async function main() {
     checks.push('Restricted operator can copy invoice, product and missing fields without editing or posting stock');
     passed = true;
   } finally {
+    releaseReview?.();
     fs.writeFileSync(path.join(output, 'result.json'), JSON.stringify({ browser: chrome ? 'Chrome' : 'Obscura', baseline, passed, checks, writes, requests }, null, 2));
     if (page) await bounded(page.close(), 'Close browser page').catch(() => {});
     if (browser) { if (chrome) await browser.close(); else await browser.disconnect(); }

@@ -1,0 +1,12 @@
+AssertionError [ERR_ASSERTION]: Obsolete review rejection must not launch another catalogue check
+
+4 !== 3
+
+    at main (/private/tmp/cms-invoice-guided-recovery/scripts/diagnostics/invoice-guided-recovery.cjs:181:14) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 4,
+  expected: 3,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

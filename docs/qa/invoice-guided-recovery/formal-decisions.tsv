@@ -1,0 +1,6 @@
+ts	phase	decision	why	evidence	result
+2026-10-31T12:24:58.249410+00:00	frame	Bound the proof to invoice recovery and asynchronous publication	A model proof must state its scope and assumptions	frontend/src/lib/purchase-invoice-catalogue.ts	scope defined
+2026-10-31T12:24:58.249508+00:00	design	Use TLC plus an independent recovery graph pass	Established checker with same-invoice recovery restriction from alternate design	verification/invoice-guided-recovery/README.md	selected after independent design judgment
+2026-10-31T12:24:58.249512+00:00	reproduce	Exercise delayed catalogue rejection after correction	Source inspection alone did not demonstrate the UX defect	docs/qa/invoice-guided-recovery/stale-review-red.txt	RED: extra catalogue request
+2026-10-31T12:24:58.249515+00:00	fix	Guard late recovery, cleanup and queued focus by current attempt	Old requests must not disrupt a newer edit or review	frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx	browser regression passed
+2026-10-31T12:24:58.249518+00:00	ci	Skip automatic catalogue checks for locked or reviewed invoices	Existing reopening contract forbids product work before confirmed reopen	frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx	targeted regression passed
