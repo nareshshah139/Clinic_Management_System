@@ -2765,6 +2765,11 @@ function PurchaseInvoiceEditor({
     setRecovery(null);
     setError(null);
   };
+  /**
+   * @cc [owner:nareshshah139,label:product] durable-import-handoff
+   * A known invoice or import attempt MUST retain its recovery URL and operator/source references.
+   * An unsaved draft without either reference MUST NOT invent an invoice URL.
+   */
   const copyHandoff = async () => {
     const id = recovery?.attempt.invoiceId || activeInvoice?.id || (unknownStockInvoiceId !== 'unconfirmed-import' ? unknownStockInvoiceId : null) || delegatedRecovery.invoiceId;
     const attemptId = importAttemptId || unlinkedRecoveryId || rejectedImportId || delegatedRecovery.attemptId;
@@ -2777,7 +2782,7 @@ function PurchaseInvoiceEditor({
     if (sourceIds.length) params.set('sources', sourceIds.join(','));
     const invoiceLink = `${window.location.origin}/dashboard/inventory?${params.toString()}`;
     const productRows = catalogue.state === 'assessed' && catalogueCurrent(catalogue.request) ? catalogue.rows.filter(row => row.resolution.state !== 'ready') : [];
-    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, id ? invoiceLink : '',
+    const text = [`Purchase ${header.invoiceNumber || activeInvoice?.invoiceNumber || 'draft'}`, id || attemptId ? invoiceLink : '',
       `Supplier: ${header.distributorName || activeInvoice?.distributorName || 'Not recorded'}`,
       stockStatusUnknown ? 'Stock status is unknown. Check the saved invoice before any stock action.' : stockAdded ? 'Stock is already posted.' : 'Stock has not been added by this invoice.',
       ...productRows.map(row => row.resolution.state === 'incomplete' ? `Line ${row.lineIndex + 1}: ${row.resolution.product.name}; product ID ${row.resolution.product.id}; pack ${row.resolution.product.packSizeLabel || 'not recorded'}; missing ${row.resolution.missingFields.map(field => catalogueFieldLabels[field]).join(', ')}` : `Line ${row.lineIndex + 1}: ${row.name}; product check ${row.resolution.state}`),
@@ -2785,7 +2790,7 @@ function PurchaseInvoiceEditor({
       id ? `Exact invoice: ${id}` : '', sourceIds.length ? `Original documents: ${sourceIds.join(', ')}` : '',
       historicalStockHold ? 'Ask an inventory administrator to compare this invoice with opening-stock records and verify a physical count. Do not add it as a new receipt. Supplier accounting remains separate.' :
         productRows.length ? 'Ask a colleague with product-edit permission to complete or resolve these saved products, then retry the invoice product check. The final stock action still requires approval.' :
-        recovery?.message || error || (id ? 'A colleague with purchase read, create and review access can open this link to recover the import.' : 'Ask a colleague with purchase access to help check this unsaved invoice.'),
+        recovery?.message || error || (id || attemptId ? 'A colleague with purchase read, create and review access can open this link to recover the import.' : 'Ask a colleague with purchase access to help check this unsaved invoice.'),
       historicalStockHold ? `${window.location.origin}/dashboard/inventory?area=stock&view=COUNT` : '',
       recovery?.reference ? `Reference: ${recovery.reference}` : ''].filter(Boolean).join('\n');
     try {

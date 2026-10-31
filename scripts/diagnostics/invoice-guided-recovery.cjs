@@ -29,6 +29,7 @@ const db = {
   inventoryItem: { findMany: async () => [] },
 };
 const service = new PharmacyPurchaseInvoiceService(db);
+let readPurchases = true;
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${apiPort}`), route = url.pathname;
   const chunks = []; for await (const chunk of req) chunks.push(chunk);
@@ -36,7 +37,7 @@ const server = http.createServer(async (req, res) => {
   try {
     const payload = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : null;
     if (route === '/auth/me' || route === `/users/${user.id}`) body = user;
-    else if (route === '/pharmacy/purchase-invoices/capabilities') body = { read: true, create: true, review: true, commit: true, automate: true, catalogDetails: true, editProduct };
+    else if (route === '/pharmacy/purchase-invoices/capabilities') body = { read: readPurchases, create: true, review: true, commit: true, automate: true, catalogDetails: true, editProduct };
     else if (route === '/inventory/workspace/capabilities') body = {};
     else if (route === '/pharmacy/purchase-invoices/invoice-proof' && req.method === 'GET') body = invoice;
     else if (staleReview && route === '/pharmacy/purchase-invoices/drafts/invoice-proof' && req.method === 'PATCH') {
@@ -219,6 +220,19 @@ async function main() {
     await page.screenshot({ path: path.join(output, 'permission-handoff.png') });
     assert.equal(writes.filter(write => write.action !== 'product').length, 0);
     checks.push('Restricted operator can copy invoice, product and missing fields without editing or posting stock');
+    readPurchases = false;
+    const attempt = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    const recoveryPath = `/dashboard/inventory?area=purchases&view=intake&attempt=${attempt}&actor=original-operator&sources=source-1%2Csource-2`;
+    const writesBeforeHandoff = writes.length;
+    await page.goto(`${base}${recoveryPath}`, { waitUntil: 'networkidle2' });
+    await clickText(page, 'Copy recovery handoff');
+    const importHandoff = await page.evaluate(() => window.invoiceProofClipboard);
+    assert.ok(importHandoff.includes(`${base}${recoveryPath}`), 'An interrupted import without an invoice retains its recovery URL');
+    assert.match(importHandoff, /open this link to recover the import/);
+    assert.doesNotMatch(importHandoff, /Exact invoice:/);
+    assert.equal(writes.length, writesBeforeHandoff);
+    await page.screenshot({ path: path.join(output, 'import-handoff-without-invoice.png') });
+    checks.push('Interrupted import handoff retains its recovery URL before an invoice exists without writing stock');
     passed = true;
   } finally {
     releaseReview?.();

@@ -1034,6 +1034,20 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.post).not.toHaveBeenCalled();
   });
 
+  it('retains an interrupted import handoff link before an invoice exists', async () => {
+    mockPurchaseAccess.read = false;
+    const id = 'ec73be65-0152-4bb1-8be6-399d78901a57';
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: jest.fn().mockRejectedValue(new Error('Clipboard blocked')) } });
+    render(<PurchaseInvoiceWorkbench recoveryAttemptId={id} recoveryActorId="original-operator" recoverySourceIds={['source-1', 'source-2']} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Copy recovery handoff' }));
+    const fallback = await screen.findByText(/Could not copy. Select and copy these details instead:/);
+    expect(fallback).toHaveTextContent(`/dashboard/inventory?area=purchases&view=intake&attempt=${id}&actor=original-operator&sources=source-1%2Csource-2`);
+    expect(fallback).toHaveTextContent('A colleague with purchase read, create and review access can open this link to recover the import.');
+    expect(fallback).not.toHaveTextContent('Exact invoice:');
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
   it('recovers a legacy session without an attempt ID and persists rejection across reloads', async () => {
     (global.fetch as jest.Mock).mockRejectedValue(new Error('Lost response'));
     const first = render(<PurchaseInvoiceWorkbench />);
