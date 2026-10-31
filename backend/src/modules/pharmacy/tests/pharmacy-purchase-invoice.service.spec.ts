@@ -633,7 +633,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.matches.map(m=>m.candidates.map(c=>c.drug.id))).toEqual(Array.from({length:20},(_,i)=>[i%2?'different-pack':'five']));
     expect(result.matches[0].candidates[0].reasons).toContain('Search omitted supplier annotation (DPC); verify the original line');
     expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(prisma.drug.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.drug.findMany).toHaveBeenCalledTimes(21);
     expect(JSON.stringify(items)).toBe(before);
     for(const entity of [prisma.drug,prisma.inventoryItem,prisma.pharmacyPurchaseInvoice,prisma.stockTransaction]) {
       for(const method of ['create','update','updateMany']) if(entity[method]) expect(entity[method]).not.toHaveBeenCalled();
@@ -646,6 +646,49 @@ describe('PharmacyPurchaseInvoiceService', () => {
     expect(result.matches[0].recommendedAction).toBe('REVIEW_MATCHES');
     expect(result.matches[0].candidates[0].confidence).toBe('LOW');
     expect(prisma.drug.create).not.toHaveBeenCalled();
+  });
+
+  it('reports exact incomplete catalogue fields before review without changing stock', async () => {
+    prisma.drug.findMany.mockResolvedValue([completeDrug({ id: 'cosglo', name: 'Cosglo New Cream', packSizeLabel: '30 Gm', composition1: null, category: null, dosageForm: null, strength: null })]);
+    const item = { ...validDto().items[0], productName: 'Cosglo New Cream', packSize: '30 Gm' };
+    const result = await service.suggestMasterMatches([item], branchId);
+    expect(result.matches[0].catalogueResolution).toEqual({ state: 'incomplete', product: expect.objectContaining({ id: 'cosglo', name: 'Cosglo New Cream', packSizeLabel: '30 Gm' }), missingFields: ['composition1', 'category', 'dosageForm', 'strength'] });
+    await expect((service as any).resolvePurchaseLineDrug(prisma, { ...item, lineNumber: 1 }, branchId)).rejects.toMatchObject({ response: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED', reason: 'incomplete', missingFields: ['composition1', 'category', 'dosageForm', 'strength'] } });
+    expect(prisma.drug.update).not.toHaveBeenCalled();
+    expect(prisma.pharmacyPurchaseInvoice.update).not.toHaveBeenCalled();
+    expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a complete fuzzy suggestion as exact readiness', async () => {
+    prisma.drug.findMany.mockImplementation(({ where }: any) => where.name?.equals ? Promise.resolve([]) : Promise.resolve([completeDrug({ name: 'Tyrodin Cream', dosageForm: 'Cream', packSizeLabel: '20g' })]));
+    const result = await service.suggestMasterMatches([{ ...validDto().items[0], productName: 'Tyrodni Cream', manufacturer: '', packSize: '' }], branchId);
+    expect(result.matches[0].candidates).toHaveLength(1);
+    expect(result.matches[0].catalogueResolution).toEqual({ state: 'missing' });
+  });
+
+  it.each([{ isActive: false, branchId }, { isActive: true, branchId: 'other-branch' }])('excludes inactive or other-branch exact records (%p)', async scope => {
+    const product = completeDrug({ ...scope, isDiscontinued: false });
+    prisma.drug.findMany.mockImplementation(({ where }: any) => Promise.resolve(where.branchId === product.branchId && where.isActive === product.isActive && where.isDiscontinued === product.isDiscontinued ? [product] : []));
+    const result = await service.suggestMasterMatches(validDto().items, branchId);
+    expect(result.matches[0].catalogueResolution).toEqual({ state: 'missing' });
+    expect(prisma.drug.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ branchId: 'branch-1', isActive: true, isDiscontinued: false, name: { equals: 'Azithral 500 Tablet', mode: 'insensitive' } }) }));
+  });
+
+  it('keeps duplicate exact products ambiguous independently of ranked suggestions', async () => {
+    prisma.drug.findMany.mockImplementation(({ where }: any) => Promise.resolve(where.name?.equals ? [completeDrug(), completeDrug({ id: 'duplicate' })] : [completeDrug()]));
+    const result = await service.suggestMasterMatches(validDto().items, branchId);
+    expect(result.matches[0].candidates).toHaveLength(1);
+    expect(result.matches[0].catalogueResolution).toEqual({ state: 'ambiguous' });
+    await expect((service as any).resolvePurchaseLineDrug(prisma, validDto().items[0], branchId)).rejects.toMatchObject({ response: { reason: 'ambiguous' }, status: 409 });
+  });
+
+  it.each(['cosmetic', 'consumable'])('uses existing %s requirements and carries the exact product even outside suggestions', async type => {
+    const product = completeDrug({ type, composition1: null, dosageForm: null, strength: null, category: 'Skin care' });
+    prisma.drug.findMany.mockImplementation(({ where }: any) => Promise.resolve(where.name?.equals ? [product] : []));
+    const result = await service.suggestMasterMatches(validDto().items, branchId);
+    expect(result.matches[0].candidates).toEqual([]);
+    expect(result.matches[0].catalogueResolution).toEqual({ state: 'ready', product: expect.objectContaining({ id: 'drug-1', category: 'Skin care', composition1: null }) });
+    expect(await (service as any).resolvePurchaseLineDrug(prisma, validDto().items[0], branchId)).toEqual(product);
   });
 
   it('updates an existing drug master only after a confirmed OCR match', async () => {

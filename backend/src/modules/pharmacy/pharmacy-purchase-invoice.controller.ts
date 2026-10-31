@@ -312,12 +312,17 @@ export class PharmacyPurchaseInvoiceController {
     return this.purchaseInvoiceService.processInvoice(id, req.user.branchId, req.user.id);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] catalogue-check-reader-permissions
+   * Exact catalogue checks MUST accept existing purchase create or review permissions, use the
+   * authenticated branch, and grant no catalogue or stock mutation permission.
+   */
   @Post('master-matches')
   @Roles(UserRole.ADMIN, UserRole.PHARMACIST, UserRole.RECEPTION)
-  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create'])
+  @Permissions(['pharmacy:purchase-invoice:create', 'inventory:po:create', 'pharmacy:purchase-invoice:review', 'inventory:po:update'])
   @ApiOperation({
     summary:
-      'Find nearest drug-master matches for purchase invoice OCR line items',
+      'Inspect exact catalogue readiness and suggest products for purchase invoice lines',
   })
   suggestMasterMatches(
     @Body() dto: SuggestPharmacyPurchaseMasterMatchesDto,
