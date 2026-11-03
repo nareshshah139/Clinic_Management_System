@@ -116,12 +116,14 @@ fs.writeFileSync(
         .querySelector('button[aria-label="Confirm line 1 batch checked"]')
         .click(),
     );
-    await button("Save invoice");
+    await button("Save draft");
     await p.waitForFunction(() =>
       document.body.innerText.includes("saved. Stock not added."),
     );
     assert(!requests.some((r) => /process|commit-stock|review$/.test(r.path)));
     checks.push("Correct and save retains draft without stock writes");
+    await button("Refresh Matches");
+    await p.waitForSelector("#purchase-final-approval");
     await p.setViewport({ width: 390, height: 1000 });
     await p.evaluate(() => scrollTo(0, 0));
     await fit();
@@ -133,7 +135,7 @@ fs.writeFileSync(
       );
       label.querySelector("input").click();
     });
-    await button("Review & Add stock");
+    await button("Save & add stock");
     await p.waitForFunction(() =>
       document.body.innerText.includes("LOCAL-ONLY"),
     );

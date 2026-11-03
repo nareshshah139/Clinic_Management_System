@@ -16,10 +16,8 @@ import {
   CheckCircle2,
   FileSearch,
   Loader2,
-  PackagePlus,
   Plus,
   RefreshCw,
-  Save,
   Send,
   Trash2,
   Truck,
@@ -1010,9 +1008,9 @@ export function PurchaseInvoiceWorkbench({
  */
 /**
  * @cc [owner:nareshshah139,label:product] purchase-check-before-stock
- * The primary scan and save actions MUST retain a reviewable draft without adding stock.
- * Adding stock MUST be a separately labelled action; automatic processing MUST stay an explicit
- * secondary choice. Linked receipts MUST use Post bill in instructions and progress and explain
+ * Scanning and Save draft MUST retain a reviewable draft without adding stock. Save & add stock
+ * MUST require final human confirmation and save, review and post the same invoice. Automatic
+ * processing MUST stay an explicit secondary choice. Linked receipts MUST use Post bill in instructions and progress and explain
  * that posting adds no further stock. Editing reviewed values MUST clear the final human confirmation.
  */
 /**
@@ -1137,6 +1135,7 @@ function PurchaseInvoiceEditor({
   );
   const [uploadListError, setUploadListError] = useState<string | null>(null);
   const saveLock = useRef(false);
+  const postingLock = useRef<number | null>(null);
   const processLock = useRef(false);
   const [manualReviewCandidateId, setManualReviewCandidateId] = useState<
     string | null
@@ -1322,12 +1321,12 @@ function PurchaseInvoiceEditor({
         setHeaderFlags((splitFlags(saved.headerFlags || "") || []).join(", "));
         setOcrSummary(saved.ocrSummary || null);
         if (saved.editingId || saved.sourceDocument || saved.header.invoiceNumber || saved.header.distributorName || saved.lines.some((line: LineForm) => !!line.productName)) {
-          setNotice("Restored your unfinished purchase draft from this tab. Save Draft stores it on the server.");
+          setNotice("Restored your unfinished purchase draft from this tab. Save draft stores it on the server.");
         }
       }
     } catch {
       setRecoveryError(
-        "Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.",
+        "Draft recovery is unavailable in this browser. Keep this tab open until Save draft succeeds.",
       );
     }
     setRecoveryReady(true);
@@ -1361,7 +1360,7 @@ function PurchaseInvoiceEditor({
       );
     } catch {
       setRecoveryError(
-        "Draft recovery is unavailable in this browser. Keep this tab open until Save Draft succeeds.",
+        "Draft recovery is unavailable in this browser. Keep this tab open until Save draft succeeds.",
       );
     }
   }, [
@@ -1957,7 +1956,7 @@ function PurchaseInvoiceEditor({
    * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
    */
   const processSavedInvoice = async () => {
-    if (!access.automate || processLock.current || draftWriteBlocked) return;
+    if (!access.automate || processLock.current || postingLock.current === editorGeneration.current || draftWriteBlocked) return;
     processLock.current = true;
     const attempt = captureAttempt();
     setProcessing(true);
@@ -1967,7 +1966,7 @@ function PurchaseInvoiceEditor({
     setNotice(null);
     try {
       if (reviewAccepted && canReview && access.commit) {
-        await reviewAndCommit();
+        await saveAndPostInvoice();
         return;
       }
       const productsReady = catalogueReady || await refreshMasterMatches();
@@ -2022,7 +2021,7 @@ function PurchaseInvoiceEditor({
       ) {
         setManualReviewCandidateId(savedForReview.id);
         setNotice(
-          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review below, then choose Save & Process.`,
+          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review below, then choose ${savedForReview.workflowReceiptId ? "Save & post bill" : "Save & add stock"}.`,
         );
       }
     } catch (err) {
@@ -2459,37 +2458,6 @@ function PurchaseInvoiceEditor({
     }
   };
 
-  /**
-   * @cc [owner:nareshshah139] reviewed-bill-recovery-ui
-   * Reopening MUST submit the saved revision and operator reason; an uncertain response MUST
-   * refresh server status before permitting further edits or stock commit.
-   */
-
-
-  const commitStock = async () => {
-    if (!access.commit || !activeInvoice || draftWriteBlocked) return;
-    const confirmed = window.confirm(`Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`);
-    if (!confirmed) return;
-    const id = activeInvoice.id;
-    const attempt = captureAttempt();
-    setNotice(null);
-    setError(null);
-    setCommitting(true);
-    setUnknownStockInvoiceId(id);
-    try {
-      await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
-    } catch (err) {
-      captureRecovery(err, attempt);
-      captureCatalogueFailure(err, attempt);
-    } finally {
-      if (attemptCurrent(attempt)) await refreshStockStatus(id);
-      if (attemptCurrent(attempt)) {
-        setCommitting(false);
-        focusActionFeedback();
-      }
-    }
-  };
-
   const refreshStockStatus = async (invoiceId: string) => {
     const attempt = captureAttempt();
     setRefreshingStockStatus(true);
@@ -2520,7 +2488,9 @@ function PurchaseInvoiceEditor({
         setRecovery(null);
         setError(null);
         setNotice(
-          `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
+          invoice.workflowReceiptId
+            ? `Bill ${invoice.invoiceNumber} posted. Stock received earlier · 0 added again.`
+            : `Stock added for ${invoice.invoiceNumber}. The saved record confirms the operation completed.`,
         );
         window.dispatchEvent(new CustomEvent("pharmacy-dashboard-refresh"));
       }
@@ -2567,6 +2537,11 @@ function PurchaseInvoiceEditor({
     focusProductMatching();
   };
 
+  /**
+   * @cc [owner:nareshshah139] reviewed-bill-recovery-ui
+   * Reopening MUST submit the saved revision and operator reason; an uncertain response MUST
+   * refresh server status before permitting further edits or stock commit.
+   */
   const reopenReviewedInvoice = async () => {
     if (!canReopenReview || !activeInvoice?.updatedAt || busy) return;
     setReopeningReview(true);
@@ -2594,6 +2569,7 @@ function PurchaseInvoiceEditor({
   };
 
   const saveIncompleteDraft = async () => {
+    if (postingLock.current === editorGeneration.current) return;
     if (!access.create || saving || draftWriteBlocked) return;
     setSaving(true);
     setError(null);
@@ -2886,42 +2862,74 @@ function PurchaseInvoiceEditor({
       cancelled = true;
     };
   }, [access.create, receiptId, recoveryReady]);
-  const reviewAndCommit = async () => {
-    if (
-      !activeInvoice ||
-      !access.review ||
-      !access.commit ||
-      !reviewAccepted ||
-      !catalogueReady ||
-      draftWriteBlocked
-    )
+  /**
+   * @cc [owner:nareshshah139,label:product] purchase-explicit-posting
+   * Explicit posting MUST save new or editable corrections, review the saved invoice and commit
+   * once after human confirmation. Reviewed invoices MUST resume at commit without saving again.
+   * Unresolved checks, historical holds, missing permissions or stale revisions MUST block posting.
+   */
+  /**
+   * @cc [owner:nareshshah139,label:state] purchase-posting-exact-id-recovery
+   * An uncertain review or commit MUST refresh the ID returned by the successful save. Failed
+   * refresh MUST block writes; only confirmed STOCK_COMMITTED may report success or refresh stock.
+   */
+  const saveAndPostInvoice = async () => {
+    if (postingLock.current === editorGeneration.current || saveLock.current || draftWriteBlocked || !access.commit) return;
+    const alreadyReviewed = activeInvoice?.status === "REVIEWED";
+    if (alreadyReviewed) {
+      if (!window.confirm(activeInvoice.workflowReceiptId
+        ? `Post bill ${activeInvoice.invoiceNumber} against the earlier stock receipt? No stock will be added again.`
+        : `Add stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory.`)) return;
+    } else if (!access.create || !access.review || !reviewAccepted || !catalogueReady || !reviewDate || historicalStockHold ||
+      currentHeaderFlags.length || currentLineFlags.some(flags => flags.length) ||
+      (activeInvoice && (!editingSelectedInvoice || ["STOCK_COMMITTED", "CANCELLED"].includes(activeInvoice.status)))) {
       return;
+    }
     const attempt = captureAttempt();
-    let stockAttempted = false;
-    const id = activeInvoice.id;
-    setReviewing(true);
+    postingLock.current = attempt.generation;
+    let phase: { kind: "saving" } | { kind: "reviewing" | "committing"; invoiceId: string } = { kind: "saving" };
+    setReviewing(!alreadyReviewed);
+    setNotice(null);
     setError(null);
     try {
-      const saved =
-        editingId === activeInvoice.id ? await saveDraft() : activeInvoice;
-      if (!saved || !attemptCurrent(attempt)) return;
-      await apiClient.reviewPharmacyPurchaseInvoice(saved.id, {
-        expectedUpdatedAt: saved.updatedAt,
-        goodsReceivedDate: reviewDate,
-        handwrittenNotes: saved.handwrittenNotes || undefined,
-      });
-      if (!attemptCurrent(attempt)) return;
-      stockAttempted = true;
-      setUnknownStockInvoiceId(id);
-      await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(id);
+      let invoice = alreadyReviewed ? activeInvoice : await saveDraft();
+      if (!invoice || !attemptCurrent(attempt)) return;
+      if (!alreadyReviewed && invoice.status !== "STOCK_COMMITTED") {
+        const issues = purchaseBlockingIssues(invoice.reconciliationIssues || []);
+        if (invoice.unresolvedOcrFlags || purchaseBlockingIssues(invoice.ocrFlags || []).length ||
+          invoice.items?.some(item => purchaseBlockingIssues(item.ocrFlags || []).length) ||
+          !((invoice.status === "DRAFT" && issues.length === 0) || canResumeManualReview(invoice))) {
+          setError(`Invoice saved. Stock not added. ${issues.join(" ") || "Resolve the remaining invoice checks before adding stock."}`);
+          return;
+        }
+        phase = { kind: "reviewing", invoiceId: invoice.id };
+        const reviewed = await apiClient.reviewPharmacyPurchaseInvoice<PurchaseInvoice>(invoice.id, {
+          expectedUpdatedAt: invoice.updatedAt,
+          goodsReceivedDate: reviewDate,
+          handwrittenNotes: invoice.handwrittenNotes || undefined,
+        });
+        if (!attemptCurrent(attempt)) return;
+        if (reviewed?.id !== invoice.id || reviewed.status !== "REVIEWED")
+          throw new Error("Review did not return a confirmed outcome. Checking the saved record.");
+        invoice = reviewed;
+        setActiveInvoice(reviewed);
+        setDraftServerRevision(reviewed.updatedAt || null);
+      }
+      phase = { kind: "committing", invoiceId: invoice.id };
+      setReviewing(false);
+      setCommitting(true);
+      setUnknownStockInvoiceId(invoice.id);
+      if (invoice.status !== "STOCK_COMMITTED")
+        await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(invoice.id);
     } catch (err) {
       captureRecovery(err, attempt);
       captureCatalogueFailure(err, attempt);
-
     } finally {
-      if (stockAttempted && attemptCurrent(attempt)) await refreshStockStatus(id);
+      if (phase.kind !== "saving" && attemptCurrent(attempt)) await refreshStockStatus(phase.invoiceId);
+      if (postingLock.current === attempt.generation) postingLock.current = null;
       if (attemptCurrent(attempt)) {
         setReviewing(false);
+        setCommitting(false);
         focusActionFeedback();
       }
     }
@@ -2957,6 +2965,7 @@ function PurchaseInvoiceEditor({
   const stockAdded = !stockStatusUnknown &&
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
   const linkedReceipt = !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
+  const postingLabel = linkedReceipt ? "Save & post bill" : "Save & add stock";
   const stockReceivedEarlier = stockAdded && linkedReceipt;
   const committedLabel = stockReceivedEarlier
     ? "Invoice posted · stock received earlier"
@@ -3267,9 +3276,7 @@ function PurchaseInvoiceEditor({
         canEdit={!!access.editSupplier}
         readOnly={!editingChecks}
         disabled={busy}
-        nextAction={
-          "Save corrections"
-        }
+        nextAction={postingLabel}
         onChange={(distributorName, distributorGstin) => {
           invalidatePending();
           setReviewAccepted(false);
@@ -3389,27 +3396,6 @@ function PurchaseInvoiceEditor({
           })}
           <p className="max-w-prose text-muted-foreground">Check these lines against the original. Retrying keeps the same confidence score. Resolve the corrections above, then confirm the final review to continue.</p>
           </details>
-        </div>
-      )}
-      {editingChecks && canReview && access.commit && (
-        <div className="flex items-start gap-1 rounded-md border p-4 text-sm">
-          <label className="flex items-start gap-3">
-            <input
-              id="purchase-final-approval"
-              type="checkbox"
-              className="mt-1"
-              checked={reviewAccepted}
-              disabled={busy}
-              onChange={(e) => setReviewAccepted(e.target.checked)}
-            />
-            <span>
-              <span className="mb-2 block"><ReviewStatus tone={reviewAccepted ? "success" : "warning"}>{reviewAccepted ? "Verified by you" : "Final check needed"}</ReviewStatus></span>
-              I verified the invoice against the original. {activeInvoice?.workflowReceiptId || workflowReceiptId ? "I approve posting this bill against the earlier stock receipt." : "I approve adding the received quantities to stock."}
-            </span>
-          </label>
-          <PurchaseHelp label="Final stock review">
-            Verify the supplier, product matches, batches, expiry, paid/free quantities and totals against the original before confirming.
-          </PurchaseHelp>
         </div>
       )}
       {editingChecks &&
@@ -3550,83 +3536,82 @@ function PurchaseInvoiceEditor({
         <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={enterCompleteInvoiceManually}>Enter complete invoice manually</Button>
         {!activeInvoice && <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => { if (window.confirm('Reject this upload without adding stock? Its archived original will be retained.')) { resetDraft(); setShowIntakeHome(true); setNotice('Upload rejected. No stock was added; the original remains in Saved uploads.'); } }}>Reject this upload</Button>}
       </div>}
-      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Save corrections to refresh the checks. Confirm the final review before choosing {linkedReceipt ? "Post bill" : "Add stock"}.</p>}
+      {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length === 0 && activeInvoice?.status !== 'REVIEWED' && <p className="text-sm">Confirm the invoice against the original, then choose {postingLabel}. Use Save draft to keep corrections without posting.</p>}
     </section>
   );
 
-  const invoiceActions = activeInvoice && (
-    <div className="flex flex-wrap items-center gap-2">
-      {stockStatusUnknown ? (
-        <Button
-          variant="outline"
-          onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)}
-          disabled={busy}
-        >
-          Refresh stock status
-        </Button>
-      ) : stockAdded ||
-        activeInvoice.status === "CANCELLED" ? null : activeInvoice.status ===
-        "REVIEWED" ? (
-        <>
-        <Button onClick={commitStock} disabled={!canCommit || busy}>
-          {committing ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <PackagePlus className="h-4 w-4" />
-          )}
-          {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
-        </Button>
-        </>
-      ) : canReview && !access.commit ? (
-        <Button onClick={reviewInvoice} disabled={busy}>
-          Mark Reviewed
-        </Button>
-      ) : editingSelectedInvoice ? (
-        <Button
-          disabled={savedFormLocked || busy || draftWriteBlocked}
-          onClick={() =>
-            reviewAccepted && canReview && access.commit
-              ? reviewInvoice()
-              : saveDraft()
-          }
-        >
-          {(saving || processing) && (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          )}
-          {saving
-            ? "Saving…"
-            : processing
-              ? "Checking invoice…"
-              : reviewAccepted && canReview && access.commit
-                ? "Complete review"
-                : "Save corrections"}
-        </Button>
-      ) : (
-        <Button
-          disabled={!access.create || busy}
-          onClick={() => editSavedDraft(activeInvoice)}
-        >
-          Review issues
-        </Button>
+  const postingBlocker = stockStatusUnknown
+    ? "Refresh stock status before continuing."
+    : draftWriteBlocked
+      ? "Reload the saved invoice to resolve the revision conflict before posting."
+      : historicalStockHold
+        ? "An inventory administrator must check this bill against opening stock before posting."
+        : !access.commit || !access.review || !access.create
+          ? "Saving and adding stock requires create, review and stock permissions."
+          : !catalogueReady
+            ? "Resolve the product checks before adding stock."
+            : confirmationCount > 0
+              ? "Finish the highlighted invoice checks before adding stock."
+              : !reviewDate
+                ? "Enter the goods received date before adding stock."
+                : null;
+  const invoiceActions = (
+    <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
+      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" &&
+        !postingBlocker && (!activeInvoice || editingSelectedInvoice) && (
+        <label className="flex items-start gap-2 text-sm">
+          <input id="purchase-final-approval" type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={reviewAccepted} disabled={busy}
+            onChange={e => setReviewAccepted(e.target.checked)} />
+          <span>I verified the invoice against the original. {linkedReceipt ? "I approve posting this bill against the earlier stock receipt." : "I approve adding the received quantities to stock."}</span>
+          <PurchaseHelp label="Final stock review">Verify the supplier, product matches, batches, expiry, paid/free quantities and totals against the original before confirming.</PurchaseHelp>
+        </label>
       )}
-      {canReopenReview && (
-        <Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy}>
-          {reopeningReview ? "Reopening review…" : "Reopen review and fix products"}
-        </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        {stockStatusUnknown ? (
+          <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
+        ) : stockAdded || activeInvoice?.status === "CANCELLED" ? null : activeInvoice?.status === "REVIEWED" ? (
+          <>
+            <Button onClick={saveAndPostInvoice} disabled={!canCommit || busy}>
+              {committing && <Loader2 className="h-4 w-4 animate-spin" />}
+              {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
+            </Button>
+            {canReopenReview && <Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button>}
+          </>
+        ) : canReview && !access.commit ? (
+          <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
+        ) : !activeInvoice || editingSelectedInvoice ? (
+          <Button onClick={saveAndPostInvoice} disabled={busy || !!postingBlocker || !reviewAccepted} aria-describedby="purchase-posting-guidance">
+            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+            {postingLabel}
+          </Button>
+        ) : (
+          <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>
+        )}
+        {!stockAdded && !savedFormLocked && (!activeInvoice || editingSelectedInvoice) && (
+          <>
+            <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={() => {
+              const errors = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts)];
+              setValidationErrors(errors);
+              return errors.length ? saveIncompleteDraft() : saveDraft();
+            }}>Save draft</Button>
+            {access.automate && <details className="relative text-sm">
+              <summary className="cursor-pointer py-2">More options</summary>
+              <div className="absolute bottom-full left-0 w-64 space-y-2 rounded-md border bg-background p-3">
+                <p className="text-muted-foreground">Automatic processing saves corrections and adds stock if every check passes.</p>
+                <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
+              </div>
+            </details>}
+          </>
+        )}
+        <span className="text-sm text-muted-foreground">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
+      </div>
+      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" && (
+        <p id="purchase-posting-guidance" className="text-sm text-muted-foreground">
+          {postingBlocker || (!reviewAccepted ? "Confirm the invoice against the original to enable posting." : linkedReceipt ? "Posts the bill against stock received earlier. No stock is added again." : "Saves the invoice and adds the received quantities after review.")}{" "}
+          {!!postingBlocker && <a className="underline underline-offset-4" href="#purchase-review-checklist">Review checks</a>}
+        </p>
       )}
-      {editingSelectedInvoice && !stockAdded && !savedFormLocked && (
-        <details className="text-sm">
-          <summary className="cursor-pointer py-2">More options</summary>
-          <div className="space-y-3 py-2">
-            <Button variant="outline" onClick={saveIncompleteDraft} disabled={busy || draftWriteBlocked}>Save draft for later</Button>
-            {access.automate && <div>
-              <p className="mb-2 max-w-prose text-muted-foreground">Automatic processing saves corrections and adds stock if every check passes.</p>
-              <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
-            </div>}
-          </div>
-        </details>
-      )}
-    </div>
+    </section>
   );
 
   const recentInvoices = (
@@ -3749,8 +3734,8 @@ function PurchaseInvoiceEditor({
           </p>
         )}
         {activeInvoice && editingSelectedInvoice && !savedFormLocked && access.create && (
-          <section className="space-y-2 rounded-md border p-3 text-sm">
-            <p className="font-medium">Correct the earlier stock receipt</p>
+          <details open={linkedReceipt || undefined} className="space-y-2 rounded-md border p-3 text-sm">
+            <summary className="cursor-pointer font-medium">{linkedReceipt ? "Correct the earlier stock receipt" : "Link stock received earlier"}</summary>
             <p>Choose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.</p>
             <div className="flex flex-wrap items-end gap-2">
               <label>Receipt reference
@@ -3778,7 +3763,7 @@ function PurchaseInvoiceEditor({
                 }
               }}>Remove incorrect receipt link</Button>}
             </div>
-          </section>
+          </details>
         )}
         {!activeInvoice && serverDrafts.length > 0 && (
           <section className="space-y-2">
@@ -3852,7 +3837,6 @@ function PurchaseInvoiceEditor({
             >
               New invoice
             </Button>
-            {invoiceActions}
           </nav>
         )}
         {stockAdded && activeInvoice?.committedItems?.length && (
@@ -3937,33 +3921,7 @@ function PurchaseInvoiceEditor({
             >
               New invoice
             </Button>
-            {!activeInvoice && (
-              <Button
-                variant="outline"
-                onClick={saveIncompleteDraft}
-                disabled={busy || savedFormLocked || draftWriteBlocked}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Save Draft
-              </Button>
-            )}
-            {!activeInvoice && access.create && (
-              <Button
-                disabled={busy || draftWriteBlocked}
-                onClick={saveDraft}
-              >
-                {saving ? "Saving…" : "Save invoice"}
-              </Button>
-            )}
-            {!activeInvoice && access.automate && <details className="text-sm">
-              <summary className="cursor-pointer py-2">Automatic processing</summary>
-              <p className="my-2 max-w-prose text-muted-foreground">Saves corrections and adds stock if every automatic check passes.</p>
-              <Button variant="outline" disabled={busy || draftWriteBlocked} onClick={processSavedInvoice}>{saving ? "Saving…" : processing ? "Checking invoice…" : "Save & Process"}</Button>
-            </details>}
+
           </div>
         </div>
 
@@ -5745,7 +5703,7 @@ function PurchaseInvoiceEditor({
                             onClick={() => {
                               setSourceDocument(document);
                               setNotice(
-                                "Original selected for this draft. Save Draft links the file to the invoice.",
+                                "Original selected for this draft. Save draft links the file to the invoice.",
                               );
                             }}
                           >
@@ -5877,6 +5835,7 @@ function PurchaseInvoiceEditor({
             />
           )}
         </div>
+        {(!showIntakeHome || !activeInvoice) && (hasDraftContent || manualEntry) && invoiceActions}
       </div>
     </PurchaseSourceContext.Provider>
     </PurchaseFieldReviewContext.Provider>
