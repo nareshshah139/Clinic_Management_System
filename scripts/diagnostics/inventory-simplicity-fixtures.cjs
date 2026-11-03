@@ -174,6 +174,8 @@ http
         ...payload,
         id: "bill-1",
         status: "DRAFT",
+        stockCommittedAt: null,
+        stockCommitReference: null,
         unresolvedOcrFlags: 0,
       };
       body = invoice;
@@ -183,8 +185,18 @@ http
     } else if (p.endsWith("/commit-stock")) {
       invoice.status = "STOCK_COMMITTED";
       invoice.stockCommitReference = "LOCAL-ONLY";
+      invoice.stockCommittedAt = new Date().toISOString();
       body = invoice;
-    } else if (p.endsWith("/master-matches")) body = { matches: [] };
+    } else if (p.endsWith("/master-matches")) body = {
+      matches: payload.items.map((item, lineIndex) => ({
+        lineIndex, ocr: item, candidates: [], recommendedAction: "REVIEW_MATCHES",
+        catalogueResolution: {
+          state: "ready",
+          product: { id: `synthetic-${lineIndex}`, name: item.productName,
+            packSizeLabel: item.packSize, manufacturerName: item.manufacturer, price: 0 },
+        },
+      })),
+    };
     else if (p.includes("/actions"))
       body = { permissions: {}, related: [], events: [] };
     else if (p === "/drugs/inventory-change-requests")

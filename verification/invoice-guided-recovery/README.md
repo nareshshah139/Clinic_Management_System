@@ -37,7 +37,7 @@ Locked invoices, existing reviewed invoices, explicit reopening, cancellations, 
 | Current or stale operation | `sameCatalogueRequest`, `catalogueCurrent`, `attemptCurrent` | Request identity unit tests and deferred-response component tests. |
 | `BeginCheck`, check response and failure | `refreshMasterMatches` | Exact-readiness parsing, check-only retry, stale-response component tests. |
 | Product edit, save, failure, saved recheck | `saveProductDetails`, `PurchaseProductDetails` | Saved-check-failed browser path, retained-form tests, no stock call assertions. |
-| `DraftSaved`, review response, catch and cleanup | `reviewAndCommit`, `captureCatalogueFailure` | Late rejection after switching invoices and post-await identity regressions. |
+| `DraftSaved`, review response, catch and cleanup | `saveAndPostInvoice`, `captureCatalogueFailure` | Late rejection after switching invoices and post-await identity regressions. |
 | `ReviewCleanup`, `FocusCallback` | `focusActionFeedback` | Queued-focus generation check and current-editor feedback tests. |
 | Commit, lost response, readback | Commit API call and `refreshStockStatus` | Existing stock uncertainty and readback tests. Database semantics remain an assumption. |
 
