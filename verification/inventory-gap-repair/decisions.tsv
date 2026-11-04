@@ -1,0 +1,30 @@
+ts	phase	decision	why	evidence	result
+2026-11-04T05:47:03.461734+00:00	frame	Work from isolated main checkout	Preserve unrelated local edits	plan.txt	base 6084c1c
+2026-11-04T05:47:03.462081+00:00	design	Compare table and exceptions-first designs	Find smallest safe review flow	design-a;design-b	in progress
+2026-11-04T05:47:03.462084+00:00	lists	One query-scoped resource model for three lists	Loading, failure and zero records must be distinct; stale responses must not replace current filters	frontend/src/components/inventory/useInventoryResource.ts	implementation ready; tests pending
+2026-11-04T05:47:03.462086+00:00	review	Final explicit action owns reviewed-value snapshot	Avoid stale React closure and redundant acknowledgments	plan.txt	design in progress
+2026-11-04T05:48:45.589667+00:00	lists	List loading, failure, retry and filter ordering verified	Behavior tests exercise visible recovery and late response suppression	frontend/__tests__/inventory/InventoryWorkspace.permissions.test.tsx	35 scoped frontend tests pass
+2026-11-04T06:06:18.462382+00:00	backend	Reuse one guarded metadata command and common sale writer	Prevent legacy endpoint and caller bypasses	backend/src/modules/inventory/inventory-item-metadata.ts	583 scoped tests and6PostgreSQL tests pass
+2026-11-04T06:06:18.462438+00:00	review	Reload current query after delayed mutations	Independent review reproduced stale callback causing permanent loading	frontend/__tests__/inventory/InventoryWorkspace.permissions.test.tsx	fixed;16tests pass; reviewer repro passes
+2026-11-04T06:06:18.462441+00:00	review	Require server-defined proposal permissions	Generated permission metadata could weaken item-write authorization	backend/src/modules/pharmacy-agent/pharmacy-agent.service.spec.ts	before2fail11pass;after13pass;independent repro blocked
+2026-11-04T06:06:18.462442+00:00	browser	Keep corrections plus one final confirmation	Same-case observed interactions include real completion	/private/tmp/cms-gap-browser-20261104/multi-result.json	3to1;11to5;20to11;synthetic UI
+2026-11-04T06:06:18.462443+00:00	review	Preserve review-only operator completion	Removing per-field checks must not strand users without commit permission	frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx	source fix;role verification pending
+2026-11-04T06:06:18.462444+00:00	review	Reject invalid resulting bulk percentages and tax modes	Batch previews must not bless malformed resulting rows	frontend/src/lib/purchase-invoice-batch.ts	independent helper probes pass
+2026-11-04T06:06:18.462445+00:00	visual	Reduce phone sticky footer	First visual pass found focused inputs obscured	/private/tmp/cms-gap-browser-20261104/multi-review-phone.png	correction integrated;confirmation pending
+2026-11-04T06:13:01.940301+00:00	design	Choose exceptions-first ownership with compact worksheet	Keep one owner and explicit immutable submit snapshot	design-synthesis.txt	complete;independent judge
+2026-11-04T06:13:01.940373+00:00	review	Review-only completion verified	Staff may review without stock permission	browser/review-only-result.json	one action;REVIEWED;zero commit calls
+2026-11-04T06:13:01.940375+00:00	visual	Phone correction remains visible	Reduce fixed footer and use safe focus target	browser/multi-geometry.json	210.5px footer;focused input entirely above it
+2026-11-04T06:13:01.940376+00:00	verification	Run real HTTP and database recovery	Browser fixtures cannot establish ledger effects	database-ui-recovery.json	five scenarios;37assertions;passed
+2026-11-04T06:13:01.940377+00:00	contracts	Validate source contract attachment and syntax	Preserve observable boundary obligations	/private/tmp/cms-gap-final-contracts.log	30files;60checks passed
+2026-11-04T06:13:01.940378+00:00	review	Use direct cleanup checks	deslop skill absent	/private/tmp/cms-gap-independent-review.txt	no unresolved findings;no comment deletions
+2026-11-04T06:17:44.211021+00:00	verification	Fix test query ambiguity	Validation alert and footer contain same message	frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx	test-only fix;all710frontend tests pass
+2026-11-04T06:17:44.211157+00:00	verification	Freeze tested application source	Final browser fingerprints match all9files	browser/source-fingerprints.tsv	24bounded browser cases pass
+2026-11-04T06:17:44.211159+00:00	verification	Build complete release	Verify shared types and both applications together	validation.tsv	allworkspaces build;585backend tests pass
+2026-11-04T06:17:44.211161+00:00	ci	Enable API-boundary PostgreSQL gate	Keep six new boundary regressions active in CI	.github/workflows/tests.yml	YAML parsed;local6test gate passes
+2026-11-04T06:17:44.211163+00:00	docs	Separate commit-only resume from draft saving	Already-reviewed invoices must not be resaved by retry	after-ocr.mmd	independent graph correction
+2026-11-04T06:17:44.211164+00:00	docs	Match database graph labels to actual scenarios	Duplicate correction and reversal retry are narrower than generic stock/status claims	after-workspace.mmd	independent graph correction
+2026-11-04T06:43:48.152449+00:00	ci	Revalidate historical stock/intake source map	CI rejected ten stale hashes; do not weaken drift guard	../inventory-state-clarity-fix-2026-10-25/report.md	36hashesmatch;3material dependenciesadded;unchangedmodelpasses
+2026-11-04T06:43:48.152505+00:00	ci	Restore one visible interrupted-import recovery control	Collapsed wrapper hid existing button and added duplicate action	frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx	newvisibilitytestred;146Workbenchtestsgreen
+2026-11-04T06:43:48.152507+00:00	browser	Run unchanged prior count/intake scenario	CI failure must recover through real mounted UI and DB	prior-count-intake-recovery.json	20assertionspass;stockpreserved
+2026-11-04T06:43:48.152508+00:00	verification	Rebuild recovery visibility fix	Verifyfinalapplicationratherthanoldbundle	/private/tmp/cms-gap-import-fix-build.log	allworkspacesPASS
+2026-11-04T06:43:48.152509+00:00	review	Recheck source mapping and recovery-entry fix	Independent proof of dependencies and visible-action behavior	independent-review.txt	PASSWITHNOTES;noactionablefindings

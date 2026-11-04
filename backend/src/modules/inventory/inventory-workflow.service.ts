@@ -283,6 +283,11 @@ export class InventoryWorkflowService {
    * Invalid physical counts MUST identify the batch and field, preserve blank as uncounted,
    * and reject the save without changing stock or retaining a partial draft.
    */
+  /**
+   * @cc [owner:nareshshah139,label:security] workflow-save-replay-access
+   * A request-key replay MUST require read access to the stored document kind and match the
+   * submitted kind before returning it. A different kind MUST fail without mutation or disclosure.
+   */
   async saveDocument(
     actor: WorkflowActor,
     dto: SaveWorkflowDocumentDto,
@@ -320,7 +325,12 @@ export class InventoryWorkflowService {
             },
           },
         });
-        if (duplicate) return this.plain(duplicate);
+        if (duplicate) {
+          await this.authorize(actor, duplicate.kind);
+          if (duplicate.kind !== dto.kind)
+            throw new ConflictException('This request key already identifies another document kind. Reload its saved outcome.');
+          return this.plain(duplicate);
+        }
       }
       const supplier = dto.supplierId
         ? await tx.supplier.findFirst({

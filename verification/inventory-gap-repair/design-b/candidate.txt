@@ -1,0 +1,142 @@
+Candidate B. Exceptions-first inline worksheet.
+
+Plan
+1. Read Principles. Complete.
+2. Ground. Complete for the editor, review helpers, and focused tests.
+3. Sketch. Complete below.
+4. Agree. Parent synthesis owns the choice.
+5. Implement. Skip. This lane is read-only design.
+6. Scrap. Revisit if immutable confirmation cannot fit the existing posting shell.
+
+Usage, written before the types
+The operator opens an OCR draft and immediately sees invoice identity, stock status, the original, and an editable worksheet.
+Every line shows product, batch, expiry, paid/free quantity, purchase rate, and tax. Errors appear beside the field.
+Secondary commercial fields remain in a named row disclosure. A flagged secondary field opens that disclosure automatically.
+An exceptions strip links to unresolved fields but does not make the operator acknowledge each field separately.
+The bottom bar says “Confirm reviewed values & add stock”. Its help names the supplier, products, batches, expiry, quantities, and totals being confirmed.
+The receipt variant says “Confirm & post bill” and “Stock received earlier. No stock is added again.”
+The click is the explicit human confirmation of the current complete invoice. It saves that exact snapshot, reviews it, posts it, and reads back the authoritative status.
+Save draft preserves unresolved flags and never posts. A successful local edit does not turn the whole invoice green.
+
+Call site 1, private PurchaseInvoiceEditor handler
+const result = prepareReviewSnapshot(captureCurrentDraft());
+if (result.kind === 'blocked') { showIssues(result.issues); focusFirstIssue(); return; }
+await saveAndPostInvoice({ kind: 'confirm-current', snapshot: result.snapshot });
+
+Call site 2, editing a batch or expiry
+updateLine(line.localId, 'batchNumber', enteredValue);
+// The owner validates the new value and records only the corresponding current-value check.
+// Remaining uncertainty can be confirmed together by the final explicit action.
+
+Call site 3, scoped repeated GST or discount
+const proposal = previewSharedTerms(captureCurrentDraft(), selectedIds, change);
+showBeforeAfter(proposal);
+applySharedTerms(proposal); // Explicit “Apply to 4 selected rows”, draft only.
+undoSharedTerms();          // Restores only this operation's fields and review evidence.
+
+Problem and grounding
+PurchaseInvoiceEditor owns header, lines, OCR flags, checked snapshots, catalogue proof, revision identity, posting locks, and recovery.
+updateLine currently invalidates pending operations and final approval (PurchaseInvoiceWorkbench.tsx:1471).
+pendingPurchaseOcrFlags restores checks after dependency changes; expiry year, supplier identity, and credit due date are coupled (PurchaseFieldReview.tsx:40-64).
+PurchaseOcrChecklist duplicates every uncertainty as a card and a Mark checked action (PurchaseOcrChecklist.tsx:18-67).
+The editor then adds a checkbox and a posting click (PurchaseInvoiceWorkbench.tsx:3558-3587).
+saveDraft builds its payload from captured React state (PurchaseInvoiceWorkbench.tsx:2327-2369).
+saveAndPostInvoice already serializes save, review, commit and fresh readback (PurchaseInvoiceWorkbench.tsx:2863-2936).
+The redesign changes how review intent enters that shell, not the shell's server identity, concurrency, or recovery ownership.
+No ancestor CONTRACTS was found for these component/helper paths. Applicable inline contracts were read.
+
+Shape
+Keep HeaderForm and LineForm private in PurchaseInvoiceWorkbench.tsx. Add a small local domain shape, not a second form store.
+type DraftSnapshot = Readonly<{
+  generation: number; invoiceId: string | null; expectedUpdatedAt: string | null;
+  header: HeaderForm; lines: readonly LineForm[]; headerFlags: readonly string[];
+  checked: Record<string, PurchaseCheckedFields>; printedAmounts: Record<string, unknown> | null;
+  reviewDate: string; sourceDocumentIds: readonly string[]; workflowReceiptId: string | null; requestKey: string;
+}>;
+type ConfirmedDraft = Readonly<{ draft: DraftSnapshot; checks: Record<string, PurchaseCheckedFields> }>;
+type ReviewPreparation = { kind: 'blocked'; issues: readonly PurchaseReviewIssue[] }
+  | { kind: 'ready'; snapshot: ConfirmedDraft };
+type PostIntent = { kind: 'confirm-current'; snapshot: ConfirmedDraft } | { kind: 'resume-reviewed' };
+type SharedTerms = { kind: 'discount'; discountPercent: string }
+  | { kind: 'gst'; cgstPercent: string; sgstPercent: string; igstPercent: string };
+type SharedPatch = Readonly<{
+  generation: number; invoiceId: string | null; selectedIds: readonly string[];
+  cells: readonly { localId: string; field: keyof LineForm; before: string; after: string }[];
+  checkedBefore: Record<string, PurchaseCheckedFields>;
+}>;
+type BatchState = { kind: 'idle' } | { kind: 'preview'; proposal: SharedPatch }
+  | { kind: 'applied'; undo: SharedPatch };
+function prepareReviewSnapshot(draft: DraftSnapshot): ReviewPreparation { throw new Error('not implemented'); }
+function previewSharedTerms(draft: DraftSnapshot, selected: ReadonlySet<string>, terms: SharedTerms): SharedPatch { throw new Error('not implemented'); }
+async function saveDraft(confirmed?: ConfirmedDraft): Promise<PurchaseInvoice | undefined> { throw new Error('not implemented'); }
+async function saveAndPostInvoice(intent: PostIntent): Promise<void> { throw new Error('not implemented'); }
+
+Single-owner rules
+All form mutations remain in PurchaseInvoiceEditor. Child controls receive values and commands, never their own copied draft.
+Model the Domain changed the bulk design to a preview/applied union rather than independent preview, undo, and busy booleans.
+Experience First changed the review design to field corrections plus one final intent, removing repeated field acknowledgements and the checkbox.
+prepareReviewSnapshot computes a fresh immutable payload synchronously at the final click. It must not set React state and then call the old closure.
+The snapshot contains actual printed totals. Never replace printed amounts with computed totals to silence reconciliation.
+The same snapshot supplies flags, header, lines, checked dependencies, and saved payload. Apply its evidence to UI state only after accepting that intent.
+Soft OCR uncertainty may be confirmed by this explicit whole-invoice action when its values are valid.
+Missing/invalid values, upload-only issues, expired batches, real total mismatches, product ambiguity, missing catalogue metadata, historical holds, and stale/unknown state remain hard blockers.
+Unknown flag categories require a visible manual issue, not silent blanket deletion. Reuse current cause-specific parsing and server validation.
+The current catalogue proof must still match the current invoice generation and product identity. Confirmation itself must not invalidate it.
+An edit clears final intent. A dependency edit invalidates prior evidence unless that complete dependent check is explicitly covered by the current input action.
+Server-returned flags remain authoritative after saving; any new unresolved flag stops review/commit.
+
+Bulk rules
+Start with GST components and discount only. Exclude product identity, batch, expiry, quantities, prices, and printed totals.
+Only explicitly selected row IDs are in scope. Preview includes names, old values, new values, and selected count.
+GST changes use all three components explicitly so applying interstate IGST cannot accidentally retain CGST/SGST.
+Validate the proposed full rows with existing numeric/discount/tax checks before enabling Apply.
+Any invoice switch, row deletion, or intervening draft edit expires the preview. Selection never follows row indexes.
+Apply is one local mutation and one generation invalidation. It does not call supplier, catalogue, draft-save, review, or stock APIs.
+Undo restores the captured cells and associated review evidence only if they still equal the applied values and the same invoice is editable.
+Unrelated later edits remain intact. If an affected cell changed again, explain that the batch undo has expired rather than overwriting newer work.
+Unknown stock status, stale revision, posting in progress, or read-only permission disables Apply and Undo.
+
+Module map and visible hierarchy
+PurchaseInvoiceWorkbench.tsx owns the domain snapshot, final command, shared-term proposal, and existing form state.
+PurchaseOcrChecklist.tsx becomes compact issue rendering with inline correction links. Remove onResolve/onChecked public props once its only Workbench consumers migrate.
+PurchaseFieldReview.tsx retains dependency snapshots and invalidation. Extend its tests for explicit edit evidence and final snapshot confirmation.
+purchase-invoice-review.ts remains cause/target classification. It must not own transport or posting state.
+PurchaseDocumentActions stays reusable and moves after active review in a “Invoice history and documents” disclosure (current early placement at Workbench:3874).
+The worksheet replaces expanded row forms at Workbench:5013. Matching details appear on the affected row; source preview stays beside it on desktop and directly accessible on mobile.
+Invoice header, blocking exceptions, worksheet, printed/computed totals, then the sticky completion action precede history and generic recovery tools.
+Existing recovery controls stay visible whenever a recovery state exists. “Recover another import” becomes secondary rather than an always-open panel.
+The status badge at Workbench:4069 must choose label and tone from stockStatusUnknown before saved invoice status.
+Reviewed reopening shows an inline reason field and calls reopenPharmacyPurchaseInvoiceReview(id, expectedUpdatedAt, reason).
+
+Contracts to reconcile intentionally
+purchase-check-before-stock and purchase-explicit-posting must define the explicit button intent as final human confirmation, with the same server stages and hard blockers.
+ocr-check-color-evidence and checked-value-identity must permit verified input/final action as evidence, while preserving dependency invalidation and unknown-state suppression.
+purchase-required-controls-visible still requires complete commercial field access and keyboard correction paths. Do not hide unresolved required fields in closed disclosures.
+reviewed-bill-recovery-ui remains unchanged in meaning. Implement the missing operator reason rather than weaken it.
+Add narrow contracts for selection-only draft effects, preview invalidation, and conflict-safe undo. Owner remains nareshshah139.
+
+Tradeoffs accepted
+We accept local additions to the mature editor in exchange for retaining one owner of invoice/revision/catalogue state and a short trace to posting.
+We accept always showing the compact product/batch/expiry/quantity/rate fields in exchange for avoiding row-open clicks for ordinary OCR corrections.
+We accept a limited set of shared terms in exchange for making bulk scope understandable and keeping identity/stock-affecting guesses out of it.
+
+Alternatives considered
+A separate review wizard hides form detail but adds navigation state and scatters correction, selection, and submission ownership across steps.
+A generic spreadsheet engine offers broader reuse but exposes column adapters, validation metadata, and patch serialization to every caller for one editor.
+An “accept all flags” button beside the existing checkbox adds an extra path and can discard hard failures. It does not remove the duplicated review model.
+
+Synthesis decision
+Parent fills this after comparing candidate A. This candidate favors the existing editor shell and a compact inline worksheet over a new review framework.
+
+Open questions and risks
+Can all server reconciliation messages be separated into hard corrections and confirmable uncertainty using the existing parser? Unknown messages must remain visible until verified.
+Will the full printed-total comparison fit the phone layout without obscuring the correction field? Validate desktop and 390px mobile together.
+
+Next implementation step and proof
+Implement immutable final-review preparation and migrate saveDraft's caller before changing layout, then prove ordinary completion and each blocker through real component interactions.
+Adapt tests at PurchaseInvoiceWorkbench.test.tsx:129,147,160,174,191,207,231,251 for one final click, exact saved ID, draft neutrality, stale retention, uncertain readback and receipt semantics.
+Add selected-row-only preview/apply/undo tests, invalid combined GST/discount rejection, stale preview rejection, and zero network writes from bulk edits.
+Keep the product recheck tests at :299 and :357, including a failed recheck and delayed older response.
+Complete stale compare/reconcile/resubmit and unknown-status readback recovery in browser fixtures. Confirm no “Ready to add stock” label during unknown status.
+Baseline observations supplied by the parent are 3, 11 and 20 interactions for unchanged, four-edit and ten-edit fixtures. Candidate targets are 1, 5 and 11.
+Those targets exclude reading, scrolling and individual keystrokes. They are design targets until the same browser scenarios are rerun.

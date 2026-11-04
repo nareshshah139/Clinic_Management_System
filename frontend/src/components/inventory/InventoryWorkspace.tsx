@@ -7,6 +7,7 @@ import { InventoryAction } from "./InventoryPresentation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api";
+import { useInventoryResource } from "./useInventoryResource";
 import { purchaseInvoiceStatusLabel } from "@/lib/purchase-invoice-review";
 import { PurchaseInvoiceWorkbench } from "@/components/pharmacy/PurchaseInvoiceWorkbench";
 import { PurchaseLedger } from "@/components/pharmacy/PurchaseLedger";
@@ -731,44 +732,17 @@ function WorkspaceToday({ navigate, open }: any) {
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
 function PurchaseRegister({ query, navigate, onOpen }: any) {
-  const [data, setData] = useState<any>(null),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(false);
-  const load = async () => {
-    setLoading(true);
-    try {
-      const q = new URLSearchParams({
-        page: query.page || "1",
-        limit: "30",
-        ...(query.status === "UNPOSTED"
-          ? { unposted: "true" }
-          : query.status
-            ? { status: query.status }
-            : {}),
-        ...(query.from ? { startDate: query.from } : {}),
-        ...(query.to ? { endDate: query.to } : {}),
-        ...(query.gstin ? { distributorGstin: query.gstin } : {}),
-        ...(query.search ? { search: query.search } : {}),
-        ...(query.source ? { source: query.source } : {}),
-      });
-      setData(await apiClient.get("/pharmacy/purchase-invoices?" + q));
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    void load();
-  }, [
-    query.status,
-    query.page,
-    query.from,
-    query.to,
-    query.gstin,
-    query.search,
-    query.source,
-  ]);
+  const q = new URLSearchParams({
+    page: query.page || "1", limit: "30",
+    ...(query.status === "UNPOSTED" ? { unposted: "true" } : query.status ? { status: query.status } : {}),
+    ...(query.from ? { startDate: query.from } : {}),
+    ...(query.to ? { endDate: query.to } : {}),
+    ...(query.gstin ? { distributorGstin: query.gstin } : {}),
+    ...(query.search ? { search: query.search } : {}),
+    ...(query.source ? { source: query.source } : {}),
+  });
+  const { data, error, status, reload } = useInventoryResource<any>("/pharmacy/purchase-invoices?" + q);
+  const loading = status === "loading";
   return (
     <section className="space-y-4">
       <h2 className="text-2xl font-semibold">Purchase register</h2>
@@ -865,7 +839,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
           </label>
         ))}
       </div>
-      {error && <p role="alert">{error}</p>}
+      {error && <div role="alert"><p>{error}</p><Button variant="outline" onClick={() => void reload()}>Retry invoices</Button></div>}
       <p role="status" className="text-sm">
         {loading
           ? "Loading invoices…"
@@ -892,6 +866,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
             </tr>
           </thead>
           <tbody className="divide-y">
+            {data && !data.data.length && <tr><td colSpan={6} className="p-6 text-center text-muted-foreground">No invoices match these filters.</td></tr>}
             {data?.data.map((d: any) => (
               <tr key={d.id}>
                 <td className="p-3">
@@ -963,43 +938,14 @@ function WorkflowRegister({
   onOpen,
   onReceive,
 }: any) {
-  const [data, setData] = useState<any>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+  const [error, setError] = useState(""), [busy, setBusy] = useState(false);
   const definition = workflowKinds[kind];
-  const load = async () => {
-    try {
-      setData(
-        await apiClient.get(
-          "/inventory/workspace/documents?" +
-            new URLSearchParams({
-              kind,
-              page: query.page || "1",
-              ...(query.status ? { status: query.status } : {}),
-              ...Object.fromEntries(
-                ["search", "from", "to", "gstin", "sourceId"]
-                  .filter((k) => query[k])
-                  .map((k) => [k, query[k]]),
-              ),
-            }),
-        ),
-      );
-    } catch (e: any) {
-      setError(e.message);
-    }
-  };
-  useEffect(() => {
-    load();
-  }, [
-    kind,
-    query.status,
-    query.page,
-    query.search,
-    query.from,
-    query.to,
-    query.gstin,
-    query.sourceId,
-  ]);
+  const q = new URLSearchParams({
+    kind, page: query.page || "1",
+    ...(query.status ? { status: query.status } : {}),
+    ...Object.fromEntries(["search", "from", "to", "gstin", "sourceId"].filter(k => query[k]).map(k => [k, query[k]])),
+  });
+  const { data, error: readError, status, reload: load } = useInventoryResource<any>("/inventory/workspace/documents?" + q);
   const generate = async () => {
     setBusy(true);
     setError("");
@@ -1144,6 +1090,8 @@ function WorkflowRegister({
           {error}
         </p>
       )}
+      {readError && <div role="alert"><p>{readError}</p><Button variant="outline" onClick={() => void load()}>Retry records</Button></div>}
+      {status === "loading" && <p role="status">Loading records…</p>}
       <ul className="divide-y border-y">
         {data?.rows.map((d: any) => (
           <li
@@ -1174,7 +1122,7 @@ function WorkflowRegister({
         ))}
         {data && !data.rows.length && (
           <li className="py-8 text-center text-muted-foreground">
-            No {definition.label.toLowerCase()} match this status.
+            No {definition.label.toLowerCase()} match these filters.
           </li>
         )}
       </ul>
@@ -1186,7 +1134,7 @@ function WorkflowRegister({
         >
           Previous
         </Button>
-        <span className="text-sm">{data?.total || 0} records</span>
+        <span className="text-sm">{data ? `${data.total} records` : status === "error" ? "Records unavailable" : "Loading…"}</span>
         <Button
           variant="outline"
           disabled={!data || data.page >= data.totalPages}
@@ -1199,17 +1147,8 @@ function WorkflowRegister({
   );
 }
 function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
-  const [rows, setRows] = useState<any[]>([]),
-    [selected, setSelected] = useState<any>(null),
-    [error, setError] = useState("");
-  const load = () =>
-    apiClient
-      .get<any[]>("/inventory/workspace/suppliers")
-      .then(setRows)
-      .catch((e: any) => setError(e.message));
-  useEffect(() => {
-    load();
-  }, []);
+  const [selected, setSelected] = useState<any>(null), [error, setError] = useState("");
+  const { data: rows, error: readError, status, reload: load } = useInventoryResource<any[]>("/inventory/workspace/suppliers");
   return (
     <section className="space-y-4">
       <div className="flex justify-between">
@@ -1225,11 +1164,15 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
         )}
       </div>
       {error && <p role="alert">{error}</p>}
+      {readError && <div role="alert"><p>{readError}</p><Button variant="outline" onClick={() => void load()}>Retry suppliers</Button></div>}
+      {status === "loading" && <p role="status">Loading suppliers…</p>}
+      {rows && !rows.length && <p className="py-4 text-muted-foreground">No suppliers yet.{canCreate ? " Add a supplier to start recording purchases." : " Ask an administrator to add a supplier."}</p>}
       {selected && (
         <form
           className="space-y-4 border-y py-4"
           onSubmit={async (e) => {
             e.preventDefault();
+            setError("");
             try {
               const allowed = Object.fromEntries(
                 [
@@ -1313,7 +1256,7 @@ function SupplierWorkspace({ canCreate, canUpdate, onAccount, onBills }: any) {
         </form>
       )}
       <ul className="divide-y border-y">
-        {rows.map((s) => (
+        {rows?.map((s) => (
           <li key={s.id} className="flex flex-wrap justify-between gap-3 py-4">
             <div>
               <strong>{s.name}</strong>

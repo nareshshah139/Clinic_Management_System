@@ -176,6 +176,7 @@ describe('PharmacyPartnerSalesService', () => {
       name: 'Azithral 500',
       batchNumber: 'AZT-001',
       currentStock: 5,
+      status: 'ACTIVE',
       expiryDate: new Date('2099-06-01T00:00:00.000Z'),
       drugs: [{ id: 'drug-1', name: 'Azithral 500' }],
     };
@@ -296,6 +297,7 @@ describe('PharmacyPartnerSalesService', () => {
       id: 'inventory-1',
       branchId,
       currentStock: 2,
+      status: 'ACTIVE',
       heldStock: 0,
       costPrice: 1,
     });

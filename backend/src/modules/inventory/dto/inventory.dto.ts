@@ -206,6 +206,13 @@ export class CreateInventoryItemDto extends InventoryRegimenDefaultsDto {
 }
 
 export class UpdateInventoryItemDto extends InventoryRegimenDefaultsDto {
+  @IsDateString()
+  updatedAt: string;
+
+  @IsString()
+  @IsOptional()
+  reason?: string;
+
   @IsString()
   @IsOptional()
   name?: string;

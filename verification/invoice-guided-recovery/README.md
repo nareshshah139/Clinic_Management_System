@@ -37,11 +37,14 @@ Locked invoices, existing reviewed invoices, explicit reopening, cancellations, 
 | Current or stale operation | `sameCatalogueRequest`, `catalogueCurrent`, `attemptCurrent` | Request identity unit tests and deferred-response component tests. |
 | `BeginCheck`, check response and failure | `refreshMasterMatches` | Exact-readiness parsing, check-only retry, stale-response component tests. |
 | Product edit, save, failure, saved recheck | `saveProductDetails`, `PurchaseProductDetails` | Saved-check-failed browser path, retained-form tests, no stock call assertions. |
+| `Approve`, then `BeginReview` | One explicit confirmation in `saveAndPostInvoice` captures the reviewed values and starts review | Immutable-submission and review-only component tests; single-action browser completion. The model retains these two abstract steps; it does not prove atomic refinement of the combined UI action. |
 | `DraftSaved`, review response, catch and cleanup | `saveAndPostInvoice`, `captureCatalogueFailure` | Late rejection after switching invoices and post-await identity regressions. |
 | `ReviewCleanup`, `FocusCallback` | `focusActionFeedback` | Queued-focus generation check and current-editor feedback tests. |
 | Commit, lost response, readback | Commit API call and `refreshStockStatus` | Existing stock uncertainty and readback tests. Database semantics remain an assumption. |
 
 These symbols live in [PurchaseInvoiceWorkbench.tsx](../../frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx), [purchase-invoice-catalogue.ts](../../frontend/src/lib/purchase-invoice-catalogue.ts), and [PurchaseProductDetails.tsx](../../frontend/src/components/pharmacy/PurchaseProductDetails.tsx). The formal model preserves the intent of `current-invoice-catalogue-check`, `catalogue-save-and-recheck`, and `explicit-exact-readiness`. The graph does not import production transition decisions and therefore cannot automatically establish implementation correspondence.
+
+The November 4 UI repair removes separate field acknowledgments and the final checkbox. Its broader browser stategraph is documented in [inventory-gap-repair](../inventory-gap-repair/README.md). Batch preview/undo, review-only handoff, reasoned reopening and external upload recovery are outside this finite model; their evidence must be assessed separately.
 
 ## Evidence
 

@@ -1,5 +1,5 @@
 import { readStockPage } from './inventory-stock-query';
-import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
+import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { reconcileInventoryLedger } from './inventory-ledger';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
@@ -8,7 +8,7 @@ import { PrismaService } from '../../shared/database/prisma.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
-import { inventoryProductName, retainPreviousInventoryName } from './inventory-names';
+import { inventoryProductName } from './inventory-names';
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -140,41 +140,7 @@ export class InventoryWorkspaceService {
    */
   async saveItem(actor:WorkflowActor,id:string,input:Record<string,any>) {
     await this.require(actor,'inventory:item:update');
-    try { return await this.workflow.transaction(async tx=>{
-      const item=await tx.inventoryItem.findFirst({where:{id,branchId:actor.branchId}});if(!item)throw new NotFoundException('Batch not found');
-      if(input.updatedAt!==item.updatedAt.toISOString())throw new ConflictException('Batch details changed. Reload before saving.');
-      const data:any=inventoryRegimenDefaults(input,item),meta=jsonObject(item.metadata),reason=String(input.reason||'').trim();
-      if (input.batchNumber !== undefined) {
-        const batch = String(input.batchNumber).trim();
-        if (!batch) throw new BadRequestException('Enter the batch number shown on the pack');
-        if (batch !== item.batchNumber) data.batchNumber = batch;
-      }
-      if (input.expiryDate !== undefined) {
-        const date = String(input.expiryDate), parsed = new Date(`${date}T23:59:59.999Z`);
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0,10) !== date)
-          throw new BadRequestException('Enter a valid expiry date shown on the pack');
-        if (date !== item.expiryDate?.toISOString().slice(0,10)) data.expiryDate = parsed;
-      }
-      if ((data.batchNumber !== undefined || data.expiryDate !== undefined) && !reason)
-        throw new BadRequestException('Enter a reason for correcting the batch number or expiry');
-      for(const f of ['name','genericName','brandName','category','subCategory','manufacturer','supplier','hsnCode','storageLocation','storageConditions','barcode','sku'])if(input[f]!==undefined)data[f]=String(input[f]).trim()||null;
-      if(input.name!==undefined&&!data.name)throw new BadRequestException('Product name is required');
-      if(data.name && data.name!==item.name)retainPreviousInventoryName(meta,item.name);
-      for(const f of ['barcode','sku']) if(data[f] && data[f]!==item[f] && await tx.inventoryItem.findFirst({where:{[f]:data[f],id:{not:id}},select:{id:true}})) throw new ConflictException(`This ${f.toUpperCase()} is already assigned. Choose a unique code.`);
-      for(const f of ['gstRate','minStockLevel','maxStockLevel','reorderLevel','reorderQuantity'])if(input[f]!==undefined){data[f]=input[f]===''||input[f]===null?null:Number(input[f]);if(data[f]!=null&&(!Number.isFinite(data[f])||data[f]<0||(f!=='gstRate'&&!Number.isSafeInteger(data[f]))))throw new BadRequestException(`${f} must be nonnegative`);}
-      const value=(f:string)=>Object.prototype.hasOwnProperty.call(data,f)?data[f]:item[f];
-      if(value('minStockLevel')!=null&&value('maxStockLevel')!=null&&value('minStockLevel')>value('maxStockLevel'))throw new BadRequestException('Minimum cannot exceed maximum');
-      const targetsChanged=['minStockLevel','maxStockLevel','reorderLevel','reorderQuantity'].some(f=>input[f]!==undefined&&data[f]!==item[f]);
-      if(targetsChanged&&!reason)throw new BadRequestException('Enter a reason for changing manual replenishment targets');
-      if(targetsChanged)meta.manualTargets=true;
-      for(const f of ['dosageForm','schedule','composition'])if(input[f]!==undefined)meta[f]=String(input[f]).trim();
-      if(input.status!==undefined){if(!['ACTIVE','INACTIVE','DISCONTINUED'].includes(input.status))throw new BadRequestException('Invalid item status');if(input.status!=='ACTIVE'&&(item.currentStock||item.heldStock))throw new BadRequestException('Dispose or return remaining stock before archiving the batch');data.status=input.status;}
-      data.metadata=JSON.stringify(meta);data.stockStatus=stockStatus({...item,...data});
-      const saved=await tx.inventoryItem.update({where:{id,branchId:actor.branchId,updatedAt:item.updatedAt},data});
-      const before=Object.fromEntries(Object.keys(data).map(k=>[k,item[k]]));
-      await tx.auditLog.create({data:{userId:actor.id,action:'INVENTORY_METADATA_UPDATED',entity:'InventoryItem',entityId:id,oldValues:JSON.stringify({branchId:actor.branchId,...before}),newValues:JSON.stringify({branchId:actor.branchId,...data,reason:reason||'Item metadata update'})}});
-      return saved;
-    }); } catch(error:any){if(error?.code==='P2002')throw new ConflictException('This SKU or barcode is already assigned. Choose a unique code.');if(error?.code==='P2025')throw new ConflictException('Batch details changed. Reload before saving.');throw error;}
+    return this.workflow.transaction(tx => saveInventoryItemMetadata(tx, actor, id, input));
   }
   /**
    * @cc [owner:nareshshah139,label:product] bulk-location-atomic-audit

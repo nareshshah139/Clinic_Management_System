@@ -16,6 +16,7 @@ describe('InventoryService', () => {
 
   const mockPrisma: any = {
     $transaction: jest.fn(),
+    auditLog: { create: jest.fn() },
     inventoryWorkflowEffect: {count:jest.fn()},
     inventoryStockOperation: {upsert:jest.fn()},
     inventoryItem: {
@@ -286,11 +287,13 @@ describe('InventoryService', () => {
         sku: 'PAR-500',
         barcode: '123456789',
         tags: null,
+        updatedAt: new Date('2026-11-01'),
       };
 
       const updateDto = {
         name: 'Updated Paracetamol',
         sellingPrice: 12.0,
+        updatedAt: existingItem.updatedAt.toISOString(),
       };
 
       const updatedItem = {
@@ -301,7 +304,7 @@ describe('InventoryService', () => {
       mockPrisma.inventoryItem.findFirst.mockResolvedValue(existingItem);
       mockPrisma.inventoryItem.update.mockResolvedValue(updatedItem);
 
-      const result = await service.updateInventoryItem('item-123', updateDto, 'branch-123');
+      const result = await service.updateInventoryItem('item-123', updateDto, 'branch-123', 'operator');
 
       expect(result).toMatchObject({
         id: 'item-123',
@@ -313,15 +316,15 @@ describe('InventoryService', () => {
     it('should throw NotFoundException if item not found', async () => {
       mockPrisma.inventoryItem.findFirst.mockResolvedValue(null);
 
-      await expect(service.updateInventoryItem('non-existent', {}, 'branch-123'))
+      await expect(service.updateInventoryItem('non-existent', { updatedAt: '2026-11-01T00:00:00.000Z' }, 'branch-123', 'operator'))
         .rejects.toThrow(NotFoundException);
     });
   });
 
   it('rejects posted cost and unit changes in the item master', async () => {
     mockPrisma.inventoryItem.findFirst.mockResolvedValue({id:'batch',costPrice:10,unit:'PIECES',currentStock:5});
-    await expect(service.updateInventoryItem('batch',{costPrice:20} as any,'branch-123')).rejects.toThrow(BadRequestException);
-    await expect(service.updateInventoryItem('batch',{currentStock:50} as any,'branch-123')).rejects.toThrow(BadRequestException);
+    await expect(service.updateInventoryItem('batch',{costPrice:20} as any,'branch-123','operator')).rejects.toThrow(BadRequestException);
+    await expect(service.updateInventoryItem('batch',{currentStock:50} as any,'branch-123','operator')).rejects.toThrow(BadRequestException);
     expect(mockPrisma.inventoryItem.update).not.toHaveBeenCalled();
   });
 

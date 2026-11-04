@@ -630,6 +630,11 @@ export class PharmacyAgentService implements OnModuleInit {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] proposal-action-authority
+   * Applying a proposal MUST require the server-defined permission for every action before
+   * any mutation. Generated or stored permission metadata MUST NOT weaken that requirement.
+   */
   async applyProposal(proposalId: string, user: AgentUser) {
     const prisma = this.prisma as any;
     const proposal = await prisma.pharmacyAgentProposal.findFirst({
@@ -643,8 +648,7 @@ export class PharmacyAgentService implements OnModuleInit {
 
     for (const action of proposal.actions) {
       this.assertSupportedAction(action.actionType);
-      const requiredPermission =
-        action.permissionRequired || ACTION_PERMISSIONS[action.actionType];
+      const requiredPermission = ACTION_PERMISSIONS[action.actionType];
       const allowed = await this.hasPermission(user, requiredPermission);
       if (!allowed) {
         throw new ForbiddenException(
@@ -1305,7 +1309,6 @@ export class PharmacyAgentService implements OnModuleInit {
                 'unknown',
               targetId: action.targetId || null,
               permissionRequired:
-                action.permissionRequired ||
                 ACTION_PERMISSIONS[action.actionType] ||
                 null,
               expectedVersion: action.expectedVersion
@@ -1333,8 +1336,7 @@ export class PharmacyAgentService implements OnModuleInit {
           action.targetType || ACTION_TARGETS[action.actionType] || 'unknown',
         targetId: action.targetId || null,
         permissionRequired:
-          action.permissionRequired ||
-          ACTION_PERMISSIONS[action.actionType] ||
+          ACTION_PERMISSIONS[action.actionType.trim()] ||
           null,
         expectedVersion: action.expectedVersion || null,
         input: action.input || {},
@@ -1396,6 +1398,11 @@ export class PharmacyAgentService implements OnModuleInit {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] inventory-proposal-revision
+   * Applying an inventory item edit MUST pass the operator identity and the proposal's saved
+   * revision to the guarded metadata command; absent revisions MUST NOT be refreshed implicitly.
+   */
   private async applyAction(action: any, user: AgentUser) {
     const input = action.input || {};
     switch (action.actionType) {
@@ -1412,8 +1419,9 @@ export class PharmacyAgentService implements OnModuleInit {
           throw new BadRequestException('targetId is required');
         return this.inventoryService.updateInventoryItem(
           action.targetId,
-          input,
+          { ...input, updatedAt: action.expectedVersion ? new Date(action.expectedVersion).toISOString() : input.updatedAt },
           user.branchId,
+          user.id,
         );
       case 'adjust_stock':
         if (!action.id) throw new BadRequestException('A saved action ID is required for stock changes');
@@ -1721,7 +1729,7 @@ export class PharmacyAgentService implements OnModuleInit {
         actionType: action.actionType,
         targetType: action.targetType,
         targetId: action.targetId,
-        permissionRequired: action.permissionRequired,
+        permissionRequired: ACTION_PERMISSIONS[action.actionType] || null,
         input: action.input,
         preview: action.preview,
         status: action.status,

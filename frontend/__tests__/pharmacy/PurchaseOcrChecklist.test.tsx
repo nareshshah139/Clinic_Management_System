@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { PurchaseOcrChecklist } from '@/components/pharmacy/PurchaseOcrChecklist';
+import { confirmPurchaseChecks, pendingPurchaseOcrFlags } from '@/components/pharmacy/PurchaseFieldReview';
 import { uniquePurchaseReviewIssues, groupPurchaseOcrFlags } from '@/lib/purchase-invoice-review';
 
 describe('Purchase OCR review controls', () => {
@@ -18,119 +19,74 @@ describe('Purchase OCR review controls', () => {
     expect(groupPurchaseOcrFlags(['Line 1: missing_packUnitType','Line 2: missing_packUnitType'])).toHaveLength(2);
   });
 
-  it('confirms duplicate reasons for the same field together', () => {
-    const onResolveMany=jest.fn();const onResolve=jest.fn();
-    const flags=['missing_packUnitType','uncertain_packUnitType'];
-    render(<PurchaseOcrChecklist flags={flags} lineIndex={0} values={{packUnitType:'Tube'}} disabled={false} onResolve={onResolve} onResolveMany={onResolveMany}/>);
-    expect(screen.getAllByRole('button', {name:/^Confirm /})).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button',{name:'Confirm line 1 stock unit checked'}));
-    expect(onResolveMany).toHaveBeenCalledWith(flags);expect(onResolve).not.toHaveBeenCalled();
+  it('groups duplicate uncertainties without a separate acknowledgement button', () => {
+    render(<PurchaseOcrChecklist flags={['missing_packUnitType', 'uncertain_packUnitType']} lineIndex={0} values={{ packUnitType: 'Tube' }} />);
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /^Confirm / })).not.toBeInTheDocument();
+    expect(confirmPurchaseChecks(['missing_packUnitType', 'uncertain_packUnitType'], { packUnitType: 'Tube' }).flags).toEqual([]);
   });
 
-  it('requires the missing value and an explicit check before resolving a flag', () => {
-    const onResolve = jest.fn();
-    const props = { flags: ['missing_packUnitType'], lineIndex: 1, lineId: 'line-2', disabled: false, onResolve };
-    const view = render(<PurchaseOcrChecklist {...props} values={{ packUnitType: '' }} />);
-    expect(screen.getByRole('button', { name: 'Confirm line 2 stock unit checked' })).toBeDisabled();
-    view.rerender(<PurchaseOcrChecklist {...props} values={{ packUnitType: 'Tube' }} />);
-    expect(onResolve).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 2 stock unit checked' }));
-    expect(onResolve).toHaveBeenCalledWith('missing_packUnitType');
+  it('keeps missing values unresolved and provides a keyboard correction target', () => {
+    const values = { packUnitType: '' };
+    render(<PurchaseOcrChecklist flags={['missing_packUnitType']} lineIndex={1} lineId="line-2" values={values} />);
+    expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'error');
     expect(screen.getByRole('link', { name: 'Edit line 2 stock unit' })).toHaveAttribute('href', '#line-2-unit');
+    expect(confirmPurchaseChecks(['missing_packUnitType'], values).flags).toEqual(['missing_packUnitType']);
   });
 
-  it('hides retired missing-manufacturer checks while retaining a reported manufacturer disagreement', () => {
-    const onResolve = jest.fn();
-    render(<PurchaseOcrChecklist flags={['missing_manufacturer', 'manufacturer is required before review', 'independent_read_disagrees_manufacturer']}
-      values={{ manufacturer: '' }} disabled={false} onResolve={onResolve} />);
+  it('retires missing manufacturer checks while preserving a disagreement for final review', () => {
+    render(<PurchaseOcrChecklist flags={['missing_manufacturer', 'manufacturer is required before review', 'independent_read_disagrees_manufacturer']} values={{ manufacturer: '' }} />);
     expect(screen.queryByText('Manufacturer is missing.')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Confirm manufacturer checked' })).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm manufacturer checked' }));
-    expect(onResolve).toHaveBeenCalledWith('independent_read_disagrees_manufacturer');
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(confirmPurchaseChecks(['independent_read_disagrees_manufacturer'], { manufacturer: '' }).flags).toEqual([]);
   });
 
-  it('requires a valid GSTIN and credit due date before those checks can be confirmed', () => {
-    render(<PurchaseOcrChecklist flags={['independent_read_disagrees_distributorGstin', 'uncertain_bill_type']}
-      values={{ distributorGstin: 'UNREADABLE', billType: 'CREDIT', dueDate: '' }} disabled={false} onResolve={jest.fn()} />);
-    expect(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Confirm bill type checked' })).toBeDisabled();
+  it('retains invalid GSTIN and credit terms without a due date', () => {
+    const flags = ['independent_read_disagrees_distributorGstin', 'uncertain_bill_type'];
+    const values = { distributorGstin: 'UNREADABLE', billType: 'CREDIT', dueDate: '' };
+    render(<PurchaseOcrChecklist flags={flags} values={values} />);
+    expect(screen.getAllByRole('listitem').map(item => item.dataset.reviewState)).toEqual(['error', 'error']);
+    expect(confirmPurchaseChecks(flags, values).flags).toEqual(flags);
   });
 
-  it('directs missing-page issues to a new upload instead of a confirmation that discards the issue', () => {
-    render(<PurchaseOcrChecklist flags={['missing_pages']} values={{}} disabled={false} onResolve={jest.fn()} />);
-    expect(screen.queryByRole('button', {name:/^Confirm /})).not.toBeInTheDocument();
+  it.each(['missing_pages', 'pdf_truncated_to_5_pages'])('retains upload-only %s checks', flag => {
+    render(<PurchaseOcrChecklist flags={[flag]} values={{}} />);
     expect(screen.getByRole('link', { name: 'Upload pages for complete invoice' })).toHaveAttribute('href', '#purchase-invoice-upload');
+    expect(confirmPurchaseChecks([flag], {}).flags).toEqual([flag]);
   });
 
-  it('keeps confirmation disabled when the draft is locked or the user cannot edit', () => {
-    render(<PurchaseOcrChecklist flags={['missing_packUnitType']} values={{ packUnitType: 'Tube' }} disabled onResolve={jest.fn()} />);
-    expect(screen.getByRole('button', { name: 'Confirm stock unit checked' })).toBeDisabled();
+  it('never silently accepts an unknown check or a catalogue mismatch', () => {
+    expect(confirmPurchaseChecks(['new_unknown_server_obligation', 'Confirm the product master record'], {}).flags).toEqual(['new_unknown_server_obligation', 'Confirm the product master record']);
   });
 });
 
-it('moves from correction to checking to checked, then requires another check after editing', () => {
-  const props = { flags: ['missing_batchNumber'], lineIndex: 0, lineId: 'line', disabled: false, onResolve: jest.fn() };
-  const view = render(<PurchaseOcrChecklist {...props} values={{ batchNumber: '' }} />);
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'error');
-  view.rerender(<PurchaseOcrChecklist {...props} values={{ batchNumber: 'B1' }} />);
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'warning');
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
-  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} values={{ batchNumber: 'B1' }} />);
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'success');
-  expect(screen.getByText('Checked')).toBeVisible();
-  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} values={{ batchNumber: 'B2' }} />);
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'warning');
-  expect(screen.getByText('Changed — check again')).toBeVisible();
-  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
+it('an explicit correction verifies only its field and invalidates changed dependencies', () => {
+  const values = { batchNumber: 'B1', expiryMonth: '12', expiryYear: '2028' };
+  const result = confirmPurchaseChecks(['uncertain_batchNumber', 'uncertain_expiry'], values, {}, 0, 'batchNumber');
+  expect(result.flags).toEqual(['uncertain_expiry']);
+  expect(pendingPurchaseOcrFlags(result.flags, { ...values, batchNumber: 'B2' }, result.checked, 0)).toEqual(['uncertain_expiry', 'uncertain_batchNumber']);
+  const expiry = confirmPurchaseChecks(['uncertain_expiry'], values);
+  expect(pendingPurchaseOcrFlags([], { ...values, expiryYear: '2029' }, expiry.checked)).toEqual(['uncertain_expiry']);
 });
-
-it('does not infer a checked state from empty flags and invalidates dependent expiry values', () => {
-  const props = { flags: [], disabled: false, onResolve: jest.fn() };
-  const view = render(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
-  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
-  view.rerender(<PurchaseOcrChecklist {...props} flags={['uncertain_expiry']} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm expiry checked' }));
-  view.rerender(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2028' }} />);
-  expect(screen.getByText('Checked')).toBeVisible();
-  view.rerender(<PurchaseOcrChecklist {...props} values={{ expiryMonth: '12', expiryYear: '2029' }} />);
-  expect(screen.getByText('Changed — check again')).toBeVisible();
-});
-
 
 it.each([
   ['13', '2028'], ['0', '2028'], ['1.5', '2028'], ['', '2028'],
   ['12', ''], ['12', '2019'], ['12', '2101'], ['12', '2028.5'], ['NaN', '2028'],
 ])('rejects invalid expiry %s/%s before confirmation', (expiryMonth, expiryYear) => {
-  const onResolve = jest.fn();
-  render(<PurchaseOcrChecklist flags={['uncertain_expiry']} values={{ expiryMonth, expiryYear }} disabled={false} onResolve={onResolve} />);
+  const values = { expiryMonth, expiryYear };
+  render(<PurchaseOcrChecklist flags={['uncertain_expiry']} values={values} />);
   expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'error');
-  const confirm = screen.getByRole('button', { name: 'Confirm expiry checked' });
-  expect(confirm).toBeDisabled();
-  fireEvent.click(confirm);
-  expect(onResolve).not.toHaveBeenCalled();
-  expect(screen.queryByText('Checked')).not.toBeInTheDocument();
+  expect(confirmPurchaseChecks(['uncertain_expiry'], values).flags).toEqual(['uncertain_expiry']);
 });
 
 it.each([['1', '2020'], ['12', '2100']])('allows valid expiry boundary %s/%s to be checked', (expiryMonth, expiryYear) => {
-  const props = { flags: ['uncertain_expiry'], values: { expiryMonth, expiryYear }, disabled: false, onResolve: jest.fn() };
-  const view = render(<PurchaseOcrChecklist {...props} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Confirm expiry checked' }));
-  view.rerender(<PurchaseOcrChecklist {...props} flags={[]} />);
-  expect(screen.getByRole('listitem')).toHaveAttribute('data-review-state', 'success');
+  expect(confirmPurchaseChecks(['uncertain_expiry'], { expiryMonth, expiryYear }).flags).toEqual([]);
 });
 
-it('treats legacy truncated-page results as requiring a replacement upload', () => {
-  const { purchaseReviewIssue } = require('@/lib/purchase-invoice-review');
-  expect(purchaseReviewIssue('pdf_truncated_to_5_pages')).toMatchObject({ requiresUpload: true, target: 'purchase-invoice-upload' });
-});
-
-it('directs a wrong document to the correct invoice upload without allowing confirmation', () => {
-  render(<><PurchaseOcrChecklist flags={['not_a_purchase_invoice']} values={{}} disabled={false} onResolve={jest.fn()} /><input id="purchase-invoice-upload" aria-label="Invoice upload" /></>);
-  expect(screen.getByText('This document was not recognized as a supplier purchase invoice.')).toBeVisible();
+it('directs the wrong document to the correct invoice upload without confirming it', () => {
+  render(<><PurchaseOcrChecklist flags={['not_a_purchase_invoice']} values={{}} /><input id="purchase-invoice-upload" aria-label="Invoice upload" /></>);
   const upload = screen.getByRole('link', { name: 'Upload correct supplier invoice' });
-  expect(upload).toHaveTextContent('Upload correct invoice');
   fireEvent.click(upload);
   expect(screen.getByRole('textbox', { name: 'Invoice upload' })).toHaveFocus();
-  expect(screen.queryByRole('button', { name: /^Confirm / })).not.toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: 'Upload pages for complete invoice' })).not.toBeInTheDocument();
+  expect(confirmPurchaseChecks(['not_a_purchase_invoice'], {}).flags).toEqual(['not_a_purchase_invoice']);
 });

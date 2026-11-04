@@ -51,6 +51,11 @@ export function movementDelta(row: any): number | null {
  * Insufficient available stock and concurrent balance changes MUST identify the batch and a
  * safe review action. NONE describes this rejected transaction, never the batch's earlier history.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] inventory-sale-eligibility
+ * A SALE MUST reject inactive or expired stock before changing balances or writing a movement.
+ * Expiry remains valid through its UTC calendar day. Other movement types retain their rules.
+ */
 export async function writeStockMovement(
   tx: any,
   input: {
@@ -79,6 +84,9 @@ export async function writeStockMovement(
   });
   if (!item)
     throw new NotFoundException('Inventory batch not found in this branch');
+  if (input.type === 'SALE' && (item.status !== 'ACTIVE' ||
+      (item.expiryDate && new Date(item.expiryDate) < new Date(new Date().toISOString().slice(0, 10)))))
+    throw new BadRequestException(`${item.name}: expired/inactive stock cannot be sold`);
   const held = Number(item.heldStock || 0);
   const release = input.consumeHeld || 0;
   if (!Number.isSafeInteger(release) || release < 0 || release > held)
@@ -103,6 +111,7 @@ export async function writeStockMovement(
         branchId: input.branchId,
         currentStock: item.currentStock,
         heldStock: held,
+        ...(input.type === 'SALE' ? { status: item.status, expiryDate: item.expiryDate } : {}),
       },
       data: {
         currentStock: afterStock,

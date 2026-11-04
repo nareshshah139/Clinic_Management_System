@@ -67,6 +67,7 @@ jobs:
           PARTNER_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           VISIT_LIFECYCLE_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
           INVENTORY_WORKFLOW_RECOVERY_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
+          INVENTORY_API_BOUNDARIES_TEST_DATABASE_URL: postgresql://recovery_test:recovery_test@127.0.0.1:5432/clinic_recovery
         run: npm test -- --ci --runInBand
 
       - name: Verify inventory state presentations and recovery proofs

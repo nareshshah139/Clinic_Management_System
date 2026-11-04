@@ -1,0 +1,18 @@
+Read the Principles section of poteto-mode in full. DONE
+Phase A: Frame
+Phase B: Design the workflow
+Phase C: Run the loop
+Phase D: Keep the audit trail
+Phase E: Verify and hand back
+Architect: Ground; Sketch; Agree; Implement; Scrap (only if evidence invalidates design).
+Arena: Frame; Fan out; Cross-judge; Pick; Graft; Verify.
+Swarm: Frame; Fan out; Aggregate; Report.
+
+Done predicate: confirmed API/UI defects blocked by regressions; valid OCR amendments require no redundant check acknowledgments; scoped batch edit previews and undo work; successful, stale and uncertain submission paths recover without double stock; same-case interaction counts and before/after graphs have runtime evidence.
+Scope: expired sales, legacy metadata command safety, request-key authorization, reviewed-reopen reason; list reads/retry/order; mobile stock search; invoice hierarchy/unknown badge; lower-effort OCR review. External OCR accuracy, mailbox configuration and physical scanners remain external capabilities.
+Base: origin/main 6084c1cb49057f2d1e5a389f6e452b0f74cd7d89. Dirty original checkout untouched.
+Throughput: two read-only design candidates then independent judge; backend, inventory UI, invoice UI writers own separate worktrees. Parent integrates and verifies. Three worker slots. Do not edit overlapping files concurrently. API client belongs to parent unless explicitly reassigned.
+Design rubric: safety invariants; fewer review interactions; recoverability; small coherent API; incumbent responsive visual fit. Distinct candidates required; 0-2 per criterion.
+Data shape: current invoice revision plus edited values and hard blockers; staged selected-row draft patch with before/after snapshot; load state scoped to current query and request generation; authorized backend commands carrying actor, revision and reason.
+Existing evidence: /private/tmp/cms-inventory-audit-20261104, same source tree as base. Before interactions 3/11/20 for correct/4-correction/10-correction fixtures, excludes scrolling/reading/keystrokes.
+Next: read design candidates, synthesize; implement isolated units; integrate; run tests/contracts/build; browser desktop/mobile and recovery; independent review; commit/push/merge/deploy under existing user authorization after gates; return graphs with limits.

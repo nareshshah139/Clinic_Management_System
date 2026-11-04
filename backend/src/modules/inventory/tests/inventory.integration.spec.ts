@@ -32,6 +32,7 @@ describe('InventoryController (Integration)', () => {
     $connect: jest.fn(),
     enableShutdownHooks: jest.fn(),
     $transaction: jest.fn(),
+    auditLog: { create: jest.fn() },
     inventoryWorkflowEffect: { count: jest.fn() },
     inventoryStockOperation: { upsert: jest.fn() },
     inventoryItem: {
@@ -340,7 +341,7 @@ describe('InventoryController (Integration)', () => {
       });
       await request(app.getHttpServer())
         .patch('/inventory/items/item-123')
-        .send({ costPrice: 12 })
+        .send({ costPrice: 12, updatedAt: '2026-11-01T00:00:00.000Z' })
         .expect(400);
       expect(mockPrismaService.inventoryItem.update).not.toHaveBeenCalled();
     });
@@ -349,6 +350,7 @@ describe('InventoryController (Integration)', () => {
       const updateDto = {
         name: 'Updated Paracetamol',
         sellingPrice: 18.0,
+        updatedAt: '2026-11-01T00:00:00.000Z',
       };
 
       const existingItem = {
@@ -358,6 +360,7 @@ describe('InventoryController (Integration)', () => {
         sku: 'PAR-500',
         barcode: '123456789',
         tags: null,
+        updatedAt: new Date('2026-11-01'),
       };
 
       const updatedItem = {

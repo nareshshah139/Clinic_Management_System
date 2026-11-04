@@ -22,12 +22,12 @@ it('keeps all default fields through DTO whitelisting on create and update', asy
   }
 });
 it('persists defaults through the inventory create and update services', async () => {
-  const stored = { id: 'item', branchId: 'clinic', ...defaults };
-  const db = { inventoryItem: { findFirst: jest.fn().mockResolvedValue(stored), create: jest.fn().mockResolvedValue(stored), update: jest.fn().mockResolvedValue(stored) } };
+  const stored = { id: 'item', branchId: 'clinic', updatedAt: new Date('2026-11-01'), ...defaults };
+  const db = { $transaction: (run: any) => run(db), auditLog: { create: jest.fn() }, inventoryItem: { findFirst: jest.fn().mockResolvedValue(stored), create: jest.fn().mockResolvedValue(stored), update: jest.fn().mockResolvedValue(stored) } };
   const service = new InventoryService(db as any);
   await service.createInventoryItem({ ...defaults, name: 'Cream', type: 'MEDICINE', unit: 'TUBES', costPrice: 1, sellingPrice: 2 } as any, 'clinic');
   expect(db.inventoryItem.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining(defaults) }));
-  await service.updateInventoryItem('item', { defaultDuration: null, defaultInstructions: '' }, 'clinic');
+  await service.updateInventoryItem('item', { updatedAt: stored.updatedAt.toISOString(), defaultDuration: null, defaultInstructions: '' }, 'clinic', 'operator');
   expect(db.inventoryItem.update).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ defaultDuration: null, defaultInstructions: null }) }));
 });
 it('persists and audits defaults in product details without changing stock', async () => {

@@ -166,6 +166,7 @@ describe('InventoryController', () => {
       const updateDto = {
         name: 'Updated Paracetamol',
         costPrice: 12.0,
+        updatedAt: '2026-11-01T00:00:00.000Z',
       };
 
       const mockUpdatedItem = {
@@ -183,6 +184,7 @@ describe('InventoryController', () => {
         'item-123',
         updateDto,
         'branch-123',
+        'user-123',
       );
     });
   });

@@ -1,0 +1,8 @@
+Chosen base: B, exceptions-first worksheet in the existing PurchaseInvoiceEditor state owner.
+Rubric (0..2): safety A2 B2; interaction cost A2 B2; recovery A2 B2; API size A1 B2; responsive incumbent fit A2 B2. Parent scores A9 B10.
+Grafts: A cell-level conflict-safe undo preserves later edits and reports skipped cells; A explicit current-value fingerprint expires batch previews.
+Both candidates converge on one immutable reviewed submission, one explicit final completion, always-visible core row fields and totals, compact blockers, no new coordinator.
+Reject additional full draft store, generic spreadsheet abstraction, batch identity/stock quantity propagation, and automatic master writes.
+All current upload, reconciliation, revision, generation, matching, permission, idempotency and authoritative readback guards remain decisive.
+Reason: Experience First removes repeated acknowledgments; Model the Domain makes query/read and batch preview states explicit.
+Independent judge agrees B10/A9; proposal scores only. See design-judgment.txt. Undo recomputes review evidence for affected current cells; it never restores a stale checks map.

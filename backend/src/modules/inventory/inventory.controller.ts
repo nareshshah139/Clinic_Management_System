@@ -186,6 +186,7 @@ export class InventoryController {
       id,
       updateItemDto,
       req.user.branchId,
+      req.user.id,
     );
   }
 

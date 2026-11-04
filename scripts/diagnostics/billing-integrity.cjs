@@ -17,9 +17,6 @@ const { PharmacyPackageService } = require(
 const { PrescriptionsService } = require(
   root + "/backend/src/modules/prescriptions/prescriptions.service",
 );
-const { InventoryService } = require(
-  root + "/backend/src/modules/inventory/inventory.service",
-);
 const adminUrl = "postgresql://nshah@127.0.0.1:55457/postgres";
 const schema = "pstack_audit_" + randomUUID().replaceAll("-", "");
 const url = adminUrl + "?schema=" + schema;
@@ -970,13 +967,13 @@ const probe = async (name, fn) => {
                                         args.data.status === "CONFIRMED"
                                       ) {
                                         changed = true;
-                                        await new InventoryService(
-                                          db,
-                                        ).updateInventoryItem(
-                                          s.item.id,
-                                          change,
-                                          branch.id,
-                                        );
+                                        await db.inventoryItem.update({
+                                          where: { id: s.item.id },
+                                          data: {
+                                            ...change,
+                                            ...(change.expiryDate ? { expiryDate: new Date(change.expiryDate) } : {}),
+                                          },
+                                        });
                                       }
                                       return delegate.update(args);
                                     };
