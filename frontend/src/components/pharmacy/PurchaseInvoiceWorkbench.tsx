@@ -927,8 +927,9 @@ const importAttemptIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab]
 
 /**
  * @cc [owner:nareshshah139,label:product] purchase-recovery-entry-and-handoff
- * Missing-invoice read failures and fresh intake MUST expose recovery in the UI. A malformed
- * attempt reference MUST NOT skip exact invoice readback or unlock its stock outcome. Handoffs MUST
+ * Missing-invoice read failures and fresh intake MUST expose a visible recovery control that opens
+ * the reference form in one action. A malformed attempt reference MUST NOT skip exact invoice
+ * readback or unlock its stock outcome. Handoffs MUST
  * retain exact attempt, original-operator, invoice and original-document references when known;
  * denied access or clipboard failure MUST leave a usable, copyable recovery route.
  */
@@ -4008,7 +4009,7 @@ function PurchaseInvoiceEditor({
           tabIndex={-1}
           className="space-y-3"
         >
-          <details aria-label="Interrupted import recovery" open={showDelegatedRecovery || stockStatusUnknown || undefined} className="space-y-3 border-b pb-2"><summary className="cursor-pointer py-2 text-sm">Recover interrupted import</summary>
+          <div aria-label="Interrupted import recovery" className="space-y-3 border-b pb-2">
             <Button type="button" variant="outline" disabled={resolvingImport} onClick={() => {
               setDelegatedRecovery(current => ({ ...current, attemptId: importAttemptId || current.attemptId,
                 originalActorId: current.originalActorId || (!recoveryAttemptId && importAttemptId ? user?.id || '' : ''),
@@ -4032,7 +4033,7 @@ function PurchaseInvoiceEditor({
               <Button type="button" variant="outline" onClick={copyHandoff}>Copy recovery handoff</Button>
               {rejectedRecoveryReference && <p className="text-sm">This recovery reference was not accepted. This tab keeps the original reference and its stock lock. <a className="text-primary underline" target="_blank" rel="noopener noreferrer" href={`/dashboard/inventory?area=purchases&view=intake&new=recovery-${encodeURIComponent(rejectedRecoveryReference)}`}>Open another recovery page</a> to enter a corrected reference separately.</p>}
             </div>}
-          </details>
+          </div>
           {recoveryPanel}
           {notice && !(stockAdded && notice.startsWith("Restored")) && (
             <p role="status" className="flex items-start gap-2 text-sm">

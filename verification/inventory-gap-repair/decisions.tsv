@@ -23,3 +23,8 @@ ts	phase	decision	why	evidence	result
 2026-11-04T06:17:44.211161+00:00	ci	Enable API-boundary PostgreSQL gate	Keep six new boundary regressions active in CI	.github/workflows/tests.yml	YAML parsed;local6test gate passes
 2026-11-04T06:17:44.211163+00:00	docs	Separate commit-only resume from draft saving	Already-reviewed invoices must not be resaved by retry	after-ocr.mmd	independent graph correction
 2026-11-04T06:17:44.211164+00:00	docs	Match database graph labels to actual scenarios	Duplicate correction and reversal retry are narrower than generic stock/status claims	after-workspace.mmd	independent graph correction
+2026-11-04T06:43:48.152449+00:00	ci	Revalidate historical stock/intake source map	CI rejected ten stale hashes; do not weaken drift guard	../inventory-state-clarity-fix-2026-10-25/report.md	36hashesmatch;3material dependenciesadded;unchangedmodelpasses
+2026-11-04T06:43:48.152505+00:00	ci	Restore one visible interrupted-import recovery control	Collapsed wrapper hid existing button and added duplicate action	frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx	newvisibilitytestred;146Workbenchtestsgreen
+2026-11-04T06:43:48.152507+00:00	browser	Run unchanged prior count/intake scenario	CI failure must recover through real mounted UI and DB	prior-count-intake-recovery.json	20assertionspass;stockpreserved
+2026-11-04T06:43:48.152508+00:00	verification	Rebuild recovery visibility fix	Verifyfinalapplicationratherthanoldbundle	/private/tmp/cms-gap-import-fix-build.log	allworkspacesPASS
+2026-11-04T06:43:48.152509+00:00	review	Recheck source mapping and recovery-entry fix	Independent proof of dependencies and visible-action behavior	independent-review.txt	PASSWITHNOTES;noactionablefindings

@@ -1002,7 +1002,9 @@ describe('PurchaseInvoiceWorkbench', () => {
 
   it('opens interrupted import recovery from a fresh intake without browser draft state', async () => {
     render(<PurchaseInvoiceWorkbench />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Recover interrupted import' }));
+    const recoveryButton = await screen.findByRole('button', { name: 'Recover interrupted import' });
+    expect(recoveryButton).toBeVisible();
+    fireEvent.click(recoveryButton);
     const input = screen.getByRole('textbox', { name: 'Import attempt ID' });
     fireEvent.change(input, { target: { value: 'ec73be65-0152-4bb1-8be6-399d78901a57' } });
     expect(input).toHaveValue('ec73be65-0152-4bb1-8be6-399d78901a57');

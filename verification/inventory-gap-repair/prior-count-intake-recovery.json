@@ -1,0 +1,184 @@
+{
+  "runId": "2026-11-04T06-41-16-659Z-b59b73ff",
+  "sourceRevision": "e7e455b9010a3fbe450e239edd95b1f108c6b492",
+  "sourceDirty": true,
+  "status": "passed",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "testedWorkbenchSha256": "e82acbdddf29a5c1774af699c29ff13162c21bdb2882e8e572e97ec662904022",
+  "scenarios": [
+    {
+      "id": "stock",
+      "category": "production-ui",
+      "status": "passed",
+      "assertionCount": 20,
+      "assertions": [
+        {
+          "label": "stale observation does not overwrite concurrent stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "stale count remains draft",
+          "expected": "DRAFT",
+          "actual": "DRAFT"
+        },
+        {
+          "label": "fresh count clears old physical observation",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh count snapshots current stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "fresh count retains source identity",
+          "expected": "cmw1r0o5s0000agbbw15gkpfo",
+          "actual": "cmw1r0o5s0000agbbw15gkpfo"
+        },
+        {
+          "label": "posted count has verified quantity and held safety",
+          "expected": {
+            "q": 6,
+            "h": 0
+          },
+          "actual": {
+            "q": 6,
+            "h": 0
+          }
+        },
+        {
+          "label": "independent ledger after count",
+          "expected": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmw1r0pdd000iagbb4n9co4f1"
+          },
+          "actual": {
+            "status": "RECONCILED",
+            "expected": 6,
+            "difference": 0,
+            "quantity": 6,
+            "document": "cmw1r0pdd000iagbb4n9co4f1"
+          }
+        },
+        {
+          "label": "recount replay opens existing posted child",
+          "expected": "cmw1r0pdd000iagbb4n9co4f1",
+          "actual": "cmw1r0pdd000iagbb4n9co4f1"
+        },
+        {
+          "label": "posted count can start another blank count",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "fresh missing-invoice URL exposes unlinked recovery action",
+          "expected": true,
+          "actual": true
+        },
+        {
+          "label": "UI missing-reference recovery records uncertain historical stock",
+          "expected": [
+            {
+              "status": "RETRY_REJECTED",
+              "stock": "UNVERIFIED"
+            }
+          ],
+          "actual": [
+            {
+              "status": "RETRY_REJECTED",
+              "stock": "UNVERIFIED"
+            }
+          ]
+        },
+        {
+          "label": "intake rejection does not alter counted stock",
+          "expected": 6,
+          "actual": 6
+        },
+        {
+          "label": "rejected intake UI link reaches a fresh physical count",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "original owner endpoint remains actor scoped",
+          "expected": 404,
+          "actual": 404
+        },
+        {
+          "label": "invalid recovery reference is editable",
+          "expected": false,
+          "actual": false
+        },
+        {
+          "label": "colleague UI recovery preserves owner and fences unfinished work",
+          "expected": {
+            "owner": "cmw1r0ued0006aga1pcsys5x5",
+            "status": "NO_STOCK_WRITTEN"
+          },
+          "actual": {
+            "owner": "cmw1r0ued0006aga1pcsys5x5",
+            "status": "NO_STOCK_WRITTEN"
+          }
+        },
+        {
+          "label": "colleague UI recovery is audited without stock effects",
+          "expected": [
+            {
+              "actor": "cmw1r0e6a0002aga1i6fwvla4",
+              "owner": "cmw1r0ued0006aga1pcsys5x5",
+              "stockEffect": 0
+            }
+          ],
+          "actual": [
+            {
+              "actor": "cmw1r0e6a0002aga1i6fwvla4",
+              "owner": "cmw1r0ued0006aga1pcsys5x5",
+              "stockEffect": 0
+            }
+          ]
+        },
+        {
+          "label": "delegated missing-invoice recovery keeps history unverified",
+          "expected": {
+            "status": "RETRY_REJECTED",
+            "stock": "UNVERIFIED",
+            "owner": "cmw1r0ued0006aga1pcsys5x5"
+          },
+          "actual": {
+            "status": "RETRY_REJECTED",
+            "stock": "UNVERIFIED",
+            "owner": "cmw1r0ued0006aga1pcsys5x5"
+          }
+        },
+        {
+          "label": "delegated rejection offers a working UI reconciliation path",
+          "expected": "",
+          "actual": ""
+        },
+        {
+          "label": "all intake recovery actions preserve existing inventory",
+          "expected": 6,
+          "actual": 6
+        }
+      ]
+    }
+  ]
+}
