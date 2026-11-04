@@ -18,6 +18,8 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
   let prisma: PrismaService;
 
   const mockPrisma = {
+    $transaction: jest.fn((run: any) => run(mockPrisma)),
+    auditLog: { create: jest.fn() },
     inventoryItem: {
       create: jest.fn(),
       findFirst: jest.fn(),
@@ -419,6 +421,7 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
   describe('Test expiryDate conversion', () => {
     beforeEach(() => {
       jest.resetAllMocks();
+      mockPrisma.$transaction.mockImplementation((run: any) => run(mockPrisma));
     });
 
     it('should convert expiryDate string to Date object on create', async () => {
@@ -469,10 +472,13 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
         barcode: null,
         expiryDate: new Date('2024-12-31'),
         tags: null,
+        updatedAt: new Date('2026-11-01'),
       };
 
       const updateDto = {
         expiryDate: '2026-12-31',
+        updatedAt: existingItem.updatedAt.toISOString(),
+        reason: 'Checked printed pack',
       };
 
       const updatedItem = {
@@ -483,10 +489,10 @@ describe('InventoryService - Enhanced Drug Addition Tests', () => {
       mockPrisma.inventoryItem.findFirst.mockResolvedValue(existingItem);
       mockPrisma.inventoryItem.update.mockResolvedValue(updatedItem);
 
-      await service.updateInventoryItem('item-123', updateDto, 'branch-123');
+      await service.updateInventoryItem('item-123', updateDto, 'branch-123', 'operator');
 
       expect(mockPrisma.inventoryItem.update).toHaveBeenCalledWith({
-        where: { id: 'item-123' },
+        where: { id: 'item-123', branchId: 'branch-123', updatedAt: existingItem.updatedAt },
         data: expect.objectContaining({
           expiryDate: expect.any(Date),
         }),

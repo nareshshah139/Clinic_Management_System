@@ -9,7 +9,7 @@ backend tests run, so a clean dependency install exposes the schema's enums and 
 
 @cc [owner:nareshshah139,label:verification] inventory-recovery-ci-coverage
 Every pull request, regardless of target branch, MUST build all workspaces, run both full test
-suites with the inventory recovery PostgreSQL gate enabled, and fail when executable state
+suites with the inventory recovery and API-boundary PostgreSQL gates enabled, and fail when executable state
 presentations or recovery proofs fail.
 
 @cc [owner:nareshshah139,label:verification] inventory-recovery-browser-gates

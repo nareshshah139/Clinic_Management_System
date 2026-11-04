@@ -1,0 +1,77 @@
+Independent inventory gap review
+Review status: PASS WITH NOTES for the current working-tree source diff. No unresolved correctness or comment findings remain in the inspected scope. Final committed-head identity, completed full-suite results and after-stategraph documentation remain parent release checks.
+Base: 6084c1c. Worktree: /private/tmp/cms-inventory-gaps-20261104. Read-only app review; only this report is written.
+
+Plan
+- Read the Principles section in full. Done.
+- Route through the how skill (Explain mode for narrow questions, Critique mode for "are we sure?"). For motivation questions, also route through the why skill. Done as the independent critique lane; no nested agents authorized.
+- Throughput checkpoint stays one line: throughput checkpoint: n/a, read-only investigation.
+- Produce the how-shaped output (Overview / Key Concepts / How It Works / Where Things Live / Gotchas), or a recommendation with a tradeoffs table if the request is a decision between alternatives. Report uses the parent's findings format.
+- Apply the unslop skill to the reply. Plain findings only.
+- Trace changed declarations and callers, independently reproduce concrete failures, review their fixes, then inspect final evidence claims.
+
+Findings resolved during review
+R3 P2. Preserve a final review action for users who can review but cannot commit stock.
+File: frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx, saveAndPostInvoice/canReview/invoiceActions, initial reviewed lines 2918,3022-3035,3614-3618.
+The removed per-field check controls leave acknowledgement in prepareReviewedDraft, which is called only by saveAndPostInvoice. That action immediately returns without access.commit. Mark Reviewed is rendered only when canReview, which still requires zero server and local OCR flags. A create+review user without commit permission cannot acknowledge an unchanged but valid uncertainty flag, and instead gets a disabled combined action requiring stock permission. This regresses the separated review role. Use the same explicit snapshot in a review-only final action and test that no commit endpoint is called. Resolved. The shared command now takes explicit review-only intent, uses the same reviewed snapshot, returns before commit and reads the authoritative invoice status. Independently inspected browser review-only-result.json and its executable assertions. One confirmation produces a draft PATCH with resolved flags, one review PATCH, saved REVIEWED state and zero commit requests. Unknown readback still locks writes; already-reviewed commit resume skips resaving.
+
+R4 P2. Enforce the selected-shared-terms contract for resulting target-row tax and discount values.
+File: frontend/src/lib/purchase-invoice-batch.ts, previewPurchaseTerms, initial reviewed lines 24-26.
+A row with CGST9/SGST9/IGST18 accepted a discount5 preview and apply despite the contract requiring rejection of mixed GST. The actual helper was compiled with target ES2022 and called in memory; output retained all three tax components. GST replacement also does not validate an existing nonnumeric ordinary discount. Validate all resulting target-row percentages and reject mixed split/integrated tax; GST replacement may fix mixed original values. No backend stock bypass is claimed. Resolved. Actual-helper probes now reject mixed GST plus a discount edit and a nonnumeric existing discount plus GST replacement. A verified split18 GST replacement fixes the original mixed row and sets IGST to0.
+
+Resolved findings
+R1 P2. A retained reload closure could strand a changed query in loading.
+Files: frontend/src/components/inventory/useInventoryResource.ts and WorkflowRegister.generate in InventoryWorkspace.tsx.
+Initial actual-hook React/jsdom probe: load A, rerender B, resolve B, invoke retained reload(A), resolve A. Result loading, empty error and absent data forever, requests A/B/A. WorkflowRegister's delayed generate POST uses that retained callback after a filter change.
+Recheck after parent's currentUrl ref fix: retained callback requests B, settles ready with B refreshed, requests A/B/B. Calling retained reload after unmount issues no request. Resolved by actual-hook execution.
+
+R2 P1 pre-existing caller-precondition violation. Generated permission metadata could authorize a guarded item edit with read permission.
+File: backend/src/modules/pharmacy-agent/pharmacy-agent.service.ts, applyProposal initial line646; directly relevant to new saveInventoryItemMetadata item-metadata-revision contract.
+Actual public applyProposal -> actual InventoryService -> metadata command probe with an in-memory Prisma fixture accepted a PHARMACIST with agent-use/apply and inventory:item:read but no inventory:item:update. A stored update_inventory_item action naming inventory:item:read returned APPLIED, changed storageLocation and wrote one metadata audit.
+After parent's server-derived ACTION_PERMISSIONS fix the same probe returns403 requiring inventory:item:update, leaves proposal PENDING_REVIEW, location unchanged and audit count0. Normalize/stage/serialize also use canonical permissions. Resolved by actual service execution.
+
+Reviewed stable behavior
+- Shared SALE writer rejects inactive/expired batches before stock updates; expiry stays valid through its UTC day. Its conditional update includes status and expiry as well as balances, preventing stale eligibility from passing a concurrent edit.
+- Shared metadata command preserves legacy supported fields, rejects quantity/unit/cost changes, requires actor/revision, checks correction reasons/dates/targets/archive stock, and writes the audit in its caller's transaction. Both entry points and the agent/API consumers were traced. Date-only expiry is now the canonical metadata input.
+- Workflow duplicate-key reads reauthorize the stored document kind and reject a different submitted kind.
+- Reviewed-invoice reopen DTO/service require and audit a trimmed nonblank operator reason.
+- List loading/error/empty states are distinct, and the corrected shared hook suppresses stale responses and stale reload identities.
+- Mobile search wraps with a full-row input; heading levels now avoid h1-to-h3 on the purchase actions section. Browser proof belongs to the parent lane.
+
+Contracts and comments
+Applicable declarations and immediate callers were manually inspected; no scoped ancestor CONTRACTS applies to these backend/frontend component/library paths. The caller search did not hit the64-reference cap for any changed declaration. cc-check format independently passed for inventory-item-metadata.ts, inventory-stock.ts, pharmacy-agent.service.ts, useInventoryResource.ts, PurchaseFieldReview.tsx, PurchaseOcrChecklist.tsx and purchase-invoice-batch.ts. cc-check list independently confirms attachment/discovery for inventory-item-metadata.ts, useInventoryResource.ts and purchase-invoice-batch.ts. Other discovery checks and broader suites are parent-owned; format/list success is not semantic proof.
+No-comments reviewed the changed comments, including the new helper files. Added comments are public @cc obligations and protected exceptions. No deletion recommendations, no MUST KILL flags, no restored comments, no application edits, no lint/TypeScript suppressions introduced in the inspected diff. Existing unrelated comment narration was outside the diff.
+
+Principle used: Prove It Works. It changed the review from accepting owner summaries to executing the real hook and actual service chain before accepting either correction.
+
+Evidence review update
+The 3-to-1,11-to-5,20-to-11 observed action counts in decisions.tsv agree with baseline-result.json, corrections-result.json and multi-result.json. Their exact step arrays contain0/4/10 field edits plus one final confirmation. These are synthetic UI interaction counts, excluding scrolling/reading/keystrokes, not elapsed-time or all-invoice claims. Unknown readback recovery checks one commit when the first commit landed, and two explicit attempts when authoritative status remains REVIEWED. The bulk result tests stock-neutral preview/apply/undo and preserves later edits. List results distinguish loading/error/retry/empty. Supplier has no filter-order case and records lateFilterIgnored=false, so it must not be counted as an independent filter-order proof. Final OCR tests are integrated and were read. They assert review-only zero-commit behavior, new server blocker rejection, selected-row batch isolation, later-edit-preserving undo, preview invalidation and invalid resulting percentages. Full-suite execution is parent-owned. After-stategraphs remain pending.
+
+Final source review notes
+The latest PurchaseFieldReview change rejects nonfinite/negative quantities or prices and fractional quantities before acknowledging flagged fields. Workbench validation also rejects nonfinite numeric line values and mixed GST. Contract format checks on both latest files pass. git diff --check passes. No scoped lint/TypeScript suppression or phase-narration comment was added.
+
+Browser source fingerprints currently differ for PurchaseInvoiceWorkbench.tsx and PurchaseFieldReview.tsx after these final validation changes; the other seven recorded frontend hashes match. Parent was notified and plans scoped real-browser revalidation plus source fingerprint verification on the committed head. The existing scenarios remain useful evidence for the recorded revision, not a certificate of an untested future head.
+
+Current verdict: PASS WITH NOTES. Four actionable issues found in review were repaired and independently checked through source plus actual hook/service/helper execution or inspected browser transitions. No remaining application-code finding was identified. This verdict is bounded to the reviewed source and preserved evidence. It does not claim that every inventory state, real OCR provider, clinic database effect or device combination is correct.
+
+
+Final documentation and evidence audit — 2026-11-04
+Verdict: PASS WITH NOTES for the reviewed working-tree artifact. No unresolved application, contract-semantic, comment, diagram or evidence-claim finding remains in this review scope. This supersedes earlier pending after-stategraph and browser-fingerprint notes above. It is not an exact committed-head release verdict.
+
+The after-OCR graph now separates saving/reviewing the captured snapshot from committing an already-reviewed invoice. Both authorized handoff resume and fresh-REVIEWED explicit retry enter the commit-only node. Review-only confirmation ends at authoritatively verified REVIEWED. This matches the reviewed implementation and avoids claiming a resave/re-review on those paths.
+
+The after-workspace graph now describes the exercised duplicate purchase correction and the supplier payment reversal's idempotent retry accurately. The earlier generic purchase partial-response/status and supplier status-recovery labels were unsupported by those scenarios and have been corrected. Partner and opening-import labels match their scenario assertions. Remaining grey/amber nodes and external-service limits are explicitly bounded.
+
+Browser evidence: 24 bounded case results report pass; all nine captured source fingerprints match the corresponding current source files. The observed 3-to-1, 11-to-5 and 20-to-11 action counts agree with their fixture step arrays. Those counts exclude reading, scrolling and typing and are not claimed to generalize to every invoice. Bulk reset/adopt, review-only handoff, unknown outcome, stale query and mobile-width cases have evidence; the synthetic browser harness does not establish database semantics.
+
+Database/UI evidence: database-ui-recovery.json now contains run provenance and literal expected/actual assertion records. Run 2026-11-04T06-04-46-360Z-460c1227 identifies baseline 6084c1cb49057f2d1e5a389f6e452b0f74cd7d89 with sourceDirty=true, correctly distinguishing an uncommitted working-tree run from committed-head proof. Purchase7 + partner6 + supplier5 + opening5 + stock14 =37 assertions, and all37 expected values equal their actual values. The four mounted UI workflows plus separate stock HTTP/database scenario are described accurately. Real cookie authentication, isolated schemas, no full application boot and no legacy shelf mounting are disclosed.
+
+Formal correspondence: the guided-recovery evidence reports27,500 states,150,745 edges and four detected negative controls, with matching model source fingerprints. The README distinguishes abstract approval/review steps from the combined UI action and does not claim atomic refinement, all-device/all-role coverage, backend transactional proof or unconditional eventual completion. The state presentation and knowledge-proof layers remain separate from browser and database evidence.
+
+The new PostgreSQL API-boundary CI environment gate agrees with the amended workflow CONTRACTS obligation. YAML/gate inspection and manual CONTRACTS review are distinguished from source cc-check format/list checks, because list does not support that workflow CONTRACTS file type. No comment deletion recommendations, new suppression concerns or contract-weakening recommendations remain.
+
+Final README and validation.tsv agree with the parent's completed verification report: frontend67 suites/710 tests; scoped backend38 suites/585 tests with96 opt-in tests skipped; API-boundary PostgreSQL6 tests; recovery PostgreSQL32 tests; all workspace builds. The documents explicitly avoid claiming that the two separate database runs cover all96 skipped tests. These full-suite/build executions are parent-delivered evidence, not reruns independently performed by this reviewer. The reviewed actual hook, service-chain and batch-helper regression probes are independently executed evidence as recorded above.
+
+Release limit: this final audit covers the current working tree and supplied artifacts. The designated browser verifier must establish exact committed head/base, stable patch identity and final source/surface correspondence. No remaining claim issue blocks creating that reviewable commit.
+
+STATEGRAPHS.md follow-up: all four Mermaid blocks exactly match the corresponding before/after OCR/workspace .mmd sources after trimming surrounding whitespace. Its legend retains bounded evidence and links the scope; no new claim issue.

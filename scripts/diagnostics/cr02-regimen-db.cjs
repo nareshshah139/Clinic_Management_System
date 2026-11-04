@@ -36,12 +36,12 @@ const now = new Date('2026-09-27T12:00:00Z');
       const never = await tx.drug.create({ data: { branchId: branch.id, name: 'Never prescribed', price: 10, manufacturerName: 'QA', packSizeLabel: 'QA' } });
       const getNever = () => medicineRegimenDefaults(tx, never.id, branch.id, doctor.id, undefined, now);
       assert.deepEqual(await getNever(), { source: 'none', prescriptionCount: 0, values: {} });
-      const inventory = new InventoryService(tx);
+      const inventory = new InventoryService(new Proxy(tx, { get: (target, key) => key === '$transaction' ? callback => callback(tx) : Reflect.get(target, key) }));
       const stock = await inventory.createInventoryItem({ name: never.name, type: 'MEDICINE', unit: 'TUBES', costPrice: 1, sellingPrice: 2,
         defaultDuration: 3, defaultDurationUnit: 'WEEKS', defaultFrequency: '0-0-1', defaultTiming: 'PM', defaultInstructions: 'apply thinly' }, branch.id);
       await tx.drug.update({ where: { id: never.id }, data: { inventoryItems: { connect: { id: stock.id } } } });
       assert.equal((await getNever()).values.duration, 3); assert.equal((await getNever()).source, 'inventory');
-      await inventory.updateInventoryItem(stock.id, { defaultDuration: null, defaultFrequency: null, defaultTiming: null, defaultInstructions: null }, branch.id);
+      await inventory.updateInventoryItem(stock.id, { updatedAt: new Date(stock.updatedAt).toISOString(), defaultDuration: null, defaultFrequency: null, defaultTiming: null, defaultInstructions: null }, branch.id, doctor.id);
       assert.deepEqual(await getNever(), { source: 'none', prescriptionCount: 0, values: {} });
       console.log('PASS real SQL: optional inventory defaults save, read and clear; unknown medicines remain blank');
       const start = performance.now(); await get(); console.log(`PASS small-fixture lookup: ${(performance.now() - start).toFixed(1)} ms (not a production benchmark)`);

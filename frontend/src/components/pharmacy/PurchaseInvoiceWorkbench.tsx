@@ -42,7 +42,7 @@ import { PurchaseSupplierReview } from "./PurchaseSupplierReview";
 import { PurchaseOcrChecklist } from "./PurchaseOcrChecklist";
 import { PurchaseReviewSummary } from "./PurchaseReviewSummary";
 import { ReviewStatus, ReviewLegend, reviewColors, type ReviewTone } from "@/components/ui/ReviewStatus";
-import { PurchaseFieldReviewContext, PurchaseFieldStatus, usePurchaseFieldTone, purchaseCheckInvalid, purchaseExpiryInvalid, pendingPurchaseOcrFlags, type PurchaseCheckedFields } from "./PurchaseFieldReview";
+import { PurchaseFieldReviewContext, PurchaseFieldStatus, usePurchaseFieldTone, purchaseCheckInvalid, purchaseExpiryInvalid, pendingPurchaseOcrFlags, purchaseCheckSnapshot, confirmPurchaseChecks, type PurchaseCheckedFields } from "./PurchaseFieldReview";
 import { PurchaseHelp, PurchaseStatusCue } from "./PurchaseHelp";
 import {
   focusPurchaseField,
@@ -62,6 +62,7 @@ import {
   reportedLineAmounts,
 } from "@/lib/purchase-invoice-totals";
 import { usePurchasePermissions } from "@/hooks/usePurchasePermissions";
+import { previewPurchaseTerms, applyPurchaseTerms, undoPurchaseTerms, type SharedTerms, type SharedTermPreview } from "@/lib/purchase-invoice-batch";
 import { apiClient } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -670,6 +671,10 @@ function validateDraft(header: HeaderForm, lines: LineForm[]) {
       if (!line[key]?.trim()) errors.push(`${prefix}: ${label} is required`);
     }
 
+    for (const field of ['quantityPurchased', 'freeQuantity', 'purchaseRate', 'mrp', 'discountPercent', 'specialDiscountPercent', 'schemeAmount', 'cgstPercent', 'sgstPercent', 'igstPercent'] as const) {
+      if (line[field].trim() && !Number.isFinite(Number(line[field]))) errors.push(`${prefix}: ${field} must be a finite number`);
+    }
+    if (Number(line.igstPercent) > 0 && (Number(line.cgstPercent) > 0 || Number(line.sgstPercent) > 0)) errors.push(`${prefix}: use either IGST or CGST and SGST, not both`);
     const purchased = numeric(line.quantityPurchased);
     const free = numeric(line.freeQuantity);
     if (!Number.isInteger(purchased) || !Number.isInteger(free)) {
@@ -1008,16 +1013,16 @@ export function PurchaseInvoiceWorkbench({
  */
 /**
  * @cc [owner:nareshshah139,label:product] purchase-check-before-stock
- * Scanning and Save draft MUST retain a reviewable draft without adding stock. Save & add stock
- * MUST require final human confirmation and save, review and post the same invoice. Automatic
+ * Scanning and Save draft MUST retain unresolved checks without adding stock. The explicit final
+ * action confirms valid current values and saves, reviews and posts the same invoice. Automatic
  * processing MUST stay an explicit secondary choice. Linked receipts MUST use Post bill in instructions and progress and explain
- * that posting adds no further stock. Editing reviewed values MUST clear the final human confirmation.
+ * that posting adds no further stock. Confirmation MUST use one immutable current-value submission.
  */
 /**
  * @cc [owner:nareshshah139,label:product] invoice-field-color-evidence
  * Unresolved field errors MUST override green verification. Empty OCR flags MUST NOT make fields
  * green; success requires final human confirmation or a server-reviewed/committed invoice.
- * Changed OCR checks MUST restore pending counts and field colors and block final approval,
+ * Changed OCR checks MUST restore pending counts and field colors until corrected or confirmed,
  * including after saving or recovering a draft. Confirming final approval MUST NOT invalidate a current
  * successful catalogue check. Unknown stock outcome or a stale revision
  * MUST suppress that global success state.
@@ -1085,7 +1090,11 @@ function PurchaseInvoiceEditor({
     error: permissionsError,
   } = usePurchasePermissions(user?.id);
   const [savingSupplier, setSavingSupplier] = useState(false);
-  const [reviewAccepted, setReviewAccepted] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [sharedTerms, setSharedTerms] = useState<SharedTerms>({ kind: 'gst', mode: 'split', rate: '' });
+  const [batchState, setBatchState] = useState<{ kind: 'idle' } | { kind: 'preview' | 'applied'; proposal: SharedTermPreview; invoiceId: string | null }>({ kind: 'idle' });
   const [checkedOcr, setCheckedOcr] = useState<Record<string, PurchaseCheckedFields>>({});
   const [serverDraft, setServerDraft] = useState<any>(null);
   const [serverDrafts, setServerDrafts] = useState<any[]>([]);
@@ -1185,7 +1194,7 @@ function PurchaseInvoiceEditor({
     if (!attemptCurrent(attempt)) return;
     if ((err as { body?: { code?: string } })?.body?.code === "PURCHASE_CATALOG_REVIEW_REQUIRED") {
       setCatalogueIssue(true);
-      setReviewAccepted(false);
+
       void refreshMasterMatches();
     }
   };
@@ -1237,7 +1246,7 @@ function PurchaseInvoiceEditor({
     setPendingMismatch(null);
     setComparison(null);
     setRecovery(null);
-    setReviewAccepted(false);
+
   };
   const captureRecovery = (err: unknown, attempt: PurchaseAttempt) => {
     if (!attemptCurrent(attempt)) return;
@@ -1260,14 +1269,11 @@ function PurchaseInvoiceEditor({
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const currentHeaderFlags = useMemo(() => pendingPurchaseOcrFlags(splitFlags(headerFlags) || [], header, checkedOcr.header), [headerFlags, header, checkedOcr]);
+  const currentHeaderFlags = useMemo(() => pendingPurchaseOcrFlags(splitFlags(headerFlags) || [], { ...header, printedAmounts: JSON.stringify(originalAmounts) }, checkedOcr.header), [headerFlags, header, originalAmounts, checkedOcr]);
   const currentLineFlags = useMemo(() => lines.map((line, index) => pendingPurchaseOcrFlags(splitFlags(line.ocrFlags) || [], line, checkedOcr[line.localId], index)), [lines, checkedOcr]);
   const pendingHeaderFlags = currentHeaderFlags.join(", ");
   const linesWithPendingChecks = useMemo(() => lines.map((line, index) => ({ ...line, ocrFlags: currentLineFlags[index].join(", ") })), [lines, currentLineFlags]);
-  const rememberOcrCheck = (scope: string, checked: PurchaseCheckedFields) => {
-    setReviewAccepted(false);
-    setCheckedOcr(current => ({ ...current, [scope]: checked }));
-  };
+
   const recoveredInvoiceId = useRef<string | null>(null);
   const draftSelection = useRef({ editingId, hasContent: false });
   draftSelection.current = {
@@ -1459,34 +1465,37 @@ function PurchaseInvoiceEditor({
   const updateHeader = (key: keyof HeaderForm, value: string) => {
     invalidatePending();
     setManualReviewCandidateId(null);
-    setReviewAccepted(false);
+
     if (key === "goodsReceivedDate") setReviewDate(value);
-    setHeader((current) => {
-      const next = { ...current, [key]: value };
-      if (key === "billType" && value === "CASH") next.dueDate = "";
-      return next;
-    });
+    const next = { ...header, [key]: value };
+    if (key === 'billType' && value === 'CASH') next.dueDate = '';
+    const review = confirmPurchaseChecks(currentHeaderFlags, next, checkedOcr.header, undefined, key);
+    setCheckedOcr(current => ({ ...current, header: review.checked }));
+    setHeaderFlags(review.flags.join(', '));
+    setHeader(next);
   };
 
   const updateLine = (localId: string, key: keyof LineForm, value: string) => {
     invalidatePending();
     setManualReviewCandidateId(null);
-    setReviewAccepted(false);
+
     if (["productName", "packSize", "packUnitType"].includes(key)) {
       setMasterMatches([]);
       setMasterStatuses({});
     }
-    setLines((current) =>
-      current.map((line) =>
-        line.localId === localId ? { ...line, [key]: value } : line,
-      ),
-    );
+    const index = lines.findIndex(line => line.localId === localId);
+    const line = lines[index];
+    if (!line) return;
+    const next = { ...line, [key]: value };
+    const review = confirmPurchaseChecks(currentLineFlags[index], next, checkedOcr[localId], index, key);
+    setCheckedOcr(current => ({ ...current, [localId]: review.checked }));
+    setLines(current => current.map(row => row.localId === localId ? { ...next, ocrFlags: review.flags.join(', ') } : row));
   };
 
   const addLine = () => {
     invalidatePending();
     setManualReviewCandidateId(null);
-    setReviewAccepted(false);
+
     setLines((current) => [...current, emptyLine(current.length + 1)]);
   };
 
@@ -1494,7 +1503,7 @@ function PurchaseInvoiceEditor({
     invalidatePending();
     setManualReviewCandidateId(null);
     if (lines.length <= 1) return;
-    setReviewAccepted(false);
+
     const removedIndex = lines.findIndex((line) => line.localId === localId);
     setMasterMatches([]);
     setMasterStatuses({});
@@ -1521,7 +1530,7 @@ function PurchaseInvoiceEditor({
     lineIndex?: number,
   ) => {
     setManualReviewCandidateId(null);
-    setReviewAccepted(false);
+
     setOriginalAmounts((current) => {
       if (!current) return current;
       if (lineIndex === undefined) return { ...current, [key]: value };
@@ -1536,6 +1545,7 @@ function PurchaseInvoiceEditor({
   };
 
   const resetDraft = () => {
+    setBatchState({ kind: 'idle' }); setSelectedRows([]); setBatchOpen(false);
     invalidatePending();
     setCheckedOcr({});
     setShowIntakeHome(false);
@@ -1553,7 +1563,7 @@ function PurchaseInvoiceEditor({
     setServerDraft(null);
     draftRequestKey.current = "";
     setWorkflowReceiptId("");
-    setReviewAccepted(false);
+
     setOriginalAmounts(null);
     setSourceDocument(null);
     setHeaderFlags("");
@@ -1580,7 +1590,7 @@ function PurchaseInvoiceEditor({
   ) => {
     invalidatePending();
     setCheckedOcr({});
-    setReviewAccepted(false);
+
     const defaults = defaultHeader();
     setShowIntakeHome(false);
     setManualReviewCandidateId(null);
@@ -1679,7 +1689,7 @@ function PurchaseInvoiceEditor({
     if (!patch) return;
     invalidatePending();
     setManualReviewCandidateId(null);
-    setReviewAccepted(false);
+
     setLines((current) =>
       current.map((line, index) => {
         if (index !== lineIndex) return line;
@@ -1726,7 +1736,7 @@ function PurchaseInvoiceEditor({
     setCatalogue({ state: 'pending', request });
     setPendingMismatch(null);
     matchRequest.current += 1;
-    setReviewAccepted(false);
+
     setMasterRefreshing(true);
     try {
       const response = await apiClient.suggestPharmacyPurchaseMasterMatches<MasterMatchResponse>({ items: sourceLines.map(linePayload) });
@@ -1866,7 +1876,7 @@ function PurchaseInvoiceEditor({
     const request = { ...catalogueIdentityRef.current, generation: editorGeneration.current, sequence: ++catalogueSequence.current };
     const sourceLines = lines;
     setCatalogue({ state: 'pending', request });
-    setReviewAccepted(false);
+
     setMasterConfirming(`edit:${drug.id}`);
     setProductFocus(null);
     setError(null);
@@ -1965,10 +1975,6 @@ function PurchaseInvoiceEditor({
     setError(null);
     setNotice(null);
     try {
-      if (reviewAccepted && canReview && access.commit) {
-        await saveAndPostInvoice();
-        return;
-      }
       const productsReady = catalogueReady || await refreshMasterMatches();
       if (!attemptCurrent(attempt)) return;
       let savedForReview: PurchaseInvoice | undefined;
@@ -2021,7 +2027,7 @@ function PurchaseInvoiceEditor({
       ) {
         setManualReviewCandidateId(savedForReview.id);
         setNotice(
-          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review below, then choose ${savedForReview.workflowReceiptId ? "Save & post bill" : "Save & add stock"}.`,
+          `Invoice ${savedForReview.invoiceNumber} saved. Automatic intake needs a human review; check the original, confirm the review below, then choose ${savedForReview.workflowReceiptId ? "Confirm & post bill" : "Confirm reviewed values & add stock"}.`,
         );
       }
     } catch (err) {
@@ -2324,14 +2330,58 @@ function PurchaseInvoiceEditor({
     }
   };
 
-  const saveDraft = async () => {
+  type ReviewedDraft = { header: HeaderForm; lines: LineForm[]; headerFlags: string[]; amounts: Record<string, unknown> | null; checks: Record<string, PurchaseCheckedFields>; reviewDate: string };
+  /**
+   * @cc [owner:nareshshah139,label:state] current-reviewed-submission
+   * Final confirmation MUST capture current values and their review evidence together, preserving
+   * printed amounts. Invalid values, unknown checks and unreconciled amounts MUST yield no submission.
+   */
+  const prepareReviewedDraft = (): ReviewedDraft | null => {
+    const headerReview = confirmPurchaseChecks(currentHeaderFlags, { ...header, printedAmounts: JSON.stringify(originalAmounts) }, checkedOcr.header);
+    const checks: Record<string, PurchaseCheckedFields> = { ...checkedOcr, header: headerReview.checked };
+    const reviewedLines = lines.map((line, index) => {
+      const review = confirmPurchaseChecks(currentLineFlags[index], line, checkedOcr[line.localId], index);
+      checks[line.localId] = review.checked;
+      return { ...line, ocrFlags: review.flags.join(', ') };
+    });
+    const errors = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts), ...draftWarnings(lines), ...missingStockFields];
+    const calculated = buildDraftPayload(header, lines) as Record<string, any>;
+    const compare = (printed: Record<string, unknown> | null, values: Record<string, any>, fields: Record<string, string>, prefix: string) => {
+      for (const [key, label] of Object.entries(fields)) {
+        if (printed?.[key] != null && printed[key] !== '' && Math.abs(Number(printed[key]) - Number(values[key])) > 1) errors.push(`${prefix}${label} differs from the calculated amount. Correct the printed value or line entries against the original.`);
+      }
+    };
+    compare(originalAmounts, calculated, reportedHeaderAmounts, 'Printed ');
+    if (Array.isArray(originalAmounts?.items)) originalAmounts.items.forEach((item, index) => { if (calculated.items[index]) compare(item, calculated.items[index], reportedLineAmounts, `Line ${index + 1} printed `); });
+    if (!errors.length) {
+      const confirmTotals = (flags: string[], values: Record<string, string>, scope: string, index?: number) => flags.filter(flag => {
+        const issue = purchaseReviewIssue(flag, index);
+        if (issue.category !== 'totals' || !/^(?:(?:AUTO|OCR):\s*)*(?:uncertain|independent_read_disagrees)[_-]/i.test(flag)) return true;
+        checks[scope] = { ...checks[scope], [issue.key]: { flags: [flag], snapshot: purchaseCheckSnapshot(issue, values) } };
+        return false;
+      });
+      headerReview.flags = confirmTotals(headerReview.flags, { ...header, printedAmounts: JSON.stringify(originalAmounts) }, 'header');
+      reviewedLines.forEach((line, index) => { line.ocrFlags = confirmTotals(splitFlags(line.ocrFlags) || [], line, line.localId, index).join(', '); });
+    }
+    if (headerReview.flags.length || reviewedLines.some(line => splitFlags(line.ocrFlags)?.length)) errors.push('Resolve the remaining upload or invoice checks before confirming. Unknown checks require correction and another scan, or complete manual entry from the original.');
+    setValidationErrors(errors);
+    if (errors.length) { focusActionFeedback(); return null; }
+    return { header: { ...header }, lines: reviewedLines, headerFlags: headerReview.flags, amounts: originalAmounts ? structuredClone(originalAmounts) : null, checks, reviewDate };
+  };
+
+  /**
+   * @cc [owner:nareshshah139,label:product] draft-review-intent
+   * Ordinary draft saves MUST preserve pending checks and stay stock neutral. A confirmed submission
+   * MUST supply both its values and checks to the same revision-checked save without reading newer state.
+   */
+  const saveDraft = async (confirmed?: ReviewedDraft) => {
     if (!access.create || saveLock.current || extracting || draftWriteBlocked)
       return;
     setNotice(null);
     setError(null);
     const errors = [
-      ...validateDraft(header, lines),
-      ...reportedAmountErrors(originalAmounts),
+      ...validateDraft(confirmed?.header || header, confirmed?.lines || lines),
+      ...reportedAmountErrors(confirmed ? confirmed.amounts : originalAmounts),
     ];
     setValidationErrors(errors);
     if (errors.length > 0) {
@@ -2345,13 +2395,13 @@ function PurchaseInvoiceEditor({
     try {
       const payload = {
         ...preserveInvoiceTotals(
-          buildDraftPayload(header, linesWithPendingChecks),
-          originalAmounts,
+          buildDraftPayload(confirmed?.header || header, confirmed?.lines || linesWithPendingChecks),
+          confirmed ? confirmed.amounts : originalAmounts,
         ),
         expectedUpdatedAt: editingId
           ? draftServerRevision || undefined
           : undefined,
-        ocrFlags: currentHeaderFlags,
+        ocrFlags: confirmed?.headerFlags || currentHeaderFlags,
         sourceDocumentId: sourceDocument?.id,
         sourceDocumentIds: additionalSourceIds,
         workflowReceiptId: workflowReceiptId || undefined,
@@ -2385,6 +2435,11 @@ function PurchaseInvoiceEditor({
         ),
       );
       setActiveInvoice(created);
+      if (confirmed) {
+        setHeaderFlags(confirmed.headerFlags.join(', '));
+        setLines(confirmed.lines);
+        setCheckedOcr(confirmed.checks);
+      }
       setOriginalAmounts(created as unknown as Record<string, unknown>);
       setSourceDocument(created.documents?.[0] || sourceDocument);
       void loadUnlinkedUploads();
@@ -2505,6 +2560,7 @@ function PurchaseInvoiceEditor({
   };
 
   const editSavedDraft = (invoice: PurchaseInvoice) => {
+    setBatchState({ kind: 'idle' }); setSelectedRows([]);
     invalidatePending();
     setCatalogueIssue(false);
     applyExtractedDraft({
@@ -2519,7 +2575,7 @@ function PurchaseInvoiceEditor({
     setRevisionConflict(null);
     setRevisionChecking(false);
     setWorkflowReceiptId((invoice as any).workflowReceiptId || "");
-    setReviewAccepted(false);
+
     setSourceDocument(invoice.documents?.[0] || null);
     setAdditionalSourceIds(invoice.documents?.map((d) => d.id) || []);
     setActiveInvoice(invoice);
@@ -2543,12 +2599,12 @@ function PurchaseInvoiceEditor({
    * refresh server status before permitting further edits or stock commit.
    */
   const reopenReviewedInvoice = async () => {
-    if (!canReopenReview || !activeInvoice?.updatedAt || busy) return;
+    if (!canReopenReview || !activeInvoice?.updatedAt || busy || !reopenReason.trim()) return;
     setReopeningReview(true);
     setError(null);
     setNotice(null);
     try {
-      const reopened = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(activeInvoice.id, activeInvoice.updatedAt);
+      const reopened = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(activeInvoice.id, activeInvoice.updatedAt, reopenReason.trim());
       if (reopened?.id !== activeInvoice.id || reopened.status !== "DRAFT" || reopened.stockCommittedAt || !reopened.updatedAt || !Array.isArray(reopened.items)) {
         throw new Error("The reopened invoice could not be confirmed. Reload the saved invoice.");
       }
@@ -2620,7 +2676,7 @@ function PurchaseInvoiceEditor({
     if (importLock.current || processLock.current || unknownStockRef.current) return;
     invalidatePending();
     setCheckedOcr({});
-    setReviewAccepted(false);
+
     const p = saved.payload;
     const revision =
       p.draftServerRevision || p.originalAmounts?.updatedAt || null;
@@ -2685,7 +2741,7 @@ function PurchaseInvoiceEditor({
       setRevisionConflict(
         "Your local corrections are retained, but the saved invoice changed or its earlier version cannot be verified. Compare with the saved version before saving or adding stock.",
       );
-      setReviewAccepted(false);
+
     } else setRevisionConflict(null);
   };
   /**
@@ -2719,9 +2775,10 @@ function PurchaseInvoiceEditor({
     let saved = comparison.saved;
     if (keepLocal && !access.create) return;
     if (keepLocal && saved.status === 'REVIEWED' && access.reopenReview && access.review && saved.updatedAt) {
+      if (!reopenReason.trim()) { setError('Enter a reason to reopen the reviewed invoice.'); return; }
       setReopeningReview(true);
       try {
-        saved = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(saved.id, saved.updatedAt);
+        saved = await apiClient.reopenPharmacyPurchaseInvoiceReview<PurchaseInvoice>(saved.id, saved.updatedAt, reopenReason.trim());
         if (!attemptCurrent(attempt) || !isPurchaseReadback(saved, comparison.saved.id)) return;
       } catch (err) { captureRecovery(err, attempt); return; }
       finally { setReopeningReview(false); }
@@ -2865,26 +2922,24 @@ function PurchaseInvoiceEditor({
   /**
    * @cc [owner:nareshshah139,label:product] purchase-explicit-posting
    * Explicit posting MUST save new or editable corrections, review the saved invoice and commit
-   * once after human confirmation. Reviewed invoices MUST resume at commit without saving again.
-   * Unresolved checks, historical holds, missing permissions or stale revisions MUST block posting.
+   * once after human confirmation. Review-only users MUST stop after a confirmed review without committing.
+   * Reviewed invoices MUST resume at commit without saving again.
+   * Invalid, upload-only or unknown checks, historical holds, missing permissions and stale revisions MUST block posting.
    */
   /**
    * @cc [owner:nareshshah139,label:state] purchase-posting-exact-id-recovery
    * An uncertain review or commit MUST refresh the ID returned by the successful save. Failed
    * refresh MUST block writes; only confirmed STOCK_COMMITTED may report success or refresh stock.
    */
-  const saveAndPostInvoice = async () => {
-    if (postingLock.current === editorGeneration.current || saveLock.current || draftWriteBlocked || !access.commit) return;
+  const saveAndPostInvoice = async (commitStock = true) => {
+    if (postingLock.current === editorGeneration.current || saveLock.current || draftWriteBlocked || (commitStock ? !access.commit : !access.review)) return;
     const alreadyReviewed = activeInvoice?.status === "REVIEWED";
-    if (alreadyReviewed) {
-      if (!window.confirm(activeInvoice.workflowReceiptId
-        ? `Post bill ${activeInvoice.invoiceNumber} against the earlier stock receipt? No stock will be added again.`
-        : `Add stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory.`)) return;
-    } else if (!access.create || !access.review || !reviewAccepted || !catalogueReady || !reviewDate || historicalStockHold ||
-      currentHeaderFlags.length || currentLineFlags.some(flags => flags.length) ||
-      (activeInvoice && (!editingSelectedInvoice || ["STOCK_COMMITTED", "CANCELLED"].includes(activeInvoice.status)))) {
+    if (!alreadyReviewed && (!access.create || !access.review || !catalogueReady || !reviewDate || historicalStockHold ||
+      (activeInvoice && (!editingSelectedInvoice || ["STOCK_COMMITTED", "CANCELLED"].includes(activeInvoice.status))))) {
       return;
     }
+    const confirmed = alreadyReviewed ? undefined : prepareReviewedDraft();
+    if (!alreadyReviewed && !confirmed) return;
     const attempt = captureAttempt();
     postingLock.current = attempt.generation;
     let phase: { kind: "saving" } | { kind: "reviewing" | "committing"; invoiceId: string } = { kind: "saving" };
@@ -2892,7 +2947,7 @@ function PurchaseInvoiceEditor({
     setNotice(null);
     setError(null);
     try {
-      let invoice = alreadyReviewed ? activeInvoice : await saveDraft();
+      let invoice = alreadyReviewed ? activeInvoice : await saveDraft(confirmed || undefined);
       if (!invoice || !attemptCurrent(attempt)) return;
       if (!alreadyReviewed && invoice.status !== "STOCK_COMMITTED") {
         const issues = purchaseBlockingIssues(invoice.reconciliationIssues || []);
@@ -2905,7 +2960,7 @@ function PurchaseInvoiceEditor({
         phase = { kind: "reviewing", invoiceId: invoice.id };
         const reviewed = await apiClient.reviewPharmacyPurchaseInvoice<PurchaseInvoice>(invoice.id, {
           expectedUpdatedAt: invoice.updatedAt,
-          goodsReceivedDate: reviewDate,
+          goodsReceivedDate: confirmed?.reviewDate || reviewDate,
           handwrittenNotes: invoice.handwrittenNotes || undefined,
         });
         if (!attemptCurrent(attempt)) return;
@@ -2915,6 +2970,7 @@ function PurchaseInvoiceEditor({
         setActiveInvoice(reviewed);
         setDraftServerRevision(reviewed.updatedAt || null);
       }
+      if (!commitStock) return;
       phase = { kind: "committing", invoiceId: invoice.id };
       setReviewing(false);
       setCommitting(true);
@@ -2925,7 +2981,10 @@ function PurchaseInvoiceEditor({
       captureRecovery(err, attempt);
       captureCatalogueFailure(err, attempt);
     } finally {
-      if (phase.kind !== "saving" && attemptCurrent(attempt)) await refreshStockStatus(phase.invoiceId);
+      if (phase.kind !== 'saving' && attemptCurrent(attempt)) {
+        const confirmedStatus = await refreshStockStatus(phase.invoiceId);
+        if (!commitStock && confirmedStatus?.status === 'REVIEWED') setNotice('Review saved. Stock not added. An authorized colleague can add stock from this reviewed invoice.');
+      }
       if (postingLock.current === attempt.generation) postingLock.current = null;
       if (attemptCurrent(attempt)) {
         setReviewing(false);
@@ -2965,7 +3024,7 @@ function PurchaseInvoiceEditor({
   const stockAdded = !stockStatusUnknown &&
     (activeInvoice?.status === "STOCK_COMMITTED" || !!activeInvoice?.stockCommittedAt);
   const linkedReceipt = !!(activeInvoice?.workflowReceiptId || workflowReceiptId);
-  const postingLabel = linkedReceipt ? "Save & post bill" : "Save & add stock";
+  const postingLabel = linkedReceipt ? "Confirm & post bill" : "Confirm reviewed values & add stock";
   const stockReceivedEarlier = stockAdded && linkedReceipt;
   const committedLabel = stockReceivedEarlier
     ? "Invoice posted · stock received earlier"
@@ -3209,7 +3268,7 @@ function PurchaseInvoiceEditor({
   // Evidence wins over a previous confirmation: unresolved corrections stay red or amber.
   const fieldTones: Record<string, ReviewTone> = {};
   const invoiceVerified = !stockStatusUnknown && !draftWriteBlocked &&
-    ((reviewAccepted && catalogueReady && confirmationCount === 0) || activeInvoice?.status === "REVIEWED" || stockAdded);
+    (activeInvoice?.status === "REVIEWED" || stockAdded);
   if (invoiceVerified) sourceTargets.forEach(target => { fieldTones[target.id] = "success"; });
   const markField = (issue: ReturnType<typeof purchaseReviewIssue>, tone: ReviewTone) => {
     if (!issue.target) return;
@@ -3218,7 +3277,16 @@ function PurchaseInvoiceEditor({
     if (fieldTones[id] !== "error") fieldTones[id] = tone;
     if (issue.field === "expiryMonth" && lineId) fieldTones[`${lineId}-expiry-year`] = tone;
   };
-  if (editingChecks) {
+  if (editingChecks && !stockStatusUnknown && !draftWriteBlocked) {
+    Object.entries(checkedOcr).forEach(([scope, entries]) => {
+      const index = scope === 'header' ? undefined : lines.findIndex(line => line.localId === scope);
+      const values = scope === 'header' ? { ...header, printedAmounts: JSON.stringify(originalAmounts) } : index !== undefined && index >= 0 ? lines[index] : null;
+      if (!values) return;
+      Object.values(entries).forEach(entry => {
+        const issue = purchaseReviewIssue(entry.flags[0], index);
+        if (!purchaseCheckInvalid(issue, values) && purchaseCheckSnapshot(issue, values) === entry.snapshot) markField(issue, 'success');
+      });
+    });
     currentHeaderFlags.forEach(flag => { const issue = purchaseReviewIssue(flag); markField(issue, purchaseCheckInvalid(issue, header) ? "error" : "warning"); });
     currentLineFlags.forEach((flags, index) => flags.forEach(flag => { const issue = purchaseReviewIssue(flag, index); markField(issue, purchaseCheckInvalid(issue, lines[index]) ? "error" : "warning"); }));
   }
@@ -3239,7 +3307,7 @@ function PurchaseInvoiceEditor({
           <PurchaseStatusCue tone={Object.values(fieldTones).includes("error") || correctionIssues.some(issue => issue.category !== "historical") ? "error" : confirmationCount || otherReviewIssues.length || !invoiceVerified ? "warning" : "success"}>
             {editingChecks ? checksRemaining > 0 ? `${checksRemaining} check${checksRemaining === 1 ? "" : "s"} to finish` : invoiceVerified ? "Review confirmed" : "Ready for your final check" : "Open Review issues to continue"}
           </PurchaseStatusCue>
-          <PurchaseHelp label="Review checks">Compare flagged values with the original, correct them if needed, then confirm each check. Corrections and field confirmations are separate from the final stock review.</PurchaseHelp>
+          <PurchaseHelp label="Review checks">Correct any mistakes against the original. The final action confirms all current valid values together; missing or invalid values still need correction.</PurchaseHelp>
         </div>
       </div>
       {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
@@ -3279,7 +3347,7 @@ function PurchaseInvoiceEditor({
         nextAction={postingLabel}
         onChange={(distributorName, distributorGstin) => {
           invalidatePending();
-          setReviewAccepted(false);
+
           setManualReviewCandidateId(null);
           setHeader((current) => ({
             ...current,
@@ -3297,60 +3365,8 @@ function PurchaseInvoiceEditor({
       />
       {editingChecks && (
         <>
-          <PurchaseOcrChecklist
-            key={checkSession}
-            flags={currentHeaderFlags}
-            checked={checkedOcr.header || {}}
-            onChecked={checked => rememberOcrCheck("header", checked)}
-            values={header}
-            disabled={busy}
-            onResolveMany={(flags) => {
-              setManualReviewCandidateId(null);
-              setHeaderFlags((current) =>
-                (splitFlags(current) || [])
-                  .filter((value) => !flags.includes(value))
-                  .join(", "),
-              );
-            }}
-            onResolve={(flag) => {
-              setManualReviewCandidateId(null);
-              setHeaderFlags((current) =>
-                (splitFlags(current) || [])
-                  .filter((value) => value !== flag)
-                  .join(", "),
-              );
-            }}
-          />
-          {lines.map((line, index) => (
-            <PurchaseOcrChecklist
-              key={`${checkSession}:${line.localId}`}
-              flags={currentLineFlags[index]}
-              checked={checkedOcr[line.localId] || {}}
-              onChecked={checked => rememberOcrCheck(line.localId, checked)}
-              lineIndex={index}
-              lineId={line.localId}
-              values={line}
-              disabled={busy}
-              onResolveMany={(flags) =>
-                updateLine(
-                  line.localId,
-                  "ocrFlags",
-                  currentLineFlags[index]
-                    .filter((value) => !flags.includes(value))
-                    .join(", "),
-                )
-              }
-              onResolve={(flag) =>
-                updateLine(
-                  line.localId,
-                  "ocrFlags",
-                  currentLineFlags[index]
-                    .filter((value) => value !== flag)
-                    .join(", "),
-                )
-              }
-            />
-          ))}
+          <PurchaseOcrChecklist flags={currentHeaderFlags} checked={checkedOcr.header} values={header} />
+          {lines.map((line, index) => <PurchaseOcrChecklist key={line.localId} flags={currentLineFlags[index]} checked={checkedOcr[line.localId]} lineIndex={index} lineId={line.localId} values={line} />)}
         </>
       )}
       {correctionIssues.length > 0 && (
@@ -3401,7 +3417,7 @@ function PurchaseInvoiceEditor({
       {editingChecks &&
         confirmationCount === 0 &&
         otherReviewIssues.length === 0 && (
-          <PurchaseStatusCue tone={reviewAccepted ? "success" : "warning"}>No outstanding OCR checks — compare with the bill</PurchaseStatusCue>
+          <PurchaseStatusCue tone="warning">No outstanding OCR checks — compare with the bill</PurchaseStatusCue>
         )}
     </section>
   );
@@ -3496,6 +3512,7 @@ function PurchaseInvoiceEditor({
       )}
       {recovery?.kind === 'stale' && !comparison && !unknownStockInvoiceId && <Button variant="outline" disabled={busy || !access.read} onClick={reloadSavedInvoice}>Compare with saved version</Button>}
       {comparison && !unknownStockInvoiceId && <div className="space-y-3" aria-label="Compare with saved invoice">
+        {comparison.saved.status === 'REVIEWED' && <label className="block text-sm">Reason to reopen saved review<Input value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label>}
         <h4 className="font-semibold">Compare with saved invoice</h4>
         <p className="text-sm">Your attempted entry is unchanged. Applying corrections keeps the saved invoice number, supplier identity, original documents and inward receipt link. Saved invoice {comparison.saved.invoiceNumber} is {purchaseInvoiceStatusLabel(comparison.saved).toLowerCase()}.</p>
         {comparison.saved.workflowReceiptId && <p className="text-sm">This bill belongs to an inward receipt. Its receipt link stays with this saved bill and stock must not be received again.</p>}
@@ -3504,7 +3521,7 @@ function PurchaseInvoiceEditor({
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={busy} onClick={() => adoptComparison(false)}>Use saved values</Button>
           {access.create && canCorrectPurchase(comparison.saved) && <Button disabled={busy} onClick={() => adoptComparison(true)}>Apply my corrections to this invoice</Button>}
-          {access.create && access.review && access.reopenReview && comparison.saved.status === 'REVIEWED' && !comparison.saved.stockCommittedAt && <Button disabled={busy} onClick={() => adoptComparison(true)}>Reopen review and apply my corrections</Button>}
+          {access.create && access.review && access.reopenReview && comparison.saved.status === 'REVIEWED' && !comparison.saved.stockCommittedAt && <Button disabled={busy || !reopenReason.trim()} onClick={() => adoptComparison(true)}>Reopen review and apply my corrections</Button>}
           <Button variant="ghost" disabled={busy} onClick={() => setComparison(null)}>Keep my attempted entry</Button>
         </div>
         {!canCorrectPurchase(comparison.saved) && <p className="text-sm">Reviewed invoices must be reopened before corrections. Posted or cancelled invoices cannot be edited here.</p>}
@@ -3527,8 +3544,8 @@ function PurchaseInvoiceEditor({
       {!comparison && !pendingMismatch && !unknownStockInvoiceId && recoveryIssues.length > 0 && <ul className="space-y-2">{recoveryIssues.map(issue => <li key={issue.key} className="space-y-1 text-sm">{recovery && <><p>{issue.message}</p><p className="text-muted-foreground">{issue.help}</p></>}{issue.category !== 'historical' && purchaseRecoveryTarget(issue, lines.map(line => line.localId)) && access.create && !savedFormLocked && <Button size="sm" variant="outline" disabled={busy} onClick={() => focusRecoveryIssue(issue)}>Correct {issue.lineIndex === undefined ? issue.label : `line ${issue.lineIndex + 1} ${issue.label}`}</Button>}</li>)}</ul>}
       <div className="flex flex-wrap gap-2">
         {catalogueIssue && !stockAdded && !stockStatusUnknown && !savedFormLocked && access.create && <Button variant="outline" onClick={openProductRecovery} disabled={busy || draftWriteBlocked}>Fix products on this invoice</Button>}
-        {canReview && !comparison && !pendingMismatch && !reviewAccepted && <Button disabled={busy} onClick={() => focusPurchaseField("purchase-review-checklist")}>Continue to final review</Button>}
-        {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && <Button variant="outline" disabled={busy} onClick={saveDraft}>Save corrections and check again</Button>}
+        {canReview && !comparison && !pendingMismatch && <Button disabled={busy} onClick={() => focusPurchaseField("purchase-review-checklist")}>Continue to final review</Button>}
+        {access.create && !savedFormLocked && !draftWriteBlocked && !comparison && <Button variant="outline" disabled={busy} onClick={() => saveDraft()}>Save corrections and check again</Button>}
         {(needsHandoff || (recovery && (recovery.kind === 'duplicate' || recovery.kind === 'receipt') && !recovery.existingInvoiceId)) && <Button variant="outline" onClick={copyHandoff}>Copy handoff details</Button>}
       </div>
       {activeInvoice && !['STOCK_COMMITTED', 'CANCELLED'].includes(activeInvoice.status) && !activeInvoice.stockCommittedAt && access.create && access.review && !draftWriteBlocked && <Button variant="outline" disabled={busy} onClick={rejectSavedInvoice}>Reject invoice</Button>}
@@ -3540,49 +3557,87 @@ function PurchaseInvoiceEditor({
     </section>
   );
 
+  const invalidReviewValues = [...validateDraft(header, lines), ...reportedAmountErrors(originalAmounts), ...draftWarnings(lines), ...missingStockFields];
+  const hardOcrFlags = [
+    ...confirmPurchaseChecks(currentHeaderFlags, header, checkedOcr.header).flags,
+    ...lines.flatMap((line, index) => confirmPurchaseChecks(currentLineFlags[index], line, checkedOcr[line.localId], index).flags),
+  ].filter(flag => !(purchaseReviewIssue(flag).category === 'totals' && /^(?:(?:AUTO|OCR):\s*)*(?:uncertain|independent_read_disagrees)[_-]/i.test(flag)));
   const postingBlocker = stockStatusUnknown
     ? "Refresh stock status before continuing."
     : draftWriteBlocked
       ? "Reload the saved invoice to resolve the revision conflict before posting."
       : historicalStockHold
         ? "An inventory administrator must check this bill against opening stock before posting."
-        : !access.commit || !access.review || !access.create
-          ? "Saving and adding stock requires create, review and stock permissions."
+        : !access.review || !access.create
+          ? "Confirming this invoice requires create and review permissions."
           : !catalogueReady
             ? "Resolve the product checks before adding stock."
-            : confirmationCount > 0
-              ? "Finish the highlighted invoice checks before adding stock."
-              : !reviewDate
+            : invalidReviewValues.length > 0
+              ? invalidReviewValues[0]
+              : hardOcrFlags.length > 0
+                ? "Resolve the upload or unsupported invoice checks. Correct the source and scan again, or enter the complete invoice manually."
+                : !reviewDate
                 ? "Enter the goods received date before adding stock."
                 : null;
+  const batchBasis = JSON.stringify([editorGeneration.current, editingId, draftServerRevision, header, lines, originalAmounts]);
+  const batchDisabled = busy || savedFormLocked || draftWriteBlocked || !access.create;
+  const applyShared = () => {
+    if (batchDisabled || batchState.kind !== 'preview') return;
+    try {
+      const next = applyPurchaseTerms(lines, batchState.proposal, batchBasis);
+      const errors = validateDraft(header, next);
+      if (errors.length) { setError(errors.join(' ')); return; }
+      invalidatePending();  setManualReviewCandidateId(null);
+      setLines(next); setBatchState({ ...batchState, kind: 'applied' });
+      setNotice(`Shared terms applied to ${batchState.proposal.selectedIds.length} selected rows. Draft only; stock has not changed.`);
+    } catch (error) { setError(getErrorMessage(error)); setBatchState({ kind: 'idle' }); }
+  };
+  const undoShared = () => {
+    if (batchDisabled || batchState.kind !== 'applied' || batchState.invoiceId !== editingId) return;
+    const result = undoPurchaseTerms(lines, batchState.proposal);
+    invalidatePending();  setManualReviewCandidateId(null);
+    setLines(result.rows); setBatchState({ kind: 'idle' });
+    setNotice(`${result.reverted} shared values undone. ${result.kept} later corrections kept.`);
+  };
+  const sharedTermsEditor = <details data-purchase-local-controls className="border-y py-2" open={batchOpen} onToggle={event => setBatchOpen(event.currentTarget.open)}>
+    <summary className="cursor-pointer py-1 text-sm font-medium">Apply GST or discount to selected rows</summary>
+    <div className="space-y-3 py-3">
+      <p className="text-sm">Select rows below. Only verified shared GST or discount changes; product, batch, expiry, quantities and printed totals stay separate.</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-sm">Shared term<select className="mt-1 block rounded border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
+        {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<select className="mt-1 block rounded border p-2" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></select></label>}
+        <label className="text-sm">{sharedTerms.kind === 'gst' ? 'Total GST %' : 'Shared discount %'}<Input type="number" min="0" max="100" value={sharedTerms.rate} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, rate: event.target.value }); setBatchState({ kind: 'idle' }); }} /></label>
+        <Button type="button" variant="outline" disabled={batchDisabled || !selectedRows.length} onClick={() => { try { setBatchState({ kind: 'preview', proposal: previewPurchaseTerms(lines, selectedRows, sharedTerms, batchBasis), invoiceId: editingId }); setError(null); } catch (error) { setError(getErrorMessage(error)); } }}>Preview {selectedRows.length} selected rows</Button>
+      </div>
+      {batchState.kind === 'preview' && <div className="space-y-2" aria-label="Shared terms preview">
+        <p className="font-medium">{batchState.proposal.selectedIds.length} selected rows · draft changes only</p>
+        <ul className="text-sm">{batchState.proposal.patches.map(patch => <li key={`${patch.localId}-${patch.field}`}>{patch.productName}: {patch.field.replace('Percent', '')} {patch.before || '0'}% → {patch.after}%</li>)}</ul>
+        {batchState.proposal.basis !== batchBasis && <p role="alert">The invoice changed. Preview the selected rows again.</p>}
+        <Button type="button" disabled={batchDisabled || batchState.proposal.basis !== batchBasis || !batchState.proposal.patches.length} onClick={applyShared}>Apply to {batchState.proposal.selectedIds.length} selected rows</Button>
+      </div>}
+      {batchState.kind === 'applied' && <Button type="button" variant="outline" disabled={batchDisabled || batchState.invoiceId !== editingId} onClick={undoShared}>Undo shared terms</Button>}
+    </div>
+  </details>;
   const invoiceActions = (
     <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
-      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" &&
-        !postingBlocker && (!activeInvoice || editingSelectedInvoice) && (
-        <label className="flex items-start gap-2 text-sm">
-          <input id="purchase-final-approval" type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={reviewAccepted} disabled={busy}
-            onChange={e => setReviewAccepted(e.target.checked)} />
-          <span>I verified the invoice against the original. {linkedReceipt ? "I approve posting this bill against the earlier stock receipt." : "I approve adding the received quantities to stock."}</span>
-          <PurchaseHelp label="Final stock review">Verify the supplier, product matches, batches, expiry, paid/free quantities and totals against the original before confirming.</PurchaseHelp>
-        </label>
-      )}
+      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p className="text-sm">Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {stockStatusUnknown ? (
           <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
         ) : stockAdded || activeInvoice?.status === "CANCELLED" ? null : activeInvoice?.status === "REVIEWED" ? (
           <>
-            <Button onClick={saveAndPostInvoice} disabled={!canCommit || busy}>
+            <Button onClick={() => saveAndPostInvoice()} disabled={!canCommit || busy}>
               {committing && <Loader2 className="h-4 w-4 animate-spin" />}
               {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
             </Button>
-            {canReopenReview && <Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button>}
+            {canReopenReview && <><label className="text-sm">Reason to reopen review<Input aria-label="Reason to reopen review" value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label><Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy || !reopenReason.trim()}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button></>}
           </>
-        ) : canReview && !access.commit ? (
+        ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
         ) : !activeInvoice || editingSelectedInvoice ? (
-          <Button onClick={saveAndPostInvoice} disabled={busy || !!postingBlocker || !reviewAccepted} aria-describedby="purchase-posting-guidance">
+          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-describedby="purchase-posting-guidance">
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-            {postingLabel}
+            {access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"}
           </Button>
         ) : (
           <Button disabled={!access.create || busy} onClick={() => editSavedDraft(activeInvoice)}>Review issues</Button>
@@ -3603,11 +3658,11 @@ function PurchaseInvoiceEditor({
             </details>}
           </>
         )}
-        <span className="text-sm text-muted-foreground">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
+        <span className="hidden text-sm text-muted-foreground sm:inline">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
       </div>
       {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" && (
-        <p id="purchase-posting-guidance" className="text-sm text-muted-foreground">
-          {postingBlocker || (!reviewAccepted ? "Confirm the invoice against the original to enable posting." : linkedReceipt ? "Posts the bill against stock received earlier. No stock is added again." : "Saves the invoice and adds the received quantities after review.")}{" "}
+        <p id="purchase-posting-guidance" className={`text-sm text-muted-foreground ${postingBlocker ? "" : "hidden sm:block"}`}>
+          {postingBlocker ? <><span className="sm:hidden">Resolve the highlighted checks.</span><span className="hidden sm:inline">{postingBlocker}</span></> : (linkedReceipt ? "Confirm the reviewed values to post this bill. No stock is added again." : "Correct any mistakes, then confirm the reviewed values to save and add stock.")}{" "}
           {!!postingBlocker && <a className="underline underline-offset-4" href="#purchase-review-checklist">Review checks</a>}
         </p>
       )}
@@ -3702,8 +3757,8 @@ function PurchaseInvoiceEditor({
       <div
         onChangeCapture={event => {
           const target = event.target as HTMLElement;
-          if (target.id === 'purchase-final-approval') return;
-          if (target.closest('[data-purchase-catalogue-editor]')) { setReviewAccepted(false); return; }
+          if (target.closest('[data-purchase-local-controls]')) return;
+          if (target.closest('[data-purchase-catalogue-editor]')) {  return; }
           invalidatePending();
         }}
         onFocusCapture={(event) => {
@@ -3712,7 +3767,7 @@ function PurchaseInvoiceEditor({
             setSelectedSourceId(id);
         }}
         ref={workbenchRef}
-        className="space-y-5 [&_[id]]:scroll-mt-40 md:[&_[id]]:scroll-mt-24 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"
+        className="space-y-5 [&_[id]]:scroll-mt-40 [&_[id]]:scroll-mb-48 md:[&_[id]]:scroll-mt-24 md:[&_[id]]:scroll-mb-32 [&_input]:min-w-0 [&_[data-slot=card]]:shadow-none"
         onClick={(event) => {
           const link = (event.target as HTMLElement).closest('a[href^="#"]');
           const target =
@@ -3750,7 +3805,7 @@ function PurchaseInvoiceEditor({
               }}>Find posted receipts</Button>
               {!!receiptOptions.length && <label>Posted receipt
                 <select className="ml-2 rounded border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
-                  setWorkflowReceiptId(e.target.value); setReviewAccepted(false);
+                  setWorkflowReceiptId(e.target.value);
                 }}>
                   <option value="" disabled>Select the receipt for these goods</option>
                   {!receiptOptions.some(r => r.id === workflowReceiptId) && workflowReceiptId && <option value={workflowReceiptId}>Current receipt</option>}
@@ -3759,7 +3814,7 @@ function PurchaseInvoiceEditor({
               </label>}
               {workflowReceiptId && <Button type="button" variant="outline" disabled={busy} onClick={() => {
                 if (window.confirm("Remove the receipt link only if these goods have not already been added to inventory. Posting this bill will add stock. Continue?")) {
-                  setWorkflowReceiptId(""); setReviewAccepted(false);
+                  setWorkflowReceiptId("");
                 }
               }}>Remove incorrect receipt link</Button>}
             </div>
@@ -3871,15 +3926,6 @@ function PurchaseInvoiceEditor({
             </ul>
           </section>
         )}
-        {activeInvoice && !showIntakeHome && (
-          <PurchaseDocumentActions
-            invoice={activeInvoice}
-            onRefresh={async () => { await refreshStockStatus(activeInvoice.id); }}
-            onEdit={
-              !savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined
-            }
-          />
-        )}
         {permissionsLoading && (
           <p role="status">Loading invoice permissions…</p>
         )}
@@ -3946,8 +3992,8 @@ function PurchaseInvoiceEditor({
         )}
 
         {!showIntakeHome && !activeInvoice && recentInvoices}
-        {!showIntakeHome && <ReviewLegend />}
-        {!showIntakeHome && <PurchaseReviewSummary
+        {!showIntakeHome && <details><summary className="cursor-pointer text-sm">Review status guide</summary><ReviewLegend /></details>}
+        {!showIntakeHome && stockAdded && <PurchaseReviewSummary
           hasContent={hasDraftContent}
           stockReceivedEarlier={linkedReceipt}
           saved={activeInvoice?.status === "REVIEWED"} committed={stockAdded} cancelled={activeInvoice?.status === "CANCELLED"} unknown={stockStatusUnknown}
@@ -3962,7 +4008,7 @@ function PurchaseInvoiceEditor({
           tabIndex={-1}
           className="space-y-3"
         >
-          <section aria-label="Interrupted import recovery" className="space-y-3 rounded-md border p-3">
+          <details aria-label="Interrupted import recovery" open={showDelegatedRecovery || stockStatusUnknown || undefined} className="space-y-3 border-b pb-2"><summary className="cursor-pointer py-2 text-sm">Recover interrupted import</summary>
             <Button type="button" variant="outline" disabled={resolvingImport} onClick={() => {
               setDelegatedRecovery(current => ({ ...current, attemptId: importAttemptId || current.attemptId,
                 originalActorId: current.originalActorId || (!recoveryAttemptId && importAttemptId ? user?.id || '' : ''),
@@ -3986,7 +4032,7 @@ function PurchaseInvoiceEditor({
               <Button type="button" variant="outline" onClick={copyHandoff}>Copy recovery handoff</Button>
               {rejectedRecoveryReference && <p className="text-sm">This recovery reference was not accepted. This tab keeps the original reference and its stock lock. <a className="text-primary underline" target="_blank" rel="noopener noreferrer" href={`/dashboard/inventory?area=purchases&view=intake&new=recovery-${encodeURIComponent(rejectedRecoveryReference)}`}>Open another recovery page</a> to enter a corrected reference separately.</p>}
             </div>}
-          </section>
+          </details>
           {recoveryPanel}
           {notice && !(stockAdded && notice.startsWith("Restored")) && (
             <p role="status" className="flex items-start gap-2 text-sm">
@@ -4066,7 +4112,7 @@ function PurchaseInvoiceEditor({
                       {activeInvoice.distributorName}
                     </p>
                   </div>
-                  <ReviewStatus tone={stockStatusUnknown ? "warning" : purchaseInvoiceReviewTone(activeInvoice)}>{purchaseInvoiceStatusLabel(activeInvoice)}</ReviewStatus>
+                  <ReviewStatus tone={stockStatusUnknown ? "warning" : purchaseInvoiceReviewTone(activeInvoice)}>{(stockStatusUnknown ? "Stock status unknown" : purchaseInvoiceStatusLabel(activeInvoice))}</ReviewStatus>
                 </div>
                 {activeInvoice.status === "STOCK_COMMITTED" ? (
                   <p className="text-sm">
@@ -4619,7 +4665,7 @@ function PurchaseInvoiceEditor({
 
                     {lines.some((line) => line.productName.trim()) &&
                       !savedFormLocked && (
-                        <Card id="purchase-master-matching" tabIndex={-1}>
+                        <details open={!catalogueReady || undefined} className="border-y py-2"><summary className="cursor-pointer py-1 text-sm font-medium">Product matching and catalogue details</summary><Card id="purchase-master-matching" tabIndex={-1}>
                           <CardHeader>
                             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                               <div>
@@ -4996,7 +5042,7 @@ function PurchaseInvoiceEditor({
                               );
                             })}
                           </CardContent>
-                        </Card>
+                        </Card></details>
                       )}
 
                     <section id="purchase-line-items" className="space-y-3">
@@ -5010,6 +5056,7 @@ function PurchaseInvoiceEditor({
                         </div>
                       </div>
 
+                      {sharedTermsEditor}
                       {lines.map((line, index) => {
                         const amounts = calculateLine(line);
                         return (
@@ -5055,396 +5102,43 @@ function PurchaseInvoiceEditor({
                                 </span>
                               </span>
                             </div>
-                            <div className="flex justify-end px-4 pb-3">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => removeLine(line.localId)}
-                                disabled={lines.length === 1}
-                                aria-label={`Remove line ${index + 1}`}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                            <div className="space-y-4 px-4 pb-4">
-                              <div className="md:col-span-2">
-                                {currentLineFlags[index].length > 0 && (
-                                  <details className="mt-2">
-                                    <summary className="cursor-pointer text-sm text-muted-foreground">
-                                      Advanced line OCR flags
-                                    </summary>
-                                    <Label
-                                      htmlFor={`${line.localId}-ocr-flags`}
-                                    >
-                                      OCR Flags
-                                    </Label>
-                                    <Input
-                                      id={`${line.localId}-ocr-flags`}
-                                      value={currentLineFlags[index].join(", ")}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "ocrFlags",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                  </details>
-                                )}
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <Field
-                                  id={`${line.localId}-product`}
-                                  label="Product"
-                                  value={line.productName}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "productName",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-manufacturer`}
-                                  label="Manufacturer (optional)"
-                                  value={line.manufacturer}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "manufacturer",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-pack-size`}
-                                  label="Pack Size"
-                                  value={line.packSize}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "packSize",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Strip of 10"
-                                />
-                                <Field
-                                  id={`${line.localId}-unit`}
-                                  label="Stock unit"
-                                  placeholder="Bottle, Tube or Strip"
-                                  value={line.packUnitType}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "packUnitType",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-hsn`}
-                                  label="HSN"
-                                  value={line.hsnCode}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "hsnCode",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-batch`}
-                                  label="Batch"
-                                  value={line.batchNumber}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "batchNumber",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                              </div>
-
-                              <div className="grid grid-cols-2 gap-3">
-                                <Field
-                                  id={`${line.localId}-expiry-month`}
-                                  label="Exp. Month"
-                                  type="number"
-                                  min="1"
-                                  max="12"
-                                  value={line.expiryMonth}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "expiryMonth",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-expiry-year`}
-                                  label="Exp. Year"
-                                  type="number"
-                                  min="2020"
-                                  max="2100"
-                                  value={line.expiryYear}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "expiryYear",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-qty`}
-                                  label="Paid Qty"
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={line.quantityPurchased}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "quantityPurchased",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-free-qty`}
-                                  label="Free Qty"
-                                  type="number"
-                                  min="0"
-                                  step="1"
-                                  value={line.freeQuantity}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "freeQuantity",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-rate`}
-                                  label="Rate"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={line.purchaseRate}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "purchaseRate",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-mrp`}
-                                  label="MRP"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={line.mrp}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "mrp",
-                                      event.target.value,
-                                    )
-                                  }
-                                />
-                                <Field
-                                  id={`${line.localId}-old-mrp`}
-                                  label="Old MRP"
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={line.oldMrp}
-                                  onChange={(event) =>
-                                    updateLine(
-                                      line.localId,
-                                      "oldMrp",
-                                      event.target.value,
-                                    )
-                                  }
-                                  placeholder="Optional"
-                                />
-                                <ReadOnlyAmount
-                                  label="Taxable"
-                                  value={amounts.taxable}
-                                />
-                              </div>
-
-                              <details open className="border-t pt-3">
-                                <summary className="cursor-pointer text-sm font-medium">
-                                  Tax, discounts and OCR details
-                                </summary>
-                                <div className="mt-3 space-y-4">
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <Field
-                                      id={`${line.localId}-discount`}
-                                      label="Disc %"
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      value={line.discountPercent}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "discountPercent",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <Field
-                                      id={`${line.localId}-special-discount`}
-                                      label="Special %"
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      value={line.specialDiscountPercent}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "specialDiscountPercent",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <Field
-                                      id={`${line.localId}-scheme`}
-                                      label="Scheme amount (₹)"
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={line.schemeAmount || "0"}
-                                      onChange={(e) =>
-                                        updateLine(
-                                          line.localId,
-                                          "schemeAmount",
-                                          e.target.value,
-                                        )
-                                      }
-                                    />
-                                    <Field
-                                      id={`${line.localId}-cgst`}
-                                      label="CGST %"
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      value={line.cgstPercent}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "cgstPercent",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <Field
-                                      id={`${line.localId}-sgst`}
-                                      label="SGST %"
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      value={line.sgstPercent}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "sgstPercent",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <Field
-                                      id={`${line.localId}-igst`}
-                                      label="IGST %"
-                                      type="number"
-                                      min="0"
-                                      max="100"
-                                      step="0.01"
-                                      value={line.igstPercent}
-                                      onChange={(event) =>
-                                        updateLine(
-                                          line.localId,
-                                          "igstPercent",
-                                          event.target.value,
-                                        )
-                                      }
-                                    />
-                                    <ReadOnlyAmount
-                                      label="GST"
-                                      value={amounts.gst}
-                                    />
-                                    <ReadOnlyAmount
-                                      label="Line Total"
-                                      value={amounts.total}
-                                    />
-                                    <ReadOnlyAmount
-                                      label="Effective Cost"
-                                      value={
-                                        numeric(line.quantityPurchased) +
-                                          numeric(line.freeQuantity) >
-                                        0
-                                          ? money(
-                                              amounts.taxable /
-                                                (numeric(
-                                                  line.quantityPurchased,
-                                                ) +
-                                                  numeric(line.freeQuantity)),
-                                            )
-                                          : 0
-                                      }
-                                    />
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    <Field
-                                      id={`${line.localId}-confidence`}
-                                      label="OCR Confidence"
-                                      type="number"
-                                      min="0"
-                                      max="1"
-                                      step="0.01"
-                                      value={line.ocrConfidence}
-                                      readOnly
-                                      placeholder="Manual entry"
-                                    />
-                                  </div>
-                                  <ReportedAmountsEditor
-                                    id={line.localId}
-                                    values={
-                                      Array.isArray(originalAmounts?.items)
-                                        ? originalAmounts.items[index]
-                                        : null
-                                    }
-                                    labels={reportedLineAmounts}
-                                    disabled={
-                                      savedFormLocked ||
-                                      saving ||
-                                      extracting ||
-                                      processing
-                                    }
-                                    onChange={(key, value) =>
-                                      updateReportedAmount(key, value, index)
-                                    }
-                                  />
+                                                          <div className="space-y-3 px-4 pb-4">
+                                {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => { setSelectedRows(current => event.target.checked ? [...current, line.localId] : current.filter(id => id !== line.localId)); if (batchState.kind === 'preview') setBatchState({ kind: 'idle' }); }} />Select line {index + 1} for shared terms</label>}
+                                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+<Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />
+<Field id={`${line.localId}-pack-size`} label="Pack Size" value={line.packSize} onChange={event => updateLine(line.localId, "packSize", event.target.value)} />
+<Field id={`${line.localId}-unit`} label="Stock unit" value={line.packUnitType} onChange={event => updateLine(line.localId, "packUnitType", event.target.value)} />
+<Field id={`${line.localId}-batch`} label="Batch" value={line.batchNumber} onChange={event => updateLine(line.localId, "batchNumber", event.target.value)} />
+<Field id={`${line.localId}-expiry-month`} label="Exp. Month" value={line.expiryMonth} type="number" min="1" max="12" onChange={event => updateLine(line.localId, "expiryMonth", event.target.value)} />
+<Field id={`${line.localId}-expiry-year`} label="Exp. Year" value={line.expiryYear} type="number" min="2020" max="2100" onChange={event => updateLine(line.localId, "expiryYear", event.target.value)} />
+<Field id={`${line.localId}-qty`} label="Paid Qty" value={line.quantityPurchased} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "quantityPurchased", event.target.value)} />
+<Field id={`${line.localId}-free-qty`} label="Free Qty" value={line.freeQuantity} type="number" min="0" step="1" onChange={event => updateLine(line.localId, "freeQuantity", event.target.value)} />
+<Field id={`${line.localId}-rate`} label="Rate" value={line.purchaseRate} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "purchaseRate", event.target.value)} />
+<Field id={`${line.localId}-mrp`} label="MRP" value={line.mrp} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "mrp", event.target.value)} />
+<Field id={`${line.localId}-discount`} label="Disc %" value={line.discountPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "discountPercent", event.target.value)} />
+<Field id={`${line.localId}-cgst`} label="CGST %" value={line.cgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "cgstPercent", event.target.value)} />
+<Field id={`${line.localId}-sgst`} label="SGST %" value={line.sgstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "sgstPercent", event.target.value)} />
+<Field id={`${line.localId}-igst`} label="IGST %" value={line.igstPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "igstPercent", event.target.value)} />
                                 </div>
-                              </details>
-                            </div>
-                          </section>
+                                <details className="border-t pt-2" open={currentLineFlags[index].some(flag => ['manufacturer','hsnCode','oldMrp','specialDiscountPercent','schemeAmount'].includes(purchaseReviewIssue(flag, index).field || '')) || !line.hsnCode.trim() || validationErrors.some(message => message.startsWith(`Line ${index + 1}`)) || undefined}>
+                                  <summary className="cursor-pointer py-1 text-sm font-medium">Other commercial details</summary>
+                                  <div className="mt-2 grid grid-cols-2 gap-3 xl:grid-cols-4">
+<Field id={`${line.localId}-manufacturer`} label="Manufacturer (optional)" value={line.manufacturer} onChange={event => updateLine(line.localId, "manufacturer", event.target.value)} />
+<Field id={`${line.localId}-hsn`} label="HSN" value={line.hsnCode} onChange={event => updateLine(line.localId, "hsnCode", event.target.value)} />
+<Field id={`${line.localId}-old-mrp`} label="Old MRP" value={line.oldMrp} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "oldMrp", event.target.value)} />
+<Field id={`${line.localId}-special-discount`} label="Special %" value={line.specialDiscountPercent} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "specialDiscountPercent", event.target.value)} />
+<Field id={`${line.localId}-scheme`} label="Scheme amount (₹)" value={line.schemeAmount} type="number" min="0" step="0.01" onChange={event => updateLine(line.localId, "schemeAmount", event.target.value)} />
+                                    <Field id={`${line.localId}-confidence`} label="OCR Confidence" type="number" value={line.ocrConfidence} readOnly placeholder="Manual entry" />
+                                    <ReadOnlyAmount label="Taxable" value={amounts.taxable} />
+                                    <ReadOnlyAmount label="GST" value={amounts.gst} />
+                                    <ReadOnlyAmount label="Effective Cost" value={numeric(line.quantityPurchased) + numeric(line.freeQuantity) > 0 ? money(amounts.taxable / (numeric(line.quantityPurchased) + numeric(line.freeQuantity))) : 0} />
+                                  </div>
+                                  <ReportedAmountsEditor id={`${line.localId}-reported`} values={Array.isArray(originalAmounts?.items) ? originalAmounts.items[index] : null} labels={reportedLineAmounts} disabled={savedFormLocked || busy} onChange={(key, value) => updateReportedAmount(key, value, index)} />
+                                  {currentLineFlags[index].length > 0 && <details className="mt-2"><summary className="cursor-pointer text-sm">Advanced line OCR flags</summary><Label htmlFor={`${line.localId}-ocr-flags`}>OCR Flags</Label><Input id={`${line.localId}-ocr-flags`} value={currentLineFlags[index].join(', ')} onChange={event => updateLine(line.localId, 'ocrFlags', event.target.value)} /></details>}
+                                  <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => removeLine(line.localId)} disabled={lines.length === 1} aria-label={`Remove line ${index + 1}`}><Trash2 className="h-4 w-4" />Remove line</Button>
+                                </details>
+                              </div>
+</section>
                         );
                       })}
                     </section>
@@ -5835,6 +5529,7 @@ function PurchaseInvoiceEditor({
             />
           )}
         </div>
+        {activeInvoice && !showIntakeHome && <details className="border-t pt-4"><summary className="cursor-pointer py-2 font-medium">Invoice history and documents</summary><PurchaseDocumentActions invoice={activeInvoice} onRefresh={async () => { await refreshStockStatus(activeInvoice.id); }} onEdit={!savedFormLocked ? () => editSavedDraft(activeInvoice) : undefined} /></details>}
         {(!showIntakeHome || !activeInvoice) && (hasDraftContent || manualEntry) && invoiceActions}
       </div>
     </PurchaseSourceContext.Provider>
@@ -5878,7 +5573,7 @@ function ReportedAmountsEditor({
   );
   if (!fields.length) return null;
   return (
-    <details className="rounded-md border p-3">
+    <details open className="rounded-md border p-3">
       <summary className="cursor-pointer text-sm font-medium">
         Amounts read from invoice
       </summary>

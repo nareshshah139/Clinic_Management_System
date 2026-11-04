@@ -1,0 +1,598 @@
+{
+  "runId": "2026-11-04T06-04-46-360Z-460c1227",
+  "sourceRevision": "6084c1cb49057f2d1e5a389f6e452b0f74cd7d89",
+  "sourceDirty": true,
+  "status": "passed",
+  "scope": "Focused production feature E2E; desktop-driven scenarios with mobile responsive screenshots. Excludes full AppModule boot and unmounted ShelfIntelligence.",
+  "setup": {
+    "status": "passed",
+    "checks": [
+      "private Prisma alias",
+      "real HttpOnly cookie login",
+      "auth/me",
+      "workspace capabilities",
+      "mounted opening import page",
+      "unauthenticated HTTP 401",
+      "pharmacist without permission HTTP 403"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "purchase",
+      "category": "production-ui",
+      "status": "passed",
+      "assertionCount": 7,
+      "assertions": [
+        {
+          "label": "attempted note entered before rejection",
+          "expected": "Keep this attempted correction",
+          "actual": "Keep this attempted correction"
+        },
+        {
+          "label": "conflict shows saved invoice number and status before opening",
+          "expected": true,
+          "actual": true
+        },
+        {
+          "label": "opening comparison preserves attempted notes",
+          "expected": "Keep this attempted correction",
+          "actual": "Keep this attempted correction"
+        },
+        {
+          "label": "opening comparison performs no write",
+          "expected": null,
+          "actual": null
+        },
+        {
+          "label": "explicit corrections preserve selected identity",
+          "expected": "RECOVERY-PURCHASE-EXISTING",
+          "actual": "RECOVERY-PURCHASE-EXISTING"
+        },
+        {
+          "label": "correction leaves stock untouched",
+          "expected": null,
+          "actual": null
+        },
+        {
+          "label": "attempted record remains distinct",
+          "expected": "RECOVERY-PURCHASE-ATTEMPT",
+          "actual": "RECOVERY-PURCHASE-ATTEMPT"
+        }
+      ]
+    },
+    {
+      "id": "partner",
+      "category": "production-ui",
+      "status": "passed",
+      "assertionCount": 6,
+      "assertions": [
+        {
+          "label": "Initial real commit leaves two outstanding",
+          "expected": {
+            "sold": 7,
+            "committed": 5,
+            "stock": 0,
+            "movements": 1
+          },
+          "actual": {
+            "sold": 7,
+            "committed": 5,
+            "stock": 0,
+            "movements": 1
+          }
+        },
+        {
+          "label": "Matching preserves sold snapshot and stock",
+          "expected": {
+            "sold": 7,
+            "batch": "PARTNER-A",
+            "stock": 5
+          },
+          "actual": {
+            "sold": 7,
+            "batch": "PARTNER-A",
+            "stock": 5
+          }
+        },
+        {
+          "label": "Explicit match retains actor and reason",
+          "expected": {
+            "actor": "cmw1ppjn20002agj8msbx6m7r",
+            "batch": "cmw1ppyd2000cagj8bprojcho",
+            "reason": "Confirmed actual batch for remaining two units"
+          },
+          "actual": {
+            "actor": "cmw1ppjn20002agj8msbx6m7r",
+            "batch": "cmw1ppyd2000cagj8bprojcho",
+            "reason": "Confirmed actual batch for remaining two units"
+          }
+        },
+        {
+          "label": "Stale revision before completion preserves remaining stock",
+          "expected": 5,
+          "actual": 5
+        },
+        {
+          "label": "Only outstanding units deducted",
+          "expected": {
+            "committed": 7,
+            "stock": 3,
+            "held": 1,
+            "movements": 1
+          },
+          "actual": {
+            "committed": 7,
+            "stock": 3,
+            "held": 1,
+            "movements": 1
+          }
+        },
+        {
+          "label": "Completed-sale replay cannot deduct stock",
+          "expected": 3,
+          "actual": 3
+        }
+      ]
+    },
+    {
+      "id": "supplier",
+      "category": "production-ui",
+      "status": "passed",
+      "assertionCount": 5,
+      "assertions": [
+        {
+          "label": "Original payment balances",
+          "expected": [
+            0,
+            100
+          ],
+          "actual": [
+            0,
+            100
+          ]
+        },
+        {
+          "label": "Reallocation preserves amount and original allocation",
+          "expected": {
+            "balances": [
+              100,
+              0
+            ],
+            "amount": 100,
+            "replacements": 1,
+            "originalAllocations": 1,
+            "audits": 1
+          },
+          "actual": {
+            "balances": [
+              100,
+              0
+            ],
+            "amount": 100,
+            "replacements": 1,
+            "originalAllocations": 1,
+            "audits": 1
+          }
+        },
+        {
+          "label": "Exact original and replacement allocations",
+          "expected": {
+            "originalReversed": true,
+            "originalAllocations": [
+              {
+                "invoice": "cmw1pq6kc000gagj85u2sbkv4",
+                "amount": 100
+              }
+            ],
+            "replaces": "cmw1pq6l1000uagpj0zhrr2k2",
+            "replacementAllocations": [
+              {
+                "invoice": "cmw1pq6kn000iagj8ynym6fy1",
+                "amount": 100
+              }
+            ]
+          },
+          "actual": {
+            "originalReversed": true,
+            "originalAllocations": [
+              {
+                "invoice": "cmw1pq6kc000gagj85u2sbkv4",
+                "amount": 100
+              }
+            ],
+            "replaces": "cmw1pq6l1000uagpj0zhrr2k2",
+            "replacementAllocations": [
+              {
+                "invoice": "cmw1pq6kn000iagj8ynym6fy1",
+                "amount": 100
+              }
+            ]
+          }
+        },
+        {
+          "label": "Lost-response reversal is applied once",
+          "expected": {
+            "balances": [
+              100,
+              100
+            ],
+            "allocations": 1,
+            "audits": 1
+          },
+          "actual": {
+            "balances": [
+              100,
+              100
+            ],
+            "allocations": 1,
+            "audits": 1
+          }
+        },
+        {
+          "label": "Reversal retains both immutable allocation records",
+          "expected": [
+            {
+              "paymentId": "cmw1pq6l1000uagpj0zhrr2k2",
+              "purchaseInvoiceId": "cmw1pq6kc000gagj85u2sbkv4",
+              "amount": 100
+            },
+            {
+              "paymentId": "cmw1pq8k80010agpjfsnbw7ny",
+              "purchaseInvoiceId": "cmw1pq6kn000iagj8ynym6fy1",
+              "amount": 100
+            }
+          ],
+          "actual": [
+            {
+              "paymentId": "cmw1pq6l1000uagpj0zhrr2k2",
+              "purchaseInvoiceId": "cmw1pq6kc000gagj85u2sbkv4",
+              "amount": 100
+            },
+            {
+              "paymentId": "cmw1pq8k80010agpjfsnbw7ny",
+              "purchaseInvoiceId": "cmw1pq6kn000iagj8ynym6fy1",
+              "amount": 100
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "opening",
+      "category": "production-ui",
+      "status": "passed",
+      "assertionCount": 5,
+      "assertions": [
+        {
+          "label": "Authenticated branch cannot read another import",
+          "expected": 404,
+          "actual": 404
+        },
+        {
+          "label": "Durable failure rolls back only failed row",
+          "expected": {
+            "statuses": [
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "retryable": true,
+            "successfulStock": 10,
+            "failedDrugs": 0,
+            "failedItems": 0
+          },
+          "actual": {
+            "statuses": [
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "retryable": true,
+            "successfulStock": 10,
+            "failedDrugs": 0,
+            "failedItems": 0
+          }
+        },
+        {
+          "label": "Outcome lookup acknowledges exactly one retry effect",
+          "expected": {
+            "created": 2,
+            "retryableRows": 0,
+            "stock": 20,
+            "newMovements": 1
+          },
+          "actual": {
+            "created": 2,
+            "retryableRows": 0,
+            "stock": 20,
+            "newMovements": 1
+          }
+        },
+        {
+          "label": "Successful row and completed retry preserve original effects",
+          "expected": {
+            "id": "cmw1pqcqs001gagpjpkn00no8",
+            "stock": 10,
+            "receipts": 1,
+            "newMovements": 1
+          },
+          "actual": {
+            "id": "cmw1pqcqs001gagpjpkn00no8",
+            "stock": 10,
+            "receipts": 1,
+            "newMovements": 1
+          }
+        },
+        {
+          "label": "Ambiguous legacy rows remain unapplied",
+          "expected": {
+            "reconciliationRequired": 1,
+            "items": 0
+          },
+          "actual": {
+            "reconciliationRequired": 1,
+            "items": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "stock",
+      "category": "http-database",
+      "status": "passed",
+      "assertionCount": 14,
+      "assertions": [
+        {
+          "label": "Direct replay returns original receipt",
+          "expected": "cmw1pqhca002oagpjjvrytdbo",
+          "actual": "cmw1pqhca002oagpjjvrytdbo"
+        },
+        {
+          "label": "Lost direct response replays one receipt",
+          "expected": {
+            "stock": 102,
+            "movements": 1
+          },
+          "actual": {
+            "stock": 102,
+            "movements": 1
+          }
+        },
+        {
+          "label": "Partial bulk commits only available row",
+          "expected": {
+            "stock": 100,
+            "success": 1,
+            "failed": 1,
+            "movements": 2
+          },
+          "actual": {
+            "stock": 100,
+            "success": 1,
+            "failed": 1,
+            "movements": 2
+          }
+        },
+        {
+          "label": "Replenishment",
+          "expected": 2100,
+          "actual": 2100
+        },
+        {
+          "label": "Failed-row subset retry",
+          "expected": 1100,
+          "actual": 1100
+        },
+        {
+          "label": "Reordered full replay returns existing receipts",
+          "expected": {
+            "stock": 1100,
+            "movements": 4
+          },
+          "actual": {
+            "stock": 1100,
+            "movements": 4
+          }
+        },
+        {
+          "label": "Reordered replay returns exact original row receipts",
+          "expected": [
+            {
+              "rowId": "large-sale",
+              "id": "cmw1pqiz0003lagpj3bj9zez7",
+              "status": "COMPLETED"
+            },
+            {
+              "rowId": "small-sale",
+              "id": "cmw1pqhe00033agpjp0xeymlb",
+              "status": "COMPLETED"
+            }
+          ],
+          "actual": [
+            {
+              "rowId": "large-sale",
+              "id": "cmw1pqiz0003lagpj3bj9zez7",
+              "status": "COMPLETED"
+            },
+            {
+              "rowId": "small-sale",
+              "id": "cmw1pqhe00033agpjp0xeymlb",
+              "status": "COMPLETED"
+            }
+          ]
+        },
+        {
+          "label": "Operation lookup returns complete exact row receipts",
+          "expected": {
+            "status": "COMPLETED",
+            "rows": [
+              {
+                "rowId": "large-sale",
+                "id": "cmw1pqiz0003lagpj3bj9zez7",
+                "status": "COMPLETED"
+              },
+              {
+                "rowId": "small-sale",
+                "id": "cmw1pqhe00033agpjp0xeymlb",
+                "status": "COMPLETED"
+              }
+            ]
+          },
+          "actual": {
+            "status": "COMPLETED",
+            "rows": [
+              {
+                "rowId": "large-sale",
+                "id": "cmw1pqiz0003lagpj3bj9zez7",
+                "status": "COMPLETED"
+              },
+              {
+                "rowId": "small-sale",
+                "id": "cmw1pqhe00033agpjp0xeymlb",
+                "status": "COMPLETED"
+              }
+            ]
+          }
+        },
+        {
+          "label": "Conflicts and duplicate row IDs leave stock unchanged",
+          "expected": {
+            "stock": 1100,
+            "movements": 4
+          },
+          "actual": {
+            "stock": 1100,
+            "movements": 4
+          }
+        },
+        {
+          "label": "Direct movement retains explicit location",
+          "expected": {
+            "responseLocation": "Dispensing counter",
+            "savedLocation": "Dispensing counter",
+            "stock": 45,
+            "movements": 1
+          },
+          "actual": {
+            "responseLocation": "Dispensing counter",
+            "savedLocation": "Dispensing counter",
+            "stock": 45,
+            "movements": 1
+          }
+        },
+        {
+          "label": "Direct location replay retains receipt and rejects a changed location",
+          "expected": {
+            "replayStatus": 201,
+            "receipt": "cmw1pqj0i0040agpjekll6txl",
+            "responseLocation": "Dispensing counter",
+            "savedLocation": "Dispensing counter",
+            "changedStatus": 409,
+            "stock": 45,
+            "movements": 1
+          },
+          "actual": {
+            "replayStatus": 201,
+            "receipt": "cmw1pqj0i0040agpjekll6txl",
+            "responseLocation": "Dispensing counter",
+            "savedLocation": "Dispensing counter",
+            "changedStatus": 409,
+            "stock": 45,
+            "movements": 1
+          }
+        },
+        {
+          "label": "Direct omitted location uses batch storage location",
+          "expected": {
+            "responseLocation": "Default shelf",
+            "savedLocation": "Default shelf",
+            "stock": 46
+          },
+          "actual": {
+            "responseLocation": "Default shelf",
+            "savedLocation": "Default shelf",
+            "stock": 46
+          }
+        },
+        {
+          "label": "Bulk movements retain explicit and default locations",
+          "expected": {
+            "responseLocations": [
+              "Dispatch counter",
+              "Default shelf"
+            ],
+            "savedLocations": [
+              "Default shelf",
+              "Dispatch counter"
+            ],
+            "stock": 39,
+            "movements": 4
+          },
+          "actual": {
+            "responseLocations": [
+              "Dispatch counter",
+              "Default shelf"
+            ],
+            "savedLocations": [
+              "Default shelf",
+              "Dispatch counter"
+            ],
+            "stock": 39,
+            "movements": 4
+          }
+        },
+        {
+          "label": "Bulk location replay retains receipts and rejects a changed location",
+          "expected": {
+            "receipts": [
+              {
+                "id": "cmw1pqj24004tagpjjuv6fa0e",
+                "location": "Default shelf"
+              },
+              {
+                "id": "cmw1pqj1y004oagpjte9zakv6",
+                "location": "Dispatch counter"
+              }
+            ],
+            "savedReceipts": [
+              {
+                "id": "cmw1pqj24004tagpjjuv6fa0e",
+                "location": "Default shelf"
+              },
+              {
+                "id": "cmw1pqj1y004oagpjte9zakv6",
+                "location": "Dispatch counter"
+              }
+            ],
+            "changedStatus": 409,
+            "stock": 39,
+            "movements": 4
+          },
+          "actual": {
+            "receipts": [
+              {
+                "id": "cmw1pqj24004tagpjjuv6fa0e",
+                "location": "Default shelf"
+              },
+              {
+                "id": "cmw1pqj1y004oagpjte9zakv6",
+                "location": "Dispatch counter"
+              }
+            ],
+            "savedReceipts": [
+              {
+                "id": "cmw1pqj24004tagpjjuv6fa0e",
+                "location": "Default shelf"
+              },
+              {
+                "id": "cmw1pqj1y004oagpjte9zakv6",
+                "location": "Dispatch counter"
+              }
+            ],
+            "changedStatus": 409,
+            "stock": 39,
+            "movements": 4
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1302,10 +1302,13 @@ export class PharmacyPurchaseInvoiceService {
   /**
    * @cc [owner:nareshshah139,label:product;security] purchase-review-reopen-before-stock
    * Reopening MUST atomically change only the caller branch's unposted REVIEWED invoice at the
-   * supplied revision to DRAFT and record REVIEW_REOPENED. Stale revisions or a concurrent stock
+   * supplied revision to DRAFT and record REVIEW_REOPENED with a nonblank operator reason.
+   * Stale revisions or a concurrent stock
    * claim MUST fail without changing invoice lines, catalogue records or inventory quantities.
    */
   async reopenReview(id: string, dto: ReopenPharmacyPurchaseInvoiceDto, branchId: string, userId?: string) {
+    const reason = typeof dto.reason === 'string' ? dto.reason.trim() : '';
+    if (!reason || reason.length > 1000) throw new BadRequestException('Enter a reason of up to 1000 characters for reopening this review.');
     const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
     if (!dto.expectedUpdatedAt || !Number.isFinite(expectedUpdatedAt.getTime())) {
       throw new BadRequestException('Reload the saved invoice before reopening its review.');
@@ -1330,7 +1333,7 @@ export class PharmacyPurchaseInvoiceService {
         where: { id, branchId },
         include: { documents: { select: this.documentMetadata }, items: { orderBy: { lineNumber: 'asc' } } },
       });
-      await this.purchaseAudit(tx, id, branchId, userId, 'REVIEW_REOPENED', before, updated);
+      await this.purchaseAudit(tx, id, branchId, userId, 'REVIEW_REOPENED', before, { ...updated, reason });
       return this.formatPurchaseInvoice(updated);
     });
   }

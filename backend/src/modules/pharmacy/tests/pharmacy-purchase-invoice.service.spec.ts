@@ -7,6 +7,7 @@ import {
   PharmacyPurchaseBillTypeDto,
   PharmacyPurchaseInvoiceSourceDto,
   PharmacyPurchaseMasterActionDto,
+  ReopenPharmacyPurchaseInvoiceDto,
 } from '../dto/pharmacy-purchase-invoice.dto';
 
 describe('PharmacyPurchaseInvoiceService', () => {
@@ -492,7 +493,7 @@ describe('PharmacyPurchaseInvoiceService', () => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValueOnce(invoice)
       .mockResolvedValueOnce({ ...invoice, status: 'DRAFT', updatedAt: new Date('2026-10-15T08:01:00.000Z') });
     prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
-    const result = await (service as any).reopenReview(invoice.id, { expectedUpdatedAt: updatedAt.toISOString() }, branchId, userId);
+    const result = await (service as any).reopenReview(invoice.id, { expectedUpdatedAt: updatedAt.toISOString(), reason: ' Correct the product match ' }, branchId, userId);
     expect(result.status).toBe('DRAFT');
     expect(result.items).toEqual(expect.arrayContaining([expect.objectContaining({ productName: invoice.items[0].productName })]));
     expect(prisma.pharmacyPurchaseInvoice.findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: invoice.id, branchId } }));
@@ -501,9 +502,23 @@ describe('PharmacyPurchaseInvoiceService', () => {
       data: { status: 'DRAFT', updatedAt: expect.any(Date) },
     }));
     expect(prisma.auditLog.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'REVIEW_REOPENED' }) }));
+    expect(JSON.parse(prisma.auditLog.create.mock.calls[0][0].data.newValues).reason).toBe('Correct the product match');
     expect(prisma.pharmacyPurchaseInvoiceItem.update).not.toHaveBeenCalled();
     expect(prisma.drug.update).not.toHaveBeenCalled();
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, '', '   '])('requires an operator reason before reopening review: %p', async reason => {
+    prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice());
+    prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 1 });
+    await expect(service.reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z', reason } as any, branchId, userId)).rejects.toThrow('reason');
+    expect(prisma.pharmacyPurchaseInvoice.updateMany).not.toHaveBeenCalled();
+    expect(prisma.auditLog.create).not.toHaveBeenCalled();
+  });
+
+  it('requires a nonblank reopen reason through DTO validation', async () => {
+    const dto = plainToInstance(ReopenPharmacyPurchaseInvoiceDto, { expectedUpdatedAt: '2026-10-15T08:00:00.000Z', reason: '   ' });
+    expect((await validate(dto)).map(error => error.property)).toContain('reason');
   });
 
   it.each([
@@ -513,21 +528,21 @@ describe('PharmacyPurchaseInvoiceService', () => {
     { status: 'DRAFT' },
   ])('refuses reopening an ineligible invoice %p', async (override) => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice(override));
-    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow(ConflictException);
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z', reason: 'Correct product match' }, branchId, userId)).rejects.toThrow(ConflictException);
     expect(prisma.pharmacyPurchaseInvoice.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects a stale revision or a concurrent stock claim without writing an audit', async () => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(reviewedInvoice());
     prisma.pharmacyPurchaseInvoice.updateMany.mockResolvedValue({ count: 0 });
-    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow(ConflictException);
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z', reason: 'Correct product match' }, branchId, userId)).rejects.toThrow(ConflictException);
     expect(prisma.auditLog.create).not.toHaveBeenCalled();
     expect(prisma.stockTransaction.create).not.toHaveBeenCalled();
   });
 
   it('does not reopen invoices outside the selected branch', async () => {
     prisma.pharmacyPurchaseInvoice.findFirst.mockResolvedValue(null);
-    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z' }, branchId, userId)).rejects.toThrow('Purchase invoice not found');
+    await expect((service as any).reopenReview('purchase-1', { expectedUpdatedAt: '2026-10-15T08:00:00.000Z', reason: 'Correct product match' }, branchId, userId)).rejects.toThrow('Purchase invoice not found');
     expect(prisma.pharmacyPurchaseInvoice.updateMany).not.toHaveBeenCalled();
   });
 

@@ -1,3 +1,4 @@
+import { saveInventoryItemMetadata } from './inventory-item-metadata';
 import { performStockOperation, registerStockOperation, requireStockOperationId, stockRequestFingerprint } from './inventory-stock-operations';
 import { inventoryRegimenDefaults } from './inventory-regimen-defaults';
 import { writeStockMovement, movementDelta, money } from './inventory-stock';
@@ -197,52 +198,16 @@ export class InventoryService {
   }
 
 
-  async updateInventoryItem(id: string, updateItemDto: UpdateInventoryItemDto, branchId: string) {
-    const existingItem = await this.prisma.inventoryItem.findFirst({
-      where: { id, branchId },
-    });
-
-    if (!existingItem) {
-      throw new NotFoundException('Inventory item not found');
-    }
-
-    const supplied = updateItemDto as any;
-    for (const field of ['currentStock','heldStock','costPrice','unit','packSize','packUnit']) {
-      if (supplied[field] !== undefined && supplied[field] !== (existingItem as any)[field]) throw new BadRequestException('Posted stock quantity, unit basis and purchase cost require a linked stock or purchase correction');
-    }
-
-    // Check for SKU conflicts
-    if (updateItemDto.sku && updateItemDto.sku !== existingItem.sku) {
-      const existingSku = await this.prisma.inventoryItem.findFirst({
-        where: { sku: updateItemDto.sku, branchId, id: { not: id } },
-      });
-      if (existingSku) {
-        throw new ConflictException('Item with this SKU already exists');
-      }
-    }
-
-    // Check for barcode conflicts
-    if (updateItemDto.barcode && updateItemDto.barcode !== existingItem.barcode) {
-      const existingBarcode = await this.prisma.inventoryItem.findFirst({
-        where: { barcode: updateItemDto.barcode, branchId, id: { not: id } },
-      });
-      if (existingBarcode) {
-        throw new ConflictException('Item with this barcode already exists');
-      }
-    }
-
-    const updatedItem = await this.prisma.inventoryItem.update({
-      where: { id },
-      data: {
-        ...updateItemDto,
-        ...inventoryRegimenDefaults(updateItemDto, existingItem),
-        // Ensure DateTime field receives a JS Date
-        expiryDate: updateItemDto.expiryDate ? new Date(updateItemDto.expiryDate) : undefined,
-        tags: updateItemDto.tags ? JSON.stringify(updateItemDto.tags) : existingItem.tags,
-      },
-    });
-
-    return this.formatInventoryItem(updatedItem);
+  /**
+   * @cc [owner:nareshshah139,label:product;security] legacy-item-edit-guards
+   * Legacy item edits MUST use the same revision, correction reason and atomic audit rules as
+   * workspace edits. Missing actor or revision MUST NOT permit a write.
+   */
+  async updateInventoryItem(id: string, updateItemDto: UpdateInventoryItemDto, branchId: string, userId: string) {
+    const updated = await this.prisma.$transaction(tx => saveInventoryItemMetadata(
+      tx, { id: userId, branchId }, id, updateItemDto,
+    ), { isolationLevel: 'Serializable' });
+    return this.formatInventoryItem(updated);
   }
 
   async deleteInventoryItem(id: string, branchId: string) {

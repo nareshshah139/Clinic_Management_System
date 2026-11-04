@@ -1,0 +1,68 @@
+Choose candidate B as the implementation base. Graft candidate A's GST mode control and conflict-preserving undo.
+
+Scope
+Both candidate files were read completely. This is a design judgment, not implementation or runtime validation.
+No application files were changed. No agents were spawned. Model and effort were inherited.
+throughput checkpoint: n/a, read-only investigation
+
+Plan completed
+1. Read the Principles section in full.
+2. Read both candidate designs and compare the supplied five-part rubric.
+3. Write the base choice, grafts, rejected choices, and decisive proof obligations.
+The parent already owns architectural exploration. This bounded cross-judge does not repeat that fan-out.
+
+Rubric scores
+Each score is 0 for missing or contradictory, 1 for partial, and 2 for explicit and coherent.
+Criterion	A	B
+Stock, revision, permission and current-value safety	2	2
+Fewer OCR review interactions	2	2
+Batch undo, stale and unknown recovery	2	2
+Smallest coherent API and one draft owner	1	2
+Incumbent responsive visual fit	2	2
+Total	9	10
+These scores describe the proposals. They do not establish that any transition works.
+
+Why B
+B keeps HeaderForm, LineForm, confirmation capture and posting effects with the existing editor owner.
+It explicitly carries printed amounts, source IDs, request key, receipt identity and checked dependencies into submission.
+Its PostIntent distinguishes confirming an editable draft from resuming a reviewed invoice.
+This gives the implementer a shorter route to preserving the existing save/review/commit/readback command.
+A moves draft preparation into a shared review module and proposes moving private form types across that boundary.
+That extra ownership split has not earned its cost for this single editor.
+Both designs remove duplicate acknowledgements and retain one explicit final confirmation.
+
+Grafts
+1. Use A's GST mode plus rate control. Expand it into all three components atomically.
+   Preview every changed component. Validate resulting rows before Apply.
+2. Use A's per-cell undo when practical. Revert only cells still equal to the applied value.
+   Preserve later corrections and report how many cells could not be reverted.
+   Recompute affected review evidence against current dependencies. Never restore a whole checkedBefore map.
+3. Use A's controlled compact row component if extracting rendering makes the editor easier to read.
+   It receives current values and mutation callbacks. It must not own a second draft or network lifecycle.
+4. Preserve A's explicit mobile labeled grid and selection controls that appear only during batch mode.
+
+Reject or constrain
+Do not create a separate fast posting pipeline or a second persisted approval flag.
+Do not equate a syntactically valid edit with proof of catalogue identity or upload completeness.
+Do not clear unknown server flags through a catch-all classification.
+Do not hide blocking secondary fields in a closed Details disclosure.
+Keep bulk scope to GST and discount. Never batch product identity, batch, expiry, quantity, price or printed totals.
+Do not display untouched OCR values as verified before the final explicit confirmation.
+
+Proof obligations before claiming the after graph
+Capture one immutable draft at click time and prove saved values and reviewed checks come from that capture.
+Keep server-returned blockers authoritative after saving. Final confirmation cannot override a newly returned issue.
+Prove a stale preview cannot apply after any draft edit, invoice switch or row deletion.
+Prove batch apply/undo performs no network write and retains unrelated later edits.
+Complete stale compare/reconcile/resubmit and unknown readback recovery through to an authoritative outcome.
+Prove linked receipt completion adds no second stock movement and reviewed reopening records the operator reason.
+Rerun the same three interaction fixtures. The 1, 5 and 11 counts remain targets until observed.
+Verify desktop and 390px mobile labels, correction targets, totals and final action together.
+
+Principle applied
+Experience First favors corrections plus one deliberate completion action and keeps ordinary fields visible.
+It also rejects a separate wizard because the navigation and repeated acknowledgements prolong this core task.
+
+Independent bounded check
+Jev preferred B for the narrow question of fewer new shared ownership responsibilities.
+I checked that judgment against both module maps. It supports the ownership choice, not the safety verdict.

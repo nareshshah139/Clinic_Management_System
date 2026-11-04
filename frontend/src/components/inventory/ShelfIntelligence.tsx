@@ -154,6 +154,7 @@ export function ShelfIntelligence() {
       setSavingShelf(true);
       await apiClient.updateInventoryItem(selectedItem.id, {
         storageLocation: shelfLocation.trim(),
+        updatedAt: selectedItem.updatedAt,
       });
       toast({
         description: `${selectedItem.name} mapped to ${shelfLocation.trim()}.`,

@@ -1,0 +1,13 @@
+1. Read Poteto Principles and applicable browser verification instructions. Done.
+2. Reuse exact before fixtures and scope each synthetic browser session. Done.
+3. Validate list loading/error/retry/race behavior and mobile stock search. Done.
+4. Wait for OCR integration, then measure the same completed scenarios and exercise recovery and selected-row terms.
+5. Capture one desktop/mobile visual batch and one confirmation batch only when a correction requires it.
+6. Return evidence and limits, with measured interaction counts rather than a timing claim.
+
+Read-state data shape: per-resource loading/error/data scoped to the current query.
+OCR proof shape: scenario, user actions, API requests, authoritative fixture state, DOM state, viewport.
+Throughput boundary: list checks can precede OCR integration. OCR tests share one isolated fixture process but every browser uses a unique scenario key.
+Prove It Works: use visible rendered controls and read persisted synthetic fixture state after completion.
+Explain the Number: count control activations and field replacements. Exclude reading, scrolling and individual keystrokes. One deterministic run per fixture is not a performance benchmark.
+Chromium visual checks follow an Obscura hydration proof. No real users, invoices, database or OCR provider are involved.

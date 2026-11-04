@@ -1,0 +1,136 @@
+Candidate A. Compact review table and one explicit completion command.
+
+Plan
+1. Read the Principles section in full. Done.
+2. Ground. Done through the current editor, checklist, field-review helpers and their contracts.
+3. Sketch. This candidate.
+4. Agree. Parent synthesis; no human checkpoint requested.
+5. Implement. Skip here; this assignment is read-only design.
+6. Scrap. Parent must reconsider if implementation needs parallel approval state or repeated guard bypasses.
+
+Usage first
+The operator sees the invoice identity, stock state, unresolved corrections, compact editable product rows,
+and calculated versus printed totals. The original remains available alongside the form on wide screens.
+After correcting values, one button says "Confirm reviewed values & add stock".
+Its adjacent sentence says "I checked these values against the original invoice. This adds the received quantities."
+Linked receipts say "Confirm & post bill" and "Stock was received earlier. Posting adds no further stock."
+There is no additional final checkbox or per-field Mark checked prerequisite.
+
+Call site 1. Workbench completion button.
+  const submission = prepareExplicitReview(currentDraft, reviewEvidence);
+  if (submission.kind === 'blocked') return focusIssue(submission.issues[0]);
+  await saveAndPostInvoice(submission.review);
+Call site 2. Table shared discount edit.
+  const preview = previewBatch(currentDraft, selectedLocalIds, { kind: 'discount', percent: '5' });
+  setBatch({ kind: 'preview', preview });
+  // Operator reads selected product names, row count, old/new values and changed totals.
+  applyBatch(preview); // One local edit; no network or catalogue write.
+Call site 3. Undo after a batch.
+  const reversal = undoBatch(currentDraft, appliedBatch);
+  replaceDraft(reversal.draft);
+  announce(`${reversal.reverted} changes undone; ${reversal.kept} later corrections kept.`);
+
+Problem and current ownership
+PurchaseInvoiceWorkbench owns header, lines, printed amounts, checked OCR snapshots, generation locks,
+catalogue request evidence, saved revision, posting and recovery. PurchaseOcrChecklist independently
+requires Mark checked, then Workbench requires reviewAccepted, then saveAndPostInvoice.
+This produces multiple human confirmations for the same displayed values.
+The existing write pipeline already saves, reviews, posts and reads back one authoritative invoice ID.
+Retain that pipeline. Replace the redundant approval choreography and long always-expanded line forms.
+
+Shape
+Existing HeaderForm and LineForm remain the editable draft representation; move their declarations only
+if needed by the pure helper. Do not introduce a second copy of the draft or a new network coordinator.
+  type DraftBasis = Readonly<{ generation: number; invoiceId: string | null; revision: string | null;
+    valueFingerprint: string; catalogueFingerprint: string }>;
+  type DraftReview = Readonly<{ basis: DraftBasis; header: HeaderForm; lines: readonly LineForm[];
+    printedAmounts: Readonly<Record<string, unknown>> | null }>;
+  type ReviewIssue = { scope: 'header' | string; field?: string; label: string; target?: string;
+    kind: 'invalid' | 'upload' | 'catalogue' | 'supplier' | 'historical' | 'uncertain' };
+  type ReviewAssessment = { blockers: readonly ReviewIssue[]; uncertainties: readonly ReviewIssue[] };
+  type ExplicitReview = DraftReview & { readonly confirmation: 'current-values-against-original' };
+  type Preparation = { kind: 'blocked'; issues: readonly ReviewIssue[] }
+    | { kind: 'ready'; review: ExplicitReview };
+  type BatchChange = { kind: 'discount'; percent: string }
+    | { kind: 'gst'; mode: 'split' | 'integrated'; rate: string };
+  type CellPatch = { lineId: string; field: keyof LineForm; before: string; after: string };
+  type BatchPreview = { basis: DraftBasis; selectedIds: readonly string[];
+    patches: readonly CellPatch[]; beforeTotal: number; afterTotal: number };
+  type BatchState = { kind: 'idle' } | { kind: 'preview'; preview: BatchPreview }
+    | { kind: 'applied'; preview: BatchPreview };
+  assessReview(draft: DraftReview, evidence: CurrentReviewEvidence): ReviewAssessment;
+  prepareExplicitReview(draft: DraftReview, evidence: CurrentReviewEvidence): Preparation;
+  previewBatch(draft: DraftReview, selectedIds: readonly string[], change: BatchChange): BatchPreview;
+  undoBatch(draft: DraftReview, applied: BatchPreview): { draft: DraftReview; reverted: number; kept: number };
+Bodies are not implemented. CurrentReviewEvidence is an editor-domain input containing permission,
+current catalogue assessment, stock knowledge and saved revision conflict; it is not an API response.
+
+Critical behavior
+prepareExplicitReview snapshots the exact displayed values and clears only human-confirmable OCR flags
+in that submission. It does not call setCheckedOcr/setReviewAccepted then rely on a stale React closure.
+saveDraft accepts that immutable submission as an explicit argument; ordinary Save draft uses pending flags.
+Global approval is not separately stored. Completion's click is the explicit human approval event.
+The pipeline checks the captured generation and saved revision; its existing server checks remain decisive.
+Never treat syntactic validity as catalogue identity, supplier match, complete pages or stock eligibility.
+Derive blockers from existing validation plus structured known issue classification. Unknown issues retain
+their existing explicit review meaning only where supported; otherwise remain blockers with a correction path.
+User corrections may settle a known field uncertainty after that field and its dependencies validate.
+Record the current dependency snapshot. A later dependent edit invalidates that evidence.
+Do not turn untouched valid OCR values green. They remain "Check against original" until final confirmation.
+Keep full invoice validation and printed amount reconciliation. Never copy calculated totals over printed totals.
+Shared GST application sets CGST/SGST/IGST together according to the chosen tax mode and previews all changes.
+Batch selection uses localId, not array index. Apply only while the captured basis and all selected rows match.
+Reordered/deleted rows or a revised draft invalidate the preview. Invalid values cannot produce an applicable preview.
+Undo applies inverse cell patches only when each current value still equals the batch's after value.
+It preserves later edits and reports skipped conflicts; it never silently restores an old full draft.
+All edits and batch changes are disabled during posting, unknown stock, stale revision or reviewed locking.
+The review pipeline retains first-save idempotency, exact invoice ID, authoritative readback and uncertain-write lock.
+
+Module map
+frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx keeps state, API effects and recovery ownership.
+frontend/src/lib/purchase-invoice-review.ts owns structured issue classification and current-value preparation.
+frontend/src/components/pharmacy/PurchaseFieldReview.tsx retains dependency snapshots and validation helpers.
+frontend/src/components/pharmacy/PurchaseInvoiceReviewTable.tsx renders one compact controlled editor; no API calls.
+frontend/src/components/pharmacy/PurchaseOcrChecklist.tsx becomes a concise correction summary without redundant
+per-field confirmation controls on this completion route. Preserve another caller only if it needs independent review.
+Keep the shared draft batch helper with review preparation, not a separate generic batch framework.
+
+Layout
+Active identity and authoritative stock label come first, then blockers, table, visible totals and sticky action.
+Desktop columns are Product/pack, Batch, Expiry, Paid/free quantity, Rate, GST and calculated line total.
+Optional commercial terms remain in a row's Details disclosure. Any blocker inside opens it automatically.
+Catalogue recovery appears beside its affected product and keeps explicit match/create/correct permissions.
+On phones the same row becomes a labeled grid, not a compressed horizontal spreadsheet.
+Select checkboxes appear only when Apply to selected rows is opened; preview names every affected product.
+Put logs, exports, source metadata and generic interrupted-import tools in secondary disclosures below the review.
+Keep real active recovery panels prominent. Unknown status overrides every "Ready to add stock" badge.
+Reviewed reopening uses an inline required operator reason before the revision-checked reopen request.
+
+Contracts and verification
+Intentionally update purchase-check-before-stock, purchase-explicit-posting, invoice-field-color-evidence,
+ocr-check-color-evidence and changed-checks-remain-pending to define final-click confirmation and current snapshots.
+Preserve purchase-posting-exact-id-recovery, checked-value-identity, purchase-expiry-bounds,
+purchase-match-labels-and-fallback, purchase-required-controls-visible and printed-field coverage obligations.
+New narrow contracts cover scoped batch application, preview invalidation, undo preserving later edits,
+and one-click confirmation capturing current values without clearing hard blockers.
+Update frontend/__tests__/pharmacy/PurchaseInvoiceWorkbench.test.tsx, PurchaseOcrChecklist.test.tsx and
+purchase-invoice-review.test.ts; add pure batch tests with literal expected patches and resulting values.
+Required browser cases include correct OCR, 4 corrections, 10 corrections, batch preview/apply/undo,
+invalid expiry, incomplete upload, ambiguous catalogue, stale compare/reconcile/retry, unknown refresh recovery,
+review reopen with reason, and linked receipt completion without a second stock addition.
+Reuse the same before fixtures and interaction definitions. Targets are 3→1, 11→5 and 20→11 interactions;
+these are design targets, not measurements. Scrolling, reading and individual keystrokes stay excluded.
+
+Rationale and risks
+Experience First removes duplicate confirmation and moves corrections before history.
+Model the Domain makes a prepared current-value submission and batch preview explicit instead of syncing booleans.
+Boundary Discipline keeps classification and preparation pure while retaining server validation at the API boundary.
+Make Operations Idempotent retains the existing save/review/commit/readback pipeline and exact-ID recovery.
+We accept a larger compact row on phones in exchange for keeping labels and touch targets readable.
+An exception-only wizard was rejected because it hides valid values needed for one whole-invoice confirmation.
+A generic all-field batch editor was rejected because it exposes dangerous identity and batch propagation choices.
+Can tests prove each existing manual-only issue remains reviewable without treating an unknown blocker as safe?
+That is an implementation proof obligation, not a reason to ask the operator to design the system.
+Red-flag screen passes if one editor owns draft state and one completion command owns posting; reject a parallel
+"fast path" that bypasses the existing guarded pipeline. Synthesis decision remains with the parent.
+Next step. Implement pure preparation and scoped batch patches, then integrate the compact controlled editor.

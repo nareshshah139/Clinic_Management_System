@@ -1,0 +1,41 @@
+flowchart TD
+  D["Loaded OCR draft"]
+  F["Flagged or incorrect values<br/>One-row and two-row cases"]
+  M["Missing required fields"]
+  K["Incomplete catalogue details"]
+  A["Ambiguous existing product"]
+  N["New product"]
+  S["Supplier details need correction"]
+  R["Reviewed bill<br/>Reopen works; reason audit gap"]
+  L["Bill already linked to a receipt"]
+  V["Valid current values<br/>Review checks acknowledged"]
+  C["Stock added<br/>Confirmed by synthetic status read"]
+  B["Bill posted against earlier receipt<br/>UI completion confirmed"]
+  T["Stale revision<br/>Edits retained; writes blocked"]
+  U["Stock outcome unknown<br/>Writes blocked; ready badge is wrong"]
+  Q["Compare or reload saved version"]
+  H["Check saved stock status"]
+  Z["Reconciled current draft or confirmed outcome"]
+  R -->|Reopen and edit| D
+  L --> D
+  D --> F & M & K & A & N & S
+  F -->|Correct if needed and acknowledge| V
+  M -->|Fill valid values and acknowledge| V
+  K -->|Complete or correct details| V
+  A -->|Choose existing match| V
+  N -->|Create verified product| V
+  S -->|Save verified supplier correction| V
+  V -->|Final approval and Save & add stock| C
+  V -->|Receipt linked: final approval and Save & post bill| B
+  V -->|Save rejected as stale| T
+  V -->|Commit response and status lookup fail| U
+  T -.->|Action offered; recovery not completed in this audit| Q
+  U -.->|Action offered; recovery not completed in this audit| H
+  Q -.-> Z
+  H -.-> Z
+  classDef tested fill:#e8f5ec,stroke:#248647,color:#123c23
+  classDef partial fill:#fff1ce,stroke:#a87300,color:#503800
+  classDef unverified fill:#f2f3f5,stroke:#7b8291,color:#343943,stroke-dasharray:5 5
+  class D,F,M,K,A,N,S,L,V,C,B tested
+  class R,T,U partial
+  class Q,H,Z unverified

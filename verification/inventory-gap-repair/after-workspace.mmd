@@ -1,0 +1,29 @@
+flowchart TB
+  I["Inventory workspace"]
+  L["Purchases / losses / suppliers"]
+  LOAD["Loading current query"]
+  ERR["Read failed: visible local Retry"]
+  EMPTY["Loaded: no records"]
+  ROWS["Loaded: current records"]
+  RACE["Purchase / loss filters ignore older responses"]
+  STOCK["Stock search: full-width phone input"]
+  OCR["Invoice review and posting: see after-ocr"]
+  REC["Real UI + HTTP + database recovery"]
+  PUR["Duplicate purchase → compare retained note → adopt existing invoice → save correction"]
+  PART["Partner partial outcome → matched status → completion"]
+  SUP["Reallocate payment; lost reversal response → idempotent retry"]
+  OPEN["Opening import failed row → retry / reconciliation"]
+  DB["Stock HTTP + database: replay / invalid command / permissions"]
+  OTHER["Other explored domain groups: source / model coverage only\nToday queues; counts / approvals; holds / loss / returns\nReceipts / reorder / automation; sales / refunds; accounting"]
+  I --> L --> LOAD
+  LOAD --> ERR -->|Retry| LOAD
+  LOAD --> EMPTY & ROWS
+  ROWS --> RACE --> LOAD
+  I --> STOCK & OCR & REC & DB & OTHER
+  REC --> PUR & PART & SUP & OPEN
+  classDef ui fill:#e8f5ec,stroke:#248647,color:#123c23
+  classDef real fill:#e6efff,stroke:#3e68aa,color:#17396c
+  classDef source fill:#f2f3f5,stroke:#7b8291,color:#343943,stroke-dasharray:5 5
+  class L,LOAD,ERR,EMPTY,ROWS,RACE,STOCK,OCR ui
+  class REC,PUR,PART,SUP,OPEN,DB real
+  class I,OTHER source

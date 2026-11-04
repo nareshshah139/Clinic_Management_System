@@ -23,12 +23,19 @@ export function purchaseExpiryInvalid(month: string, year: string) {
   return !Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(y) || y < 2020 || y > 2100;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:validation] checked-field-eligibility
+ * Missing flagged fields, malformed GSTIN, incomplete credit terms, invalid expiry and invalid
+ * stock quantities or prices MUST remain unconfirmable even after a correction event.
+ */
 export function purchaseCheckInvalid(issue: PurchaseReviewIssue, values: Record<string, string>) {
   const value = issue.field ? values[issue.field]?.trim() : undefined;
   return !!issue.requiresUpload || (!!issue.field && issue.field !== 'manufacturer' && !value)
     || (issue.field === 'expiryMonth' && purchaseExpiryInvalid(values.expiryMonth, values.expiryYear))
     || (issue.field === 'distributorGstin' && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(value || ''))
-    || (issue.field === 'billType' && values.billType === 'CREDIT' && !values.dueDate);
+    || (issue.field === 'billType' && values.billType === 'CREDIT' && !values.dueDate)
+    || (!!issue.field && ['quantityPurchased', 'freeQuantity', 'purchaseRate', 'mrp'].includes(issue.field) && (!Number.isFinite(Number(value)) || Number(value) < 0))
+    || (!!issue.field && ['quantityPurchased', 'freeQuantity'].includes(issue.field) && !Number.isInteger(Number(value)));
 }
 
 /**
@@ -60,4 +67,27 @@ export function pendingPurchaseOcrFlags(flags: string[], values: Record<string, 
     return purchaseCheckInvalid(issue, values) || purchaseCheckSnapshot(issue, values) !== entry.snapshot ? entry.flags : [];
   });
   return [...new Set([...flags, ...changed])];
+}
+
+/**
+ * @cc [owner:nareshshah139,label:product] explicit-current-value-review
+ * A correction or final review may settle known, valid field uncertainty and recognized manual
+ * OCR confidence checks. Upload, catalogue, historical and unknown checks remain unresolved.
+ */
+export function confirmPurchaseChecks(flags: string[], values: Record<string, string>, checked: PurchaseCheckedFields = {}, lineIndex?: number, editedField?: string) {
+  const remaining: string[] = [];
+  const next = { ...checked };
+  for (const flag of flags) {
+    const issue = purchaseReviewIssue(flag, lineIndex);
+    const matchesEdit = !editedField || issue.field === editedField ||
+      (issue.field === 'expiryMonth' && editedField === 'expiryYear') ||
+      (issue.field === 'billType' && editedField === 'dueDate');
+    const confirmable = (issue.field || issue.category === 'manual' || /independent_read_disagrees_row_count/i.test(flag)) &&
+      !issue.requiresUpload && !purchaseCheckInvalid(issue, values) && matchesEdit;
+    if (!confirmable) { remaining.push(flag); continue; }
+    const key = issue.field || issue.key;
+    const previous = next[key];
+    next[key] = { flags: [...new Set([...(previous?.flags || []), flag])], snapshot: purchaseCheckSnapshot(issue, values) };
+  }
+  return { flags: remaining, checked: next };
 }

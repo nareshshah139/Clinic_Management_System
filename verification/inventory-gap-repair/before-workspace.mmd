@@ -1,0 +1,18 @@
+flowchart TB
+  I["Wider inventory states explored<br/>Source/model coverage; not full browser validation"]
+  I --> W["Workspace<br/>Today / Purchases / Stock / Sales / Reorder<br/>Permission loading / denied / failed"]
+  I --> Q["Today queues<br/>Pending invoices / receipts / counts / returns<br/>Low or expired stock / orders / dues"]
+  I --> S["Stock and batch details<br/>Current / depleted / expired<br/>Physical / held / available<br/>Editing / correction / retained history"]
+  I --> P["Intake and purchases<br/>Manual / photo / PDF / CSV / Gmail<br/>Draft / reviewed / posted / cancelled<br/>Incomplete / duplicate / stale / unknown / handoff"]
+  I --> C["Counts and approvals<br/>Blank / zero / observed<br/>Draft / awaiting approval / approved<br/>Applied / rejected / cancelled / fresh count"]
+  I --> H["Loss, holds and supplier returns<br/>Draft / posted loss / reversed<br/>Held / released<br/>Return challan / final credit / cancellation"]
+  I --> R["Receipts and reorder<br/>Gate pass / inward challan<br/>PO draft / approval / partial or full receipt<br/>Cancelled remainder / targets / Shortbook<br/>Automation off / setup required / failed"]
+  I --> A["Sales and customer returns<br/>Quotation / sale draft / posted sale<br/>Return for restock / quarantine / loss<br/>Refund / release / reversal"]
+  I --> F["Suppliers and accounting<br/>Active / inactive / edit / account<br/>Dues / payment / credit / allocation / reversal"]
+  I --> E["Read and recovery states<br/>Loading / populated / empty / failed<br/>Unknown outcome / status check / handoff"]
+  E --> X["Known gap<br/>List loading, empty and failed states are inconsistent"]
+  S --> Y["Known gap<br/>Phone search input is too narrow"]
+  classDef source fill:#f2f3f5,stroke:#7b8291,color:#343943
+  classDef issue fill:#fde8e8,stroke:#b53b3b,color:#6c1717
+  class I,W,Q,S,P,C,H,R,A,F,E source
+  class X,Y issue

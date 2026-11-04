@@ -1,0 +1,14 @@
+check	result	coverage
+frontend	PASS	67suites;710tests
+inventory-pharmacy-backend	PASS	38suites;585tests;96opt-in tests skipped
+postgres-api-boundaries	PASS	6tests
+postgres-purchase-workflow-recovery	PASS	32tests
+workspace-build	PASS	shared-types;frontend;backend
+synthetic-browser	PASS	24cases;9matching source fingerprints
+real-http-database-recovery	PASS	5scenarios;37assertions;4mounted UI workflows
+source-contracts	PASS	30files;60format/list checks
+workflow-contracts	MANUAL	list unsupported;manual obligations review;YAML parsed
+state-presentations	PASS	18900cases
+knowledge-proof	PASS	22states;2UNSAT;4negative controls
+guided-recovery-proof	PASS	27500states;150745edges;4negative controls;5checker unit tests
+cleanup	PASS	diff whitespace;changed comments;no new suppressions;direct deslop fallback

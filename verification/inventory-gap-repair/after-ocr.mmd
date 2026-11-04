@@ -1,0 +1,45 @@
+flowchart TD
+  D["OCR draft: one review worksheet"]
+  X["Missing / invalid / ambiguous details"]
+  M["Correct values or choose / create product"]
+  B["Select rows: GST / discount preview"]
+  A["Apply locally; undo preserves later edits"]
+  C["Current catalogue check"]
+  E["Check failed; saved product stays saved"]
+  R["Ready: confirm current values once"]
+  P["Save exact snapshot → review"]
+  J["Commit already-reviewed invoice"]
+  V["REVIEWED verified: handoff to stock-authorized staff"]
+  F["Fresh saved-status lookup"]
+  S["Stock committed and confirmed"]
+  I["Receipt-linked bill posted; receipt retained"]
+  T["Stale revision: edits retained, writes blocked"]
+  Q["Compare saved version; reconcile current draft"]
+  U["Stock outcome unknown: writes blocked"]
+  H["Fresh status says REVIEWED: explicit retry"]
+  O["Reopen reviewed invoice with reason"]
+  Z["Unknown or upload-only flag: explicit recovery required"]
+  D --> X --> M --> C
+  D --> C
+  D --> B --> A --> C
+  B -->|Draft changed: preview invalidated| D
+  C -->|Current ready response only| R
+  C --> E -->|Retry check, no duplicate product save| C
+  R -->|Confirm and add stock| P
+  R -->|Review-only permission| P
+  P -->|Review-only: fresh status confirms REVIEWED| V
+  P -->|Stock permission| J
+  V -->|Authorized staff resumes| J
+  V --> O --> D
+  J --> F
+  F --> S
+  F --> I
+  P -->|Revision conflict| T --> Q --> D
+  J -->|Commit and lookup responses lost| U
+  U -->|Check saved status only| F
+  F --> H -->|Add stock| J
+  D -.-> Z
+  classDef ui fill:#e8f5ec,stroke:#248647,color:#123c23
+  classDef boundary fill:#fff1ce,stroke:#a87300,color:#503800
+  class D,X,M,B,A,C,E,R,P,J,V,F,S,I,T,Q,U,H,O ui
+  class Z boundary

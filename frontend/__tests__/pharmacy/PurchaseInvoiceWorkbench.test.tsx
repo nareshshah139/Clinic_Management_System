@@ -38,6 +38,7 @@ const draftInvoice = {
   updatedAt: '2026-09-14T08:00:00.000Z',
   distributorName: 'Apex Distributors',
   distributorGstin: '36ABCDE1234F1Z5',
+  distributorDlNo: 'DL-TEST',
   invoiceNumber: 'APX-001',
   invoiceDate: '2026-05-01T00:00:00.000Z',
   goodsReceivedDate: '2026-05-02T00:00:00.000Z',
@@ -56,6 +57,9 @@ const draftInvoice = {
       productName: 'Azithral 500 Tablet',
       manufacturer: 'Alembic',
       packSize: 'Strip of 3',
+      packUnitType: 'Strip',
+      cgstPercent: 6,
+      sgstPercent: 6,
       hsnCode: '3004',
       batchNumber: 'AZT2401',
       expiryMonth: 12,
@@ -98,7 +102,15 @@ function importAutomatically() {
 }
 
 async function reviewConfirmation() {
-  return screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
+  const button = await screen.findByRole('button', { name: /Confirm reviewed values & add stock|Confirm & post bill/ });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
+}
+
+async function reviewOnlyConfirmation() {
+  const button = await screen.findByRole('button', { name: /^(Mark Reviewed|Confirm reviewed values & mark reviewed)$/ });
+  await waitFor(() => expect(button).toBeEnabled());
+  return button;
 }
 
 describe('PurchaseInvoiceWorkbench', () => {
@@ -135,8 +147,8 @@ describe('PurchaseInvoiceWorkbench', () => {
       renderSavedInvoice();
     }
     await screen.findByDisplayValue('APX-001');
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('ONE-ACTION-STOCK'));
     expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1', expect.any(Object));
     expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledTimes(1);
@@ -147,9 +159,9 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('keeps Save draft separate from posting even after final confirmation', async () => {
     renderSavedInvoice();
     await editSelectedInvoice();
-    fireEvent.click(await reviewConfirmation());
+    await reviewConfirmation();
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'DRAFT-BATCH' } });
-    fireEvent.click(await reviewConfirmation());
+    await reviewConfirmation();
     fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
     await screen.findByText(/Invoice APX-001 saved. Stock not added/);
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'DRAFT-BATCH' })] }));
@@ -162,11 +174,11 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'LOCAL-CORRECTION' } });
     api.updatePharmacyPurchaseInvoiceDraft.mockRejectedValueOnce(new Error('Invoice changed while editing'));
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await screen.findByText('Invoice changed while editing');
     expect(screen.getByLabelText('Batch')).toHaveValue('LOCAL-CORRECTION');
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
@@ -179,8 +191,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02' } }} />);
     await screen.findByDisplayValue('APX-001');
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'RETAINED-BATCH' } });
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await screen.findByText('Review rejected by server');
     await waitFor(() => expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenCalledWith('new-review-id'));
     expect(screen.getByLabelText('Batch')).toHaveValue('RETAINED-BATCH');
@@ -196,8 +208,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...saved, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-11-03T00:00:00Z', stockCommitReference: 'NEW-ID-CONFIRMED' });
     render(<PurchaseInvoiceWorkbench importedDraft={{ draft: { ...draftInvoice, invoiceDate: '2026-05-01', goodsReceivedDate: '2026-05-02' } }} />);
     await screen.findByDisplayValue('APX-001');
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('NEW-ID-CONFIRMED'));
     expect(api.getPharmacyPurchaseInvoiceById).toHaveBeenCalledWith('new-commit-id');
     expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledTimes(1);
@@ -210,8 +222,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice();
     await editSelectedInvoice();
     api.getPharmacyPurchaseInvoiceById.mockRejectedValueOnce(new Error('Offline'));
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('Stock status unknown'));
     expect(screen.getByLabelText('Batch')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save draft' })).not.toBeInTheDocument();
@@ -236,8 +248,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-11-03T00:00:00Z', stockCommitReference: 'SINGLE-COMMIT' });
     renderSavedInvoice();
     await editSelectedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    const post = screen.getByRole('button', { name: 'Save & add stock' });
+    await reviewConfirmation();
+    const post = screen.getByRole('button', { name: 'Confirm reviewed values & add stock' });
     fireEvent.click(post);
     fireEvent.click(post);
     expect(post).toBeDisabled();
@@ -256,9 +268,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...linked, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-11-03T00:00:00Z', stockCommitReference: 'LINKED-BILL' });
     renderSavedInvoice(linked);
     await editSelectedInvoice();
-    expect(await reviewConfirmation()).toHaveAccessibleName(/earlier stock receipt/);
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & post bill' }));
+    expect(await reviewConfirmation()).toHaveAccessibleName('Confirm & post bill');
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm & post bill' }));
     await screen.findByText('Bill APX-001 posted. Stock received earlier · 0 added again.');
     expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('Invoice posted · stock received earlier');
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ workflowReceiptId: 'receipt-1' }));
@@ -393,9 +405,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     let rejectReview!: (error: Error) => void;
     api.reviewPharmacyPurchaseInvoice.mockImplementation(() => new Promise((_, reject) => { rejectReview = reject; }));
     const view = renderSavedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    if (mode === 'review') fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
-    else processCurrentInvoice();
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
     if (mode === 'review-and-commit') {
       api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, id: 'invoice-b', invoiceNumber: 'OTHER-002' });
@@ -422,15 +433,15 @@ describe('PurchaseInvoiceWorkbench', () => {
       .mockImplementationOnce(() => new Promise(resolve => { finishCurrent = resolve; }));
     api.getPharmacyPurchaseInvoiceById.mockResolvedValue({ ...draftInvoice, status: 'STOCK_COMMITTED', stockCommittedAt: '2026-11-03T00:00:00Z', stockCommitReference: 'CURRENT-REVIEW' });
     renderSavedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1));
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'CORRECTED-BATCH' } });
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     await waitFor(() => expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledTimes(2));
     await act(async () => { rejectOld(Object.assign(new Error('Old catalogue failure'), { body: { code: 'PURCHASE_CATALOG_REVIEW_REQUIRED' } })); });
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     await act(async () => { finishCurrent({ ...draftInvoice, status: 'REVIEWED' }); });
     await waitFor(() => expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('CURRENT-REVIEW'));
     expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledTimes(1);
@@ -486,8 +497,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     } finally {
       HTMLElement.prototype.scrollIntoView = scrollIntoView;
     }
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm bill type checked' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm bill type checked' }));
+    expect(screen.queryByRole('button', { name: 'Confirm bill type checked' })).not.toBeInTheDocument();
     expect(screen.queryByText('uncertain bill type')).not.toBeInTheDocument();
     const recovered = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:new')!);
     expect(recovered.ocrSummary.flags).toEqual(['uncertain_bill_type']);
@@ -539,7 +549,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.click(screen.getByRole('button',{name:'Apply my corrections to this invoice'}));
     expect(screen.getByLabelText('Invoice No.')).toHaveValue('EXISTING');
     expect(screen.getByLabelText('Notes')).toHaveValue('My correction');
-    expect(await reviewConfirmation()).not.toBeChecked();
+    expect(screen.queryByRole('checkbox', { name: /I verified the invoice/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Save corrections and check again'}));
     await waitFor(()=>expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('existing-1',expect.objectContaining({expectedUpdatedAt:existing.updatedAt,invoiceNumber:'EXISTING',handwrittenNotes:'My correction'})));
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
@@ -566,7 +576,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     mockPurchaseAccess = {...mockPurchaseAccess,commit:false};
     api.reviewPharmacyPurchaseInvoice.mockRejectedValue(Object.assign(new Error('Goods received date cannot be before invoice date'),{status:400,body:{code:'PURCHASE_REVIEW_REQUIRED',issues:[{message:'Goods received date cannot be before invoice date',field:'goodsReceivedDate'}]}}));
     renderSavedInvoice(); await editSelectedInvoice();
-    fireEvent.click(await screen.findByRole('button',{name:'Mark Reviewed'}));
+    fireEvent.click(await reviewOnlyConfirmation());
     fireEvent.click(await screen.findByRole('button',{name:'Correct goods received date'}));
     await waitFor(()=>expect(screen.getByLabelText('Goods Received')).toHaveFocus());
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
@@ -619,7 +629,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.reviewPharmacyPurchaseInvoice.mockRejectedValue(Object.assign(new Error('Review permission required'),{status:403,requestId:reference}));
     Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:jest.fn().mockRejectedValue(new Error('Unavailable'))}});
     renderSavedInvoice(); await editSelectedInvoice();
-    fireEvent.click(await screen.findByRole('button',{name:'Mark Reviewed'}));
+    fireEvent.click(await reviewOnlyConfirmation());
     await screen.findByText(`Reference: ${reference}`);
     fireEvent.click(screen.getByRole('button',{name:'Copy handoff details'}));
     expect(await screen.findByText(/Could not copy. Select and copy/)).toHaveTextContent(reference);
@@ -644,27 +654,24 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
-  it('requires a fresh final confirmation after correcting a printed amount', async () => {
+  it('keeps printed corrections independent and blocks unreconciled final submission', async () => {
     renderSavedInvoice();
     await editSelectedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    expect(await reviewConfirmation()).toBeChecked();
-    expect(screen.getByLabelText('Batch')).toHaveAttribute('aria-describedby', expect.stringContaining('review-state'));
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
-    fireEvent.change(screen.getByLabelText('Reported Net payable'), { target: { value: '113' } });
-    expect(await reviewConfirmation()).not.toBeChecked();
     expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Reported Net payable'), { target: { value: '130' } });
+    fireEvent.click(await reviewConfirmation());
+    expect(await screen.findByText(/Printed Net payable differs from the calculated amount/)).toBeVisible();
+    expect(screen.getByLabelText('Reported Net payable')).toHaveValue(130);
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
-  it('clears final green verification when a product line is removed', async () => {
+  it('does not infer global verification after removing a product line', async () => {
     renderSavedInvoice({ ...draftInvoice, items: [...draftInvoice.items, { ...draftInvoice.items[0], id: 'line-2', lineNumber: 2 }] });
     await editSelectedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    expect(await reviewConfirmation()).toBeChecked();
-    fireEvent.click(screen.getByRole('button', { name: 'Remove line 2' }));
-    expect(await reviewConfirmation()).not.toBeChecked();
+    const remove = screen.getByRole('button', { name: 'Remove line 2', hidden: true });
+    fireEvent.click(remove);
+    expect(screen.getAllByLabelText('Product')).toHaveLength(1);
     expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
@@ -696,9 +703,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED', workflowReceiptId: 'receipt-1' });
     await screen.findByRole('button', { name: 'Post bill' });
     expect(screen.getByText('These goods were received earlier. Choose Post bill to record this invoice. No additional stock will be added.')).toBeVisible();
-    const progress = screen.getByRole('region', { name: 'Invoice progress' });
-    expect(within(progress).getByText('3. Post bill')).toBeVisible();
-    expect(within(progress).queryByText(/Add stock/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Post bill' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Add stock' })).not.toBeInTheDocument();
     expect(screen.queryByText('Review complete. Choose Add stock when ready.')).not.toBeInTheDocument();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
@@ -779,8 +785,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     }));
     api.suggestPharmacyPurchaseMasterMatches.mockResolvedValueOnce({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'REVIEW_MATCHES', catalogueResolution: { state: 'ready', product: { id: 'ready', name: 'Azithral 500 Tablet' } } }] }).mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'CREATE_NEW' }] });
     renderSavedInvoice(); await editSelectedInvoice();
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Fix products on this invoice' }));
     expect(await screen.findByRole('button', { name: 'Create new item' })).toBeVisible();
     expect(screen.getByLabelText('Search saved products manually')).toBeVisible();
@@ -801,9 +807,10 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.reopenPharmacyPurchaseInvoiceReview.mockResolvedValue({ ...draftInvoice, updatedAt: '2026-10-15T08:00:00.000Z' });
     api.suggestPharmacyPurchaseMasterMatches.mockResolvedValue({ matches: [{ lineIndex: 0, ocr: {}, candidates: [], recommendedAction: 'CREATE_NEW' }] });
     renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.change(await screen.findByLabelText('Reason to reopen review'), { target: { value: 'Correct product identity against invoice' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Reopen review and fix products' }));
     expect(await screen.findByRole('button', { name: 'Create new item' })).toBeVisible();
-    expect(api.reopenPharmacyPurchaseInvoiceReview).toHaveBeenCalledWith('pinv-1', draftInvoice.updatedAt);
+    expect(api.reopenPharmacyPurchaseInvoiceReview).toHaveBeenCalledWith('pinv-1', draftInvoice.updatedAt, 'Correct product identity against invoice');
     expect(screen.getByRole('button', { name: 'Correct invoice name' })).toBeVisible();
     expect(screen.getByLabelText('Search saved products manually')).toBeVisible();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice/ })).not.toBeInTheDocument();
@@ -817,6 +824,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     mockPurchaseAccess = { ...mockPurchaseAccess, catalogDetails: true, reopenReview: true } as typeof mockPurchaseAccess;
     api.reopenPharmacyPurchaseInvoiceReview.mockRejectedValue(new Error('Invoice changed. Reload the saved invoice.'));
     renderSavedInvoice({ ...draftInvoice, status: 'REVIEWED' });
+    fireEvent.change(await screen.findByLabelText('Reason to reopen review'), { target: { value: 'Correct product identity against invoice' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Reopen review and fix products' }));
     expect(await screen.findByText('Invoice changed. Reload the saved invoice.')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Create new item' })).not.toBeInTheDocument();
@@ -895,7 +903,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalled());
     expect(await screen.findByText(/saved for correction/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
   });
 
   it('saves a verified supplier in the checklist without changing stock and restores Save & Process', async () => {
@@ -1429,34 +1437,19 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.getPharmacyPurchaseInvoiceById.mockImplementation(async () => persisted);
     renderSavedInvoice(flagged);
     expect(await screen.findByRole('heading', { name: 'Finish invoice review' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Add stock' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm bill type checked' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' }));
     expect(screen.getByLabelText('Manufacturer (optional)')).toHaveValue('');
     fireEvent.change(screen.getByLabelText('Stock unit'), { target: { value: 'Strip' } });
     expect(screen.queryByRole('button', { name: 'Confirm line 1 manufacturer checked' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 stock unit checked' }));
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeVisible();
     expect(screen.queryByText('More actions')).not.toBeInTheDocument();
-    processCurrentInvoice();
-    expect(await reviewConfirmation()).toBeEnabled();
-    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
-      ocrFlags: [], items: [expect.objectContaining({ manufacturer: '', packUnitType: 'Strip', ocrFlags: [], ocrConfidence: 0.95 })],
-    }));
-    fireEvent.click(screen.getByRole('button', { name: 'Back to Invoice OCR' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Resume invoice' }));
-    expect(await reviewConfirmation()).toBeEnabled();
-    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledTimes(1);
-    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     fireEvent.click(await reviewConfirmation());
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeEnabled();
-    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
     await waitFor(() => expect(api.commitPharmacyPurchaseInvoiceStock).toHaveBeenCalledWith('pinv-1'));
     expect(api.reviewPharmacyPurchaseInvoice.mock.invocationCallOrder[0]).toBeLessThan(api.commitPharmacyPurchaseInvoiceStock.mock.invocationCallOrder[0]);
     expect(await screen.findByRole('status', { name: 'Stock status' })).toHaveTextContent('Stock added');
-    expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1);
+    expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ ocrFlags: [], items: [expect.objectContaining({ packUnitType: 'Strip', ocrFlags: [] })] }));
   });
 
   it('imports and adds stock in one request, displaying the persisted result without an extra save or confirmation', async () => {
@@ -1581,7 +1574,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({
       netPayable: 120, items: [expect.objectContaining({ ocrConfidence: 0.979 })],
     }));
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
   });
 
   it('keeps a single save-only action for staff without automatic stock permissions', async () => {
@@ -1626,11 +1619,11 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(draftInvoice);
     await editSelectedInvoice();
     processCurrentInvoice();
-    expect(await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ })).toBeEnabled();
-    fireEvent.click(await reviewConfirmation());
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeEnabled();
+    expect(await reviewConfirmation()).toBeEnabled();
+    await reviewConfirmation();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeEnabled();
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'NEW-BATCH' } });
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(await reviewConfirmation()).toBeEnabled();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
   });
@@ -1643,7 +1636,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(draftInvoice);
     await editSelectedInvoice();
     fireEvent.change(screen.getByLabelText('Batch'),{target:{value:'CORRECTED-BATCH'}});
-    fireEvent.click(await screen.findByRole('button',{name:'Mark Reviewed'}));
+    fireEvent.click(await reviewOnlyConfirmation());
     await waitFor(()=>expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalled());
     expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1',expect.objectContaining({items:[expect.objectContaining({batchNumber:'CORRECTED-BATCH'})]}));
     expect(api.updatePharmacyPurchaseInvoiceDraft.mock.invocationCallOrder[0]).toBeLessThan(api.reviewPharmacyPurchaseInvoice.mock.invocationCallOrder[0]);
@@ -2022,8 +2015,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(invoice);
     await editSelectedInvoice();
     const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
-    expect(within(checklist).getByRole('button', { name: 'Confirm bill type checked' })).toBeVisible();
-    expect(within(checklist).getByRole('button', { name: 'Confirm line 2 stock unit checked' })).toBeVisible();
+    expect(within(checklist).getByRole('link', { name: 'Edit bill type' })).toBeVisible();
+    expect(within(checklist).getByRole('link', { name: 'Edit line 2 stock unit' })).toBeVisible();
     for (const product of screen.getAllByLabelText('Product')) expect(product).toBeVisible();
     expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('Stock not added');
   });
@@ -2038,7 +2031,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     view.unmount();
     renderSavedInvoice(invoice);
-    expect(await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ })).toBeEnabled();
+    expect(await reviewConfirmation()).toBeEnabled();
     expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('Stock not added');
     expect(api.processPharmacyPurchaseInvoice).not.toHaveBeenCalled();
   });
@@ -2087,7 +2080,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice(draftInvoice);
     await editSelectedInvoice();
     processCurrentInvoice();
-    expect(await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ })).toBeEnabled();
+    expect(await reviewConfirmation()).toBeEnabled();
     expect(screen.getByRole('status', { name: 'Stock status' })).toHaveTextContent('Stock not added');
     expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledTimes(1);
   });
@@ -2097,7 +2090,7 @@ describe('PurchaseInvoiceWorkbench', () => {
       reconciliationIssues: ['AUTO: Line GST sum does not match header GST'] }] });
     renderSavedInvoice({ ...draftInvoice, status: 'RECONCILIATION_FAILED', reconciliationIssues: ['AUTO: Line GST sum does not match header GST'] });
     await editSelectedInvoice();
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     const checklist = screen.getByRole('region', { name: 'Check before adding stock' });
     expect(within(checklist).getAllByText('How to fix').length).toBeGreaterThan(0);
     fireEvent.click(within(checklist).getByRole('button', {name:'Help: invoice totals correction'}));
@@ -2149,8 +2142,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.click(screen.getByRole('button', { name: 'Save & add stock' }));
+    await reviewConfirmation();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' }));
 
     await waitFor(() =>
       expect(api.reviewPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1', {
@@ -2185,7 +2178,7 @@ describe('PurchaseInvoiceWorkbench', () => {
 
     expect(await screen.findByRole('region', { name: 'Check before adding stock' })).toBeInTheDocument();
     expect(await screen.findByText('Line GST sum does not match header GST')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Save & Process' })).toBeEnabled();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice/ })).not.toBeInTheDocument();
   });
@@ -2352,40 +2345,24 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(api.processPharmacyPurchaseInvoice).toHaveBeenCalledWith('pinv-1'));
   });
 
-  it('restores edited OCR checks in field colors, counts, saved drafts and final approval', async () => {
-    const saved = { ...draftInvoice, distributorDlNo: 'DL-TEST', items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', ocrFlags: [] }] };
+  it('records explicit corrections and preserves review evidence across saved draft recovery', async () => {
+    const saved = { ...draftInvoice, items: [{ ...draftInvoice.items[0], ocrFlags: [] }] };
     const flagged = { ...saved, unresolvedOcrFlags: 1, items: [{ ...saved.items[0], ocrFlags: ['uncertain_batchNumber'] }] };
-    api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async (_id, payload: any) => ({ ...saved, ...payload, items: payload.items.map((item: any, index: number) => ({ ...item, id: saved.items[index].id })), unresolvedOcrFlags: payload.items.reduce((sum: number, item: any) => sum + item.ocrFlags.length, 0) }));
+    api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async (_id, payload: any) => ({ ...saved, ...payload, items: payload.items.map((item: any, index: number) => ({ ...item, id: saved.items[index].id })), unresolvedOcrFlags: 0 }));
     const view = renderSavedInvoice(flagged);
     await editSelectedInvoice();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
-    saveCurrentInvoice();
-    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
-    fireEvent.click(await reviewConfirmation());
-    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'NEW-UNCHECKED-BATCH' } });
-    expect(screen.getByText('Changed — check again')).toBeInTheDocument();
     expect(screen.getByLabelText('Batch')).toHaveClass('border-amber-600');
-    expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
-    expect(screen.queryByText('No outstanding OCR checks — compare with the bill')).not.toBeInTheDocument();
-    expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save & add stock' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'CORRECTED-BATCH' } });
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
     saveCurrentInvoice();
-    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'NEW-UNCHECKED-BATCH', ocrFlags: ['uncertain_batchNumber'] })] })));
-    const recovery = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:pinv-1')!);
-    expect(recovery.lines[0].ocrFlags).toBe('uncertain_batchNumber');
+    await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'CORRECTED-BATCH', ocrFlags: [] })] })));
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
     view.unmount();
     render(<PurchaseInvoiceWorkbench invoiceId="pinv-1" />);
-    await screen.findByDisplayValue('NEW-UNCHECKED-BATCH');
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-amber-600');
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 batch checked' }));
-    saveCurrentInvoice();
-    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
-    fireEvent.click(await reviewConfirmation());
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
-    expect(screen.getByText('Review confirmed')).toBeInTheDocument();
-    expect(screen.queryByText('Changed — check again')).not.toBeInTheDocument();
-    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
-    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    await screen.findByDisplayValue('CORRECTED-BATCH');
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: '' } });
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-red-600');
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
   });
 
   it('restores a checked supplier GSTIN when its dependent supplier name changes', async () => {
@@ -2393,9 +2370,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue(saved);
     renderSavedInvoice({ ...saved, unresolvedOcrFlags: 1, ocrFlags: ['uncertain_distributorGstin'] });
     await editSelectedInvoice();
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm supplier GSTIN checked' }));
+    fireEvent.change(screen.getByLabelText('GSTIN'), { target: { value: '36ABCDE1234F1Z6' } });
     saveCurrentInvoice();
-    await screen.findByRole('checkbox', { name: /I verified the invoice against the original/ });
+    await reviewConfirmation();
     fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Corrected supplier' } });
     expect(screen.getByLabelText('GSTIN')).toHaveClass('border-amber-600');
     expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
@@ -2411,20 +2388,85 @@ describe('PurchaseInvoiceWorkbench', () => {
     await editSelectedInvoice();
     expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByLabelText('Exp. Year')).toHaveClass('border-red-600');
-    expect(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     saveCurrentInvoice();
-    expect(screen.getByText('Line 1: expiry month/year is invalid')).toBeInTheDocument();
+    const validationFeedback = screen.getByText('Fix Required').closest('[role="alert"]') as HTMLElement;
+    expect(within(validationFeedback).getByText('Line 1: expiry month/year is invalid')).toBeVisible();
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     await screen.findByText('Unfinished invoice saved to the server. Missing fields are allowed; stock has not changed.');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Exp. Month'), { target: { value: '12' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' }));
-    expect(screen.getByText('Checked').closest('li')).toHaveAttribute('data-review-state', 'success');
+    expect(screen.queryByRole('button', { name: 'Confirm line 1 expiry checked' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Exp. Month')).toHaveClass('border-emerald-600');
     fireEvent.change(screen.getByLabelText('Exp. Year'), { target: { value: '' } });
     expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('button', { name: 'Confirm line 1 expiry checked' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('confirms valid uncertainty for a review-only operator without committing stock', async () => {
+    mockPurchaseAccess = { read: true, create: true, review: true, commit: false, automate: false };
+    const reviewed = { ...draftInvoice, status: 'REVIEWED', unresolvedOcrFlags: 0 };
+    api.reviewPharmacyPurchaseInvoice.mockResolvedValue(reviewed);
+    api.getPharmacyPurchaseInvoiceById.mockResolvedValue(reviewed);
+    renderSavedInvoice({ ...draftInvoice, unresolvedOcrFlags: 1, items: [{ ...draftInvoice.items[0], ocrFlags: ['uncertain_batchNumber'] }] });
+    const confirm = await screen.findByRole('button', { name: 'Confirm reviewed values & mark reviewed' });
+    await waitFor(() => expect(confirm).toBeEnabled());
+    expect(screen.queryByRole('button', { name: 'Mark checked' })).not.toBeInTheDocument();
+    fireEvent.click(confirm);
+    expect(await screen.findByText('Review saved. Stock not added. An authorized colleague can add stock from this reviewed invoice.')).toBeVisible();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'AZT2401', ocrFlags: [] })] }));
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+    expect(window.confirm).not.toHaveBeenCalled();
+  });
+
+  it('saves one current reviewed snapshot and stops if the server returns a new blocker', async () => {
+    api.updatePharmacyPurchaseInvoiceDraft.mockResolvedValue({ ...draftInvoice, status: 'OCR_REVIEW_REQUIRED', unresolvedOcrFlags: 1, ocrFlags: ['new_server_check'] });
+    renderSavedInvoice({ ...draftInvoice, unresolvedOcrFlags: 2, ocrFlags: ['uncertain_distributorGstin'], items: [{ ...draftInvoice.items[0], ocrFlags: ['uncertain_batchNumber'] }] });
+    await screen.findByDisplayValue('APX-001');
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'VERIFIED-B2' } });
+    fireEvent.click(await reviewConfirmation());
+    await screen.findByText(/Invoice saved. Stock not added. Resolve the remaining invoice checks/);
+    expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenCalledWith('pinv-1', expect.objectContaining({ ocrFlags: [], items: [expect.objectContaining({ batchNumber: 'VERIFIED-B2', ocrFlags: [] })] }));
+    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('previews selected GST changes, retains later corrections on undo and writes no APIs', async () => {
+    renderSavedInvoice({ ...draftInvoice, grossAmount: 200, taxableAmount: 200, totalGst: 24, netPayable: 224, items: [draftInvoice.items[0], { ...draftInvoice.items[0], id: 'line-2', productName: 'Second product', lineNumber: 2 }] });
+    await editSelectedInvoice();
+    fireEvent.click(screen.getByText('Apply GST or discount to selected rows'));
+    fireEvent.click(await screen.findByLabelText('Select line 1 for shared terms'));
+    fireEvent.change(screen.getByLabelText('GST mode'), { target: { value: 'integrated' } });
+    fireEvent.change(screen.getByLabelText('Total GST %'), { target: { value: '18' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview 1 selected rows' }));
+    expect(screen.getAllByLabelText('IGST %')[0]).toHaveValue(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Apply to 1 selected rows' }));
+    expect(screen.getAllByLabelText('IGST %').map(input => (input as HTMLInputElement).value)).toEqual(['18', '0']);
+    fireEvent.change(screen.getAllByLabelText('CGST %')[0], { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Undo shared terms' }));
+    expect(screen.getAllByLabelText('CGST %')[0]).toHaveValue(7);
+    expect(screen.getAllByLabelText('SGST %')[0]).toHaveValue(6);
+    expect(screen.getAllByLabelText('IGST %')[0]).toHaveValue(0);
+    expect(screen.getByText('2 shared values undone. 1 later corrections kept.')).toBeVisible();
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
+    expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
+    expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
+  });
+
+  it('invalidates a batch preview after a separate invoice correction', async () => {
+    renderSavedInvoice();
+    await editSelectedInvoice();
+    fireEvent.click(screen.getByText('Apply GST or discount to selected rows'));
+    fireEvent.click(await screen.findByLabelText('Select line 1 for shared terms'));
+    fireEvent.change(screen.getByLabelText('Total GST %'), { target: { value: '18' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Preview 1 selected rows' }));
+    fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'LATER-BATCH' } });
+    expect(screen.getByRole('button', { name: 'Apply to 1 selected rows' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('The invoice changed. Preview the selected rows again.');
+    expect(screen.getByLabelText('CGST %')).toHaveValue(6);
+    expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
   });
 
 });

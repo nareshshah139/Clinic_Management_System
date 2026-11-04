@@ -1,6 +1,7 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import { InventoryWorkspace } from '@/components/inventory/InventoryWorkspace';
 import { apiClient } from '@/lib/api';
+import { useInventoryResource } from '@/components/inventory/useInventoryResource';
 const mockRouter = {push:jest.fn(),refresh:jest.fn()};
 let mockQuery = 'area=stock&view=list';
 jest.mock('@/lib/api', () => ({apiClient:{get:jest.fn()}}));
@@ -73,4 +74,60 @@ it.each(['', '0', '-1', '1.5', 'invalid'])('does not invent a pending revision f
   (apiClient.get as jest.Mock).mockResolvedValue({kinds:{LOSS:{read:true,write:false}}});
   render(<InventoryWorkspace/>);
   expect(await screen.findByText('Recovery version missing operation transition')).toBeInTheDocument();
+});
+
+const emptyDocuments = { rows: [], total: 0, page: 1, totalPages: 1 };
+it.each([
+  ['area=stock&view=LOSS', 'Loading records…', 'Retry records', emptyDocuments, 'No loss & breakage match these filters.'],
+  ['area=purchases&view=register', 'Loading invoices…', 'Retry invoices', {data:[],pagination:{total:0,page:1,pages:1}}, 'No invoices match these filters.'],
+  ['area=purchases&view=suppliers', 'Loading suppliers…', 'Retry suppliers', [], 'No suppliers yet. Add a supplier to start recording purchases.'],
+])('distinguishes loading, failed and recovered empty reads for %s', async (query, loading, retry, result, empty) => {
+  mockQuery = query as string;
+  let rejectRead: (error: Error) => void = () => {};
+  let reads = 0;
+  (apiClient.get as jest.Mock).mockImplementation((path: string) => {
+    if (path.includes('capabilities')) return Promise.resolve({supplierWrite:true,kinds:{LOSS:{read:true,write:true}}});
+    if (++reads === 1) return new Promise((_resolve, reject) => { rejectRead = reject; });
+    return Promise.resolve(result);
+  });
+  render(<InventoryWorkspace/>);
+  expect(await screen.findByText(loading as string)).toBeInTheDocument();
+  expect(screen.queryByText('0 records')).not.toBeInTheDocument();
+  await act(async () => rejectRead(new Error('Connection interrupted')));
+  expect(await screen.findByText('Connection interrupted')).toBeInTheDocument();
+  expect(screen.queryByText(empty as string)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name: retry as string}));
+  expect(await screen.findByText(empty as string)).toBeInTheDocument();
+  expect(screen.queryByText('Connection interrupted')).not.toBeInTheDocument();
+});
+
+it('never lets a late prior filter overwrite current workflow results', async () => {
+  mockQuery = 'area=stock&view=LOSS&search=old';
+  let resolveOld: (data: unknown) => void = () => {};
+  (apiClient.get as jest.Mock).mockImplementation((path: string) => {
+    if(path.includes('capabilities')) return Promise.resolve({kinds:{LOSS:{read:true,write:true}}});
+    if(path.includes('search=old')) return new Promise(resolve => {resolveOld=resolve;});
+    return Promise.resolve({...emptyDocuments, rows:[{id:'new',kind:'LOSS',reference:'Current filtered record',status:'POSTED',createdAt:'2026-11-04',totalAmount:10,payload:{lines:[]}}],total:1});
+  });
+  const view = render(<InventoryWorkspace/>);
+  await screen.findByText('Loading records…');
+  mockQuery = 'area=stock&view=LOSS&search=new';
+  view.rerender(<InventoryWorkspace/>);
+  expect(await screen.findByText('Current filtered record')).toBeInTheDocument();
+  await act(async () => resolveOld({...emptyDocuments,rows:[{id:'old',kind:'LOSS',reference:'Stale record',status:'POSTED',createdAt:'2026-11-04',totalAmount:10,payload:{lines:[]}}],total:1}));
+  expect(screen.getByText('Current filtered record')).toBeInTheDocument();
+  expect(screen.queryByText('Stale record')).not.toBeInTheDocument();
+});
+
+it('reloads the current query when an older mutation retains its reload callback', async () => {
+  (apiClient.get as jest.Mock).mockImplementation(async (url: string) => ({ label: url }));
+  const view = renderHook(({url}) => useInventoryResource<{label:string}>(url), {initialProps:{url:'/old-query'}});
+  await waitFor(() => expect(view.result.current.data?.label).toBe('/old-query'));
+  const retainedReload = view.result.current.reload;
+  view.rerender({url:'/current-query'});
+  await waitFor(() => expect(view.result.current.data?.label).toBe('/current-query'));
+  await act(async () => retainedReload());
+  expect(view.result.current.status).toBe('ready');
+  expect(view.result.current.data).toEqual({label:'/current-query'});
+  expect((apiClient.get as jest.Mock).mock.calls.map(([url])=>url)).toEqual(['/old-query','/current-query','/current-query']);
 });

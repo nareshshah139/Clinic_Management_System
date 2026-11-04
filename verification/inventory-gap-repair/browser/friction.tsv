@@ -1,0 +1,11 @@
+scenario	before	after	field_edits	status
+baseline	3	1	0	STOCK_COMMITTED
+corrections	11	5	4	STOCK_COMMITTED
+multi	20	11	10	STOCK_COMMITTED
+missing	7	4	3	STOCK_COMMITTED
+ambiguous	4	2	0	STOCK_COMMITTED
+newproduct	6	4	2	STOCK_COMMITTED
+supplier	7	5	1	STOCK_COMMITTED
+reviewed	4	4	2	STOCK_COMMITTED
+receipt	3	1	0	STOCK_COMMITTED
+catalog	8	6	2	STOCK_COMMITTED

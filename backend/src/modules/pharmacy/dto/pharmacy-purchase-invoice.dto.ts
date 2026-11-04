@@ -587,6 +587,13 @@ export class ReopenPharmacyPurchaseInvoiceDto {
   @ApiProperty({ description: 'The saved revision being reopened for correction' })
   @IsDateString()
   expectedUpdatedAt: string;
+
+  @ApiProperty({ description: 'Operator reason for correcting the reviewed invoice' })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(1000)
+  reason: string;
 }
 
 export class ReviewPharmacyPurchaseInvoiceDto {
@@ -670,7 +677,7 @@ export class RejectPharmacyPurchaseInvoiceDto extends ReopenPharmacyPurchaseInvo
   @IsString()
   @MinLength(1)
   @MaxLength(500)
-  reason: string;
+  declare reason: string;
 }
 
 /**

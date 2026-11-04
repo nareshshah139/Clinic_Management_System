@@ -935,7 +935,7 @@ export function WorkspaceStock({
               filter("search", search);
             }}
           >
-            <label className="min-w-60 flex-1">
+            <label className="w-full basis-full sm:w-auto sm:basis-auto sm:flex-1">
               <span className="mb-1 block text-sm">Search stock</span>
               <input
                 className={inputClass}
