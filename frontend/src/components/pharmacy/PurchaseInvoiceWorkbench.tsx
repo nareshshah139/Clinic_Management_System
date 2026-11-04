@@ -47,6 +47,7 @@ import { PurchaseHelp, PurchaseStatusCue } from "./PurchaseHelp";
 import {
   focusPurchaseField,
   groupPurchaseOcrFlags,
+  purchaseCheckStops,
   purchaseBlockingIssues,
   purchaseInvoiceStatusLabel,
   purchaseInvoiceReviewTone,
@@ -1055,6 +1056,18 @@ export function PurchaseInvoiceWorkbench({
  * Recognized save conflicts MUST show their blocker and authorized saved invoice identity and status.
  * Opening the existing invoice MUST retain attempted edits and re-read it before offering corrections.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-check-navigation-only
+ * Previous/Next check MUST only focus current correction targets, never approve checks or write
+ * invoice data. Removed checks retain surviving successors without moving focus automatically.
+ * Combined row amount checks MUST focus their current row, falling back to the line list if absent.
+ * Saved ordinal-only line blockers MUST NOT target reindexed rows; stale or locked drafts hide navigation.
+ */
+/**
+ * @cc [owner:nareshshah139,label:state] purchase-explicit-batch-scope
+ * Select all MUST snapshot current row IDs without selecting future rows. Scope changes MUST
+ * discard unapplied previews while retaining applied undo and making no network writes.
+ */
 function PurchaseInvoiceEditor({
   recoveryKey,
   invoiceId,
@@ -1094,6 +1107,7 @@ function PurchaseInvoiceEditor({
   const [reopenReason, setReopenReason] = useState("");
   const [batchOpen, setBatchOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [checkCursor, setCheckCursor] = useState<{ id: string; order: string[] } | null>(null);
   const [sharedTerms, setSharedTerms] = useState<SharedTerms>({ kind: 'gst', mode: 'split', rate: '' });
   const [batchState, setBatchState] = useState<{ kind: 'idle' } | { kind: 'preview' | 'applied'; proposal: SharedTermPreview; invoiceId: string | null }>({ kind: 'idle' });
   const [checkedOcr, setCheckedOcr] = useState<Record<string, PurchaseCheckedFields>>({});
@@ -1546,7 +1560,7 @@ function PurchaseInvoiceEditor({
   };
 
   const resetDraft = () => {
-    setBatchState({ kind: 'idle' }); setSelectedRows([]); setBatchOpen(false);
+    setBatchState({ kind: 'idle' }); setSelectedRows([]); setBatchOpen(false); setCheckCursor(null);
     invalidatePending();
     setCheckedOcr({});
     setShowIntakeHome(false);
@@ -2561,7 +2575,7 @@ function PurchaseInvoiceEditor({
   };
 
   const editSavedDraft = (invoice: PurchaseInvoice) => {
-    setBatchState({ kind: 'idle' }); setSelectedRows([]);
+    setBatchState({ kind: 'idle' }); setSelectedRows([]); setCheckCursor(null);
     invalidatePending();
     setCatalogueIssue(false);
     applyExtractedDraft({
@@ -3438,6 +3452,39 @@ function PurchaseInvoiceEditor({
     if (issue.category === 'product') void openProductRecovery();
     requestAnimationFrame(() => focusPurchaseField(target));
   };
+  const checkStops = editingChecks && !draftWriteBlocked && !stockStatusUnknown
+    ? purchaseCheckStops(currentHeaderFlags, lines.map((line, index) => ({ localId: line.localId, flags: currentLineFlags[index] })), [
+      ...correctionIssues.filter(issue => issue.lineIndex === undefined),
+      ...uniquePurchaseReviewIssues([...missingStockFields, ...validateDraft(header, lines), ...draftWarnings(lines)]),
+    ])
+    : [];
+  const activeCheckIndex = checkStops.findIndex(stop => stop.id === checkCursor?.id);
+  const activeCheck = checkStops[activeCheckIndex]?.issue;
+  const adjacentCheck = (direction: -1 | 1) => {
+    if (!checkCursor) return direction === 1 ? checkStops[0] : undefined;
+    if (activeCheckIndex >= 0) return checkStops[activeCheckIndex + direction];
+    const priorIndex = checkCursor.order.indexOf(checkCursor.id);
+    const candidates = direction === 1 ? checkCursor.order.slice(priorIndex + 1) : checkCursor.order.slice(0, priorIndex).reverse();
+    const nextId = candidates.find(id => checkStops.some(stop => stop.id === id));
+    return checkStops.find(stop => stop.id === nextId);
+  };
+  const navigateCheck = (direction: -1 | 1) => {
+    if (busy || !checkStops.length) return;
+    const stop = adjacentCheck(direction);
+    if (!stop) {
+      setCheckCursor(null);
+      focusPurchaseField('purchase-review-checklist');
+      return;
+    }
+    setCheckCursor({ id: stop.id, order: checkStops.map(item => item.id) });
+    if (stop.issue.category === 'product') focusRecoveryIssue(stop.issue);
+    else {
+      const target = purchaseRecoveryTarget(stop.issue, lines.map(line => line.localId));
+      const rowId = stop.issue.lineIndex === undefined ? undefined : lines[stop.issue.lineIndex]?.localId;
+      const rowTarget = target === 'purchase-line-items' && rowId ? `${rowId}-review` : undefined;
+      focusPurchaseField(rowTarget && document.getElementById(rowTarget) ? rowTarget : target && document.getElementById(target) ? target : 'purchase-review-checklist');
+    }
+  };
   const rejectSavedInvoice = async () => {
     if (!activeInvoice?.updatedAt || !access.create || !access.review || busy || draftWriteBlocked) return;
     const reason = window.prompt('Why is this invoice being rejected? Its original and history will be retained.');
@@ -3582,6 +3629,12 @@ function PurchaseInvoiceEditor({
                 : null;
   const batchBasis = JSON.stringify([editorGeneration.current, editingId, draftServerRevision, header, lines, originalAmounts]);
   const batchDisabled = busy || savedFormLocked || draftWriteBlocked || !access.create;
+  const currentSelectedRows = selectedRows.filter(id => lines.some(line => line.localId === id));
+  const selectBatchRows = (ids: string[]) => {
+    if (batchDisabled) return;
+    setSelectedRows(ids);
+    if (batchState.kind === 'preview') setBatchState({ kind: 'idle' });
+  };
   const applyShared = () => {
     if (batchDisabled || batchState.kind !== 'preview') return;
     try {
@@ -3603,16 +3656,21 @@ function PurchaseInvoiceEditor({
   const sharedTermsEditor = <details data-purchase-local-controls className="border-y py-2" open={batchOpen} onToggle={event => setBatchOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer py-1 text-sm font-medium">Apply GST or discount to selected rows</summary>
     <div className="space-y-3 py-3">
-      <p className="text-sm">Select rows below. Only verified shared GST or discount changes; product, batch, expiry, quantities and printed totals stay separate.</p>
+      <p className="text-sm">Use only when the selected rows have the same GST or discount on the bill. Preview the changes before applying.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={batchDisabled || currentSelectedRows.length === lines.length} onClick={() => selectBatchRows(lines.map(line => line.localId))}>Select all {lines.length} {lines.length === 1 ? 'row' : 'rows'}</Button>
+        <Button type="button" size="sm" variant="ghost" disabled={batchDisabled || !currentSelectedRows.length} onClick={() => selectBatchRows([])}>Clear selection</Button>
+        <span className="text-sm text-muted-foreground" role="status" aria-label="Selected rows">{currentSelectedRows.length} of {lines.length} rows selected</span>
+      </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">Shared term<select className="mt-1 block rounded border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
+        <label className="text-sm">Change<select className="mt-1 block rounded border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
         {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<select className="mt-1 block rounded border p-2" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></select></label>}
         <label className="text-sm">{sharedTerms.kind === 'gst' ? 'Total GST %' : 'Shared discount %'}<Input type="number" min="0" max="100" value={sharedTerms.rate} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, rate: event.target.value }); setBatchState({ kind: 'idle' }); }} /></label>
-        <Button type="button" variant="outline" disabled={batchDisabled || !selectedRows.length} onClick={() => { try { setBatchState({ kind: 'preview', proposal: previewPurchaseTerms(lines, selectedRows, sharedTerms, batchBasis), invoiceId: editingId }); setError(null); } catch (error) { setError(getErrorMessage(error)); } }}>Preview {selectedRows.length} selected rows</Button>
+        <Button type="button" variant="outline" disabled={batchDisabled || !currentSelectedRows.length} onClick={() => { try { setBatchState({ kind: 'preview', proposal: previewPurchaseTerms(lines, currentSelectedRows, sharedTerms, batchBasis), invoiceId: editingId }); setError(null); } catch (error) { setError(getErrorMessage(error)); } }}>Preview {currentSelectedRows.length} selected rows</Button>
       </div>
       {batchState.kind === 'preview' && <div className="space-y-2" aria-label="Shared terms preview">
         <p className="font-medium">{batchState.proposal.selectedIds.length} selected rows · draft changes only</p>
-        <ul className="text-sm">{batchState.proposal.patches.map(patch => <li key={`${patch.localId}-${patch.field}`}>{patch.productName}: {patch.field.replace('Percent', '')} {patch.before || '0'}% → {patch.after}%</li>)}</ul>
+        <ul className="text-sm">{batchState.proposal.patches.map(patch => <li key={`${patch.localId}-${patch.field}`}>{patch.productName}: {{ cgstPercent: 'CGST', sgstPercent: 'SGST', igstPercent: 'IGST', discountPercent: 'Discount' }[patch.field]} {patch.before || '0'}% → {patch.after}%</li>)}</ul>
         {batchState.proposal.basis !== batchBasis && <p role="alert">The invoice changed. Preview the selected rows again.</p>}
         <Button type="button" disabled={batchDisabled || batchState.proposal.basis !== batchBasis || !batchState.proposal.patches.length} onClick={applyShared}>Apply to {batchState.proposal.selectedIds.length} selected rows</Button>
       </div>}
@@ -3621,7 +3679,7 @@ function PurchaseInvoiceEditor({
   </details>;
   const invoiceActions = (
     <section aria-label="Invoice actions" className="sticky bottom-0 z-20 space-y-2 border-t bg-background py-3">
-      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p className="text-sm">Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</p>}
+      {!stockAdded && !stockStatusUnknown && activeInvoice?.status !== 'CANCELLED' && <p id="purchase-posting-guidance" className="text-sm">{editingChecks && postingBlocker ? <>{postingBlocker}{!checkStops.length && <> <a className="underline underline-offset-4" href="#purchase-review-checklist" onClick={event => { event.preventDefault(); focusPurchaseField('purchase-review-checklist'); }}>Review checks</a></>}</> : <>Confirm values against the original. {!access.commit ? 'Saves review; stock stays unchanged.' : linkedReceipt ? 'Posts bill; no stock added again.' : 'Adds the received quantities to stock.'}</>}</p>}
       <div className="flex flex-wrap items-center gap-2">
         {stockStatusUnknown ? (
           <Button variant="outline" onClick={() => unknownStockInvoiceId && refreshStockStatus(unknownStockInvoiceId)} disabled={busy}>Refresh stock status</Button>
@@ -3661,12 +3719,11 @@ function PurchaseInvoiceEditor({
         )}
         <span className="hidden text-sm text-muted-foreground sm:inline">{stockStatusUnknown ? "Stock status unknown" : stockAdded ? committedLabel : linkedReceipt ? "Stock received earlier · 0 added again" : activeInvoice ? "Stock not added" : "Not saved · stock not added"}</span>
       </div>
-      {!stockAdded && activeInvoice?.status !== "CANCELLED" && activeInvoice?.status !== "REVIEWED" && (
-        <p id="purchase-posting-guidance" className={`text-sm text-muted-foreground ${postingBlocker ? "" : "hidden sm:block"}`}>
-          {postingBlocker ? <><span className="sm:hidden">Resolve the highlighted checks.</span><span className="hidden sm:inline">{postingBlocker}</span></> : (linkedReceipt ? "Confirm the reviewed values to post this bill. No stock is added again." : "Correct any mistakes, then confirm the reviewed values to save and add stock.")}{" "}
-          {!!postingBlocker && <a className="underline underline-offset-4" href="#purchase-review-checklist">Review checks</a>}
-        </p>
-      )}
+      {checkStops.length > 0 && <nav aria-label="Invoice checks" className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="mr-auto text-sm text-muted-foreground" aria-live="polite">{!activeCheck ? `${checkStops.length} ${checkStops.length === 1 ? 'check' : 'checks'} to review` : `Check ${activeCheckIndex + 1} of ${checkStops.length} · ${activeCheck.lineIndex === undefined ? '' : `Line ${activeCheck.lineIndex + 1} `}${activeCheck.label}`}</span>
+        <Button type="button" size="sm" variant="ghost" aria-label="Previous check" disabled={busy || !adjacentCheck(-1)} onClick={() => navigateCheck(-1)}>Previous</Button>
+        <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => navigateCheck(1)}>{adjacentCheck(1) ? 'Next check' : 'Back to review'}</Button>
+      </nav>}
     </section>
   );
 
@@ -5104,7 +5161,7 @@ function PurchaseInvoiceEditor({
                               </span>
                             </div>
                                                           <div className="space-y-3 px-4 pb-4">
-                                {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => { setSelectedRows(current => event.target.checked ? [...current, line.localId] : current.filter(id => id !== line.localId)); if (batchState.kind === 'preview') setBatchState({ kind: 'idle' }); }} />Select line {index + 1} for shared terms</label>}
+                                {batchOpen && <label className="flex items-center gap-2 text-sm"><input data-purchase-local-controls type="checkbox" disabled={batchDisabled} checked={selectedRows.includes(line.localId)} onChange={event => selectBatchRows(event.target.checked ? [...currentSelectedRows, line.localId] : currentSelectedRows.filter(id => id !== line.localId))} />Select line {index + 1} for shared terms</label>}
                                 <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
 <Field id={`${line.localId}-product`} label="Product" value={line.productName} className="col-span-2" onChange={event => updateLine(line.localId, "productName", event.target.value)} />
 <Field id={`${line.localId}-pack-size`} label="Pack Size" value={line.packSize} onChange={event => updateLine(line.localId, "packSize", event.target.value)} />

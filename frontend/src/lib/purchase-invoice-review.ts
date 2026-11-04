@@ -13,6 +13,29 @@ export type PurchaseReviewIssue = {
   category?: 'manual' | 'supplier' | 'product' | 'totals' | 'historical';
 };
 
+export type PurchaseCheckStop = { id: string; issue: PurchaseReviewIssue };
+
+/**
+ * @cc [owner:nareshshah139,label:state] purchase-check-navigation-index
+ * Checks MUST be derived from current issues in header/row order, deduplicated by field and
+ * identified by stable row ID. Missing rows MUST be omitted; navigation grants no review evidence.
+ */
+export function purchaseCheckStops(headerFlags: string[], rows: readonly { localId: string; flags: string[] }[], corrections: readonly PurchaseReviewIssue[]): PurchaseCheckStop[] {
+  const issues = [
+    ...headerFlags.map(flag => purchaseReviewIssue(flag)),
+    ...rows.flatMap((row, index) => row.flags.map(flag => ({ ...purchaseReviewIssue(flag, index), lineIndex: index }))),
+    ...corrections,
+  ].sort((a, b) => (a.lineIndex ?? -1) - (b.lineIndex ?? -1));
+  const stops = new Map<string, PurchaseCheckStop>();
+  for (const issue of issues) {
+    const scope = issue.lineIndex === undefined ? 'header' : rows[issue.lineIndex]?.localId;
+    if (!scope) continue;
+    const id = `${scope}:${issue.field || issue.key.slice(issue.key.indexOf(':') + 1)}`;
+    if (!stops.has(id)) stops.set(id, { id, issue });
+  }
+  return [...stops.values()];
+}
+
 /**
  * @cc [owner:nareshshah139,label:accessibility] purchase-correction-target-visible
  * Jumping to a correction MUST open enclosing disclosures and focus the field or section.
@@ -42,12 +65,12 @@ const fields = [
   ['distributorDlNo', 'supplier drug license', 'distributor-dl', /distributor.?dl/i],
   ['invoiceNumber', 'invoice number', 'invoice-number', /invoice.?number/i],
   ['goodsReceivedDate', 'goods received date', 'goods-date', /goods.?received/i],
-  ['invoiceDate', 'invoice date', 'invoice-date', /invoice.?date/i],
   ['dueDate', 'due date', 'due-date', /due.?date/i],
+  ['invoiceDate', 'invoice date', 'invoice-date', /invoice.?date/i],
   ['manufacturer', 'manufacturer', 'manufacturer', /manufacturer/i],
   ['packUnitType', 'stock unit', 'unit', /pack.?unit.?type|stock unit/i],
   ['packSize', 'pack size', 'pack-size', /pack.?size/i],
-  ['productName', 'product', 'product', /product.?name/i],
+  ['productName', 'product', 'product', /product.?name|^product (?:is )?(?:required|missing)/i],
   ['hsnCode', 'HSN', 'hsn', /hsn/i],
   ['batchNumber', 'batch', 'batch', /batch/i],
   ['expiryMonth', 'expiry', 'expiry-month', /expiry/i],
@@ -73,6 +96,15 @@ export function purchaseReviewField(field: string, lineIndex?: number) {
  * historical-stock holds MUST NOT recommend posting the invoice as a new receipt. Wrong-document
  * readings MUST request the correct supplier invoice rather than implying only pages are missing.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-expired-batch-correction
+ * Expired-batch warnings MUST target expiry and retain their restriction on review and stock posting.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] purchase-joint-amount-correction
+ * Combined quantity or rate/MRP errors MUST retain their message and target the amounts section,
+ * rather than attributing a combined validation failure to one field.
+ */
 export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseReviewIssue {
   const text = raw.trim().replace(/^(?:(?:AUTO|OCR):\s*)+/i, '');
   const line = /^Line (\d+):\s*/i.exec(text);
@@ -80,6 +112,11 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
   const body = line ? text.slice(line[0].length) : text;
   const prefix = index === undefined ? '' : `Line ${index + 1}: `;
   const base = { lineIndex: index, key: `${index ?? 'header'}:${body.toLowerCase()}` };
+  if (/\bexpired batch(?:es)?\b/i.test(body)) {
+    return { ...base, key: `${index ?? 'header'}:expiryMonth:expired`, field: 'expiryMonth', label: 'expiry', target: 'expiry-month',
+      message: prefix + body,
+      help: 'Compare the expiry month and year with the original. Correct a misread expiry; expired goods cannot be reviewed or added to stock.' };
+  }
   if (/historical invoice|historical before.*stock|already.*inventory backfill/i.test(body)) {
     return { ...base, category: 'historical', label: 'historical stock',
       message: 'This invoice may already be included in opening stock.',
@@ -129,7 +166,8 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, category: 'product', label: 'product match', target: 'purchase-master-matching', message: `${prefix}Confirm the product record.`,
       help: 'Refresh Matches and confirm the correct product and pack. Manufacturer is optional, but can help distinguish similar products. Create a new product only when no matching record exists. Choose its product kind and known details here. For an incomplete saved record, use Check or correct saved product details.' };
   }
-  const match = fields.find(([, , , pattern]) => pattern.test(body));
+  const jointAmounts = /^(?:purchase and free quantities|quantities cannot|purchased plus free quantity|purchase rate and MRP)\b/i.test(body);
+  const match = jointAmounts ? undefined : fields.find(([, , , pattern]) => pattern.test(body));
   if (match) {
     const [field, label, target] = match;
     const missing = /missing|required/i.test(body);
@@ -142,7 +180,7 @@ export function purchaseReviewIssue(raw: string, lineIndex?: number): PurchaseRe
     return { ...base, key: `${index ?? 'header'}:${field}:${missing ? 'missing' : 'check'}`,
       field, label, target, message: prefix + message, help };
   }
-  if (/total|taxable|gst|discount|rounding|rate|quantity/i.test(body)) {
+  if (/total|taxable|gst|discount|rounding|rate|quantit(?:y|ies)|scheme.?amount/i.test(body)) {
     return { ...base, category: 'totals', label: index === undefined ? 'invoice totals' : 'product amounts',
       target: index === undefined ? 'purchase-totals' : 'purchase-line-items',
       message: prefix + body,
