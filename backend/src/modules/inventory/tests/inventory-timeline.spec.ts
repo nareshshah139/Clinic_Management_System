@@ -61,13 +61,10 @@ describe('inventory timeline ledger', () => {
     expect(rows.find(r => r.id === 'legacy')).toMatchObject({ delta: null, direction: 'UNKNOWN', balance: null });
   });
 
-  it('keeps channel totals over the whole range while filtering the rows', async () => {
-    const { rows, totals, pagination } = await read({ channel: 'PRESCRIPTION,PURCHASE_INVOICE' });
+  it('filters rows by method', async () => {
+    const { rows, pagination } = await read({ channel: 'PRESCRIPTION,PURCHASE_INVOICE' });
     expect(rows.map(r => r.id).sort()).toEqual(['purchase', 'rx']);
     expect(pagination.total).toBe(2);
-    expect(totals.reduce((n, t) => n + t.entries, 0)).toBe(movements.length);
-    expect(totals.find(t => t.channel === 'PHARMACY_BILL')).toMatchObject({ entries: 2, unitsOut: 6 });
-    expect(totals.find(t => t.channel === 'MANUAL')).toMatchObject({ unitsIn: 0, unitsOut: 0, unknown: 1 });
   });
 
   it('filters by direction and pages the result', async () => {
@@ -103,6 +100,6 @@ describe('inventory timeline ledger', () => {
     const many = Array.from({ length: 10001 }, (_, i) => movement(`m${i}`, 0, { quantityDelta: 1, reference: 'manual' }));
     const result = await read({}, prisma(many));
     expect(result.truncated).toBe(true);
-    expect(result.totals[0].entries).toBe(10000);
+    expect(result.pagination.total).toBe(10000);
   });
 });

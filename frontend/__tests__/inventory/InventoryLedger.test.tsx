@@ -13,10 +13,6 @@ const row = (fields: Record<string, any>) => ({
 });
 const timeline = {
   range: { from: '2026-10-06', to: '2026-11-04' }, truncated: false, scanLimit: 10000,
-  totals: [
-    { channel: 'PURCHASE_INVOICE', label: 'Purchase invoice', entries: 1, unitsIn: 100, unitsOut: 0, unknown: 0 },
-    { channel: 'PRESCRIPTION', label: 'Prescription dispensed', entries: 1, unitsIn: 0, unitsOut: 10, unknown: 0 },
-  ],
   rows: [
     row({ id: 'rx' }),
     row({ id: 'purchase', at: '2026-11-03T05:00:00.000Z', type: 'PURCHASE', delta: 100, direction: 'IN', balance: { before: 0, after: 100 }, reference: 'PINV-778',
@@ -51,11 +47,12 @@ it('reads the range and filters from the URL and writes filter changes back to i
   (apiClient.get as jest.Mock).mockResolvedValue(timeline);
   const p = props();
   render(<InventoryLedger {...p} query={{ ...p.query, ledgerChannel: 'PRESCRIPTION', ledgerDirection: 'OUT', ledgerPage: '2' }} />);
-  await screen.findByText('Showing Prescription dispensed.', { exact: false });
+  await screen.findByLabelText('Removed 10 tablets');
+  expect(screen.getByLabelText('Method')).toHaveValue('PRESCRIPTION');
   const url = (apiClient.get as jest.Mock).mock.calls[0][0] as string;
   expect(new URLSearchParams(url.split('?')[1])).toEqual(new URLSearchParams({ from: '2026-10-06', to: '2026-11-04', page: '2', limit: '50', channel: 'PRESCRIPTION', direction: 'OUT' }));
-  fireEvent.click(screen.getByRole('button', { name: /Purchase invoice/ }));
-  expect(p.navigate).toHaveBeenCalledWith({ ledgerChannel: 'PRESCRIPTION,PURCHASE_INVOICE', ledgerPage: '' });
+  fireEvent.change(screen.getByLabelText('Method'), { target: { value: 'PURCHASE_INVOICE' } });
+  expect(p.navigate).toHaveBeenCalledWith({ ledgerChannel: 'PURCHASE_INVOICE', ledgerPage: '' });
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'ceti' } });
   await waitFor(() => expect(p.navigate).toHaveBeenCalledWith({ ledgerSearch: 'ceti', ledgerPage: '' }));
 });
@@ -66,7 +63,7 @@ it('keeps a failed read distinct from an empty ledger and warns when truncated',
   expect(await screen.findByRole('alert')).toHaveTextContent('Ledger offline');
   expect(screen.queryByText('No stock changes match these filters')).not.toBeInTheDocument();
   unmount();
-  (apiClient.get as jest.Mock).mockResolvedValue({ ...timeline, truncated: true, rows: [], totals: [], pagination: { page: 1, limit: 50, total: 0, pages: 1 } });
+  (apiClient.get as jest.Mock).mockResolvedValue({ ...timeline, truncated: true, rows: [], pagination: { page: 1, limit: 50, total: 0, pages: 1 } });
   render(<InventoryLedger {...props()} />);
   expect(await screen.findByText('No stock changes match these filters')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('more than 10,000 movements');

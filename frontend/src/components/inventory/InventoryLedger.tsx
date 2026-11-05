@@ -30,30 +30,29 @@ type Entry = {
   item: { id: string; name: string } | null; actor: { id: string; name: string } | null;
   source: { channel: Channel; label: string; document: LedgerDocument | null; counterparty: string | null };
 };
-type Total = { channel: Channel; label: string; entries: number; unitsIn: number; unitsOut: number; unknown: number };
 type Timeline = {
-  range: { from: string; to: string }; truncated: boolean; scanLimit: number; totals: Total[]; rows: Entry[];
+  range: { from: string; to: string }; truncated: boolean; scanLimit: number; rows: Entry[];
   pagination: { page: number; limit: number; total: number; pages: number };
 };
 
 type Tone = "receipt" | "dispense" | "loss" | "adjust" | "neutral";
-const CHANNEL: Record<Channel, { icon: LucideIcon; tone: Tone }> = {
-  PURCHASE_INVOICE: { icon: Truck, tone: "receipt" },
-  OPENING_STOCK: { icon: FileSpreadsheet, tone: "receipt" },
-  CUSTOMER_RETURN: { icon: Undo2, tone: "receipt" },
-  PRESCRIPTION: { icon: Stethoscope, tone: "dispense" },
-  PHARMACY_BILL: { icon: Receipt, tone: "dispense" },
-  COUNTER_SALE: { icon: ShoppingBag, tone: "dispense" },
-  PARTNER_SALE: { icon: Handshake, tone: "dispense" },
-  SUPPLIER_RETURN: { icon: RotateCcw, tone: "loss" },
-  LOSS: { icon: PackageMinus, tone: "loss" },
-  HOLD: { icon: ShieldAlert, tone: "loss" },
-  STOCK_COUNT: { icon: ClipboardCheck, tone: "adjust" },
-  CORRECTION: { icon: PencilLine, tone: "adjust" },
-  APPROVED_EDIT: { icon: PencilLine, tone: "adjust" },
-  TRANSFER: { icon: ArrowLeftRight, tone: "neutral" },
-  INVENTORY_DOCUMENT: { icon: FileText, tone: "neutral" },
-  MANUAL: { icon: Boxes, tone: "neutral" },
+const CHANNEL: Record<Channel, { label: string; icon: LucideIcon; tone: Tone }> = {
+  PURCHASE_INVOICE: { label: "Purchase invoice", icon: Truck, tone: "receipt" },
+  OPENING_STOCK: { label: "Opening stock", icon: FileSpreadsheet, tone: "receipt" },
+  CUSTOMER_RETURN: { label: "Customer return", icon: Undo2, tone: "receipt" },
+  PRESCRIPTION: { label: "Prescription dispensed", icon: Stethoscope, tone: "dispense" },
+  PHARMACY_BILL: { label: "Pharmacy bill", icon: Receipt, tone: "dispense" },
+  COUNTER_SALE: { label: "Counter sale", icon: ShoppingBag, tone: "dispense" },
+  PARTNER_SALE: { label: "Partner daily sale", icon: Handshake, tone: "dispense" },
+  SUPPLIER_RETURN: { label: "Supplier return", icon: RotateCcw, tone: "loss" },
+  LOSS: { label: "Loss or breakage", icon: PackageMinus, tone: "loss" },
+  HOLD: { label: "Blocked stock", icon: ShieldAlert, tone: "loss" },
+  STOCK_COUNT: { label: "Stock count", icon: ClipboardCheck, tone: "adjust" },
+  CORRECTION: { label: "Movement correction", icon: PencilLine, tone: "adjust" },
+  APPROVED_EDIT: { label: "Approved stock edit", icon: PencilLine, tone: "adjust" },
+  TRANSFER: { label: "Location transfer", icon: ArrowLeftRight, tone: "neutral" },
+  INVENTORY_DOCUMENT: { label: "Inventory document", icon: FileText, tone: "neutral" },
+  MANUAL: { label: "Manual entry", icon: Boxes, tone: "neutral" },
 };
 const TONE: Record<Tone, string> = {
   receipt: "border-success-border bg-success-soft text-success-text",
@@ -85,7 +84,7 @@ function documentLabel(doc: LedgerDocument): string {
 /**
  * @cc [owner:nareshshah139,label:product] inventory-ledger-view
  * The stock ledger MUST show every movement newest first, grouped by clinic day, with its signed
- * change, recorded balance, source method, counterparty and actor. Range, channel, direction,
+ * change, recorded balance, source method, counterparty and actor. Range, method, direction,
  * search and page MUST live in the workspace URL so item detail and browser back return to the
  * same view. Loading, failed and empty reads MUST stay distinct, and a truncated range MUST say so.
  */
@@ -98,7 +97,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
 }) {
   const today = clinicToday();
   const to = query.ledgerTo || today, from = query.ledgerFrom || daysBefore(to, 29);
-  const channels = useMemo(() => new Set((query.ledgerChannel || "").split(",").filter(Boolean) as Channel[]), [query.ledgerChannel]);
+  const channel = (query.ledgerChannel in CHANNEL ? query.ledgerChannel : "") as Channel | "";
   const direction = (query.ledgerDirection || "") as Direction | "";
   const [search, setSearch] = useState(query.ledgerSearch || "");
   useEffect(() => setSearch(query.ledgerSearch || ""), [query.ledgerSearch]);
@@ -109,17 +108,12 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
   }, [search, query.ledgerSearch, navigate]);
 
   const params = new URLSearchParams({ from, to, page: query.ledgerPage || "1", limit: "50" });
-  if (channels.size) params.set("channel", [...channels].join(","));
+  if (channel) params.set("channel", channel);
   if (direction) params.set("direction", direction);
   if (query.ledgerSearch) params.set("search", query.ledgerSearch);
   const timeline = useInventoryResource<Timeline>(`/inventory/workspace/timeline?${params}`);
   const data = timeline.data;
 
-  const toggleChannel = (channel: Channel) => {
-    const next = new Set(channels);
-    if (next.has(channel)) next.delete(channel); else next.add(channel);
-    navigate({ ledgerChannel: [...next].join(","), ledgerPage: "" });
-  };
   const days = useMemo(() => {
     const groups: { day: string; entries: Entry[] }[] = [];
     for (const entry of data?.rows || []) {
@@ -157,7 +151,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_1fr_auto] md:items-end">
+      <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(10rem,13rem)_auto] md:items-end">
         <label className="grid gap-1 text-sm font-medium">From
           <input type="date" className={inputClass} value={from} max={to} onChange={e => e.target.value && navigate({ ledgerFrom: e.target.value, ledgerPage: "" })} />
         </label>
@@ -167,6 +161,12 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
         <label className="col-span-2 grid gap-1 text-sm font-medium md:col-span-1">Search
           <input type="search" className={inputClass} placeholder="Product, batch or reference" value={search} onChange={e => setSearch(e.target.value)} />
         </label>
+        <label className="col-span-2 grid gap-1 text-sm font-medium md:col-span-1">Method
+          <select className={inputClass} value={channel} onChange={e => navigate({ ledgerChannel: e.target.value, ledgerPage: "" })}>
+            <option value="">All methods</option>
+            {(Object.keys(CHANNEL) as Channel[]).map(c => <option key={c} value={c}>{CHANNEL[c].label}</option>)}
+          </select>
+        </label>
         <div role="group" aria-label="Direction" className="col-span-2 flex rounded-md border p-0.5 md:col-span-1">
           {([["", "All"], ["IN", "Stock in"], ["OUT", "Stock out"]] as const).map(([value, label]) => (
             <button key={label} type="button" aria-pressed={direction === value}
@@ -174,7 +174,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
               onClick={() => navigate({ ledgerDirection: value, ledgerPage: "" })}>{label}</button>
           ))}
         </div>
-        <div className="col-span-2 flex flex-wrap gap-2 md:col-span-4">
+        <div className="col-span-2 flex flex-wrap gap-2 md:col-span-5">
           {PRESETS.map(([label, n]) => {
             const active = to === today && from === daysBefore(today, n);
             return (
@@ -196,36 +196,9 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
       )}
       {data && (
         <>
-          <div aria-label="Changes by method" className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(11rem,1fr))]">
-            {data.totals.map(t => {
-              const { icon: Icon, tone } = CHANNEL[t.channel];
-              const active = channels.has(t.channel);
-              return (
-                <button key={t.channel} type="button" aria-pressed={active} onClick={() => toggleChannel(t.channel)}
-                  className={`rounded-lg border p-3 text-left transition-shadow hover:shadow-sm ${active ? "ring-2 ring-primary" : ""} ${channels.size && !active ? "opacity-60" : ""}`}>
-                  <span className="flex items-start gap-2 text-sm font-medium leading-tight">
-                    <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${TONE[tone]}`}><Icon className="h-4 w-4" aria-hidden /></span>
-                    <span className="pt-1">{t.label}</span>
-                  </span>
-                  <span className="mt-2 block text-xs text-muted-foreground">{t.entries} {t.entries === 1 ? "entry" : "entries"}</span>
-                  <span className="block text-sm font-medium tabular-nums">
-                    {t.unitsIn > 0 && <span className="text-success-text">+{t.unitsIn} in</span>}
-                    {t.unitsIn > 0 && t.unitsOut > 0 && " · "}
-                    {t.unitsOut > 0 && <span className="text-destructive-text">−{t.unitsOut} out</span>}
-                    {t.unknown > 0 && <span className="text-muted-foreground">{t.unitsIn || t.unitsOut ? " · " : ""}{t.unknown} unsigned</span>}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {channels.size > 0 && (
-            <p className="text-sm">Showing {[...channels].map(c => data.totals.find(t => t.channel === c)?.label || c).join(", ")}.{" "}
-              <button type="button" className="underline" onClick={() => navigate({ ledgerChannel: "", ledgerPage: "" })}>Show all methods</button>
-            </p>
-          )}
           {data.truncated && (
             <p role="status" className="rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text">
-              This range holds more than {data.scanLimit.toLocaleString("en-IN")} movements. Only the newest are shown and counted. Narrow the dates or search for a product to see the rest.
+              This range holds more than {data.scanLimit.toLocaleString("en-IN")} movements. Only the newest are shown. Narrow the dates or search for a product to see the rest.
             </p>
           )}
 

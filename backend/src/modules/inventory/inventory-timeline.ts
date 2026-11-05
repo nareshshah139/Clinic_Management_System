@@ -199,15 +199,12 @@ export type TimelineEntry = {
   item: { id: string; name: string } | null; actor: { id: string; name: string } | null; source: LedgerSource;
 };
 
-type ChannelTotal = { channel: LedgerChannel; label: string; entries: number; unitsIn: number; unitsOut: number; unknown: number };
-
 /**
  * @cc [owner:nareshshah139,label:product] inventory-timeline-ledger
  * The timeline MUST list movements newest first with each row's signed change, recorded balance
- * before and after, actor and source. Channel totals MUST cover every movement in the range that
- * matches the item and search filters, regardless of channel, direction or page; a movement of
- * unknown direction MUST be counted as unknown, never as an inflow or outflow. When the range holds
- * more movements than the scan limit, the response MUST say it is truncated.
+ * before and after, actor and source. A movement of unknown direction MUST be reported as UNKNOWN,
+ * never as an inflow or outflow. When the range holds more movements than the scan limit, the
+ * response MUST say it is truncated.
  */
 export async function readInventoryTimeline(prisma: any, branchId: string, q: TimelineQuery) {
   const where: Record<string, any> = { branchId, createdAt: { gte: q.from, lt: q.to } };
@@ -230,17 +227,10 @@ export async function readInventoryTimeline(prisma: any, branchId: string, q: Ti
   const truncated = scanned.length > SCAN_LIMIT;
   const movements: any[] = truncated ?scanned.slice(0, SCAN_LIMIT) : scanned;
   const ctx = await loadSourceContext(prisma, branchId, movements);
-  const totals = new Map<LedgerChannel, ChannelTotal>();
   const entries = movements.map((m: any): TimelineEntry => {
     const src = classifyMovement(m, ctx);
     const delta = movementDelta(m);
     const direction = movementDirection(delta);
-    const total = totals.get(src.channel) ?? { channel: src.channel, label: src.label, entries: 0, unitsIn: 0, unitsOut: 0, unknown: 0 };
-    total.entries++;
-    if (direction === 'IN') total.unitsIn += delta!;
-    else if (direction === 'OUT') total.unitsOut += -delta!;
-    else total.unknown++;
-    totals.set(src.channel, total);
     const info = jsonObject(m.notes);
     const before = Number.isFinite(info.beforeStock) ? info.beforeStock : null;
     const afterStock = Number.isFinite(info.afterStock) ? info.afterStock : null;
@@ -270,7 +260,6 @@ export async function readInventoryTimeline(prisma: any, branchId: string, q: Ti
     range: { from: q.fromDay, to: q.toDay },
     truncated,
     scanLimit: SCAN_LIMIT,
-    totals: [...totals.values()].sort((a, b) => b.entries - a.entries),
     rows: visible.slice((page - 1) * q.limit, page * q.limit),
     pagination: { page, limit: q.limit, total: visible.length, pages },
   };
