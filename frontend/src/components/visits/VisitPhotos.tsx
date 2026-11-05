@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import PatientPhotoArchive from './PatientPhotoArchive';
 import { apiClient } from '@/lib/api';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
+import { useConfirm } from "@/components/ui/confirmation-provider";
 
 interface Props {
   visitId: string;
@@ -25,6 +26,7 @@ type PhotoPosition = 'FRONT' | 'LEFT_PROFILE' | 'RIGHT_PROFILE' | 'BACK' | 'CLOS
 interface PhotoItem { url: string; uploadedAt?: string | null; position?: PhotoPosition; displayOrder?: number }
 
 export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId, allowDelete, onChangeCount }: Props) {
+  const confirmAction = useConfirm();
   const { toast } = useToast();
   const [items, setItems] = useState<PhotoItem[]>([]);
   const [photoLoading, setPhotoLoading] = useState(true);
@@ -538,7 +540,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
 
   const deleteActive = async () => {
     if (!active) return;
-    const confirmed = window.confirm('Delete this photo? This cannot be undone.');
+    const confirmed = (await confirmAction({ title: "Delete photo?", description: 'Delete this photo? This cannot be undone.', confirmLabel: "Delete photo", variant: "destructive" }));
     if (!confirmed) return;
     if (deleting) return;
     try {

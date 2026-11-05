@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmationProvider } from "@/components/ui/confirmation-provider";
 import { BrandedModeProvider } from "@/components/layout/branded-mode-context";
 
 const geistSans = Geist({
@@ -30,8 +31,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <BrandedModeProvider>
-          {children}
-          <Toaster />
+          <ConfirmationProvider>
+            {children}
+            <Toaster />
+          </ConfirmationProvider>
         </BrandedModeProvider>
       </body>
     </html>

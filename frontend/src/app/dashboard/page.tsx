@@ -10,6 +10,7 @@ import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { toast } from "@/hooks/use-toast";
 
 export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
@@ -170,12 +171,12 @@ export default function DashboardPage() {
       
       // Show success message
       const backupInfo = (result as unknown as { backup: { timestamp: string; directory: string; size: number } }).backup;
-      alert(`✅ Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`);
+      toast({ title: "Success", description: `Database backup created successfully!\n\nTimestamp: ${backupInfo.timestamp}\nLocation: ${backupInfo.directory}\nSize: ${(backupInfo.size / 1024).toFixed(1)} KB\n\nBackup saved to local server directory.`, variant: "success" });
       
     } catch (error: unknown) {
       console.error('Backup failed:', error);
       const message = (error as { message?: string })?.message || 'Backup creation failed';
-      alert(`❌ Backup Failed\n\n${message}`);
+      toast({ title: "Action failed", description: `Backup Failed\n\n${message}`, variant: "destructive" });
     } finally {
       setBackupLoading(false);
     }

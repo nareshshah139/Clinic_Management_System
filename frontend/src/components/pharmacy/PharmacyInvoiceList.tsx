@@ -38,6 +38,8 @@ import {
   type PharmacyPaymentMethod as PharmacyPaymentMethodType,
 } from '@/lib/api-enums';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { useConfirm } from "@/components/ui/confirmation-provider";
+import { toast } from "@/hooks/use-toast";
 
 type StatusFilter = PharmacyInvoiceStatusType | 'all';
 type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
@@ -64,6 +66,7 @@ const PAYMENT_STATUS_COLORS: Record<PharmacyPaymentStatusType, string> = {
 
 
 export function PharmacyInvoiceList() {
+  const confirmAction = useConfirm();
   const [invoices, setInvoices] = useState<PharmacyInvoiceSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(typeof window==='undefined'?'':new URLSearchParams(window.location.search).get('search')||'');
@@ -328,7 +331,7 @@ export function PharmacyInvoiceList() {
       
       const win = window.open('', '_blank');
       if (!win) {
-        alert('Please allow pop-ups to view the invoice');
+        toast({ title: "Check the details", description: 'Please allow pop-ups to view the invoice', variant: "warning" });
         return;
       }
       const html = renderPrintHtml(invoice);
@@ -337,7 +340,7 @@ export function PharmacyInvoiceList() {
       win.document.close();
     } catch (error) {
       console.error('Failed to load invoice:', error);
-      alert('Failed to load invoice. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to load invoice. Please try again.', variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -358,7 +361,7 @@ export function PharmacyInvoiceList() {
   };
 
   const handleConfirmInvoice = async (invoiceId: string) => {
-    if (!confirm('Confirm this invoice? This will mark it as finalized and include it in stock predictions.')) {
+    if (!(await confirmAction({ title: "Confirm invoice?", description: 'Confirm this invoice? This will mark it as finalized and include it in stock predictions.', confirmLabel: "Confirm invoice", variant: "default" }))) {
       return;
     }
 
@@ -367,20 +370,20 @@ export function PharmacyInvoiceList() {
       await loadInvoices();
     } catch (error: any) {
       const message = error?.body?.message || error?.message || 'Failed to confirm invoice';
-      alert(`Error: ${message}`);
+      toast({ title: "Action failed", description: `Error: ${message}`, variant: "destructive" });
     }
   };
 
   const handleDeleteInvoice = async (invoiceId: string) => {
-    if (!confirm('Are you sure you want to delete this invoice?')) return;
+    if (!(await confirmAction({ title: "Delete invoice?", description: 'Are you sure you want to delete this invoice?', confirmLabel: "Delete invoice", variant: "destructive" }))) return;
 
     try {
       await apiClient.delete(`/pharmacy/invoices/${invoiceId}`);
       await loadInvoices();
-      alert('Invoice deleted successfully');
+      toast({ title: "Success", description: 'Invoice deleted successfully', variant: "success" });
     } catch (error) {
       console.error('Failed to delete invoice:', error);
-      alert('Failed to delete invoice. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to delete invoice. Please try again.', variant: "destructive" });
     }
   };
 
@@ -392,7 +395,7 @@ export function PharmacyInvoiceList() {
       // For now, open print dialog which allows save as PDF
       const win = window.open('', '_blank');
       if (!win) {
-        alert('Please allow pop-ups to download the invoice');
+        toast({ title: "Check the details", description: 'Please allow pop-ups to download the invoice', variant: "warning" });
         return;
       }
       const html = renderPrintHtml(invoice);
@@ -407,14 +410,14 @@ export function PharmacyInvoiceList() {
       }, 500);
     } catch (error) {
       console.error('Failed to download invoice:', error);
-      alert('Failed to download invoice. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to download invoice. Please try again.', variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleMarkAsPaid = async (invoice: PharmacyInvoiceSummary) => {
-    if (!confirm(`Mark invoice ${invoice.invoiceNumber} as paid?\n\nAmount: ₹${invoice.totalAmount?.toFixed(2) || '0.00'}`)) {
+    if (!(await confirmAction({ title: "Mark invoice as paid?", description: `Mark invoice ${invoice.invoiceNumber} as paid?\n\nAmount: ₹${invoice.totalAmount?.toFixed(2) || '0.00'}`, confirmLabel: "Mark as paid", variant: "default" }))) {
       return;
     }
 
@@ -430,10 +433,10 @@ export function PharmacyInvoiceList() {
 
       // Reload invoices to show updated status
       await loadInvoices();
-      alert('Invoice marked as paid successfully');
+      toast({ title: "Success", description: 'Invoice marked as paid successfully', variant: "success" });
     } catch (error) {
       console.error('Failed to mark invoice as paid:', error);
-      alert('Failed to mark invoice as paid. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to mark invoice as paid. Please try again.', variant: "destructive" });
     } finally {
       setLoading(false);
     }

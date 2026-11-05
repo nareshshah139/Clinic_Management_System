@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +21,11 @@ import {
  * Acceptance: INV-22. Validation and open gaps:
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] credit-reversal-explicit-reason
+ * Reversing an allocation MUST require submission of a nonblank operator reason. Cancelling
+ * the reason form MUST leave the allocation unchanged; a pending submission cannot repeat.
+ */
 export function SupplierCreditPanel({
   canWrite,
   onNew,
@@ -30,6 +35,9 @@ export function SupplierCreditPanel({
   supplierGstin,
   onChanged,
 }: any) {
+  const [reversal, setReversal] = useState<{ id: string; reason: string } | null>(null);
+  const [reversing, setReversing] = useState(false);
+  const reversalLock = useRef(false);
   const [data, setData] = useState<any>(null),
     [credit, setCredit] = useState<any>(null),
     [form, setForm] = useState<any>({}),
@@ -194,30 +202,43 @@ export function SupplierCreditPanel({
                       View bill
                     </a>
                   </span>
-                  {canWrite && !a.reversedAt && (
+                  {canWrite && !a.reversedAt && (reversal && reversal.id === a.id ? (
+                    <form className="flex flex-wrap items-end gap-2" onSubmit={async event => {
+                      event.preventDefault();
+                      const reason = reversal.reason.trim();
+                      if (!reason || reversalLock.current) return;
+                      reversalLock.current = true;
+                      setReversing(true);
+                      setError("");
+                      try {
+                        await apiClient.post(`/inventory/workspace/credits/allocations/${a.id}/reverse`, { reason });
+                        setReversal(null);
+                        setNotice("Credit allocation reversed.");
+                        await load();
+                        await onChanged?.();
+                      } catch (e: any) {
+                        setError(e.message);
+                      } finally {
+                        reversalLock.current = false;
+                        setReversing(false);
+                      }
+                    }}>
+                      <label className="grid gap-1 text-sm">Reason for reversing allocation
+                        <input autoFocus required className={inputClass} disabled={reversing} value={reversal.reason} onChange={event => setReversal({ id: a.id, reason: event.target.value })} />
+                      </label>
+                      <Button type="submit" size="sm" disabled={reversing || !reversal.reason.trim()}>{reversing ? "Reversing…" : "Reverse allocation"}</Button>
+                      <Button type="button" size="sm" variant="ghost" disabled={reversing} onClick={() => setReversal(null)}>Cancel</Button>
+                    </form>
+                  ) : (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={async () => {
-                        const reason = window.prompt(
-                          "Reason for reversing this credit allocation",
-                        );
-                        if (!reason) return;
-                        try {
-                          await apiClient.post(
-                            `/inventory/workspace/credits/allocations/${a.id}/reverse`,
-                            { reason },
-                          );
-                          load();
-                          onChanged?.();
-                        } catch (e: any) {
-                          setError(e.message);
-                        }
-                      }}
+                      disabled={reversing}
+                      onClick={() => setReversal({ id: a.id, reason: "" })}
                     >
                       Reverse allocation
                     </Button>
-                  )}
+                  ))}
                 </div>
               ))}
             </li>

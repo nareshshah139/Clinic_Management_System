@@ -20,8 +20,10 @@ import {
   parseWhatsAppSettings,
   validateWhatsAppTemplateChoice,
 } from '@/lib/whatsapp-settings';
+import { useConfirm } from "@/components/ui/confirmation-provider";
 
 export default function UsersManagement() {
+  const confirmAction = useConfirm();
   const { toast } = useToast();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,14 +108,14 @@ export default function UsersManagement() {
       setLoading(true);
       const trimmedPhone = form.phone.trim();
       if (!trimmedPhone) {
-        alert('Phone number is required');
+        toast({ title: "Check the details", description: 'Phone number is required', variant: "warning" });
         return;
       }
 
       const payload = { firstName: form.firstName, lastName: form.lastName, email: form.email, phone: trimmedPhone, role: form.role, status: form.status } as any;
       if (!form.id) {
         if (!form.password || form.password.length < 8 || form.password.length > 20) {
-          alert('Password must be 8-20 characters');
+          toast({ title: "Check the details", description: 'Password must be 8-20 characters', variant: "warning" });
           return;
         }
         payload.password = form.password;
@@ -137,7 +139,7 @@ export default function UsersManagement() {
   };
 
   const onDelete = async (u: User) => {
-    if (!confirm('Delete user?')) return;
+    if (!(await confirmAction({ title: "Delete user?", description: 'Delete user?', confirmLabel: "Delete user", variant: "destructive" }))) return;
     await apiClient.deleteUser(u.id);
     await fetchUsers();
   };
@@ -277,7 +279,7 @@ export default function UsersManagement() {
 
   const saveTemplate = async () => {
     if (!tplName || !tplText) {
-      alert('Name and Plain Text are required');
+      toast({ title: "Check the details", description: 'Name and Plain Text are required', variant: "warning" });
       return;
     }
     const placeholders = new Set([...extractPlaceholders(tplHtml), ...extractPlaceholders(tplText)]);
@@ -286,7 +288,7 @@ export default function UsersManagement() {
       if (!tplVars.includes(p)) missing.push(p);
     });
     if (missing.length) {
-      alert(`Add these variables or remove placeholders: ${missing.join(', ')}`);
+      toast({ title: "Check the details", description: `Add these variables or remove placeholders: ${missing.join(', ')}`, variant: "warning" });
       return;
     }
 
@@ -312,23 +314,23 @@ export default function UsersManagement() {
       });
     }
     await loadTemplates();
-    alert('Template saved');
+    toast({ title: "Success", description: 'Template saved', variant: "success" });
   };
 
   const deleteTemplate = async (tpl: any) => {
     if (!tpl?.id) return;
-    if (!confirm('Delete this template?')) return;
+    if (!(await confirmAction({ title: "Delete template?", description: 'Delete this template?', confirmLabel: "Delete template", variant: "destructive" }))) return;
     await apiClient.deleteWhatsAppTemplate(String(tpl.id));
     await loadTemplates();
   };
 
   const testSendTemplate = async () => {
     if (!tplEditing?.id) {
-      alert('Save the template before sending a test');
+      toast({ title: "Check the details", description: 'Save the template before sending a test', variant: "warning" });
       return;
     }
     if (!tplTestTo) {
-      alert('Enter a phone number in E.164 format (e.g., +15551234567)');
+      toast({ title: "Check the details", description: 'Enter a phone number in E.164 format (e.g., +15551234567)', variant: "warning" });
       return;
     }
     try {
@@ -443,10 +445,10 @@ export default function UsersManagement() {
       const defaults = roleRecord?.permissions ? JSON.parse(roleRecord.permissions) : [];
       setRolePerms(defaults);
       
-      alert(`Role updated to ${role} successfully!`);
+      toast({ title: "Success", description: `Role updated to ${role} successfully!`, variant: "success" });
     } catch (error) {
       console.error('Error applying role:', error);
-      alert('Failed to update role. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to update role. Please try again.', variant: "destructive" });
     }
   };
 
@@ -455,10 +457,10 @@ export default function UsersManagement() {
     try {
       await apiClient.updateUserPermissions(selectedUser.id, perms);
       await fetchUsers();
-      alert('Permissions updated successfully!');
+      toast({ title: "Success", description: 'Permissions updated successfully!', variant: "success" });
     } catch (error) {
       console.error('Error updating permissions:', error);
-      alert('Failed to update permissions. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to update permissions. Please try again.', variant: "destructive" });
     }
   };
 

@@ -12,6 +12,7 @@ import { apiClient } from '@/lib/api';
 import { Zap, User, Activity, Settings, Save } from 'lucide-react';
 import type { Patient, StaffSummary, VisitSummary, ProcedureVisitResponse } from '@/lib/types';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { toast } from "@/hooks/use-toast";
 
 // Machine configurations
 const MACHINES = {
@@ -258,7 +259,7 @@ export default function SmartProceduresPage() {
 
   const saveProcedure = async () => {
     if (!procedureData.patientId || !procedureData.doctorId || !procedureData.selectedMachine) {
-      alert('Please fill in all required fields');
+      toast({ title: "Check the details", description: 'Please fill in all required fields', variant: "warning" });
       return;
     }
 
@@ -294,7 +295,7 @@ export default function SmartProceduresPage() {
       };
 
       await apiClient.createVisit(payload);
-      alert('Procedure saved successfully!');
+      toast({ title: "Success", description: 'Procedure saved successfully!', variant: "success" });
       
       // Reset form
       setProcedureData({
@@ -307,7 +308,7 @@ export default function SmartProceduresPage() {
       });
     } catch (error) {
       console.error('Failed to save procedure:', error);
-      alert('Failed to save procedure. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to save procedure. Please try again.', variant: "destructive" });
     } finally {
       setSaving(false);
     }

@@ -22,6 +22,7 @@ const eslintConfig = [
   },
   {
     rules: {
+      "no-alert": "error",
       // So builds don't fail; we'll fix these in code incrementally
       "@typescript-eslint/no-explicit-any": "warn",
       "react/no-unescaped-entities": "warn",

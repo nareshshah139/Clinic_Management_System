@@ -108,7 +108,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm opacity-90", className)}
+    className={cn("whitespace-pre-wrap break-words text-sm opacity-90", className)}
     {...props}
   />
 ))
@@ -128,4 +128,4 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
-} 
+}

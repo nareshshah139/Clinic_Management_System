@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { useConfirm } from "@/components/ui/confirmation-provider";
 
 interface Drug {
   id: string;
@@ -99,6 +100,7 @@ const DERMATOLOGY_SUBCATEGORIES = [
 ];
 
 export function PharmacyPackageManager() {
+  const confirmAction = useConfirm();
   const [packages, setPackages] = useState<PharmacyPackage[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,7 +255,7 @@ export function PharmacyPackageManager() {
 
   const handleDeletePackage = async (packageId: string) => {
     try {
-      if (!confirm('Are you sure you want to delete this package?')) {
+      if (!(await confirmAction({ title: "Delete package?", description: 'Are you sure you want to delete this package?', confirmLabel: "Delete package", variant: "destructive" }))) {
         return;
       }
 

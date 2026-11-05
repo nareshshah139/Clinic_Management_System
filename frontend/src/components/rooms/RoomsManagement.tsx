@@ -15,6 +15,7 @@ import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { Plus, Edit, Trash2, MapPin, Users } from 'lucide-react';
 
 import type { Room } from '@/lib/types';
+import { useConfirm } from "@/components/ui/confirmation-provider";
 
 interface RoomFormData {
   name: string;
@@ -24,6 +25,7 @@ interface RoomFormData {
 }
 
 export default function RoomsManagement() {
+  const confirmAction = useConfirm();
   const { user } = useDashboardUser();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(false);
@@ -123,7 +125,7 @@ export default function RoomsManagement() {
   };
 
   const handleDelete = async (room: Room) => {
-    if (!confirm(`Are you sure you want to delete "${room.name}"?`)) {
+    if (!(await confirmAction({ title: "Delete room?", description: `Are you sure you want to delete "${room.name}"?`, confirmLabel: "Delete room", variant: "destructive" }))) {
       return;
     }
 

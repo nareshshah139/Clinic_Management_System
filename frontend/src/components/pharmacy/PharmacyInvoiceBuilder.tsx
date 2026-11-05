@@ -43,6 +43,8 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getGlobalPrintStyleTag } from '@/lib/printStyles';
+import { useConfirm } from "@/components/ui/confirmation-provider";
+import { toast } from "@/hooks/use-toast";
 
 interface Drug {
   id: string;
@@ -118,6 +120,7 @@ interface InvoiceItem {
 }
 
 export function PharmacyInvoiceBuilder() {
+  const confirmAction = useConfirm();
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Drug[]>([]);
@@ -250,16 +253,14 @@ export function PharmacyInvoiceBuilder() {
       const invoice = await apiClient.getPharmacyInvoiceById(id);
 
       if (!invoice) {
-        alert('Invoice not found');
+        toast({ title: "Action failed", description: 'Invoice not found', variant: "destructive" });
         resetForm();
         return;
       }
 
       // Check if invoice can be edited (only DRAFT status)
       if (invoice.status !== 'DRAFT') {
-        alert(
-          `Cannot edit invoice with status: ${invoice.status}. Only DRAFT invoices can be edited.`
-        );
+        toast({ title: "Check the details", description: `Cannot edit invoice with status: ${invoice.status}. Only DRAFT invoices can be edited.`, variant: "warning" });
         resetForm();
         return;
       }
@@ -344,7 +345,7 @@ export function PharmacyInvoiceBuilder() {
       console.error('Failed to load invoice:', error);
       const message =
         error?.body?.message || error?.message || 'Failed to load invoice';
-      alert(`Error: ${message}`);
+      toast({ title: "Action failed", description: `Error: ${message}`, variant: "destructive" });
       resetForm();
     } finally {
       setLoading(false);
@@ -656,12 +657,12 @@ export function PharmacyInvoiceBuilder() {
 
   const saveInvoice = async (status: 'DRAFT' | 'CONFIRMED') => {
     if (!invoiceData.patientId || items.length === 0) {
-      alert('Please select a patient and add at least one item');
+      toast({ title: "Check the details", description: 'Please select a patient and add at least one item', variant: "warning" });
       return;
     }
 
     if (!invoiceData.billingName || !invoiceData.billingPhone) {
-      alert('Please fill billing name and phone');
+      toast({ title: "Check the details", description: 'Please fill billing name and phone', variant: "warning" });
       return;
     }
 
@@ -713,9 +714,7 @@ export function PharmacyInvoiceBuilder() {
           result.status = 'CONFIRMED';
         }
 
-        alert(
-          `Invoice ${result?.invoiceNumber || result?.id || editingInvoiceId} updated ${status === 'CONFIRMED' ? 'and confirmed' : ''} successfully`
-        );
+        toast({ title: "Success", description: `Invoice ${result?.invoiceNumber || result?.id || editingInvoiceId} updated ${status === 'CONFIRMED' ? 'and confirmed' : ''} successfully`, variant: "success" });
 
         // Dispatch refresh event for invoice list
         window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
@@ -734,9 +733,7 @@ export function PharmacyInvoiceBuilder() {
           openPrintPreview(result);
         }
 
-        alert(
-          `Invoice ${result?.invoiceNumber || result?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`
-        );
+        toast({ title: "Success", description: `Invoice ${result?.invoiceNumber || result?.id || ''} ${status === 'CONFIRMED' ? 'confirmed' : 'saved as draft'} successfully`, variant: "success" });
 
         // Dispatch refresh event for invoice list
         window.dispatchEvent(new CustomEvent('pharmacy-invoices-refresh'));
@@ -751,7 +748,7 @@ export function PharmacyInvoiceBuilder() {
       console.error('Failed to save invoice:', error);
       const message =
         error?.body?.message || error?.message || 'Failed to save invoice';
-      alert(`Failed to save invoice. ${message}`);
+      toast({ title: "Action failed", description: `Failed to save invoice. ${message}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -896,14 +893,14 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
   const sendViaWhatsApp = async () => {
     try {
       if (!invoiceData.billingPhone) {
-        alert('Billing phone required to send via WhatsApp');
+        toast({ title: "Check the details", description: 'Billing phone required to send via WhatsApp', variant: "warning" });
         return;
       }
       const cleaned = invoiceData.billingPhone.startsWith('+')
         ? invoiceData.billingPhone
         : `+${invoiceData.billingPhone}`;
       const text = `Invoice ${new Date().toLocaleDateString()} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
-      alert(`This will send via backend: ${cleaned}\n${text}`);
+      toast({ title: "Notice", description: `This will send via backend: ${cleaned}\n${text}`, variant: "default" });
       // Backend endpoint could be added later to send with selected template
     } catch (e) {
       console.error(e);
@@ -924,9 +921,9 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
+              onClick={async () => {
                 if (
-                  confirm('Cancel editing? All unsaved changes will be lost.')
+                  (await confirmAction({ title: "Discard invoice changes?", description: 'Cancel editing? All unsaved changes will be lost.', confirmLabel: "Discard changes", variant: "destructive" }))
                 ) {
                   resetForm();
                 }

@@ -41,6 +41,8 @@ import {
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { getErrorMessage } from '@/lib/utils';
+import { useConfirm } from "@/components/ui/confirmation-provider";
+import { toast } from "@/hooks/use-toast";
 
 interface Drug {
   type?: string;
@@ -61,6 +63,7 @@ interface Drug {
 }
 
 export function DrugManagement() {
+  const confirmAction = useConfirm();
   const [drugs, setDrugs] = useState<Drug[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -170,7 +173,7 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to add drug:', error);
-      alert(getErrorMessage(error));
+      toast({ title: "Action failed", description: getErrorMessage(error), variant: "destructive" });
     }
   };
 
@@ -190,7 +193,7 @@ export function DrugManagement() {
       loadDrugs();
     } catch (error) {
       console.error('Failed to update drug:', error);
-      alert(getErrorMessage(error));
+      toast({ title: "Action failed", description: getErrorMessage(error), variant: "destructive" });
     }
   };
 
@@ -212,9 +215,7 @@ export function DrugManagement() {
       .map(([, label]) => label);
 
     if (missing.length > 0) {
-      alert(
-        `Please fill required product master fields: ${missing.join(', ')}`
-      );
+      toast({ title: "Check the details", description: `Please fill required product master fields: ${missing.join(', ')}`, variant: "warning" });
       return false;
     }
 
@@ -222,14 +223,14 @@ export function DrugManagement() {
   };
 
   const handleDeleteDrug = async (drugId: string) => {
-    if (!confirm('Are you sure you want to delete this drug?')) return;
+    if (!(await confirmAction({ title: "Delete drug?", description: 'Are you sure you want to delete this drug?', confirmLabel: "Delete drug", variant: "destructive" }))) return;
 
     try {
       await apiClient.delete(`/drugs/${drugId}`);
       loadDrugs();
     } catch (error) {
       console.error('Failed to delete drug:', error);
-      alert('Failed to delete drug. Please try again.');
+      toast({ title: "Action failed", description: 'Failed to delete drug. Please try again.', variant: "destructive" });
     }
   };
 

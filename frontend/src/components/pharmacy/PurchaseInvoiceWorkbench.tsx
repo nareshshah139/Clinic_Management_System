@@ -85,6 +85,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { useConfirm } from "@/components/ui/confirmation-provider";
 
 type BillType = "CASH" | "CREDIT" | "";
 type SourceType = "MANUAL" | "OCR" | "CSV" | "GMAIL";
@@ -1012,6 +1013,7 @@ function PurchaseInvoiceEditor({
   draftKey?: string;
   onNew?: () => void;
 }) {
+  const confirmAction = useConfirm();
   const { user } = useDashboardUser();
   const {
     permissions: access,
@@ -1531,6 +1533,11 @@ function PurchaseInvoiceEditor({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:state] master-confirmation-current-line
+   * Cancelling a master match MUST leave the line unchanged. If the invoice or lines change
+   * while confirmation is open, no master request may use the previously displayed line.
+   */
   const confirmMasterLine = async (
     match: MasterMatch,
     action: "MATCH_EXISTING" | "CREATE_NEW",
@@ -1550,10 +1557,15 @@ function PurchaseInvoiceEditor({
       return "Product details are not available yet. Reload after the update completes.";
     const confirmed =
       action === "CREATE_NEW" ||
-      window.confirm(
-        `Confirm this DB master match for ${line.productName || "this OCR line"}?`,
-      );
+      (await confirmAction({ title: "Confirm master match?", description: `Confirm this DB master match for ${line.productName || "this OCR line"}?`, confirmLabel: "Confirm match", variant: "default" }));
     if (!confirmed) return;
+
+    const current = confirmationState.current;
+    if (current.lines !== lines || current.activeInvoice !== activeInvoice || !current.canCreate) {
+      const message = "The line changed. Refresh matches and try again.";
+      setError(message);
+      return message;
+    }
 
     const key = `${match.lineIndex}:${action}`;
     setMasterConfirming(key);
@@ -1980,17 +1992,27 @@ function PurchaseInvoiceEditor({
     }
   };
 
+  /**
+   * @cc [owner:nareshshah139,label:state] stock-confirmation-current-invoice
+   * Stock commit MUST wait for explicit acceptance and reject a changed, blocked or no-longer
+   * authorized invoice after the wait. A pending confirmation or commit MUST not submit twice.
+   */
   const commitStock = async () => {
-    if (!activeInvoice || draftWriteBlocked) return;
-    const confirmed = window.confirm(
-      `Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`,
-    );
-    if (!confirmed) return;
-
-    setNotice(null);
-    setError(null);
-    setCommitting(true);
+    if (!activeInvoice || draftWriteBlocked || busy || !access.commit || stockCommitLock.current) return;
+    stockCommitLock.current = true;
+    let started = false;
     try {
+      const confirmed = (await confirmAction({ title: "Commit stock?", description: `Commit stock for purchase invoice ${activeInvoice.invoiceNumber}? This updates branch inventory and cannot be undone from this screen.`, confirmLabel: "Commit stock", variant: "default" }));
+      if (!confirmed) return;
+      const current = confirmationState.current;
+      if (current.activeInvoice !== activeInvoice || current.draftWriteBlocked || current.busy || !current.canCommit) {
+        setError("The purchase changed while confirmation was open. Review it again before posting.");
+        return;
+      }
+      started = true;
+      setNotice(null);
+      setError(null);
+      setCommitting(true);
       const committed =
         await apiClient.commitPharmacyPurchaseInvoiceStock<PurchaseInvoice>(
           activeInvoice.id,
@@ -2013,8 +2035,9 @@ function PurchaseInvoiceEditor({
       setError(getErrorMessage(err));
       if (activeInvoice) await refreshStockStatus(activeInvoice.id);
     } finally {
+      stockCommitLock.current = false;
       setCommitting(false);
-      focusActionFeedback();
+      if (started) focusActionFeedback();
     }
   };
 
@@ -2362,6 +2385,9 @@ function PurchaseInvoiceEditor({
     savingSupplier ||
     masterConfirming !== null ||
     masterRefreshing;
+  const stockCommitLock = useRef(false);
+  const confirmationState = useRef({ lines, activeInvoice, draftWriteBlocked, busy, canCreate: access.create, canCommit: access.commit });
+  confirmationState.current = { lines, activeInvoice, draftWriteBlocked, busy, canCreate: access.create, canCommit: access.commit };
   const stockStatusUnknown =
     !!activeInvoice && unknownStockInvoiceId === activeInvoice.id;
   const stockAdded =
