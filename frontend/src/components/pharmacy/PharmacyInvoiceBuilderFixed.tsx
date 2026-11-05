@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -1472,9 +1473,7 @@ export function PharmacyInvoiceBuilderFixed({
     const patient = isStandardPrintData ? invoice.patient : undefined;
     const copyType = options?.copyType || invoice?.copyType || 'ORIGINAL';
     const fallback = options?.billingFallback;
-    const dateStr = new Date(
-      invoiceCore?.createdAt || invoiceCore?.invoiceDate || Date.now()
-    ).toLocaleDateString();
+    const dateStr = invoiceCore?.invoiceDate ? displayClinicDate(invoiceCore.invoiceDate) : displayClinicDate(invoiceCore?.createdAt);
 
     const itemsRows = isStandardPrintData
       ? invoice.lines

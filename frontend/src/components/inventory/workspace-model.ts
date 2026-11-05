@@ -16,7 +16,6 @@ export const workflowKinds:Record<string,{label:string;area:string;help:string;p
  TARGET_REVIEW:{label:'Target proposals',area:'reorder',help:'Compare proposed minimum and maximum levels with the saved values; choose the lines to accept.',primary:'Accept selected targets'},
 };
 export const fmtMoney=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(v)||0);
-export const fmtDate=(v:any)=>v?new Date(v).toLocaleDateString('en-IN'):'—';
 export const labelStatus=(v:string)=>({DRAFT:'Draft • no stock change',AWAITING_APPROVAL:'Awaiting manager approval',APPROVED:'Approved • ready for next step',CHALLAN:'Challan • stock returned',POSTED:'Posted',PART_RECEIVED:'Part received',RECEIVED:'Received in full',RELEASED:'Released',REVERSED:'Reversed',ORDERED:'Purchase order created',CONVERTED:'Sale draft created',SENT:'Recorded as sent',PART_REVIEWED:'Partly reviewed',CANCELLED:'Cancelled',REJECTED:'Rejected'}[v]||v);
 export const requestKey=()=>Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 export const inputClass='h-10 w-full min-w-0 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-2 focus-visible:outline-primary';

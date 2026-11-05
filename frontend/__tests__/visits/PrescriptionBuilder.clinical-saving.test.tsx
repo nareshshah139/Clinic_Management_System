@@ -16,8 +16,8 @@ it('sends examination diagnosis shortcuts and explicitly unchecked family histor
   render(<PrescriptionBuilder patientId="synthetic" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenCalled());
   fireEvent.click(screen.getByRole('button', { name: 'Acne vulgaris' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
-  fireEvent.click(screen.getByRole('checkbox', { name: 'DM' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Diabetes' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Diabetes' }));
   await waitFor(() => expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({
     diagnosis: [{ diagnosis: 'Acne vulgaris' }],
     history: expect.objectContaining({ familyHistory: expect.objectContaining({ dm: false }) }),

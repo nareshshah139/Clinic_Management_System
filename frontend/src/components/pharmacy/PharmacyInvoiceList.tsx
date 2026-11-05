@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -147,7 +148,7 @@ export function PharmacyInvoiceList() {
   }, []);
 
   const renderPrintHtml = (invoice: any) => {
-    const dateStr = new Date(invoice.createdAt || invoice.invoiceDate || Date.now()).toLocaleDateString();
+    const dateStr = invoice.invoiceDate ? displayClinicDate(invoice.invoiceDate) : displayClinicDate(invoice.createdAt);
     
     const itemsRows = (invoice.items || []).map((item: any) => {
       const itemName = item.itemType === 'PACKAGE' 
@@ -464,15 +465,6 @@ export function PharmacyInvoiceList() {
     setPagination(prev => ({ ...prev, page: 1 }));
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   const stats = useMemo(() => {
     const totalAmount = invoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
@@ -699,7 +691,7 @@ export function PharmacyInvoiceList() {
                         </div>
                         <div>
                           <p><strong>Items:</strong> {invoice.items.length}</p>
-                          <p><strong>Date:</strong> {formatDate(invoice.invoiceDate)}</p>
+                          <p><strong>Date:</strong> {displayClinicDate(invoice.invoiceDate)}</p>
                         </div>
                         <div>
                           <p><strong>Subtotal:</strong> ₹{invoice.subtotal.toFixed(2)}</p>

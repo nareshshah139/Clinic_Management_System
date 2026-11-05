@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -689,7 +691,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                       {patientVisits
                         .filter(v => (visitId ? v.id !== visitId : true))
                         .map(v => (
-                          <SelectItem key={v.id} value={v.id}>{`Visit ${v.ordinal}${v.createdAt ? ` - ${new Date(v.createdAt).toLocaleDateString()}` : ''}`}</SelectItem>
+                          <SelectItem key={v.id} value={v.id}>{`Visit ${v.ordinal}${v.createdAt ? ` - ${displayClinicDate(v.createdAt)}` : ''}`}</SelectItem>
                         ))}
                     </SelectContent>
                   </Select>
@@ -740,7 +742,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
             {/* Meta */}
             <div className="text-xs text-muted-foreground flex items-center justify-between">
               <div>
-                {active?.uploadedAt ? `Uploaded: ${new Date(active.uploadedAt).toLocaleString()}` : ''}
+                {active?.uploadedAt ? `Uploaded: ${displayClinicDateTime(active.uploadedAt)}` : ''}
                 {active?.position ? ` • ${POSITION_LABEL[active.position]}` : ''}
               </div>
               <div className="space-x-2">
@@ -762,7 +764,7 @@ export default function VisitPhotos({ visitId, apiBase, onVisitNeeded, patientId
                     <button
                       type="button"
                       onClick={() => setActiveIndex(idx)}
-                      title={it.uploadedAt ? new Date(it.uploadedAt).toLocaleString() : it.url}
+                      title={it.uploadedAt ? displayClinicDateTime(it.uploadedAt) : it.url}
                       className="absolute inset-0"
                     >
                       <img src={toAbsolute(it.url)} alt="thumb" className="h-full w-full object-cover" />

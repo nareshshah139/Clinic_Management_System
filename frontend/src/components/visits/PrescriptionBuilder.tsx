@@ -1,4 +1,5 @@
 'use client';
+import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { Spinner } from "@/components/ui/spinner";
 import { TELE_VIDEO_DISCLAIMER, TELE_VIDEO_CONSENT_REQUIRED, type ConsultationType } from '@/lib/tele-consultation';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -1048,8 +1049,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const patientCodeDisplay = useMemo(() => visitData?.patient?.patientCode || patientData?.patientCode || '', [visitData, patientData]);
   const reviewDateDisplay = useMemo(() => {
     if (!reviewDate) return '';
-    const parsed = new Date(reviewDate);
-    return Number.isNaN(parsed.getTime()) ? reviewDate : parsed.toLocaleDateString();
+    return displayUtcDate(reviewDate, reviewDate);
   }, [reviewDate]);
   const patientGender = useMemo(() => visitData?.patient?.gender || patientData?.gender || '', [visitData, patientData]);
   const patientAgeYears = useMemo(() => {
@@ -1071,7 +1071,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     if (patientGender) parts.push(patientGender);
     return parts.join(' / ');
   }, [patientAgeYears, patientGender]);
-  const todayStr = useMemo(() => new Date().toLocaleDateString(), []);
+  const todayStr = useMemo(() => displayClinicDate(new Date()), []);
   const hasSavedPrescription = !!(visitData?.prescription?.id || visitData?.prescriptionId || savedPrescriptionId);
 
   const historyLine = useMemo(() => {
@@ -1086,8 +1086,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
 
   const familyHistoryLine = useMemo(() => {
     const parts: string[] = [];
-    if (familyHistoryDM) parts.push('DM');
-    if (familyHistoryHTN) parts.push('HTN');
+    if (familyHistoryDM) parts.push('Diabetes');
+    if (familyHistoryHTN) parts.push('Hypertension');
     if (familyHistoryThyroid) parts.push('Thyroid disorder');
     if (familyHistoryOthers?.trim()) parts.push(tt('familyHistoryOthers', familyHistoryOthers));
     return parts.join(', ');
@@ -4213,11 +4213,11 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
     return 'Emerging pattern';
   }, [learnedPlan]);
   const learnedPlanTitle = useMemo(() => {
-    if (!diagnosis.trim()) return 'Name the diagnosis. The plan can assemble itself.';
+    if (!diagnosis.trim()) return 'Enter a diagnosis to see treatment suggestions.';
     if (learningSourcesStatus === 'loading' && !learnedPlan) return 'Reading recent plans, patterns, and saved order sets…';
     if (learnedPlanSuppressed) return 'Autofill paused for this diagnosis.';
-    if (learnedPlanMerged) return 'Missing treatment details were quick-filled.';
-    if (learnedPlanApplied) return 'Treatment assembled from live practice patterns.';
+    if (learnedPlanMerged) return 'Missing treatment details filled from a saved plan';
+    if (learnedPlanApplied) return 'Treatment prefilled from previous plans';
     if (learnedPlanCustomized) return 'Customized after autofill.';
     if (learnedPlanBlocked) return 'Learned plan ready. Your manual edits were preserved.';
     if (learnedPlan) return 'A learned plan is ready to prefill.';
@@ -4226,13 +4226,13 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   }, [diagnosis, learningSourcesStatus, learnedPlan, learnedPlanSuppressed, learnedPlanMerged, learnedPlanApplied, learnedPlanCustomized, learnedPlanBlocked, learningSourcesError]);
   const learnedPlanDescription = useMemo(() => {
     if (!diagnosis.trim()) {
-      return 'Once diagnosis is entered, this panel learns from the patient’s similar visits, recent prescriptions from the database, and saved server order sets.';
+      return 'Suggestions use similar patient visits, previous prescriptions, and saved treatment plans.';
     }
     if (learningSourcesStatus === 'loading' && !learnedPlan) {
       return 'Scanning live prescription history. The full row editor remains editable underneath.';
     }
     if (learnedPlanSuppressed) {
-      return 'You rolled back the machine draft. It will stay out of the way until you reapply it or change the diagnosis.';
+      return 'You cleared the suggested draft. Autofill is paused for this diagnosis. Reapply the suggestion or change the diagnosis to resume.';
     }
     if (learnedPlanMerged) {
       return 'Only blank medication details, missing medications, and empty follow-up fields were filled from the learned plan.';
@@ -4586,8 +4586,8 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                   <div>
                     <label className="text-xs text-muted-foreground flex items-center gap-1">Family History{language !== 'EN' && (<Languages className="h-3 w-3 text-info-text" aria-label="Translated on print" />)}</label>
                     <div className="flex flex-wrap gap-2 text-xs mt-1">
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => { setFamilyHistoryDM(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'dm']))); }} /> DM</label>
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> HTN</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryDM} onChange={(e) => { setFamilyHistoryDM(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'dm']))); }} /> Diabetes</label>
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryHTN} onChange={(e) => { setFamilyHistoryHTN(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'htn']))); }} /> Hypertension</label>
                       <label className="flex items-center gap-1"><input type="checkbox" checked={familyHistoryThyroid} onChange={(e) => { setFamilyHistoryThyroid(e.target.checked); setFamilyHistoryTouched(prev => Array.from(new Set([...prev, 'thyroid']))); }} /> Thyroid</label>
                     </div>
                     <Input key="family-history-others" className="mt-1" placeholder="Others" value={familyHistoryOthers} onChange={(e) => setFamilyHistoryOthers(e.target.value)} onBlur={(e) => pushRecent('familyHistoryOthers', e.target.value)} />
@@ -4803,7 +4803,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                         <div className="space-y-3">
                           <div className="inline-flex items-center gap-2 rounded-full border border-current/15 bg-card/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-info-text">
                             <Sparkles className="h-3.5 w-3.5" />
-                            Diagnosis Autopilot
+                            Treatment suggestions
                           </div>
                           <div>
                             <div className="text-xl font-semibold tracking-tight">{learnedPlanTitle}</div>
@@ -5549,7 +5549,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     <span>{previewDoctorName}</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Date: {new Date().toLocaleDateString()} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
+                    Date: {displayClinicDate(new Date())} {isTeleVideo ? '• Consultation: Tele-video' : ''} {standaloneReason ? `• Reason: ${standaloneReason}` : ''}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -5605,7 +5605,7 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                       {(() => {
                         const headerLines = [
                           'PRESCRIPTION',
-                          `${new Date().toLocaleString()}`
+                          `${displayClinicDateTime(new Date())}`
                         ];
                         const patientLines = [
                           `Patient: ${visitData?.patient?.name || patientData?.name || '—'}`,

@@ -1,5 +1,6 @@
 "use client";
 
+import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useRef, useState } from "react";
 import {
@@ -276,7 +277,7 @@ export function PharmacyInventoryStarterImport({
                 {r.packSizeLabel} / {r.unit}
               </td>
               <td>
-                {r.batchNumber} / {r.expiryDate}
+                {r.batchNumber} / {displayUtcDate(r.expiryDate, r.expiryDate || "—")}
               </td>
               <td>{r.currentStock}</td>
               <td className="text-right tabular-nums">

@@ -14,8 +14,8 @@ afterEach(() => { global.fetch = originalFetch; });
 it('shows previous visit and older unattached photos even when the current visit is empty', async () => {
   render(<VisitPhotos patientId="p" visitId="current" />);
   expect(await screen.findByText('No photos attached to this visit')).toBeInTheDocument();
-  expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 1 Jan 2025' })).toHaveAttribute('href', '/api/visits/old/photos/image');
-  expect(await screen.findByRole('link', { name: 'Open unattached photo 1 from 2 Jan 2025' })).toHaveAttribute('href', '/api/visits/photos/draft/p/20250102/draft');
+  expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 01 Jan 2025' })).toHaveAttribute('href', '/api/visits/old/photos/image');
+  expect(await screen.findByRole('link', { name: 'Open unattached photo 1 from 02 Jan 2025' })).toHaveAttribute('href', '/api/visits/photos/draft/p/20250102/draft');
   expect(apiClient.getAllPatientVisitHistory).toHaveBeenCalledWith('p', false);
   expect(apiClient.get).toHaveBeenCalledWith('/visits/photos/draft/p?allDates=true');
 });
@@ -32,7 +32,7 @@ it('does not hide successfully loaded visit photos when the draft archive reques
   (apiClient.get as jest.Mock).mockRejectedValue(new Error('Offline'));
   render(<VisitPhotos patientId="p" visitId="current" />);
   expect(await screen.findByText('Unattached uploads could not be loaded.')).toBeInTheDocument();
-  expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 1 Jan 2025' })).toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: 'Open visit photo 1 from 01 Jan 2025' })).toBeInTheDocument();
 });
 
 it('advances the editor version only from a successful photo mutation', async () => {

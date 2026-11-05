@@ -1,3 +1,4 @@
+import { displayUtcDate } from '@/lib/date-display';
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 import type { TimeSlotConfig } from './types'
@@ -91,9 +92,7 @@ export function formatDob(dob: string | Date | null | undefined): string {
   if (!dob) return 'N/A';
   if (isDefaultDob(dob)) return 'N/A';
   try {
-    const date = new Date(dob);
-    if (isNaN(date.getTime())) return 'N/A';
-    return date.toLocaleDateString();
+    return displayUtcDate(dob, 'N/A');
   } catch {
     return 'N/A';
   }

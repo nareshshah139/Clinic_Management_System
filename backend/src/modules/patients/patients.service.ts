@@ -1,3 +1,4 @@
+import { displayUtcDate } from '../../common/date-display';
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { CreatePatientDto } from './dto/create-patient.dto';
@@ -294,7 +295,7 @@ export class PatientsService {
     if (!patient.phone) throw new BadRequestException('Patient has no phone number');
 
     const doctorName = `Dr. ${[appt.doctor?.firstName || '', appt.doctor?.lastName || ''].join(' ').trim()}`.trim();
-    const humanDate = new Date(appt.date).toLocaleDateString('en-IN');
+    const humanDate = displayUtcDate(appt.date);
     const summaryLines = [
       `Hello ${patient.name},`,
       '',

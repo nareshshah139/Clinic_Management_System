@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDateTime } from '@/lib/date-display';
+
 import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -92,7 +94,7 @@ export function InventoryUpdates() {
               <p>{request.proposedPrice != null && <>Selling price: {fmtMoney(request.currentPrice)} → {fmtMoney(request.proposedPrice)}<br /></>}
                 {request.proposedStock != null && <>{batch ? 'Batch physical stock' : 'Total physical stock'}: {request.currentStock} → {request.proposedStock}</>}</p>
               <p><span className="font-medium">Reason: </span>{request.reason || 'No reason recorded (legacy request)'}</p>
-              <p className="text-sm text-muted-foreground">{[request.requestedBy?.firstName, request.requestedBy?.lastName].filter(Boolean).join(' ') || 'Staff'} · {new Date(request.createdAt).toLocaleString('en-IN')}</p>
+              <p className="text-sm text-muted-foreground">{[request.requestedBy?.firstName, request.requestedBy?.lastName].filter(Boolean).join(' ') || 'Staff'} · {displayClinicDateTime(request.createdAt)}</p>
               {canApprove && <div className="flex gap-2">
                 <Button onClick={() => { setNote(''); setReview({ request, action: 'approve' }); }}>Approve</Button>
                 <Button variant="outline" onClick={() => { setNote(''); setReview({ request, action: 'reject' }); }}>Reject</Button>

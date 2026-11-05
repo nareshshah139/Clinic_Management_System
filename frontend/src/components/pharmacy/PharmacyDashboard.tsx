@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
 import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -153,13 +154,6 @@ export function PharmacyDashboard() {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
 
   if (loading) {
     return <LoadingSkeleton label="Loading pharmacy dashboard…" variant="cards" />;
@@ -303,7 +297,7 @@ export function PharmacyDashboard() {
                   <div>
                     <p className="font-medium text-sm">{invoice.invoiceNumber}</p>
                     <p className="text-xs text-muted-foreground">{invoice.patientName}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(invoice.createdAt)}</p>
+                    <p className="text-xs text-muted-foreground">{displayClinicDate(invoice.createdAt)}</p>
                   </div>
                   <div className="text-right flex items-center gap-2">
                     <StatusBadge domain="invoice" status={invoice.status} />

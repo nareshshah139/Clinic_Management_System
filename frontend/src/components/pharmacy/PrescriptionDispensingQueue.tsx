@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDateTime } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 
 import { EmptyState } from '@/components/ui/empty-state';
@@ -311,7 +312,7 @@ export function PrescriptionDispensingQueue({
                   <TableCell className="whitespace-normal">
                     <div>{entry.doctor.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {formatDate(entry.createdAt)}
+                      {displayClinicDateTime(entry.createdAt)}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-sm whitespace-normal">
@@ -476,14 +477,6 @@ function formatAge(hours: number) {
   return `${hours.toFixed(1)}h pending`;
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function buildDispenseUrl(entry: QueueEntry) {
   const params = new URLSearchParams({

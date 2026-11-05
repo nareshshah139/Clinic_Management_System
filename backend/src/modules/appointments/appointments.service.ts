@@ -1,3 +1,4 @@
+import { displayCalendarDate } from '../../common/date-display';
 import {
   Injectable,
   BadRequestException,
@@ -195,8 +196,7 @@ export class AppointmentsService {
 
       const doctorName =
         `${appointment.doctor.firstName ?? ''} ${appointment.doctor.lastName ?? ''}`.trim();
-      const appointmentDateObj = new Date(date);
-      const humanDate = appointmentDateObj.toLocaleDateString();
+      const humanDate = displayCalendarDate(date);
       const humanTime = slot;
       const summary = this.buildAppointmentSummary({
         doctorName,

@@ -1,5 +1,7 @@
 'use client';
 
+import { displayLocalDateHeading } from '@/lib/date-display';
+
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -239,12 +241,7 @@ export default function RoomCalendar() {
             <div className="flex min-w-0 items-center gap-2 sm:min-w-[200px]">
               <Calendar className="h-5 w-5 text-info-text" />
               <h2 className="text-lg font-semibold">
-                {selectedDate.toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
+                {displayLocalDateHeading(selectedDate)}
               </h2>
             </div>
             <Button

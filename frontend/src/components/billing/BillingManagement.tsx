@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDate, displayClinicTime } from '@/lib/date-display';
 import { PageHeader } from '@/components/ui/page-header';
 
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -245,7 +246,7 @@ export default function BillingManagement() {
       const total = inv.total ?? inv.totalAmount ?? 0;
       const received = inv.received ?? 0;
       const balance = inv.balance ?? Math.max(0, Number(total) - Number(received));
-      const date = inv.createdAt ? new Date(inv.createdAt).toLocaleDateString('en-IN') : '';
+      const date = displayClinicDate(inv.createdAt, '');
       return [invoiceNo, patient, status, total, received, balance, date].map(escapeCsv).join(',');
     });
     const csv = headers.join(',') + '\n' + rows.join('\n');
@@ -568,8 +569,8 @@ export default function BillingManagement() {
 
       const detailsLines = [
         `Invoice #: ${printInvoice.invoiceNo || 'DRAFT'}`,
-        `Date: ${new Date().toLocaleDateString('en-IN')}`,
-        `Time: ${new Date().toLocaleTimeString('en-IN')}`,
+        `Date: ${displayClinicDate(printInvoice.createdAt)}`,
+        `Time: ${displayClinicTime(printInvoice.createdAt)}`,
         ...(invoiceNotes ? [`Notes: ${invoiceNotes}`] : [])
       ];
 
@@ -734,8 +735,8 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
           <div>
             <h3>Invoice Details:</h3>
             <p><strong>Invoice #:</strong> ${printInvoice.invoiceNo || 'DRAFT'}</p>
-            <p><strong>Date:</strong> ${new Date().toLocaleDateString('en-IN')}</p>
-            <p><strong>Time:</strong> ${new Date().toLocaleTimeString('en-IN')}</p>
+            <p><strong>Date:</strong> ${displayClinicDate(printInvoice.createdAt)}</p>
+            <p><strong>Time:</strong> ${displayClinicTime(printInvoice.createdAt)}</p>
             ${invoiceNotes ? `<p><strong>Notes:</strong> ${invoiceNotes}</p>` : ''}
           </div>
         </div>
@@ -1486,7 +1487,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">₹{((inv as any).total ?? (inv as any).totalAmount)?.toLocaleString?.('en-IN') || '0'}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        {new Date((inv as any).createdAt).toLocaleDateString('en-IN')}
+                        {displayClinicDate((inv as any).createdAt)}
                       </TableCell>
                       <TableCell>
                         <Button

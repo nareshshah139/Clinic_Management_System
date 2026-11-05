@@ -1,5 +1,6 @@
 "use client";
 
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { assessCatalogue, catalogueFieldLabels, catalogueFingerprint, sameCatalogueRequest, type CatalogueAssessment, type CatalogueProduct, type CatalogueRequest, type CatalogueResolution, type CatalogueRow } from '@/lib/purchase-invoice-catalogue';
 import { PurchaseDocumentActions } from "@/components/inventory/PurchaseDocumentActions";
@@ -885,16 +886,6 @@ function statusVariant(
   return "outline";
 }
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function manualReviewOnlyIssue(raw: string) {
   const issue = raw.replace(/^AUTO:\s*/i, "").trim();
@@ -3794,7 +3785,7 @@ function PurchaseInvoiceEditor({
                   <ReviewStatus tone={purchaseInvoiceReviewTone(invoice)}>{purchaseInvoiceStatusLabel(invoice)}</ReviewStatus>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{formatDate(invoice.invoiceDate)}</span>
+                  <span>{displayUtcDate(invoice.invoiceDate, "-")}</span>
                   <span>{currency.format(invoice.netPayable || 0)}</span>
                 </div>
               </button>
@@ -3894,7 +3885,7 @@ function PurchaseInvoiceEditor({
                   {saved.payload?.header?.invoiceNumber ||
                     saved.payload?.sourceDocument?.fileName ||
                     "Unfinished invoice"}{" "}
-                  · {new Date(saved.updatedAt).toLocaleDateString()}
+                  · {displayClinicDate(saved.updatedAt)}
                 </Button>
               ))}
             </div>

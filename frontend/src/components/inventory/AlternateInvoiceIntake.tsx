@@ -1,4 +1,6 @@
 "use client";
+
+import { displayClinicDateTime, displayMailDateTime } from '@/lib/date-display';
 import { useEffect, useState } from "react";
 import { InventoryAction, InventoryDetails } from "./InventoryPresentation";
 import { Download } from "lucide-react";
@@ -214,7 +216,7 @@ export function AlternateInvoiceIntake({
                   <span className="block text-sm text-muted-foreground">
                     Last attachment search:{" "}
                     {status.lastSyncAt
-                      ? new Date(status.lastSyncAt).toLocaleString("en-IN")
+                      ? displayClinicDateTime(status.lastSyncAt)
                       : "Not searched yet"}{" "}
                     · current account and search query
                   </span>
@@ -270,7 +272,7 @@ export function AlternateInvoiceIntake({
                     <div>
                       <strong>{m.subject}</strong>
                       <p className="text-sm text-muted-foreground">
-                        {m.from} · {m.date}
+                        {m.from} · <span title={m.date}>{displayMailDateTime(m.date)}</span>
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">

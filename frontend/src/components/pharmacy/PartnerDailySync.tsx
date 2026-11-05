@@ -1,5 +1,6 @@
 'use client';
 
+import { displayCalendarDate, displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -370,7 +371,7 @@ export function PartnerDailySync() {
         <Card>
           <CardHeader>
             <CardTitle>Manual Daily Entry</CardTitle>
-            <CardDescription>{date}</CardDescription>
+            <CardDescription>{displayCalendarDate(date)}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-4">
@@ -565,7 +566,7 @@ export function PartnerDailySync() {
           <CardHeader>
             <CardTitle>Missing Entries</CardTitle>
             <CardDescription>
-              Organizations without a sale for {date}.
+              Organizations without a sale for {displayCalendarDate(date)}.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -606,7 +607,7 @@ export function PartnerDailySync() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Submissions</CardTitle>
-          <CardDescription>{date}</CardDescription>
+          <CardDescription>{displayCalendarDate(date)}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto rounded-md border">
@@ -638,7 +639,7 @@ export function PartnerDailySync() {
                       <TableCell className="font-medium">
                         {sale.partnerOrganizationName}
                       </TableCell>
-                      <TableCell>{sale.date.slice(0, 10)}</TableCell>
+                      <TableCell>{displayUtcDate(sale.date)}</TableCell>
                       <TableCell>
                         <StatusBadge domain="workflow" status={sale.status}>
                           {sale.status.replace(/_/g, ' ')}
@@ -1058,7 +1059,7 @@ function PartnerLineRecovery({
                 {batch.name} · batch {batch.batchNumber || 'not recorded'} ·{' '}
                 {batch.availableQuantity} {batch.unit} available
                 {batch.expiryDate
-                  ? ` · expires ${batch.expiryDate.slice(0, 10)}`
+                  ? ` · expires ${displayUtcDate(batch.expiryDate)}`
                   : ''}
               </option>
             ))}

@@ -1,5 +1,6 @@
 "use client";
 
+import { displayCalendarDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
@@ -341,7 +342,7 @@ export default function DoctorDayCalendar({
               <div className="mb-3 flex items-start justify-between rounded-lg border border-warning-border bg-warning-soft p-3 text-sm">
                 <div>
                   <div className="font-medium text-warning-text">Rescheduling {formatPatientName(rescheduleTarget.patient)}</div>
-                  <div className="text-warning-text">Click a free time to move this appointment to {date}.</div>
+                  <div className="text-warning-text">Click a free time to move this appointment to {displayCalendarDate(date)}.</div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setRescheduleTarget(null)} disabled={rescheduleLoading}>
                   Cancel
@@ -944,7 +945,7 @@ export default function DoctorDayCalendar({
           </DialogHeader>
           {selectedAppointment && (
             <div className="space-y-3 text-sm">
-              <div><span className="text-muted-foreground">Date:</span> {date}</div>
+              <div><span className="text-muted-foreground">Date:</span> {displayCalendarDate(date)}</div>
               <div><span className="text-muted-foreground">Slot:</span> {selectedAppointment.slot}</div>
               <div><span className="text-muted-foreground">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
               {selectedAppointment.patient?.phone && (
@@ -1022,7 +1023,7 @@ export default function DoctorDayCalendar({
               </p>
               <div className="bg-background p-3 rounded-lg space-y-2 text-sm">
                 <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
-                <div><span className="font-medium">Date:</span> {date}</div>
+                <div><span className="font-medium">Date:</span> {displayCalendarDate(date)}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>
                 <div><span className="font-medium">Type:</span> {selectedAppointment.visitType}</div>
               </div>

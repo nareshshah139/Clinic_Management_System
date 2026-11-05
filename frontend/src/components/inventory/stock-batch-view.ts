@@ -1,3 +1,5 @@
+import { displayUtcDate } from '@/lib/date-display';
+
 /**
  * @cc [owner:nareshshah139,label:product] stock-page-default-scope
  * The stock page MUST show all batches by default, including depleted history. Explicit
@@ -45,9 +47,7 @@ export function batchRowClass(item: any, now = new Date()) {
  * month-end timestamps. Missing or invalid dates MUST display as unverified.
  */
 export function fmtStockExpiry(value: string | Date | null | undefined) {
-  if (!value) return 'Unverified';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Unverified' : date.toLocaleDateString('en-IN', { timeZone: 'UTC' });
+  return displayUtcDate(value, 'Unverified');
 }
 
 /**

@@ -1,5 +1,6 @@
 'use client';
 
+import { displayUtcDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -81,10 +82,10 @@ export function ShelfIntelligence() {
         return nextItems[0]?.id || '';
       });
     } catch (err) {
-      console.error('Failed to load shelf intelligence inventory:', err);
+      console.error('Failed to load shelf stock:', err);
       toast({
         variant: 'destructive',
-        title: 'Shelf intelligence unavailable',
+        title: 'Shelf stock unavailable',
         description: 'Inventory could not be loaded.',
       });
     } finally {
@@ -189,7 +190,7 @@ export function ShelfIntelligence() {
         return;
       }
       if (!countReason.trim()) {
-        toast({ variant: 'destructive', title: 'Reason required', description: 'Cycle count corrections need an auditable reason.' });
+        toast({ variant: 'destructive', title: 'Reason required', description: 'Enter a reason for each stock correction.' });
         return;
       }
       corrections = entered.flatMap(([itemId, value]) => {
@@ -199,7 +200,7 @@ export function ShelfIntelligence() {
         return [{ operationId: crypto.randomUUID(), itemId, adjustmentQuantity: delta,
           reason: countReason.trim(), notes: `Shelf cycle count at ${item.storageLocation || 'unmapped shelf'}` }];
       });
-      if (!corrections.length) { toast({ description: 'No stock variance to post.' }); return; }
+      if (!corrections.length) { toast({ description: 'No stock corrections to record.' }); return; }
       setPendingCorrections(corrections);
     }
     setPostingCounts(true);
@@ -221,7 +222,7 @@ export function ShelfIntelligence() {
       setPendingCorrections(null);
       setPhysicalCounts({});
       setCountReason('');
-      toast({ description: 'All cycle count corrections are confirmed.' });
+      toast({ description: 'All stock corrections are confirmed.' });
       await loadItems();
     } finally {
       setPostingCounts(false);
@@ -240,7 +241,7 @@ export function ShelfIntelligence() {
         <ShelfMetric
           label="Near expiry"
           value={nearExpiryCount}
-          detail="Needs FEFO attention"
+          detail="Review these batches before dispensing"
           intent="amber"
         />
         <ShelfMetric
@@ -268,7 +269,7 @@ export function ShelfIntelligence() {
                 </p>
               </div>
               <p className="text-sm text-muted-foreground">
-                Location-aware batches for faster picking, cycle counts, and FEFO rotation.
+                Find batches by shelf, count stock, and pick the batches that expire first.
               </p>
             </div>
             <div className="flex min-w-0 flex-wrap gap-2">
@@ -347,9 +348,9 @@ export function ShelfIntelligence() {
             </div>
             <div className="mt-3 space-y-2 text-sm text-muted-foreground">
               <RuleRow done text="Excel import accepts storageLocation as shelf input." />
-              <RuleRow done text="Supplier OCR creates reviewed batch receipts before stock commit." />
+              <RuleRow done text="Invoice scanning creates batch receipts for review before stock is added." />
               <RuleRow done={unmappedItems.length === 0} text="Unmapped committed batches enter the shelf assignment queue." />
-              <RuleRow done text="Cycle count corrections post auditable adjustment movements." />
+              <RuleRow done text="Stock count corrections are recorded in stock history." />
             </div>
           </div>
         </div>
@@ -378,11 +379,11 @@ export function ShelfIntelligence() {
             <div className="flex items-center gap-2">
               <RotateCcw className="h-5 w-5 text-foreground" />
               <p className="text-lg font-semibold text-foreground">
-                Shelf Cycle Count
+                Shelf stock count
               </p>
             </div>
             <p className="text-sm text-muted-foreground">
-              Count by shelf, enter physical quantity, and post variance with a mandatory reason.
+              Count by shelf, enter the physical quantity, and record stock corrections with a reason.
             </p>
           </div>
           <Badge variant="outline" className="w-fit bg-success-soft text-success-text">
@@ -438,7 +439,7 @@ export function ShelfIntelligence() {
               value={countReason}
               disabled={Boolean(pendingCorrections) || postingCounts}
               onChange={(event) => setCountReason(event.target.value)}
-              placeholder="Reason required, for example: Shelf cycle count variance verified by pharmacist"
+              placeholder="Reason required, for example: Shelf stock count checked by pharmacist"
             />
             <Button onClick={postCycleCounts} disabled={postingCounts}>
               <Send className="mr-2 h-4 w-4" />
@@ -576,7 +577,7 @@ function IntelligenceTable({
                   <TableCell>{item.storageLocation || 'Unmapped'}</TableCell>
                   <TableCell className="text-right">
                     {mode === 'expiry'
-                      ? formatDateOnly(item.expiryDate)
+                      ? displayUtcDate(item.expiryDate, "-")
                       : suggestedOrder(item)}
                   </TableCell>
                   <TableCell className="text-right">
@@ -647,14 +648,6 @@ function suggestedOrder(item: ShelfInventoryItem) {
   return Math.max(item.reorderQuantity ?? 0, target - item.currentStock, threshold);
 }
 
-function formatDateOnly(value?: string | null) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
-}
 
 function getApiErrorMessage(error: unknown, fallback: string) {
   if (typeof error === 'object' && error !== null) {

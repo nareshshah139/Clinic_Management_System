@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
+
 type PrescriptionSummaryProps = {
   prescription: unknown;
   onPrint?: () => void;
@@ -9,12 +11,6 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const formatDateTime = (value?: string | Date | null) => {
-  if (!value) return null;
-  const date = typeof value === 'string' ? new Date(value) : value;
-  if (Number.isNaN(date.getTime())) return null;
-  return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-};
 
 function normalizePrescription(prescription: unknown) {
   if (!isPlainObject(prescription)) {
@@ -39,7 +35,7 @@ function normalizePrescription(prescription: unknown) {
   return {
     id: typeof prescription.id === 'string' ? prescription.id : undefined,
     prescriptionNumber: typeof prescription.prescriptionNumber === 'string' ? prescription.prescriptionNumber : undefined,
-    createdAt: formatDateTime(prescription.createdAt as string | Date | undefined),
+    createdAt: displayClinicDateTime(prescription.createdAt as string | Date | undefined, '') || null,
     status: typeof prescription.status === 'string' ? prescription.status : undefined,
     doctor:
       isPlainObject(prescription.doctor) && typeof prescription.doctor.name === 'string'
@@ -52,7 +48,7 @@ function normalizePrescription(prescription: unknown) {
     notes: typeof prescription.notes === 'string' ? prescription.notes : undefined,
     instructions: typeof prescription.instructions === 'string' ? prescription.instructions : undefined,
     pharmacistNotes: typeof prescription.pharmacistNotes === 'string' ? prescription.pharmacistNotes : undefined,
-    reviewDate: formatDateTime((prescription as Record<string, unknown>).reviewDate as string | Date | undefined),
+    reviewDate: displayUtcDate((prescription as Record<string, unknown>).reviewDate as string | Date | undefined, '') || null,
     metadata: isPlainObject(prescription.metadata) ? prescription.metadata : undefined,
     items,
   };

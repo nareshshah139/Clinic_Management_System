@@ -1,5 +1,6 @@
 "use client";
 
+import { pharmacyChatTitle, pharmacyProposalLabel } from "@/lib/pharmacy-agent-display";
 import { Spinner } from '@/components/ui/spinner';
 import {
   useCallback,
@@ -285,7 +286,7 @@ export function AgenticPharmacyDock() {
     setCreating(true);
     const request = apiClient
       .createPharmacyAgentSession<AgentSession>({
-        title: "Agentic Pharmacy",
+        title: "Pharmacy assistant",
       })
       .then((created) => {
         applySession(created);
@@ -484,7 +485,7 @@ export function AgenticPharmacyDock() {
     } catch (error) {
       toast({
         variant: "destructive",
-        title: "Thread unavailable",
+        title: "Chat unavailable",
         description: getErrorMessage(error),
       });
     }
@@ -505,7 +506,7 @@ export function AgenticPharmacyDock() {
         await apiClient.archivePharmacyAgentSession<AgentSession>(threadId);
       upsertSessionListItem(archived);
       setShowHistory(true);
-      toast({ title: "Thread archived" });
+      toast({ title: "Chat archived" });
       const nextSessions = await refreshThreads();
       if (threadId === session?.id) {
         const nextActive = nextSessions.find(
@@ -537,7 +538,7 @@ export function AgenticPharmacyDock() {
       upsertSessionListItem(restored);
       await loadSession(threadId);
       void refreshThreads();
-      toast({ title: "Thread restored" });
+      toast({ title: "Chat restored" });
     } catch (error) {
       toast({
         variant: "destructive",
@@ -551,11 +552,11 @@ export function AgenticPharmacyDock() {
 
   return (
     <section className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <div className="flex items-center justify-between border-b border-border bg-card px-4 py-3 text-foreground">
+      <div className="flex flex-col items-start justify-between gap-3 border-b border-border bg-card px-4 py-3 text-foreground sm:flex-row sm:items-center">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Bot className="h-5 w-5" />
-            <h3 className="truncate text-sm font-semibold">Agentic Pharmacy</h3>
+            <h3 className="text-sm font-semibold">Pharmacy AI assistant</h3>
             <Badge
               variant="outline"
               className={
@@ -567,8 +568,8 @@ export function AgenticPharmacyDock() {
               {codexReady === null
                 ? "Checking"
                 : codexReady
-                  ? "Codex"
-                  : "Codex offline"}
+                  ? "Assistant ready"
+                  : "Assistant unavailable"}
             </Badge>
             {pendingProposalCount > 0 && (
               <Badge className="bg-warning text-warning-foreground">
@@ -578,10 +579,10 @@ export function AgenticPharmacyDock() {
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Ask questions, attach pharmacy files, generate charts, and review
-            proposed DB updates.
+            suggested changes to pharmacy records.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           {session && !isHistoryThread && (
             <Button
               type="button"
@@ -635,7 +636,7 @@ export function AgenticPharmacyDock() {
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            New Thread
+            New chat
           </Button>
         </div>
       </div>
@@ -667,7 +668,7 @@ export function AgenticPharmacyDock() {
             {creating && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Spinner className="h-4 w-4 " />
-                Starting session
+                Starting chat
               </div>
             )}
             {messages.length === 0 && !creating && (
@@ -794,7 +795,7 @@ export function AgenticPharmacyDock() {
                     void sendMessage();
                   }
                 }}
-                placeholder="Ask Codex about pharmacy operations. Enter sends, Shift+Enter adds a line."
+                placeholder="Ask the pharmacy assistant about pharmacy operations. Enter sends, Shift+Enter adds a line."
                 disabled={isHistoryThread}
                 className="max-h-28 min-h-11 resize-none"
               />
@@ -874,7 +875,7 @@ function ThreadRail({
       <div className="border-b border-border px-3 py-2">
         <div className="flex items-center justify-between">
           <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Threads
+            Chats
           </div>
           {loading && (
             <Spinner className="h-3.5 w-3.5  text-muted-foreground" />
@@ -885,7 +886,7 @@ function ThreadRail({
         <ThreadSection
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           title="Active"
-          emptyText="No active threads."
+          emptyText="No active chats."
           sessions={sessions}
           currentSessionId={currentSessionId}
           onSelect={onSelect}
@@ -1015,7 +1016,7 @@ function ThreadListItem({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0 truncate text-xs font-semibold text-foreground">
-            {session.title || "Agentic Pharmacy"}
+            {pharmacyChatTitle(session.title)}
           </div>
           {session.pendingProposalCount ? (
             <Badge className="h-5 bg-warning px-1.5 text-xs text-warning-foreground">
@@ -1040,7 +1041,7 @@ function ThreadListItem({
           className="mt-2 h-7 w-full justify-start px-2 text-xs"
           onClick={onArchive}
           disabled={actionInProgress}
-          aria-label={`Archive ${session.title || "Agentic Pharmacy"} thread`}
+          aria-label={`Archive ${pharmacyChatTitle(session.title)} chat`}
         >
           {isArchiving ? (
             <Spinner className="h-3.5 w-3.5 " />
@@ -1104,8 +1105,8 @@ function ProposalCard({
           }
         >
           {proposal.status === "PENDING_REVIEW"
-            ? proposal.riskLevel
-            : proposal.status}
+            ? pharmacyProposalLabel("risk", proposal.riskLevel)
+            : pharmacyProposalLabel("status", proposal.status)}
         </Badge>
       </div>
       <div className="mt-2 space-y-1.5">
@@ -1116,19 +1117,29 @@ function ProposalCard({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-foreground">
-                {action.actionType}
+                {pharmacyProposalLabel("action", action.actionType)}
               </span>
-              <span className="text-muted-foreground">{action.targetType}</span>
+              <span className="text-muted-foreground">{pharmacyProposalLabel("target", action.targetType)}</span>
             </div>
             {action.permissionRequired && (
               <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                 <ShieldCheck className="h-3 w-3" />
-                {action.permissionRequired}
+                {pharmacyProposalLabel("permission", action.permissionRequired)}
               </div>
             )}
           </div>
         ))}
       </div>
+      <details className="mt-2 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Technical details</summary>
+        <pre className="mt-1 whitespace-pre-wrap break-words">{JSON.stringify({
+          status: proposal.status,
+          riskLevel: proposal.riskLevel,
+          actions: proposal.actions.map(({ actionType, targetType, permissionRequired }) => ({
+            actionType, targetType, permissionRequired,
+          })),
+        }, null, 2)}</pre>
+      </details>
       {pending && (
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Button size="sm" className="h-8 gap-1" onClick={onApply}>

@@ -17,7 +17,7 @@ it('distinguishes depleted balances from expired, held and unverified stock with
   expect(batchRowClass({ ...item, status: 'INACTIVE' }, now)).toContain('bg-warning-soft');
 });
 it('formats month-end expiry as the stored UTC calendar date, including in India', () => {
-  expect(fmtStockExpiry('2027-05-31T23:59:59.999Z')).toBe('31/5/2027');
+  expect(fmtStockExpiry('2027-05-31T23:59:59.999Z')).toBe('31 May 2027');
   expect(fmtStockExpiry('bad')).toBe('Unverified');
   expect(fmtStockExpiry(null)).toBe('Unverified');
 });

@@ -65,7 +65,7 @@ it('renders every clinical field when expanded and uses the appointment day', ()
   for (const text of ['Second complaint', 'Two weeks', 'Second diagnosis', 'Trigger detail', 'Prior treatment', 'Exam detail', 'Final note', 'Follow-up instruction', 'Procedure detail', 'Topical detail', '1-0-1', 'Application detail', 'Prescription guidance', 'Temperature (°C)', 'SpO₂ (%)']) {
     expect(screen.getAllByText(new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).length).toBeGreaterThan(0);
   }
-  expect(screen.getByText('September 2, 2026')).toBeInTheDocument();
+  expect(screen.getByText('02 Sep 2026')).toBeInTheDocument();
 });
 
 it('labels an appointment without a visit and never offers to resume it as a visit', () => {

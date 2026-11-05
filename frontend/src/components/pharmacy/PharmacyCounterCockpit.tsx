@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDateTime, displayUtcDate } from '@/lib/date-display';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -553,10 +554,10 @@ export function PharmacyCounterCockpit({
                 Pharmacy Counter
               </h3>
               <Badge variant="outline" className="border-success-border/30 bg-success/10 px-2 py-0 text-xs text-success-text">
-                HITL
+                Pharmacist review
               </Badge>
               <Badge variant="outline" className="border-info-border/30 bg-info/10 px-2 py-0 text-xs text-info-text">
-                Shelf-aware
+                Shelf locations
               </Badge>
             </div>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -871,7 +872,7 @@ function ActiveDispenseColumn({
                   ) : null}
                 </div>
                 <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  Dr. {activeEntry.doctor.name} · {formatDate(activeEntry.createdAt)} · {activeEntry.prescriptionId}
+                  Dr. {activeEntry.doctor.name} · {displayClinicDateTime(activeEntry.createdAt)} · {activeEntry.prescriptionId}
                 </p>
               </div>
               <LifecycleRail active={activeLifecycle} />
@@ -881,7 +882,7 @@ function ActiveDispenseColumn({
           {loadingStock ? (
             <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-background text-sm text-muted-foreground">
               <Spinner className="mr-2 h-4 w-4 " />
-              Checking stock and FEFO batches
+              Checking stock and batch expiry
             </div>
           ) : (
             <fieldset disabled={savingTask || activeEntry?.dispensingEligible === false} className="contents">
@@ -989,7 +990,7 @@ function MedicationReviewTable({
         <span>Prescription</span>
         <span>Inventory Match</span>
         <span>Stock</span>
-        <span>Shelf / FEFO</span>
+        <span>Shelf and batch</span>
         <span>Action</span>
       </div>
       <div className="min-h-0 divide-y divide-border overflow-y-auto">
@@ -1071,7 +1072,7 @@ function MedicationReviewRow({
       <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1.5 lg:grid-cols-1">
         <CompactFact value={recommendedBatch?.storageLocation || 'Unmapped'} />
         <CompactFact value={recommendedBatch?.batchNumber || 'No batch'} />
-        <CompactFact value={recommendedBatch?.expiryDate ? formatDateOnly(recommendedBatch.expiryDate) : 'No expiry'} />
+        <CompactFact value={recommendedBatch?.expiryDate ? displayUtcDate(recommendedBatch.expiryDate) : 'No expiry'} />
       </div>
 
       <div className="flex flex-wrap gap-1.5">
@@ -1138,7 +1139,7 @@ function FulfillmentColumn({
         </div>
         <div className="grid grid-cols-3 divide-x divide-white/10 text-center">
           <ScanFact label="Batch" value={nextPick?.recommendedBatch?.batchNumber || '--'} />
-          <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? formatDateOnly(nextPick.recommendedBatch.expiryDate) : '--'} />
+          <ScanFact label="Expiry" value={nextPick?.recommendedBatch?.expiryDate ? displayUtcDate(nextPick.recommendedBatch.expiryDate) : '--'} />
           <ScanFact label="Stock" value={nextPick?.stock?.totalNonExpiredStock ?? '--'} />
         </div>
       </div>
@@ -1152,8 +1153,8 @@ function FulfillmentColumn({
         />
         <ChecklistItem
           icon={<MapPin className="h-4 w-4" />}
-          title="FEFO pick"
-          detail="Earliest valid batch"
+          title="Pick earliest-expiry batch"
+          detail="Use an unexpired batch with the nearest expiry date"
           done={pickLines.some((line) => Boolean(line.recommendedBatch))}
         />
         <ChecklistItem
@@ -1217,7 +1218,7 @@ function FulfillmentColumn({
                   />
                   <MiniFact
                     label="Expiry"
-                    value={line.recommendedBatch?.expiryDate ? formatDateOnly(line.recommendedBatch.expiryDate) : 'No expiry'}
+                    value={line.recommendedBatch?.expiryDate ? displayUtcDate(line.recommendedBatch.expiryDate) : 'No expiry'}
                   />
                 </div>
                 {line.alternateCount > 0 ? (
@@ -1242,7 +1243,7 @@ function FulfillmentColumn({
         </Button>
         <Button size="sm" variant="outline" onClick={onOpenInventoryControl}>
           <MapPin className="mr-2 h-4 w-4" />
-          Shelf intelligence
+          Shelf locations
         </Button>
       </div>
     </div>
@@ -1436,7 +1437,7 @@ function ScanFact({ label, value }: { label: string; value: string | number }) {
       <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
         {label}
       </p>
-      <p className="truncate text-xs font-semibold text-foreground">{value}</p>
+      <p className="whitespace-normal text-xs font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -1562,21 +1563,4 @@ function backendActionFromLineAction(action: LineAction) {
 function formatAge(hours: number) {
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))}m pending`;
   return `${hours.toFixed(1)}h pending`;
-}
-
-function formatDate(value: string) {
-  return new Date(value).toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function formatDateOnly(value: string) {
-  return new Date(value).toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
 }

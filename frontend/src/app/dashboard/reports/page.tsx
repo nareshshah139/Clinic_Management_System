@@ -1,5 +1,6 @@
 'use client';
 
+import { displayClinicDate, displayCalendarDate } from '@/lib/date-display';
 import { PageHeader } from '@/components/ui/page-header';
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -584,7 +585,7 @@ export default function ReportsPage() {
                   <div key={index} className="flex justify-between items-center p-3 bg-background rounded-lg">
                     <div>
                       <p className="font-medium">{patient.patientName}</p>
-                      <p className="text-sm text-muted-foreground">Last visit: {new Date(patient.lastVisitDate).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">Last visit: {displayClinicDate(patient.lastVisitDate)}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">{patient.visitCount} visits</p>
@@ -1267,7 +1268,7 @@ export default function ReportsPage() {
             {reportTypes.find(r => r.id === selectedReport)?.name}
           </CardTitle>
           <CardDescription>
-            Report for {dateRange.startDate} to {dateRange.endDate}
+            Report for {displayCalendarDate(dateRange.startDate)} to {displayCalendarDate(dateRange.endDate)}
           </CardDescription>
         </CardHeader>
         <CardContent>

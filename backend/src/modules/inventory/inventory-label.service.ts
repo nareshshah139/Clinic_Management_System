@@ -1,3 +1,4 @@
+import { displayClinicDate, displayUtcDate } from '../../common/date-display';
 import { Injectable } from '@nestjs/common';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
@@ -18,7 +19,7 @@ export class InventoryLabelService {
   const PDFDocument=require('pdfkit'),pdf=new PDFDocument({size:[360,240],margin:20}),chunks:Buffer[]=[];
   const done=new Promise<Buffer>((resolve,reject)=>{pdf.on('data',(b:Buffer)=>chunks.push(b));pdf.on('end',()=>resolve(Buffer.concat(chunks)));pdf.on('error',reject)});
   pdf.font('Helvetica-Bold').fontSize(14).text(document?value.reference:value.name,{width:230});pdf.moveDown(.5).font('Helvetica').fontSize(10);
-  const lines=document?[`Type: ${value.kind}`,`Status: ${value.status}`,`Date: ${value.createdAt.toISOString().slice(0,10)}`]:[`Batch: ${value.batchNumber||'Not recorded'}`,`Expiry: ${value.expiryDate?new Date(value.expiryDate).toISOString().slice(0,10):'Not recorded'}`,`Stock unit: ${value.unit}`,`MRP: INR ${Number(value.mrp||value.sellingPrice).toFixed(2)}`];
+  const lines=document?[`Type: ${value.kind}`,`Status: ${value.status}`,`Date: ${displayClinicDate(value.createdAt)}`]:[`Batch: ${value.batchNumber||'Not recorded'}`,`Expiry: ${displayUtcDate(value.expiryDate, 'Not recorded')}`,`Stock unit: ${value.unit}`,`MRP: INR ${Number(value.mrp||value.sellingPrice).toFixed(2)}`];
   for(const line of lines)pdf.text(line,{width:230});pdf.image(qr,248,72,{width:92,height:92});pdf.fontSize(8).text(code,20,192,{width:320});pdf.text('Scan or paste this code into Inventory search.',20,216,{width:320});pdf.end();return done;
  }
 }

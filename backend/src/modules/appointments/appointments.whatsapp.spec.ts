@@ -89,9 +89,6 @@ describe('AppointmentsService WhatsApp flow', () => {
       language: 'en',
       variables: ['patient_name', 'appointment_date'],
     });
-    const dateSpy = jest
-      .spyOn(Date.prototype, 'toLocaleDateString')
-      .mockReturnValue('2099-01-01');
 
     const svc = new AppointmentsService(
       prisma as any,
@@ -108,10 +105,9 @@ describe('AppointmentsService WhatsApp flow', () => {
       'Alice Patient',
     );
     expect(payload.template.components?.[0]?.parameters?.[1]?.text).toBe(
-      '2099-01-01',
+      '01 Jan 2099',
     );
 
-    dateSpy.mockRestore();
   });
 
   it('supports object metadata and fills patient and clinic template variables', async () => {
