@@ -572,7 +572,7 @@ export function PartnerDailySync() {
           <CardContent>
             {missing.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-success-text" />
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
                 No missing entries for the selected date.
               </div>
             ) : (
@@ -1005,7 +1005,7 @@ function PartnerLineRecovery({
         <p className="text-sm">{item.discrepancyReason}</p>
       )}
       {item.recoveryInventoryItemId && (
-        <p className="text-sm text-success-text">
+        <p className="text-sm text-emerald-700">
           A batch is selected for the outstanding quantity. Retry outstanding
           when stock is available.
         </p>
@@ -1085,7 +1085,7 @@ function PartnerLineRecovery({
         </>
       )}
       {saved && (
-        <p role="status" className="text-sm text-success-text">
+        <p role="status" className="text-sm text-emerald-700">
           Match saved. Use Retry outstanding to deduct only the remaining
           quantities.
         </p>

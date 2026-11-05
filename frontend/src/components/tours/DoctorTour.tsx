@@ -275,20 +275,20 @@ function getDoctorVisitTourSteps(): TourStep[] {
         <div class="space-y-3 p-1">
           <div class="flex items-center gap-2">
             <span class="text-3xl">👨‍⚕️</span>
-            <h3 class="text-xl font-bold text-info-text">Welcome to the Doctor Visit Workflow!</h3>
+            <h3 class="text-xl font-bold text-blue-600">Welcome to the Doctor Visit Workflow!</h3>
           </div>
           <p class="text-base leading-relaxed">
             This comprehensive tour will guide you through the complete medical visit workflow,
             from reviewing patient information to creating prescriptions and completing the visit.
           </p>
-          <div class="bg-info-soft border-l-4 border-info-border p-3 rounded-md">
-            <p class="text-sm text-info-text">
+          <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md">
+            <p class="text-sm text-blue-900">
               <strong>📚 What you'll learn:</strong> Patient context, vital signs, clinical documentation,
               SOAP notes, prescription builder, photos, labs, and visit completion.
             </p>
           </div>
-          <div class="bg-success-soft border-l-4 border-success-border p-3 rounded-md text-sm mt-2">
-            <p class="text-success-text">
+          <div class="bg-green-50 border-l-4 border-green-500 p-3 rounded-md text-sm mt-2">
+            <p class="text-green-900">
               <strong>⏱️ Estimated time:</strong> 5-7 minutes. You can exit and restart anytime!
             </p>
           </div>
@@ -308,50 +308,50 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="flex gap-3 items-start p-2 bg-info-soft rounded-md">
-              <div class="flex-shrink-0 w-7 h-7 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-sm">1</div>
+            <div class="flex gap-3 items-start p-2 bg-blue-50 rounded-md">
+              <div class="flex-shrink-0 w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">1</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-info-text">Review Patient Context</p>
-                <p class="text-xs text-info-text">Check patient history, allergies, and previous visits</p>
+                <p class="font-semibold text-sm text-blue-900">Review Patient Context</p>
+                <p class="text-xs text-blue-800">Check patient history, allergies, and previous visits</p>
               </div>
             </div>
             
-            <div class="flex gap-3 items-start p-2 bg-success-soft rounded-md">
-              <div class="flex-shrink-0 w-7 h-7 bg-success text-success-foreground rounded-full flex items-center justify-center font-bold text-sm">2</div>
+            <div class="flex gap-3 items-start p-2 bg-green-50 rounded-md">
+              <div class="flex-shrink-0 w-7 h-7 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-sm">2</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-success-text">Review Vitals & Photos</p>
-                <p class="text-xs text-success-text">Check vital signs and clinical photos taken by staff</p>
+                <p class="font-semibold text-sm text-green-900">Review Vitals & Photos</p>
+                <p class="text-xs text-green-800">Check vital signs and clinical photos taken by staff</p>
               </div>
             </div>
             
-            <div class="flex gap-3 items-start p-2 bg-highlight-soft rounded-md">
-              <div class="flex-shrink-0 w-7 h-7 bg-highlight text-highlight-foreground rounded-full flex items-center justify-center font-bold text-sm">3</div>
+            <div class="flex gap-3 items-start p-2 bg-purple-50 rounded-md">
+              <div class="flex-shrink-0 w-7 h-7 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-sm">3</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-highlight-text">Document Visit (SOAP)</p>
-                <p class="text-xs text-highlight-text">Complete clinical documentation using SOAP format</p>
+                <p class="font-semibold text-sm text-purple-900">Document Visit (SOAP)</p>
+                <p class="text-xs text-purple-800">Complete clinical documentation using SOAP format</p>
               </div>
             </div>
             
-            <div class="flex gap-3 items-start p-2 bg-warning-soft rounded-md">
-              <div class="flex-shrink-0 w-7 h-7 bg-warning text-warning-foreground rounded-full flex items-center justify-center font-bold text-sm">4</div>
+            <div class="flex gap-3 items-start p-2 bg-orange-50 rounded-md">
+              <div class="flex-shrink-0 w-7 h-7 bg-orange-600 text-white rounded-full flex items-center justify-center font-bold text-sm">4</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-warning-text">Create Prescription</p>
-                <p class="text-xs text-warning-text">Add medications, instructions, and follow-up plans</p>
+                <p class="font-semibold text-sm text-orange-900">Create Prescription</p>
+                <p class="text-xs text-orange-800">Add medications, instructions, and follow-up plans</p>
               </div>
             </div>
             
-            <div class="flex gap-3 items-start p-2 bg-destructive-soft rounded-md">
-              <div class="flex-shrink-0 w-7 h-7 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center font-bold text-sm">5</div>
+            <div class="flex gap-3 items-start p-2 bg-red-50 rounded-md">
+              <div class="flex-shrink-0 w-7 h-7 bg-red-600 text-white rounded-full flex items-center justify-center font-bold text-sm">5</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-destructive-text">Complete Visit</p>
-                <p class="text-xs text-destructive-text">Save, review, and mark the visit as complete</p>
+                <p class="font-semibold text-sm text-red-900">Complete Visit</p>
+                <p class="text-xs text-red-800">Save, review, and mark the visit as complete</p>
               </div>
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-3">
-            <p class="font-semibold text-warning-text mb-1">💡 Pro Tip:</p>
-            <p class="text-warning-text">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-xs mt-3">
+            <p class="font-semibold text-amber-900 mb-1">💡 Pro Tip:</p>
+            <p class="text-amber-800">
               The system auto-saves your work as you go, so you can safely pause and resume at any time!
             </p>
           </div>
@@ -372,35 +372,35 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">📋 Key Information:</p>
-              <ul class="text-xs text-info-text space-y-1 ml-3">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">📋 Key Information:</p>
+              <ul class="text-xs text-blue-800 space-y-1 ml-3">
                 <li>• Patient demographics (name, age, gender)</li>
                 <li>• Contact information</li>
-                <li>• <strong class="text-destructive-text">⚠️ Allergies (if any)</strong></li>
+                <li>• <strong class="text-red-700">⚠️ Allergies (if any)</strong></li>
                 <li>• Medical history summary</li>
                 <li>• Insurance/payment status</li>
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">📅 Recent Visits:</p>
-              <p class="text-xs text-success-text">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">📅 Recent Visits:</p>
+              <p class="text-xs text-green-800">
                 See the patient's last 2-3 visits with dates, diagnoses, and quick access
                 to previous prescriptions and notes.
               </p>
             </div>
           </div>
           
-          <div class="bg-destructive-soft border-l-4 border-destructive-border p-3 rounded-md text-sm mt-3">
-            <p class="font-semibold text-destructive-text">⚠️ Safety First:</p>
-            <p class="text-xs text-destructive-text mt-1">
+          <div class="bg-red-50 border-l-4 border-red-500 p-3 rounded-md text-sm mt-3">
+            <p class="font-semibold text-red-900">⚠️ Safety First:</p>
+            <p class="text-xs text-red-800 mt-1">
               <strong>Always check for allergies</strong> before prescribing any medication. 
               Allergies are highlighted in red at the top of the patient context.
             </p>
           </div>
           
-          <div class="text-xs text-muted-foreground p-2 bg-background rounded-md">
+          <div class="text-xs text-gray-600 p-2 bg-gray-50 rounded-md">
             <strong>Quick tip:</strong> Click on any previous visit to view complete details in a popup.
           </div>
         </div>
@@ -420,58 +420,58 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="grid gap-2">
-            <div class="flex items-center gap-3 p-2 bg-info-soft rounded-md border-l-4 border-info-border">
-              <div class="w-8 h-8 bg-info rounded-md flex items-center justify-center text-info-foreground text-xs font-bold">👁️</div>
+            <div class="flex items-center gap-3 p-2 bg-blue-50 rounded-md border-l-4 border-blue-500">
+              <div class="w-8 h-8 bg-blue-600 rounded-md flex items-center justify-center text-white text-xs font-bold">👁️</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-info-text">Overview</p>
-                <p class="text-xs text-info-text">Visit summary and quick access to all sections</p>
+                <p class="font-semibold text-sm text-blue-900">Overview</p>
+                <p class="text-xs text-blue-800">Visit summary and quick access to all sections</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-success-soft rounded-md border-l-4 border-success-border">
-              <div class="w-8 h-8 bg-success rounded-md flex items-center justify-center text-success-foreground text-xs font-bold">🩺</div>
+            <div class="flex items-center gap-3 p-2 bg-green-50 rounded-md border-l-4 border-green-500">
+              <div class="w-8 h-8 bg-green-600 rounded-md flex items-center justify-center text-white text-xs font-bold">🩺</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-success-text">Vitals</p>
-                <p class="text-xs text-success-text">BP, HR, temperature, weight (often pre-filled by nurse)</p>
+                <p class="font-semibold text-sm text-green-900">Vitals</p>
+                <p class="text-xs text-green-800">BP, HR, temperature, weight (often pre-filled by nurse)</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-highlight-soft rounded-md border-l-4 border-highlight-border">
-              <div class="w-8 h-8 bg-highlight rounded-md flex items-center justify-center text-highlight-foreground text-xs font-bold">📷</div>
+            <div class="flex items-center gap-3 p-2 bg-purple-50 rounded-md border-l-4 border-purple-500">
+              <div class="w-8 h-8 bg-purple-600 rounded-md flex items-center justify-center text-white text-xs font-bold">📷</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-highlight-text">Photos</p>
-                <p class="text-xs text-highlight-text">Clinical photos for documentation and comparison</p>
+                <p class="font-semibold text-sm text-purple-900">Photos</p>
+                <p class="text-xs text-purple-800">Clinical photos for documentation and comparison</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-warning-soft rounded-md border-l-4 border-warning-border">
-              <div class="w-8 h-8 bg-warning rounded-md flex items-center justify-center text-warning-foreground text-xs font-bold">📋</div>
+            <div class="flex items-center gap-3 p-2 bg-orange-50 rounded-md border-l-4 border-orange-500">
+              <div class="w-8 h-8 bg-orange-600 rounded-md flex items-center justify-center text-white text-xs font-bold">📋</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-warning-text">Prescription ⭐</p>
-                <p class="text-xs text-warning-text">Complete clinical documentation + medications (main tab)</p>
+                <p class="font-semibold text-sm text-orange-900">Prescription ⭐</p>
+                <p class="text-xs text-orange-800">Complete clinical documentation + medications (main tab)</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-highlight-soft rounded-md border-l-4 border-highlight-border">
-              <div class="w-8 h-8 bg-highlight rounded-md flex items-center justify-center text-highlight-foreground text-xs font-bold">🧪</div>
+            <div class="flex items-center gap-3 p-2 bg-indigo-50 rounded-md border-l-4 border-indigo-500">
+              <div class="w-8 h-8 bg-indigo-600 rounded-md flex items-center justify-center text-white text-xs font-bold">🧪</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-highlight-text">Lab Tests</p>
-                <p class="text-xs text-highlight-text">Order labs and review results</p>
+                <p class="font-semibold text-sm text-indigo-900">Lab Tests</p>
+                <p class="text-xs text-indigo-800">Order labs and review results</p>
               </div>
             </div>
             
-            <div class="flex items-center gap-3 p-2 bg-background rounded-md border-l-4 border-border">
-              <div class="w-8 h-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground text-xs font-bold">📜</div>
+            <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-md border-l-4 border-gray-500">
+              <div class="w-8 h-8 bg-gray-600 rounded-md flex items-center justify-center text-white text-xs font-bold">📜</div>
               <div class="flex-1">
-                <p class="font-semibold text-sm text-foreground">History</p>
-                <p class="text-xs text-foreground">Previous visits, trends, and patient timeline</p>
+                <p class="font-semibold text-sm text-gray-900">History</p>
+                <p class="text-xs text-gray-800">Previous visits, trends, and patient timeline</p>
               </div>
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-3">
-            <p class="font-semibold text-warning-text mb-1">✨ Green Indicator:</p>
-            <p class="text-warning-text">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-xs mt-3">
+            <p class="font-semibold text-amber-900 mb-1">✨ Green Indicator:</p>
+            <p class="text-amber-800">
               A green dot appears on tabs when that section is complete. This helps track your progress!
             </p>
           </div>
@@ -492,48 +492,48 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md">
-              <p class="font-semibold text-sm text-info-text mb-2">Standard Vitals Captured:</p>
+            <div class="bg-blue-50 p-3 rounded-md">
+              <p class="font-semibold text-sm text-blue-900 mb-2">Standard Vitals Captured:</p>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="flex items-center gap-2">
-                  <span class="text-destructive-text">❤️</span>
-                  <span class="text-info-text"><strong>Blood Pressure</strong> (systolic/diastolic)</span>
+                  <span class="text-red-600">❤️</span>
+                  <span class="text-blue-800"><strong>Blood Pressure</strong> (systolic/diastolic)</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-highlight-text">💗</span>
-                  <span class="text-info-text"><strong>Heart Rate</strong> (bpm)</span>
+                  <span class="text-pink-600">💗</span>
+                  <span class="text-blue-800"><strong>Heart Rate</strong> (bpm)</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-warning-text">🌡️</span>
-                  <span class="text-info-text"><strong>Temperature</strong> (°F or °C)</span>
+                  <span class="text-orange-600">🌡️</span>
+                  <span class="text-blue-800"><strong>Temperature</strong> (°F or °C)</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-success-text">⚖️</span>
-                  <span class="text-info-text"><strong>Weight</strong> (kg or lbs)</span>
+                  <span class="text-green-600">⚖️</span>
+                  <span class="text-blue-800"><strong>Weight</strong> (kg or lbs)</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-highlight-text">📏</span>
-                  <span class="text-info-text"><strong>Height</strong> (cm or inches)</span>
+                  <span class="text-purple-600">📏</span>
+                  <span class="text-blue-800"><strong>Height</strong> (cm or inches)</span>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="text-info-text">🫁</span>
-                  <span class="text-info-text"><strong>Oxygen Saturation</strong> (SpO2)</span>
+                  <span class="text-blue-600">🫁</span>
+                  <span class="text-blue-800"><strong>Oxygen Saturation</strong> (SpO2)</span>
                 </div>
               </div>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">📊 Automatic Calculations:</p>
-              <p class="text-xs text-success-text">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">📊 Automatic Calculations:</p>
+              <p class="text-xs text-green-800">
                 The system automatically calculates BMI from height and weight, and flags
                 abnormal values (high BP, fever, etc.) for your attention.
               </p>
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">💡 Quick Review:</p>
-            <p class="text-warning-text mt-1">
+          <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-yellow-900">💡 Quick Review:</p>
+            <p class="text-yellow-800 mt-1">
               Even if vitals are pre-filled, <strong>always review them</strong> before proceeding.
               Look for any red flags or abnormal values that need immediate attention.
             </p>
@@ -555,9 +555,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-2">📸 Photo Capabilities:</p>
-              <ul class="text-xs text-highlight-text space-y-1 ml-3">
+            <div class="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+              <p class="font-semibold text-sm text-purple-900 mb-2">📸 Photo Capabilities:</p>
+              <ul class="text-xs text-purple-800 space-y-1 ml-3">
                 <li>• <strong>Capture photos</strong> directly from camera or upload files</li>
                 <li>• <strong>Categorize photos</strong> (before/after, specific body areas)</li>
                 <li>• <strong>Add annotations</strong> and notes to each photo</li>
@@ -566,9 +566,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">🎯 Best Practices:</p>
-              <ul class="text-xs text-info-text space-y-1 ml-3">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">🎯 Best Practices:</p>
+              <ul class="text-xs text-blue-800 space-y-1 ml-3">
                 <li>• Use consistent lighting and angles for comparison photos</li>
                 <li>• Take before photos <strong>before any procedure</strong></li>
                 <li>• Label photos clearly (e.g., "Face - Front View", "Lesion - Close-up")</li>
@@ -577,9 +577,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-success-soft p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-success-text mb-1">✨ Time-Saving Tip:</p>
-            <p class="text-success-text">
+          <div class="bg-green-50 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-green-900 mb-1">✨ Time-Saving Tip:</p>
+            <p class="text-green-800">
               Your staff can pre-load photos before you enter. Just review, annotate, and
               add any additional angles you need during the examination.
             </p>
@@ -593,7 +593,7 @@ function getDoctorVisitTourSteps(): TourStep[] {
         <div class="space-y-3 p-1">
           <div class="flex items-center gap-2">
             <span class="text-3xl">📋</span>
-            <h3 class="text-xl font-bold text-warning-text">Step 5: Prescription Tab (The Core!)</h3>
+            <h3 class="text-xl font-bold text-orange-600">Step 5: Prescription Tab (The Core!)</h3>
           </div>
           <p class="text-base leading-relaxed mb-3">
             This is where you'll spend most of your time. The Prescription tab combines
@@ -601,61 +601,61 @@ function getDoctorVisitTourSteps(): TourStep[] {
             in one seamless interface.
           </p>
           
-          <div class="bg-gradient-to-br from-warning-soft to-warning-soft p-4 rounded-lg border-2 border-warning-border">
-            <p class="font-semibold text-warning-text mb-3">The SOAP Framework:</p>
+          <div class="bg-gradient-to-br from-orange-50 to-amber-50 p-4 rounded-lg border-2 border-orange-200">
+            <p class="font-semibold text-orange-900 mb-3">The SOAP Framework:</p>
             
             <div class="space-y-2">
-              <div class="flex gap-2 items-start p-2 bg-card rounded-md border-l-4 border-info-border">
-                <div class="flex-shrink-0 w-6 h-6 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-xs">S</div>
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-blue-500">
+                <div class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">S</div>
                 <div class="flex-1">
-                  <p class="font-bold text-sm text-foreground">Subjective</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-bold text-sm text-gray-900">Subjective</p>
+                  <p class="text-xs text-gray-700">
                     <strong>Chief Complaints:</strong> What the patient tells you. 
                     Their symptoms, concerns, history of present illness.
                   </p>
-                  <p class="text-xs text-info-text mt-1">
+                  <p class="text-xs text-blue-700 mt-1">
                     💡 "Patient reports acne breakouts for 3 months, worse on cheeks"
                   </p>
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-card rounded-md border-l-4 border-success-border">
-                <div class="flex-shrink-0 w-6 h-6 bg-success text-success-foreground rounded-full flex items-center justify-center font-bold text-xs">O</div>
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-green-500">
+                <div class="flex-shrink-0 w-6 h-6 bg-green-600 text-white rounded-full flex items-center justify-center font-bold text-xs">O</div>
                 <div class="flex-1">
-                  <p class="font-bold text-sm text-foreground">Objective</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-bold text-sm text-gray-900">Objective</p>
+                  <p class="text-xs text-gray-700">
                     <strong>On Examination:</strong> What you observe and measure.
                     Physical findings, test results, clinical observations.
                   </p>
-                  <p class="text-xs text-success-text mt-1">
+                  <p class="text-xs text-green-700 mt-1">
                     💡 "Multiple comedones and papules on bilateral cheeks, no scarring"
                   </p>
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-card rounded-md border-l-4 border-highlight-border">
-                <div class="flex-shrink-0 w-6 h-6 bg-highlight text-highlight-foreground rounded-full flex items-center justify-center font-bold text-xs">A</div>
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-purple-500">
+                <div class="flex-shrink-0 w-6 h-6 bg-purple-600 text-white rounded-full flex items-center justify-center font-bold text-xs">A</div>
                 <div class="flex-1">
-                  <p class="font-bold text-sm text-foreground">Assessment</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-bold text-sm text-gray-900">Assessment</p>
+                  <p class="text-xs text-gray-700">
                     <strong>Diagnosis:</strong> Your clinical impression based on S + O.
                     Primary diagnosis and any differential diagnoses.
                   </p>
-                  <p class="text-xs text-highlight-text mt-1">
+                  <p class="text-xs text-purple-700 mt-1">
                     💡 "Acne vulgaris, Grade 2 (moderate)"
                   </p>
                 </div>
               </div>
               
-              <div class="flex gap-2 items-start p-2 bg-card rounded-md border-l-4 border-warning-border">
-                <div class="flex-shrink-0 w-6 h-6 bg-warning text-warning-foreground rounded-full flex items-center justify-center font-bold text-xs">P</div>
+              <div class="flex gap-2 items-start p-2 bg-white rounded-md border-l-4 border-orange-500">
+                <div class="flex-shrink-0 w-6 h-6 bg-orange-600 text-white rounded-full flex items-center justify-center font-bold text-xs">P</div>
                 <div class="flex-1">
-                  <p class="font-bold text-sm text-foreground">Plan</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-bold text-sm text-gray-900">Plan</p>
+                  <p class="text-xs text-gray-700">
                     <strong>Treatment Plan:</strong> Medications, procedures, follow-up.
                     Everything the patient needs to do next.
                   </p>
-                  <p class="text-xs text-warning-text mt-1">
+                  <p class="text-xs text-orange-700 mt-1">
                     💡 "Topical retinoid, benzoyl peroxide, follow-up in 6 weeks"
                   </p>
                 </div>
@@ -663,9 +663,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-info-soft border-l-4 border-info-border p-3 rounded-md text-sm">
-            <p class="font-semibold text-info-text mb-1">⚡ Smart Features:</p>
-            <ul class="text-xs text-info-text space-y-1">
+          <div class="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-md text-sm">
+            <p class="font-semibold text-blue-900 mb-1">⚡ Smart Features:</p>
+            <ul class="text-xs text-blue-800 space-y-1">
               <li>• <strong>Voice transcription:</strong> Dictate notes hands-free</li>
               <li>• <strong>Auto-save:</strong> Never lose your work</li>
               <li>• <strong>Templates:</strong> Quick-fill common diagnoses and plans</li>
@@ -688,48 +688,48 @@ function getDoctorVisitTourSteps(): TourStep[] {
             dosages, and instructions. The system makes this fast and error-free.
           </p>
           
-          <div class="bg-gradient-to-br from-info-soft to-highlight-soft p-4 rounded-lg border-2 border-info-border">
-            <p class="font-semibold text-info-text mb-3">Adding a Medication (4 Quick Steps):</p>
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-lg border-2 border-blue-200">
+            <p class="font-semibold text-blue-900 mb-3">Adding a Medication (4 Quick Steps):</p>
             
             <div class="space-y-2">
               <div class="flex gap-2">
-                <div class="flex-shrink-0 w-6 h-6 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-xs">1</div>
+                <div class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">1</div>
                 <div class="flex-1">
-                  <p class="font-semibold text-sm text-foreground">Search Drug Name</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-semibold text-sm text-gray-900">Search Drug Name</p>
+                  <p class="text-xs text-gray-700">
                     Type the medication name. Smart search shows matching drugs instantly.
-                    <span class="block text-info-text mt-1">→ Generic or brand name both work!</span>
+                    <span class="block text-blue-700 mt-1">→ Generic or brand name both work!</span>
                   </p>
                 </div>
               </div>
               
               <div class="flex gap-2">
-                <div class="flex-shrink-0 w-6 h-6 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-xs">2</div>
+                <div class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">2</div>
                 <div class="flex-1">
-                  <p class="font-semibold text-sm text-foreground">Set Dosage & Frequency</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-semibold text-sm text-gray-900">Set Dosage & Frequency</p>
+                  <p class="text-xs text-gray-700">
                     Specify dose (e.g., 10 mg), frequency (twice daily), and duration (14 days).
-                    <span class="block text-info-text mt-1">→ Common presets available for quick selection</span>
+                    <span class="block text-blue-700 mt-1">→ Common presets available for quick selection</span>
                   </p>
                 </div>
               </div>
               
               <div class="flex gap-2">
-                <div class="flex-shrink-0 w-6 h-6 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-xs">3</div>
+                <div class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">3</div>
                 <div class="flex-1">
-                  <p class="font-semibold text-sm text-foreground">Add Instructions</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-semibold text-sm text-gray-900">Add Instructions</p>
+                  <p class="text-xs text-gray-700">
                     Patient-friendly instructions like "Take with food" or "Apply after washing face".
-                    <span class="block text-info-text mt-1">→ Templates available for common instructions</span>
+                    <span class="block text-blue-700 mt-1">→ Templates available for common instructions</span>
                   </p>
                 </div>
               </div>
               
               <div class="flex gap-2">
-                <div class="flex-shrink-0 w-6 h-6 bg-info text-info-foreground rounded-full flex items-center justify-center font-bold text-xs">4</div>
+                <div class="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xs">4</div>
                 <div class="flex-1">
-                  <p class="font-semibold text-sm text-foreground">Review & Add</p>
-                  <p class="text-xs text-foreground">
+                  <p class="font-semibold text-sm text-gray-900">Review & Add</p>
+                  <p class="text-xs text-gray-700">
                     The drug appears in your prescription list. Repeat for all medications!
                   </p>
                 </div>
@@ -738,14 +738,14 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="space-y-2 mt-3">
-            <div class="bg-success-soft p-2 rounded-md text-xs border-l-4 border-success-border">
-              <p class="font-semibold text-success-text">✅ Safety Features:</p>
-              <p class="text-success-text">System checks for drug interactions and alerts if patient has allergies</p>
+            <div class="bg-green-50 p-2 rounded-md text-xs border-l-4 border-green-500">
+              <p class="font-semibold text-green-900">✅ Safety Features:</p>
+              <p class="text-green-800">System checks for drug interactions and alerts if patient has allergies</p>
             </div>
             
-            <div class="bg-highlight-soft p-2 rounded-md text-xs border-l-4 border-highlight-border">
-              <p class="font-semibold text-highlight-text">📋 Multi-Language:</p>
-              <p class="text-highlight-text">Print prescriptions in English, Hindi, or Telugu for patient comfort</p>
+            <div class="bg-purple-50 p-2 rounded-md text-xs border-l-4 border-purple-500">
+              <p class="font-semibold text-purple-900">📋 Multi-Language:</p>
+              <p class="text-purple-800">Print prescriptions in English, Hindi, or Telugu for patient comfort</p>
             </div>
           </div>
         </div>
@@ -765,42 +765,42 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-2">🔬 Dermatology Exam Fields:</p>
+            <div class="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+              <p class="font-semibold text-sm text-purple-900 mb-2">🔬 Dermatology Exam Fields:</p>
               <div class="grid grid-cols-2 gap-2 text-xs">
                 <div class="space-y-1">
-                  <p class="text-highlight-text"><strong>• Skin Type</strong> (Fitzpatrick I-VI)</p>
-                  <p class="text-highlight-text"><strong>• Morphology</strong> (macule, papule, etc.)</p>
-                  <p class="text-highlight-text"><strong>• Distribution</strong> (face, trunk, limbs)</p>
+                  <p class="text-purple-800"><strong>• Skin Type</strong> (Fitzpatrick I-VI)</p>
+                  <p class="text-purple-800"><strong>• Morphology</strong> (macule, papule, etc.)</p>
+                  <p class="text-purple-800"><strong>• Distribution</strong> (face, trunk, limbs)</p>
                 </div>
                 <div class="space-y-1">
-                  <p class="text-highlight-text"><strong>• Acne Severity</strong> (Grade 1-4)</p>
-                  <p class="text-highlight-text"><strong>• Itch Score</strong> (0-10 scale)</p>
-                  <p class="text-highlight-text"><strong>• Common Diagnoses</strong> (quick-select)</p>
+                  <p class="text-purple-800"><strong>• Acne Severity</strong> (Grade 1-4)</p>
+                  <p class="text-purple-800"><strong>• Itch Score</strong> (0-10 scale)</p>
+                  <p class="text-purple-800"><strong>• Common Diagnoses</strong> (quick-select)</p>
                 </div>
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">🎯 Procedure Documentation:</p>
-              <p class="text-xs text-info-text">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">🎯 Procedure Documentation:</p>
+              <p class="text-xs text-blue-800">
                 For laser treatments, chemical peels, or other procedures, document specific
                 parameters like fluence, wavelength, spot size, and number of passes.
               </p>
             </div>
             
-            <div class="bg-warning-soft p-3 rounded-md border-l-4 border-warning-border">
-              <p class="font-semibold text-sm text-warning-text mb-1">📋 Topical Application Details:</p>
-              <p class="text-xs text-warning-text">
+            <div class="bg-orange-50 p-3 rounded-md border-l-4 border-orange-500">
+              <p class="font-semibold text-sm text-orange-900 mb-1">📋 Topical Application Details:</p>
+              <p class="text-xs text-orange-800">
                 For topical treatments, specify application site, day part (morning/evening),
                 leave-on time, and washing instructions.
               </p>
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">💡 Optional but Valuable:</p>
-            <p class="text-warning-text mt-1">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-amber-900">💡 Optional but Valuable:</p>
+            <p class="text-amber-800 mt-1">
               These fields are optional, but filling them creates a detailed record that helps
               track treatment progress and makes future follow-ups much easier!
             </p>
@@ -822,9 +822,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-2">🔬 Lab Capabilities:</p>
-              <ul class="text-xs text-highlight-text space-y-1 ml-3">
+            <div class="bg-indigo-50 p-3 rounded-md border-l-4 border-indigo-500">
+              <p class="font-semibold text-sm text-indigo-900 mb-2">🔬 Lab Capabilities:</p>
+              <ul class="text-xs text-indigo-800 space-y-1 ml-3">
                 <li>• <strong>Order tests:</strong> Common panels (CBC, LFT, lipid panel, etc.)</li>
                 <li>• <strong>Record results:</strong> Enter lab values when reports arrive</li>
                 <li>• <strong>Track status:</strong> Pending, completed, or reviewed</li>
@@ -833,9 +833,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">📋 Common Lab Panels:</p>
-              <div class="grid grid-cols-2 gap-1 text-xs text-success-text mt-2">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">📋 Common Lab Panels:</p>
+              <div class="grid grid-cols-2 gap-1 text-xs text-green-800 mt-2">
                 <p>• Complete Blood Count (CBC)</p>
                 <p>• Liver Function Tests (LFT)</p>
                 <p>• Kidney Function (RFT)</p>
@@ -848,9 +848,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">💡 Best Practice:</p>
-            <p class="text-warning-text mt-1">
+          <div class="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-yellow-900">💡 Best Practice:</p>
+            <p class="text-yellow-800 mt-1">
               Order labs at the end of the visit if needed for diagnosis or monitoring.
               The system can print lab requisition forms along with the prescription.
             </p>
@@ -872,9 +872,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-background p-3 rounded-md border-l-4 border-border">
-              <p class="font-semibold text-sm text-foreground mb-2">📅 What You'll See:</p>
-              <ul class="text-xs text-foreground space-y-1 ml-3">
+            <div class="bg-gray-50 p-3 rounded-md border-l-4 border-gray-500">
+              <p class="font-semibold text-sm text-gray-900 mb-2">📅 What You'll See:</p>
+              <ul class="text-xs text-gray-700 space-y-1 ml-3">
                 <li>• <strong>Visit timeline:</strong> All previous visits in chronological order</li>
                 <li>• <strong>Diagnoses history:</strong> Track condition progression</li>
                 <li>• <strong>Treatment history:</strong> What medications were prescribed when</li>
@@ -883,18 +883,18 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">🔍 Quick Actions:</p>
-              <p class="text-xs text-info-text">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">🔍 Quick Actions:</p>
+              <p class="text-xs text-blue-800">
                 Click any historical visit to view full details. Use "Copy from previous visit"
                 to quickly populate common fields for follow-up visits.
               </p>
             </div>
           </div>
           
-          <div class="bg-success-soft border-l-4 border-success-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-success-text">✨ Time-Saver:</p>
-            <p class="text-success-text mt-1">
+          <div class="bg-green-50 border-l-4 border-green-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-green-900">✨ Time-Saver:</p>
+            <p class="text-green-800 mt-1">
               For follow-up visits, reference the history tab to see what was prescribed last time
               and what the patient's response was. Helps maintain treatment continuity!
             </p>
@@ -916,29 +916,29 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-2">💾 Save Options:</p>
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-2">💾 Save Options:</p>
               
               <div class="space-y-2">
-                <div class="bg-card p-2 rounded-md border-l-2 border-success-border">
-                  <p class="font-bold text-xs text-foreground">Auto-Save (Automatic)</p>
-                  <p class="text-xs text-foreground mt-1">
+                <div class="bg-white p-2 rounded-md border-l-2 border-green-400">
+                  <p class="font-bold text-xs text-gray-900">Auto-Save (Automatic)</p>
+                  <p class="text-xs text-gray-700 mt-1">
                     The system saves your work every 30 seconds as you type. You'll see
                     "Saved" indicator at the top. <strong>No action needed!</strong>
                   </p>
                 </div>
                 
-                <div class="bg-card p-2 rounded-md border-l-2 border-info-border">
-                  <p class="font-bold text-xs text-foreground">Manual Save (Draft)</p>
-                  <p class="text-xs text-foreground mt-1">
+                <div class="bg-white p-2 rounded-md border-l-2 border-blue-400">
+                  <p class="font-bold text-xs text-gray-900">Manual Save (Draft)</p>
+                  <p class="text-xs text-gray-700 mt-1">
                     Click "Save Draft" to immediately save your current work. Use this when
                     you need to step away mid-visit. Visit status stays "In Progress".
                   </p>
                 </div>
                 
-                <div class="bg-card p-2 rounded-md border-l-2 border-warning-border">
-                  <p class="font-bold text-xs text-foreground">Complete Visit</p>
-                  <p class="text-xs text-foreground mt-1">
+                <div class="bg-white p-2 rounded-md border-l-2 border-orange-400">
+                  <p class="font-bold text-xs text-gray-900">Complete Visit</p>
+                  <p class="text-xs text-gray-700 mt-1">
                     Click "Complete Visit" when done. This marks the visit as finished,
                     updates the appointment status, and makes it ready for billing.
                   </p>
@@ -946,9 +946,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">📱 Status Indicator:</p>
-              <p class="text-xs text-info-text">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">📱 Status Indicator:</p>
+              <p class="text-xs text-blue-800">
                 Watch the top-right corner for save status:
                 <span class="block mt-1">
                   <strong>Saving...</strong> → Work in progress<br/>
@@ -959,9 +959,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">⚡ Pro Tip:</p>
-            <p class="text-warning-text mt-1">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-amber-900">⚡ Pro Tip:</p>
+            <p class="text-amber-800 mt-1">
               You can safely switch between tabs or even close the browser - your draft is saved!
               Come back anytime to resume where you left off.
             </p>
@@ -983,9 +983,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-2">🎨 Print Features:</p>
-              <ul class="text-xs text-info-text space-y-1 ml-3">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-2">🎨 Print Features:</p>
+              <ul class="text-xs text-blue-800 space-y-1 ml-3">
                 <li>• <strong>Live preview:</strong> See exactly how it will print</li>
                 <li>• <strong>Custom letterhead:</strong> Upload your clinic logo/header</li>
                 <li>• <strong>Multi-language:</strong> English, Hindi, or Telugu</li>
@@ -995,9 +995,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-1">📋 What Gets Printed:</p>
-              <div class="grid grid-cols-2 gap-1 text-xs text-highlight-text mt-2">
+            <div class="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+              <p class="font-semibold text-sm text-purple-900 mb-1">📋 What Gets Printed:</p>
+              <div class="grid grid-cols-2 gap-1 text-xs text-purple-800 mt-2">
                 <p>✓ Patient demographics</p>
                 <p>✓ Visit date & doctor name</p>
                 <p>✓ Chief complaints</p>
@@ -1009,18 +1009,18 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </div>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">🎯 Customization Tab:</p>
-              <p class="text-xs text-success-text">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">🎯 Customization Tab:</p>
+              <p class="text-xs text-green-800">
                 Go to the "Customization" tab to set up your prescription template once.
                 Settings are saved per-doctor, so you only configure it once!
               </p>
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">💡 Best Practice:</p>
-            <p class="text-warning-text mt-1">
+          <div class="bg-orange-50 border-l-4 border-orange-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-orange-900">💡 Best Practice:</p>
+            <p class="text-orange-800 mt-1">
               Always click "Preview" before printing to catch any typos or formatting issues.
               Patients appreciate clean, professional prescriptions!
             </p>
@@ -1041,35 +1041,35 @@ function getDoctorVisitTourSteps(): TourStep[] {
             mark the visit as complete. This updates the system and triggers billing.
           </p>
           
-          <div class="bg-gradient-to-br from-success-soft to-success-soft p-4 rounded-lg border-2 border-success-border">
-            <p class="font-semibold text-success-text mb-3">Completing Visit Checklist:</p>
+          <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-lg border-2 border-green-200">
+            <p class="font-semibold text-green-900 mb-3">Completing Visit Checklist:</p>
             
             <div class="space-y-2">
               <div class="flex items-start gap-2">
-                <div class="flex-shrink-0 w-5 h-5 bg-success text-success-foreground rounded-full flex items-center justify-center text-xs">✓</div>
-                <p class="text-xs text-success-text">
+                <div class="flex-shrink-0 w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-xs">✓</div>
+                <p class="text-xs text-green-900">
                   <strong>All key sections filled:</strong> Chief complaints, diagnosis, and at least
                   one medication (or explanation why no Rx needed)
                 </p>
               </div>
               
               <div class="flex items-start gap-2">
-                <div class="flex-shrink-0 w-5 h-5 bg-success text-success-foreground rounded-full flex items-center justify-center text-xs">✓</div>
-                <p class="text-xs text-success-text">
+                <div class="flex-shrink-0 w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-xs">✓</div>
+                <p class="text-xs text-green-900">
                   <strong>Follow-up date set:</strong> When should the patient return?
                 </p>
               </div>
               
               <div class="flex items-start gap-2">
-                <div class="flex-shrink-0 w-5 h-5 bg-success text-success-foreground rounded-full flex items-center justify-center text-xs">✓</div>
-                <p class="text-xs text-success-text">
+                <div class="flex-shrink-0 w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-xs">✓</div>
+                <p class="text-xs text-green-900">
                   <strong>Prescription printed:</strong> Patient has their copy
                 </p>
               </div>
               
               <div class="flex items-start gap-2">
-                <div class="flex-shrink-0 w-5 h-5 bg-success text-success-foreground rounded-full flex items-center justify-center text-xs">✓</div>
-                <p class="text-xs text-success-text">
+                <div class="flex-shrink-0 w-5 h-5 bg-green-600 text-white rounded-full flex items-center justify-center text-xs">✓</div>
+                <p class="text-xs text-green-900">
                   <strong>Patient counseled:</strong> Instructions given verbally
                 </p>
               </div>
@@ -1077,9 +1077,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="space-y-2 mt-3">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-1">🔄 What Happens Next:</p>
-              <ol class="text-xs text-info-text space-y-1 ml-4 list-decimal">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-1">🔄 What Happens Next:</p>
+              <ol class="text-xs text-blue-800 space-y-1 ml-4 list-decimal">
                 <li>Visit status changes to "Completed"</li>
                 <li>Appointment status updates to "Completed"</li>
                 <li>Billing team gets notified to process payment</li>
@@ -1088,9 +1088,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ol>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-1">🔓 Need to Edit Later?</p>
-              <p class="text-xs text-highlight-text">
+            <div class="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+              <p class="font-semibold text-sm text-purple-900 mb-1">🔓 Need to Edit Later?</p>
+              <p class="text-xs text-purple-800">
                 Completed visits can be reopened if you need to add or correct something.
                 Just click "Edit Visit" from the visit history.
               </p>
@@ -1113,9 +1113,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-2">🎙️ How It Works:</p>
-              <ol class="text-xs text-highlight-text space-y-1 ml-4 list-decimal">
+            <div class="bg-indigo-50 p-3 rounded-md border-l-4 border-indigo-500">
+              <p class="font-semibold text-sm text-indigo-900 mb-2">🎙️ How It Works:</p>
+              <ol class="text-xs text-indigo-800 space-y-1 ml-4 list-decimal">
                 <li>Look for the microphone icon in any text field (Chief Complaints, Objective, etc.)</li>
                 <li>Click the mic to start recording your voice</li>
                 <li>Speak naturally - the AI transcribes in real-time</li>
@@ -1123,9 +1123,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ol>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">✨ Smart Features:</p>
-              <ul class="text-xs text-success-text space-y-1 ml-3">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">✨ Smart Features:</p>
+              <ul class="text-xs text-green-800 space-y-1 ml-3">
                 <li>• <strong>Medical terminology:</strong> Recognizes clinical terms accurately</li>
                 <li>• <strong>Auto-punctuation:</strong> Adds periods, commas automatically</li>
                 <li>• <strong>Edit after:</strong> Clean up any errors after transcription</li>
@@ -1134,9 +1134,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
             </div>
           </div>
           
-          <div class="bg-warning-soft border-l-4 border-warning-border p-3 rounded-md text-xs mt-2">
-            <p class="font-semibold text-warning-text">💡 Best Use Cases:</p>
-            <div class="space-y-1 mt-1 text-warning-text">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-md text-xs mt-2">
+            <p class="font-semibold text-amber-900">💡 Best Use Cases:</p>
+            <div class="space-y-1 mt-1 text-amber-800">
               <p>• <strong>Chief Complaints:</strong> "Patient complains of severe acne on face for past 3 months"</p>
               <p>• <strong>Objective:</strong> "On examination bilateral cheeks show multiple comedones and papules"</p>
               <p>• <strong>Plan:</strong> "Advised topical retinoid nightly and benzoyl peroxide wash morning"</p>
@@ -1159,31 +1159,31 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-background p-3 rounded-md border-l-4 border-border">
-              <p class="font-semibold text-sm text-foreground mb-2">⌨️ Essential Shortcuts:</p>
+            <div class="bg-gray-50 p-3 rounded-md border-l-4 border-gray-500">
+              <p class="font-semibold text-sm text-gray-900 mb-2">⌨️ Essential Shortcuts:</p>
               <div class="grid grid-cols-2 gap-2 text-xs">
-                <div class="bg-card p-2 rounded-md border">
-                  <p class="font-mono text-info-text font-bold">Ctrl/Cmd + S</p>
-                  <p class="text-foreground mt-1">Quick save draft</p>
+                <div class="bg-white p-2 rounded-md border">
+                  <p class="font-mono text-blue-600 font-bold">Ctrl/Cmd + S</p>
+                  <p class="text-gray-700 mt-1">Quick save draft</p>
                 </div>
-                <div class="bg-card p-2 rounded-md border">
-                  <p class="font-mono text-info-text font-bold">Tab</p>
-                  <p class="text-foreground mt-1">Move between fields</p>
+                <div class="bg-white p-2 rounded-md border">
+                  <p class="font-mono text-blue-600 font-bold">Tab</p>
+                  <p class="text-gray-700 mt-1">Move between fields</p>
                 </div>
-                <div class="bg-card p-2 rounded-md border">
-                  <p class="font-mono text-info-text font-bold">Ctrl/Cmd + P</p>
-                  <p class="text-foreground mt-1">Preview prescription</p>
+                <div class="bg-white p-2 rounded-md border">
+                  <p class="font-mono text-blue-600 font-bold">Ctrl/Cmd + P</p>
+                  <p class="text-gray-700 mt-1">Preview prescription</p>
                 </div>
-                <div class="bg-card p-2 rounded-md border">
-                  <p class="font-mono text-info-text font-bold">Ctrl/Cmd + Enter</p>
-                  <p class="text-foreground mt-1">Complete visit</p>
+                <div class="bg-white p-2 rounded-md border">
+                  <p class="font-mono text-blue-600 font-bold">Ctrl/Cmd + Enter</p>
+                  <p class="text-gray-700 mt-1">Complete visit</p>
                 </div>
               </div>
             </div>
             
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-2">🚀 Speed Tips:</p>
-              <ul class="text-xs text-info-text space-y-1 ml-3">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-2">🚀 Speed Tips:</p>
+              <ul class="text-xs text-blue-800 space-y-1 ml-3">
                 <li>• Use <strong>common diagnosis shortcuts</strong> (type "acne" → selects from list)</li>
                 <li>• <strong>Copy from last visit</strong> for follow-ups (one click)</li>
                 <li>• Set up <strong>favorite medications</strong> for quick prescription</li>
@@ -1192,9 +1192,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">📊 Workflow Optimization:</p>
-              <p class="text-xs text-success-text">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">📊 Workflow Optimization:</p>
+              <p class="text-xs text-green-800">
                 Most doctors complete a routine follow-up visit in <strong>3-5 minutes</strong> and
                 a new patient visit in <strong>8-12 minutes</strong> once familiar with the system!
               </p>
@@ -1217,9 +1217,9 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </p>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-sm text-info-text mb-2">🔐 Security Features:</p>
-              <ul class="text-xs text-info-text space-y-1 ml-3">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-sm text-blue-900 mb-2">🔐 Security Features:</p>
+              <ul class="text-xs text-blue-800 space-y-1 ml-3">
                 <li>• <strong>Encrypted storage:</strong> All data encrypted at rest and in transit</li>
                 <li>• <strong>Audit logs:</strong> Every access and edit is logged with timestamp</li>
                 <li>• <strong>Role-based access:</strong> Staff can only see what they need</li>
@@ -1228,25 +1228,25 @@ function getDoctorVisitTourSteps(): TourStep[] {
               </ul>
             </div>
             
-            <div class="bg-highlight-soft p-3 rounded-md border-l-4 border-highlight-border">
-              <p class="font-semibold text-sm text-highlight-text mb-1">📋 Legal Compliance:</p>
-              <p class="text-xs text-highlight-text">
+            <div class="bg-purple-50 p-3 rounded-md border-l-4 border-purple-500">
+              <p class="font-semibold text-sm text-purple-900 mb-1">📋 Legal Compliance:</p>
+              <p class="text-xs text-purple-800">
                 All prescriptions include legally required fields (doctor registration number,
                 clinic address, date/time) and are stored for the mandated 3-year minimum period.
               </p>
             </div>
             
-            <div class="bg-success-soft p-3 rounded-md border-l-4 border-success-border">
-              <p class="font-semibold text-sm text-success-text mb-1">🔄 Version Control:</p>
-              <p class="text-xs text-success-text">
+            <div class="bg-green-50 p-3 rounded-md border-l-4 border-green-500">
+              <p class="font-semibold text-sm text-green-900 mb-1">🔄 Version Control:</p>
+              <p class="text-xs text-green-800">
                 If you edit a completed visit, the system keeps both versions so you can see
                 what changed and when. Full audit trail maintained.
               </p>
             </div>
           </div>
           
-          <div class="bg-background p-2 rounded-md text-xs mt-2">
-            <p class="text-foreground">
+          <div class="bg-gray-50 p-2 rounded-md text-xs mt-2">
+            <p class="text-gray-700">
               <strong>Note:</strong> Your clinic admin controls user access and can generate audit
               reports anytime for compliance reviews.
             </p>
@@ -1260,58 +1260,58 @@ function getDoctorVisitTourSteps(): TourStep[] {
         <div class="space-y-4 p-1">
           <div class="flex items-center gap-2 justify-center">
             <span class="text-4xl">🎉</span>
-            <h3 class="text-2xl font-bold text-success-text">You're Ready to Go!</h3>
+            <h3 class="text-2xl font-bold text-green-600">You're Ready to Go!</h3>
             <span class="text-4xl">🎉</span>
           </div>
           
-          <div class="bg-gradient-to-br from-success-soft to-success-soft p-4 rounded-xl border-2 border-success-border">
-            <p class="text-base text-foreground text-center leading-relaxed mb-3">
+          <div class="bg-gradient-to-br from-green-50 to-emerald-50 p-4 rounded-xl border-2 border-green-300">
+            <p class="text-base text-gray-800 text-center leading-relaxed mb-3">
               You now have a complete understanding of the doctor visit workflow!
               From patient context to prescription to completion, you're equipped to
               provide excellent care with efficient documentation.
             </p>
             
-            <div class="bg-card p-4 rounded-lg shadow-sm">
-              <p class="font-bold text-success-text mb-3 text-center">📚 Quick Workflow Recap:</p>
+            <div class="bg-white p-4 rounded-lg shadow-sm">
+              <p class="font-bold text-green-900 mb-3 text-center">📚 Quick Workflow Recap:</p>
               <div class="grid grid-cols-3 gap-2 text-xs">
-                <div class="text-center p-2 bg-info-soft rounded-md">
-                  <div class="font-bold text-info-text">1️⃣ Patient Context</div>
-                  <div class="text-info-text">Review history & allergies</div>
+                <div class="text-center p-2 bg-blue-50 rounded-md">
+                  <div class="font-bold text-blue-900">1️⃣ Patient Context</div>
+                  <div class="text-blue-700">Review history & allergies</div>
                 </div>
-                <div class="text-center p-2 bg-success-soft rounded-md">
-                  <div class="font-bold text-success-text">2️⃣ Vitals & Photos</div>
-                  <div class="text-success-text">Check pre-filled data</div>
+                <div class="text-center p-2 bg-green-50 rounded-md">
+                  <div class="font-bold text-green-900">2️⃣ Vitals & Photos</div>
+                  <div class="text-green-700">Check pre-filled data</div>
                 </div>
-                <div class="text-center p-2 bg-highlight-soft rounded-md">
-                  <div class="font-bold text-highlight-text">3️⃣ SOAP Notes</div>
-                  <div class="text-highlight-text">Document S-O-A-P</div>
+                <div class="text-center p-2 bg-purple-50 rounded-md">
+                  <div class="font-bold text-purple-900">3️⃣ SOAP Notes</div>
+                  <div class="text-purple-700">Document S-O-A-P</div>
                 </div>
-                <div class="text-center p-2 bg-warning-soft rounded-md">
-                  <div class="font-bold text-warning-text">4️⃣ Prescription</div>
-                  <div class="text-warning-text">Add medications</div>
+                <div class="text-center p-2 bg-orange-50 rounded-md">
+                  <div class="font-bold text-orange-900">4️⃣ Prescription</div>
+                  <div class="text-orange-700">Add medications</div>
                 </div>
-                <div class="text-center p-2 bg-highlight-soft rounded-md">
-                  <div class="font-bold text-highlight-text">5️⃣ Print & Review</div>
-                  <div class="text-highlight-text">Preview before patient</div>
+                <div class="text-center p-2 bg-pink-50 rounded-md">
+                  <div class="font-bold text-pink-900">5️⃣ Print & Review</div>
+                  <div class="text-pink-700">Preview before patient</div>
                 </div>
-                <div class="text-center p-2 bg-destructive-soft rounded-md">
-                  <div class="font-bold text-destructive-text">6️⃣ Complete</div>
-                  <div class="text-destructive-text">Mark as done</div>
+                <div class="text-center p-2 bg-red-50 rounded-md">
+                  <div class="font-bold text-red-900">6️⃣ Complete</div>
+                  <div class="text-red-700">Mark as done</div>
                 </div>
               </div>
             </div>
           </div>
           
           <div class="space-y-2">
-            <div class="bg-info-soft p-3 rounded-md border-l-4 border-info-border">
-              <p class="font-semibold text-info-text mb-1">⚡ Remember:</p>
-              <p class="text-sm text-info-text">
+            <div class="bg-blue-50 p-3 rounded-md border-l-4 border-blue-500">
+              <p class="font-semibold text-blue-900 mb-1">⚡ Remember:</p>
+              <p class="text-sm text-blue-800">
                 Auto-save protects your work. Take your time, be thorough, and the system
                 will help you be both efficient and comprehensive!
               </p>
             </div>
             
-            <div class="bg-highlight text-highlight-foreground p-4 rounded-lg text-center">
+            <div class="bg-purple-600 text-white p-4 rounded-lg text-center">
               <p class="font-semibold mb-2">Need Help Later?</p>
               <p class="text-sm">
                 Click the <strong>"Start Tour"</strong> button anytime to replay this guide!
@@ -1321,8 +1321,8 @@ function getDoctorVisitTourSteps(): TourStep[] {
           </div>
           
           <div class="text-center">
-            <p class="text-lg font-semibold text-foreground">Happy Doctoring! 🩺</p>
-            <p class="text-sm text-muted-foreground mt-1">
+            <p class="text-lg font-semibold text-gray-700">Happy Doctoring! 🩺</p>
+            <p class="text-sm text-gray-600 mt-1">
               Focus on your patients - we've got the paperwork covered.
             </p>
           </div>

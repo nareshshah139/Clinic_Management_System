@@ -722,7 +722,7 @@ export function WorkflowDocumentEditor({
         {notice && (
           <p
             role="status"
-            className="rounded-md border border-success-border bg-success-soft p-3 text-success-text"
+            className="rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
           >
             {notice}
           </p>

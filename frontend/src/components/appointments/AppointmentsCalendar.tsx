@@ -32,7 +32,7 @@ interface AppointmentsCalendarProps {
  */
 /**
  * @cc [owner:nareshshah139,label:accessibility] appointment-booking-success-feedback
- * A successful booking MUST display its patient and slot details using success theme tokens
+ * A successful booking MUST display its patient and slot details using the success palette
  * and expose the confirmation as a status announcement.
  */
 export default function AppointmentsCalendar({
@@ -456,12 +456,12 @@ export default function AppointmentsCalendar({
                         <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
                         <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
                       </svg>
-                      <span className="text-xs font-medium text-success-text">Syncing</span>
+                      <span className="text-xs font-medium text-green-700">Syncing</span>
                     </div>
-                    <Badge variant="outline" className="text-xs border-success-border bg-success-soft text-success-text">
+                    <Badge variant="outline" className="text-xs border-green-200 bg-green-50 text-green-700">
                       {googleStatus.email || googleStatus.calendarId || 'Connected'}
                     </Badge>
-                    <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-destructive-text" onClick={disconnectGoogle} disabled={googleLoading}>
+                    <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-red-600" onClick={disconnectGoogle} disabled={googleLoading}>
                       {googleLoading ? 'Disconnecting...' : 'Disconnect'}
                     </Button>
                   </>
@@ -469,7 +469,7 @@ export default function AppointmentsCalendar({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="gap-2 border-border"
+                    className="gap-2 border-gray-300"
                     onClick={startGoogleConnect}
                     disabled={googleLoading}
                   >
@@ -488,7 +488,7 @@ export default function AppointmentsCalendar({
 
           {/* Doctor-specific Google Calendar status */}
           {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
+            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
@@ -497,7 +497,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-success-border bg-success-soft px-3 py-1.5 text-xs text-success-text">
+            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
               <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -513,7 +513,7 @@ export default function AppointmentsCalendar({
             {!hideHeaderControls && (
               <>
                 <div>
-                  <label className="text-sm text-foreground">Doctor</label>
+                  <label className="text-sm text-gray-700">Doctor</label>
                   <Select value={doctorId} onValueChange={setDoctorId}>
                     <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
                     <SelectContent>
@@ -522,13 +522,13 @@ export default function AppointmentsCalendar({
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm text-foreground">Date</label>
+                  <label className="text-sm text-gray-700">Date</label>
                   <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </>
             )}
             <div>
-              <label className="text-sm text-foreground">Visit Type</label>
+              <label className="text-sm text-gray-700">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
                 <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
                 <SelectContent>
@@ -540,7 +540,7 @@ export default function AppointmentsCalendar({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-foreground">Room</label>
+              <label className="text-sm text-gray-700">Room</label>
               <Select value={roomFilter} onValueChange={setRoomFilter}>
                 <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
                 <SelectContent>
@@ -552,11 +552,11 @@ export default function AppointmentsCalendar({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-foreground">Patient</label>
+              <label className="text-sm text-gray-700">Patient</label>
               <Input placeholder="Search patient by name/phone" value={patientSearch} onChange={(e) => { setSelectedPatientId(''); setSelectedPatient(null); void searchPatients(e.target.value); }} />
             </div>
             <div>
-              <label className="text-sm text-foreground">Grid</label>
+              <label className="text-sm text-gray-700">Grid</label>
               <Select value={String(gridMinutes)} onValueChange={(v: string) => setGridMinutes(parseInt(v, 10))}>
                 <SelectTrigger><SelectValue placeholder="Grid granularity" /></SelectTrigger>
                 <SelectContent>
@@ -581,7 +581,7 @@ export default function AppointmentsCalendar({
           )}
 
           {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
+            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4" />
               <span>Select a patient from the list or add them as new before booking.</span>
             </div>
@@ -592,7 +592,7 @@ export default function AppointmentsCalendar({
               {patients.map((p) => (
                 <div
                   key={p.id}
-                  className="px-3 py-2 text-sm hover:bg-background cursor-pointer"
+                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
                   onClick={() => {
                     setPatientSearch(`${p.firstName} ${p.lastName} — ${p.phone}`);
                     setSelectedPatientId(p.id);
@@ -609,7 +609,7 @@ export default function AppointmentsCalendar({
           )}
 
           {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-foreground">
+            <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
@@ -619,13 +619,13 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-gray-500">
               Tip: enter patient name and phone, then use "Add" to create a new record instantly.
             </div>
           )}
 
           {/* Legend */}
-          <div className="border rounded-md p-3 bg-background">
+          <div className="border rounded-md p-3 bg-gray-50">
             <h3 className="font-semibold mb-2">Legend</h3>
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
@@ -637,19 +637,19 @@ export default function AppointmentsCalendar({
                 <span className="text-sm">Procedure</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--highlight-soft)' }} />
+                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-telemedicine)' }} />
                 <span className="text-sm">Telemedicine</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--muted)' }} />
+                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-completed)' }} />
                 <span className="text-sm">Completed</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'color-mix(in oklab, var(--calendar-consultation) 55%, var(--card))' }} />
+                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation-past)' }} />
                 <span className="text-sm">Past (OPD)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'color-mix(in oklab, var(--calendar-procedure) 55%, var(--card))' }} />
+                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure-past)' }} />
                 <span className="text-sm">Past (Procedure)</span>
               </div>
               <div className="flex items-center gap-2">
@@ -665,12 +665,12 @@ export default function AppointmentsCalendar({
 
           {!!bookingDetails && (
             <div 
-              className="rounded-md border border-success-border bg-success-soft p-4 text-sm text-success-text"
+              className="rounded-md border border-green-500 bg-green-50 p-4 text-sm text-green-700"
               role="status"
             >
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-success-text" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>

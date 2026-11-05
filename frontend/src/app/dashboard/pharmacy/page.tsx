@@ -192,7 +192,7 @@ function PharmacyPageContent() {
   };
 
   return (
-    <main className="flex-1 bg-background p-2 md:p-3">
+    <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
       <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
         <div className="space-y-3">
           {pharmacyTab !== 'desk' && <PageHeader title={pharmacyTab === 'counter' ? 'Pharmacy Counter' : 'Pharmacy Billing'} />}
@@ -277,16 +277,16 @@ function PharmacyDeskPanel({
 }) {
   return (
     <div className="space-y-3">
-      <section className="rounded-lg border border-border bg-card px-3 py-2.5 text-foreground shadow-sm">
+      <section className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-sm">
         <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <PageHeader title="Pharmacy Desk" />
-              <span className="rounded-full border border-success-border/30 bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success-text">
+              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-100">
                 Command center
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 truncate text-xs text-slate-300">
               Queue, review, pick, bill, pay, dispense.
             </p>
           </div>
@@ -327,7 +327,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
             >
               <RefreshCcw className="h-4 w-4" />
@@ -336,7 +336,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={onOpenInvoices}
             >
               <Receipt className="h-4 w-4" />
@@ -345,7 +345,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
+              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
               onClick={onOpenDrugs}
             >
               <Pill className="h-4 w-4" />
@@ -473,17 +473,17 @@ function PharmacyBillingPanel({
 
 function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+    <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-card text-foreground">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-slate-950 text-white">
             <Bot className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-foreground">
+            <h3 className="truncate text-sm font-semibold text-slate-950">
               Pharmacy AI assistant
             </h3>
-            <p className="truncate text-xs text-muted-foreground">
+            <p className="truncate text-xs text-slate-500">
               Opens when needed.
             </p>
           </div>
@@ -499,8 +499,8 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
 
 function AgenticPharmacyDockLoading() {
   return (
-    <section className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
-      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+    <section className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3 text-sm text-slate-600">
         <Spinner className="h-4 w-4     " />
         Loading pharmacy assistant…
       </div>
@@ -513,7 +513,7 @@ function PharmacyGuide() {
     <QuickGuide
       title="Pharmacy Management Guide"
       triggerVariant="ghost"
-      triggerClassName="text-foreground hover:bg-card/10 hover:text-foreground"
+      triggerClassName="text-white hover:bg-white/10 hover:text-white"
       sections={[
         {
           title: 'Prescription & Auto-Fill',
@@ -559,19 +559,19 @@ function MetricStrip({
   intent: 'green' | 'blue' | 'purple' | 'amber';
 }) {
   const colors = {
-    green: 'bg-success-soft text-success-text',
-    blue: 'bg-info-soft text-info-text',
-    purple: 'bg-highlight-soft text-highlight-text',
-    amber: 'bg-warning-soft text-warning-text',
+    green: 'bg-emerald-50 text-emerald-700',
+    blue: 'bg-blue-50 text-blue-700',
+    purple: 'bg-violet-50 text-violet-700',
+    amber: 'bg-amber-50 text-amber-700',
   };
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-current/10 bg-card/10 px-2.5 py-1.5">
+    <div className="flex items-center justify-between gap-2 rounded-md border border-white/10 bg-white/10 px-2.5 py-1.5">
       <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-base font-semibold leading-5 text-foreground">{value}</p>
-        <p className="flex items-center text-xs leading-4 text-muted-foreground">
-          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-success-text" />}
+        <p className="text-xs text-slate-300">{label}</p>
+        <p className="truncate text-base font-semibold leading-5 text-white">{value}</p>
+        <p className="flex items-center text-xs leading-4 text-slate-400">
+          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-emerald-700" />}
           {detail}
         </p>
       </div>
@@ -597,18 +597,18 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center justify-between gap-2 rounded-md border border-current/10 bg-card/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-card/15"
+      className="group flex items-center justify-between gap-2 rounded-md border border-white/10 bg-white/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-white/15"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-card text-foreground">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-slate-950">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
-          <p className="truncate text-xs text-muted-foreground">{detail}</p>
+          <p className="truncate text-sm font-semibold text-white">{title}</p>
+          <p className="truncate text-xs text-slate-300">{detail}</p>
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
     </button>
   );
 }
@@ -621,12 +621,12 @@ function WorkbenchHeader({
   detail: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-md border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-lg font-semibold text-foreground">{title}</p>
-        <p className="text-sm text-muted-foreground">{detail}</p>
+        <p className="text-lg font-semibold text-slate-950">{title}</p>
+        <p className="text-sm text-slate-600">{detail}</p>
       </div>
-      <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-soft px-3 py-1 text-xs font-semibold text-success-text">
+      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Validate before adding stock
       </div>

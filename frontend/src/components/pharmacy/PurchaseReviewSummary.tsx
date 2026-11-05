@@ -95,7 +95,7 @@ export function PurchaseReviewSummary({
             {checks > 0 ? (
               <AlertTriangle
                 aria-hidden="true"
-                className="h-4 w-4 text-warning-text dark:text-warning-text"
+                className="h-4 w-4 text-amber-700 dark:text-amber-300"
               />
             ) : (
               <FileSearch aria-hidden="true" className="h-4 w-4" />
