@@ -82,7 +82,7 @@ export default function AppointmentSummary({ appointment, onOpenDetails }: Appoi
               });
             }}
           >
-            <span className="min-w-0 flex-1 overflow-hidden">
+            <span className="h-full min-w-0 flex-1 overflow-hidden">
               <span className="block truncate text-sm font-semibold leading-4">{name}</span>
               <span className="block truncate text-xs leading-4">
                 <span className="font-medium text-blue-700">{appointment.slot}</span>
