@@ -318,13 +318,13 @@ export default function TestTranscribePage() {
                 <div className="h-4 bg-secondary rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-100 ${
-                      audioLevel > 70 ? 'bg-success' : audioLevel > 30 ? 'bg-warning' : 'bg-destructive'
+                      audioLevel > 70 ? 'bg-green-500' : audioLevel > 30 ? 'bg-yellow-500' : 'bg-red-500'
                     }`}
                     style={{ width: `${audioLevel}%` }}
                   />
                 </div>
                 {audioLevel < 20 && (
-                  <p className="text-xs text-warning-text">
+                  <p className="text-xs text-amber-600">
                     ⚠️ Low audio level - speak louder or move closer to microphone
                   </p>
                 )}
@@ -437,7 +437,7 @@ export default function TestTranscribePage() {
                       <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
                         <Badge>Doctor</Badge>
                       </h3>
-                      <div className="p-4 bg-info-soft dark:bg-info rounded-lg">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
                         <p className="whitespace-pre-wrap">{transcription.speakers.doctorText}</p>
                       </div>
                     </div>
@@ -448,7 +448,7 @@ export default function TestTranscribePage() {
                       <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
                         <Badge variant="secondary">Patient</Badge>
                       </h3>
-                      <div className="p-4 bg-success-soft dark:bg-success rounded-lg">
+                      <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
                         <p className="whitespace-pre-wrap">{transcription.speakers.patientText}</p>
                       </div>
                     </div>
@@ -470,8 +470,8 @@ export default function TestTranscribePage() {
                         key={idx}
                         className={`p-3 rounded-lg ${
                           segment.speaker === 'DOCTOR'
-                            ? 'bg-info-soft dark:bg-info'
-                            : 'bg-success-soft dark:bg-success'
+                            ? 'bg-blue-50 dark:bg-blue-950'
+                            : 'bg-green-50 dark:bg-green-950'
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">

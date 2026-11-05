@@ -85,7 +85,7 @@ export function PurchaseProductDetails({ id, product, disabled, onSave, createLa
         <div className="grid gap-3 sm:grid-cols-2">
           {(['category', 'composition1', 'dosageForm', 'strength'] as const).map(field => <div key={field}>
             <Label htmlFor={`${id}-${field}`}>{({ category: 'Category', composition1: 'Composition', dosageForm: medicine ? 'Dosage form' : 'Product form', strength: 'Strength' })[field]}{medicine || field === 'category' ? ' (required)' : ' (optional)'}</Label>
-            <Input id={`${id}-${field}`} aria-invalid={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) || undefined} className={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) ? 'border-warning-border' : undefined} value={fields[field]} onChange={event => { setFields(current => ({ ...current, [field]: event.target.value })); setSaved(false); }} />
+            <Input id={`${id}-${field}`} aria-invalid={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) || undefined} className={missingFields.includes(field) && (medicine || field === 'category') && !validValue(fields[field]) ? 'border-amber-600' : undefined} value={fields[field]} onChange={event => { setFields(current => ({ ...current, [field]: event.target.value })); setSaved(false); }} />
           </div>)}
         </div>
         {medicine && <div><Label htmlFor={`${id}-prescription`}>Prescription required</Label>

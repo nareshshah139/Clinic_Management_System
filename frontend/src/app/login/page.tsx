@@ -44,8 +44,8 @@ function LoginPageInner() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-brand-gradient-soft px-4 py-16 relative">
       <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Palette className="h-4 w-4 text-muted-foreground" />
-        <span className="text-xs text-muted-foreground">Branded</span>
+        <Palette className="h-4 w-4 text-gray-500" />
+        <span className="text-xs text-gray-600">Branded</span>
         <Switch
           checked={brandedEnabled}
           onCheckedChange={() => toggleBranded()}
@@ -67,7 +67,7 @@ function LoginPageInner() {
             className="space-y-4"
           >
             <div>
-              <label className="text-sm text-foreground" htmlFor="login-identifier">Phone or email</label>
+              <label className="text-sm text-gray-700" htmlFor="login-identifier">Phone or email</label>
               <Input
                 id="login-identifier"
                 name="username"
@@ -84,7 +84,7 @@ function LoginPageInner() {
               />
             </div>
             <div>
-              <label className="text-sm text-foreground" htmlFor="login-password">Password</label>
+              <label className="text-sm text-gray-700" htmlFor="login-password">Password</label>
               <Input
                 id="login-password"
                 name="current-password"
@@ -96,12 +96,12 @@ function LoginPageInner() {
                 required
               />
             </div>
-            {error && <p role="alert" className="text-sm text-destructive-text">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
             <Button className="w-full" type="submit" disabled={loading || !identifier.trim() || !password}>
               {loading && <Spinner label="Signing in…" />}
               {loading ? 'Signing in…' : 'Sign in'}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">Use your registered phone number or email with your password.</p>
+            <p className="text-xs text-gray-500 text-center">Use your registered phone number or email with your password.</p>
           </form>
         </CardContent>
       </Card>

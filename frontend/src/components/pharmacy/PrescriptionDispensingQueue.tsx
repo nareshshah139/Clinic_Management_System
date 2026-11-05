@@ -338,7 +338,7 @@ export function PrescriptionDispensingQueue({
                       {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
                         <Badge
                           variant="outline"
-                          className="gap-1 text-warning-text"
+                          className="gap-1 text-amber-700"
                         >
                           <AlertTriangle className="size-3" />
                           Over 2h
@@ -459,7 +459,7 @@ function StockWarnings({ items, prescriptionId, onLinked, canLink }: { items: St
     </StatusBadge>
     <span>{item.drugName} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
     {!!(item.heldStock || item.expiredStock) && <span className="ml-1 text-muted-foreground">{item.totalOnHandStock} on hand · {item.heldStock || 0} held · {item.expiredStock || 0} expired</span>}
-    {item.nearExpiry && <span className="ml-1 text-warning-text">Near expiry</span>}
+    {item.nearExpiry && <span className="ml-1 text-amber-700">Near expiry</span>}
     {canLink && <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />}
   </div>)}</div>;
 }

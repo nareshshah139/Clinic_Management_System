@@ -488,7 +488,7 @@ export function Header() {
   };
 
   return (
-    <header className="h-16 bg-card border-b border-border flex items-center justify-between px-6">
+    <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
       {/* Search */}
       <div
         className="flex-1 max-w-md relative"
@@ -502,7 +502,7 @@ export function Header() {
       >
         <form onSubmit={handleSearchSubmit}>
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
             <Input
               type="text"
               placeholder="Search patients, appointments, doctors..."
@@ -533,29 +533,29 @@ export function Header() {
                 return (
                   <div
                     key={`${result.type}-${result.id}-${index}`}
-                    className="flex items-center gap-3 p-3 hover:bg-background cursor-pointer border-b border-border last:border-b-0"
+                    className="flex items-center gap-3 p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
                     onClick={() => handleResultClick(result)}
                   >
                     <div className="flex-shrink-0">
                       <div className={`p-2 rounded-lg ${
-                        result.type === 'patient' ? 'bg-info-soft text-info-text' :
-                        result.type === 'appointment' ? 'bg-success-soft text-success-text' :
-                        'bg-highlight-soft text-highlight-text'
+                        result.type === 'patient' ? 'bg-blue-100 text-blue-600' :
+                        result.type === 'appointment' ? 'bg-green-100 text-green-600' :
+                        'bg-purple-100 text-purple-600'
                       }`}>
                         <IconComponent className="h-4 w-4" />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">
+                      <p className="text-sm font-medium text-gray-900 truncate">
                         {result.title}
                       </p>
                       {result.subtitle && (
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs text-gray-600 truncate">
                           {result.subtitle}
                         </p>
                       )}
                       {result.description && (
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs text-gray-500 truncate">
                           {result.description}
                         </p>
                       )}
@@ -570,8 +570,8 @@ export function Header() {
                 );
               })}
               {searchQuery.length >= 2 && (
-                <div className="p-3 bg-background border-t">
-                  <p className="text-xs text-muted-foreground text-center">
+                <div className="p-3 bg-gray-50 border-t">
+                  <p className="text-xs text-gray-500 text-center">
                     Press Enter to go to first result • Type more to refine search
                   </p>
                 </div>
@@ -584,8 +584,8 @@ export function Header() {
         {showResults && searchResults.length === 0 && searchQuery.length >= 2 && !isSearching && (
           <Card className="absolute top-full left-0 right-0 mt-1 z-50 shadow-sm">
             <CardContent className="p-4 text-center">
-              <p className="text-sm text-muted-foreground">No results found for "{searchQuery}"</p>
-              <p className="text-xs text-muted-foreground mt-1">Try searching for patient names, phone numbers, or doctor names</p>
+              <p className="text-sm text-gray-500">No results found for "{searchQuery}"</p>
+              <p className="text-xs text-gray-400 mt-1">Try searching for patient names, phone numbers, or doctor names</p>
             </CardContent>
           </Card>
         )}
@@ -596,15 +596,15 @@ export function Header() {
       <div className="flex items-center space-x-4">
         {/* Receptionist Tour Button */}
         {user?.role === 'RECEPTION' && (
-          <div className="pr-2 border-r border-border mr-2">
+          <div className="pr-2 border-r border-gray-200 mr-2">
             <ReceptionistTour />
           </div>
         )}
         
         {/* Branded mode toggle */}
-        <div className="flex items-center gap-2 pr-2 border-r border-border mr-2">
-          <Palette className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">Branded</span>
+        <div className="flex items-center gap-2 pr-2 border-r border-gray-200 mr-2">
+          <Palette className="h-4 w-4 text-gray-500" />
+          <span className="text-xs text-gray-600">Branded</span>
           <Switch
             checked={brandedEnabled}
             onCheckedChange={() => toggleBranded()}
@@ -633,7 +633,7 @@ export function Header() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifItems.length === 0 && !notifLoading && (
-              <div className="px-3 py-6 text-sm text-muted-foreground">No notifications</div>
+              <div className="px-3 py-6 text-sm text-gray-500">No notifications</div>
             )}
             {notifItems.map((n) => (
               <DropdownMenuItem
@@ -641,16 +641,16 @@ export function Header() {
                 onClick={() => router.push(n.href)}
                 className={
                   n.variant === 'destructive'
-                    ? 'text-destructive-text'
+                    ? 'text-red-600'
                     : n.variant === 'warning'
-                      ? 'text-warning-text'
+                      ? 'text-yellow-700'
                       : ''
                 }
               >
                 <div className="flex flex-col">
                   <span className="text-sm font-medium">{n.title}</span>
                   {n.description && (
-                    <span className="text-xs text-muted-foreground">{n.description}</span>
+                    <span className="text-xs text-gray-500">{n.description}</span>
                   )}
                 </div>
               </DropdownMenuItem>
@@ -683,25 +683,25 @@ export function Header() {
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium">Send WhatsApp on appointment creation</div>
-                        <div className="text-xs text-muted-foreground">Enable automatic WhatsApp confirmation to patients when you are the doctor.</div>
+                        <div className="text-xs text-gray-500">Enable automatic WhatsApp confirmation to patients when you are the doctor.</div>
                       </div>
                       <Switch checked={whatsappAutoConfirm} onCheckedChange={(v: boolean) => setWhatsappAutoConfirm(v)} />
                     </div>
-                    <div className="text-xs text-muted-foreground">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
                   </div>
 
                   <div className="border rounded-md p-3 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium">Use WhatsApp Template</div>
-                        <div className="text-xs text-muted-foreground">Recommended for sending messages outside the 24h window.</div>
+                        <div className="text-xs text-gray-500">Recommended for sending messages outside the 24h window.</div>
                       </div>
                       <Switch checked={whatsappUseTemplate} onCheckedChange={(v: boolean) => setWhatsappUseTemplate(v)} />
                     </div>
                     {whatsappUseTemplate && (
                       <div className="space-y-3">
                         {whatsappTemplatesLoading ? (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
                             <Spinner className="h-3.5 w-3.5 " />
                             Loading approved templates…
                           </div>
@@ -727,12 +727,12 @@ export function Header() {
                                 ))}
                               </SelectContent>
                             </Select>
-                            <div className="text-xs text-muted-foreground mt-1">
+                            <div className="text-xs text-gray-500 mt-1">
                               Selecting from saved templates avoids name and language mismatches.
                             </div>
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground">
+                          <div className="text-xs text-gray-500">
                             No active appointment templates were found. You can still enter the template name and language manually.
                           </div>
                         )}
@@ -759,9 +759,9 @@ export function Header() {
                     )}
                   </div>
 
-                  <div className="border rounded-md p-3 bg-background">
+                  <div className="border rounded-md p-3 bg-gray-50">
                     <div className="font-medium mb-2">How to enable WhatsApp (Doctor steps)</div>
-                    <ol className="list-decimal ml-5 space-y-1 text-muted-foreground text-sm">
+                    <ol className="list-decimal ml-5 space-y-1 text-gray-600 text-sm">
                       <li>Ask the admin to configure WhatsApp Cloud API credentials on the server.</li>
                       <li>Toggle "Send WhatsApp on appointment creation" to enable automatic messages.</li>
                       <li>Optional: Toggle "Use WhatsApp Template", then enter your approved template name and language.</li>
@@ -790,11 +790,11 @@ export function Header() {
 
         {/* User menu */}
         <div className="flex items-center space-x-2">
-          <div className="h-8 w-8 rounded-full bg-info-soft flex items-center justify-center">
-            <User className="h-4 w-4 text-info-text" />
+          <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+            <User className="h-4 w-4 text-blue-600" />
           </div>
           <div className="text-sm">
-            <p className="font-medium text-foreground">
+            <p className="font-medium text-gray-900">
               {loading ? 'Loading…' : `${user?.firstName ?? ''} ${user?.lastName ?? ''}`.trim() || user?.email || 'Unknown User'}
             </p>
           </div>

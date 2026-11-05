@@ -3,7 +3,7 @@
 import { displayCalendarDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -51,6 +51,44 @@ export interface DoctorDayCalendarProps {
   selectedRoomName?: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] non-overlapping-calendar-lanes
+ * Appointments that overlap in time MUST occupy disjoint horizontal lanes.
+ * Every connected overlap group MUST use one lane width; touching endpoints may reuse a lane.
+ */
+function getAppointmentLanes(appointments: AppointmentInSlot[]) {
+  const intervals = appointments.map(appointment => {
+    const [start, end] = appointment.slot.split('-').map(hhmmToMinutes);
+    return { appointment, start, end };
+  }).filter(interval => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end || String(a.appointment.id).localeCompare(String(b.appointment.id)));
+  const groups: typeof intervals[] = [];
+  let groupEnd = -Infinity;
+  for (const interval of intervals) {
+    if (interval.start >= groupEnd) groups.push([]);
+    groups[groups.length - 1].push(interval);
+    groupEnd = Math.max(groupEnd, interval.end);
+  }
+  const lanes = new Map<AppointmentInSlot, { left: number; width: number }>();
+  for (const group of groups) {
+    const ends: number[] = [];
+    const assignments = group.map(interval => {
+      const available = ends.findIndex(end => end <= interval.start);
+      const column = available < 0 ? ends.length : available;
+      ends[column] = interval.end;
+      return { appointment: interval.appointment, column };
+    });
+    const width = 100 / ends.length;
+    assignments.forEach(({ appointment, column }) => lanes.set(appointment, { left: column * width, width }));
+  }
+  return lanes;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:accessibility] appointment-text-containment
+ * Appointment text and actions MUST fit inside their time span when labels wrap.
+ * Resizing or text scaling MUST preserve a uniform time scale and aligned hour labels.
+ */
 export default function DoctorDayCalendar({ 
   doctorId, 
   date, 
@@ -73,6 +111,8 @@ export default function DoctorDayCalendar({
 }: DoctorDayCalendarProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const calendarGrid = useRef<HTMLDivElement>(null);
+  const [pixelsPerMinute, setPixelsPerMinute] = useState(0);
   const [schedule, setSchedule] = useState<AppointmentInSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +136,7 @@ export default function DoctorDayCalendar({
     stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
     timezone: timeSlotConfig.timezone,
   }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
-  // Tile height so the entire day grid fits in ~80% of the viewport
-  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
+  const tileHeightCss = `max(calc(80vh / ${Math.max(1, baseGridSlots.length)}), ${pixelsPerMinute * Math.max(5, timeSlotConfig.stepMinutes || 10)}px)`;
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
@@ -135,7 +174,25 @@ export default function DoctorDayCalendar({
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
-  // Build quick lookup for overlap checks
+  const appointmentLanes = useMemo(() => getAppointmentLanes(filteredSchedule), [filteredSchedule]);
+
+  useEffect(() => {
+    const grid = calendarGrid.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return;
+    const content = [...grid.querySelectorAll<HTMLElement>('[data-appointment-content]')];
+    const measure = () => {
+      const required = content.reduce((scale, element) => {
+        const minutes = Number(element.dataset.durationMinutes);
+        return minutes > 0 ? Math.max(scale, (element.scrollHeight + 4) / minutes) : scale;
+      }, 0);
+      setPixelsPerMinute(current => Math.abs(current - required) < 0.05 ? current : required);
+    };
+    const observer = new ResizeObserver(measure);
+    content.forEach(element => observer.observe(element));
+    measure();
+    return () => observer.disconnect();
+  }, [filteredSchedule, loading, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
   const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
@@ -310,7 +367,7 @@ export default function DoctorDayCalendar({
     return (
       <Card>
         <CardContent className="p-8 text-center">
-          <div className="text-destructive-text mb-4">Failed to load schedule</div>
+          <div className="text-red-600 mb-4">Failed to load schedule</div>
           <Button onClick={() => void fetchSchedule()} variant="outline">
             Retry
           </Button>
@@ -324,8 +381,8 @@ export default function DoctorDayCalendar({
       <Card>
         <CardContent className="p-4">
           {(visitTypeFilter !== 'ALL' || roomFilter !== 'ALL') && (
-            <div className="mb-4 p-3 bg-info-soft rounded-lg">
-              <div className="text-sm text-info-text">
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+              <div className="text-sm text-blue-700">
                 <span className="font-medium">Filters Active:</span>
                 {visitTypeFilter !== 'ALL' && <Badge variant="secondary" className="ml-2">{visitTypeFilter}</Badge>}
                 {roomFilterLabel && (
@@ -339,10 +396,10 @@ export default function DoctorDayCalendar({
           
           <div className="relative" aria-busy={loading}>
             {rescheduleTarget && (
-              <div className="mb-3 flex items-start justify-between rounded-lg border border-warning-border bg-warning-soft p-3 text-sm">
+              <div className="mb-3 flex items-start justify-between rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm">
                 <div>
-                  <div className="font-medium text-warning-text">Rescheduling {formatPatientName(rescheduleTarget.patient)}</div>
-                  <div className="text-warning-text">Click a free time to move this appointment to {displayCalendarDate(date)}.</div>
+                  <div className="font-medium text-amber-800">Rescheduling {formatPatientName(rescheduleTarget.patient)}</div>
+                  <div className="text-amber-700">Click a free time to move this appointment to {displayCalendarDate(date)}.</div>
                 </div>
                 <Button size="sm" variant="ghost" onClick={() => setRescheduleTarget(null)} disabled={rescheduleLoading}>
                   Cancel
@@ -350,21 +407,21 @@ export default function DoctorDayCalendar({
               </div>
             )}
             {showLoadingOverlay && (
-              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-card/70 backdrop-blur-sm transition-opacity duration-200">
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm transition-opacity duration-200">
                 <Spinner className=" h-8 w-8    " />
-                <span className="mt-2 text-sm font-medium text-info-text">Refreshing schedule…</span>
+                <span className="mt-2 text-sm font-medium text-blue-700">Refreshing schedule…</span>
               </div>
             )}
-            <div className="flex">
+            <div className="flex max-h-[80vh] overflow-y-auto">
               {/* Sticky left gutter with hour labels */}
-              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-card/80 backdrop-blur-sm">
+              <div className="w-14 shrink-0 sticky left-0 self-start z-10 bg-white/80 backdrop-blur-sm">
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
                   const isHourStart = slotStart.endsWith(':00');
                   return (
                     <div key={`gutter-${slot}`} style={{ height: tileHeightCss }} className="flex items-start justify-end pr-1">
                       {isHourStart && (
-                        <span className="text-xs leading-none text-muted-foreground">{slotStart}</span>
+                        <span className="text-xs leading-none text-gray-400">{slotStart}</span>
                       )}
                     </div>
                   );
@@ -372,7 +429,8 @@ export default function DoctorDayCalendar({
               </div>
               {/* Main calendar grid */}
               <div
-                className="flex-1 grid grid-cols-1 gap-0"
+                ref={calendarGrid}
+                className="min-w-0 h-max flex-1 grid grid-cols-1 gap-0"
                 style={{ position: 'relative', ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
               >
             {/* Appointment-level background overlays across full spans (merges cells visually) */}
@@ -383,19 +441,18 @@ export default function DoctorDayCalendar({
               const getColor = (apt: AppointmentInSlot) => {
                 const isPast = isSlotInPast(apt.slot, date);
                 
-                if (apt.status === AppointmentStatus.COMPLETED) return 'var(--muted)';
+                if (apt.status === AppointmentStatus.COMPLETED) return 'var(--calendar-completed)';
                 
                 if (isPast) {
-                  if (apt.visitType === 'PROCEDURE') return 'color-mix(in oklab, var(--calendar-procedure) 55%, var(--card))';
-                  if (apt.visitType === 'TELEMED') return 'color-mix(in oklab, var(--highlight-soft) 55%, var(--card))';
-                  return 'color-mix(in oklab, var(--calendar-consultation) 55%, var(--card))';
+                  if (apt.visitType === 'PROCEDURE') return 'var(--calendar-procedure-past)';
+                  if (apt.visitType === 'TELEMED') return 'var(--calendar-telemedicine-past)';
+                  return 'var(--calendar-consultation-past)';
                 }
                 
                 if (apt.visitType === 'PROCEDURE') return 'var(--calendar-procedure)';
-                if (apt.visitType === 'TELEMED') return 'var(--highlight-soft)';
+                if (apt.visitType === 'TELEMED') return 'var(--calendar-telemedicine)';
                 return 'var(--calendar-consultation)';
               };
-              const byStart = (s: string) => hhmmToMinutes((s || '').split('-')[0] || '00:00');
               return filteredSchedule.map((apt) => {
                 const [as, ae] = (apt.slot || '').split('-');
                 if (!as || !ae) return null;
@@ -406,12 +463,8 @@ export default function DoctorDayCalendar({
                 if (clampedEnd <= clampedStart) return null;
                 const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
                 const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
-                const overlapping = filteredSchedule
-                  .filter((b) => doTimeSlotsOverlap(apt.slot, b.slot))
-                  .sort((a, b) => byStart(a.slot) - byStart(b.slot) || String(a.id || a.slot).localeCompare(String(b.id || b.slot)));
-                const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
-                const widthPct = 100 / Math.max(1, overlapping.length);
-                const leftPct = index * widthPct;
+                const lane = appointmentLanes.get(apt);
+                if (!lane) return null;
                 const bg = getColor(apt);
                 return (
                   <div
@@ -420,8 +473,8 @@ export default function DoctorDayCalendar({
                     style={{
                       top: `${topPct}%`,
                       height: `${heightPct}%`,
-                      left: `${leftPct}%`,
-                      width: `${widthPct}%`,
+                      left: `${lane.left}%`,
+                      width: `${lane.width}%`,
                       backgroundColor: bg,
                       borderRadius: 6,
                       zIndex: 1,
@@ -446,66 +499,51 @@ export default function DoctorDayCalendar({
                 if (clampedEnd <= clampedStart) return null;
                 const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
                 const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
+                const lane = appointmentLanes.get(apt);
+                if (!lane) return null;
                 return (
                   <div
                     key={`span-label-${apt.id || apt.slot}`}
-                    className="absolute left-0 right-0 group"
+                    className="absolute min-w-0 group"
+                    data-appointment-id={apt.id}
                     style={{
                       top: `${topPct}%`,
+                      left: `${lane.left}%`,
+                      width: `${lane.width}%`,
                       height: `${heightPct}%`,
                       pointerEvents: 'auto',
-                      color: apt.status === AppointmentStatus.COMPLETED ? 'var(--foreground)' : apt.visitType === 'PROCEDURE' ? 'var(--calendar-procedure-foreground)' : apt.visitType === 'TELEMED' ? 'var(--highlight-text)' : 'var(--calendar-consultation-foreground)',
+                      color: apt.status === AppointmentStatus.COMPLETED ? 'var(--foreground)' : apt.visitType === 'PROCEDURE' ? 'var(--calendar-procedure-foreground)' : apt.visitType === 'TELEMED' ? 'var(--foreground)' : 'var(--calendar-consultation-foreground)',
                       zIndex: 2,
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
                       justifyContent: 'center',
                     }}
                   >
-                    {/* Main appointment info */}
-                    <div
-                      className="font-semibold px-2 py-1 flex-1 flex items-center justify-between"
-                      style={{
-                        color: '#000000',
-                        background: 'transparent',
-                        maxWidth: '70%',
-                        fontSize: 'calc(0.875rem + var(--app-text-increase, 0rem))',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {/* Left side - Time and Patient */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-info-text font-bold">{`${as}-${ae}`}</span>
-                        <span className="font-semibold">
+                    <div data-appointment-content data-duration-minutes={clampedEnd - clampedStart} style={{ color: '#000000' }} className="w-full min-w-0 space-y-1 p-2 [overflow-wrap:anywhere]">
+                      <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1 text-sm font-semibold">
+                        <span className="text-blue-700 font-bold">{`${as}-${ae}`}</span>
+                        <span className="min-w-0 basis-full sm:basis-0 flex-1">
                           {formatPatientName(apt.patient ?? { name: 'Unknown' })}
                           {apt.visitType === 'PROCEDURE' && apt.notes && (
-                            <span className="text-highlight-text font-medium ml-1">({apt.notes})</span>
+                            <span className="text-purple-700 font-medium ml-1">({apt.notes})</span>
                           )}
                         </span>
                       </div>
-                      
-                      {/* Center - Status indicators */}
-                      <div className="flex items-center gap-2 flex-1 justify-center">
-                        {apt.isFollowUp && <span className="text-warning-text font-semibold text-xs">FOLLOW-UP</span>}
-                        <span className="text-highlight-text font-medium">{apt.visitType || 'OPD'}</span>
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        {apt.isFollowUp && <span className="text-amber-600 font-semibold">FOLLOW-UP</span>}
+                        <span className="text-purple-600 font-medium">{apt.visitType || 'OPD'}</span>
+                        {apt.patient?.age !== undefined && <span className="text-gray-600">{apt.patient.age}y</span>}
+                        {apt.patient?.gender && <span className="text-gray-600 bg-gray-100 px-1 rounded-md">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.room?.name && <span className="text-green-600 font-medium">{apt.room.name}</span>}
                       </div>
-                      
-                      {/* Right side - Demographics and location */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {apt.patient?.age !== undefined && <span className="text-muted-foreground">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="text-muted-foreground bg-muted px-1 rounded-md text-xs">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
-                        {apt.room?.name && <span className="text-success-text font-medium">{apt.room.name}</span>}
-                      </div>
-                    </div>
-                    
-                    {/* Action buttons - appear on hover */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1 ml-2">
+                      <div className="flex min-w-0 flex-wrap gap-1 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                       {/* View Appointment Details Button */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedAppointment(apt);
                         }}
-                        className="bg-secondary hover:bg-muted text-secondary-foreground text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
+                        className="bg-gray-500 hover:bg-gray-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
                         title="View Appointment Details"
                         disabled={apt.id?.startsWith('optimistic-')}
                       >
@@ -518,7 +556,7 @@ export default function DoctorDayCalendar({
                           e.stopPropagation();
                           setRescheduleTarget(apt);
                         }}
-                        className="bg-warning hover:bg-warning text-warning-foreground text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
+                        className="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
                         title="Reschedule Appointment"
                         disabled={apt.id?.startsWith('optimistic-')}
                       >
@@ -531,12 +569,13 @@ export default function DoctorDayCalendar({
                           e.stopPropagation();
                           handleStartVisit(apt);
                         }}
-                        className="bg-info hover:bg-info text-info-foreground text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
+                        className="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded-md shadow-sm transition-colors font-medium"
                         title={apt.visit?.id ? 'Continue Visit' : 'Start Visit'}
                         disabled={apt.id?.startsWith('optimistic-')}
                       >
                         {apt.visit?.id ? 'CONT' : 'START'}
                       </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -593,7 +632,7 @@ export default function DoctorDayCalendar({
               const showInlineDetails = false;
               const showInlineActions = false;
               // Compute base border color once; avoid shorthand borderColor conflicts with per-side overrides
-              const baseBorderColor = isBookingInProgress ? 'var(--warning-border)' : 'var(--border)';
+              const baseBorderColor = isBookingInProgress ? 'var(--warning-border)' : '#e5e7eb';
 
               // Flexible selection within a tile: allow booking in sub-segments (e.g., 15m) if space exists
               const FLEX_STEP_MIN = 15; // baseline flexible start granularity
@@ -618,7 +657,7 @@ export default function DoctorDayCalendar({
                   style={{
                     backgroundColor: (() => {
                       if (isBookingInProgress) return 'var(--warning-soft)';
-                      return past ? 'var(--muted)' : (inSelectionPreview ? 'var(--warning-soft)' : 'var(--card)');
+                      return past ? '#f3f4f6' : (inSelectionPreview ? 'var(--warning-soft)' : 'var(--card)');
                     })(),
                     // Per-side border colors to avoid shorthand conflicts
                     borderTopColor: hasAny && crossesTop ? 'transparent' : baseBorderColor,
@@ -631,7 +670,7 @@ export default function DoctorDayCalendar({
                       if (isNewlyBooked) parts.push('0 0 0 2px var(--success-border)');
                       else if (isBookingInProgress) parts.push('0 0 0 2px var(--warning-border)');
                       if (showNowLine) parts.push('inset 0 2px 0 var(--destructive)');
-                      else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 var(--border)');
+                      else if (isHourStart && !(hasAny && crossesTop)) parts.push('inset 0 1px 0 #e5e7eb');
                       return parts.length ? parts.join(', ') : 'none';
                     })(),
                     height: tileHeightCss,
@@ -795,7 +834,7 @@ export default function DoctorDayCalendar({
                                   backgroundColor: primary.visitType === 'PROCEDURE' 
                                     ? 'var(--calendar-procedure)'
                                     : primary.visitType === 'TELEMED'
-                                    ? 'var(--highlight-soft)'
+                                    ? 'var(--calendar-telemedicine)'
                                     : 'var(--calendar-consultation)',
                                   color: 'var(--foreground)',
                                   border: 'none'
@@ -816,7 +855,7 @@ export default function DoctorDayCalendar({
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-2 text-xs text-foreground hover:bg-muted"
+                              className="h-6 px-2 text-xs text-white hover:bg-white"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleStartVisit(primary);
@@ -829,7 +868,7 @@ export default function DoctorDayCalendar({
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-2 text-xs text-destructive-text hover:bg-destructive-soft hover:text-destructive-text"
+                              className="h-6 px-2 text-xs text-white hover:bg-red-500 hover:text-destructive-text"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleCancelAppointment(primary);
@@ -841,7 +880,7 @@ export default function DoctorDayCalendar({
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="h-6 px-2 text-xs text-foreground hover:bg-muted"
+                              className="h-6 px-2 text-xs text-white hover:bg-white"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setRescheduleTarget(primary);
@@ -930,7 +969,7 @@ export default function DoctorDayCalendar({
           </div>
           
           {filteredSchedule.length === 0 && schedule.length > 0 && (
-            <div className="text-center text-muted-foreground mt-4 p-4">
+            <div className="text-center text-gray-500 mt-4 p-4">
               No appointments match the current filters.
             </div>
           )}
@@ -945,42 +984,42 @@ export default function DoctorDayCalendar({
           </DialogHeader>
           {selectedAppointment && (
             <div className="space-y-3 text-sm">
-              <div><span className="text-muted-foreground">Date:</span> {displayCalendarDate(date)}</div>
-              <div><span className="text-muted-foreground">Slot:</span> {selectedAppointment.slot}</div>
-              <div><span className="text-muted-foreground">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
+              <div><span className="text-gray-600">Date:</span> {displayCalendarDate(date)}</div>
+              <div><span className="text-gray-600">Slot:</span> {selectedAppointment.slot}</div>
+              <div><span className="text-gray-600">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
               {selectedAppointment.patient?.phone && (
-                <div><span className="text-muted-foreground">Phone:</span> {selectedAppointment.patient.phone}</div>
+                <div><span className="text-gray-600">Phone:</span> {selectedAppointment.patient.phone}</div>
               )}
               {selectedAppointment.patient?.email && (
-                <div><span className="text-muted-foreground">Email:</span> {selectedAppointment.patient.email}</div>
+                <div><span className="text-gray-600">Email:</span> {selectedAppointment.patient.email}</div>
               )}
               {selectedAppointment.patient?.age !== undefined && (
-                <div><span className="text-muted-foreground">Age:</span> {selectedAppointment.patient.age} years</div>
+                <div><span className="text-gray-600">Age:</span> {selectedAppointment.patient.age} years</div>
               )}
               {selectedAppointment.patient?.gender && (
-                <div><span className="text-muted-foreground">Sex:</span> {selectedAppointment.patient.gender}</div>
+                <div><span className="text-gray-600">Sex:</span> {selectedAppointment.patient.gender}</div>
               )}
               {selectedAppointment.isFollowUp && (
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-warning-soft text-warning-text border-warning-border">
+                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
                     FOLLOW-UP (Existing Patient)
                   </Badge>
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Type:</span>
+                <span className="text-gray-600">Type:</span>
                 <Badge variant={selectedAppointment.visitType === 'PROCEDURE' ? 'destructive' : selectedAppointment.visitType === 'TELEMED' ? 'secondary' : 'default'}>
                   {selectedAppointment.visitType || 'OPD'}
                 </Badge>
               </div>
               {selectedAppointment.visitType === 'PROCEDURE' && selectedAppointment.notes && (
-                <div><span className="text-muted-foreground">Procedure:</span> {selectedAppointment.notes}</div>
+                <div><span className="text-gray-600">Procedure:</span> {selectedAppointment.notes}</div>
               )}
               {selectedAppointment.room && (
-                <div><span className="text-muted-foreground">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
+                <div><span className="text-gray-600">Room:</span> {selectedAppointment.room.name} ({selectedAppointment.room.type})</div>
               )}
               {selectedAppointment.status && (
-                <div><span className="text-muted-foreground">Status:</span> {selectedAppointment.status}</div>
+                <div><span className="text-gray-600">Status:</span> {selectedAppointment.status}</div>
               )}
             </div>
           )}
@@ -1012,16 +1051,16 @@ export default function DoctorDayCalendar({
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-destructive-text" />
+              <AlertTriangle className="h-5 w-5 text-red-500" />
               Cancel Appointment
             </DialogTitle>
           </DialogHeader>
           {selectedAppointment && (
             <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-600">
                 Are you sure you want to cancel this appointment? This action cannot be undone.
               </p>
-              <div className="bg-background p-3 rounded-lg space-y-2 text-sm">
+              <div className="bg-gray-50 p-3 rounded-lg space-y-2 text-sm">
                 <div><span className="font-medium">Patient:</span> {formatPatientName(selectedAppointment.patient)}</div>
                 <div><span className="font-medium">Date:</span> {displayCalendarDate(date)}</div>
                 <div><span className="font-medium">Time:</span> {selectedAppointment.slot}</div>

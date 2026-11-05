@@ -262,7 +262,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               className={cn(
                 "group relative flex min-h-10 items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-accent-soft text-foreground before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary"
+                  ? "bg-accent text-accent-foreground before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-ring"
                   : "text-muted-foreground hover:bg-accent-soft hover:text-foreground",
               )}
             >
@@ -285,7 +285,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="shrink-0 border-t border-border p-4">
         <div className="flex items-center">
           <Avatar className="size-9 shrink-0">
-            <AvatarFallback className="bg-primary-soft text-sm font-semibold text-foreground">
+            <AvatarFallback className="bg-accent-soft text-sm font-semibold text-primary">
               {`${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || '?'}
             </AvatarFallback>
           </Avatar>
