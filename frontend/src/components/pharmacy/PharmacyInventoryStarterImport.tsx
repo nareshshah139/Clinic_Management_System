@@ -93,6 +93,11 @@ const optionalColumns = [
   "Supplier",
 ];
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] named-import-results
+ * Both import layouts MUST expose returned row outcomes in an Opening stock import results
+ * region, so those outcomes remain identifiable independently of theme colors.
+ */
 export function PharmacyInventoryStarterImport({
   className = "",
   compact = false,
@@ -399,7 +404,7 @@ export function PharmacyInventoryStarterImport({
           )}
 
           {summary && (
-            <div className="rounded-md border bg-background p-3">
+            <div role="region" aria-label="Opening stock import results" className="rounded-md border bg-background p-3">
               <div className="grid grid-cols-3 gap-2">
                 <ImportMetric label="Created" value={summary.created} />
                 <ImportMetric label="Updated" value={summary.updated} />
@@ -554,7 +559,7 @@ export function PharmacyInventoryStarterImport({
           </InventoryDetails>
 
           {summary && (
-            <div className="rounded-md border bg-background p-4">
+            <div role="region" aria-label="Opening stock import results" className="rounded-md border bg-background p-4">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                 <ImportMetric label="Rows" value={summary.totalRows} />
                 <ImportMetric label="Created" value={summary.created} />

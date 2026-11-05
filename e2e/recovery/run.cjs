@@ -501,7 +501,7 @@ async function setup() {
               if (id === "purchase") target = document.querySelector("#purchase-recovery-panel") || document.querySelector("#purchase-action-feedback");
               if (id === "opening")
                 target = Array.from(
-                  document.querySelectorAll("div.bg-slate-50"),
+                  document.querySelectorAll('[role="region"][aria-label="Opening stock import results"]'),
                 ).find(
                   (e) =>
                     e.textContent.includes("Created") &&
