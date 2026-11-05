@@ -23,7 +23,7 @@ import type { Room } from '@/lib/types';
  */
 /**
  * @cc [owner:nareshshah139,label:product] room-calendar-label-wrapping
- * Appointment names and procedure notes MUST wrap within the room column and stay within the
+ * Appointment names and procedure notes MUST wrap within their appointment block and stay within the
  * scheduled time span; details remain available in the appointment tooltip when text is clipped.
  */
 export default function RoomCalendar() {
@@ -484,11 +484,17 @@ export default function RoomCalendar() {
                         if (end <= start) return null;
                         const topPct = ((start - dayStart) * 100) / total;
                         const heightPct = ((end - start) * 100) / total;
+                        const getStart = (x: any) => hhmmToMinutes(((x.slot || '').split('-')[0]) || '00:00');
+                        const overlapping = appointments
+                          .filter((b) => overlapsWith(apt, b))
+                          .sort((a, b) => getStart(a) - getStart(b));
+                        const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
+                        const widthPct = 100 / Math.max(1, overlapping.length);
                         return (
                           <div
                             key={`label-${room.id}-${idx}`}
-                            className="absolute left-0 right-0 group"
-                            style={{ top: `${topPct}%`, height: `${heightPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            className="absolute group"
+                            style={{ top: `${topPct}%`, height: `${heightPct}%`, left: `${index * widthPct}%`, width: `${widthPct}%`, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onMouseEnter={(e) => {
                               const el = (e.currentTarget as HTMLElement) || null;
                               if (!el || typeof el.getBoundingClientRect !== 'function') {
