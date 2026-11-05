@@ -1,7 +1,8 @@
 'use client';
 
 import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
-
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,8 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Mic, 
-  MicOff, 
-  Loader2,
+  MicOff,
   Save, 
   FileText, 
   User, 
@@ -1277,7 +1277,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       type="button"
       variant="ghost"
       size="sm"
-      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-red-100 text-red-600' : ''}`}
+      className={`ml-2 ${activeVoiceField === fieldName ? 'bg-destructive-soft text-destructive-text' : ''}`}
       onClick={() => void startVoiceInput(fieldName)}
       disabled={isTranscribing || (isListening && activeVoiceField !== fieldName)}
       aria-label={
@@ -1296,7 +1296,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
       }
     >
       {activeVoiceField === fieldName ? (
-        isListening ? <MicOff className="h-4 w-4" /> : <Loader2 className="h-4 w-4 animate-spin" />
+        isListening ? <MicOff className="h-4 w-4" /> : <Spinner className="h-4 w-4 " />
       ) : (
         <Mic className="h-4 w-4" />
       )}
@@ -1672,11 +1672,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
               {patientDetails && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 text-gray-500" />
+                    <User className="h-4 w-4 text-muted-foreground" />
                     <span className="font-medium">{patientDetails.name}</span>
                     <Badge variant="outline" className="text-xs">ID: {patientId}</Badge>
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Age: {(() => {
                       if ((patientDetails as any).age != null) return (patientDetails as any).age;
                       if (!patientDetails.dob) return 'N/A';
@@ -1693,28 +1693,28 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       return adjustedAge >= 0 ? adjustedAge : 'N/A';
                     })()} • {patientDetails.gender || 'N/A'}
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-muted-foreground">
                     Phone: {patientDetails.phone || 'N/A'}
                   </div>
                   {patientDetails.allergies && (
-                    <div className="p-2 bg-red-50 border border-red-200 rounded">
-                      <div className="text-xs font-medium text-red-800">⚠️ ALLERGIES</div>
-                      <div className="text-sm text-red-700">{patientDetails.allergies}</div>
+                    <div className="p-2 bg-destructive-soft border border-destructive-border rounded-md">
+                      <div className="text-xs font-medium text-destructive-text">⚠️ ALLERGIES</div>
+                      <div className="text-sm text-destructive-text">{patientDetails.allergies}</div>
                     </div>
                   )}
                   {patientDetails.medicalHistory && (
-                    <div className="p-2 bg-blue-50 border border-blue-200 rounded">
-                      <div className="text-xs font-medium text-blue-800">Medical History</div>
-                      <div className="text-sm text-blue-700">{patientDetails.medicalHistory}</div>
+                    <div className="p-2 bg-info-soft border border-info-border rounded-md">
+                      <div className="text-xs font-medium text-info-text">Medical History</div>
+                      <div className="text-sm text-info-text">{patientDetails.medicalHistory}</div>
                     </div>
                   )}
                 </div>
               )}
               
               {!patientDetails && patientId && (
-                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                  <div className="text-xs font-medium text-yellow-800">⚠️ Patient Loading</div>
-                  <div className="text-sm text-yellow-700">
+                <div className="p-3 bg-warning-soft border border-warning-border rounded-md">
+                  <div className="text-xs font-medium text-warning-text">⚠️ Patient Loading</div>
+                  <div className="text-sm text-warning-text">
                     Loading patient data for ID: {patientId}
                     {patientName && <div className="mt-1">Name: {patientName}</div>}
                   </div>
@@ -1730,9 +1730,9 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
               )}
               
               {!patientDetails && !patientId && (
-                <div className="p-3 bg-gray-50 border border-gray-200 rounded">
-                  <div className="text-xs font-medium text-gray-600">No Patient Selected</div>
-                  <div className="text-sm text-gray-500">
+                <div className="p-3 bg-background border border-border rounded-md">
+                  <div className="text-xs font-medium text-muted-foreground">No Patient Selected</div>
+                  <div className="text-sm text-muted-foreground">
                     Patient context will appear when a patient is selected
                   </div>
                 </div>
@@ -1752,11 +1752,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       .slice(0, 2)
                       .join(', ');
                     return (
-                    <div key={visit.id || index} className="p-2 bg-gray-50 rounded text-xs">
+                    <div key={visit.id || index} className="p-2 bg-background rounded-md text-xs">
                         <div className="font-medium">
                           {displayDate}
                         </div>
-                        <div className="text-gray-600">
+                        <div className="text-muted-foreground">
                           {diagnosesList || 'No diagnosis'}
                         </div>
                       </div>
@@ -1781,7 +1781,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
         
 
       {saveConflict && (
-        <div role="alert" className="space-y-3 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-950">
+        <div role="alert" className="space-y-3 rounded-md border border-warning-border bg-warning-soft p-4 text-warning-text">
           <p className="font-medium">This visit changed elsewhere. Your local draft is retained.</p>
           <p className="text-sm">Autosave is paused. You can keep these edits here, or discard them and load the saved visit.</p>
           <Button variant="outline" onClick={() => void discardAndReloadSavedVisit()} disabled={reloadingSavedVisit || saving}>
@@ -1802,7 +1802,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   {visitStatus.replace('_', ' ').toUpperCase()}
                 </Badge>
                 {appointmentData && (
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                  <Badge variant="secondary" className="bg-info-soft text-info-text">
                     <Calendar className="h-3 w-3 mr-1" />
                     Linked to Appointment
                   </Badge>
@@ -1814,18 +1814,18 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
             </div>
             <div className="flex items-center gap-2">
               <Badge variant="outline">{photoCount} Photos</Badge>
-              <div className="w-20 bg-gray-200 rounded-full h-2">
+              <div className="w-20 bg-muted rounded-full h-2">
                 <div 
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                  className="bg-info h-2 rounded-full transition-all duration-300"
                   style={{ width: `${getProgress()}%` }}
                 />
               </div>
-            <div className="text-xs text-gray-500 min-w-[120px] text-right">
+            <div className="text-xs text-muted-foreground min-w-[120px] text-right">
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
               {saveStatus === 'unsaved' && 'Unsaved changes'}
               {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
-              {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
+              {saveStatus === 'error' && <span className="text-destructive-text">Save failed</span>}
             </div>
               <DoctorTour autoStart={false} />
               <Button variant="outline" size="sm" onClick={() => setShortcutsOpen(true)}>
@@ -1871,23 +1871,23 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
           <div className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <span>Save Draft</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + S</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Cmd/Ctrl + S</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Complete Visit</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Cmd/Ctrl + Shift + S</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Cmd/Ctrl + Shift + S</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Patient Search Navigate</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">↑ / ↓</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">↑ / ↓</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Patient Search Select</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Enter</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Enter</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Close Menus</span>
-              <span className="font-mono text-xs bg-gray-100 px-2 py-1 rounded">Esc</span>
+              <span className="font-mono text-xs bg-muted px-2 py-1 rounded-md">Esc</span>
             </div>
           </div>
         </DialogContent>
@@ -1913,7 +1913,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     {tab.label}
                     {showIndicator && (
                       <div 
-                        className={`w-2 h-2 bg-green-500 rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
+                        className={`w-2 h-2 bg-success rounded-full ${tab.id === 'prescription' ? 'animate-pulse' : ''}`}
                         title={tab.id === 'prescription' ? 'At least 4 key sections filled' : 'Section complete'}
                       />
                     )}
@@ -1931,21 +1931,21 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Visit Number:</span>
+                      <span className="text-sm text-muted-foreground">Visit Number:</span>
                       <Badge variant="outline">#{currentVisitNumber}</Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Status:</span>
+                      <span className="text-sm text-muted-foreground">Status:</span>
                       <Badge variant={visitStatus === 'COMPLETED' ? 'default' : 'secondary'}>
                         {visitStatus.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Photos Captured:</span>
+                      <span className="text-sm text-muted-foreground">Photos Captured:</span>
                       <span className="text-sm font-medium">0</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-gray-600">Captured By:</span>
+                      <span className="text-sm text-muted-foreground">Captured By:</span>
                       <span className="text-sm font-medium">{userRole}</span>
                     </div>
                   </CardContent>
@@ -1959,7 +1959,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   <div className="space-y-2">
                     {renderTabs().filter(tab => tab.id !== 'overview' && tab.id !== 'history').map(tab => (
                         <div key={tab.id} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600">{tab.label}:</span>
+                          <span className="text-sm text-muted-foreground">{tab.label}:</span>
                           <div className="flex items-center gap-2">
                             {isSectionComplete(tab.id) ? (
                               <Badge variant="default" className="text-xs">Complete</Badge>
@@ -1973,11 +1973,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <div className="pt-2 border-t">
                       <div className="flex justify-between items-center">
                         <span className="text-sm font-medium">Overall Progress:</span>
-                        <span className="text-sm font-bold text-blue-600">{getProgress()}%</span>
+                        <span className="text-sm font-bold text-info-text">{getProgress()}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                      <div className="w-full bg-muted rounded-full h-2 mt-1">
                         <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          className="bg-info h-2 rounded-full transition-all duration-300"
                           style={{ width: `${getProgress()}%` }}
                         />
                       </div>
@@ -2016,7 +2016,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
               <TabsContent value="vitals" className="space-y-4" forceMount>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div>
-                    <label className="text-sm font-medium text-gray-700">BP Systolic</label>
+                    <label className="text-sm font-medium text-foreground">BP Systolic</label>
                     <Input 
                       placeholder="mmHg" 
                       value={vitals.bpS} 
@@ -2024,7 +2024,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">BP Diastolic</label>
+                    <label className="text-sm font-medium text-foreground">BP Diastolic</label>
                     <Input 
                       placeholder="mmHg" 
                       value={vitals.bpD} 
@@ -2032,7 +2032,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Heart Rate</label>
+                    <label className="text-sm font-medium text-foreground">Heart Rate</label>
                     <Input 
                       placeholder="bpm" 
                       value={vitals.hr} 
@@ -2040,7 +2040,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Temperature</label>
+                    <label className="text-sm font-medium text-foreground">Temperature</label>
                     <Input 
                       placeholder="°F"
                       value={vitals.temp} 
@@ -2048,7 +2048,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Weight</label>
+                    <label className="text-sm font-medium text-foreground">Weight</label>
                     <Input 
                       placeholder="kg" 
                       value={vitals.weight} 
@@ -2056,7 +2056,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Height</label>
+                    <label className="text-sm font-medium text-foreground">Height</label>
                     <Input 
                       placeholder="cm" 
                       value={vitals.height} 
@@ -2064,7 +2064,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">BMI</label>
+                    <label className="text-sm font-medium text-foreground">BMI</label>
                     <Input
                       placeholder="kg/m²"
                       readOnly
@@ -2081,7 +2081,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Resp. Rate</label>
+                    <label className="text-sm font-medium text-foreground">Resp. Rate</label>
                     <Input 
                       placeholder="/min" 
                       value={vitals.rr} 
@@ -2092,7 +2092,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Pain Score (0-10)</label>
+                    <label className="text-sm font-medium text-foreground">Pain Score (0-10)</label>
                     <Input 
                       placeholder="0-10" 
                       value={painScore} 
@@ -2117,7 +2117,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     <CardTitle className="text-lg">Lab Tests (Investigations)</CardTitle>
                     <CardDescription>Select tests and enter results with units. You can also autofill from a photo.</CardDescription>
                     <div className="mt-2">
-                      <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <label className="flex items-center gap-2 text-sm text-muted-foreground">
                         <input type="checkbox" checked={compareLabs} onChange={(e) => setCompareLabs(e.target.checked)} />
                         Compare with previous visit
                       </label>
@@ -2147,7 +2147,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                             const entry = labResults[test] as any;
                             const isComposite = entry && typeof entry === 'object' && !('value' in entry) && !('unit' in entry);
                             return (
-                              <div key={test} className="border rounded p-3">
+                              <div key={test} className="border rounded-md p-3">
                                 <div className="text-sm font-semibold mb-2">{test}</div>
                                 {!isComposite ? (
                                   <div className="flex gap-2 items-center">
@@ -2169,11 +2169,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                                       const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
                                       const delta = hasNums ? (currNum - prevNum) : null;
                                       return (
-                                        <div className="text-xs text-gray-600">
+                                        <div className="text-xs text-muted-foreground">
                                           {hasNums ? (
                                             <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
                                           ) : (
-                                            <span className="text-gray-400">—</span>
+                                            <span className="text-muted-foreground">—</span>
                                           )}
                                         </div>
                                       );
@@ -2208,11 +2208,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                                           const hasNums = !Number.isNaN(currNum) && !Number.isNaN(prevNum);
                                           const delta = hasNums ? (currNum - prevNum) : null;
                                           return (
-                                            <div className="text-xs text-gray-600">
+                                            <div className="text-xs text-muted-foreground">
                                               {hasNums ? (
                                                 <span>Δ {delta! >= 0 ? '+' : ''}{delta}</span>
                                               ) : (
-                                                <span className="text-gray-400">—</span>
+                                                <span className="text-muted-foreground">—</span>
                                               )}
                                             </div>
                                           );
@@ -2229,7 +2229,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                     )}
 
                     <div className="flex items-center justify-between pt-2 border-t">
-                      <div className="text-xs text-gray-500">Selections and results are saved under Treatment Plan → Dermatology.</div>
+                      <div className="text-xs text-muted-foreground">Selections and results are saved under Treatment Plan → Dermatology.</div>
                       <div className="flex gap-2">
                         <div className="flex flex-col gap-0.5">
                           <label className="text-sm">
@@ -2271,7 +2271,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                               }}
                             />
                           </label>
-                          <span className="text-[10px] text-gray-400">Accepts JPG, PNG, or PDF</span>
+                          <span className="text-xs text-muted-foreground">Accepts JPG, PNG, or PDF</span>
                         </div>
                         <Button type="button" variant="outline" disabled={labsAutofillLoading} onClick={async () => { if (await save(false)) markSectionComplete('labs'); }}>
                           {labsAutofillLoading ? 'Processing…' : 'Save Labs'}
@@ -2419,7 +2419,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                   <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <div className="md:col-span-2 space-y-2">
-                        <label className="text-sm text-gray-700">Print Background Image URL (optional)</label>
+                        <label className="text-sm text-foreground">Print Background Image URL (optional)</label>
                         <Input placeholder="https://.../letterhead.png" value={printBgUrl} onChange={(e) => setPrintBgUrl(e.target.value)} />
                         <div className="flex items-center gap-2 text-sm">
                           <input
@@ -2445,24 +2445,24 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm text-gray-700">Top Margin (px)</label>
+                        <label className="text-sm text-foreground">Top Margin (px)</label>
                         <Input type="number" min={0} value={printTopMarginPx} onChange={(e) => setPrintTopMarginPx(Number(e.target.value) || 0)} />
-                        <label className="text-sm text-gray-700">Bottom Margin (px)</label>
+                        <label className="text-sm text-foreground">Bottom Margin (px)</label>
                         <Input type="number" min={0} value={printBottomMarginPx} onChange={(e) => setPrintBottomMarginPx(Number(e.target.value) || 0)} />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm text-gray-700">Left Margin (px)</label>
+                        <label className="text-sm text-foreground">Left Margin (px)</label>
                         <Input type="number" min={0} value={printLeftMarginPx} onChange={(e) => setPrintLeftMarginPx(Number(e.target.value) || 0)} />
-                        <label className="text-sm text-gray-700">Right Margin (px)</label>
+                        <label className="text-sm text-foreground">Right Margin (px)</label>
                         <Input type="number" min={0} value={printRightMarginPx} onChange={(e) => setPrintRightMarginPx(Number(e.target.value) || 0)} />
                       </div>
                       <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-2 items-end">
                         <div>
-                          <label className="text-sm text-gray-700">Content X Offset (px)</label>
+                          <label className="text-sm text-foreground">Content X Offset (px)</label>
                           <Input type="number" value={contentOffsetXPx} onChange={(e) => setContentOffsetXPx(Number(e.target.value) || 0)} />
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Content Y Offset (px)</label>
+                          <label className="text-sm text-foreground">Content Y Offset (px)</label>
                           <Input type="number" value={contentOffsetYPx} onChange={(e) => setContentOffsetYPx(Number(e.target.value) || 0)} />
                         </div>
                         <div className="flex gap-2">
@@ -2477,8 +2477,8 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
                         <div>
-                          <label className="text-sm text-gray-700">Paper Preset</label>
-                          <select className="border rounded px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
+                          <label className="text-sm text-foreground">Paper Preset</label>
+                          <select className="border rounded-md px-2 py-1 w-full" value={paperPreset} onChange={(e) => setPaperPreset(e.target.value === 'LETTER' ? 'LETTER' : 'A4')}>
                             <option value="A4">A4 (210x297mm)</option>
                             <option value="LETTER">Letter (8.5x11in)</option>
                           </select>
@@ -2491,7 +2491,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                             <input type="checkbox" checked={showBleedSafe} onChange={(e) => setShowBleedSafe(e.target.checked)} /> Show Safe Margin
                           </label>
                           <Input className="w-28" type="number" min={0} value={safeMarginMm} onChange={(e) => setSafeMarginMm(Number(e.target.value) || 0)} />
-                          <span className="text-sm text-gray-600">mm</span>
+                          <span className="text-sm text-muted-foreground">mm</span>
                         </div>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:col-span-3">
@@ -2501,11 +2501,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                           </label>
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Header Height (mm)</label>
+                          <label className="text-sm text-foreground">Header Height (mm)</label>
                           <Input type="number" min={0} value={headerHeightMm} onChange={(e) => setHeaderHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
                         </div>
                         <div>
-                          <label className="text-sm text-gray-700">Footer Height (mm)</label>
+                          <label className="text-sm text-foreground">Footer Height (mm)</label>
                           <Input type="number" min={0} value={footerHeightMm} onChange={(e) => setFooterHeightMm(Number(e.target.value) || 0)} disabled={!framesEnabled} />
                         </div>
                         <div className="md:col-span-3">
@@ -2530,11 +2530,11 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                           <div>
-                            <label className="text-sm text-gray-700">Grid Size (px)</label>
+                            <label className="text-sm text-foreground">Grid Size (px)</label>
                             <Input type="number" min={2} value={designGridSizePx} onChange={(e) => setDesignGridSizePx(Number(e.target.value) || 8)} disabled={!designAidsEnabled} />
                           </div>
                           <div>
-                            <label className="text-sm text-gray-700">Nudge Step (px)</label>
+                            <label className="text-sm text-foreground">Nudge Step (px)</label>
                             <Input type="number" min={1} value={designNudgeStepPx} onChange={(e) => setDesignNudgeStepPx(Number(e.target.value) || 1)} disabled={!designAidsEnabled} />
                           </div>
                         </div>
@@ -2618,7 +2618,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                         </div>
                       </div>
                   <div className="md:col-span-3">
-                    <label className="text-sm text-gray-700">Print Sections</label>
+                    <label className="text-sm text-foreground">Print Sections</label>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-sm mt-1">
                       {Object.keys(rxIncludeSections).map((k) => (
                         <label key={k} className="flex items-center gap-2">
@@ -2639,17 +2639,17 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Patient Visit History</h3>
                 <Button variant="outline" onClick={() => void timeline.refresh()} disabled={timeline.loading}>
-                  {timeline.loading ? 'Loading...' : 'Refresh'}
+                  {timeline.loading ? 'Loading…' : 'Refresh'}
                 </Button>
               </div>
 
-              {timeline.error ? (<p role="alert" className="text-red-700">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
-                <div className="text-center py-8 text-gray-500">
-                  <div className="animate-spin h-8 w-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2" />
-                  <p>Loading patient history...</p>
+              {timeline.error ? (<p role="alert" className="text-destructive-text">Unable to load history. {timeline.error}</p>) : timeline.loading ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Spinner className=" h-8 w-8     mx-auto mb-2" />
+                  <LoadingSkeleton label="Loading patient history…" />
                 </div>
               ) : timeline.entries.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <History className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>No documented history to show.</p>
                 </div>
@@ -2661,14 +2661,14 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                       <div key={visit.id} className="relative flex items-start space-x-3 pb-4">
                         {/* Timeline line */}
                         {index !== timeline.entries.length - 1 && (
-                          <div className="absolute left-4 top-8 w-0.5 h-full bg-gray-200" />
+                          <div className="absolute left-4 top-8 w-0.5 h-full bg-muted" />
                         )}
                         
                         {/* Timeline dot */}
                         <div className={`relative flex items-center justify-center w-8 h-8 rounded-full ${
-                          visit.status === 'COMPLETED' ? 'bg-green-100 text-green-600' :
-                          visit.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-600' :
-                          'bg-gray-100 text-gray-600'
+                          visit.status === 'COMPLETED' ? 'bg-success-soft text-success-text' :
+                          visit.status === 'IN_PROGRESS' ? 'bg-info-soft text-info-text' :
+                          'bg-muted text-muted-foreground'
                         }`}>
                           <div className="w-3 h-3 rounded-full bg-current" />
                         </div>
@@ -2693,7 +2693,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
 
           {/* Action Buttons */}
           <div className="flex justify-between items-center pt-6 border-t">
-            <div className="text-sm text-gray-500">
+            <div className="text-sm text-muted-foreground">
               Progress: {getProgress()}% • {completedSections.size} of {hasPermission('all') ? 5 : 3} sections complete
             </div>
             <div className="flex gap-2">

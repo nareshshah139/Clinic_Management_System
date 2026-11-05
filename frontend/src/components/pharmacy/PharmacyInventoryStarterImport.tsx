@@ -1,12 +1,11 @@
 "use client";
 
 import { displayUtcDate } from '@/lib/date-display';
-
+import { Spinner } from '@/components/ui/spinner';
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
   FileSpreadsheet,
-  Loader2,
   Upload,
   X,
 } from "lucide-react";
@@ -95,6 +94,11 @@ const optionalColumns = [
   "Supplier",
 ];
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] named-import-results
+ * Both import layouts MUST expose returned row outcomes in an Opening stock import results
+ * region, so those outcomes remain identifiable independently of theme colors.
+ */
 export function PharmacyInventoryStarterImport({
   className = "",
   compact = false,
@@ -276,7 +280,7 @@ export function PharmacyInventoryStarterImport({
                 {r.batchNumber} / {displayUtcDate(r.expiryDate, r.expiryDate || "—")}
               </td>
               <td>{r.currentStock}</td>
-              <td>
+              <td className="text-right tabular-nums">
                 {r.costPrice} / {r.mrp}
               </td>
               <td>
@@ -296,13 +300,13 @@ export function PharmacyInventoryStarterImport({
   if (compact) {
     return (
       <Card
-        className={`overflow-hidden rounded-[8px] border-slate-200 bg-white shadow-sm ${className}`}
+        className={`overflow-hidden rounded-md border-border bg-card shadow-sm ${className}`}
       >
         <CardHeader className="space-y-2 pb-3">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-base">
-                <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
+                <FileSpreadsheet className="h-5 w-5 text-success-text" />
                 Start Inventory From Excel
               </CardTitle>
               <CardDescription>
@@ -322,10 +326,10 @@ export function PharmacyInventoryStarterImport({
           />
 
           <div
-            className={`group flex min-h-28 items-center gap-3 rounded-[8px] border border-dashed bg-slate-50 p-4 transition ${
+            className={`group flex min-h-28 items-center gap-3 rounded-md border border-dashed bg-background p-4 transition ${
               isDragging
-                ? "border-emerald-500 ring-2 ring-emerald-100"
-                : "border-slate-300"
+                ? "border-success-border ring-2 ring-success-border"
+                : "border-border"
             }`}
             onDragOver={(event) => {
               event.preventDefault();
@@ -338,24 +342,24 @@ export function PharmacyInventoryStarterImport({
               selectFile(event.dataTransfer.files?.[0]);
             }}
           >
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] bg-emerald-50 text-emerald-700 transition-transform duration-300 group-hover:scale-105">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-success-soft text-success-text transition-transform duration-300 group-hover:scale-105">
               <FileSpreadsheet className="h-6 w-6" />
             </div>
             {selectedFile ? (
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-slate-950">
+                <p className="truncate font-medium text-foreground">
                   {selectedFile.name}
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   {(selectedFile.size / 1024).toFixed(1)} KB selected
                 </p>
               </div>
             ) : (
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-slate-950">
+                <p className="font-medium text-foreground">
                   Drop an Excel file here
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-muted-foreground">
                   .xlsx or .xls, up to 5 MB and 1,000 rows
                 </p>
               </div>
@@ -378,7 +382,7 @@ export function PharmacyInventoryStarterImport({
               disabled={!selectedFile || isUploading}
             >
               {isUploading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="mr-2 h-4 w-4 " />
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
@@ -401,7 +405,7 @@ export function PharmacyInventoryStarterImport({
           )}
 
           {summary && (
-            <div className="rounded-[8px] border bg-slate-50 p-3">
+            <div role="region" aria-label="Opening stock import results" className="rounded-md border bg-background p-3">
               <div className="grid grid-cols-3 gap-2">
                 <ImportMetric label="Created" value={summary.created} />
                 <ImportMetric label="Updated" value={summary.updated} />
@@ -416,8 +420,8 @@ export function PharmacyInventoryStarterImport({
             </div>
           )}
 
-          <details className="rounded-[8px] border bg-slate-50 p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-900">
+          <details className="rounded-md border bg-background p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
               Accepted columns
             </summary>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -441,13 +445,13 @@ export function PharmacyInventoryStarterImport({
 
   return (
     <Card
-      className={`overflow-hidden rounded-[8px] border-slate-200 bg-white shadow-sm transition-shadow duration-700 hover:shadow-xl ${className}`}
+      className={`overflow-hidden rounded-md border-border bg-card shadow-sm transition-shadow duration-700 hover:shadow-sm ${className}`}
     >
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
             <CardTitle className="flex items-center gap-2 text-xl">
-              <FileSpreadsheet className="h-5 w-5 text-emerald-700" />
+              <FileSpreadsheet className="h-5 w-5 text-success-text" />
               Start Pharmacy Inventory From Excel
             </CardTitle>
             <CardDescription>
@@ -471,7 +475,7 @@ export function PharmacyInventoryStarterImport({
               disabled={!selectedFile || isUploading}
             >
               {isUploading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <Spinner className="mr-2 h-4 w-4 " />
               ) : (
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
               )}
@@ -490,10 +494,10 @@ export function PharmacyInventoryStarterImport({
         />
 
         <div
-          className={`group flex min-h-44 flex-col items-center justify-center overflow-hidden rounded-[8px] border border-dashed bg-slate-50 p-5 text-center transition ${
+          className={`group flex min-h-44 flex-col items-center justify-center overflow-hidden rounded-md border border-dashed bg-background p-5 text-center transition ${
             isDragging
-              ? "border-emerald-500 ring-2 ring-emerald-100"
-              : "border-slate-300"
+              ? "border-success-border ring-2 ring-success-border"
+              : "border-border"
           }`}
           onDragOver={(event) => {
             event.preventDefault();
@@ -506,12 +510,12 @@ export function PharmacyInventoryStarterImport({
             selectFile(event.dataTransfer.files?.[0]);
           }}
         >
-          <FileSpreadsheet className="mb-3 h-10 w-10 text-emerald-700 transition-transform duration-700 ease-out group-hover:scale-105" />
+          <FileSpreadsheet className="mb-3 h-10 w-10 text-success-text transition-transform duration-700 ease-out group-hover:scale-105" />
           {selectedFile ? (
             <div className="space-y-3">
               <div>
-                <p className="font-medium text-gray-900">{selectedFile.name}</p>
-                <p className="text-sm text-gray-500">
+                <p className="font-medium text-foreground">{selectedFile.name}</p>
+                <p className="text-sm text-muted-foreground">
                   {(selectedFile.size / 1024).toFixed(1)} KB selected
                 </p>
               </div>
@@ -528,10 +532,10 @@ export function PharmacyInventoryStarterImport({
             </div>
           ) : (
             <div className="space-y-2">
-              <p className="font-medium text-gray-900">
+              <p className="font-medium text-foreground">
                 Drop an Excel file here
               </p>
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 Supports .xlsx and .xls files up to 5 MB and 1,000 rows
               </p>
             </div>
@@ -556,7 +560,7 @@ export function PharmacyInventoryStarterImport({
           </InventoryDetails>
 
           {summary && (
-            <div className="rounded-[8px] border bg-slate-50 p-4">
+            <div role="region" aria-label="Opening stock import results" className="rounded-md border bg-background p-4">
               <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
                 <ImportMetric label="Rows" value={summary.totalRows} />
                 <ImportMetric label="Created" value={summary.created} />
@@ -582,9 +586,9 @@ export function PharmacyInventoryStarterImport({
 
 function ImportMetric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md bg-gray-50 px-3 py-2">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-lg font-semibold text-gray-900">{value}</p>
+    <div className="rounded-md bg-background px-3 py-2">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="text-lg font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -604,7 +608,7 @@ function ImportErrors({
   return (
     <div
       role="alert"
-      className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900"
+      className="mt-3 rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text"
     >
       <p className="mb-2 flex items-center gap-2 font-medium">
         <AlertTriangle className="h-4 w-4" />
@@ -622,7 +626,7 @@ function ImportErrors({
           {((summary.retryableRows ?? 0) > 0 ||
             (summary.pendingRows ?? 0) > 0) && (
             <Button type="button" size="sm" onClick={onRetry} disabled={busy}>
-              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {busy && <Spinner className="mr-2 h-4 w-4 " />}
               {(summary.retryableRows ?? 0) > 0
                 ? "Retry failed rows"
                 : "Resume unfinished rows"}

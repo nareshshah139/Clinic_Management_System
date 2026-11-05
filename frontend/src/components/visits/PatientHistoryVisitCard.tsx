@@ -206,7 +206,7 @@ export default function PatientHistoryVisitCard({
     <Card
       className={cn(
         'gap-0 overflow-hidden border-border py-0 shadow-none',
-        highlight && 'border-blue-300 bg-blue-50/30 dark:border-blue-800 dark:bg-blue-950/20',
+        highlight && 'border-info-border bg-info-soft/30 dark:border-info-border dark:bg-info/20',
         className
       )}
     >

@@ -1,10 +1,12 @@
 'use client';
 
 import { displayClinicDate } from '@/lib/date-display';
-
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
   TrendingUp, 
@@ -153,40 +155,19 @@ export function PharmacyDashboard() {
   };
 
 
-  const getStatusColor = (status: string) => {
-    const colors = {
-      COMPLETED: 'bg-green-100 text-green-800',
-      PENDING: 'bg-yellow-100 text-yellow-800',
-      DISPENSED: 'bg-blue-100 text-blue-800',
-      CANCELLED: 'bg-red-100 text-red-800',
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-          <p className="text-gray-500">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton label="Loading pharmacy dashboard…" variant="cards" />;
   }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Pharmacy Dashboard</h2>
-          <p className="text-gray-600">Overview of pharmacy operations and performance</p>
-        </div>
+      <PageHeader title="Pharmacy Dashboard" description="Overview of pharmacy operations and performance" actions={
         <Button onClick={loadDashboardData} variant="outline">
           <Activity className="h-4 w-4 mr-2" />
           Refresh
         </Button>
-      </div>
+      } />
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -194,20 +175,20 @@ export function PharmacyDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Today's Sales</p>
+                <p className="text-sm text-muted-foreground">Today's Sales</p>
                 <p className="text-2xl font-bold">{formatCurrency(stats.todaySales)}</p>
                 <div className="flex items-center mt-1">
                   {stats.todayGrowth > 0 ? (
-                    <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
+                    <TrendingUp className="h-3 w-3 text-success-text mr-1" />
                   ) : (
-                    <TrendingDown className="h-3 w-3 text-red-600 mr-1" />
+                    <TrendingDown className="h-3 w-3 text-destructive-text mr-1" />
                   )}
-                  <span className={`text-xs ${stats.todayGrowth > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-xs ${stats.todayGrowth > 0 ? 'text-success-text' : 'text-destructive-text'}`}>
                     {Math.abs(stats.todayGrowth)}% vs yesterday
                   </span>
                 </div>
               </div>
-              <DollarSign className="h-8 w-8 text-green-600" />
+              <DollarSign className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -216,16 +197,16 @@ export function PharmacyDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Monthly Sales</p>
+                <p className="text-sm text-muted-foreground">Monthly Sales</p>
                 <p className="text-2xl font-bold">{formatCurrency(stats.monthSales)}</p>
                 <div className="flex items-center mt-1">
-                  <TrendingUp className="h-3 w-3 text-green-600 mr-1" />
-                  <span className="text-xs text-green-600">
+                  <TrendingUp className="h-3 w-3 text-success-text mr-1" />
+                  <span className="text-xs text-success-text">
                     {stats.monthGrowth}% vs last month
                   </span>
                 </div>
               </div>
-              <Calendar className="h-8 w-8 text-blue-600" />
+              <Calendar className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -234,16 +215,16 @@ export function PharmacyDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Invoices</p>
+                <p className="text-sm text-muted-foreground">Total Invoices</p>
                 <p className="text-2xl font-bold">{stats.totalInvoices.toLocaleString()}</p>
                 <div className="flex items-center mt-1">
-                  <CheckCircle className="h-3 w-3 text-green-600 mr-1" />
-                  <span className="text-xs text-gray-600">
+                  <CheckCircle className="h-3 w-3 text-success-text mr-1" />
+                  <span className="text-xs text-muted-foreground">
                     {stats.completedInvoices} completed
                   </span>
                 </div>
               </div>
-              <FileText className="h-8 w-8 text-purple-600" />
+              <FileText className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
@@ -252,16 +233,16 @@ export function PharmacyDashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Drug Inventory</p>
+                <p className="text-sm text-muted-foreground">Drug Inventory</p>
                 <p className="text-2xl font-bold">{stats.totalDrugs.toLocaleString()}</p>
                 <div className="flex items-center mt-1">
-                  <AlertTriangle className="h-3 w-3 text-orange-600 mr-1" />
-                  <span className="text-xs text-orange-600">
+                  <AlertTriangle className="h-3 w-3 text-warning-text mr-1" />
+                  <span className="text-xs text-warning-text">
                     {stats.lowStockDrugs} low stock
                   </span>
                 </div>
               </div>
-              <Pill className="h-8 w-8 text-orange-600" />
+              <Pill className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
@@ -283,12 +264,12 @@ export function PharmacyDashboard() {
               {stats.topSellingDrugs.map((drug, index) => (
                 <div key={drug.id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm font-semibold text-blue-600">
+                    <div className="w-8 h-8 rounded-full bg-info-soft flex items-center justify-center text-sm font-semibold text-info-text">
                       {index + 1}
                     </div>
                     <div>
                       <p className="font-medium text-sm">{drug.name}</p>
-                      <p className="text-xs text-gray-500">{drug.quantity} units sold</p>
+                      <p className="text-xs text-muted-foreground">{drug.quantity} units sold</p>
                     </div>
                   </div>
                   <div className="text-right">
@@ -315,13 +296,11 @@ export function PharmacyDashboard() {
                 <div key={invoice.id} className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-sm">{invoice.invoiceNumber}</p>
-                    <p className="text-xs text-gray-500">{invoice.patientName}</p>
-                    <p className="text-xs text-gray-400">{displayClinicDate(invoice.createdAt)}</p>
+                    <p className="text-xs text-muted-foreground">{invoice.patientName}</p>
+                    <p className="text-xs text-muted-foreground">{displayClinicDate(invoice.createdAt)}</p>
                   </div>
                   <div className="text-right flex items-center gap-2">
-                    <Badge className={getStatusColor(invoice.status)}>
-                      {invoice.status}
-                    </Badge>
+                    <StatusBadge domain="invoice" status={invoice.status} />
                     <p className="font-semibold text-sm">{formatCurrency(invoice.amount)}</p>
                   </div>
                 </div>
@@ -335,25 +314,25 @@ export function PharmacyDashboard() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-orange-600" />
+            <AlertTriangle className="h-5 w-5 text-warning-text" />
             Stock Alerts
           </CardTitle>
           <CardDescription>Drugs requiring immediate attention</CardDescription>
         </CardHeader>
         <CardContent>
           {stats.lowStockAlerts.length === 0 ? (
-            <p className="text-center text-gray-500 py-4">No stock alerts at this time</p>
+            <EmptyState title="No stock alerts at this time" icon={Package} />
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {stats.lowStockAlerts.map((alert) => (
-                <div key={alert.id} className="border rounded-lg p-3 bg-orange-50 border-orange-200">
+                <div key={alert.id} className="border rounded-lg p-3 bg-warning-soft border-warning-border">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="font-medium text-sm">{alert.name}</h4>
-                    <Badge variant="destructive">Low Stock</Badge>
+                    <StatusBadge domain="stock" status="LOW_STOCK">Low Stock</StatusBadge>
                   </div>
-                  <p className="text-xs text-gray-600 mb-1">{alert.manufacturerName}</p>
+                  <p className="text-xs text-muted-foreground mb-1">{alert.manufacturerName}</p>
                   <div className="flex justify-between text-xs">
-                    <span>Current: <span className="font-semibold text-orange-600">{alert.currentStock}</span></span>
+                    <span>Current: <span className="font-semibold text-warning-text">{alert.currentStock}</span></span>
                     <span>Min Required: <span className="font-semibold">{alert.minStock}</span></span>
                   </div>
                 </div>

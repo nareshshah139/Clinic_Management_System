@@ -1,0 +1,10 @@
+evidence	result
+reviewed_commit	b940319e7fa4a39b5197b852107f70604a6be3d5
+comparison_base	ceb758ebef50f983167c1f4aa85fa8fd236f0270
+fingerprints	9 of 36 refreshed after read-only source-mapping review; remaining 27 unchanged
+production_behavior	834 behavior-bearing JSX attributes and 76 API/storage calls unchanged; handlers, recovery identity, permissions and action guards preserved
+model_scope	ACTION_MAP, edge-bindings, model guards, assumptions, mutation checks and backend sources unchanged
+frontend_tests	Existing behavior assertions retained; palette expectations updated; posting busy-state assertion added
+browser_evidence	Screenshot target changed from palette CSS to named import-results region present in both layouts; Created/Skipped predicate and behavior assertions retained
+verification	PASS: check_presentations.cjs, check_knowledge.py and check_model.py using z3-solver 5.3.1.0; CI independently enforces the refreshed source mapping
+model_results	All state counts, recovery outcomes, six SMT obligations and mutation results unchanged; regenerated counterexamples vary only in tied reason-field selection

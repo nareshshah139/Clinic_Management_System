@@ -1,7 +1,11 @@
 'use client';
 
 import { displayClinicDateTime } from '@/lib/date-display';
+import { Spinner } from '@/components/ui/spinner';
 
+import { EmptyState } from '@/components/ui/empty-state';
+import { StatusBadge } from '@/components/ui/status-badge';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -258,7 +262,7 @@ export function PrescriptionDispensingQueue({
             </SelectContent>
           </Select>
           <Button variant="outline" size="icon" onClick={loadQueue} aria-label="Refresh prescription queue">
-            <RefreshCw className={loading ? 'animate-spin' : ''} />
+            {loading ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
           </Button>
         </div>
       </CardHeader>
@@ -283,13 +287,13 @@ export function PrescriptionDispensingQueue({
             {loading ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
-                  Loading queue...
+                  <LoadingSkeleton label="Loading prescription queue…" />
                 </TableCell>
               </TableRow>
             ) : queue.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center">
-                  No prescriptions in this queue.
+                  <EmptyState title="No prescriptions in this queue." description="Choose another status to view other prescriptions." />
                 </TableCell>
               </TableRow>
             ) : (
@@ -330,11 +334,11 @@ export function PrescriptionDispensingQueue({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-2">
-                      <StatusBadge status={entry.status} />
+                      <QueueStatusBadge status={entry.status} />
                       {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
                         <Badge
                           variant="outline"
-                          className="gap-1 text-amber-700"
+                          className="gap-1 text-warning-text"
                         >
                           <AlertTriangle className="size-3" />
                           Over 2h
@@ -357,13 +361,7 @@ export function PrescriptionDispensingQueue({
                         onClick={() => refreshEntry(entry.prescriptionId)}
                         disabled={refreshingId === entry.prescriptionId}
                       >
-                        <RefreshCw
-                          className={
-                            refreshingId === entry.prescriptionId
-                              ? 'animate-spin'
-                              : ''
-                          }
-                        />
+                        {refreshingId === entry.prescriptionId ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
                       </Button>
                       {entry.dispensingEligible === false ? (
                         <Button size="sm" disabled>{openActionLabel}</Button>
@@ -416,39 +414,35 @@ export function PrescriptionDispensingQueue({
   );
 }
 
-function StatusBadge({ status }: { status: QueueStatus }) {
+function QueueStatusBadge({ status }: { status: QueueStatus }) {
   const config: Record<
     QueueStatus,
-    { label: string; className: string; icon: typeof Clock }
+    { label: string; icon: typeof Clock }
   > = {
     pending: {
       label: 'Pending',
-      className: 'bg-slate-100 text-slate-800',
       icon: Clock,
     },
     partial: {
       label: 'Partial',
-      className: 'bg-amber-100 text-amber-800',
       icon: PackageCheck,
     },
     dispensed: {
       label: 'Dispensed',
-      className: 'bg-emerald-100 text-emerald-800',
       icon: CheckCircle2,
     },
     expired: {
       label: 'Expired',
-      className: 'bg-red-100 text-red-800',
       icon: AlertTriangle,
     },
   };
   const Icon = config[status].icon;
 
   return (
-    <Badge variant="outline" className={config[status].className}>
+    <StatusBadge domain="prescription" status={status}>
       <Icon className="size-3" />
       {config[status].label}
-    </Badge>
+    </StatusBadge>
   );
 }
 
@@ -460,12 +454,12 @@ function StatusBadge({ status }: { status: QueueStatus }) {
 function StockWarnings({ items, prescriptionId, onLinked, canLink }: { items: StockCheckItem[]; prescriptionId: string; onLinked: () => Promise<void>; canLink: boolean }) {
   if (!items.length) return <span className="text-sm text-muted-foreground">Checking…</span>;
   return <div className="flex flex-col gap-2">{items.map((item, index) => <div key={`${index}-${item.drugName}`} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-    <Badge variant="outline" className={item.stockStatus === 'IN_STOCK' ? 'text-emerald-700' : 'text-amber-700'}>
+    <StatusBadge domain="stock" status={item.stockStatus}>
       {{ UNMATCHED: 'Not linked', OUT_OF_STOCK: 'Out', LOW_STOCK: 'Low', IN_STOCK: 'In stock' }[item.stockStatus]}
-    </Badge>
+    </StatusBadge>
     <span>{item.drugName} ({item.stockStatus === 'UNMATCHED' ? '—' : `${item.totalNonExpiredStock}${item.unit ? ` ${item.unit.toLowerCase()}` : ''}`})</span>
     {!!(item.heldStock || item.expiredStock) && <span className="ml-1 text-muted-foreground">{item.totalOnHandStock} on hand · {item.heldStock || 0} held · {item.expiredStock || 0} expired</span>}
-    {item.nearExpiry && <span className="ml-1 text-amber-700">Near expiry</span>}
+    {item.nearExpiry && <span className="ml-1 text-warning-text">Near expiry</span>}
     {canLink && <PrescriptionInventoryLink prescriptionId={prescriptionId} lineIndex={index} linked={!!item.inventoryItemId} prescriptionVersion={item.prescriptionVersion} name={item.drugName} suggestions={item.suggestions} onLinked={onLinked} />}
   </div>)}</div>;
 }

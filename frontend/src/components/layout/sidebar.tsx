@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Fragment, useMemo } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useDashboardUser } from "./dashboard-user-context";
@@ -27,6 +28,7 @@ type PharmacySidebarSection = "desk" | "counter" | "billing";
 
 type NavigationItem = {
   name: string;
+  section: "Overview" | "Clinical" | "Pharmacy" | "Admin";
   href: string;
   icon: LucideIcon;
   allowedRoles: string[];
@@ -40,7 +42,7 @@ type NavigationItem = {
  */
 const navigation: NavigationItem[] = [
   {
-    name: "Dashboard",
+    name: "Dashboard", section: "Overview",
     href: "/dashboard",
     icon: Home,
     allowedRoles: [
@@ -55,76 +57,76 @@ const navigation: NavigationItem[] = [
     ],
   },
   {
-    name: "Patients",
+    name: "Patients", section: "Clinical",
     href: "/dashboard/patients",
     icon: Users,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: "Appointments",
+    name: "Appointments", section: "Clinical",
     href: "/dashboard/appointments",
     icon: Calendar,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: "Visits",
+    name: "Visits", section: "Clinical",
     href: "/dashboard/visits",
     icon: Stethoscope,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE"],
   },
   {
-    name: "Procedures",
+    name: "Procedures", section: "Clinical",
     href: "/dashboard/procedures",
     icon: Activity,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR"],
   },
   {
-    name: "Rooms",
+    name: "Rooms", section: "Clinical",
     href: "/dashboard/rooms",
     icon: MapPin,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "NURSE", "RECEPTION"],
   },
   {
-    name: "Pharmacy Desk",
+    name: "Pharmacy Desk", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=desk",
     icon: Pill,
     pharmacySection: "desk",
     allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: "Pharmacy Counter",
+    name: "Pharmacy Counter", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=counter",
     icon: ClipboardCheck,
     pharmacySection: "counter",
     allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: "Pharmacy Billing",
+    name: "Pharmacy Billing", section: "Pharmacy",
     href: "/dashboard/pharmacy?section=billing",
     icon: Receipt,
     pharmacySection: "billing",
     allowedRoles: ["ADMIN", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: "Inventory",
+    name: "Inventory", section: "Pharmacy",
     href: "/dashboard/inventory",
     icon: Package,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER", "DOCTOR", "PHARMACIST", "RECEPTION"],
   },
   {
-    name: "Reports",
+    name: "Reports", section: "Admin",
     href: "/dashboard/reports",
     icon: BarChart3,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
   },
   {
-    name: "Users",
+    name: "Users", section: "Admin",
     href: "/dashboard/users",
     icon: UserIcon,
     allowedRoles: ["OWNER", "ADMIN", "MANAGER"],
   },
   {
-    name: "Test Transcribe",
+    name: "Test Transcribe", section: "Admin",
     href: "/test-transcribe",
     icon: Mic,
     allowedRoles: ["OWNER", "ADMIN", "DOCTOR"],
@@ -193,6 +195,11 @@ function getActivePharmacySection(
   return "desk";
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] grouped-navigation-permissions
+ * Navigation sections MUST contain only the role-filtered links. Grouping MUST
+ * preserve each destination and pharmacy active-section selection.
+ */
 export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -210,7 +217,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
 
   return (
     <div
-      className="flex h-full w-64 flex-col bg-[var(--sidebar, var(--card))] border-r border-[var(--border)]"
+      className="flex h-full min-h-0 w-64 flex-col bg-sidebar border-r border-[var(--border)]"
       data-tour="sidebar"
     >
       {/* Logo */}
@@ -224,8 +231,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-4 space-y-1">
-        {navigationItems.map((item) => {
+      <nav aria-label="Main navigation" className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        {navigationItems.map((item, index) => {
           const itemPath = item.href.split("?")[0];
           const targetParams = new URLSearchParams(
             item.href.split("?")[1] || "",
@@ -243,15 +250,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
                   : pathname === itemPath ||
                     pathname.startsWith(itemPath + "/");
           return (
+            <Fragment key={item.name}>
+              {(index === 0 || navigationItems[index - 1].section !== item.section) && (
+                <p className={cn('px-3 pb-1 text-xs font-medium text-muted-foreground', index > 0 && 'pt-5')}>{item.section}</p>
+              )}
             <Link
               key={item.name}
               href={item.href}
               onClick={onNavigate}
+              aria-current={isActive ? "page" : undefined}
               className={cn(
-                "group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors border",
+                "group relative flex min-h-10 items-center rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-[var(--ring)] shadow-sm"
-                  : "border-transparent text-[var(--muted-foreground)] hover:bg-[var(--accent-soft)] hover:text-[var(--foreground)]",
+                  ? "bg-accent-soft text-foreground before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-primary"
+                  : "text-muted-foreground hover:bg-accent-soft hover:text-foreground",
               )}
             >
               <item.icon
@@ -264,18 +276,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
               />
               {item.name}
             </Link>
+            </Fragment>
           );
         })}
       </nav>
 
       {/* User section */}
-      <div className="border-t border-[var(--border)] p-4">
+      <div className="shrink-0 border-t border-border p-4">
         <div className="flex items-center">
-          <div className="h-8 w-8 rounded-full bg-[var(--accent-soft)] flex items-center justify-center">
-            <UserIcon className="h-4 w-4 text-[var(--primary)]" />
-          </div>
-          <div className="ml-3 flex-1">
-            <p className="text-sm font-medium text-[var(--foreground)]">
+          <Avatar className="size-9 shrink-0">
+            <AvatarFallback className="bg-primary-soft text-sm font-semibold text-foreground">
+              {`${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || '?'}
+            </AvatarFallback>
+          </Avatar>
+          <div className="ml-3 min-w-0 flex-1">
+            <p className="break-words text-sm font-medium text-[var(--foreground)]">
               {loading
                 ? "Loading…"
                 : `${user?.firstName ?? ""} ${user?.lastName ?? ""}`.trim() ||

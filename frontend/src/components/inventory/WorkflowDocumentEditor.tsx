@@ -1,6 +1,6 @@
 "use client";
-
 import { displayUtcDate, displayClinicDateTime } from '@/lib/date-display';
+import { Spinner } from '@/components/ui/spinner';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -9,7 +9,6 @@ import {
   Trash2,
   FileDown,
   Printer,
-  Loader2,
 } from "lucide-react";
 import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
@@ -649,7 +648,7 @@ export function WorkflowDocumentEditor({
               disabled={busy || (kind === "TARGET_REVIEW" && !selected.length)}
               onClick={() => perform(action)}
             >
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              {busy && <Spinner className="h-4 w-4 " />}
               {primaryText}
             </Button>
           )}
@@ -723,7 +722,7 @@ export function WorkflowDocumentEditor({
         {notice && (
           <p
             role="status"
-            className="rounded-md border border-green-600 bg-green-50 p-3 text-green-900"
+            className="rounded-md border border-success-border bg-success-soft p-3 text-success-text"
           >
             {notice}
           </p>
@@ -1229,7 +1228,7 @@ export function WorkflowDocumentEditor({
                       "schemeAmount",
                       "gstRate",
                     ].map((f) => (
-                      <td key={f} className="p-2">
+                      <td key={f} className="p-2 text-right tabular-nums">
                         <input
                           className={`${inputClass} w-24`}
                           type="number"
@@ -1251,7 +1250,7 @@ export function WorkflowDocumentEditor({
                         />
                       </td>
                     ))}
-                    <td className="whitespace-nowrap p-3">
+                    <td className="whitespace-nowrap p-3 text-right tabular-nums">
                       {fmtMoney(
                         !editable && l.total != null
                           ? l.total
@@ -1288,7 +1287,7 @@ export function WorkflowDocumentEditor({
                   </td>
                 )}
                 {kind === "INWARD_CHALLAN" && form.sourceId && (
-                  <td className="p-3">
+                  <td className="p-3 text-right tabular-nums">
                     <select
                       className={`${inputClass} w-44`}
                       disabled={!editable}

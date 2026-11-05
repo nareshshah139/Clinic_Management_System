@@ -102,7 +102,7 @@ export function SupplierPaymentRecovery({ payments, invoices, canWrite, onChange
   return <Card>
     <CardHeader><CardTitle>Recorded payments</CardTitle></CardHeader>
     <CardContent className="space-y-4">
-      {message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+      {message && <p role="status" className="text-sm text-success-text">{message}</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       {!payments.length && <p className="text-sm text-muted-foreground">No recorded payments for this supplier.</p>}
       {payments.map(payment => <div key={payment.id} className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3">

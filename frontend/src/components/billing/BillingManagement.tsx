@@ -1,7 +1,10 @@
 'use client';
 
 import { displayClinicDate, displayClinicTime } from '@/lib/date-display';
+import { PageHeader } from '@/components/ui/page-header';
 
+import { StatusBadge } from '@/components/ui/status-badge';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,7 +12,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, AlertCircle, Package, Trash2, ShoppingCart, Printer } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -824,14 +826,14 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
   return (
     <div className="space-y-4">
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-3 flex items-center gap-2 text-green-800">
+        <div className="bg-success-soft border border-success-border rounded-md p-3 flex items-center gap-2 text-success-text">
           <AlertCircle className="h-4 w-4" />
           {success}
         </div>
       )}
       
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-gray-900">Invoices</h2>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader title="Invoices" />
         <div className="flex gap-2">
           <Dialog open={open} onOpenChange={handleDialogOpenChange}>
             <DialogTrigger asChild>
@@ -848,7 +850,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                 
                 <TabsContent value="simple" className="space-y-4">
                   {errors.general && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800 text-sm">
+                    <div className="bg-destructive-soft border border-destructive-border rounded-md p-3 text-destructive-text text-sm">
                       {errors.general}
                     </div>
                   )}
@@ -868,27 +870,27 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                           }
                         }}
                         onFocus={() => setShowPatientMenu(true)}
-                        className={errors.patientId ? 'border-red-500' : ''}
+                        className={errors.patientId ? 'border-destructive-border' : ''}
                       />
                       {showPatientMenu && (
-                        <div className="absolute z-20 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
+                        <div className="absolute z-20 mt-1 w-full bg-card border rounded-md shadow-sm max-h-64 overflow-auto">
                           {searchingPatients && (
-                            <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                            <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
                           )}
                           {!searchingPatients && patientOptions.length === 0 && patientQuery && (
-                            <div className="px-3 py-2 text-xs text-gray-500">No results found</div>
+                            <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
                           )}
                           {!searchingPatients && patientOptions.map((p) => (
                             <button
                               key={p.id}
                               type="button"
                               onClick={() => handlePatientSelect(p)}
-                              className={`w-full text-left px-3 py-2 hover:bg-gray-50 text-sm ${form.patientId === p.id ? 'bg-blue-50' : ''}`}
+                              className={`w-full text-left px-3 py-2 hover:bg-background text-sm ${form.patientId === p.id ? 'bg-info-soft' : ''}`}
                             >
                               <div className="flex items-center gap-2">
                                 <div className="flex flex-col">
                                   <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     <span>ID: {p.id}</span>
                                     {p.phone && <span>📞 {p.phone}</span>}
                                     {p.email && <span>✉️ {p.email}</span>}
@@ -901,12 +903,12 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                       )}
                     </div>
                     {selectedPatient && (
-                      <div className="text-xs text-green-600 mt-1">
+                      <div className="text-xs text-success-text mt-1">
                         ✓ Selected: {selectedPatient.name} (ID: {selectedPatient.id})
                       </div>
                     )}
                     {errors.patientId && (
-                      <div className="text-xs text-red-600 mt-1">{errors.patientId}</div>
+                      <div className="text-xs text-destructive-text mt-1">{errors.patientId}</div>
                     )}
                   </div>
                   
@@ -919,10 +921,10 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                         setErrors({ ...errors, description: '' });
                       }}
                       placeholder="e.g., Dermatology Consultation"
-                      className={errors.description ? 'border-red-500' : ''}
+                      className={errors.description ? 'border-destructive-border' : ''}
                     />
                     {errors.description && (
-                      <div className="text-xs text-red-600 mt-1">{errors.description}</div>
+                      <div className="text-xs text-destructive-text mt-1">{errors.description}</div>
                     )}
                   </div>
                   
@@ -939,10 +941,10 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        className={errors.amount ? 'border-red-500' : ''}
+                        className={errors.amount ? 'border-destructive-border' : ''}
                       />
                       {errors.amount && (
-                        <div className="text-xs text-red-600 mt-1">{errors.amount}</div>
+                        <div className="text-xs text-destructive-text mt-1">{errors.amount}</div>
                       )}
                     </div>
                     
@@ -959,14 +961,14 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                         max="30"
                         step="0.01"
                       />
-                      <div className="text-xs text-gray-500 mt-1">Default: 18%</div>
+                      <div className="text-xs text-muted-foreground mt-1">Default: 18%</div>
                     </div>
                   </div>
                 </TabsContent>
                 
                 <TabsContent value="builder" className="space-y-4">
                   {errors.general && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-3 text-red-800 text-sm">
+                    <div className="bg-destructive-soft border border-destructive-border rounded-md p-3 text-destructive-text text-sm">
                       {errors.general}
                     </div>
                   )}
@@ -987,27 +989,27 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                           }
                         }}
                         onFocus={() => setShowPatientMenu(true)}
-                        className={errors.patientId ? 'border-red-500' : ''}
+                        className={errors.patientId ? 'border-destructive-border' : ''}
                       />
                       {showPatientMenu && (
-                        <div className="absolute z-20 mt-1 w-full bg-white border rounded shadow max-h-64 overflow-auto">
+                        <div className="absolute z-20 mt-1 w-full bg-card border rounded-md shadow-sm max-h-64 overflow-auto">
                           {searchingPatients && (
-                            <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
+                            <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
                           )}
                           {!searchingPatients && patientOptions.length === 0 && patientQuery && (
-                            <div className="px-3 py-2 text-xs text-gray-500">No results found</div>
+                            <div className="px-3 py-2 text-xs text-muted-foreground">No results found</div>
                           )}
                           {!searchingPatients && patientOptions.map((p) => (
                             <button
                               key={p.id}
                               type="button"
                               onClick={() => handlePatientSelect(p)}
-                              className={`w-full text-left px-3 py-2 hover:bg-gray-50 text-sm ${form.patientId === p.id ? 'bg-blue-50' : ''}`}
+                              className={`w-full text-left px-3 py-2 hover:bg-background text-sm ${form.patientId === p.id ? 'bg-info-soft' : ''}`}
                             >
                               <div className="flex items-center gap-2">
                                 <div className="flex flex-col">
                                   <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                                  <div className="flex items-center gap-3 text-xs text-gray-500">
+                                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                     <span>ID: {p.id}</span>
                                     {p.phone && <span>📞 {p.phone}</span>}
                                     {p.email && <span>✉️ {p.email}</span>}
@@ -1020,12 +1022,12 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                       )}
                     </div>
                     {selectedPatient && (
-                      <div className="text-xs text-green-600 mt-1">
+                      <div className="text-xs text-success-text mt-1">
                         ✓ Selected: {selectedPatient.name} (ID: {selectedPatient.id})
                       </div>
                     )}
                     {errors.patientId && (
-                      <div className="text-xs text-red-600 mt-1">{errors.patientId}</div>
+                      <div className="text-xs text-destructive-text mt-1">{errors.patientId}</div>
                     )}
                   </div>
 
@@ -1040,12 +1042,12 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                       </CardHeader>
                       <CardContent className="space-y-2">
                         {DERMATOLOGY_PACKAGES.map(pkg => (
-                          <div key={pkg.id} className="border rounded-lg p-3 hover:bg-gray-50">
+                          <div key={pkg.id} className="border rounded-lg p-3 hover:bg-background">
                             <div className="flex justify-between items-start mb-2">
                               <div>
                                 <h4 className="font-medium text-sm">{pkg.name}</h4>
-                                <p className="text-xs text-gray-600">{pkg.description}</p>
-                                <p className="text-xs text-blue-600">{pkg.sessions} sessions</p>
+                                <p className="text-xs text-muted-foreground">{pkg.description}</p>
+                                <p className="text-xs text-info-text">{pkg.sessions} sessions</p>
                               </div>
                               <div className="text-right">
                                 <p className="font-semibold">₹{pkg.price.toLocaleString('en-IN')}</p>
@@ -1081,9 +1083,9 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                           }, {} as Record<string, typeof INDIVIDUAL_SERVICES>)
                         ).map(([category, services]) => (
                           <div key={category}>
-                            <h5 className="font-medium text-xs text-gray-700 mb-1">{category}</h5>
+                            <h5 className="font-medium text-xs text-foreground mb-1">{category}</h5>
                             {services.map(service => (
-                              <div key={service.name} className="flex justify-between items-center py-1 px-2 hover:bg-gray-50 rounded">
+                              <div key={service.name} className="flex justify-between items-center py-1 px-2 hover:bg-background rounded-md">
                                 <span className="text-sm">{service.name}</span>
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium">₹{service.price.toLocaleString('en-IN')}</span>
@@ -1112,7 +1114,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                       <CardContent>
                         <div className="space-y-3">
                           {/* Header row */}
-                          <div className="grid grid-cols-12 gap-2 items-center text-xs font-medium text-gray-600 px-3 py-2 bg-gray-50 rounded">
+                          <div className="grid grid-cols-12 gap-2 items-center text-xs font-medium text-muted-foreground px-3 py-2 bg-background rounded-md">
                             <div className="col-span-3">Service</div>
                             <div className="col-span-1">Qty</div>
                             <div className="col-span-2">Price (₹)</div>
@@ -1123,7 +1125,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                           </div>
                           
                           {invoiceItems.map((item, index) => (
-                            <div key={index} className="grid grid-cols-12 gap-2 items-center p-3 border rounded">
+                            <div key={index} className="grid grid-cols-12 gap-2 items-center p-3 border rounded-md">
                               <div className="col-span-3">
                                 <Input
                                   value={item.name}
@@ -1191,7 +1193,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                         </div>
 
                         {/* Invoice Summary */}
-                        <div className="mt-4 p-3 bg-gray-50 rounded">
+                        <div className="mt-4 p-3 bg-background rounded-md">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <Label>Overall Discount (%)</Label>
@@ -1220,7 +1222,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                               <span>₹{subtotal.toLocaleString('en-IN')}</span>
                             </div>
                             {discountAmount > 0 && (
-                              <div className="flex justify-between text-red-600">
+                              <div className="flex justify-between text-destructive-text">
                                 <span>Discount ({customDiscount}%):</span>
                                 <span>-₹{discountAmount.toLocaleString('en-IN')}</span>
                               </div>
@@ -1240,30 +1242,30 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                   )}
 
                   {errors.items && (
-                    <div className="text-xs text-red-600">{errors.items}</div>
+                    <div className="text-xs text-destructive-text">{errors.items}</div>
                   )}
 
                   {/* Sticky Totals & Actions */}
                   {invoiceItems.length > 0 && (
-                    <div className="sticky bottom-0 bg-white border-t mt-4">
+                    <div className="sticky bottom-0 bg-card border-t mt-4">
                       <div className="flex flex-col md:flex-row items-center justify-between gap-3 p-3">
                         <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
                           <span>
-                            <span className="text-gray-600">Subtotal:</span>{' '}
+                            <span className="text-muted-foreground">Subtotal:</span>{' '}
                             <span className="font-medium">₹{subtotal.toLocaleString('en-IN')}</span>
                           </span>
                           {discountAmount > 0 && (
-                            <span className="text-red-600">
+                            <span className="text-destructive-text">
                               <span>Discount:</span>{' '}
                               <span>-₹{discountAmount.toLocaleString('en-IN')}</span>
                             </span>
                           )}
                           <span>
-                            <span className="text-gray-600">GST:</span>{' '}
+                            <span className="text-muted-foreground">GST:</span>{' '}
                             <span className="font-medium">₹{gstAmount.toLocaleString('en-IN')}</span>
                           </span>
                           <span className="text-base">
-                            <span className="text-gray-600">Total:</span>{' '}
+                            <span className="text-muted-foreground">Total:</span>{' '}
                             <span className="font-semibold">₹{finalTotal.toLocaleString('en-IN')}</span>
                           </span>
                         </div>
@@ -1433,7 +1435,7 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
               </div>
             </div>
             <div 
-              className="border rounded p-4 bg-white"
+              className="border rounded-md p-4 bg-card"
               dangerouslySetInnerHTML={{ __html: generatePrintContent() }}
             />
           </div>
@@ -1447,9 +1449,9 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
+            <LoadingSkeleton label="Loading invoices…" />
           ) : invoices.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">
+            <div className="text-center py-10 text-muted-foreground">
               <div>No invoices found</div>
               {(filters.search || filters.status !== 'all' || filters.startDate || filters.endDate) && (
                 <div className="mt-3">
@@ -1480,17 +1482,11 @@ ${invoiceNotes ? `\nNotes:\n${invoiceNotes}\n` : ''}
                     <TableRow key={inv.id}>
                       <TableCell className="font-mono text-sm">{(inv as any).invoiceNo || (inv as any).invoiceNumber}</TableCell>
                       <TableCell>{(inv as any).patient?.name || `${(inv as any).patient?.firstName || ''} ${(inv as any).patient?.lastName || ''}`.trim() || 'Unknown'}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          (inv as any).balance === 0 ? 'default' : 
-                          (inv as any).received > 0 ? 'secondary' : 
-                          'outline'
-                        }>
-                          {(inv as any).balance === 0 ? 'PAID' : ((inv as any).received > 0 ? 'PARTIAL' : 'PENDING')}
-                        </Badge>
+                      <TableCell className="text-right tabular-nums">
+                        <StatusBadge domain="invoice" status={(inv as any).balance === 0 ? 'PAID' : ((inv as any).received > 0 ? 'PARTIAL' : 'PENDING')} />
                       </TableCell>
-                      <TableCell>₹{((inv as any).total ?? (inv as any).totalAmount)?.toLocaleString?.('en-IN') || '0'}</TableCell>
-                      <TableCell className="text-sm text-gray-500">
+                      <TableCell className="text-right tabular-nums">₹{((inv as any).total ?? (inv as any).totalAmount)?.toLocaleString?.('en-IN') || '0'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
                         {displayClinicDate((inv as any).createdAt)}
                       </TableCell>
                       <TableCell>

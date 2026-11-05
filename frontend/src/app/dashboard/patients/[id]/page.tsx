@@ -1,7 +1,8 @@
 'use client';
 
 import { displayCalendarDate, displayUtcDate, displayLocalDate } from '@/lib/date-display';
-
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
@@ -169,14 +170,14 @@ export default function PatientDetailsPage() {
 
   if (loading) {
     return (
-      <div className="p-6 text-sm text-gray-600">Loading patient…</div>
+      <LoadingSkeleton variant="cards" label="Loading patient…" />
     );
   }
 
   if (error) {
     return (
       <div className="p-6">
-        <div className="mb-4 text-red-700 bg-red-50 border border-red-200 p-3 rounded text-sm">{error}</div>
+        <div className="mb-4 text-destructive-text bg-destructive-soft border border-destructive-border p-3 rounded-md text-sm">{error}</div>
         <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>Back to Patients</Button>
       </div>
     );
@@ -185,7 +186,7 @@ export default function PatientDetailsPage() {
   if (!patient) {
     return (
       <div className="p-6">
-        <div className="mb-4 text-gray-700 bg-gray-50 border border-gray-200 p-3 rounded text-sm">Patient not found.</div>
+        <div className="mb-4 text-foreground bg-background border border-border p-3 rounded-md text-sm">Patient not found.</div>
         <Button variant="outline" onClick={() => router.push('/dashboard/patients')}>Back to Patients</Button>
       </div>
     );
@@ -198,8 +199,8 @@ export default function PatientDetailsPage() {
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5" />
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900 leading-tight">{patientName || 'Patient'}</h1>
-              <div className="flex flex-wrap gap-2 mt-1 text-xs text-gray-600">
+              <PageHeader title={<>{patientName || 'Patient'}</>} />
+              <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground">
                 <Badge variant="secondary">ID: {patient.id}</Badge>
                 {patient.patientCode && <Badge variant="secondary">Code: {patient.patientCode}</Badge>}
                 {patient.abhaId && <Badge variant="outline">ABHA: {patient.abhaId}</Badge>}
@@ -227,23 +228,23 @@ export default function PatientDetailsPage() {
         <Card>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
             <div className="space-y-1">
-              <div className="text-gray-500">Primary contact</div>
-              <div className="font-medium text-gray-900">{patient.phone || '—'}</div>
-              <div className="text-gray-600">{patient.email || '—'}</div>
+              <div className="text-muted-foreground">Primary contact</div>
+              <div className="font-medium text-foreground">{patient.phone || '—'}</div>
+              <div className="text-muted-foreground">{patient.email || '—'}</div>
             </div>
             <div className="space-y-1">
-              <div className="text-gray-500">Last visit</div>
-              <div className="font-medium text-gray-900">
+              <div className="text-muted-foreground">Last visit</div>
+              <div className="font-medium text-foreground">
                 {lastVisitDate ? displayLocalDate(lastVisitDate) : 'No visits yet'}
               </div>
               {lastVisit?.doctor && (
-                <div className="text-gray-600">Dr. {(lastVisit.doctor.firstName ?? '')} {(lastVisit.doctor.lastName ?? '')}</div>
+                <div className="text-muted-foreground">Dr. {(lastVisit.doctor.firstName ?? '')} {(lastVisit.doctor.lastName ?? '')}</div>
               )}
             </div>
             <div className="space-y-1">
-              <div className="text-gray-500">Next appointment</div>
-              <div className="font-medium text-gray-900">{nextAppointmentLabel}</div>
-              <div className="text-gray-600">{patient.referralSource ? `Referral: ${patient.referralSource}` : ''}</div>
+              <div className="text-muted-foreground">Next appointment</div>
+              <div className="font-medium text-foreground">{nextAppointmentLabel}</div>
+              <div className="text-muted-foreground">{patient.referralSource ? `Referral: ${patient.referralSource}` : ''}</div>
             </div>
           </CardContent>
         </Card>
@@ -265,12 +266,12 @@ export default function PatientDetailsPage() {
               <CardTitle>Patient Information</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div><span className="text-gray-600">Gender:</span> <span className="text-gray-900">{patient.gender || '—'}</span></div>
-              <div><span className="text-gray-600">Age:</span> <span className="text-gray-900">{formatAge(patient)}</span></div>
-              <div><span className="text-gray-600">Phone:</span> <span className="text-gray-900">{patient.phone || '—'}</span></div>
-              <div><span className="text-gray-600">Email:</span> <span className="text-gray-900">{patient.email || '—'}</span></div>
-              <div><span className="text-gray-600">ABHA ID:</span> <span className="text-gray-900">{patient.abhaId || '—'}</span></div>
-              <div><span className="text-gray-600">Address:</span> <span className="text-gray-900">{patient.address || '—'}</span></div>
+              <div><span className="text-muted-foreground">Gender:</span> <span className="text-foreground">{patient.gender || '—'}</span></div>
+              <div><span className="text-muted-foreground">Age:</span> <span className="text-foreground">{formatAge(patient)}</span></div>
+              <div><span className="text-muted-foreground">Phone:</span> <span className="text-foreground">{patient.phone || '—'}</span></div>
+              <div><span className="text-muted-foreground">Email:</span> <span className="text-foreground">{patient.email || '—'}</span></div>
+              <div><span className="text-muted-foreground">ABHA ID:</span> <span className="text-foreground">{patient.abhaId || '—'}</span></div>
+              <div><span className="text-muted-foreground">Address:</span> <span className="text-foreground">{patient.address || '—'}</span></div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -279,19 +280,19 @@ export default function PatientDetailsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Patient History</CardTitle><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
-              {historyLoading && <p>Loading history…</p>}
+              {historyLoading && <LoadingSkeleton label="Loading history…" />}
               {historyError && <p role="alert">Unable to load history. {historyError}</p>}
             </CardHeader>
             <CardContent>
               {historyLoading || historyError ? null : visits.length === 0 ? (
-                <div className="text-sm text-gray-500">No documented history to show.</div>
+                <div className="text-sm text-muted-foreground">No documented history to show.</div>
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-3">
                     <div className="flex flex-wrap gap-2 items-center text-sm">
-                      <span className="text-gray-600">Filter:</span>
+                      <span className="text-muted-foreground">Filter:</span>
                       <select
-                        className="border border-gray-200 rounded px-3 py-2 text-sm"
+                        className="border border-border rounded-md px-3 py-2 text-sm"
                         value={doctorFilter}
                         onChange={(e) => setDoctorFilter(e.target.value)}
                       >
@@ -313,25 +314,25 @@ export default function PatientDetailsPage() {
                   </div>
 
                   {groupedByDate.length === 0 ? (
-                    <div className="text-sm text-gray-500">No records match the current filters.</div>
+                    <div className="text-sm text-muted-foreground">No records match the current filters.</div>
                   ) : (
                     <div className="space-y-3">
                       {groupedByDate.map((group) => {
                         const collapsed = collapsedDates[group.dateLabel];
                         const toggle = () => setCollapsedDates((prev) => ({ ...prev, [group.dateLabel]: !prev[group.dateLabel] }));
                         return (
-                          <div key={group.dateLabel} className="border border-gray-200 rounded">
+                          <div key={group.dateLabel} className="border border-border rounded-md">
                             <button
                               type="button"
-                              className="w-full flex items-center justify-between px-4 py-2 bg-gray-50 hover:bg-gray-100"
+                              className="w-full flex items-center justify-between px-4 py-2 bg-background hover:bg-muted"
                               onClick={toggle}
                             >
                               <div className="flex items-center gap-3">
-                                <Calendar className="h-4 w-4 text-gray-500" />
-                                <span className="font-medium text-gray-900">{group.dateLabel}</span>
+                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium text-foreground">{group.dateLabel}</span>
                                 <Badge variant="secondary">{group.entries.length} record{group.entries.length > 1 ? 's' : ''}</Badge>
                               </div>
-                              <span className="text-sm text-gray-600">{collapsed ? 'Show' : 'Hide'}</span>
+                              <span className="text-sm text-muted-foreground">{collapsed ? 'Show' : 'Hide'}</span>
                             </button>
                             {!collapsed && (
                               <div className="p-3 space-y-2">

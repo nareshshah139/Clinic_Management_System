@@ -73,15 +73,9 @@ export function BrandedModeProvider({ children }: { children: React.ReactNode })
       root.classList.add('branded');
     } else {
       root.classList.remove('branded');
-      // Allow CSS defaults to take over by clearing inline overrides
-      root.style.removeProperty('--primary');
-      root.style.removeProperty('--primary-foreground');
-      root.style.removeProperty('--accent');
-      root.style.removeProperty('--accent-foreground');
-      root.style.removeProperty('--ring');
-      root.style.removeProperty('--sidebar-primary');
-      root.style.removeProperty('--sidebar-primary-foreground');
-      root.style.removeProperty('--sidebar-ring');
+      for (const property of ['--brand-primary', '--brand-primary-foreground', '--brand-accent', '--brand-accent-foreground']) {
+        root.style.removeProperty(property);
+      }
     }
   }, []);
 

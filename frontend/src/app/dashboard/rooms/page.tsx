@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
 import { useState } from 'react';
 import RoomsManagement from '@/components/rooms/RoomsManagement';
 import RoomCalendar from '@/components/rooms/RoomCalendar';
@@ -16,14 +17,7 @@ export default function RoomsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Room Management</h1>
-          <p className="text-gray-600 mt-1">
-            Manage room schedules, occupancy, and configurations
-          </p>
-        </div>
-        <QuickGuide
+      <PageHeader title={<>Room Management</>} description={<>Manage room schedules, occupancy, and configurations</>} actions={<><QuickGuide
           title="Room Management Guide"
           sections={[
             {
@@ -54,8 +48,7 @@ export default function RoomsPage() {
               ]
             }
           ]}
-        />
-      </div>
+        /></>} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
@@ -73,7 +66,7 @@ export default function RoomsPage() {
 
         <TabsContent value="calendar" className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
-            <Calendar className="h-5 w-5 text-blue-600" />
+            <Calendar className="h-5 w-5 text-info-text" />
             <h2 className="text-xl font-semibold">Room Calendar & Occupancy</h2>
           </div>
           <div data-tour="room-calendar">
@@ -84,7 +77,7 @@ export default function RoomsPage() {
         {canManageRooms && (
           <TabsContent value="management" className="space-y-6">
             <div className="flex items-center gap-2 mb-4">
-              <Settings className="h-5 w-5 text-blue-600" />
+              <Settings className="h-5 w-5 text-info-text" />
               <h2 className="text-xl font-semibold">Room Configuration & Management</h2>
             </div>
             <RoomsManagement />

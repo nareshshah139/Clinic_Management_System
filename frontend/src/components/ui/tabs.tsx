@@ -152,7 +152,7 @@ function TabsFontSizeControls({ className }: { className?: string }) {
       <button
         type="button"
         onClick={ctx.decrease}
-        className="h-7 px-2 rounded border text-xs"
+        className="h-7 px-2 rounded-md border text-xs"
         aria-label="Decrease tab font size"
         title="Decrease tab font size"
       >
@@ -161,7 +161,7 @@ function TabsFontSizeControls({ className }: { className?: string }) {
       <button
         type="button"
         onClick={ctx.reset}
-        className="h-7 px-2 rounded border text-xs"
+        className="h-7 px-2 rounded-md border text-xs"
         aria-label="Reset tab font size"
         title="Reset tab font size"
       >
@@ -170,7 +170,7 @@ function TabsFontSizeControls({ className }: { className?: string }) {
       <button
         type="button"
         onClick={ctx.increase}
-        className="h-7 px-2 rounded border text-xs"
+        className="h-7 px-2 rounded-md border text-xs"
         aria-label="Increase tab font size"
         title="Increase tab font size"
       >

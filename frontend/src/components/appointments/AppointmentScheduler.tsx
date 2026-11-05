@@ -592,7 +592,7 @@ export default function AppointmentScheduler({
             {!hideHeaderControls && (
               <>
                 <div>
-                  <label className="text-sm text-gray-700">Doctor</label>
+                  <label className="text-sm text-foreground">Doctor</label>
                   <Select value={doctorId} onValueChange={setDoctorId}>
                     <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
                     <SelectContent>
@@ -601,13 +601,13 @@ export default function AppointmentScheduler({
                   </Select>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-700">Date</label>
+                  <label className="text-sm text-foreground">Date</label>
                   <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </>
             )}
             <div>
-              <label className="text-sm text-gray-700">Visit Type</label>
+              <label className="text-sm text-foreground">Visit Type</label>
               <Select value={visitTypeFilter} onValueChange={setVisitTypeFilter}>
                 <SelectTrigger><SelectValue placeholder="All Types" /></SelectTrigger>
                 <SelectContent>
@@ -619,7 +619,7 @@ export default function AppointmentScheduler({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Room</label>
+              <label className="text-sm text-foreground">Room</label>
               <Select value={roomFilter} onValueChange={setRoomFilter}>
                 <SelectTrigger><SelectValue placeholder="All Rooms" /></SelectTrigger>
                 <SelectContent>
@@ -631,7 +631,7 @@ export default function AppointmentScheduler({
               </Select>
             </div>
             <div>
-              <label className="text-sm text-gray-700">Duration</label>
+              <label className="text-sm text-foreground">Duration</label>
               <Select
                 value={String(slotConfig.stepMinutes)}
                 onValueChange={(v: string) => {
@@ -656,7 +656,7 @@ export default function AppointmentScheduler({
           </div>
 
           <div>
-            <label className="text-sm text-gray-700">Patient</label>
+            <label className="text-sm text-foreground">Patient</label>
             <Input 
               placeholder="Search patient by name/phone" 
               value={patientSearch} 
@@ -667,12 +667,12 @@ export default function AppointmentScheduler({
               }} 
             />
             {selectedPatient && (
-              <div className="mt-2 rounded border border-green-200 bg-green-50 p-3">
+              <div className="mt-2 rounded-md border border-success-border bg-success-soft p-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="font-medium text-green-800">✓ Selected Patient</div>
-                    <div className="text-green-700 font-medium">{formatPatientName(selectedPatient)}</div>
-                    <div className="mt-1 flex items-center gap-3 text-xs text-green-600">
+                    <div className="font-medium text-success-text">✓ Selected Patient</div>
+                    <div className="text-success-text font-medium">{formatPatientName(selectedPatient)}</div>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-success-text">
                       <span>ID: {selectedPatient.id}</span>
                       {selectedPatient.phone && <span>📞 {selectedPatient.phone}</span>}
                       {selectedPatient.email && <span>✉️ {selectedPatient.email}</span>}
@@ -696,18 +696,18 @@ export default function AppointmentScheduler({
             )}
 
             {!selectedPatientId && patientSearch && (
-              <div className="mt-2 flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-warning-border bg-warning-soft px-3 py-2 text-xs text-warning-text">
                 <AlertCircle className="h-4 w-4" />
                 <span>Select a patient from the list or add them as new before booking a slot.</span>
               </div>
             )}
 
             {patientSearch && patients.length > 0 && (
-              <div className="mt-2 max-h-40 overflow-auto border rounded">
+              <div className="mt-2 max-h-40 overflow-auto border rounded-md">
                 {patients.map((p) => (
                   <div
                     key={p.id}
-                    className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                    className="px-3 py-2 text-sm hover:bg-background cursor-pointer"
                     onClick={() => {
                       setPatientSearch(`${formatPatientName(p)} — ${p.phone}`);
                       setSelectedPatientId(p.id);
@@ -718,7 +718,7 @@ export default function AppointmentScheduler({
                     }}
                   >
                     <div className="font-medium">{formatPatientName(p)}</div>
-                    <div className="text-xs text-gray-500 flex items-center gap-3">
+                    <div className="text-xs text-muted-foreground flex items-center gap-3">
                       <span>ID: {p.id}</span>
                       {p.phone && <span>📞 {p.phone}</span>}
                       {p.email && <span>✉️ {p.email}</span>}
@@ -728,7 +728,7 @@ export default function AppointmentScheduler({
               </div>
             )}
             {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-              <div className="mt-2 flex flex-col gap-2 rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+              <div className="mt-2 flex flex-col gap-2 rounded-md border border-dashed border-border bg-background p-4 text-sm text-foreground">
                 <div>No matching patients found.</div>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
                   + Add "{patientSearch}" as a new patient
@@ -736,7 +736,7 @@ export default function AppointmentScheduler({
               </div>
             )}
             {patientSearch && !patients.length && !quickCreateOpen && !selectedPatientId && !searchingPatients && (
-              <div className="mt-2 text-xs text-gray-500">
+              <div className="mt-2 text-xs text-muted-foreground">
                 Tip: enter patient name and phone, then use "Add" to create a new record instantly.
               </div>
             )}

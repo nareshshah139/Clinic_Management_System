@@ -1,5 +1,9 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+
 import { useState, useEffect } from 'react';
 import {
   Card,
@@ -278,19 +282,15 @@ export function DrugManagement() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Drug Database</h2>
-          <p className="text-gray-600">Manage your pharmacy's drug inventory</p>
-        </div>
+      <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-blue-600 hover:bg-blue-700"
+          className="bg-info hover:bg-info"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug
         </Button>
-      </div>
+      } />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -298,12 +298,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Drugs</p>
+                <p className="text-sm text-muted-foreground">Total Drugs</p>
                 <p className="text-2xl font-bold">
                   {pagination.total.toLocaleString()}
                 </p>
               </div>
-              <Pill className="h-8 w-8 text-blue-600" />
+              <Pill className="h-8 w-8 text-info-text" />
             </div>
           </CardContent>
         </Card>
@@ -312,10 +312,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Categories</p>
+                <p className="text-sm text-muted-foreground">Categories</p>
                 <p className="text-2xl font-bold">{categories.length}</p>
               </div>
-              <Package className="h-8 w-8 text-green-600" />
+              <Package className="h-8 w-8 text-success-text" />
             </div>
           </CardContent>
         </Card>
@@ -324,10 +324,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Manufacturers</p>
+                <p className="text-sm text-muted-foreground">Manufacturers</p>
                 <p className="text-2xl font-bold">{manufacturers.length}</p>
               </div>
-              <Building className="h-8 w-8 text-purple-600" />
+              <Building className="h-8 w-8 text-highlight-text" />
             </div>
           </CardContent>
         </Card>
@@ -336,12 +336,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Active Drugs</p>
+                <p className="text-sm text-muted-foreground">Active Drugs</p>
                 <p className="text-2xl font-bold">
                   {drugs.filter((d) => d.isActive).length}
                 </p>
               </div>
-              <Calendar className="h-8 w-8 text-orange-600" />
+              <Calendar className="h-8 w-8 text-warning-text" />
             </div>
           </CardContent>
         </Card>
@@ -354,7 +354,7 @@ export function DrugManagement() {
             <div>
               <Label>Search Drugs</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Search by name, composition..."
                   value={searchQuery}
@@ -428,23 +428,15 @@ export function DrugManagement() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
-                <p className="text-gray-500">Loading drugs...</p>
-              </div>
-            </div>
+            <LoadingSkeleton label="Loading drugs…" variant="cards" />
           ) : drugs.length === 0 ? (
-            <div className="text-center py-8">
-              <Pill className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-              <p className="text-gray-500">No drugs found</p>
-            </div>
+            <EmptyState title="No drugs found" description="Adjust your search or add a drug to the database." icon={Pill} action={<Button onClick={() => setShowAddDialog(true)}><Plus className="size-4" />Add New Drug</Button>} />
           ) : (
             <div className="space-y-4">
               {drugs.map((drug) => (
                 <div
                   key={drug.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50"
+                  className="border rounded-lg p-4 hover:bg-background"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -461,7 +453,7 @@ export function DrugManagement() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
                         <div>
                           <p>
                             <strong>Manufacturer:</strong>{' '}
@@ -496,7 +488,7 @@ export function DrugManagement() {
                       </div>
 
                       {drug.composition2 && (
-                        <p className="text-sm text-blue-600 mt-2">
+                        <p className="text-sm text-info-text mt-2">
                           <strong>Additional:</strong> {drug.composition2}
                         </p>
                       )}
@@ -514,7 +506,7 @@ export function DrugManagement() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteDrug(drug.id)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-destructive-text hover:text-destructive-text"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -540,7 +532,7 @@ export function DrugManagement() {
                     Previous
                   </Button>
 
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-muted-foreground">
                     Page {pagination.page} of {pagination.pages}
                   </span>
 

@@ -1,5 +1,8 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
+import { Spinner } from '@/components/ui/spinner';
 import { Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -144,12 +147,7 @@ function PharmacyPageContent() {
 
   if (isLoading) {
     return (
-      <div className="flex-1 flex items-center justify-center p-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading pharmacy dashboard...</p>
-        </div>
-      </div>
+      <LoadingSkeleton variant="cards" label="Loading pharmacy dashboard…" />
     );
   }
 
@@ -194,9 +192,10 @@ function PharmacyPageContent() {
   };
 
   return (
-    <main className="flex-1 bg-[#eef4f8] p-2 md:p-3">
+    <main className="flex-1 bg-background p-2 md:p-3">
       <div ref={pharmacyWorkspaceRef} className="mx-auto max-w-[1560px] scroll-mt-3">
         <div className="space-y-3">
+          {pharmacyTab !== 'desk' && <PageHeader title={pharmacyTab === 'counter' ? 'Pharmacy Counter' : 'Pharmacy Billing'} />}
           {pharmacyTab === 'desk' ? (
             <PharmacyDeskPanel
               todaySales={todaySales}
@@ -241,12 +240,7 @@ function PharmacyPageContent() {
 
 function PharmacyPageLoading() {
   return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Loading pharmacy dashboard...</p>
-      </div>
-    </div>
+    <LoadingSkeleton variant="cards" label="Loading pharmacy dashboard…" />
   );
 }
 
@@ -283,18 +277,16 @@ function PharmacyDeskPanel({
 }) {
   return (
     <div className="space-y-3">
-      <section className="rounded-[12px] border border-slate-800 bg-slate-950 px-3 py-2.5 text-white shadow-[0_14px_40px_rgba(15,23,42,0.10)]">
+      <section className="rounded-lg border border-border bg-card px-3 py-2.5 text-foreground shadow-sm">
         <div className="grid gap-2 xl:grid-cols-[minmax(220px,0.7fr)_minmax(0,1fr)_auto] xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-semibold tracking-tight">
-                Pharmacy Desk
-              </h2>
-              <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-100">
+              <PageHeader title="Pharmacy Desk" />
+              <span className="rounded-full border border-success-border/30 bg-success/10 px-2.5 py-0.5 text-xs font-semibold text-success-text">
                 Command center
               </span>
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               Queue, review, pick, bill, pay, dispense.
             </p>
           </div>
@@ -335,7 +327,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
               onClick={() => window.dispatchEvent(new CustomEvent('pharmacy-dashboard-refresh'))}
             >
               <RefreshCcw className="h-4 w-4" />
@@ -344,7 +336,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
               onClick={onOpenInvoices}
             >
               <Receipt className="h-4 w-4" />
@@ -353,7 +345,7 @@ function PharmacyDeskPanel({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
               onClick={onOpenDrugs}
             >
               <Pill className="h-4 w-4" />
@@ -481,17 +473,17 @@ function PharmacyBillingPanel({
 
 function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
   return (
-    <section className="rounded-[10px] border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+    <section className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-slate-950 text-white">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-card text-foreground">
             <Bot className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-slate-950">
+            <h3 className="truncate text-sm font-semibold text-foreground">
               Pharmacy AI assistant
             </h3>
-            <p className="truncate text-xs text-slate-500">
+            <p className="truncate text-xs text-muted-foreground">
               Opens when needed.
             </p>
           </div>
@@ -507,10 +499,10 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
 
 function AgenticPharmacyDockLoading() {
   return (
-    <section className="rounded-[10px] border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
-      <div className="flex items-center gap-3 text-sm text-slate-600">
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
-        Loading pharmacy assistant...
+    <section className="rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+        <Spinner className="h-4 w-4     " />
+        Loading pharmacy assistant…
       </div>
     </section>
   );
@@ -521,7 +513,7 @@ function PharmacyGuide() {
     <QuickGuide
       title="Pharmacy Management Guide"
       triggerVariant="ghost"
-      triggerClassName="text-white hover:bg-white/10 hover:text-white"
+      triggerClassName="text-foreground hover:bg-card/10 hover:text-foreground"
       sections={[
         {
           title: 'Prescription & Auto-Fill',
@@ -567,23 +559,23 @@ function MetricStrip({
   intent: 'green' | 'blue' | 'purple' | 'amber';
 }) {
   const colors = {
-    green: 'bg-emerald-50 text-emerald-700',
-    blue: 'bg-blue-50 text-blue-700',
-    purple: 'bg-violet-50 text-violet-700',
-    amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-success-soft text-success-text',
+    blue: 'bg-info-soft text-info-text',
+    purple: 'bg-highlight-soft text-highlight-text',
+    amber: 'bg-warning-soft text-warning-text',
   };
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-[8px] border border-white/10 bg-white/10 px-2.5 py-1.5">
+    <div className="flex items-center justify-between gap-2 rounded-md border border-current/10 bg-card/10 px-2.5 py-1.5">
       <div className="min-w-0">
-        <p className="text-[11px] text-slate-300">{label}</p>
-        <p className="truncate text-base font-semibold leading-5 text-white">{value}</p>
-        <p className="flex items-center text-[10px] leading-4 text-slate-400">
-          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-emerald-700" />}
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="truncate text-base font-semibold leading-5 text-foreground">{value}</p>
+        <p className="flex items-center text-xs leading-4 text-muted-foreground">
+          {label === "Today's sales" && <TrendingUp className="mr-1 h-3 w-3 text-success-text" />}
           {detail}
         </p>
       </div>
-      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] ${colors[intent]}`}>
+      <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${colors[intent]}`}>
         {icon}
       </div>
     </div>
@@ -605,18 +597,18 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center justify-between gap-2 rounded-[8px] border border-white/10 bg-white/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-white/15"
+      className="group flex items-center justify-between gap-2 rounded-md border border-current/10 bg-card/10 px-2.5 py-1.5 text-left transition hover:-translate-y-0.5 hover:bg-card/15"
     >
       <div className="flex min-w-0 items-center gap-2">
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] bg-white text-slate-950">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-card text-foreground">
           {icon}
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-white">{title}</p>
-          <p className="truncate text-[11px] text-slate-300">{detail}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{title}</p>
+          <p className="truncate text-xs text-muted-foreground">{detail}</p>
         </div>
       </div>
-      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-hover:translate-x-1" />
+      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1" />
     </button>
   );
 }
@@ -629,12 +621,12 @@ function WorkbenchHeader({
   detail: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-[8px] border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-card px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <p className="text-lg font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{detail}</p>
+        <p className="text-lg font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{detail}</p>
       </div>
-      <div className="flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800">
+      <div className="flex items-center gap-2 rounded-full border border-success-border bg-success-soft px-3 py-1 text-xs font-semibold text-success-text">
         <CheckCircle2 className="h-3.5 w-3.5" />
         Validate before adding stock
       </div>

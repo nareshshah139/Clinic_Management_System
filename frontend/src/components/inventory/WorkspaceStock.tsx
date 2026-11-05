@@ -355,16 +355,16 @@ export function WorkspaceStock({
                 {item.priceBasis}.
               </p>
               {!capabilities?.kinds?.COUNT?.write && (
-                <section className="space-y-2 rounded border p-4" aria-label="Batch recovery handoff">
+                <section className="space-y-2 rounded-md border p-4" aria-label="Batch recovery handoff">
                   {item.drugs?.length > 1 && <p>This batch is linked to more than one product. Its physical product must be verified before reconciliation.</p>}
                   <p>Ask a colleague with Counts &amp; audit write access to open this batch, verify its product identity when needed, and record a fresh physical count. Viewing this batch or sharing this reference does not change stock.</p>
                   <label className="block">Batch recovery reference
-                    <input className="mt-1 w-full rounded border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
+                    <input className="mt-1 w-full rounded-md border p-2" readOnly value={`/dashboard/inventory?area=stock&view=list&item=${encodeURIComponent(item.id)}`} onFocus={event => event.currentTarget.select()} />
                   </label>
                 </section>
               )}
               {item.drugs?.length > 1 && capabilities?.kinds?.COUNT?.write && (
-                <form key={`${item.id}:${item.updatedAt}`} className="space-y-3 rounded border p-4 print:hidden" onSubmit={async e => {
+                <form key={`${item.id}:${item.updatedAt}`} className="space-y-3 rounded-md border p-4 print:hidden" onSubmit={async e => {
                   e.preventDefault();
                   const values = new FormData(e.currentTarget);
                   setBusy(true); setError("");
@@ -381,12 +381,12 @@ export function WorkspaceStock({
                   <p className="font-medium">Resolve this batch’s product identity</p>
                   <p>This batch is linked to more than one product. Verify the physical pack before choosing its product. Resolving the link does not change the stock quantity.</p>
                   <label className="block">Verified product
-                    <select name="productId" required className="ml-2 rounded border p-2" defaultValue="">
+                    <select name="productId" required className="ml-2 rounded-md border p-2" defaultValue="">
                       <option value="" disabled>Select the product on the physical pack</option>
                       {item.drugs.map((drug: any) => <option key={drug.id} value={drug.id}>{drug.name}</option>)}
                     </select>
                   </label>
-                  <label className="block">Reason <input name="reason" required maxLength={500} className="ml-2 rounded border p-2" /></label>
+                  <label className="block">Reason <input name="reason" required maxLength={500} className="ml-2 rounded-md border p-2" /></label>
                   <label className="block"><input name="confirmed" type="checkbox" required /> I verified the physical product and the existing {item.unit} stock unit and pack size.</label>
                   <Button disabled={busy}>Resolve product identity</Button>
                 </form>
@@ -519,7 +519,7 @@ export function WorkspaceStock({
                               <td>{b.unit}</td>
                               <td>{b.baseQuantity ?? "Unknown"}</td>
                               <td>{fmtMoney(b.costPrice)}</td>
-                              <td>{fmtMoney(b.mrp)}</td>
+                              <td className="text-right tabular-nums">{fmtMoney(b.mrp)}</td>
                               <td>
                                 {b.metadata.landingCostPerStockUnit == null
                                   ? "Unknown"
@@ -674,7 +674,7 @@ export function WorkspaceStock({
                           )
                           .map((m: any) => (
                             <tr key={m.id}>
-                              <td className="p-3">
+                              <td className="p-3 text-right tabular-nums">
                                 {displayClinicDateTime(m.createdAt)}
                               </td>
                               <td className="p-3">
@@ -1324,7 +1324,7 @@ export function WorkspaceStock({
                       </button>
                       {i.packLabel && <p className="text-sm">{i.packLabel}</p>}
                       {i.productName && i.productName !== i.name && <p className="text-xs text-muted-foreground">Recorded as: {i.name}</p>}
-                      {i.searchMatch?.kind === "fuzzy" && <p className="text-xs text-amber-800 dark:text-amber-200">Similar spelling: {i.searchMatch.corrections.join(", ")}</p>}
+                      {i.searchMatch?.kind === "fuzzy" && <p className="text-xs text-warning-text dark:text-warning-text">Similar spelling: {i.searchMatch.corrections.join(", ")}</p>}
                       {i.searchMatch?.kind === "alias" && <p className="text-xs text-muted-foreground">Matched earlier name: {i.searchMatch.matchedText}</p>}
                       <p className="text-xs text-muted-foreground">
                         {i.batchNumber || "Batch missing"}
@@ -1336,7 +1336,7 @@ export function WorkspaceStock({
                     </td>
                     {moreColumns && <><td className="p-3">{i.currentStock}</td><td className="p-3">{i.heldStock}</td></>}
                     <td className="p-3"><strong className="whitespace-nowrap">{i.available} {!moreColumns && i.unit}</strong>{!moreColumns && i.heldStock > 0 && <p className="text-sm text-muted-foreground">{i.heldStock} set aside</p>}</td>
-                    {moreColumns && <><td className="p-3">{i.unit}</td><td className="p-3">{fmtMoney(i.costPrice)}</td><td className="p-3">{fmtMoney(i.mrp)}</td></>}
+                    {moreColumns && <><td className="p-3">{i.unit}</td><td className="p-3">{fmtMoney(i.costPrice)}</td><td className="p-3 text-right tabular-nums">{fmtMoney(i.mrp)}</td></>}
                     <td className="p-3">{fmtMoney(i.sellingPrice)}</td>
                     <td className="p-3">
                       {i.storageLocation || "Not assigned"}

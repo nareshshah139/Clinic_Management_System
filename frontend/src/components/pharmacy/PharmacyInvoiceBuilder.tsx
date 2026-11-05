@@ -27,7 +27,6 @@ import {
   inferFrequencyFromDosePattern,
   inferTimingFromDosePattern,
 } from '@/lib/frequency';
-import { Badge } from '@/components/ui/badge';
 import {
   X,
   Search,
@@ -970,12 +969,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                       />
                       {patientDropdownMounted && patientResults.length > 0 && (
                         <div
-                          className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showPatientResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                          className={`absolute top-full left-0 right-0 z-50 mt-1 bg-card border rounded-md shadow-sm max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showPatientResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
                         >
                           {patientResults.map((p) => (
                             <div
                               key={p.id}
-                              className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                              className="p-3 hover:bg-background cursor-pointer border-b last:border-b-0"
                               onMouseDown={() => handleSelectPatient(p)}
                             >
                               <div className="flex justify-between items-start">
@@ -984,7 +983,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                                     {p.name}
                                   </div>
                                   {p.phone && (
-                                    <div className="text-xs text-gray-500">
+                                    <div className="text-xs text-muted-foreground">
                                       {p.phone}
                                     </div>
                                   )}
@@ -1070,12 +1069,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   {/* Search Results Dropdown */}
                   {dropdownMounted && searchResults.length > 0 && (
                     <div
-                      className={`absolute top-full left-0 right-0 z-50 mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showSearchResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+                      className={`absolute top-full left-0 right-0 z-50 mt-1 bg-card border rounded-md shadow-sm max-h-60 overflow-y-auto transition ease-out duration-150 transform origin-top ${showSearchResults ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
                     >
                       {searchResults.map((drug) => (
                         <div
                           key={drug.id}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                          className="p-3 hover:bg-background cursor-pointer border-b last:border-b-0"
                           onMouseDown={() => addDrugToInvoice(drug)}
                         >
                           <div className="flex justify-between items-start">
@@ -1083,11 +1082,11 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                               <div className="font-medium text-sm">
                                 {drug.name}
                               </div>
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-muted-foreground">
                                 {drug.manufacturerName} • {drug.packSizeLabel}
                               </div>
                               {drug.composition1 && (
-                                <div className="text-xs text-blue-600 mt-1">
+                                <div className="text-xs text-info-text mt-1">
                                   {drug.composition1}
                                   {drug.composition2 &&
                                     ` • ${drug.composition2}`}
@@ -1116,8 +1115,8 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
               </CardHeader>
               <CardContent>
                 {items.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    <Pill className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Pill className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p>No items added yet. Search and add drugs above.</p>
                   </div>
                 ) : (
@@ -1127,12 +1126,12 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                         <div className="flex justify-between items-start mb-3">
                           <div className="flex-1">
                             <h4 className="font-medium">{item.drug?.name}</h4>
-                            <p className="text-sm text-gray-500">
+                            <p className="text-sm text-muted-foreground">
                               {item.drug?.manufacturerName} •{' '}
                               {item.drug?.packSizeLabel}
                             </p>
                             {item.drug?.composition1 && (
-                              <p className="text-xs text-blue-600 mt-1">
+                              <p className="text-xs text-info-text mt-1">
                                 {item.drug?.composition1}
                               </p>
                             )}
@@ -1141,7 +1140,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                             variant="ghost"
                             size="sm"
                             onClick={() => removeItem(item.drugId)}
-                            className="text-red-500 hover:text-red-700"
+                            className="text-destructive-text hover:text-destructive-text"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -1170,7 +1169,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                               step="0.01"
                               value={item.unitPrice}
                               disabled
-                              className="h-8 bg-gray-50"
+                              className="h-8 bg-background"
                             />
                           </div>
                           <div>
@@ -1303,7 +1302,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                           </div>
                           <div>
                             <Label className="text-xs">Total</Label>
-                            <div className="h-8 px-3 py-1 bg-gray-50 border rounded-md flex items-center text-sm font-semibold">
+                            <div className="h-8 px-3 py-1 bg-background border rounded-md flex items-center text-sm font-semibold">
                               ₹{item.totalAmount.toFixed(2)}
                             </div>
                           </div>
@@ -1476,7 +1475,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
                   <span>Subtotal</span>
                   <span>₹{totals.subtotal.toFixed(2)}</span>
                 </div>
-                <div className="flex justify-between text-red-600">
+                <div className="flex justify-between text-destructive-text">
                   <span>Discount</span>
                   <span>-₹{totals.totalDiscount.toFixed(2)}</span>
                 </div>
@@ -1542,7 +1541,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
               </Button>
               <Button
                 onClick={() => saveInvoice('CONFIRMED')}
-                className="w-full bg-blue-600 hover:bg-blue-700"
+                className="w-full bg-info hover:bg-info"
                 disabled={loading || items.length === 0}
               >
                 <Send className="h-4 w-4 mr-2" />

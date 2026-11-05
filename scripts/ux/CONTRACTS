@@ -1,0 +1,2 @@
+@cc [owner:nareshshah139,label:product] visual-migration-boundary
+Visual migration tools MUST preserve printed HTML strings, clinical values, event handlers and scheduling geometry. Only class tokens and JSX presentation nodes may change. A dry run MUST NOT write source files.

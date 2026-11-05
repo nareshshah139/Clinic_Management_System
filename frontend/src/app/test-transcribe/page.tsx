@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -285,15 +286,10 @@ export default function TestTranscribePage() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-3xl font-bold">Voice Transcription Test</h1>
-          <Button asChild variant="outline">
-            <a href="/dashboard">
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Back to dashboard
-            </a>
-          </Button>
-        </div>
+        <PageHeader
+          title="Voice Transcription Test"
+          actions={<Button asChild variant="outline"><a href="/dashboard"><ArrowLeft className="h-4 w-4" aria-hidden="true" />Back to dashboard</a></Button>}
+        />
         <p className="text-muted-foreground">
           Test the OpenAI Whisper transcription API with speaker diarization
         </p>
@@ -322,13 +318,13 @@ export default function TestTranscribePage() {
                 <div className="h-4 bg-secondary rounded-full overflow-hidden">
                   <div
                     className={`h-full transition-all duration-100 ${
-                      audioLevel > 70 ? 'bg-green-500' : audioLevel > 30 ? 'bg-yellow-500' : 'bg-red-500'
+                      audioLevel > 70 ? 'bg-success' : audioLevel > 30 ? 'bg-warning' : 'bg-destructive'
                     }`}
                     style={{ width: `${audioLevel}%` }}
                   />
                 </div>
                 {audioLevel < 20 && (
-                  <p className="text-xs text-amber-600">
+                  <p className="text-xs text-warning-text">
                     ⚠️ Low audio level - speak louder or move closer to microphone
                   </p>
                 )}
@@ -441,7 +437,7 @@ export default function TestTranscribePage() {
                       <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
                         <Badge>Doctor</Badge>
                       </h3>
-                      <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg">
+                      <div className="p-4 bg-info-soft dark:bg-info rounded-lg">
                         <p className="whitespace-pre-wrap">{transcription.speakers.doctorText}</p>
                       </div>
                     </div>
@@ -452,7 +448,7 @@ export default function TestTranscribePage() {
                       <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
                         <Badge variant="secondary">Patient</Badge>
                       </h3>
-                      <div className="p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+                      <div className="p-4 bg-success-soft dark:bg-success rounded-lg">
                         <p className="whitespace-pre-wrap">{transcription.speakers.patientText}</p>
                       </div>
                     </div>
@@ -474,8 +470,8 @@ export default function TestTranscribePage() {
                         key={idx}
                         className={`p-3 rounded-lg ${
                           segment.speaker === 'DOCTOR'
-                            ? 'bg-blue-50 dark:bg-blue-950'
-                            : 'bg-green-50 dark:bg-green-950'
+                            ? 'bg-info-soft dark:bg-info'
+                            : 'bg-success-soft dark:bg-success'
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1">
