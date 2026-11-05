@@ -21,6 +21,11 @@ import type { Room } from '@/lib/types';
  * Appointment fills and legend swatches MUST use the same theme-aware colors for visit type,
  * past appointments and completed appointments without changing their scheduled time spans.
  */
+/**
+ * @cc [owner:nareshshah139,label:product] room-calendar-label-wrapping
+ * Appointment names and procedure notes MUST wrap within the room column and stay within the
+ * scheduled time span; details remain available in the appointment tooltip when text is clipped.
+ */
 export default function RoomCalendar() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -508,8 +513,8 @@ export default function RoomCalendar() {
                               }
                             }}
                           >
-                            <div className="font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
-                              <div className="truncate font-semibold">
+                            <div className="w-full min-w-0 max-h-full overflow-hidden font-medium px-1 py-1 text-center transition-all duration-200 group-hover/col:opacity-40 hover:opacity-100" style={{ color: '#000000', fontSize: 'calc(0.75rem + var(--app-text-increase, 0rem))', lineHeight: '1.2' }}>
+                              <div className="whitespace-normal [overflow-wrap:anywhere] font-semibold">
                                 {apt.patient.name}
                                 {apt.visitType === 'PROCEDURE' && apt.notes && (
                                   <span className="text-purple-700 font-medium ml-0.5">({apt.notes})</span>
@@ -580,6 +585,9 @@ export default function RoomCalendar() {
               {hoveredApt.status && (
                 <div className="text-xs"><span className="font-medium text-gray-700">Status:</span> {hoveredApt.status}</div>
               )}
+              {hoveredApt.visitType === 'PROCEDURE' && hoveredApt.notes && (
+                <div className="text-xs [overflow-wrap:anywhere]"><span className="font-medium text-gray-700">Notes:</span> {hoveredApt.notes}</div>
+              )}
             </div>
             {hoveredRoomInfo && (
               <div className="text-xs">
@@ -629,4 +637,4 @@ export default function RoomCalendar() {
 
     </div>
   );
-} 
+}
