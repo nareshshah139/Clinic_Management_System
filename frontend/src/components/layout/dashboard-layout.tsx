@@ -113,7 +113,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <DashboardUserProvider value={contextValue}>
-      <div className="h-screen flex bg-background">
+      <div className="h-screen flex bg-gray-50">
         {/* Sidebar */}
         <div className="hidden shrink-0 md:block">
           <Suspense
@@ -131,7 +131,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <div className="hidden md:block">
             <Header />
           </div>
-          <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-card px-4 md:hidden">
+          <div className="flex h-14 shrink-0 items-center gap-3 border-b bg-white px-4 md:hidden">
             <Sheet open={navigationOpen} onOpenChange={setNavigationOpen}>
               <SheetTrigger asChild>
                 <Button

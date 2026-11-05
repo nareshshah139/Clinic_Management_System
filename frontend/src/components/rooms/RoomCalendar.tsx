@@ -208,14 +208,14 @@ export default function RoomCalendar() {
     const vt = (visitType || '').toUpperCase();
     switch (vt) {
       case 'OPD':
-        return 'bg-calendar-consultation text-calendar-consultation-foreground';
+        return 'bg-blue-100 text-blue-800';
       case 'PROCEDURE':
-        return 'bg-calendar-procedure text-calendar-procedure-foreground';
+        return 'bg-purple-100 text-purple-800';
       case 'TELEMED':
       case 'TELEMEDICINE':
-        return 'bg-highlight-soft text-highlight-text';
+        return 'bg-green-100 text-green-800';
       default:
-        return 'bg-muted text-foreground';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -239,7 +239,7 @@ export default function RoomCalendar() {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="flex min-w-0 items-center gap-2 sm:min-w-[200px]">
-              <Calendar className="h-5 w-5 text-info-text" />
+              <Calendar className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold">
                 {displayLocalDateHeading(selectedDate)}
               </h2>
@@ -299,9 +299,9 @@ export default function RoomCalendar() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-info-text" />
+              <User className="h-5 w-5 text-blue-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Total Rooms</p>
+                <p className="text-sm text-gray-600">Total Rooms</p>
                 <p className="text-2xl font-bold">{filteredRooms.length}</p>
               </div>
             </div>
@@ -310,10 +310,10 @@ export default function RoomCalendar() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-success-text" />
+              <Clock className="h-5 w-5 text-green-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Available</p>
-                <p className="text-2xl font-bold text-success-text">
+                <p className="text-sm text-gray-600">Available</p>
+                <p className="text-2xl font-bold text-green-600">
                   {filteredRooms.filter(room => {
                     const schedule = roomSchedules[room.id];
                     return !schedule || schedule.appointments.length === 0;
@@ -326,10 +326,10 @@ export default function RoomCalendar() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-warning-text" />
+              <User className="h-5 w-5 text-orange-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Occupied</p>
-                <p className="text-2xl font-bold text-warning-text">
+                <p className="text-sm text-gray-600">Occupied</p>
+                <p className="text-2xl font-bold text-orange-600">
                   {filteredRooms.filter(room => {
                     const schedule = roomSchedules[room.id];
                     return schedule && schedule.appointments.length > 0;
@@ -342,10 +342,10 @@ export default function RoomCalendar() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Stethoscope className="h-5 w-5 text-highlight-text" />
+              <Stethoscope className="h-5 w-5 text-purple-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Appointments</p>
-                <p className="text-2xl font-bold text-highlight-text">
+                <p className="text-sm text-gray-600">Appointments</p>
+                <p className="text-2xl font-bold text-purple-600">
                   {Object.values(roomSchedules).reduce((total, schedule) => 
                     total + schedule.appointments.length, 0
                   )}
@@ -369,11 +369,11 @@ export default function RoomCalendar() {
             <div className="min-w-[800px]" style={{ overflow: 'visible' }}>
               {/* Header Row */}
               <div className="grid grid-cols-[120px_repeat(auto-fit,minmax(200px,1fr))] gap-2 mb-2">
-                <div className="font-semibold text-sm text-muted-foreground p-2">Time</div>
+                <div className="font-semibold text-sm text-gray-600 p-2">Time</div>
                 {filteredRooms.map((room) => (
-                  <div key={room.id} className="text-center p-2 bg-background rounded-md">
+                  <div key={room.id} className="text-center p-2 bg-gray-50 rounded-md">
                     <div className="font-semibold text-sm">{room.name}</div>
-                    <div className="text-xs text-muted-foreground flex items-center justify-center gap-1">
+                    <div className="text-xs text-gray-600 flex items-center justify-center gap-1">
                       <span>{getRoomTypeIcon(room.type)}</span>
                       <span>{room.type}</span>
                       <Badge variant="outline" className="text-xs">
@@ -389,7 +389,7 @@ export default function RoomCalendar() {
                 {/* Time gutter (left) */}
                 <div className="relative" style={{ height: '80vh' }}>
                   {timeSlots.map((slot) => (
-                    <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-muted-foreground"
+                    <div key={`gutter-${slot.label}`} className="absolute left-0 right-0 flex items-center pl-2 text-xs text-gray-600"
                       style={{ top: `${((slot.startMin - 9*60) * 100) / (9*60)}%`, transform: 'translateY(-50%)' }}
                       id={`time-${slot.label}`}
                     >
@@ -409,18 +409,18 @@ export default function RoomCalendar() {
                   const getColor = (vt: string, completed: boolean, slot: string) => {
                     const isPast = isSlotInPast(slot, dateStr);
                     
-                    if (completed) return 'var(--muted)';
+                    if (completed) return 'var(--calendar-completed)';
                     
                     const upper = (vt || '').toUpperCase();
                     
                     if (isPast) {
-                      if (upper === 'PROCEDURE') return 'color-mix(in oklab, var(--calendar-procedure) 55%, var(--card))';
-                      if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'color-mix(in oklab, var(--highlight-soft) 55%, var(--card))';
-                      return 'color-mix(in oklab, var(--calendar-consultation) 55%, var(--card))';
+                      if (upper === 'PROCEDURE') return 'var(--calendar-procedure-past)';
+                      if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine-past)';
+                      return 'var(--calendar-consultation-past)';
                     }
                     
                     if (upper === 'PROCEDURE') return 'var(--calendar-procedure)';
-                    if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--highlight-soft)';
+                    if (upper === 'TELEMED' || upper === 'TELEMEDICINE') return 'var(--calendar-telemedicine)';
                     return 'var(--calendar-consultation)';
                   };
                   const overlapsWith = (a: any, b: any) => {
@@ -432,10 +432,10 @@ export default function RoomCalendar() {
                     return a1 < b2 && a2 > b1;
                   };
                   return (
-                    <div key={`col-${room.id}`} className="relative bg-card rounded-md border group/col" style={{ height: '80vh' }}>
+                    <div key={`col-${room.id}`} className="relative bg-white rounded-md border group/col" style={{ height: '80vh' }}>
                       {/* Horizontal grid lines */}
                       {timeSlots.map((slot) => (
-                        <div key={`line-${room.id}-${slot.label}`} className="absolute left-0 right-0 border-t border-border"
+                        <div key={`line-${room.id}-${slot.label}`} className="absolute left-0 right-0 border-t border-gray-200"
                           style={{ top: `${((slot.startMin - dayStart) * 100) / total}%` }}
                         />
                       ))}
@@ -512,7 +512,7 @@ export default function RoomCalendar() {
                               <div className="truncate font-semibold">
                                 {apt.patient.name}
                                 {apt.visitType === 'PROCEDURE' && apt.notes && (
-                                  <span className="text-highlight-text font-medium ml-0.5">({apt.notes})</span>
+                                  <span className="text-purple-700 font-medium ml-0.5">({apt.notes})</span>
                                 )}
                               </div>
                             </div>
@@ -533,7 +533,7 @@ export default function RoomCalendar() {
       {/* Global fixed tooltip - avoids parent overflow clipping */}
       {hoveredApt && tooltipPos && (
         <div
-          className="fixed bg-card shadow-sm border border-border rounded-xl"
+          className="fixed bg-white shadow-sm border border-gray-300 rounded-xl"
           style={{
             top: Math.max(8, tooltipPos.top - 120),
             left: tooltipPos.left,
@@ -551,39 +551,39 @@ export default function RoomCalendar() {
           }}
         >
           <div className="text-sm space-y-2">
-            <div className="border-b border-border pb-2">
-              <div className="font-semibold text-foreground">{hoveredApt.patient?.name}</div>
-              <div className="text-xs text-muted-foreground">{getISTDateString(selectedDate)} • {hoveredApt.slot}</div>
+            <div className="border-b border-gray-200 pb-2">
+              <div className="font-semibold text-gray-900">{hoveredApt.patient?.name}</div>
+              <div className="text-xs text-gray-600">{getISTDateString(selectedDate)} • {hoveredApt.slot}</div>
             </div>
             <div>
               {hoveredApt.patient?.phone && (
-                <div className="text-xs"><span className="font-medium text-foreground">Phone:</span> {hoveredApt.patient.phone}</div>
+                <div className="text-xs"><span className="font-medium text-gray-700">Phone:</span> {hoveredApt.patient.phone}</div>
               )}
               {hoveredApt.patient?.email && (
-                <div className="text-xs"><span className="font-medium text-foreground">Email:</span> {hoveredApt.patient.email}</div>
+                <div className="text-xs"><span className="font-medium text-gray-700">Email:</span> {hoveredApt.patient.email}</div>
               )}
             </div>
             <div>
               {hoveredApt.doctor && (
-                <div className="text-xs"><span className="font-medium text-foreground">Doctor:</span> Dr. {hoveredApt.doctor.firstName} {hoveredApt.doctor.lastName}</div>
+                <div className="text-xs"><span className="font-medium text-gray-700">Doctor:</span> Dr. {hoveredApt.doctor.firstName} {hoveredApt.doctor.lastName}</div>
               )}
               <div className="text-xs">
-                <span className="font-medium text-foreground">Type:</span>
+                <span className="font-medium text-gray-700">Type:</span>
                 <span className={`ml-1 px-2 py-0.5 rounded-md text-xs font-medium ${
-                  hoveredApt.visitType === 'PROCEDURE' ? 'bg-destructive-soft text-destructive-text' :
-                  hoveredApt.visitType === 'TELEMED' ? 'bg-muted text-foreground' :
-                  'bg-info-soft text-info-text'
+                  hoveredApt.visitType === 'PROCEDURE' ? 'bg-red-100 text-red-800' :
+                  hoveredApt.visitType === 'TELEMED' ? 'bg-gray-100 text-gray-800' :
+                  'bg-blue-100 text-blue-800'
                 }`}>
                   {hoveredApt.visitType || 'OPD'}
                 </span>
               </div>
               {hoveredApt.status && (
-                <div className="text-xs"><span className="font-medium text-foreground">Status:</span> {hoveredApt.status}</div>
+                <div className="text-xs"><span className="font-medium text-gray-700">Status:</span> {hoveredApt.status}</div>
               )}
             </div>
             {hoveredRoomInfo && (
               <div className="text-xs">
-                <span className="font-medium text-foreground">Room:</span> {hoveredRoomInfo.name} ({hoveredRoomInfo.type})
+                <span className="font-medium text-gray-700">Room:</span> {hoveredRoomInfo.name} ({hoveredRoomInfo.type})
               </div>
             )}
           </div>
@@ -596,7 +596,7 @@ export default function RoomCalendar() {
           <h3 className="font-semibold mb-3">Legend</h3>
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-success-soft border border-success-border rounded-md"></div>
+              <div className="w-4 h-4 bg-green-50 border border-green-200 rounded-md"></div>
               <span className="text-sm">Available</span>
             </div>
             <div className="flex items-center gap-2">
@@ -608,19 +608,19 @@ export default function RoomCalendar() {
               <span className="text-sm">Procedure</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--highlight-soft)' }} />
+              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-telemedicine)' }} />
               <span className="text-sm">Telemedicine</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--muted)' }} />
+              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-completed)' }} />
               <span className="text-sm">Completed</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'color-mix(in oklab, var(--calendar-consultation) 55%, var(--card))' }} />
+              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation-past)' }} />
               <span className="text-sm">Past (OPD)</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'color-mix(in oklab, var(--calendar-procedure) 55%, var(--card))' }} />
+              <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure-past)' }} />
               <span className="text-sm">Past (Procedure)</span>
             </div>
           </div>

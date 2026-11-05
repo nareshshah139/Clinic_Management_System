@@ -195,7 +195,7 @@ export default function RoomsManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Rooms Management</h2>
-          <p className="text-muted-foreground">Manage clinic rooms and their configurations</p>
+          <p className="text-gray-600">Manage clinic rooms and their configurations</p>
         </div>
         <Button onClick={handleOpenAddDialog} className="flex items-center gap-2">
           <Plus className="h-4 w-4" />
@@ -208,9 +208,9 @@ export default function RoomsManagement() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-info-text" />
+              <MapPin className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="text-sm text-muted-foreground">Total Rooms</p>
+                <p className="text-sm text-gray-600">Total Rooms</p>
                 <p className="text-2xl font-bold">{stats.total}</p>
               </div>
             </div>
@@ -222,7 +222,7 @@ export default function RoomsManagement() {
             <div className="flex items-center gap-2">
               <span className="text-lg">🩺</span>
               <div>
-                <p className="text-sm text-muted-foreground">Consultation</p>
+                <p className="text-sm text-gray-600">Consultation</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Consultation')?.count || 0}</p>
               </div>
             </div>
@@ -234,7 +234,7 @@ export default function RoomsManagement() {
             <div className="flex items-center gap-2">
               <span className="text-lg">🏥</span>
               <div>
-                <p className="text-sm text-muted-foreground">Procedure</p>
+                <p className="text-sm text-gray-600">Procedure</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Procedure')?.count || 0}</p>
               </div>
             </div>
@@ -246,7 +246,7 @@ export default function RoomsManagement() {
             <div className="flex items-center gap-2">
               <span className="text-lg">💻</span>
               <div>
-                <p className="text-sm text-muted-foreground">Telemedicine</p>
+                <p className="text-sm text-gray-600">Telemedicine</p>
                 <p className="text-2xl font-bold">{stats.typeStats.find(s => s.value === 'Telemed')?.count || 0}</p>
               </div>
             </div>
@@ -291,11 +291,11 @@ export default function RoomsManagement() {
           {loading ? (
             <div className="text-center py-8">Loading rooms...</div>
           ) : rooms.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-8 text-gray-500">
               No rooms found. Add your first room to get started.
             </div>
           ) : filteredRooms.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">No rooms match your filters.</div>
+            <div className="text-center py-8 text-gray-500">No rooms match your filters.</div>
           ) : (
             <Table>
               <TableHeader>
@@ -322,7 +322,7 @@ export default function RoomsManagement() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <Users className="h-4 w-4 text-gray-400" />
                           {room.capacity}
                         </div>
                       </TableCell>
@@ -362,7 +362,7 @@ export default function RoomsManagement() {
                             variant="outline"
                             size="sm"
                             onClick={() => handleDelete(room)}
-                            className="flex items-center gap-1 text-destructive-text hover:text-destructive-text"
+                            className="flex items-center gap-1 text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="h-3 w-3" />
                             Delete
@@ -386,7 +386,7 @@ export default function RoomsManagement() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Room Name *</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Room Name *</label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -396,7 +396,7 @@ export default function RoomsManagement() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Room Type *</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Room Type *</label>
               <Select value={formData.type} onValueChange={(value: string) => setFormData({ ...formData, type: value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select room type" />
@@ -415,7 +415,7 @@ export default function RoomsManagement() {
             </div>
 
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Capacity *</label>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Capacity *</label>
               <Input
                 type="number"
                 min="1"
@@ -434,7 +434,7 @@ export default function RoomsManagement() {
                 checked={formData.isActive}
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
               />
-              <label htmlFor="isActive" className="text-sm text-foreground">Room is active</label>
+              <label htmlFor="isActive" className="text-sm text-gray-700">Room is active</label>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">

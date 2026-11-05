@@ -157,18 +157,18 @@ export default function PatientProgressTracker({ patientId, compact = false, var
   const circleClass = (status: StepStatus) => {
     switch (status) {
       case 'done':
-        return 'bg-success text-success-foreground border-success-border';
+        return 'bg-emerald-500 text-white border-emerald-600';
       case 'active':
-        return 'bg-info text-info-foreground border-info-border animate-pulse motion-reduce:animate-none';
+        return 'bg-blue-600 text-white border-blue-700 animate-pulse motion-reduce:animate-none';
       default:
-        return 'bg-muted text-muted-foreground border-border';
+        return 'bg-gray-200 text-gray-500 border-gray-300';
     }
   };
 
   const lineClass = (left: StepStatus, right: StepStatus) => {
     const anyActive = left === 'active' || right === 'active';
     const anyDone = left === 'done' && right === 'done';
-    return anyDone ? 'bg-success' : anyActive ? 'bg-info' : 'bg-muted';
+    return anyDone ? 'bg-emerald-300' : anyActive ? 'bg-blue-300' : 'bg-gray-200';
   };
 
   const StartAction = () => {
@@ -224,7 +224,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
 
   if (error) {
     return (
-      <div className="text-xs text-destructive-text">{error}</div>
+      <div className="text-xs text-red-600">{error}</div>
     );
   }
 
@@ -240,8 +240,8 @@ export default function PatientProgressTracker({ patientId, compact = false, var
         <div className="flex items-center gap-1.5">
           {miniSteps.map((s, i) => (
             <div key={s.key} className="flex items-center">
-              <div className={`h-2.5 w-2.5 rounded-full ${s.status === 'done' ? 'bg-success' : s.status === 'active' ? 'bg-info' : 'bg-border'}`} />
-              {i < miniSteps.length - 1 && <div className={`mx-1 h-0.5 w-6 ${s.status === 'done' && miniSteps[i + 1].status === 'done' ? 'bg-success' : (s.status === 'active' || miniSteps[i + 1].status === 'active') ? 'bg-info' : 'bg-muted'}`} />}
+              <div className={`h-2.5 w-2.5 rounded-full ${s.status === 'done' ? 'bg-emerald-500' : s.status === 'active' ? 'bg-blue-500' : 'bg-gray-300'}`} />
+              {i < miniSteps.length - 1 && <div className={`mx-1 h-0.5 w-6 ${s.status === 'done' && miniSteps[i + 1].status === 'done' ? 'bg-emerald-300' : (s.status === 'active' || miniSteps[i + 1].status === 'active') ? 'bg-blue-300' : 'bg-gray-200'}`} />}
             </div>
           ))}
         </div>
@@ -259,7 +259,7 @@ export default function PatientProgressTracker({ patientId, compact = false, var
                 {step.icon}
               </div>
               {!(compact || variant === 'compact') && (
-                <div className="mt-1 text-xs text-foreground">
+                <div className="mt-1 text-xs text-gray-700">
                   {step.label}
                 </div>
               )}

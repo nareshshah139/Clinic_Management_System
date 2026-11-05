@@ -274,8 +274,8 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                  <p className="text-2xl font-semibold tabular-nums text-foreground">{stat.value}</p>
+                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                  <p className="text-2xl font-semibold tabular-nums text-gray-900">{stat.value}</p>
                 </div>
                 <div className="rounded-md bg-primary-soft p-3">
                   <stat.icon className="h-6 w-6 text-foreground" />
@@ -291,7 +291,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Database className="h-5 w-5 text-highlight-text mr-2" />
+              <Database className="h-5 w-5 text-purple-500 mr-2" />
               Admin Controls
             </CardTitle>
             <CardDescription>
@@ -302,8 +302,8 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
-                  <h4 className="font-medium text-foreground">Database Backup</h4>
-                  <p className="text-sm text-muted-foreground">Create a complete backup of the database</p>
+                  <h4 className="font-medium text-gray-900">Database Backup</h4>
+                  <p className="text-sm text-gray-600">Create a complete backup of the database</p>
                 </div>
                 <Button 
                   onClick={handleBackup} 
@@ -323,7 +323,7 @@ export default function DashboardPage() {
                   )}
                 </Button>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-xs text-gray-500">
                 ⚠️ Backups are stored locally on the server and contain sensitive data.
               </div>
             </div>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-warning-text mr-2" />
+              <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
               System Alerts
             </CardTitle>
             <CardDescription>
@@ -351,26 +351,26 @@ export default function DashboardPage() {
                 {alerts.map((alert, index) => (
                   <div
                     key={index}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-background"
+                    className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50"
                   >
                     <div className={`p-1 rounded-full ${
                       alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'bg-destructive-soft'
+                        ? 'bg-red-100'
                         : alert.severity === 'MEDIUM' 
-                        ? 'bg-warning-soft'
-                        : 'bg-info-soft'
+                        ? 'bg-yellow-100'
+                        : 'bg-blue-100'
                     }`}>
                       <AlertTriangle className={`h-4 w-4 ${
                         alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                          ? 'text-destructive-text'
+                          ? 'text-red-600'
                           : alert.severity === 'MEDIUM' 
-                          ? 'text-warning-text'
-                          : 'text-info-text'
+                          ? 'text-yellow-600'
+                          : 'text-blue-600'
                       }`} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
-                      <p className="text-xs text-muted-foreground">{alert.message}</p>
+                      <p className="text-sm font-medium text-gray-900">{alert.title}</p>
+                      <p className="text-xs text-gray-600">{alert.message}</p>
                     </div>
                     <Badge variant={
                       alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
@@ -392,7 +392,7 @@ export default function DashboardPage() {
         <Card data-tour="appointments-list">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Clock className="h-5 w-5 text-info-text mr-2" />
+              <Clock className="h-5 w-5 text-blue-500 mr-2" />
               Today&apos;s Appointments
             </CardTitle>
             <CardDescription>
@@ -401,19 +401,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {todaysAppointments.length === 0 ? (
-              <p className="text-muted-foreground text-center py-4">No appointments scheduled for today</p>
+              <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
             ) : (
               <div className="space-y-3">
                 {todaysAppointments.map((appointment, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-background"
+                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
                   >
                     <div>
-                      <p className="text-sm font-medium text-foreground">
+                      <p className="text-sm font-medium text-gray-900">
                         {formatPatientName(appointment.patient)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-gray-600">
                         {appointment.slot}
                       </p>
                     </div>

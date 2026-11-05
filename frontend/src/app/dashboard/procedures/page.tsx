@@ -384,7 +384,7 @@ export default function SmartProceduresPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
                 <User className="h-4 w-4" />
                 <span>{formatDoctorName(doctor)}</span>
               </div>
@@ -393,24 +393,24 @@ export default function SmartProceduresPage() {
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   {procedure.fluence && (
                     <div>
-                      <span className="text-muted-foreground">Fluence:</span> {procedure.fluence} J/cm²
+                      <span className="text-gray-500">Fluence:</span> {procedure.fluence} J/cm²
                     </div>
                   )}
                   {procedure.spotSize && (
                     <div>
-                      <span className="text-muted-foreground">Spot Size:</span> {procedure.spotSize} mm
+                      <span className="text-gray-500">Spot Size:</span> {procedure.spotSize} mm
                     </div>
                   )}
                   {procedure.passes && (
                     <div>
-                      <span className="text-muted-foreground">Passes:</span> {procedure.passes}
+                      <span className="text-gray-500">Passes:</span> {procedure.passes}
                     </div>
                   )}
                 </div>
               )}
               
               {plan?.dermatology?.notes && (
-                <p className="text-sm text-muted-foreground line-clamp-2">{plan.dermatology.notes}</p>
+                <p className="text-sm text-gray-600 line-clamp-2">{plan.dermatology.notes}</p>
               )}
             </div>
             
@@ -456,12 +456,12 @@ export default function SmartProceduresPage() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-border">
+            <table className="w-full border-collapse border border-gray-300">
               <thead>
-                <tr className="bg-background">
-                  <th className="border border-border p-2 text-left font-medium">Parameter</th>
+                <tr className="bg-gray-50">
+                  <th className="border border-gray-300 p-2 text-left font-medium">Parameter</th>
                   {Array.from({ length: machine.maxPasses }, (_, i) => (
-                    <th key={i} className="border border-border p-2 text-center font-medium">
+                    <th key={i} className="border border-gray-300 p-2 text-center font-medium">
                       Pass {i + 1}
                     </th>
                   ))}
@@ -469,12 +469,12 @@ export default function SmartProceduresPage() {
               </thead>
               <tbody>
                 {machine.parameters.map((param, paramIndex) => (
-                  <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-card' : 'bg-muted/40'}>
-                    <td className="border border-border p-2 font-medium text-foreground">
+                  <tr key={paramIndex} className={paramIndex % 2 === 0 ? 'bg-white' : 'bg-muted/40'}>
+                    <td className="border border-gray-300 p-2 font-medium text-gray-700">
                       {param}
                     </td>
                     {Array.from({ length: machine.maxPasses }, (_, passIndex) => (
-                      <td key={passIndex} className="border border-border p-1">
+                      <td key={passIndex} className="border border-gray-300 p-1">
                         <Input
                           placeholder={`${param.toLowerCase()}`}
                           value={procedureData.machineParameters[param]?.[passIndex + 1] || ''}
@@ -552,7 +552,7 @@ export default function SmartProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground">Patient *</label>
+                <label className="text-sm font-medium text-gray-700">Patient *</label>
                 <Select value={procedureData.patientId} onValueChange={(value: string) => updateProcedureData('patientId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select patient" />
@@ -568,7 +568,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground">Doctor *</label>
+                <label className="text-sm font-medium text-gray-700">Doctor *</label>
                 <Select value={procedureData.doctorId} onValueChange={(value: string) => updateProcedureData('doctorId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select doctor" />
@@ -584,7 +584,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground">Nurse/Therapist</label>
+                <label className="text-sm font-medium text-gray-700">Nurse/Therapist</label>
                 <Select value={procedureData.therapistId} onValueChange={(value: string) => updateProcedureData('therapistId', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select nurse" />
@@ -612,33 +612,33 @@ export default function SmartProceduresPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-foreground">Session No.</label>
+                  <label className="text-sm font-medium text-gray-700">Session No.</label>
                   <Input placeholder="Session number" value={procedureData.sessionNo} onChange={(e) => updateProcedureData('sessionNo', parseInt(e.target.value) || 1)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground">Shot Count (Begin)</label>
+                  <label className="text-sm font-medium text-gray-700">Shot Count (Begin)</label>
                   <Input placeholder="e.g. 50" value={procedureData.shotCountBegin} onChange={(e) => updateProcedureData('shotCountBegin', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground">Shot Count (End)</label>
+                  <label className="text-sm font-medium text-gray-700">Shot Count (End)</label>
                   <Input placeholder="e.g. 50" value={procedureData.shotCountEnd} onChange={(e) => updateProcedureData('shotCountEnd', parseInt(e.target.value) || 0)} />
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-foreground">Total Shots</label>
+                  <label className="text-sm font-medium text-gray-700">Total Shots</label>
                   <Input
                     value={procedureData.shotCountEnd - procedureData.shotCountBegin}
                     disabled
-                    className="bg-background"
+                    className="bg-gray-50"
                   />
                 </div>
               </div>
 
               {/* Body Parts */}
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">Body Parts</label>
+                <label className="text-sm font-medium text-gray-700 mb-2 block">Body Parts</label>
                 <div className="flex flex-wrap gap-2">
                   {BODY_PARTS.map((part) => (
                     <Button
@@ -656,7 +656,7 @@ export default function SmartProceduresPage() {
 
               {/* Indications */}
               <div>
-                <label className="text-sm font-medium text-foreground">Indications</label>
+                <label className="text-sm font-medium text-gray-700">Indications</label>
                 <Textarea
                   placeholder="Enter procedure indications..."
                   value={procedureData.indications}
@@ -674,7 +674,7 @@ export default function SmartProceduresPage() {
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="text-sm font-medium text-foreground">Fitzpatrick Type</label>
+                <label className="text-sm font-medium text-gray-700">Fitzpatrick Type</label>
                 <Select value={procedureData.fitzpatrickType} onValueChange={(value: string) => updateProcedureData('fitzpatrickType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -690,7 +690,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground">Robert Type</label>
+                <label className="text-sm font-medium text-gray-700">Robert Type</label>
                 <Select value={procedureData.robertType} onValueChange={(value: string) => updateProcedureData('robertType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -706,7 +706,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground">Scar Type</label>
+                <label className="text-sm font-medium text-gray-700">Scar Type</label>
                 <Select value={procedureData.scarType} onValueChange={(value: string) => updateProcedureData('scarType', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select type" />
@@ -722,7 +722,7 @@ export default function SmartProceduresPage() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground">Herpes Status</label>
+                <label className="text-sm font-medium text-gray-700">Herpes Status</label>
                 <Select value={procedureData.herpesStatus} onValueChange={(value: string) => updateProcedureData('herpesStatus', value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select status" />
@@ -801,7 +801,7 @@ export default function SmartProceduresPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Procedure History</h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-gray-600">
                 Procedures captured from visits ({visits.length} found)
               </p>
             </div>
@@ -823,8 +823,8 @@ export default function SmartProceduresPage() {
           ) : (
             <Card>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+                <div className="text-center py-8 text-gray-500">
+                  <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                   <p>No procedure history found for this patient</p>
                   <p className="text-sm">Procedures from visits will appear here</p>
                 </div>
@@ -840,8 +840,8 @@ export default function SmartProceduresPage() {
               <CardDescription>Insights and statistics about procedures</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Activity className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+              <div className="text-center py-8 text-gray-500">
+                <Activity className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                 <p>Analytics dashboard coming soon</p>
                 <p className="text-sm">Track procedure outcomes and performance metrics</p>
               </div>

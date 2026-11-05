@@ -3321,7 +3321,7 @@ function PurchaseInvoiceEditor({
           <PurchaseHelp label="Review checks">Correct any mistakes against the original. The final action confirms all current valid values together; missing or invalid values still need correction.</PurchaseHelp>
         </div>
       </div>
-      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-warning-border bg-warning-soft/40 p-4 text-sm">
+      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
         <h5 className="font-semibold">{catalogue.state === 'pending' ? 'Checking invoice products…' : 'Products need attention'}</h5>
         {catalogue.state === 'failed' && <p role="alert">{catalogue.productSaved ? 'Product details saved. Invoice check could not finish. Retry the check without saving again.' : 'Invoice products could not be checked. Retry the check before final review.'}</p>}
         {catalogueBlockers.map(row => <div key={row.localId} className="space-y-2">
@@ -3948,7 +3948,7 @@ function PurchaseInvoiceEditor({
         )}
         {stockAdded && activeInvoice?.committedItems?.length && (
           <section
-            className="space-y-2 rounded-md border border-success-border p-4"
+            className="space-y-2 rounded-md border border-green-600 p-4"
             aria-label="Confirmed receipt"
           >
             <h4 className="font-semibold">
