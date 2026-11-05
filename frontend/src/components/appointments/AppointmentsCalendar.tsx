@@ -488,7 +488,7 @@ export default function AppointmentsCalendar({
 
           {/* Doctor-specific Google Calendar status */}
           {googleConfigured !== false && doctorId && !doctorGoogleStatus.connected && googleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />
               <span>
                 {currentDoctorName}&apos;s Google Calendar is not connected. Appointments won&apos;t sync to their calendar.
@@ -497,7 +497,7 @@ export default function AppointmentsCalendar({
             </div>
           )}
           {googleConfigured !== false && doctorId && doctorGoogleStatus.connected && (
-            <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
+            <div className="flex items-center gap-2 rounded border border-green-200 bg-green-50 px-3 py-1.5 text-xs text-green-700">
               <svg className="h-3.5 w-3.5 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
               </svg>
@@ -581,14 +581,14 @@ export default function AppointmentsCalendar({
           )}
 
           {!selectedPatientId && patientSearch && (
-            <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="flex items-center gap-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               <AlertCircle className="h-4 w-4" />
               <span>Select a patient from the list or add them as new before booking.</span>
             </div>
           )}
 
           {patientSearch && patients.length > 0 && (
-            <div className="max-h-40 overflow-auto border rounded-md">
+            <div className="max-h-40 overflow-auto border rounded">
               {patients.map((p) => (
                 <div
                   key={p.id}
@@ -609,7 +609,7 @@ export default function AppointmentsCalendar({
           )}
 
           {patientSearch && patients.length === 0 && !selectedPatientId && !searchingPatients && (
-            <div className="rounded-md border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
+            <div className="rounded border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
               <div className="flex items-center justify-between">
                 <span>No matching patients found.</span>
                 <Button variant="outline" size="sm" onClick={() => setQuickCreateOpen(true)}>
@@ -625,39 +625,39 @@ export default function AppointmentsCalendar({
           )}
 
           {/* Legend */}
-          <div className="border rounded-md p-3 bg-gray-50">
+          <div className="border rounded p-3 bg-gray-50">
             <h3 className="font-semibold mb-2">Legend</h3>
             <div className="flex flex-wrap gap-4 items-center">
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(219, 234, 254, 0.95)' }} />
                 <span className="text-sm">OPD</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(237, 233, 254, 0.95)' }} />
                 <span className="text-sm">Procedure</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-telemedicine)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(243, 244, 246, 0.95)' }} />
                 <span className="text-sm">Telemedicine</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-completed)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(226, 232, 240, 0.95)' }} />
                 <span className="text-sm">Completed</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-consultation-past)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(239, 246, 255, 0.95)' }} />
                 <span className="text-sm">Past (OPD)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--calendar-procedure-past)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: 'rgba(245, 237, 254, 0.95)' }} />
                 <span className="text-sm">Past (Procedure)</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--success)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#22c55e' }} />
                 <span className="text-sm">Newly Booked</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-4 h-4 rounded-md" style={{ backgroundColor: 'var(--warning-soft)' }} />
+                <div className="w-4 h-4 rounded" style={{ backgroundColor: '#fbbf24' }} />
                 <span className="text-sm">Booking In Progress</span>
               </div>
             </div>
@@ -665,18 +665,23 @@ export default function AppointmentsCalendar({
 
           {!!bookingDetails && (
             <div 
-              className="rounded-md border border-green-500 bg-green-50 p-4 text-sm text-green-700"
+              className="p-4 rounded-r text-sm shadow-sm"
               role="status"
+              style={{
+                backgroundColor: '#f0fdf4',
+                borderLeft: '4px solid #22c55e',
+                color: '#15803d'
+              }}
             >
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                  <svg className="h-5 w-5" style={{ color: '#22c55e' }} viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                 </div>
                 <div className="ml-3">
                   <p className="font-medium">Appointment Successfully Booked!</p>
-                  <p>
+                  <p style={{ color: '#16a34a' }}>
                     {bookingDetails.patient?.name || `${selectedPatient?.firstName ?? ''} ${selectedPatient?.lastName ?? ''}`.trim()} 
                     {' '} scheduled for {bookingDetails.slot}
                     {bookingDetails.room && ` in ${bookingDetails.room.name}`}
