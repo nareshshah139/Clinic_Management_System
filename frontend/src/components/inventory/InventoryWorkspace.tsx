@@ -24,6 +24,7 @@ import { AlternateInvoiceIntake } from "./AlternateInvoiceIntake";
 import { WorkflowDocumentEditor } from "./WorkflowDocumentEditor";
 import { WorkspaceStock } from "./WorkspaceStock";
 import { InventoryUpdates } from "./InventoryUpdates";
+import { InventoryLedger } from "./InventoryLedger";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
@@ -58,6 +59,7 @@ const menus: Record<string, string[][]> = {
   ],
   stock: [
     ["list", "Stock list"],
+    ["ledger", "Stock ledger"],
     ["approvals", "Approve corrections"],
     ["COUNT", "Counts & audit"],
     ["SUPPLIER_RETURN", "Supplier returns"],
@@ -331,6 +333,15 @@ export function InventoryWorkspace() {
               onTask={task}
               onDocument={open}
               onInvoice={invoice}
+            />
+          )}
+          {area === "stock" && view === "ledger" && (
+            <InventoryLedger
+              query={query}
+              navigate={navigate}
+              onDocument={open}
+              onInvoice={invoice}
+              onItem={(id) => navigate({ return: origin(), view: "list", item: id })}
             />
           )}
           {area === "stock" && view === "approvals" && (
