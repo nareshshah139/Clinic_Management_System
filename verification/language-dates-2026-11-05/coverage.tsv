@@ -1,0 +1,123 @@
+file	audit_line	context	disposition	implementation
+frontend/src/components/pharmacy/PharmacyInvoiceList.tsx	146	Printed invoice date	migrated	Sales invoiceDate is a server creation instant, displayed in Asia/Kolkata. Missing dates do not substitute today.
+frontend/src/components/pharmacy/PharmacyInvoiceList.tsx	671	Invoice list date	migrated	Sales invoiceDate is a server creation instant, displayed in Asia/Kolkata. Missing dates do not substitute today.
+frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx	840	Active prescription timestamp	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx	1041	Suggested batch expiry	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx	1108	Next batch expiry	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/pharmacy/PharmacyCounterCockpit.tsx	1187	Allocation batch expiry	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/pharmacy/PrescriptionDispensingQueue.tsx	317	Prescription received timestamp	migrated	Existing human display uses displayClinicDateTime.
+frontend/src/components/pharmacy/PackageBrowser.tsx	380	Package created date	migrated	Existing human display uses displayClinicDate.
+frontend/src/components/pharmacy/PharmacyInvoiceBuilderFixed.tsx	1390	Printed invoice date	migrated	Sales invoiceDate is a server creation instant, displayed in Asia/Kolkata. Missing dates do not substitute today.
+frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx	3026	Purchase invoice date	migrated	Existing human display uses displayClinicDate, displayUtcDate.
+frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx	3119	Saved draft updated date	migrated	Existing human display uses displayClinicDate, displayUtcDate.
+frontend/src/components/pharmacy/DistributorAnalytics.tsx	403	Latest distributor invoice date	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/pharmacy/DistributorAnalytics.tsx	522	Discount alert invoice date	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/pharmacy/ComplianceCenter.tsx	714	Expiry returns date	migrated	Existing human display uses displayClinicDate, displayUtcDate.
+frontend/src/components/pharmacy/ComplianceCenter.tsx	836	GSTR purchase invoice date	migrated	Report sourceType sale uses clinic date; purchase/workflow calendar date uses UTC day. Export record scope unchanged.
+frontend/src/components/pharmacy/PurchaseLedger.tsx	665	Outstanding invoice due date	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/pharmacy/PartnerDailySync.tsx	362	Daily summary subtitle	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/pharmacy/PartnerDailySync.tsx	557	Missing organization sales explanation	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/pharmacy/PartnerDailySync.tsx	598	Submitted sales subtitle	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/pharmacy/PartnerDailySync.tsx	630	Submitted sale date cell	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/pharmacy/PharmacyInventoryStarterImport.tsx	157	Opening stock source-row expiry preview	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/inventory/workspace-model.ts	19	Shared fmtDate helper	migrated	Removed ambiguous fmtDate; each existing caller now chooses calendar/UTC or clinic event semantics.
+frontend/src/components/inventory/WorkspaceStock.tsx	536	Purchase history invoice date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	576	Linked document created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	610	History created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	660	Movement history timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	1171	Report filter as-of and expiry-end dates	migrated	As-of event uses clinic date; expiry window boundary retains UTC calendar day.
+frontend/src/components/inventory/stock-batch-view.ts	49	Shared stock expiry formatter	migrated	Existing human display uses displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	278	Stock row expiry	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	497	Batch detail expiry	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate, fmtStockExpiry.
+frontend/src/components/inventory/WorkspaceStock.tsx	1317	Stock export/preview expiry	migrated	Human stock export/preview follows fmtStockExpiry; ISO machine transport remains unchanged.
+frontend/src/components/inventory/InventoryWorkspace.tsx	612	Stock report as-of date	migrated	As-of event uses clinic date; expiry window boundary retains UTC calendar day.
+frontend/src/components/inventory/InventoryWorkspace.tsx	888	Purchase document invoice date	migrated	Existing human display uses displayClinicDate, displayUtcDate.
+frontend/src/components/inventory/InventoryWorkspace.tsx	1132	Workflow document created date	migrated	Existing human display uses displayClinicDate, displayUtcDate.
+frontend/src/components/inventory/WorkflowDocumentEditor.tsx	903	Available stock expiry	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/WorkflowDocumentEditor.tsx	1001	Document line expiry	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/WorkflowDocumentEditor.tsx	1339	Workflow event timestamp	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/SupplierCreditPanel.tsx	188	Credit allocation date	migrated	Existing human display uses displayClinicDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	111	Proposal created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	113	Evidence date range	migrated	Source-traced creation/calculation instants use displayClinicDate in Asia/Kolkata.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	118	Approval decision timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	120	Demand record dates	migrated	Source-traced creation/calculation instants use displayClinicDate in Asia/Kolkata.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	127	Supplier purchase history date	migrated	Supplier purchase invoiceDate is a stored calendar value and uses displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	134	Dispatch attempt timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	135	Receiving record created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	140	Last/next/scheduled run timestamps	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	158	Calculation date range	migrated	Explicit applied calendar filters retain UTC day; default rolling Date bounds use clinic day.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	159	Calculation record timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	162	Order date	migrated	Source-traced creation/calculation instants use displayClinicDate in Asia/Kolkata.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	167	Saved proposal created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	173	Saved run outcome timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/ReplenishmentCenter.tsx	207	Target-change and event timestamps	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/inventory/PurchaseDocumentActions.tsx	117	Purchase audit event timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/inventory/PurchaseDocumentActions.tsx	121	Attached document created date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/inventory/AlternateInvoiceIntake.tsx	217	Mailbox last synchronization timestamp	migrated	Existing human display uses displayClinicDateTime, displayMailDateTime.
+frontend/src/components/inventory/AlternateInvoiceIntake.tsx	273	Mailbox message date	migrated	Explicit RFC Date header adapter validates original calendar/time/offset and displays clinic timestamp; original header remains in title.
+frontend/src/components/inventory/InventoryUpdates.tsx	95	Stock/price request created timestamp	migrated	Existing human display uses displayClinicDateTime.
+frontend/src/components/inventory/InventoryMovements.tsx	204	Movement timeline day grouping	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+frontend/src/components/inventory/InventoryMovements.tsx	406	Timeline movement timestamp	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+frontend/src/components/inventory/InventoryMovements.tsx	459	Ledger movement timestamp	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+frontend/src/components/visits/PatientHistoryVisitCard.tsx	142	Visit heading	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/visits/PatientHistoryVisitCard.tsx	203	Prescription valid-until detail	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/visits/PatientHistoryVisitCard.tsx	204	Follow-up date detail	migrated	Existing human display uses displayCalendarDate, displayUtcDate.
+frontend/src/components/visits/PatientPhotoArchive.tsx	54	Photo archive visit heading	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/visits/PatientPhotoArchive.tsx	55	Photo accessible link label	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/visits/VisitPhotos.tsx	662	Destination visit selector	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/visits/VisitPhotos.tsx	713	Uploaded timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/visits/VisitPhotos.tsx	735	Photo upload tooltip timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/visits/MedicalVisitForm.tsx	1683	Draft/recovery display date	migrated	Existing human display uses displayCalendarDate, displayClinicTime.
+frontend/src/components/visits/MedicalVisitForm.tsx	1755	Saved status time	migrated	Existing human display uses displayCalendarDate, displayClinicTime.
+frontend/src/components/visits/PrescriptionBuilder.tsx	1273	Review-date formatter used by text and printed output	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/visits/PrescriptionBuilder.tsx	1295	Today formatter used by printed prescription	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/visits/PrescriptionBuilder.tsx	5843	Prescription preview date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/components/visits/PrescriptionBuilder.tsx	5899	Text prescription timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime, displayUtcDate.
+frontend/src/app/dashboard/visits/page.tsx	16	Prescription created/review formatter	migrated	Existing human display uses displayClinicDateTime, displayUtcDate.
+frontend/src/app/dashboard/procedures/page.tsx	374	Procedure visit timestamp	migrated	Existing human display uses displayClinicDateTime.
+frontend/src/app/dashboard/patients/[id]/page.tsx	104	Visit grouping key	migrated	Stable encounter-day key separated from named-month display label.
+frontend/src/app/dashboard/patients/[id]/page.tsx	121	Next appointment summary	migrated	Existing human display uses displayCalendarDate, displayLocalDate, displayUtcDate.
+frontend/src/app/dashboard/patients/[id]/page.tsx	237	Last visit date	migrated	Existing human display uses displayCalendarDate, displayLocalDate, displayUtcDate.
+frontend/src/components/patients/PatientsManagement.tsx	551	Appointment scheduled toast	migrated	Existing human display uses displayCalendarDate, displayClinicDate.
+frontend/src/components/patients/PatientsManagement.tsx	1123	Last visit date	migrated	Existing human display uses displayCalendarDate, displayClinicDate.
+frontend/src/app/dashboard/reports/page.tsx	587	Last visit in report	migrated	Existing human display uses displayCalendarDate, displayClinicDate.
+frontend/src/app/dashboard/reports/page.tsx	1276	Report date-range caption	migrated	Existing human display uses displayCalendarDate, displayClinicDate.
+frontend/src/components/rooms/RoomsManagement.tsx	347	Room created date	migrated	Existing human display uses displayClinicDate.
+frontend/src/components/rooms/RoomCalendar.tsx	242	Calendar day heading	migrated	Existing human display uses displayLocalDateHeading.
+frontend/src/components/appointments/AppointmentBookingDialog.tsx	291	Booking date summary	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/appointments/DoctorDayCalendar.tsx	452	Reschedule instruction	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/appointments/DoctorDayCalendar.tsx	1035	Appointment detail date	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/appointments/DoctorDayCalendar.tsx	1113	Booking date summary	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/appointments/AppointmentScheduler.tsx	467	Rescheduled appointment toast	migrated	Existing human display uses displayCalendarDate.
+frontend/src/components/layout/header.tsx	289	Notification appointment time formatter	migrated	Source is appointment calendar date, not clock instant. Display date beside existing slot where available.
+frontend/src/components/layout/header.tsx	293	Invoice due-date notification formatter	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/layout/header.tsx	440	Appointment search-result date	migrated	Existing human display uses displayUtcDate.
+frontend/src/app/dashboard/page.tsx	421	Dashboard appointment time	migrated	Source is appointment calendar date, not clock instant. Display date beside existing slot where available.
+frontend/src/components/billing/BillingManagement.tsx	264	Invoice CSV date column	migrated	Human invoice-report CSV now uses clinic issue date; machine exports retain their ISO fields.
+frontend/src/components/billing/BillingManagement.tsx	591	Text invoice date	migrated	Existing human display uses displayClinicDate, displayClinicTime.
+frontend/src/components/billing/BillingManagement.tsx	592	Text invoice time	migrated	Existing human display uses displayClinicDate, displayClinicTime.
+frontend/src/components/billing/BillingManagement.tsx	757	HTML invoice date	migrated	Existing human display uses displayClinicDate, displayClinicTime.
+frontend/src/components/billing/BillingManagement.tsx	758	HTML invoice time	migrated	Existing human display uses displayClinicDate, displayClinicTime.
+frontend/src/components/billing/DailyCollection.tsx	65	Collection payment time	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+backend/src/modules/appointments/appointments.service.ts	195	Appointment email/WhatsApp confirmation date	migrated	Existing human display uses displayCalendarDate.
+backend/src/modules/patients/patients.service.ts	286	Appointment WhatsApp reminder date	migrated	Existing human display uses displayUtcDate.
+backend/src/modules/prescriptions/prescriptions.service.ts	1694	Generated prescription date	migrated	Existing human display uses displayClinicDate.
+backend/src/modules/prescriptions/prescription-clinical-print.ts	44	Generated prescription review date	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+frontend/src/components/pharmacy/PharmacyDashboard.tsx	306	Recent invoice created date	migrated	Existing human display uses displayClinicDate.
+frontend/src/components/pharmacy/PharmacyPackageManager.tsx	984	Package created date	migrated	Existing human display uses displayClinicDate.
+frontend/src/components/pharmacy/PharmacyInvoiceBuilder.tsx	762	Printed invoice timestamp	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/pharmacy/PharmacyInvoiceBuilder.tsx	904	Invoice share message date	migrated	Existing human display uses displayClinicDate, displayClinicDateTime.
+frontend/src/components/inventory/ShelfIntelligence.tsx	574	Shelf expiry	migrated	Existing human display uses displayUtcDate.
+frontend/src/lib/utils.ts	90	formatDob helper	migrated	Existing human display uses displayUtcDate.
+frontend/src/components/ui/calendar.tsx	193	data-day attribute	preserved machine value	Native input, stable key, metadata or import schema stays unchanged.
+frontend/src/lib/patient-history.ts	16	Encounter grouping key	preserved machine value	Native input, stable key, metadata or import schema stays unchanged.
+frontend/src/components/pharmacy/PurchaseInvoiceWorkbench.tsx	378	Native date-input value construction	preserved machine value	Native input, stable key, metadata or import schema stays unchanged.
+frontend/src/components/inventory/AlternateInvoiceIntake.tsx	13	JSON import example dates	preserved machine value	Native input, stable key, metadata or import schema stays unchanged.
+frontend/src/components/inventory/StocktakeTools.tsx	39	CSV expiry import instruction	absent in current main	File does not exist at isolated base 3cb960f; no feature invented.
+frontend/src/components/pharmacy/SupplierPaymentRecovery.tsx	current-main addition	Recorded supplier payment date	migrated	displayUtcDate preserves stored payment calendar date.
+backend/src/modules/inventory/inventory-label.service.ts	current-main addition	Workflow label creation date	migrated	displayClinicDate converts creation instant to Asia/Kolkata.
+backend/src/modules/inventory/inventory-label.service.ts	current-main addition	Stock label expiry	migrated	displayUtcDate preserves month-end expiry day and Not recorded fallback.
+backend/src/modules/inventory/inventory-purchase-actions.service.ts	current-main addition	Purchase QR invoice date	migrated	displayUtcDate preserves purchase calendar day.
+backend/src/modules/inventory/inventory-purchase-actions.service.ts	current-main addition	Purchase PDF header dates	migrated	PDF-only overrides use UTC for invoice/goods-received/due days and clinic datetime for created/updated/stock-committed events. CSV/XLSX stay unchanged.
+backend/src/modules/inventory/inventory-purchase-actions.service.ts	current-main addition	Purchase PDF month-only expiry	migrated	displayCalendarDate receives YYYY-MM and renders Nov 2026 without inventing a day.
+backend/src/modules/reports/reports.service.ts	current-main addition	Report PDF generation timestamp	migrated	displayClinicDateTime shows generation instant in Asia/Kolkata.

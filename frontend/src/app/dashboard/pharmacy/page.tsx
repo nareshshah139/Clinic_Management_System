@@ -378,7 +378,7 @@ function PharmacyDeskPanel({
           <QuickAction
             icon={<Package className="h-4 w-4" />}
             title="Inventory Control"
-            detail="Shelf, OCR, FEFO"
+            detail="Shelves, invoice scanning, expiry"
             onClick={onOpenInventoryControl}
           />
         </div>
@@ -489,7 +489,7 @@ function AgenticPharmacyLauncher({ onOpen }: { onOpen: () => void }) {
           </div>
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-slate-950">
-              Agentic Pharmacy
+              Pharmacy AI assistant
             </h3>
             <p className="truncate text-xs text-slate-500">
               Opens when needed.
@@ -510,7 +510,7 @@ function AgenticPharmacyDockLoading() {
     <section className="rounded-[10px] border border-slate-200 bg-white px-4 py-3 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
       <div className="flex items-center gap-3 text-sm text-slate-600">
         <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-slate-800" />
-        Loading Agentic Pharmacy...
+        Loading pharmacy assistant...
       </div>
     </section>
   );
@@ -544,8 +544,8 @@ function PharmacyGuide() {
           title: 'Inventory Controls',
           items: [
             'Use Inventory > Pharmacy Control for Excel import',
-            'Use Inventory > Pharmacy Control for supplier invoice OCR',
-            'Review FEFO, expiry, reorder, ledger, and cost analytics in Inventory',
+            'Use Inventory > Pharmacy Control for invoice scanning',
+            'Review batch expiry, reorder needs, supplier payments, and purchase costs in Inventory',
           ],
         },
       ]}

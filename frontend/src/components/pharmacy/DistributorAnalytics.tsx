@@ -1,5 +1,7 @@
 "use client";
 
+import { displayUtcDate } from '@/lib/date-display';
+
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
@@ -140,16 +142,6 @@ function defaultFilters(): FilterState {
   };
 }
 
-function formatDate(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function emptyAnalytics(): AnalyticsResponse {
   return {
@@ -400,7 +392,7 @@ export function DistributorAnalytics() {
                   <TableCell className="text-right">
                     {number.format(row.averageDiscountPercent || 0)}%
                   </TableCell>
-                  <TableCell>{formatDate(row.lastInvoiceDate)}</TableCell>
+                  <TableCell>{displayUtcDate(row.lastInvoiceDate, "-")}</TableCell>
                 </TableRow>
               ))
             )}
@@ -519,7 +511,7 @@ export function DistributorAnalytics() {
                       {alert.latestInvoiceNumber}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {formatDate(alert.latestInvoiceDate)}
+                      {displayUtcDate(alert.latestInvoiceDate, "-")}
                     </div>
                   </TableCell>
                 </TableRow>

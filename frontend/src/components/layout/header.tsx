@@ -1,5 +1,7 @@
 'use client';
 
+import { displayUtcDate } from '@/lib/date-display';
+
 import { Bell, Search, Settings, User, Calendar, Users, Palette, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -162,7 +164,7 @@ export function Header() {
       case 'DOCTOR': {
         const list: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
-          title: `${a.patientName || 'Patient'} at ${formatTime(a.time)}`,
+          title: `${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
           description: `${a.visitType || 'Visit'} • ${a.status}`,
           href: `/dashboard/visits?appointmentId=${encodeURIComponent(a.id)}`,
           variant: 'default',
@@ -173,14 +175,14 @@ export function Header() {
       case 'RECEPTION': {
         const apptItems: NotificationItem[] = (upcoming || []).map((a: any) => ({
           id: `appt-${a.id}`,
-          title: `Upcoming: ${a.patientName || 'Patient'} at ${formatTime(a.time)}`,
+          title: `Upcoming: ${a.patientName || 'Patient'} on ${displayUtcDate(a.time)}`,
           description: `${a.visitType || 'Visit'} • Dr. ${a.doctorName || ''}`.trim(),
           href: `/dashboard/appointments`,
         }));
         const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
-          description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
+          description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
           href: `/dashboard/pharmacy?section=billing`,
           variant: 'warning',
         }));
@@ -220,7 +222,7 @@ export function Header() {
         const invItems: NotificationItem[] = (overdue || []).map((inv: any) => ({
           id: `inv-${inv.id}`,
           title: `Overdue Invoice ${inv.invoiceNo}`,
-          description: `${inv.patient?.name || 'Patient'} • Due ${formatDate(inv.dueDate)}`,
+          description: `${inv.patient?.name || 'Patient'} • Due ${displayUtcDate(inv.dueDate)}`,
           href: `/dashboard/pharmacy?section=billing`,
           variant: 'destructive',
         }));
@@ -283,14 +285,6 @@ export function Header() {
     return items;
   }
 
-  function formatTime(value: string | Date): string {
-    const d = new Date(value);
-    return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  }
-  function formatDate(value: string | Date): string {
-    const d = new Date(value);
-    return d.toLocaleDateString();
-  }
   function formatCurrency(amount: number): string {
     try {
       return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR' }).format(amount || 0);
@@ -436,7 +430,7 @@ export function Header() {
             type: 'appointment',
             title: `${patientName} - ${appointment.slot}`,
             subtitle: `Dr. ${doctorName}`,
-            description: `Appointment • ${new Date(appointment.date).toLocaleDateString()} • ${appointment.visitType || 'OPD'}`,
+            description: `Appointment • ${displayUtcDate(appointment.date)} • ${appointment.visitType || 'OPD'}`,
             icon: Calendar,
             href: `/dashboard/appointments`,
           });

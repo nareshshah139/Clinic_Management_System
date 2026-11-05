@@ -1,10 +1,11 @@
 "use client";
+
+import { displayClinicDate } from '@/lib/date-display';
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
   fmtMoney,
-  fmtDate,
   inputClass,
   requestKey,
   workflowKinds,
@@ -185,7 +186,7 @@ export function SupplierCreditPanel({
                   className="flex flex-wrap items-center gap-3 text-sm"
                 >
                   <span>
-                    {fmtDate(a.createdAt)} · {fmtMoney(a.amount)} allocated{" "}
+                    {displayClinicDate(a.createdAt)} · {fmtMoney(a.amount)} allocated{" "}
                     {a.reversedAt ? "· reversed" : ""}{" "}
                     <a
                       className="underline"

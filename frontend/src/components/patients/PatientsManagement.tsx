@@ -1,5 +1,7 @@
 'use client';
 
+import { displayCalendarDate, displayClinicDate } from '@/lib/date-display';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -548,7 +550,7 @@ export default function PatientsManagement() {
           });
           toast({
             title: 'Walk-in appointment booked',
-            description: `Appointment scheduled for ${dateStr} at ${slot}`,
+            description: `Appointment scheduled for ${displayCalendarDate(dateStr)} at ${slot}`,
             variant: 'default',
           });
           return;
@@ -1122,7 +1124,7 @@ export default function PatientsManagement() {
                       </TableCell>
                       {displayPatients.some(pp => !!pp.lastVisitDate) && (
                         <TableCell>
-                          <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
+                          <div className="text-sm text-gray-600">{p.lastVisitDate ? displayClinicDate(p.lastVisitDate) : <span className="text-gray-400">—</span>}</div>
                         </TableCell>
                       )}
                       <TableCell>

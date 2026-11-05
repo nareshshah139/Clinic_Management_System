@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDateTime, displayClinicDate } from '@/lib/date-display';
+
 import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
@@ -760,7 +762,7 @@ export function PharmacyInvoiceBuilder() {
   const totals = calculateTotals();
 
   const renderPrintHtml = (invoice: any) => {
-    const dateStr = new Date().toLocaleString();
+    const dateStr = displayClinicDateTime(new Date());
     const itemsRows = items
       .map(
         (it) => `
@@ -902,7 +904,7 @@ Grand Total: <strong>₹${totals.grandTotal.toFixed(2)}</strong>
       const cleaned = invoiceData.billingPhone.startsWith('+')
         ? invoiceData.billingPhone
         : `+${invoiceData.billingPhone}`;
-      const text = `Invoice ${new Date().toLocaleDateString()} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
+      const text = `Invoice ${displayClinicDate(new Date())} for ${invoiceData.billingName}\nTotal: ₹${totals.grandTotal.toFixed(2)}`;
       alert(`This will send via backend: ${cleaned}\n${text}`);
       // Backend endpoint could be added later to send with selected template
     } catch (e) {

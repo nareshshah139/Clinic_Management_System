@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDateTime } from '@/lib/date-display';
+
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -370,13 +372,7 @@ export default function SmartProceduresPage() {
               <div>
                 <CardTitle className="text-base">{stringifyPatientName(patient)}</CardTitle>
                 <CardDescription>
-                  {new Date(visit.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })}
+                  {displayClinicDateTime(visit.createdAt)}
                 </CardDescription>
               </div>
               <Badge variant="outline">

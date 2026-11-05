@@ -1,3 +1,4 @@
+import { displayClinicDate } from '../../common/date-display';
 import { Prisma } from '@prisma/client';
 import { medicineRegimenDefaults } from './medicine-regimen-defaults';
 import { searchPrescriptionDrugs } from './prescription-drug-search';
@@ -1352,7 +1353,7 @@ export class PrescriptionsService {
     doc.fontSize(10).text(this.renderTemplate('Patient: {{ patient.name }}', ctx));
     doc.text(this.renderTemplate('Doctor: {{ doctor.firstName }} {{ doctor.lastName }}', ctx));
     const teleVideo = prescription.visit.consultationType === ConsultationType.TELE_VIDEO;
-    const date = new Date(prescription.visit.createdAt || prescription.createdAt || Date.now()).toLocaleDateString('en-IN');
+    const date = displayClinicDate(prescription.visit.createdAt || prescription.createdAt);
     doc.text(`Date: ${date}${teleVideo ? ' | Consultation: Tele-video' : ''}`);
     doc.moveDown();
 

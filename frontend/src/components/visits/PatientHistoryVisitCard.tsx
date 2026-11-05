@@ -1,5 +1,7 @@
 'use client';
 
+import { displayUtcDate, displayCalendarDate } from '@/lib/date-display';
+
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -123,8 +125,7 @@ const normalizeAssetUrl = (path: string) => {
 };
 
 const formatMaybeDate = (value: string) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+  return displayUtcDate(value, value);
 };
 
 const deriveVisitData = (visit: PatientHistoryVisit) => {
@@ -136,7 +137,7 @@ const deriveVisitData = (visit: PatientHistoryVisit) => {
   const rxItems = Array.isArray(raw.prescriptionItems) ? raw.prescriptionItems : [];
   const status = String(visit.status || '').toLowerCase().replaceAll('_', '-');
   return {
-    dateLabel: day ? new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'Unknown date',
+    dateLabel: displayCalendarDate(day, 'Unknown date'),
     doctorName: visit.doctor ? `${visit.doctor.firstName || ''} ${visit.doctor.lastName || ''}`.trim() : undefined,
     chiefComplaint: extractTextList(visit.complaints, ['complaint', 'text', 'name']).join('; '),
     primaryDiagnosis: extractTextList(visit.diagnosis, ['diagnosis', 'condition', 'name']).join('; '),

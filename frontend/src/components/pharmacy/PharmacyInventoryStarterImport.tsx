@@ -1,5 +1,7 @@
 "use client";
 
+import { displayUtcDate } from '@/lib/date-display';
+
 import { useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -271,7 +273,7 @@ export function PharmacyInventoryStarterImport({
                 {r.packSizeLabel} / {r.unit}
               </td>
               <td>
-                {r.batchNumber} / {r.expiryDate}
+                {r.batchNumber} / {displayUtcDate(r.expiryDate, r.expiryDate || "—")}
               </td>
               <td>{r.currentStock}</td>
               <td>

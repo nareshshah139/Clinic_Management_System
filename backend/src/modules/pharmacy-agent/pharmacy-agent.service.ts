@@ -266,7 +266,7 @@ export class PharmacyAgentService implements OnModuleInit {
       data: {
         branchId: user.branchId,
         userId: user.id,
-        title: dto.title || 'Agentic Pharmacy',
+        title: dto.title || 'Pharmacy assistant',
         metadata: { runtime: 'codex-cli', safety: 'draft_then_approve' },
       },
     });
@@ -1180,7 +1180,7 @@ export class PharmacyAgentService implements OnModuleInit {
     fulfilledData: unknown;
   }) {
     return [
-      'You are Agentic Pharmacy embedded inside a clinic management application.',
+      'You are the Pharmacy AI assistant embedded inside a clinic management application.',
       'You help with pharmacy operations only: dashboard Q&A, invoices, prescription queue, dispense tasks, drug master, inventory, purchase invoices/OCR, purchase ledger, partner sales, compliance, packages, charts, and reports.',
       'Return only JSON matching the provided output schema.',
       'Use empty strings for unused string fields and empty arrays for unused arrays.',
@@ -1771,14 +1771,14 @@ export class PharmacyAgentService implements OnModuleInit {
       {
         id: 'perm_pharmacy_agent_use',
         name: 'pharmacy:agent:use',
-        description: 'Use the embedded Agentic Pharmacy assistant',
+        description: 'Use the pharmacy AI assistant',
         resource: 'pharmacy_agent',
         action: 'use',
       },
       {
         id: 'perm_pharmacy_agent_proposal_apply',
         name: 'pharmacy:agent:proposal:apply',
-        description: 'Apply reviewed Agentic Pharmacy database proposals',
+        description: 'Apply reviewed suggestions to pharmacy records',
         resource: 'pharmacy_agent',
         action: 'proposal:apply',
       },
@@ -1923,7 +1923,7 @@ export class PharmacyAgentService implements OnModuleInit {
 
   private deriveTitle(message: string) {
     return (
-      message.trim().replace(/\s+/g, ' ').slice(0, 80) || 'Agentic Pharmacy'
+      message.trim().replace(/\s+/g, ' ').slice(0, 80) || 'Pharmacy assistant'
     );
   }
 

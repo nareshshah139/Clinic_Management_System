@@ -1,5 +1,7 @@
 'use client';
 
+import { displayCalendarDate } from '@/lib/date-display';
+
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -464,7 +466,7 @@ export default function AppointmentScheduler({
       toast({
         variant: "success",
         title: "Appointment rescheduled",
-        description: `${formatPatientName(rescheduleContext.appointment.patient)} moved to ${newSlot} on ${targetDate}`,
+        description: `${formatPatientName(rescheduleContext.appointment.patient)} moved to ${newSlot} on ${displayCalendarDate(targetDate)}`,
       });
 
       setRescheduleContext(null);

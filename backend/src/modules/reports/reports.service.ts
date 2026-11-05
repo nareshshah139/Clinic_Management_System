@@ -1,3 +1,4 @@
+import { displayClinicDateTime } from '../../common/date-display';
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import {
@@ -955,7 +956,7 @@ export class ReportsService {
 
       doc.fontSize(18).text(`${reportType} Report`, { underline: true });
       doc.moveDown();
-      doc.fontSize(10).text(`Generated: ${new Date().toISOString()}`);
+      doc.fontSize(10).text(`Generated: ${displayClinicDateTime(new Date())}`);
       doc.moveDown();
 
       const rows = this.prepareRowsForCsv(reportType, data);

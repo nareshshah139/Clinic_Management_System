@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -381,7 +383,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
                     {selectedPackage.creator.department && ` • ${selectedPackage.creator.department}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Created on {new Date(selectedPackage.createdAt).toLocaleDateString()}
+                    Created on {displayClinicDate(selectedPackage.createdAt)}
                   </p>
                 </div>
               )}

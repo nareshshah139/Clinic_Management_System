@@ -1,3 +1,4 @@
+import { displayCalendarDate, displayClinicDateTime, displayUtcDate } from '../../common/date-display';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
 import { PharmacyPurchaseInvoiceService } from '../pharmacy/pharmacy-purchase-invoice.service';
@@ -225,10 +226,16 @@ export class InventoryPurchaseActionsService {
         const qr = await require('qrcode').toBuffer(code, { type: 'png', width: 420, margin: 2, errorCorrectionLevel: 'M' });
         pdf.image(qr, 36, pdf.y, { width: 160, height: 160 }); pdf.y += 172;
         pdf.text(code).text('Scan or paste this code into the purchase register search.');
-        pdf.text(`Invoice date: ${new Date(invoice.invoiceDate).toISOString().slice(0, 10)} | Net: INR ${Number(invoice.netPayable).toFixed(2)}`);
+        pdf.text(`Invoice date: ${displayUtcDate(invoice.invoiceDate)} | Net: INR ${Number(invoice.netPayable).toFixed(2)}`);
         continue;
       }
       const header = this.header(invoice);
+      for (const key of ['invoiceDate', 'goodsReceivedDate', 'dueDate']) {
+        if (invoice[key]) header[label(key)] = displayUtcDate(invoice[key]);
+      }
+      for (const key of ['createdAt', 'updatedAt', 'stockCommittedAt']) {
+        if (invoice[key]) header[label(key)] = displayClinicDateTime(invoice[key]);
+      }
       const technical = new Set(['Id', 'Branch Id', 'Action Metadata', 'Action Version', 'Ocr Flags', 'Unresolved Ocr Flags', 'Reconciliation Issues', 'Originals', 'Quantity basis', 'Stock effect']);
       fields(Object.entries(header).filter(([key, value]) => !technical.has(key) && value !== '' && value !== '[]'));
       if (invoice.actionMetadata) fields(Object.entries(object(invoice.actionMetadata)).filter(([key]) => ['location', 'futureSaleDiscountPercent', 'discountBasis'].includes(key)).map(([key, value]) => [label(key), value]));
@@ -236,7 +243,7 @@ export class InventoryPurchaseActionsService {
       for (const item of invoice.items) {
         space(180); pdf.font('Helvetica-Bold').fontSize(11).text(`${item.lineNumber}. ${text(item.productName)}`);
         pdf.font('Helvetica').fontSize(9);
-        const summary = `Batch ${text(item.batchNumber)} | Expiry ${String(item.expiryMonth).padStart(2, '0')}/${item.expiryYear} | Paid ${item.quantityPurchased} + free ${item.freeQuantity} ${text(item.packUnitType)} (${text(item.packSize)})`;
+        const summary = `Batch ${text(item.batchNumber)} | Expiry ${displayCalendarDate(`${item.expiryYear}-${String(item.expiryMonth).padStart(2, '0')}`)} | Paid ${item.quantityPurchased} + free ${item.freeQuantity} ${text(item.packUnitType)} (${text(item.packSize)})`;
         pdf.text(summary).text(`MRP INR ${Number(item.mrp).toFixed(2)} | Rate INR ${Number(item.purchaseRate).toFixed(2)} | Taxable INR ${Number(item.taxableAmount).toFixed(2)} | GST INR ${Number(item.gstAmount).toFixed(2)} | Total INR ${Number(item.lineTotal).toFixed(2)}`);
         pdf.moveDown(.5);
         const listed = new Set(['productName', 'batchNumber', 'expiryMonth', 'expiryYear', 'quantityPurchased', 'freeQuantity', 'packUnitType', 'packSize', 'mrp', 'purchaseRate', 'taxableAmount', 'gstAmount', 'lineTotal', 'lineNumber', 'createdAt', 'updatedAt', 'purchaseInvoiceId']);

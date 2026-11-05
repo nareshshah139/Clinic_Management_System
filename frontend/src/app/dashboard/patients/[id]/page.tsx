@@ -1,5 +1,7 @@
 'use client';
 
+import { displayCalendarDate, displayUtcDate, displayLocalDate } from '@/lib/date-display';
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
@@ -97,15 +99,14 @@ export default function PatientDetailsPage() {
   }, [sortedVisits, doctorFilter, fromDate, toDate]);
 
   const groupedByDate = useMemo(() => {
-    const groups: Array<{ dateLabel: string; entries: VisitEntry[] }> = [];
+    const groups: Array<{ dateKey: string; dateLabel: string; entries: VisitEntry[] }> = [];
     for (const v of filteredVisits) {
-      const d = new Date(`${encounterDay(v)}T12:00:00`);
-      const key = d ? d.toLocaleDateString() : 'Unknown date';
+      const key = encounterDay(v);
       const last = groups[groups.length - 1];
-      if (last && last.dateLabel === key) {
+      if (last && last.dateKey === key) {
         last.entries.push(v);
       } else {
-        groups.push({ dateLabel: key, entries: [v] });
+        groups.push({ dateKey: key, dateLabel: displayCalendarDate(key, 'Unknown date'), entries: [v] });
       }
     }
     return groups;
@@ -117,7 +118,7 @@ export default function PatientDetailsPage() {
   const nextAppointmentLabel = (() => {
     const upcoming = patient?.nextAppointment as any;
     if (upcoming?.date && upcoming?.slot) {
-      return `${new Date(String(upcoming.date)).toLocaleDateString()} @ ${upcoming.slot}`;
+      return `${displayUtcDate(String(upcoming.date))} @ ${upcoming.slot}`;
     }
     return 'Not scheduled';
   })();
@@ -233,7 +234,7 @@ export default function PatientDetailsPage() {
             <div className="space-y-1">
               <div className="text-gray-500">Last visit</div>
               <div className="font-medium text-gray-900">
-                {lastVisitDate ? lastVisitDate.toLocaleDateString() : 'No visits yet'}
+                {lastVisitDate ? displayLocalDate(lastVisitDate) : 'No visits yet'}
               </div>
               {lastVisit?.doctor && (
                 <div className="text-gray-600">Dr. {(lastVisit.doctor.firstName ?? '')} {(lastVisit.doctor.lastName ?? '')}</div>

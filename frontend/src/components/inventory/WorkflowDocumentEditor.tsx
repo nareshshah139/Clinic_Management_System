@@ -1,4 +1,6 @@
 "use client";
+
+import { displayUtcDate, displayClinicDateTime } from '@/lib/date-display';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -16,7 +18,6 @@ import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
   fmtMoney,
-  fmtDate,
   labelStatus,
   requestKey,
   inputClass,
@@ -1060,7 +1061,7 @@ export function WorkflowDocumentEditor({
                         <span>
                           <strong>{i.name}</strong> ·{" "}
                           {i.batchNumber || "No batch"} · expires{" "}
-                          {fmtDate(i.expiryDate)}
+                          {displayUtcDate(i.expiryDate)}
                         </span>
                         <span>
                           {i.available} {i.unit} available ·{" "}
@@ -1157,7 +1158,7 @@ export function WorkflowDocumentEditor({
                   )}
                   <p className="text-xs text-muted-foreground">
                     {l.batchNumber || "—"} · {l.unit || "Amount"}
-                    {l.expiryDate && ` · ${fmtDate(l.expiryDate)}`}
+                    {l.expiryDate && ` · ${displayUtcDate(l.expiryDate)}`}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     MRP {fmtMoney(l.mrp)} ·{" "}
@@ -1495,7 +1496,7 @@ export function WorkflowDocumentEditor({
           <ol className="divide-y border-y">
             {doc.events.map((e: any) => (
               <li key={e.id} className="py-3 text-sm">
-                {new Date(e.createdAt).toLocaleString("en-IN")} ·{" "}
+                {displayClinicDateTime(e.createdAt)} ·{" "}
                 {e.actorName || e.actorId} · {e.action === "RESOLVE_OUTCOME" ? "Interrupted attempt resolved" : e.action} ·{" "}
                 {labelStatus(e.toStatus)}
                 {e.reason && ` · ${e.reason}`}

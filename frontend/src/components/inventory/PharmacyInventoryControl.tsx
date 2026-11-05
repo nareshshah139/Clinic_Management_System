@@ -78,7 +78,7 @@ export function PharmacyInventoryControl() {
           <ScenarioCard
             active={inventoryTab === 'order-ocr'}
             icon={<FileUp className="h-4 w-4" />}
-            title="Supplier invoice OCR"
+            title="Scan supplier invoice"
             detail="Import bills and add fully validated stock automatically. Review exceptions here."
             action="Scan invoice"
             onClick={() => openInventory('order-ocr')}
@@ -86,8 +86,8 @@ export function PharmacyInventoryControl() {
           <ScenarioCard
             active={inventoryTab === 'shelf-intelligence'}
             icon={<MapPin className="h-4 w-4" />}
-            title="Shelf Intelligence"
-            detail="Map rack/shelf/bin locations, rotate FEFO batches, count by shelf, and post variances."
+            title="Shelf locations"
+            detail="Assign storage locations, pick batches by expiry, count stock, and record corrections."
             action="Optimize shelves"
             onClick={() => openInventory('shelf-intelligence')}
           />
@@ -110,8 +110,8 @@ export function PharmacyInventoryControl() {
           <ScenarioCard
             active={inventoryTab === 'compliance'}
             icon={<ShieldCheck className="h-4 w-4" />}
-            title="Batch, expiry & FEFO"
-            detail="Watch GST, expiry returns, FEFO stock picks, and audit adjustments."
+            title="Batches and expiry"
+            detail="Review GST, expiry returns, batch selection, and recorded stock corrections."
             action="Control stock"
             onClick={() => openInventory('compliance')}
           />
@@ -123,7 +123,7 @@ export function PharmacyInventoryControl() {
       <section ref={workbenchRef} className="scroll-mt-4 space-y-3">
         {inventoryTab !== 'order-ocr' && <WorkbenchHeader
           title="Pharmacy Inventory Control"
-          detail="Excel starts stock, supplier OCR receives orders, Shelf Intelligence controls location-aware picking, and analytics explains costs."
+          detail="Excel starts stock, invoice scanning receives orders, Shelf locations controls location-aware picking, and analytics explains costs."
         />}
         <Tabs
           value={inventoryTab}
@@ -136,7 +136,7 @@ export function PharmacyInventoryControl() {
             <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto rounded-lg bg-muted p-1 lg:grid lg:grid-cols-5">
               <TabsTrigger value="order-ocr" className="min-h-10 shrink-0 gap-2">
                 <FileUp className="h-4 w-4" />
-                Supplier OCR
+                Invoice scanning
               </TabsTrigger>
               <TabsTrigger value="shelf-intelligence" className="min-h-10 shrink-0 gap-2">
                 <MapPin className="h-4 w-4" />
@@ -184,7 +184,7 @@ function InventoryControlSummary() {
     <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       <InventoryControlCard
         title="Live inventory tracking"
-        detail="Sales, purchase commits, Excel imports, and returns move stock through auditable transactions."
+        detail="Sales, purchased stock, Excel imports, and returns are recorded in stock history."
         points={[
           'Sale deducts stock',
           'Purchase OCR commits stock',
@@ -192,13 +192,13 @@ function InventoryControlSummary() {
         ]}
       />
       <InventoryControlCard
-        title="Expiry, batch & FEFO"
-        detail="Batch numbers and expiry dates are preserved so older valid stock can be dispensed first."
-        points={['FEFO deduction', 'Near-expiry alerts', 'Expiry return review']}
+        title="Batches and expiry"
+        detail="Batch numbers and expiry dates are preserved so unexpired stock with the nearest expiry date can be dispensed first."
+        points={['Deduct stock from the earliest-expiry batch', 'Near-expiry alerts', 'Expiry return review']}
       />
       <InventoryControlCard
-        title="Shelf intelligence"
-        detail="Shelf, rack, bin, and fridge location drives picking, replenishment, cycle counts, and variance correction."
+        title="Shelf stock"
+        detail="Shelf, rack, bin, and fridge location drives picking, replenishment, stock counts, and stock corrections."
         points={['Pick assist', 'Shelf counts', 'Unmapped queue']}
       />
       <InventoryControlCard

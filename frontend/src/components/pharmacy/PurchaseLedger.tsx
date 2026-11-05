@@ -1,5 +1,7 @@
 "use client";
 
+import { displayUtcDate } from '@/lib/date-display';
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
@@ -670,7 +672,7 @@ export function PurchaseLedger({
                       {formatMoney(invoice.creditApplied || 0)}
                     </p>
                     <div className="text-xs text-gray-500">
-                      Due {invoice.dueDate ? invoice.dueDate.slice(0, 10) : "-"}
+                      Due {displayUtcDate(invoice.dueDate, "-")}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">

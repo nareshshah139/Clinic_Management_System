@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -150,13 +152,6 @@ export function PharmacyDashboard() {
     }).format(amount);
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
 
   const getStatusColor = (status: string) => {
     const colors = {
@@ -321,7 +316,7 @@ export function PharmacyDashboard() {
                   <div>
                     <p className="font-medium text-sm">{invoice.invoiceNumber}</p>
                     <p className="text-xs text-gray-500">{invoice.patientName}</p>
-                    <p className="text-xs text-gray-400">{formatDate(invoice.createdAt)}</p>
+                    <p className="text-xs text-gray-400">{displayClinicDate(invoice.createdAt)}</p>
                   </div>
                   <div className="text-right flex items-center gap-2">
                     <Badge className={getStatusColor(invoice.status)}>

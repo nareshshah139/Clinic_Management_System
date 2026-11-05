@@ -1,4 +1,6 @@
 "use client";
+
+import { displayUtcDate, displayClinicDate, displayClinicDateTime } from '@/lib/date-display';
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import { useEffect, useState } from "react";
 import { ArrowLeft, Search, Printer, Download, Plus } from "lucide-react";
@@ -14,7 +16,6 @@ import { ReviewStatus } from "@/components/ui/ReviewStatus";
 import { batchReviewTone, batchRowClass, batchState, fmtStockExpiry, stockPageQuery } from "./stock-batch-view";
 import {
   fmtMoney,
-  fmtDate,
   inputClass,
   downloadCsv,
   requestKey,
@@ -550,7 +551,7 @@ export function WorkspaceStock({
                         {p.invoiceNumber} · {p.distributorName}
                       </button>
                       <span>
-                        {fmtDate(p.invoiceDate)} · {fmtMoney(p.netPayable)} ·{" "}
+                        {displayUtcDate(p.invoiceDate)} · {fmtMoney(p.netPayable)} ·{" "}
                         {p.status}
                       </span>
                     </li>
@@ -590,7 +591,7 @@ export function WorkspaceStock({
                           {h.document.status} · Physical {h.quantityDelta} ·
                           Held {h.heldDelta} {item.unit}
                           <span className="block text-xs text-muted-foreground">
-                            {fmtDate(h.document.createdAt)} ·{" "}
+                            {displayClinicDate(h.document.createdAt)} ·{" "}
                             {h.document.createdBy} ·{" "}
                             {h.document.payload?.reason || "No reason recorded"}
                           </span>
@@ -624,7 +625,7 @@ export function WorkspaceStock({
                             {h.remainingHeld} {item.unit} still held ·{" "}
                             {h.status}
                             <span className="block text-xs text-muted-foreground">
-                              {fmtDate(h.createdAt)} · {h.ownerName} ·{" "}
+                              {displayClinicDate(h.createdAt)} · {h.ownerName} ·{" "}
                               {h.reason || "No reason recorded"}
                             </span>
                           </span>
@@ -674,7 +675,7 @@ export function WorkspaceStock({
                           .map((m: any) => (
                             <tr key={m.id}>
                               <td className="p-3">
-                                {new Date(m.createdAt).toLocaleString("en-IN")}
+                                {displayClinicDateTime(m.createdAt)}
                               </td>
                               <td className="p-3">
                                 {(() => {
@@ -1185,7 +1186,7 @@ export function WorkspaceStock({
           {moreColumns && (          <p className="text-xs text-muted-foreground">
             Current branch. {data?.filterScope?.expiryBoundary}{" "}
             {data?.filterScope?.asOf &&
-              `As of ${fmtDate(data.filterScope.asOf)}; expiry window through ${fmtDate(data.filterScope.expiryEnd)}.`}{" "}
+              `As of ${displayClinicDate(data.filterScope.asOf)}; expiry window through ${displayUtcDate(data.filterScope.expiryEnd)}.`}{" "}
             PTR and landing price exclude recoverable GST.
           </p>)}
           {capabilities?.itemWrite && selected.length > 0 && (

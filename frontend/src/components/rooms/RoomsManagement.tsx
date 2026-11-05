@@ -1,5 +1,7 @@
 'use client';
 
+import { displayClinicDate } from '@/lib/date-display';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -344,7 +346,7 @@ export default function RoomsManagement() {
                           />
                         </div>
                       </TableCell>
-                      <TableCell>{new Date(room.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>{displayClinicDate(room.createdAt)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Button

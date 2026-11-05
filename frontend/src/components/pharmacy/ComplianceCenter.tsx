@@ -1,5 +1,7 @@
 "use client";
 
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
+
 import {
   useCallback,
   useEffect,
@@ -148,16 +150,6 @@ function defaultStartDate() {
   return toDateInput(date);
 }
 
-function formatDate(value?: string) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
 
 function SummaryMetric({
   label,
@@ -711,7 +703,7 @@ function ExpiryTable({
                     {row.batchNumber || "-"}
                   </div>
                 </TableCell>
-                <TableCell>{formatDate(row.expiryDate)}</TableCell>
+                <TableCell>{displayUtcDate(row.expiryDate, "-")}</TableCell>
                 <TableCell className="text-right">{row.currentStock}</TableCell>
                 <TableCell className="text-right">
                   {currency.format(row.valueAtCost)}
@@ -833,7 +825,7 @@ function ReportRecords({ title, report }: { title: string; report: any }) {
                   </a>
                   <span className="block text-xs">{r.party}</span>
                 </td>
-                <td className="p-2">{r.invoiceDate?.slice(0, 10)}</td>
+                <td className="p-2">{r.sourceType === "sale" ? displayClinicDate(r.invoiceDate, "") : displayUtcDate(r.invoiceDate, "")}</td>
                 <td className="p-2">{r.status}</td>
                 <td className="p-2">{currency.format(r.taxableAmount)}</td>
                 <td className="p-2">{currency.format(r.gstAmount)}</td>

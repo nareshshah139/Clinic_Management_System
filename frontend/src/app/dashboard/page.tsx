@@ -1,5 +1,7 @@
 'use client';
 
+import { displayUtcDate } from '@/lib/date-display';
+
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -416,10 +418,7 @@ export default function DashboardPage() {
                         {appointment.patient?.firstName} {appointment.patient?.lastName}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {new Date(appointment.date).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })} - {appointment.slot}
+                        {displayUtcDate(appointment.date)} - {appointment.slot}
                       </p>
                     </div>
                     <Badge variant={

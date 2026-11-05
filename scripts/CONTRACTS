@@ -1,0 +1,7 @@
+@cc [owner:nareshshah139,label:verification] date-display-source-parity
+sync-date-display.cjs check mode MUST fail when the committed backend formatter differs from
+frontend/src/lib/date-display.ts. Write mode MUST copy that source without changing app packaging.
+
+@cc [owner:nareshshah139,label:testing] language-browser-isolation
+ux/verify-language.cjs MUST use only loopback app URLs and synthetic API responses. A failed
+visible-copy or date assertion MUST exit unsuccessfully without changing clinic data.

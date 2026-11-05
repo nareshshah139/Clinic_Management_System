@@ -1,4 +1,6 @@
 "use client";
+
+import { displayUtcDate, displayClinicDate } from '@/lib/date-display';
 import "./inventory-readability.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -24,7 +26,6 @@ import { InventoryUpdates } from "./InventoryUpdates";
 import { useDashboardUser } from "@/components/layout/dashboard-user-context";
 import {
   fmtMoney,
-  fmtDate,
   inputClass,
   requestKey,
   workflowKinds,
@@ -633,7 +634,7 @@ function WorkspaceToday({ navigate, open }: any) {
         <h2 className="text-2xl font-semibold">What needs attention</h2>
         <p className="text-muted-foreground">
           Every action opens the matching records.{" "}
-          {data && `As of ${fmtDate(data.asOf)} · current branch`}
+          {data && `As of ${displayClinicDate(data.asOf)} · current branch`}
         </p>
       </header>
       {error && (
@@ -883,7 +884,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
                     {d.distributorGstin}
                   </p>
                 </td>
-                <td className="p-3">{fmtDate(d.invoiceDate)}</td>
+                <td className="p-3">{displayUtcDate(d.invoiceDate)}</td>
                 <td className="p-3">
                   {purchaseInvoiceStatusLabel(d)}
                 </td>
@@ -1106,7 +1107,7 @@ function WorkflowRegister({
                 {d.reference}
               </strong>
               <span className="mt-1 block text-sm text-muted-foreground">
-                {fmtDate(d.createdAt)} · {d.payload.lines.length} lines ·{" "}
+                {displayClinicDate(d.createdAt)} · {d.payload.lines.length} lines ·{" "}
                 {labelStatus(d.status)}
               </span>
             </button>

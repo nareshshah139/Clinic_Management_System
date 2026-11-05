@@ -1,5 +1,7 @@
 'use client';
 
+import { displayCalendarDate } from '@/lib/date-display';
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -288,7 +290,7 @@ export default function AppointmentBookingDialog({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
             <div><span className="font-medium">Patient:</span> {formatPatientName(patient)}</div>
             <div><span className="font-medium">Phone:</span> {patient?.phone || 'N/A'}</div>
-            <div><span className="font-medium">Date:</span> {date}</div>
+            <div><span className="font-medium">Date:</span> {displayCalendarDate(date)}</div>
             <div><span className="font-medium">Time Slot:</span> {derivedSlot}</div>
           </div>
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { displayCalendarDate, displayClinicTime } from '@/lib/date-display';
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PRESCRIPTION_LETTERHEAD_URL, PRESCRIPTION_TOP_MARGIN_PX, PRESCRIPTION_BOTTOM_MARGIN_PX, prescriptionLetterheadUrl } from '@/lib/prescription-letterhead';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -1740,8 +1742,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Recent Visits</div>
                   {recentVisits.slice(0, 2).map((visit, index) => {
-                    const timestamp = `${encounterDay(visit)}T12:00:00`;
-                    const displayDate = timestamp ? new Date(timestamp).toLocaleDateString() : 'Unknown date';
+                    const displayDate = displayCalendarDate(encounterDay(visit), 'Unknown date');
                     const diagnoses = Array.isArray(visit.diagnosis)
                       ? visit.diagnosis
                       : [];
@@ -1823,7 +1824,7 @@ function MedicalVisitFormEditor({ patientId, doctorId, userRole = 'DOCTOR', visi
               {saveStatus === 'saving' && 'Saving…'}
               {saveStatus === 'autosaving' && 'Auto-saving…'}
               {saveStatus === 'unsaved' && 'Unsaved changes'}
-              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Saved')}
+              {saveStatus === 'saved' && (lastSavedAt ? `Saved ${displayClinicTime(new Date(lastSavedAt))}` : 'Saved')}
               {saveStatus === 'error' && <span className="text-red-600">Save failed</span>}
             </div>
               <DoctorTour autoStart={false} />
