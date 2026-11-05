@@ -4,7 +4,7 @@ const path = require('node:path');
 const puppeteer = require('puppeteer-core');
 
 const baseUrl = process.env.WRAP_URL || 'http://127.0.0.1:3012';
-const output = process.env.WRAP_OUTPUT || '/tmp/clinic-wrap-evidence';
+const output = process.env.WRAP_OUTPUT || '/tmp/clinic-hover-evidence/after';
 const baseline = process.argv.includes('--baseline');
 const patientName = 'Annapoorna Venkatasubramanian Chandrasekharan';
 
@@ -27,6 +27,10 @@ async function prepare(page) {
       appointments[0].slot = '09:00-09:30';
       appointments.push({ ...appointments[0], id: 'wrap-appointment-2', slot: '09:15-09:45' }, { ...appointments[0], id: 'wrap-appointment-3', slot: '09:30-10:00' });
     }
+    if (location.search.includes('wrap-extreme=1')) appointments[0].notes = 'ProcedureReferenceWithoutWhitespace'.repeat(20);
+    if (location.search.includes('wrap-clipped=1')) appointments[0].slot = '08:50-09:05';
+    if (location.search.includes('wrap-short=1')) appointments[0].slot = '09:00-09:05';
+    if (location.search.includes('wrap-edge=1')) appointments[0].slot = '17:45-18:00';
     window.fetch = async (input, init) => {
       const url = new URL(typeof input === 'string' ? input : input.url, location.href);
       if (!url.pathname.startsWith('/api/')) return nativeFetch(input, init);
@@ -48,26 +52,121 @@ async function prepare(page) {
 }
 
 async function measure(page) {
-  return page.evaluate(name => {
+  return page.evaluate(() => {
     const labels = [...document.querySelectorAll('[data-appointment-id]')];
-    if (!labels.length) {
-      const text = [...document.querySelectorAll('span')].find(e => e.textContent.includes(name) && ![...e.children].some(c => c.textContent.includes(name)));
-      if (text?.closest('.absolute.group')) labels.push(text.closest('.absolute.group'));
-    }
     if (!labels.length) throw new Error('Synthetic appointment did not render');
     const appointments = labels.map(label => {
       const box = label.getBoundingClientRect();
-      const range = document.createRange();
-      range.selectNodeContents(label);
-      const rects = [...range.getClientRects()].filter(r => r.width && r.height);
-      if (!rects.length) throw new Error('Browser did not provide text-layout rectangles');
-      return { width: box.width, height: box.height, overflowingRects: rects.filter(r => r.left < box.left - 1 || r.right > box.right + 1 || r.top < box.top - 1 || r.bottom > box.bottom + 1).length };
+      const summary = label.querySelector('[data-appointment-summary]');
+      const buttonBox = summary?.getBoundingClientRect();
+      return {
+        width: box.width, height: box.height,
+        summaryContained: buttonBox ? buttonBox.left >= box.left - 1 && buttonBox.right <= box.right + 1 && buttonBox.top >= box.top - 1 && buttonBox.bottom <= box.bottom + 1 : false,
+      };
     });
     const boxes = labels.map(label => label.getBoundingClientRect());
     const intersectingAppointments = boxes.some((a, i) => boxes.slice(i + 1).some(b => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1));
     return { intersectingAppointments, viewport: innerWidth, pageWidth: document.documentElement.scrollWidth, mainOverflow: [...document.querySelectorAll('main')].some(e => e.scrollWidth > e.clientWidth + 1), appointments };
+  });
+}
 
-  }, patientName);
+async function settle(page, selector) {
+  await page.$eval(selector, async element => {
+    await Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {})));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
+async function verifyDialog(page) {
+  await settle(page, '[role="dialog"]');
+  const result = await page.$eval('[role="dialog"]', element => {
+    const box = element.getBoundingClientRect();
+    return {
+      inViewport: box.left >= 0 && box.right <= innerWidth + 1 && box.top >= 0 && box.bottom <= innerHeight + 1,
+      horizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+      actionsFit: [...element.querySelectorAll('button')].every(button => {
+        const action = button.getBoundingClientRect();
+        return action.left >= box.left - 1 && action.right <= box.right + 1;
+      }),
+    };
+  });
+  assert.ok(result.inViewport && !result.horizontalOverflow && result.actionsFit, `Details containment: ${JSON.stringify(result)}`);
+}
+
+async function verifyPreview(page, scenario) {
+  const trigger = '[data-appointment-summary]';
+  const preview = '[data-appointment-preview]';
+  const before = await measure(page);
+  await page.hover(trigger);
+  await page.waitForSelector(preview, { visible: true });
+  await settle(page, preview);
+  const details = await page.$eval(preview, element => {
+    const box = element.getBoundingClientRect();
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const rects = [];
+    while (walker.nextNode()) {
+      if (walker.currentNode.parentElement.closest('[role="tooltip"]')) continue;
+      const range = document.createRange();
+      range.selectNodeContents(walker.currentNode);
+      rects.push(...[...range.getClientRects()].filter(r => r.width && r.height));
+    }
+    if (!rects.length) throw new Error('Browser did not provide text-layout rectangles');
+    return {
+      text: element.textContent,
+      inViewport: box.left >= 0 && box.right <= innerWidth + 1 && box.top >= 0 && box.bottom <= innerHeight + 1,
+      horizontalTextOverflow: rects.some(r => r.left < box.left - 1 || r.right > box.right + 1),
+      width: box.width, height: box.height,
+      bounds: { left: box.left, top: box.top, right: box.right, bottom: box.bottom },
+    };
+  });
+  assert.ok(details.text.includes(patientName), 'Hover reveals the full patient name');
+  assert.ok(details.text.includes('Consultation and Diagnostic Procedures Room'), 'Hover reveals the full room');
+  assert.ok(details.text.includes(scenario.extreme ? 'ProcedureReferenceWithoutWhitespace'.repeat(20) : 'Follow-up assessment and ultrasound-guided diagnostic procedure'), 'Hover reveals the full procedure');
+  if (!details.inViewport || details.horizontalTextOverflow) await page.screenshot({ path: path.join(output, `failed-preview-${scenario.name}.png`) });
+  assert.ok(details.inViewport && !details.horizontalTextOverflow, `Preview containment: ${JSON.stringify({ inViewport: details.inViewport, horizontalTextOverflow: details.horizontalTextOverflow, bounds: details.bounds })}`);
+  assert.deepEqual((await measure(page)).appointments, before.appointments, 'Hover does not change appointment geometry');
+  const previewBox = await (await page.$(preview)).boundingBox();
+  await page.mouse.move(previewBox.x + previewBox.width / 2, previewBox.y + previewBox.height / 2, { steps: 12 });
+  await page.waitForSelector(preview, { visible: true });
+  if (scenario.reduced) assert.equal(await page.$eval(preview, e => getComputedStyle(e).animationName), 'none', 'Reduced motion disables preview animation');
+  await page.screenshot({ path: path.join(output, `preview-${scenario.name}.png`) });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(preview, { hidden: true });
+  await page.mouse.move(0, 0);
+  await page.focus(trigger);
+  await page.waitForSelector(preview, { visible: true });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector(preview, { hidden: true });
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('[role="dialog"]', { visible: true });
+  await verifyDialog(page);
+  const dialogText = await page.$eval('[role="dialog"]', e => e.textContent);
+  assert.ok(dialogText.includes(patientName) && dialogText.includes('Consultation and Diagnostic Procedures Room'), 'Keyboard opens full appointment details');
+  for (const action of ['Reschedule', 'Start Visit', 'Cancel Appointment']) assert.ok(dialogText.includes(action), `${action} remains available`);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[role="dialog"]', { hidden: true });
+  assert.equal(await page.$eval(trigger, e => document.activeElement === e), true, 'Closing details returns focus to its appointment');
+  return { width: details.width, height: details.height, keyboard: true, hover: true, escape: true };
+}
+
+async function verifyRescheduleFocus(page) {
+  await page.click('[data-appointment-summary]');
+  await page.waitForSelector('[role="dialog"]', { visible: true });
+  await verifyDialog(page);
+  for (const button of await page.$$('[role="dialog"] button')) {
+    if ((await button.evaluate(e => e.textContent)).includes('Reschedule')) { await button.click(); break; }
+  }
+  await page.waitForSelector('[role="dialog"]', { hidden: true });
+  await page.waitForFunction(() => document.activeElement?.textContent.includes('Rescheduling'));
+  await page.mouse.move(0, 0);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  assert.equal(await page.$eval('[data-appointment-summary]', e => document.activeElement === e), true, 'Keyboard returns to appointment after rescheduling');
+  await page.waitForSelector('[data-appointment-preview]', { visible: true, timeout: 3000 });
+  await settle(page, '[data-appointment-preview]');
+  await page.screenshot({ path: path.join(output, 'reschedule-keyboard-preview.png') });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-appointment-preview]', { hidden: true });
 }
 
 async function verifyControls(page) {
@@ -76,7 +175,6 @@ async function verifyControls(page) {
     const sources = [
       ['button', [...document.querySelectorAll('[data-slot="button"]')].find(e => e.textContent.includes('Quick Guide'))],
       ['select', document.querySelector('[data-slot="select-trigger"]')],
-      ['badge', document.querySelector('[data-slot="badge"]')],
       ['heading', document.querySelector('h1')?.parentElement?.parentElement],
     ];
     return sources.map(([name, source]) => {
@@ -109,30 +207,58 @@ async function verifyControls(page) {
   const results = [];
   try {
     await prepare(page);
-    const scenarios = baseline ? [{ width: 1440 }, { width: 390 }] : [{ width: 1440 }, { width: 390 }, { width: 320 }, { width: 390, scale: true }, { width: 390, overlap: true }, { width: 390, chain: true }];
+    const scenarios = baseline ? [{ name: '1440', width: 1440 }, { name: '390', width: 390 }] : [
+      { name: '1440', width: 1440 }, { name: '390', width: 390 }, { name: '320', width: 320 },
+      { name: 'large-text', width: 390, scale: true }, { name: 'overlap', width: 390, overlap: true },
+      { name: 'chain', width: 390, chain: true }, { name: 'extreme', width: 320, extreme: true },
+      { name: 'edge', width: 1440, edge: true }, { name: 'short', width: 390, short: true, reduced: true }, { name: 'clipped', width: 390, clipped: true },
+    ];
     for (const scenario of scenarios) {
-      const { width, scale, overlap, chain } = scenario;
+      const { width, scale, overlap, chain, extreme, edge, short, reduced, clipped } = scenario;
       await page.setViewport({ width, height: 1000 });
-      await page.goto(`${baseUrl}/dashboard/appointments${overlap ? '?wrap-overlap=1' : chain ? '?wrap-chain=1' : ''}`, { waitUntil: 'networkidle0' });
+      await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: reduced ? 'reduce' : 'no-preference' }]);
+      const query = overlap ? '?wrap-overlap=1' : chain ? '?wrap-chain=1' : extreme ? '?wrap-extreme=1' : edge ? '?wrap-edge=1' : short ? '?wrap-short=1' : clipped ? '?wrap-clipped=1' : '';
+      await page.goto(`${baseUrl}/dashboard/appointments${query}`, { waitUntil: 'networkidle0' });
       await page.waitForFunction(name => document.body.textContent.includes(name), { timeout: 60000 }, patientName);
       if (scale) await page.evaluate(() => document.documentElement.style.setProperty('--app-text-increase', '0.5rem'));
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-      if (!baseline) await page.waitForFunction(() => [...document.querySelectorAll('[data-appointment-content]')].every(e => e.scrollHeight <= e.parentElement.getBoundingClientRect().height + 1), { timeout: 5000 });
+      await page.$eval('[data-appointment-id]', e => e.scrollIntoView({ block: 'center' }));
       const result = { ...scenario, ...await measure(page) };
       results.push(result);
-      await page.evaluate(name => [...document.querySelectorAll('span')].find(e => e.textContent.includes(name))?.scrollIntoView({ block: 'center' }), patientName);
-      await page.screenshot({ path: path.join(output, `${baseline ? 'before' : 'after'}-${width}${scale ? '-large-text' : ''}${overlap ? '-overlap' : chain ? '-chain' : ''}.png`) });
+      await page.screenshot({ path: path.join(output, `${baseline ? 'before' : 'compact'}-${scenario.name}.png`) });
       if (!baseline) {
         assert.ok(result.pageWidth <= width + 1 && !result.mainOverflow, `Page exceeds ${width}px viewport`);
         assert.equal(result.appointments.length, chain ? 3 : overlap ? 2 : 1, 'Expected appointment count');
         assert.equal(result.intersectingAppointments, false, 'Overlapping appointments have separate columns');
-        result.appointments.forEach(appointment => assert.equal(appointment.overflowingRects, 0, `Appointment text escapes at ${width}px`));
-        await page.click('[title="View Appointment Details"]');
-        await page.waitForSelector('[role="dialog"]');
-        const dialogText = await page.$eval('[role="dialog"]', e => e.textContent);
-        assert.ok(dialogText.includes(patientName), 'Appointment details remain reachable');
+        result.appointments.forEach(appointment => assert.ok(appointment.summaryContained, `Appointment button escapes at ${width}px`));
+        if (short || clipped) assert.ok(result.appointments[0].height >= 23, 'Five-minute appointment retains a usable target');
+        result.preview = await verifyPreview(page, scenario);
         result.wrappingControls = await verifyControls(page);
+        if (scenario.name === '1440') {
+          await verifyRescheduleFocus(page);
+          result.rescheduleKeyboard = true;
+        }
       }
+    }
+    if (!baseline) {
+      await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
+      await page.goto(`${baseUrl}/dashboard/appointments`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('[data-appointment-summary]');
+      await page.$eval('[data-appointment-summary]', e => e.scrollIntoView({ block: 'center' }));
+      await page.tap('[data-appointment-summary]');
+      await page.waitForSelector('[role="dialog"]', { visible: true });
+      await verifyDialog(page);
+      await page.waitForSelector('[data-appointment-preview]', { hidden: true });
+      assert.ok((await page.$eval('[role="dialog"]', e => e.textContent)).includes(patientName), 'Touch reveals full appointment details');
+      await page.screenshot({ path: path.join(output, 'touch-details.png') });
+      const reschedule = await page.$$('[role="dialog"] button');
+      for (const button of reschedule) {
+        if ((await button.evaluate(e => e.textContent)).includes('Reschedule')) { await button.tap(); break; }
+      }
+      await page.waitForFunction(() => document.body.textContent.includes('Rescheduling'));
+      await page.waitForSelector('[role="dialog"]', { hidden: true });
+      assert.equal(await page.$('[role="dialog"]'), null, 'Rescheduling returns to the calendar');
+      results.push({ name: 'touch', details: true, reschedule: true });
     }
 
   } finally {
