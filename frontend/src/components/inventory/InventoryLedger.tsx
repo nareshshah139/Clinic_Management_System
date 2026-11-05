@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   ArrowLeftRight, Boxes, ClipboardCheck, FileDown, FileSpreadsheet, FileText, Handshake, PackageMinus,
-  PackageOpen, PencilLine, Receipt, RefreshCw, RotateCcw, ShieldAlert, ShoppingBag, Stethoscope, Truck, Undo2,
+  PackageOpen, PencilLine, Receipt, RotateCcw, ShieldAlert, ShoppingBag, Stethoscope, Truck, Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/ui/skeleton";
@@ -86,7 +86,8 @@ function documentLabel(doc: LedgerDocument): string {
  * The stock ledger MUST show every movement newest first, grouped by clinic day, with its signed
  * change, recorded balance, source method, counterparty and actor. Range, method, direction,
  * search and page MUST live in the workspace URL so item detail and browser back return to the
- * same view. Loading, failed and empty reads MUST stay distinct, and a truncated range MUST say so.
+ * same view. The workspace refresh action MUST reload the ledger. Loading, failed and empty reads
+ * MUST stay distinct, and a truncated range MUST say so.
  */
 export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem }: {
   query: Record<string, string>;
@@ -113,6 +114,12 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
   if (query.ledgerSearch) params.set("search", query.ledgerSearch);
   const timeline = useInventoryResource<Timeline>(`/inventory/workspace/timeline?${params}`);
   const data = timeline.data;
+  const { reload } = timeline;
+  useEffect(() => {
+    const refresh = () => void reload();
+    window.addEventListener("inventory-workspace-refresh", refresh);
+    return () => window.removeEventListener("inventory-workspace-refresh", refresh);
+  }, [reload]);
 
   const days = useMemo(() => {
     const groups: { day: string; entries: Entry[] }[] = [];
@@ -139,18 +146,7 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
     doc.type === "PURCHASE_INVOICE" || doc.type === "PHARMACY_INVOICE" || (doc.type === "WORKFLOW" && !!workflowKinds[doc.kind]);
 
   return (
-    <section aria-labelledby="ledger-heading" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 id="ledger-heading" className="text-2xl font-semibold">Stock ledger</h2>
-          <p className="text-muted-foreground">Every change to stock, newest first, with the bill, prescription or document that caused it.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => void timeline.reload()}><RefreshCw className="h-4 w-4" /> Refresh</Button>
-          <Button variant="outline" disabled={!data?.rows.length} onClick={exportRows}><FileDown className="h-4 w-4" /> Export page</Button>
-        </div>
-      </header>
-
+    <section aria-label="Stock ledger" className="space-y-5">
       <div className="grid grid-cols-2 gap-3 rounded-lg border bg-card p-4 md:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(10rem,13rem)_auto] md:items-end">
         <label className="grid gap-1 text-sm font-medium">From
           <input type="date" className={inputClass} value={from} max={to} onChange={e => e.target.value && navigate({ ledgerFrom: e.target.value, ledgerPage: "" })} />
@@ -183,6 +179,9 @@ export function InventoryLedger({ query, navigate, onDocument, onInvoice, onItem
                 onClick={() => navigate({ ledgerFrom: daysBefore(today, n), ledgerTo: today, ledgerPage: "" })}>{label}</button>
             );
           })}
+          <Button size="sm" variant="outline" className="ml-auto" disabled={!data?.rows.length} onClick={exportRows}>
+            <FileDown className="h-4 w-4" /> Export CSV
+          </Button>
         </div>
       </div>
 

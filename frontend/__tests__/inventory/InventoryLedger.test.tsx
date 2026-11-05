@@ -68,3 +68,11 @@ it('keeps a failed read distinct from an empty ledger and warns when truncated',
   expect(await screen.findByText('No stock changes match these filters')).toBeInTheDocument();
   expect(screen.getByRole('status')).toHaveTextContent('more than 10,000 movements');
 });
+
+it('reloads when the workspace refresh action fires', async () => {
+  (apiClient.get as jest.Mock).mockResolvedValue(timeline);
+  render(<InventoryLedger {...props()} />);
+  await screen.findByLabelText('Removed 10 tablets');
+  window.dispatchEvent(new CustomEvent('inventory-workspace-refresh'));
+  await waitFor(() => expect(apiClient.get).toHaveBeenCalledTimes(2));
+});
