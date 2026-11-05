@@ -44,7 +44,7 @@ export function PurchaseManualMatchSearch({ lineNumber, disabled, onSelect }: {
     {searching && <p role="status" className="text-sm">Searching saved products…</p>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {!!query.trim() && !searching && !error && !results.length && <p className="text-sm text-muted-foreground">No saved products found.</p>}
-    {results.map(product => <div key={product.id} className="flex flex-wrap items-center justify-between gap-2 rounded border p-3 text-sm">
+    {results.map(product => <div key={product.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
       <div><p className="font-medium">{product.name}</p><p className="text-muted-foreground">{[product.manufacturerName, product.packSizeLabel, product.productKind].filter(Boolean).join(' · ')}</p></div>
       <Button type="button" variant="outline" disabled={disabled || searching} onClick={() => onSelect(product)}>Match {product.name}</Button>
     </div>)}

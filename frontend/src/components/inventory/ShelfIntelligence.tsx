@@ -1,5 +1,6 @@
 'use client';
 
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -257,22 +258,22 @@ export function ShelfIntelligence() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="rounded-[8px] border border-slate-200 bg-white shadow-sm">
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="rounded-md border border-border bg-card shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-slate-700" />
-                <p className="text-lg font-semibold text-slate-950">
+                <MapPin className="h-5 w-5 text-foreground" />
+                <p className="text-lg font-semibold text-foreground">
                   Shelf Map
                 </p>
               </div>
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 Location-aware batches for faster picking, cycle counts, and FEFO rotation.
               </p>
             </div>
             <div className="flex min-w-0 flex-wrap gap-2">
               <div className="relative min-w-0 flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
@@ -281,7 +282,7 @@ export function ShelfIntelligence() {
                 />
               </div>
               <Button variant="outline" onClick={loadItems} disabled={loading}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? <Spinner className="mr-2 h-4 w-4" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Refresh
               </Button>
             </div>
@@ -291,7 +292,7 @@ export function ShelfIntelligence() {
               <ShelfGroupCard key={group.location} group={group} />
             ))}
             {shelfGroups.length === 0 ? (
-              <div className="rounded-[8px] border border-dashed border-slate-200 p-6 text-center text-sm text-slate-600 md:col-span-2">
+              <div className="rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground md:col-span-2">
                 No matching medicines or shelf locations.
               </div>
             ) : null}
@@ -299,12 +300,12 @@ export function ShelfIntelligence() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-md border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <PackageCheck className="h-5 w-5 text-slate-700" />
-              <p className="font-semibold text-slate-950">Assign Shelf</p>
+              <PackageCheck className="h-5 w-5 text-foreground" />
+              <p className="font-semibold text-foreground">Assign Shelf</p>
             </div>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-muted-foreground">
               Map incoming Excel/OCR batches to a rack, shelf, bin, or fridge.
             </p>
             <div className="mt-4 space-y-3">
@@ -314,7 +315,7 @@ export function ShelfIntelligence() {
                   id="shelf-item"
                   value={selectedItemId}
                   onChange={(event) => setSelectedItemId(event.target.value)}
-                  className="h-10 w-full rounded-[8px] border border-slate-200 bg-white px-3 text-sm"
+                  className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm"
                 >
                   {items.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -339,12 +340,12 @@ export function ShelfIntelligence() {
             </div>
           </div>
 
-          <div className="rounded-[8px] border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="rounded-md border border-border bg-card p-4 shadow-sm">
             <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-slate-700" />
-              <p className="font-semibold text-slate-950">Receiving Rules</p>
+              <ClipboardCheck className="h-5 w-5 text-foreground" />
+              <p className="font-semibold text-foreground">Receiving Rules</p>
             </div>
-            <div className="mt-3 space-y-2 text-sm text-slate-600">
+            <div className="mt-3 space-y-2 text-sm text-muted-foreground">
               <RuleRow done text="Excel import accepts storageLocation as shelf input." />
               <RuleRow done text="Supplier OCR creates reviewed batch receipts before stock commit." />
               <RuleRow done={unmappedItems.length === 0} text="Unmapped committed batches enter the shelf assignment queue." />
@@ -371,25 +372,25 @@ export function ShelfIntelligence() {
         />
       </section>
 
-      <section className="rounded-[8px] border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-center lg:justify-between">
+      <section className="rounded-md border border-border bg-card shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-border p-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-slate-700" />
-              <p className="text-lg font-semibold text-slate-950">
+              <RotateCcw className="h-5 w-5 text-foreground" />
+              <p className="text-lg font-semibold text-foreground">
                 Shelf Cycle Count
               </p>
             </div>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-muted-foreground">
               Count by shelf, enter physical quantity, and post variance with a mandatory reason.
             </p>
           </div>
-          <Badge variant="outline" className="w-fit bg-emerald-50 text-emerald-800">
+          <Badge variant="outline" className="w-fit bg-success-soft text-success-text">
             Adjustment movement, no silent overwrite
           </Badge>
         </div>
         <div className="p-4">
-          <div className="overflow-hidden rounded-[8px] border border-slate-200">
+          <div className="overflow-hidden rounded-md border border-border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -405,7 +406,7 @@ export function ShelfIntelligence() {
                   <TableRow key={item.id}>
                     <TableCell>
                       <div className="font-medium">{item.name}</div>
-                      <div className="text-xs text-slate-500">{item.sku || item.manufacturer || '-'}</div>
+                      <div className="text-xs text-muted-foreground">{item.sku || item.manufacturer || '-'}</div>
                     </TableCell>
                     <TableCell>{item.batchNumber || '-'}</TableCell>
                     <TableCell>{item.storageLocation || 'Unmapped'}</TableCell>
@@ -431,7 +432,7 @@ export function ShelfIntelligence() {
               </TableBody>
             </Table>
           </div>
-          {pendingCorrections && <p role="status" className="mt-3 text-sm text-amber-800">Some corrections are unconfirmed. Their quantities and reason are kept for a safe retry. Confirmed corrections will not be applied again.</p>}
+          {pendingCorrections && <p role="status" className="mt-3 text-sm text-warning-text">Some corrections are unconfirmed. Their quantities and reason are kept for a safe retry. Confirmed corrections will not be applied again.</p>}
           <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px]">
             <Textarea
               value={countReason}
@@ -462,14 +463,14 @@ function ShelfMetric({
   intent: 'blue' | 'amber' | 'red' | 'slate';
 }) {
   const colors = {
-    blue: 'bg-blue-50 text-blue-800 border-blue-100',
-    amber: 'bg-amber-50 text-amber-800 border-amber-100',
-    red: 'bg-red-50 text-red-800 border-red-100',
-    slate: 'bg-slate-50 text-slate-800 border-slate-200',
+    blue: 'bg-info-soft text-info-text border-info-border',
+    amber: 'bg-warning-soft text-warning-text border-warning-border',
+    red: 'bg-destructive-soft text-destructive-text border-destructive-border',
+    slate: 'bg-background text-foreground border-border',
   };
 
   return (
-    <div className={`rounded-[8px] border p-4 shadow-sm ${colors[intent]}`}>
+    <div className={`rounded-md border p-4 shadow-sm ${colors[intent]}`}>
       <p className="text-sm font-medium">{label}</p>
       <p className="mt-2 text-2xl font-semibold">{value}</p>
       <p className="mt-1 text-xs opacity-80">{detail}</p>
@@ -479,29 +480,29 @@ function ShelfMetric({
 
 function ShelfGroupCard({ group }: { group: ShelfGroup }) {
   return (
-    <div className="rounded-[8px] border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-md border border-border bg-background p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-semibold text-slate-950">{group.location}</p>
-          <p className="text-xs text-slate-500">
+          <p className="truncate font-semibold text-foreground">{group.location}</p>
+          <p className="text-xs text-muted-foreground">
             {group.items.length} batches · {group.totalStock} units
           </p>
         </div>
-        <MapPin className="h-5 w-5 shrink-0 text-slate-500" />
+        <MapPin className="h-5 w-5 shrink-0 text-muted-foreground" />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         {group.lowStock > 0 ? (
-          <Badge variant="outline" className="bg-amber-50 text-amber-800">
+          <Badge variant="outline" className="bg-warning-soft text-warning-text">
             {group.lowStock} low
           </Badge>
         ) : null}
         {group.nearExpiry > 0 ? (
-          <Badge variant="outline" className="bg-red-50 text-red-800">
+          <Badge variant="outline" className="bg-destructive-soft text-destructive-text">
             {group.nearExpiry} expiry
           </Badge>
         ) : null}
         {group.lowStock === 0 && group.nearExpiry === 0 ? (
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-800">
+          <Badge variant="outline" className="bg-success-soft text-success-text">
             Healthy
           </Badge>
         ) : null}
@@ -509,8 +510,8 @@ function ShelfGroupCard({ group }: { group: ShelfGroup }) {
       <div className="mt-4 space-y-2">
         {group.items.slice(0, 3).map((item) => (
           <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
-            <span className="truncate text-slate-700">{item.name}</span>
-            <span className="font-semibold text-slate-950">{item.currentStock}</span>
+            <span className="truncate text-foreground">{item.name}</span>
+            <span className="font-semibold text-foreground">{item.currentStock}</span>
           </div>
         ))}
       </div>
@@ -522,9 +523,9 @@ function RuleRow({ done, text }: { done: boolean; text: string }) {
   return (
     <div className="flex gap-2">
       {done ? (
-        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-700" />
+        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
       ) : (
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
       )}
       <span>{text}</span>
     </div>
@@ -545,10 +546,10 @@ function IntelligenceTable({
   mode: 'expiry' | 'reorder';
 }) {
   return (
-    <div className="rounded-[8px] border border-slate-200 bg-white shadow-sm">
-      <div className="border-b border-slate-100 p-4">
-        <p className="font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{detail}</p>
+    <div className="rounded-md border border-border bg-card shadow-sm">
+      <div className="border-b border-border p-4">
+        <p className="font-semibold text-foreground">{title}</p>
+        <p className="text-sm text-muted-foreground">{detail}</p>
       </div>
       <div className="overflow-hidden">
         <Table>
@@ -568,7 +569,7 @@ function IntelligenceTable({
                 <TableRow key={`${mode}-${item.id}`}>
                   <TableCell>
                     <div className="font-medium">{item.name}</div>
-                    <div className="text-xs text-slate-500">
+                    <div className="text-xs text-muted-foreground">
                       {item.batchNumber || item.sku || '-'}
                     </div>
                   </TableCell>
@@ -585,7 +586,7 @@ function IntelligenceTable({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                   {empty}
                 </TableCell>
               </TableRow>

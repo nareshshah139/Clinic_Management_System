@@ -53,26 +53,26 @@ export function DoctorSignatureSettings({ doctorId }: { doctorId: string }) {
   };
 
   return (
-    <section aria-labelledby="doctor-signature-heading" className="border rounded p-3 space-y-3">
+    <section aria-labelledby="doctor-signature-heading" className="border rounded-md p-3 space-y-3">
       <h3 id="doctor-signature-heading" className="font-medium">Doctor signature</h3>
-      <p id="doctor-signature-help" className="text-sm text-gray-600">
+      <p id="doctor-signature-help" className="text-sm text-muted-foreground">
         Upload your signature, then select “Show signature” in Print Preview. PNG or JPG, up to 2 MB. Transparent backgrounds are supported.
       </p>
-      {loading ? <p role="status" className="text-sm text-gray-600">Loading signature…</p> : signature ? (
-        <div className="rounded border bg-white p-3">
+      {loading ? <p role="status" className="text-sm text-muted-foreground">Loading signature…</p> : signature ? (
+        <div className="rounded-md border bg-card p-3">
           {/* A native image preserves the uploaded PNG transparency in the print pipeline. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={signature} alt="Your saved signature" className="h-20 max-w-full object-contain" />
         </div>
-      ) : <p className="text-sm text-gray-600">No signature uploaded. Space is left for signing by hand.</p>}
+      ) : <p className="text-sm text-muted-foreground">No signature uploaded. Space is left for signing by hand.</p>}
       <div className="space-y-2">
         <label htmlFor="doctor-signature-file" className="text-sm font-medium">{signature ? 'Replace signature' : 'Upload signature'}</label>
         <Input id="doctor-signature-file" type="file" accept="image/png,image/jpeg" aria-describedby="doctor-signature-help" disabled={loading || saving}
           onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; if (file) void changeSignature(file); }} />
       </div>
       {signature && <Button type="button" variant="outline" size="sm" disabled={loading || saving} onClick={() => void changeSignature(null)}>Remove signature</Button>}
-      {error && <div role="alert" className="space-y-2 text-sm text-red-700"><p>{error}</p><Button type="button" variant="outline" size="sm" disabled={saving || loading} onClick={() => setReload(value => value + 1)}>Reload signature</Button></div>}
-      <p role="status" className="text-sm text-gray-600">{saving ? 'Saving signature…' : status || 'Only you can change your signature. Changes save immediately.'}</p>
+      {error && <div role="alert" className="space-y-2 text-sm text-destructive-text"><p>{error}</p><Button type="button" variant="outline" size="sm" disabled={saving || loading} onClick={() => setReload(value => value + 1)}>Reload signature</Button></div>}
+      <p role="status" className="text-sm text-muted-foreground">{saving ? 'Saving signature…' : status || 'Only you can change your signature. Changes save immediately.'}</p>
     </section>
   );
 }

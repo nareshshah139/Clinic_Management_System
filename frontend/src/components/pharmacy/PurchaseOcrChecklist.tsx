@@ -20,7 +20,7 @@ export function PurchaseOcrChecklist({ flags, lineIndex, lineId, values, checked
       const target = issue.target && (lineId && issue.field ? `${lineId}-${issue.target}` : issue.target);
       const invalid = purchaseCheckInvalid(issue, values);
       const verified = checked[issue.field || issue.key]?.snapshot === purchaseCheckSnapshot(issue, values) && !invalid;
-      return <li key={issue.key} data-review-state={invalid ? 'error' : 'warning'} className={`flex flex-wrap items-baseline justify-between gap-2 rounded border px-3 py-2 ${reviewColors[invalid ? 'error' : 'warning']}`}>
+      return <li key={issue.key} data-review-state={invalid ? 'error' : 'warning'} className={`flex flex-wrap items-baseline justify-between gap-2 rounded-md border px-3 py-2 ${reviewColors[invalid ? 'error' : 'warning']}`}>
         <span>{issue.message} {!invalid && !verified && 'Check against the original before confirming.'}</span>
         {target && <a className="inline-flex min-h-8 items-center underline underline-offset-4" aria-label={issue.requiresUpload ? issue.uploadLabel?.accessibleName || 'Upload pages for complete invoice' : `Edit ${lineIndex === undefined ? '' : `line ${lineIndex + 1} `}${issue.label}`} href={`#${target}`} onClick={() => focusPurchaseField(target)}>{issue.requiresUpload ? issue.uploadLabel?.text || 'Upload pages' : 'Correct'}</a>}
       </li>;

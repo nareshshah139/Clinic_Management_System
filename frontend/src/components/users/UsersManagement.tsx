@@ -1,5 +1,9 @@
 'use client';
 
+
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +18,7 @@ import { Plus, Edit, Trash2, Settings } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import React, { useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+
 import {
   parseMetadataObject,
   parseWhatsAppSettings,
@@ -464,11 +468,8 @@ export default function UsersManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Users</h2>
-          <p className="text-gray-600">Manage users, roles, and statuses</p>
-        </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div><h2 className="text-lg font-semibold text-foreground">Users</h2><p className="mt-1 text-sm text-muted-foreground">Manage users, roles, and statuses</p></div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button><Plus className="h-4 w-4 mr-2" /> New User</Button>
@@ -540,9 +541,9 @@ export default function UsersManagement() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
+            <LoadingSkeleton label="Loading users…" />
           ) : users.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">No users found</div>
+            <EmptyState title="No users found" description="Try a different search or add a user using the form above." />
           ) : (
             <div className="overflow-x-auto">
               <Table>
@@ -576,7 +577,7 @@ export default function UsersManagement() {
                                   <DialogTitle>Doctor Working Hours</DialogTitle>
                                 </DialogHeader>
                                 <div className="space-y-4">
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="grid grid-cols-2 gap-3">
                                       <div>
                                         <Label className="text-sm">Default Start Hour</Label>
@@ -588,12 +589,12 @@ export default function UsersManagement() {
                                       </div>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                      <div className="text-xs text-gray-500">Hours are in 24h format. End should be greater than Start.</div>
+                                      <div className="text-xs text-muted-foreground">Hours are in 24h format. End should be greater than Start.</div>
                                       <Button size="sm" variant="outline" onClick={copyDefaultsToAllDays}>Copy defaults to all days</Button>
                                     </div>
                                   </div>
 
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="font-medium">Per-day Overrides (optional)</div>
                                     {['sun','mon','tue','wed','thu','fri','sat'].map((d) => (
                                       <div key={d} className="grid grid-cols-5 gap-2 items-end">
@@ -688,7 +689,7 @@ export default function UsersManagement() {
                                   </div>
                                   <div>
                                     <Label>Permissions</Label>
-                                    <div className="text-xs text-gray-500">Selected: {rolePerms.length}</div>
+                                    <div className="text-xs text-muted-foreground">Selected: {rolePerms.length}</div>
                                   </div>
                                 </div>
                                 <div className="md:col-span-8">
@@ -696,7 +697,7 @@ export default function UsersManagement() {
                                     {Object.entries(groupedPermissions).map(([group, perms]) => (
                                       <div key={group}>
                                         <div className="flex items-center justify-between">
-                                          <div className="font-medium capitalize">{group} <span className="text-xs text-gray-500">({perms.length})</span></div>
+                                          <div className="font-medium capitalize">{group} <span className="text-xs text-muted-foreground">({perms.length})</span></div>
                                           <div className="flex gap-2">
                                             <Button variant="outline" size="sm" onClick={() => {
                                               const next = new Set(rolePerms);
@@ -750,37 +751,37 @@ export default function UsersManagement() {
                                   <DialogTitle>Doctor WhatsApp Settings</DialogTitle>
                                 </DialogHeader>
                                 <div className="space-y-4">
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <div>
                                         <div className="font-medium">Send WhatsApp on appointment creation</div>
-                                        <div className="text-xs text-gray-500">Automatic confirmation to patients when this doctor is assigned.</div>
+                                        <div className="text-xs text-muted-foreground">Automatic confirmation to patients when this doctor is assigned.</div>
                                       </div>
                                       <Switch checked={waAutoConfirm} onCheckedChange={(v: boolean) => setWaAutoConfirm(v)} />
                                     </div>
-                                    <div className="text-xs text-gray-500">Requires backend WhatsApp credentials. Uses text messages by default.</div>
+                                    <div className="text-xs text-muted-foreground">Requires backend WhatsApp credentials. Uses text messages by default.</div>
                                   </div>
 
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="grid grid-cols-1 gap-3">
                                       <div>
                                         <Label className="text-sm">Doctor WhatsApp Phone Number ID</Label>
                                         <Input value={waPhoneNumberId} onChange={(e) => setWaPhoneNumberId(e.target.value)} placeholder="e.g., 123456789012345" />
-                                        <div className="text-xs text-gray-500 mt-1">Optional. Overrides clinic default phone number ID.</div>
+                                        <div className="text-xs text-muted-foreground mt-1">Optional. Overrides clinic default phone number ID.</div>
                                       </div>
                                       <div>
                                         <Label className="text-sm">Doctor WhatsApp Access Token</Label>
                                         <Input type="password" value={waAccessToken} onChange={(e) => setWaAccessToken(e.target.value)} placeholder="Paste long-lived access token" />
-                                        <div className="text-xs text-gray-500 mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
+                                        <div className="text-xs text-muted-foreground mt-1">Optional. Stored in user metadata. Leave blank to keep existing.</div>
                                       </div>
                                     </div>
                                   </div>
 
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <div>
                                         <div className="font-medium">Use WhatsApp Template</div>
-                                        <div className="text-xs text-gray-500">Recommended for messages outside the 24h window.</div>
+                                        <div className="text-xs text-muted-foreground">Recommended for messages outside the 24h window.</div>
                                       </div>
                                       <Switch checked={waUseTemplate} onCheckedChange={(v: boolean) => setWaUseTemplate(v)} />
                                     </div>
@@ -798,11 +799,11 @@ export default function UsersManagement() {
                                     )}
                                   </div>
 
-                                  <div className="border rounded p-3 space-y-3">
+                                  <div className="border rounded-md p-3 space-y-3">
                                     <div className="flex items-center justify-between">
                                       <div>
                                         <div className="font-medium">Templates</div>
-                                        <div className="text-xs text-gray-500">Create and customize WhatsApp templates for common actions.</div>
+                                        <div className="text-xs text-muted-foreground">Create and customize WhatsApp templates for common actions.</div>
                                       </div>
                                       <Button size="sm" variant="outline" onClick={() => void openTemplateEditor()}>Manage</Button>
                                     </div>
@@ -834,23 +835,23 @@ export default function UsersManagement() {
             <DialogTitle>WhatsApp Template Editor</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div className="md:col-span-5 border rounded p-3">
+            <div className="md:col-span-5 border rounded-md p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">Existing Templates</div>
                 <Button size="sm" variant="outline" onClick={() => startEditTemplate({})}>New</Button>
               </div>
               <div className="space-y-2 max-h-96 overflow-auto">
                 {tplLoading ? (
-                  <div className="text-sm text-gray-500">Loading templates...</div>
+                  <div className="text-sm text-muted-foreground">Loading templates...</div>
                 ) : tplList.length === 0 ? (
-                  <div className="text-sm text-gray-500">No templates yet.</div>
+                  <div className="text-sm text-muted-foreground">No templates yet.</div>
                 ) : (
                   tplList.map((t) => (
-                    <div key={t.id} className={`border rounded p-2 ${tplEditing?.id === t.id ? 'ring-1 ring-blue-500' : ''}`}>
+                    <div key={t.id} className={`border rounded-md p-2 ${tplEditing?.id === t.id ? 'ring-1 ring-info-border' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-sm">{t.name}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-muted-foreground">
                             {t.touchpoint} • {t.language || 'en'} {t.ownerId ? '• Mine' : '• Branch'} {t.isActive === false ? '• Inactive' : ''}
                           </div>
                         </div>
@@ -864,7 +865,7 @@ export default function UsersManagement() {
                 )}
               </div>
             </div>
-            <div className="md:col-span-7 border rounded p-3 space-y-3">
+            <div className="md:col-span-7 border rounded-md p-3 space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label className="text-sm">Name</Label>
@@ -942,7 +943,7 @@ export default function UsersManagement() {
                     }}
                   >
                     {genLoading ? (
-                      <span className="inline-flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" /> Generating…</span>
+                      <span className="inline-flex items-center gap-2"><Spinner className="h-4 w-4 " /> Generating…</span>
                     ) : (
                       'Generate'
                     )}
@@ -962,7 +963,7 @@ export default function UsersManagement() {
                 <div
                   ref={editorRef}
                   contentEditable
-                  className="border rounded min-h-32 p-2 prose prose-sm max-w-none"
+                  className="border rounded-md min-h-32 p-2 prose prose-sm max-w-none"
                   onInput={() => {
                     const html = editorRef.current?.innerHTML || '';
                     setTplHtml(html);
@@ -970,7 +971,7 @@ export default function UsersManagement() {
                   }}
                   dangerouslySetInnerHTML={{ __html: tplHtml }}
                 />
-                <div className="text-xs text-gray-500 mt-1">Use variables to personalize messages.</div>
+                <div className="text-xs text-muted-foreground mt-1">Use variables to personalize messages.</div>
               </div>
 
               <div>
@@ -1021,11 +1022,11 @@ export default function UsersManagement() {
                 <Button onClick={() => void saveTemplate()}>Save Template</Button>
               </div>
 
-              <div className="border rounded p-3 space-y-3">
+              <div className="border rounded-md p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="font-medium">Send Test</div>
-                    <div className="text-xs text-gray-500">Send a test message to verify mapping.</div>
+                    <div className="text-xs text-muted-foreground">Send a test message to verify mapping.</div>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => void testSendTemplate()} disabled={!tplEditing?.id}>Send Test</Button>
                 </div>
@@ -1034,12 +1035,12 @@ export default function UsersManagement() {
                     <Label className="text-sm">Test Phone (E.164)</Label>
                     <Input value={tplTestTo} onChange={(e) => setTplTestTo(e.target.value)} placeholder="+15551234567" />
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-muted-foreground">
                     Variables will be sent blank unless you extend UI mapping; backend will still accept.
                   </div>
                 </div>
                 {tplTestStatus && (
-                  <div className={`text-sm ${tplTestStatus.ok ? 'text-green-600' : 'text-red-600'}`}>
+                  <div className={`text-sm ${tplTestStatus.ok ? 'text-success-text' : 'text-destructive-text'}`}>
                     {tplTestStatus.msg}
                   </div>
                 )}

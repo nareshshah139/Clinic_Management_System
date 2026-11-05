@@ -1,17 +1,13 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
 import UsersManagement from '@/components/users/UsersManagement';
 import { QuickGuide } from '@/components/common/QuickGuide';
 
 export default function UsersPage() {
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap justify-between items-center gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
-          <p className="text-gray-600">Manage clinic staff and user accounts</p>
-        </div>
-        <QuickGuide
+      <PageHeader title={<>Users Management</>} description={<>Manage clinic staff and user accounts</>} actions={<><QuickGuide
           title="Users Management Guide"
           sections={[
             {
@@ -43,8 +39,7 @@ export default function UsersPage() {
               ]
             }
           ]}
-        />
-      </div>
+        /></>} />
       <UsersManagement />
     </div>
   );

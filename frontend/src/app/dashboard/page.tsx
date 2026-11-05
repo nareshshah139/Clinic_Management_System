@@ -1,5 +1,9 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Spinner } from '@/components/ui/spinner';
+import { PageHeader } from '@/components/ui/page-header';
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -185,16 +189,9 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
+          <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." />
         </div>
-        <div className="animate-pulse">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded-lg"></div>
-            ))}
-          </div>
-        </div>
+        <LoadingSkeleton variant="cards" label="Loading dashboard…" />
       </div>
     );
   }
@@ -204,41 +201,28 @@ export default function DashboardPage() {
       title: 'Total Users',
       value: statistics?.users?.total || 0,
       icon: Users,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
     },
     {
       title: 'Active Users',
       value: statistics?.users?.active || 0,
       icon: Users,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
     },
     {
       title: 'Total Branches',
       value: statistics?.branches?.total || 0,
       icon: Package,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
     },
     {
       title: 'System Status',
       value: statistics?.system?.status || 'unknown',
       icon: TrendingUp,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-100',
     },
   ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Welcome back! Here&apos;s what&apos;s happening at your clinic today.</p>
-        </div>
-        <QuickGuide
+      <PageHeader title="Dashboard" description="Welcome back! Here’s what’s happening at your clinic today." actions={<><QuickGuide
           title="Dashboard Guide"
           sections={[
             {
@@ -266,8 +250,7 @@ export default function DashboardPage() {
               ]
             }] : [])
           ]}
-        />
-      </div>
+        /></>} />
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">
@@ -276,11 +259,11 @@ export default function DashboardPage() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
+                  <p className="text-2xl font-semibold tabular-nums text-foreground">{stat.value}</p>
                 </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                <div className="rounded-md bg-primary-soft p-3">
+                  <stat.icon className="h-6 w-6 text-foreground" />
                 </div>
               </div>
             </CardContent>
@@ -293,7 +276,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Database className="h-5 w-5 text-purple-500 mr-2" />
+              <Database className="h-5 w-5 text-highlight-text mr-2" />
               Admin Controls
             </CardTitle>
             <CardDescription>
@@ -304,8 +287,8 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
-                  <h4 className="font-medium text-gray-900">Database Backup</h4>
-                  <p className="text-sm text-gray-600">Create a complete backup of the database</p>
+                  <h4 className="font-medium text-foreground">Database Backup</h4>
+                  <p className="text-sm text-muted-foreground">Create a complete backup of the database</p>
                 </div>
                 <Button 
                   onClick={handleBackup} 
@@ -314,7 +297,7 @@ export default function DashboardPage() {
                 >
                   {backupLoading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <Spinner className="  h-4 w-4   mr-2" />
                       Creating...
                     </>
                   ) : (
@@ -325,7 +308,7 @@ export default function DashboardPage() {
                   )}
                 </Button>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-muted-foreground">
                 ⚠️ Backups are stored locally on the server and contain sensitive data.
               </div>
             </div>
@@ -338,7 +321,7 @@ export default function DashboardPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <AlertTriangle className="h-5 w-5 text-orange-500 mr-2" />
+              <AlertTriangle className="h-5 w-5 text-warning-text mr-2" />
               System Alerts
             </CardTitle>
             <CardDescription>
@@ -347,39 +330,39 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {alerts.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No alerts at this time</p>
+              <EmptyState icon={AlertTriangle} title="No alerts at this time" description="New clinic notifications will appear here." action={<Button variant="outline" onClick={() => window.location.reload()}>Refresh dashboard</Button>} />
             ) : (
               <div className="space-y-3">
                 {alerts.map((alert, index) => (
                   <div
                     key={index}
-                    className="flex items-start space-x-3 p-3 rounded-lg bg-gray-50"
+                    className="flex items-start space-x-3 p-3 rounded-lg bg-background"
                   >
                     <div className={`p-1 rounded-full ${
                       alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'bg-red-100' 
+                        ? 'bg-destructive-soft'
                         : alert.severity === 'MEDIUM' 
-                        ? 'bg-yellow-100' 
-                        : 'bg-blue-100'
+                        ? 'bg-warning-soft'
+                        : 'bg-info-soft'
                     }`}>
                       <AlertTriangle className={`h-4 w-4 ${
                         alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                          ? 'text-red-600' 
+                          ? 'text-destructive-text'
                           : alert.severity === 'MEDIUM' 
-                          ? 'text-yellow-600' 
-                          : 'text-blue-600'
+                          ? 'text-warning-text'
+                          : 'text-info-text'
                       }`} />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">{alert.title}</p>
-                      <p className="text-xs text-gray-600">{alert.message}</p>
+                      <p className="text-sm font-medium text-foreground">{alert.title}</p>
+                      <p className="text-xs text-muted-foreground">{alert.message}</p>
                     </div>
                     <Badge variant={
                       alert.severity === 'HIGH' || alert.severity === 'CRITICAL' 
-                        ? 'destructive' 
+                        ? 'danger'
                         : alert.severity === 'MEDIUM' 
-                        ? 'secondary' 
-                        : 'default'
+                        ? 'warning'
+                        : 'info'
                     }>
                       {alert.severity}
                     </Badge>
@@ -394,7 +377,7 @@ export default function DashboardPage() {
         <Card data-tour="appointments-list">
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Clock className="h-5 w-5 text-blue-500 mr-2" />
+              <Clock className="h-5 w-5 text-info-text mr-2" />
               Today&apos;s Appointments
             </CardTitle>
             <CardDescription>
@@ -403,19 +386,19 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {todaysAppointments.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">No appointments scheduled for today</p>
+              <p className="text-muted-foreground text-center py-4">No appointments scheduled for today</p>
             ) : (
               <div className="space-y-3">
                 {todaysAppointments.map((appointment, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-50"
+                    className="flex items-center justify-between p-3 rounded-lg bg-background"
                   >
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-foreground">
                         {appointment.patient?.firstName} {appointment.patient?.lastName}
                       </p>
-                      <p className="text-xs text-gray-600">
+                      <p className="text-xs text-muted-foreground">
                         {new Date(appointment.date).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit'
@@ -426,7 +409,7 @@ export default function DashboardPage() {
                       appointment.status === 'CONFIRMED' 
                         ? 'default' 
                         : appointment.status === 'IN_PROGRESS'
-                        ? 'secondary'
+                        ? 'warning'
                         : appointment.status === 'COMPLETED'
                         ? 'default'
                         : 'outline'

@@ -1,5 +1,6 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -447,12 +448,7 @@ export function PharmacyPackageManager() {
       {/* Packages List */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {loading ? (
-          <div className="col-span-full flex justify-center py-8">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-2 text-muted-foreground">Loading packages...</p>
-            </div>
-          </div>
+          <LoadingSkeleton label="Loading packages…" variant="cards" className="col-span-full" />
         ) : filteredPackages.length === 0 ? (
           <div className="col-span-full text-center py-8">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -465,7 +461,7 @@ export function PharmacyPackageManager() {
           </div>
         ) : (
           filteredPackages.map((pkg) => (
-            <Card key={pkg.id} className="hover:shadow-md transition-shadow">
+            <Card key={pkg.id} className="hover:shadow-sm transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
@@ -817,11 +813,11 @@ export function PharmacyPackageManager() {
                       <span>Package Price:</span>
                       <span>₹{formData.packagePrice.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold text-green-600">
+                    <div className="flex justify-between font-semibold text-success-text">
                       <span>Savings:</span>
                       <span>₹{(calculateOriginalPrice() - formData.packagePrice).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold text-green-600">
+                    <div className="flex justify-between font-semibold text-success-text">
                       <span>Discount:</span>
                       <span>
                         {calculateOriginalPrice() > 0 
@@ -841,7 +837,7 @@ export function PharmacyPackageManager() {
                 id="isPublic"
                 checked={formData.isPublic}
                 onChange={(e) => setFormData(prev => ({ ...prev, isPublic: e.target.checked }))}
-                className="rounded"
+                className="rounded-md"
               />
               <Label htmlFor="isPublic">Make this package public (visible to all doctors)</Label>
             </div>
@@ -950,7 +946,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.instructions && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-success-text" />
                     Usage Instructions
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.instructions}</p>
@@ -960,7 +956,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.indications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-blue-500" />
+                    <CheckCircle className="h-4 w-4 text-info-text" />
                     Indications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.indications}</p>
@@ -970,7 +966,7 @@ export function PharmacyPackageManager() {
               {selectedPackage.contraindications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-red-500" />
+                    <AlertTriangle className="h-4 w-4 text-destructive-text" />
                     Contraindications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.contraindications}</p>

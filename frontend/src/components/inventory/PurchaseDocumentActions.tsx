@@ -1,7 +1,8 @@
 'use client';
 
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FileDown, History, Loader2, Pencil, Printer, RotateCcw, Upload } from 'lucide-react';
+import { FileDown, History, Pencil, Printer, RotateCcw, Upload } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { inputClass, labelStatus } from './workspace-model';
@@ -86,7 +87,7 @@ export function PurchaseDocumentActions({ invoice, onRefresh, onEdit, onDocument
   return <section aria-label="Purchase document actions" className="space-y-4 border-y py-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h2 className="text-lg font-semibold">Purchase documents & history</h2><p className="mt-1 max-w-3xl text-sm text-muted-foreground">{posted ? 'The receipt is posted. Keep corrections linked to its original stock and supplier history.' : 'Saved files and exports reflect the last saved purchase.'}</p></div>
-      {!detail && !error && <span role="status" className="flex items-center gap-2 text-sm"><Loader2 aria-hidden="true" className="h-4 w-4 animate-spin" />Loading actions…</span>}
+      {!detail && !error && <span role="status" className="flex items-center gap-2 text-sm"><Spinner aria-hidden="true" className="h-4 w-4 " />Loading actions…</span>}
     </div>
     {error && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm"><p>{error}</p><Button type="button" variant="outline" size="sm" disabled={!!busy} onClick={() => void perform('Reload', load)}>Reload actions</Button></div>}
     {notice && <p role="status" className="text-sm">{notice}</p>}
@@ -99,7 +100,7 @@ export function PurchaseDocumentActions({ invoice, onRefresh, onEdit, onDocument
       <Button type="button" variant="outline" disabled={!detail || !!busy} onClick={() => setPanel(panel === 'logs' ? null : 'logs')}><History className="h-4 w-4" aria-hidden="true" />Logs</Button>
     </div>
     <div className="flex flex-wrap gap-2" aria-label="Purchase exports">
-      {([['pdf', 'PDF'], ['xlsx', 'Excel'], ['csv', 'Purchase CSV'], ['qr', 'Print QR']] as const).map(([format, name]) => <Button key={format} type="button" size="sm" variant="outline" disabled={!detail || !!busy} onClick={() => void perform(name, () => download(format))}>{busy === name ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : format === 'qr' ? <Printer className="h-4 w-4" aria-hidden="true" /> : <FileDown className="h-4 w-4" aria-hidden="true" />}{name}</Button>)}
+      {([['pdf', 'PDF'], ['xlsx', 'Excel'], ['csv', 'Purchase CSV'], ['qr', 'Print QR']] as const).map(([format, name]) => <Button key={format} type="button" size="sm" variant="outline" disabled={!detail || !!busy} onClick={() => void perform(name, () => download(format))}>{busy === name ? <Spinner className="h-4 w-4 " aria-hidden="true" /> : format === 'qr' ? <Printer className="h-4 w-4" aria-hidden="true" /> : <FileDown className="h-4 w-4" aria-hidden="true" />}{name}</Button>)}
     </div>
     {panel === 'correction' && <div className="space-y-3 bg-muted/40 p-4 text-sm"><h3 className="font-semibold">Correct this posted purchase</h3><p className="max-w-3xl">Create a linked supplier return with a reason for affected quantities. Finalise its credit, then enter the corrected replacement bill. For a price-only supplier credit, use a linked credit note. The original bill, stock receipt and files remain available.</p><div className="flex flex-wrap gap-2">{detail?.permissions.return && <Button type="button" onClick={returnToSupplier}>Start linked return</Button>}<a className="inline-flex min-h-10 items-center underline underline-offset-4" href={`/dashboard/inventory?area=purchases&view=CREDIT_NOTE&new=${linkedDraftKey('credit')}&purchaseInvoiceId=${encodeURIComponent(invoice.id)}`}>Record linked supplier credit</a><Button type="button" variant="ghost" onClick={() => setPanel(null)}>Close</Button></div></div>}
     {panel === 'credits' && posted && detail?.permissions.ledgerRead && <SupplierCreditPanel

@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeader } from '@/components/ui/page-header';
 import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -211,42 +212,42 @@ export default function ReportsPage() {
       name: 'Revenue Report',
       description: 'Financial performance and revenue analysis',
       icon: DollarSign,
-      color: 'text-green-600',
+      color: 'text-success-text',
     },
     {
       id: 'patients' as ReportType,
       name: 'Patient Analytics',
       description: 'Patient demographics and statistics',
       icon: Users,
-      color: 'text-blue-600',
+      color: 'text-info-text',
     },
     {
       id: 'doctors' as ReportType,
       name: 'Doctor Performance',
       description: 'Doctor productivity and patient metrics',
       icon: Activity,
-      color: 'text-purple-600',
+      color: 'text-highlight-text',
     },
     {
       id: 'appointments' as ReportType,
       name: 'Appointment Analytics',
       description: 'Scheduling patterns and appointment data',
       icon: Calendar,
-      color: 'text-orange-600',
+      color: 'text-warning-text',
     },
     {
       id: 'inventory' as ReportType,
       name: 'Inventory Report',
       description: 'Stock levels and inventory movements',
       icon: BarChart3,
-      color: 'text-indigo-600',
+      color: 'text-highlight-text',
     },
     {
       id: 'payments' as ReportType,
       name: 'Payment Analytics',
       description: 'Payment methods and transaction analysis',
       icon: TrendingUp,
-      color: 'text-teal-600',
+      color: 'text-info-text',
     },
   ];
 
@@ -372,10 +373,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Revenue</p>
+                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {formatCurrency(data.totalRevenue || 0)}
                 </p>
               </div>
@@ -385,10 +386,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">GST Amount</p>
+                  <FileText className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">GST Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {formatCurrency(data.totalGst || 0)}
                 </p>
               </div>
@@ -398,10 +399,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <TrendingUp className="h-5 w-5 text-purple-600 mr-2" />
-                  <p className="text-sm text-gray-600">Net Revenue</p>
+                  <TrendingUp className="h-5 w-5 text-highlight-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Net Revenue</p>
                 </div>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-2xl font-bold text-highlight-text">
                   {formatCurrency(data.netRevenue || 0)}
                 </p>
               </div>
@@ -411,10 +412,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <FileText className="h-5 w-5 text-orange-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Invoices</p>
+                  <FileText className="h-5 w-5 text-warning-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Invoices</p>
                 </div>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-warning-text">
                   {data.totalInvoices || 0}
                 </p>
               </div>
@@ -434,14 +435,14 @@ export default function ReportsPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {data.paymentBreakdown.map((payment: PaymentBreakdown, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="p-3 bg-background rounded-lg">
                     <div className="flex justify-between items-center">
                       <span className="font-medium">{payment.mode}</span>
                       <Badge variant="secondary">{formatPercentage(payment.percentage)}</Badge>
                     </div>
                     <div className="mt-1">
                       <p className="text-lg font-bold">{formatCurrency(payment.amount)}</p>
-                      <p className="text-sm text-gray-600">{payment.transactionCount} transactions</p>
+                      <p className="text-sm text-muted-foreground">{payment.transactionCount} transactions</p>
                     </div>
                   </div>
                 ))}
@@ -462,14 +463,14 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {data.doctorBreakdown.slice(0, 5).map((doctor: DoctorBreakdown, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-background rounded-lg">
                     <div>
                       <p className="font-medium">{doctor.doctorName}</p>
-                      <p className="text-sm text-gray-600">{doctor.visitCount} visits</p>
+                      <p className="text-sm text-muted-foreground">{doctor.visitCount} visits</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">{formatCurrency(doctor.revenue)}</p>
-                      <p className="text-sm text-gray-600">Avg: {formatCurrency(doctor.averageRevenuePerPatient)}</p>
+                      <p className="text-sm text-muted-foreground">Avg: {formatCurrency(doctor.averageRevenuePerPatient)}</p>
                     </div>
                   </div>
                 ))}
@@ -493,10 +494,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Users className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Patients</p>
+                  <Users className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {data.totalPatients || 0}
                 </p>
               </div>
@@ -506,10 +507,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">New Patients</p>
+                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">New Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {data.newPatients || 0}
                 </p>
               </div>
@@ -519,10 +520,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <RefreshCw className="h-5 w-5 text-orange-600 mr-2" />
-                  <p className="text-sm text-gray-600">Returning Patients</p>
+                  <RefreshCw className="h-5 w-5 text-warning-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Returning Patients</p>
                 </div>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-warning-text">
                   {data.returningPatients || 0}
                 </p>
               </div>
@@ -532,10 +533,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-purple-600 mr-2" />
-                  <p className="text-sm text-gray-600">Avg Age</p>
+                  <Calendar className="h-5 w-5 text-highlight-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Avg Age</p>
                 </div>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-2xl font-bold text-highlight-text">
                   {data.ageGroupBreakdown ? 
                     Math.round(data.ageGroupBreakdown.reduce((acc: number, group: AgeGroupBreakdown) => acc + (group.count * parseFloat(group.ageGroup.split('-')[0] || '0')), 0) / data.totalPatients) 
                     : 0}
@@ -557,7 +558,7 @@ export default function ReportsPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {data.genderBreakdown.map((gender: GenderBreakdown, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg text-center">
+                  <div key={index} className="p-3 bg-background rounded-lg text-center">
                     <p className="font-medium capitalize">{gender.gender}</p>
                     <p className="text-2xl font-bold mt-1">{gender.count}</p>
                     <Badge variant="secondary">{formatPercentage(gender.percentage)}</Badge>
@@ -580,14 +581,14 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {data.topVisitingPatients.slice(0, 5).map((patient: TopVisitingPatient, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-background rounded-lg">
                     <div>
                       <p className="font-medium">{patient.patientName}</p>
-                      <p className="text-sm text-gray-600">Last visit: {new Date(patient.lastVisitDate).toLocaleDateString()}</p>
+                      <p className="text-sm text-muted-foreground">Last visit: {new Date(patient.lastVisitDate).toLocaleDateString()}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">{patient.visitCount} visits</p>
-                      <p className="text-sm text-gray-600">{formatCurrency(patient.totalRevenue)}</p>
+                      <p className="text-sm text-muted-foreground">{formatCurrency(patient.totalRevenue)}</p>
                     </div>
                   </div>
                 ))}
@@ -611,10 +612,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Stethoscope className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Doctors</p>
+                  <Stethoscope className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {data.totalDoctors || 0}
                 </p>
               </div>
@@ -624,10 +625,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Activity className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Active Doctors</p>
+                  <Activity className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Active Doctors</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {data.activeDoctors || 0}
                 </p>
               </div>
@@ -637,10 +638,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Building2 className="h-5 w-5 text-purple-600 mr-2" />
-                  <p className="text-sm text-gray-600">Departments</p>
+                  <Building2 className="h-5 w-5 text-highlight-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Departments</p>
                 </div>
-                <p className="text-2xl font-bold text-purple-600">
+                <p className="text-2xl font-bold text-highlight-text">
                   {data.departmentBreakdown?.length || 0}
                 </p>
               </div>
@@ -660,29 +661,29 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {data.doctorMetrics.slice(0, 5).map((doctor: DoctorMetrics, index: number) => (
-                  <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                  <div key={index} className="p-4 bg-background rounded-lg">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-medium">{doctor.doctorName}</p>
-                        <p className="text-sm text-gray-600">{doctor.department}</p>
+                        <p className="text-sm text-muted-foreground">{doctor.department}</p>
                       </div>
                       <Badge variant="secondary">{formatPercentage(doctor.completionRate)}</Badge>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <p className="text-gray-600">Appointments</p>
+                        <p className="text-muted-foreground">Appointments</p>
                         <p className="font-bold">{doctor.totalAppointments}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Completed</p>
-                        <p className="font-bold text-green-600">{doctor.completedAppointments}</p>
+                        <p className="text-muted-foreground">Completed</p>
+                        <p className="font-bold text-success-text">{doctor.completedAppointments}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Revenue</p>
+                        <p className="text-muted-foreground">Revenue</p>
                         <p className="font-bold">{formatCurrency(doctor.totalRevenue)}</p>
                       </div>
                       <div>
-                        <p className="text-gray-600">Avg/Appt</p>
+                        <p className="text-muted-foreground">Avg/Appt</p>
                         <p className="font-bold">{formatCurrency(doctor.averageRevenuePerAppointment)}</p>
                       </div>
                     </div>
@@ -708,10 +709,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Calendar className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Appointments</p>
+                  <Calendar className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Appointments</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {data.totalAppointments || 0}
                 </p>
               </div>
@@ -721,10 +722,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Completed</p>
+                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Completed</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {data.completedAppointments || 0}
                 </p>
                 <Badge variant="secondary" className="mt-1">
@@ -737,10 +738,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                  <p className="text-sm text-gray-600">Cancelled</p>
+                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Cancelled</p>
                 </div>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-2xl font-bold text-destructive-text">
                   {data.cancelledAppointments || 0}
                 </p>
                 <Badge variant="secondary" className="mt-1">
@@ -753,10 +754,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Clock className="h-5 w-5 text-orange-600 mr-2" />
-                  <p className="text-sm text-gray-600">No Show</p>
+                  <Clock className="h-5 w-5 text-warning-text mr-2" />
+                  <p className="text-sm text-muted-foreground">No Show</p>
                 </div>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-warning-text">
                   {data.noShowAppointments || 0}
                 </p>
                 <Badge variant="secondary" className="mt-1">
@@ -779,7 +780,7 @@ export default function ReportsPage() {
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {data.peakHours.slice(0, 8).map((peak: PeakHour, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg text-center">
+                  <div key={index} className="p-3 bg-background rounded-lg text-center">
                     <p className="font-medium">{peak.hour}:00</p>
                     <p className="text-lg font-bold mt-1">{peak.appointmentCount}</p>
                     <Badge variant="secondary">{formatPercentage(peak.percentage)}</Badge>
@@ -802,10 +803,10 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {data.roomUtilization.map((room: RoomUtilization, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-background rounded-lg">
                     <div>
                       <p className="font-medium">{room.roomName}</p>
-                      <p className="text-sm text-gray-600">Avg: {room.averageAppointmentsPerDay.toFixed(1)} per day</p>
+                      <p className="text-sm text-muted-foreground">Avg: {room.averageAppointmentsPerDay.toFixed(1)} per day</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">{room.totalAppointments} appointments</p>
@@ -833,10 +834,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Package className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Items</p>
+                  <Package className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Items</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {data.totalItems || 0}
                 </p>
               </div>
@@ -846,10 +847,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Value</p>
+                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Value</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {formatCurrency(data.totalValue || 0)}
                 </p>
               </div>
@@ -859,10 +860,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                  <p className="text-sm text-gray-600">Low Stock</p>
+                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Low Stock</p>
                 </div>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-2xl font-bold text-destructive-text">
                   {data.lowStockItems || 0}
                 </p>
               </div>
@@ -872,10 +873,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-orange-600 mr-2" />
-                  <p className="text-sm text-gray-600">Out of Stock</p>
+                  <AlertCircle className="h-5 w-5 text-warning-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Out of Stock</p>
                 </div>
-                <p className="text-2xl font-bold text-orange-600">
+                <p className="text-2xl font-bold text-warning-text">
                   {data.outOfStockItems || 0}
                 </p>
               </div>
@@ -895,14 +896,14 @@ export default function ReportsPage() {
             <CardContent>
               <div className="space-y-3">
                 {data.topSellingItems.slice(0, 5).map((item: TopSellingItem, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-background rounded-lg">
                     <div>
                       <p className="font-medium">{item.itemName}</p>
-                      <p className="text-sm text-gray-600">Qty sold: {item.quantitySold}</p>
+                      <p className="text-sm text-muted-foreground">Qty sold: {item.quantitySold}</p>
                     </div>
                     <div className="text-right">
                       <p className="font-bold">{formatCurrency(item.totalRevenue)}</p>
-                      <p className="text-sm text-gray-600">Avg: {formatCurrency(item.averageSellingPrice)}</p>
+                      <p className="text-sm text-muted-foreground">Avg: {formatCurrency(item.averageSellingPrice)}</p>
                     </div>
                   </div>
                 ))}
@@ -916,20 +917,20 @@ export default function ReportsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
-                <AlertCircle className="h-5 w-5 mr-2 text-red-600" />
+                <AlertCircle className="h-5 w-5 mr-2 text-destructive-text" />
                 Low Stock Alerts
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 {data.lowStockAlerts.slice(0, 5).map((item: LowStockAlert, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-destructive-soft rounded-lg">
                     <div>
                       <p className="font-medium">{item.itemName}</p>
-                      <p className="text-sm text-red-600">Reorder Level: {item.reorderLevel}</p>
+                      <p className="text-sm text-destructive-text">Reorder Level: {item.reorderLevel}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-red-600">{item.currentStock} left</p>
+                      <p className="font-bold text-destructive-text">{item.currentStock} left</p>
                       <Badge variant="destructive">Low Stock</Badge>
                     </div>
                   </div>
@@ -954,10 +955,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <CreditCard className="h-5 w-5 text-blue-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Payments</p>
+                  <CreditCard className="h-5 w-5 text-info-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Payments</p>
                 </div>
-                <p className="text-2xl font-bold text-blue-600">
+                <p className="text-2xl font-bold text-info-text">
                   {data.totalPayments || 0}
                 </p>
               </div>
@@ -967,10 +968,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <DollarSign className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Total Amount</p>
+                  <DollarSign className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Total Amount</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {formatCurrency(data.totalAmount || 0)}
                 </p>
               </div>
@@ -980,10 +981,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <UserCheck className="h-5 w-5 text-green-600 mr-2" />
-                  <p className="text-sm text-gray-600">Successful</p>
+                  <UserCheck className="h-5 w-5 text-success-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Successful</p>
                 </div>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-success-text">
                   {data.successfulPayments || 0}
                 </p>
                 <Badge variant="secondary" className="mt-1">
@@ -996,10 +997,10 @@ export default function ReportsPage() {
             <CardContent className="p-4">
               <div className="text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
-                  <p className="text-sm text-gray-600">Failed</p>
+                  <AlertCircle className="h-5 w-5 text-destructive-text mr-2" />
+                  <p className="text-sm text-muted-foreground">Failed</p>
                 </div>
-                <p className="text-2xl font-bold text-red-600">
+                <p className="text-2xl font-bold text-destructive-text">
                   {data.failedPayments || 0}
                 </p>
               </div>
@@ -1019,15 +1020,15 @@ export default function ReportsPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {data.paymentModeBreakdown.map((mode: PaymentModeBreakdown, index: number) => (
-                  <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="p-3 bg-background rounded-lg">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-medium">{mode.mode}</span>
                       <Badge variant="secondary">{formatPercentage(mode.percentage)}</Badge>
                     </div>
                     <div>
                       <p className="text-lg font-bold">{formatCurrency(mode.totalAmount)}</p>
-                      <p className="text-sm text-gray-600">{mode.transactionCount} transactions</p>
-                      <p className="text-sm text-green-600">Success: {formatPercentage(mode.successRate)}</p>
+                      <p className="text-sm text-muted-foreground">{mode.transactionCount} transactions</p>
+                      <p className="text-sm text-success-text">Success: {formatPercentage(mode.successRate)}</p>
                     </div>
                   </div>
                 ))}
@@ -1047,21 +1048,21 @@ export default function ReportsPage() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-gray-50 rounded-lg text-center">
-                  <p className="text-sm text-gray-600">Total Transactions</p>
+                <div className="p-3 bg-background rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">Total Transactions</p>
                   <p className="text-xl font-bold">{data.reconciliationSummary.totalTransactions}</p>
                 </div>
-                <div className="p-3 bg-green-50 rounded-lg text-center">
-                  <p className="text-sm text-gray-600">Reconciled</p>
-                  <p className="text-xl font-bold text-green-600">{data.reconciliationSummary.reconciledTransactions}</p>
+                <div className="p-3 bg-success-soft rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">Reconciled</p>
+                  <p className="text-xl font-bold text-success-text">{data.reconciliationSummary.reconciledTransactions}</p>
                 </div>
-                <div className="p-3 bg-orange-50 rounded-lg text-center">
-                  <p className="text-sm text-gray-600">Pending</p>
-                  <p className="text-xl font-bold text-orange-600">{data.reconciliationSummary.pendingReconciliation}</p>
+                <div className="p-3 bg-warning-soft rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">Pending</p>
+                  <p className="text-xl font-bold text-warning-text">{data.reconciliationSummary.pendingReconciliation}</p>
                 </div>
-                <div className="p-3 bg-blue-50 rounded-lg text-center">
-                  <p className="text-sm text-gray-600">Rate</p>
-                  <p className="text-xl font-bold text-blue-600">{formatPercentage(data.reconciliationSummary.reconciliationRate)}</p>
+                <div className="p-3 bg-info-soft rounded-lg text-center">
+                  <p className="text-sm text-muted-foreground">Rate</p>
+                  <p className="text-xl font-bold text-info-text">{formatPercentage(data.reconciliationSummary.reconciliationRate)}</p>
                 </div>
               </div>
             </CardContent>
@@ -1076,7 +1077,7 @@ export default function ReportsPage() {
       return (
         <div className="space-y-4">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 bg-gray-100 rounded animate-pulse" />
+            <div key={i} className="h-24 bg-muted rounded-md animate-pulse" />
           ))}
         </div>
       );
@@ -1086,8 +1087,8 @@ export default function ReportsPage() {
     if (!currentData) {
       return (
         <div className="text-center py-8">
-          <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500">No data available for the selected period</p>
+          <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No data available for the selected period</p>
         </div>
       );
     }
@@ -1109,8 +1110,8 @@ export default function ReportsPage() {
       default:
         return (
           <div className="text-center py-8">
-            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Report data will be displayed here</p>
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Report data will be displayed here</p>
           </div>
         );
     }
@@ -1119,12 +1120,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap justify-between items-start gap-3">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="text-gray-600">Generate comprehensive reports and analyze your clinic&apos;s performance</p>
-        </div>
-        <QuickGuide
+      <PageHeader title={<>Reports & Analytics</>} description={<>Generate comprehensive reports and analyze your clinic&apos;s performance</>} actions={<><QuickGuide
           title="Reports & Analytics Guide"
           sections={[
             {
@@ -1157,14 +1153,13 @@ export default function ReportsPage() {
               ]
             }
           ]}
-        />
-      </div>
+        /></>} />
 
       {/* System Alerts */}
       {systemAlerts && systemAlerts.counts && (
-        <Card className="border-orange-200 bg-orange-50">
+        <Card className="border-warning-border bg-warning-soft">
           <CardHeader>
-            <CardTitle className="flex items-center text-orange-800">
+            <CardTitle className="flex items-center text-warning-text">
               <AlertCircle className="h-5 w-5 mr-2" />
               System Alerts
             </CardTitle>
@@ -1172,23 +1167,23 @@ export default function ReportsPage() {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
               <div className="text-center">
-                <p className="text-orange-600">Overdue Invoices</p>
+                <p className="text-warning-text">Overdue Invoices</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.overdueInvoices}</p>
               </div>
               <div className="text-center">
-                <p className="text-red-600">Low Stock</p>
+                <p className="text-destructive-text">Low Stock</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.lowStockAlerts}</p>
               </div>
               <div className="text-center">
-                <p className="text-yellow-600">Expiry Alerts</p>
+                <p className="text-warning-text">Expiry Alerts</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.expiryAlerts}</p>
               </div>
               <div className="text-center">
-                <p className="text-blue-600">Pending Payments</p>
+                <p className="text-info-text">Pending Payments</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.pendingPayments}</p>
               </div>
               <div className="text-center">
-                <p className="text-green-600">Upcoming Appointments</p>
+                <p className="text-success-text">Upcoming Appointments</p>
                 <p className="text-lg font-bold">{systemAlerts.counts.upcomingAppointments}</p>
               </div>
             </div>
@@ -1203,19 +1198,19 @@ export default function ReportsPage() {
             key={report.id}
             className={`cursor-pointer transition-all ${
               selectedReport === report.id
-                ? 'ring-2 ring-blue-500 bg-blue-50'
-                : 'hover:shadow-md'
+                ? 'ring-2 ring-info-border bg-info-soft'
+                : 'hover:shadow-sm'
             }`}
             onClick={() => setSelectedReport(report.id)}
           >
             <CardContent className="p-4">
               <div className="flex items-center space-x-3">
-                <div className={`p-2 rounded-lg bg-gray-100`}>
+                <div className={`p-2 rounded-lg bg-muted`}>
                   <report.icon className={`h-6 w-6 ${report.color}`} />
                 </div>
                 <div>
-                  <h3 className="font-medium text-gray-900">{report.name}</h3>
-                  <p className="text-sm text-gray-500">{report.description}</p>
+                  <h3 className="font-medium text-foreground">{report.name}</h3>
+                  <p className="text-sm text-muted-foreground">{report.description}</p>
                 </div>
               </div>
             </CardContent>
@@ -1228,7 +1223,7 @@ export default function ReportsPage() {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 items-end">
             <div className="flex-1">
-              <label className="text-sm font-medium text-gray-700 mb-2 block">
+              <label className="text-sm font-medium text-foreground mb-2 block">
                 Date Range
               </label>
               <div className="flex gap-2">

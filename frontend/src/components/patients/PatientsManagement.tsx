@@ -1,5 +1,8 @@
 'use client';
 
+
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -730,10 +733,10 @@ export default function PatientsManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap justify-between items-center gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Patients</h2>
-          <p className="text-gray-600">Search, add, and manage patient records</p>
+          <h2 className="text-lg font-semibold text-foreground">Patients</h2>
+          <p className="text-muted-foreground">Search, add, and manage patient records</p>
         </div>
         <Dialog open={open} onOpenChange={(v: boolean) => { if (!v) resetForm(); setOpen(v); }}>
           <DialogTrigger asChild>
@@ -746,7 +749,7 @@ export default function PatientsManagement() {
               <DialogTitle>{form.id ? 'Edit Patient' : 'Create Patient'}</DialogTitle>
             </DialogHeader>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+              <div className="bg-destructive-soft border border-destructive-border text-destructive-text px-4 py-3 rounded-md">
                 {error}
               </div>
             )}
@@ -788,7 +791,7 @@ export default function PatientsManagement() {
                   onChange={(e) => setForm({ ...form, abhaId: e.target.value })}
                   placeholder="Optional - Enter 14-digit ABHA number"
                 />
-                <div className="text-xs text-gray-500 mt-1">Enter the patient's ABHA ID for national health record integration</div>
+                <div className="text-xs text-muted-foreground mt-1">Enter the patient's ABHA ID for national health record integration</div>
               </div>
               <div className="md:col-span-2">
                 <Label htmlFor="email">Email</Label>
@@ -857,7 +860,7 @@ export default function PatientsManagement() {
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="text-xs text-gray-500 mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
+                <div className="text-xs text-muted-foreground mt-1">If Patient Type is Walk-in and a doctor is selected, the next available slot will be automatically booked after saving.</div>
               </div>
               {form.patientType === 'WALKIN' && (
                 <>
@@ -889,7 +892,7 @@ export default function PatientsManagement() {
                           ))}
                         </SelectContent>
                       </Select>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-muted-foreground mt-1">
                         {form.walkinVisitType === 'PROCEDURE' ? 'Selecting an available procedure room is recommended.' : 'Optional: choose a consultation room if needed.'}
                       </div>
                     </div>
@@ -913,33 +916,38 @@ export default function PatientsManagement() {
         <CardContent className="p-6">
           <div className="flex flex-col sm:flex-row gap-4 items-start">
             <div className="relative w-full sm:flex-1" data-tour="search-patients">
-              <Search className="absolute left-3 top-4.5 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input 
                 id="patients-search"
                 className="pl-10" 
                 placeholder="Search by name, phone, ABHA, or email (min 2 chars)" 
                 value={search} 
                 onChange={(e) => setSearch(e.target.value)}
+                aria-describedby="patients-search-hint"
               />
+              </div>
+              <div id="patients-search-hint" className="mt-1 min-h-8 text-xs text-muted-foreground">
               {search.length > 0 && search.length < 2 && (
-                <div className="mt-1 text-xs text-gray-500">
+                <div className="text-xs text-muted-foreground">
                   Enter at least 2 characters to search
                 </div>
               )}
               {search.length === 0 && (
-                <div className="mt-1 text-xs text-gray-400">
+                <div className="text-xs text-muted-foreground">
                   Try: 9xxx… (phone), abha…, @email
                 </div>
               )}
+              </div>
               {search.length > 0 && search.length < 2 && suggestions.length > 0 && (
-                <div className="absolute left-0 top-full z-10 mt-2 w-full bg-white border border-gray-200 rounded shadow-sm p-2">
-                  <div className="text-xs text-gray-600 mb-1">Did you mean</div>
+                <div className="relative z-10 mt-2 w-full bg-card border border-border rounded-md shadow-sm p-2">
+                  <div className="text-xs text-muted-foreground mb-1">Did you mean</div>
                   <div className="flex flex-wrap gap-2">
                     {suggestions.map((s) => (
                       <button
                         key={s}
                         type="button"
-                        className="text-sm px-2 py-1 rounded border border-gray-200 hover:bg-gray-50"
+                        className="text-sm px-2 py-1 rounded-md border border-border hover:bg-background"
                         onClick={() => setSearch(s)}
                         aria-label={`Search for ${s}`}
                       >
@@ -994,7 +1002,7 @@ export default function PatientsManagement() {
             <DialogTitle>Link Portal Access</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="text-sm text-gray-600">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
+            <div className="text-sm text-muted-foreground">{linkPortalTarget ? `Patient: ${formatPatientName(linkPortalTarget)}` : ''}</div>
             <div>
               <Label htmlFor="linkPortalEmail">Email</Label>
               <Input id="linkPortalEmail" value={linkPortalEmail} onChange={(e) => setLinkPortalEmail(e.target.value)} placeholder="Enter email to link" />
@@ -1015,17 +1023,15 @@ export default function PatientsManagement() {
         <CardContent>
           {error ? (
             <div className="text-center py-10">
-              <div className="text-red-600 mb-2">{error}</div>
+              <div className="text-destructive-text mb-2">{error}</div>
               <Button variant="outline" onClick={() => fetchPatients(currentPage)}>
                 Try Again
               </Button>
             </div>
           ) : listLoading ? (
-            <div className="space-y-3">{[...Array(6)].map((_, i) => (<div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />))}</div>
+            <LoadingSkeleton label="Loading patients…" />
           ) : patients.length === 0 ? (
-            <div className="text-center py-10 text-gray-500">
-              {search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'No patients found matching your search criteria' : 'No patients found'}
-            </div>
+            <EmptyState title="No patients found" description={search.length >= 2 || genderFilter !== 'ALL' || dateRangeFilter !== 'ALL' ? 'Adjust your search or filters to find a patient.' : 'Add a patient to start their clinic record.'} />
           ) : (
             <div className="overflow-x-auto" data-tour="patients-table">
               <Table>
@@ -1057,15 +1063,15 @@ export default function PatientsManagement() {
                 </TableHeader>
                 <TableBody>
                   {displayPatients.map((p) => (
-                    <TableRow key={p.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/dashboard/patients/${p.id}`)}>
+                    <TableRow key={p.id} className="hover:bg-background cursor-pointer" onClick={() => router.push(`/dashboard/patients/${p.id}`)}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar><AvatarFallback className="bg-blue-100 text-blue-600">{initials(p)}</AvatarFallback></Avatar>
+                          <Avatar><AvatarFallback className="bg-info-soft text-info-text">{initials(p)}</AvatarFallback></Avatar>
                           <div>
-                            <div className="font-medium text-gray-900">{formatPatientName(p)}</div>
+                            <div className="font-medium text-foreground">{formatPatientName(p)}</div>
                             <button
                               type="button"
-                              className="text-xs text-gray-500 hover:underline"
+                              className="text-xs text-muted-foreground hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigator.clipboard?.writeText(p.id).then(() => {
@@ -1083,12 +1089,12 @@ export default function PatientsManagement() {
                       <TableCell>
                         <div className="flex flex-col text-sm">
                           <div className="font-mono">
-                            {p.patientCode ? p.patientCode : <span className="text-gray-400">—</span>}
+                            {p.patientCode ? p.patientCode : <span className="text-muted-foreground">—</span>}
                           </div>
                           {p.patientCode && (
                             <button
                               type="button"
-                              className="text-xs text-gray-500 hover:underline"
+                              className="text-xs text-muted-foreground hover:underline"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigator.clipboard?.writeText(p.patientCode || '').then(() => {
@@ -1105,36 +1111,36 @@ export default function PatientsManagement() {
                       <TableCell>
                         <div className="text-sm">{(() => {
                           const age = calculateAge(p);
-                          return age !== null ? `${age} yrs` : <span className="text-gray-400">—</span>;
+                          return age !== null ? `${age} yrs` : <span className="text-muted-foreground">—</span>;
                         })()}</div>
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary">{normalizeGender(p.gender)}</Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="space-y-1 text-sm text-gray-700">
+                        <div className="space-y-1 text-sm text-foreground">
                           <div className="flex items-center"><Phone className="h-3 w-3 mr-1" /> {p.phone}</div>
                           {p.email && <div className="flex items-center"><Mail className="h-3 w-3 mr-1" /> {p.email}</div>}
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm text-gray-600">{p.abhaId || <span className="text-gray-400">—</span>}</div>
+                        <div className="text-sm text-muted-foreground">{p.abhaId || <span className="text-muted-foreground">—</span>}</div>
                       </TableCell>
                       {displayPatients.some(pp => !!pp.lastVisitDate) && (
                         <TableCell>
-                          <div className="text-sm text-gray-600">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-gray-400">—</span>}</div>
+                          <div className="text-sm text-muted-foreground">{p.lastVisitDate ? new Date(p.lastVisitDate).toLocaleDateString() : <span className="text-muted-foreground">—</span>}</div>
                         </TableCell>
                       )}
                       <TableCell>
-                        <div className="text-sm text-gray-600">{p.referralSource || <span className="text-gray-400">—</span>}</div>
+                        <div className="text-sm text-muted-foreground">{p.referralSource || <span className="text-muted-foreground">—</span>}</div>
                       </TableCell>
                       <TableCell>
                         {(p as any).consultationType === 'ONLINE' ? (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-700">Online</Badge>
+                          <Badge variant="secondary" className="bg-info-soft text-info-text">Online</Badge>
                         ) : (p as any).consultationType === 'OFFLINE' ? (
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">Offline</Badge>
+                          <Badge variant="secondary" className="bg-success-soft text-success-text">Offline</Badge>
                         ) : (
-                          <span className="text-gray-400 text-sm">—</span>
+                          <span className="text-muted-foreground text-sm">—</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -1163,7 +1169,7 @@ export default function PatientsManagement() {
           {/* Pagination Controls */}
           {!listLoading && patients.length > 0 && totalPages > 1 && (
             <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t">
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalPatients)} of {totalPatients} patients
               </div>
               <div className="flex flex-wrap items-center gap-2">
