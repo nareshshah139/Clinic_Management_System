@@ -10,7 +10,23 @@ import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { formatPatientName, getISTDateString } from '@/lib/utils';
 
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-clinic-day
+ * Today's appointments MUST be requested for the current Asia/Kolkata calendar day
+ * for both doctor schedules and the general appointment summary.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-patient-label
+ * Appointment rows MUST prefer the canonical patient name, falling back to legacy
+ * name parts or a nonempty patient label when those names are unavailable.
+ */
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-booked-slot
+ * Appointment rows MUST display the booked slot unchanged, without a clock time
+ * derived from the appointment's calendar date.
+ */
 export default function DashboardPage() {
   const [statistics, setStatistics] = useState<SystemStatistics | null>(null);
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
@@ -125,8 +141,7 @@ export default function DashboardPage() {
         }
 
         // Load today's appointments for the current user/role
-        const today = new Date();
-        const todayDate = today.toISOString().split('T')[0];
+        const todayDate = getISTDateString();
         let appointments: Appointment[] = [];
 
         if (currentUser?.role === 'DOCTOR' && currentUser?.id) {
@@ -413,13 +428,10 @@ export default function DashboardPage() {
                   >
                     <div>
                       <p className="text-sm font-medium text-gray-900">
-                        {appointment.patient?.firstName} {appointment.patient?.lastName}
+                        {formatPatientName(appointment.patient)}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {new Date(appointment.date).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })} - {appointment.slot}
+                        {appointment.slot}
                       </p>
                     </div>
                     <Badge variant={
