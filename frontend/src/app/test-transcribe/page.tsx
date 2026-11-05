@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mic, MicOff, Download, Trash2, Activity } from 'lucide-react';
+import { Mic, MicOff, Download, Trash2, Activity, ArrowLeft } from 'lucide-react';
 
 interface TranscriptionResult {
   text: string;
@@ -21,6 +21,11 @@ interface TranscriptionResult {
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] dashboard-return
+ * The page MUST offer a return to /dashboard without relying on browser history.
+ * Returning MUST navigate the document so active microphone capture ends.
+ */
 export default function TestTranscribePage() {
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -280,7 +285,15 @@ export default function TestTranscribePage() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Voice Transcription Test</h1>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold">Voice Transcription Test</h1>
+          <Button asChild variant="outline">
+            <a href="/dashboard">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to dashboard
+            </a>
+          </Button>
+        </div>
         <p className="text-muted-foreground">
           Test the OpenAI Whisper transcription API with speaker diarization
         </p>
