@@ -47,6 +47,12 @@ interface SearchResult {
   href: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] search-dismissal
+ * Escape within global search MUST dismiss results without clearing the query.
+ * Pending responses MUST NOT reopen dismissed results; editing or focusing a
+ * query of at least two non-whitespace characters may reopen them.
+ */
 export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
@@ -383,6 +389,7 @@ export function Header() {
       } else {
         setSearchResults([]);
         setShowResults(false);
+        setIsSearching(false);
       }
     }, 300);
 
@@ -459,11 +466,9 @@ export function Header() {
       }
 
       setSearchResults(results);
-      setShowResults(results.length > 0);
     } catch (error) {
       console.error('Search failed:', error);
       setSearchResults([]);
-      setShowResults(false);
     } finally {
       setIsSearching(false);
     }
@@ -485,7 +490,16 @@ export function Header() {
   return (
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
       {/* Search */}
-      <div className="flex-1 max-w-md relative" ref={searchRef}>
+      <div
+        className="flex-1 max-w-md relative"
+        ref={searchRef}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            setShowResults(false);
+          }
+        }}
+      >
         <form onSubmit={handleSearchSubmit}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -494,12 +508,13 @@ export function Header() {
               placeholder="Search patients, appointments, doctors..."
               className="pl-10 pr-4 py-2 w-full"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => {
-                if (searchResults.length > 0) {
-                  setShowResults(true);
-                }
+              onChange={(e) => {
+                const hasSearchQuery = e.target.value.trim().length >= 2;
+                setSearchQuery(e.target.value);
+                setShowResults(hasSearchQuery);
+                setIsSearching(hasSearchQuery);
               }}
+              onFocus={() => setShowResults(searchQuery.trim().length >= 2)}
             />
             {isSearching && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">

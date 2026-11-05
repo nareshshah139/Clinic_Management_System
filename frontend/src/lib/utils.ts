@@ -9,6 +9,12 @@ export function cn(...inputs: ClassValue[]) {
 
 // Patient name utilities
 type MinimalPatient = { id?: string; name?: string; firstName?: string; lastName?: string } | null | undefined;
+/**
+ * @cc [owner:nareshshah139,label:product] patient-name-precedence
+ * A truthy canonical name MUST be returned unchanged; otherwise use trimmed legacy
+ * name parts. Missing patients MUST produce "Unknown Patient"; unnamed patients
+ * MUST produce "Patient " followed by the final four ID characters or "Unknown".
+ */
 export function formatPatientName(patient: MinimalPatient): string {
   if (!patient) return 'Unknown Patient';
   
@@ -169,12 +175,21 @@ export function doTimeSlotsOverlap(slot1: string, slot2: string): boolean {
 }
 
 // IST timezone utilities
+/**
+ * @cc [owner:nareshshah139,label:product] clinic-calendar-day
+ * A valid instant MUST produce its Asia/Kolkata calendar day as YYYY-MM-DD,
+ * independent of the host timezone. An omitted instant MUST use the current time.
+ */
 export function getISTDateString(date: Date = new Date()): string {
-  // Convert to IST and return YYYY-MM-DD format
-  const istDate = new Date(date.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const year = istDate.getFullYear();
-  const month = String(istDate.getMonth() + 1).padStart(2, '0');
-  const day = String(istDate.getDate()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const year = parts.find(part => part.type === 'year')!.value;
+  const month = parts.find(part => part.type === 'month')!.value;
+  const day = parts.find(part => part.type === 'day')!.value;
   return `${year}-${month}-${day}`;
 }
 

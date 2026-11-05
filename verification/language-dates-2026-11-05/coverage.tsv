@@ -92,7 +92,7 @@ frontend/src/components/appointments/AppointmentScheduler.tsx	467	Rescheduled ap
 frontend/src/components/layout/header.tsx	289	Notification appointment time formatter	migrated	Source is appointment calendar date, not clock instant. Display date beside existing slot where available.
 frontend/src/components/layout/header.tsx	293	Invoice due-date notification formatter	migrated	Existing human display uses displayUtcDate.
 frontend/src/components/layout/header.tsx	440	Appointment search-result date	migrated	Existing human display uses displayUtcDate.
-frontend/src/app/dashboard/page.tsx	421	Dashboard appointment time	migrated	Source is appointment calendar date, not clock instant. Display date beside existing slot where available.
+frontend/src/app/dashboard/page.tsx	421	Dashboard appointment time	migrated	Today's appointments show the booked slot only, preserving main's appointment fix without an inferred clock time.
 frontend/src/components/billing/BillingManagement.tsx	264	Invoice CSV date column	migrated	Human invoice-report CSV now uses clinic issue date; machine exports retain their ISO fields.
 frontend/src/components/billing/BillingManagement.tsx	591	Text invoice date	migrated	Existing human display uses displayClinicDate, displayClinicTime.
 frontend/src/components/billing/BillingManagement.tsx	592	Text invoice time	migrated	Existing human display uses displayClinicDate, displayClinicTime.
