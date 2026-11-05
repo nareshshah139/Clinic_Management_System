@@ -9,6 +9,7 @@ import { InventoryWorkflowService } from './inventory-workflow.service';
 import { WorkflowActor } from './inventory-workflow.types';
 import { jsonObject, money, movementDelta, stockStatus, writeStockMovement } from './inventory-stock';
 import { inventoryProductName } from './inventory-names';
+import { parseTimelineQuery, readInventoryTimeline } from './inventory-timeline';
 
 @Injectable()
 export class InventoryWorkspaceService {
@@ -84,6 +85,11 @@ export class InventoryWorkspaceService {
       tx => readStockPage(tx, actor.branchId, q, item => this.present(item)),
       { isolationLevel: 'RepeatableRead', timeout: 30000 },
     );
+  }
+
+async timeline(actor: WorkflowActor, q: Record<string, any> = {}) {
+    await this.require(actor, 'inventory:transaction:read');
+    return readInventoryTimeline(this.prisma, actor.branchId, parseTimelineQuery(q));
   }
 
 /**
