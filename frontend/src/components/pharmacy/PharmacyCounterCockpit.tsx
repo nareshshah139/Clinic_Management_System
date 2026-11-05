@@ -1,5 +1,7 @@
 'use client';
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
@@ -7,7 +9,6 @@ import {
   CheckCircle2,
   ClipboardCheck,
   FileText,
-  Loader2,
   MapPin,
   PackageCheck,
   Pill,
@@ -543,22 +544,22 @@ export function PharmacyCounterCockpit({
   );
 
   return (
-    <section className="flex min-h-[620px] flex-col overflow-hidden rounded-[12px] border border-slate-200/80 bg-white shadow-[0_18px_60px_rgba(15,23,42,0.08)] xl:h-[calc(100vh-205px)]">
-      <div className="shrink-0 border-b border-slate-800 bg-slate-950 px-3 py-2 text-white md:px-4">
+    <section className="flex min-h-[620px] flex-col overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm xl:h-[calc(100vh-205px)]">
+      <div className="shrink-0 border-b border-border bg-muted px-3 py-2 text-foreground md:px-4">
         <div className="grid gap-2 xl:grid-cols-[minmax(210px,0.65fr)_minmax(0,1fr)_auto] xl:items-center">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-semibold tracking-tight">
                 Pharmacy Counter
               </h3>
-              <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-[10px] text-emerald-100">
+              <Badge variant="outline" className="border-success-border/30 bg-success/10 px-2 py-0 text-xs text-success-text">
                 HITL
               </Badge>
-              <Badge variant="outline" className="border-cyan-300/30 bg-cyan-300/10 px-2 py-0 text-[10px] text-cyan-100">
+              <Badge variant="outline" className="border-info-border/30 bg-info/10 px-2 py-0 text-xs text-info-text">
                 Shelf-aware
               </Badge>
             </div>
-            <p className="mt-0.5 truncate text-xs text-slate-300">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               Queue to pick to bill in one workstation.
             </p>
           </div>
@@ -574,23 +575,23 @@ export function PharmacyCounterCockpit({
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
               onClick={loadQueue}
               disabled={loadingQueue || savingTask}
             >
-              <RefreshCw className={`h-4 w-4 ${loadingQueue ? 'animate-spin' : ''}`} />
+              {loadingQueue ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
               Refresh
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="h-8 border-white/15 bg-white/10 text-white hover:bg-white/15 hover:text-white"
+              className="h-8 border-current/15 bg-card/10 text-foreground hover:bg-card/15 hover:text-foreground"
               onClick={onOpenQueue}
             >
               <ClipboardCheck className="h-4 w-4" />
               Rx queue
             </Button>
-            <Button size="sm" className="h-8 bg-white text-slate-950 hover:bg-slate-100" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
+            <Button size="sm" className="h-8 bg-card text-foreground hover:bg-muted" onClick={openActiveBilling} disabled={activeEntry?.dispensingEligible === false}>
               <Receipt className="h-4 w-4" />
               Bill
             </Button>
@@ -599,12 +600,12 @@ export function PharmacyCounterCockpit({
       </div>
 
       {error || stockError ? (
-        <div role="alert" className="border-b border-red-100 bg-red-50 px-5 py-3 text-sm font-medium text-red-700">
+        <div role="alert" className="border-b border-destructive-border bg-destructive-soft px-5 py-3 text-sm font-medium text-destructive-text">
           {error || stockError}
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-2 bg-slate-100/70 p-2 xl:grid-cols-[300px_minmax(0,1fr)_330px]">
+      <div className="grid min-h-0 flex-1 gap-2 bg-muted/70 p-2 xl:grid-cols-[300px_minmax(0,1fr)_330px]">
         <QueueColumn
           queue={queue}
           queueTotal={queueTotal}
@@ -702,7 +703,7 @@ function QueueColumn({
   });
 
   return (
-    <div className="flex min-h-0 flex-col rounded-[10px] border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-2.5 shadow-sm">
       <PanelHeader
         icon={<ClipboardCheck className="h-4 w-4" />}
         title="Queue"
@@ -724,10 +725,10 @@ function QueueColumn({
             key={value}
             type="button"
             onClick={() => setFilter(value as typeof filter)}
-            className={`rounded-full border px-2 py-1 text-[11px] font-semibold transition ${
+            className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
               filter === value
-                ? 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                ? 'border-border bg-muted text-foreground'
+                : 'border-border bg-card text-muted-foreground hover:border-border'
             }`}
           >
             {label}
@@ -736,13 +737,10 @@ function QueueColumn({
       </div>
       <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
         {loading ? (
-          <div className="flex h-40 items-center justify-center rounded-[10px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading queue
-          </div>
+          <LoadingSkeleton label="Loading prescription queue…" />
         ) : queue.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-            <p className="font-semibold text-slate-950">No prescriptions waiting</p>
+          <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
+            <p className="font-semibold text-foreground">No prescriptions waiting</p>
             <div className="mt-3 grid gap-1.5">
               <Button size="sm" onClick={onOpenBilling}>
                 Walk-in bill
@@ -756,7 +754,7 @@ function QueueColumn({
             </div>
           </div>
         ) : filteredQueue.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          <div className="rounded-lg border border-dashed border-border bg-background p-3 text-sm text-muted-foreground">
             No items match this filter.
           </div>
         ) : (
@@ -765,10 +763,10 @@ function QueueColumn({
               key={entry.prescriptionId}
               type="button"
               onClick={() => onSelect(entry)}
-              className={`w-full rounded-[10px] border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:bg-slate-50 hover:shadow-sm ${
+              className={`w-full rounded-lg border px-2.5 py-2 text-left transition hover:-translate-y-0.5 hover:border-border hover:bg-background hover:shadow-sm ${
                 activeId === entry.prescriptionId
-                  ? 'border-slate-950 bg-slate-950 text-white shadow-md hover:bg-slate-950'
-                  : 'border-slate-200 bg-white text-slate-950'
+                  ? 'border-border bg-muted text-foreground shadow-sm hover:bg-muted'
+                  : 'border-border bg-card text-foreground'
               }`}
             >
               <div className="flex items-start justify-between gap-3">
@@ -777,8 +775,8 @@ function QueueColumn({
                   <p
                     className={`mt-0.5 truncate text-xs ${
                       activeId === entry.prescriptionId
-                        ? 'text-slate-300'
-                        : 'text-slate-500'
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground'
                     }`}
                   >
                     {entry.patient.patientCode || entry.patient.id}
@@ -792,13 +790,13 @@ function QueueColumn({
               </div>
               <div
                 className={`mt-2 flex flex-wrap items-center gap-2 text-xs ${
-                  activeId === entry.prescriptionId ? 'text-slate-300' : 'text-slate-500'
+                  activeId === entry.prescriptionId ? 'text-muted-foreground' : 'text-muted-foreground'
                 }`}
               >
                 <span>{entry.medications.length} medicines</span>
                 <span>{formatAge(entry.pendingHours)}</span>
                 {entry.isOverTwoHours && entry.status !== 'dispensed' ? (
-                  <span className={activeId === entry.prescriptionId ? 'text-amber-200' : 'text-amber-700'}>
+                  <span className={activeId === entry.prescriptionId ? 'text-warning-text' : 'text-warning-text'}>
                     over 2h
                   </span>
                 ) : null}
@@ -843,7 +841,7 @@ function ActiveDispenseColumn({
   savingTask: boolean;
 }) {
   return (
-    <div className="flex min-h-0 flex-col rounded-[10px] border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-2.5 shadow-sm">
       <PanelHeader
         icon={<Pill className="h-4 w-4" />}
         title="Active Dispense"
@@ -856,23 +854,23 @@ function ActiveDispenseColumn({
 
       {activeEntry ? (
         <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="shrink-0 overflow-hidden rounded-[10px] border border-slate-200 bg-white">
-            <div className="grid gap-2 bg-slate-950 px-3 py-2 text-white lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="shrink-0 overflow-hidden rounded-lg border border-border bg-card">
+            <div className="grid gap-2 bg-muted px-3 py-2 text-foreground lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate text-base font-semibold">
                     {activeEntry.patient.name}
                   </p>
-                  <Badge variant="outline" className="border-white/20 bg-white/10 px-2 py-0 text-[10px] text-white">
+                  <Badge variant="outline" className="border-border bg-card px-2 py-0 text-xs text-foreground">
                     {activeLifecycle}
                   </Badge>
                   {activeEntry.linkedInvoiceIds.length > 0 ? (
-                    <Badge variant="outline" className="border-emerald-300/30 bg-emerald-300/10 px-2 py-0 text-[10px] text-emerald-100">
+                    <Badge variant="outline" className="border-success-border/30 bg-success/10 px-2 py-0 text-xs text-success-text">
                       Invoice
                     </Badge>
                   ) : null}
                 </div>
-                <p className="mt-0.5 truncate text-xs text-slate-300">
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
                   Dr. {activeEntry.doctor.name} · {formatDate(activeEntry.createdAt)} · {activeEntry.prescriptionId}
                 </p>
               </div>
@@ -881,8 +879,8 @@ function ActiveDispenseColumn({
           </div>
 
           {loadingStock ? (
-            <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-[10px] border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <div className="mt-2 flex h-32 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-background text-sm text-muted-foreground">
+              <Spinner className="mr-2 h-4 w-4 " />
               Checking stock and FEFO batches
             </div>
           ) : (
@@ -895,12 +893,12 @@ function ActiveDispenseColumn({
             </fieldset>
           )}
 
-          <div className="mt-2 shrink-0 rounded-[10px] border border-slate-200 bg-slate-50/80 p-2">
+          <div className="mt-2 shrink-0 rounded-lg border border-border bg-background/80 p-2">
             <div className="grid gap-2 lg:grid-cols-[210px_minmax(0,1fr)]">
               <select
                 value={reasonType}
                 onChange={(event) => setReasonType(event.target.value)}
-                className="h-9 rounded-[8px] border border-slate-200 bg-white px-2 text-sm"
+                className="h-9 rounded-md border border-border bg-card px-2 text-sm"
               >
                 {reasonOptions.map((option) => (
                   <option key={option} value={option}>
@@ -912,14 +910,14 @@ function ActiveDispenseColumn({
                 value={reasonNote}
                 onChange={(event) => setReasonNote(event.target.value)}
                 placeholder="Reason or pharmacist note"
-                className="min-h-9 resize-none rounded-[8px] py-2"
+                className="min-h-9 resize-none rounded-md py-2"
               />
             </div>
           </div>
 
-          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-[10px] border border-slate-200 bg-white p-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mt-2 shrink-0 flex flex-col gap-2 rounded-lg border border-border bg-card p-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm">
-              <p className="font-semibold text-slate-950">
+              <p className="font-semibold text-foreground">
                 {readyForBilling ? 'Ready for billing review' : 'Review every medicine before billing'}
               </p>
             </div>
@@ -964,9 +962,9 @@ function ActiveDispenseColumn({
           </div>
         </div>
       ) : (
-        <div className="mt-2 rounded-[10px] border border-dashed border-slate-200 bg-slate-50 p-4 text-center">
-          <Pill className="mx-auto h-8 w-8 text-slate-400" />
-          <p className="mt-3 font-semibold text-slate-950">No active prescription</p>
+        <div className="mt-2 rounded-lg border border-dashed border-border bg-background p-4 text-center">
+          <Pill className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-3 font-semibold text-foreground">No active prescription</p>
           <Button className="mt-3" size="sm" onClick={onOpenBilling}>
             Start billing
           </Button>
@@ -986,15 +984,15 @@ function MedicationReviewTable({
   setLineAction: (medication: QueueMedication, action: LineAction) => void;
 }) {
   return (
-    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[10px] border border-slate-200">
-      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] font-semibold uppercase tracking-normal text-slate-500 lg:grid">
+    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
+      <div className="hidden shrink-0 grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] gap-2 border-b border-border bg-background px-2.5 py-2 text-xs font-semibold uppercase tracking-normal text-muted-foreground lg:grid">
         <span>Prescription</span>
         <span>Inventory Match</span>
         <span>Stock</span>
         <span>Shelf / FEFO</span>
         <span>Action</span>
       </div>
-      <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
+      <div className="min-h-0 divide-y divide-border overflow-y-auto">
         {activeEntry.medications.map((medication, index) => {
           const stock = stockByLine[medication.sourceLineKey ?? String(index)];
           return (
@@ -1031,30 +1029,30 @@ function MedicationReviewRow({
   const warnings = stock ? stockWarnings(stock) : ['Stock check pending'];
 
   return (
-    <div className="grid gap-2 bg-white px-2.5 py-2 transition hover:bg-slate-50 lg:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] lg:items-center">
+    <div className="grid gap-2 bg-card px-2.5 py-2 transition hover:bg-background lg:grid-cols-[minmax(180px,1.25fr)_minmax(160px,1fr)_86px_136px_210px] lg:items-center">
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-950">{medication.drugName}</p>
-        <p className="truncate text-xs text-slate-600">
+        <p className="truncate text-sm font-semibold text-foreground">{medication.drugName}</p>
+        <p className="truncate text-xs text-muted-foreground">
           {[medication.dosage, medication.dosageUnit, medication.frequency]
             .filter(Boolean)
             .join(' ') || 'Dose not specified'}
         </p>
-        <p className="truncate text-[11px] text-slate-500">
+        <p className="truncate text-xs text-muted-foreground">
           {[medication.duration, medication.durationUnit].filter(Boolean).join(' ') || 'Duration not set'}
         </p>
       </div>
 
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-slate-950">
+        <p className="truncate text-sm font-semibold text-foreground">
           {stock?.matchedDrug?.name || 'No inventory match'}
         </p>
-        <p className="truncate text-xs text-slate-600">
+        <p className="truncate text-xs text-muted-foreground">
           {stock?.matchedDrug?.manufacturerName || 'Needs pharmacist action'}
         </p>
         {warnings.length > 0 ? (
           <div className="mt-1 flex flex-wrap gap-1">
             {warnings.slice(0, 2).map((warning) => (
-              <Badge key={warning} variant="outline" className="h-5 bg-amber-50 px-1.5 text-[10px] text-amber-800">
+              <Badge key={warning} variant="outline" className="h-5 bg-warning-soft px-1.5 text-xs text-warning-text">
                 <AlertTriangle className="h-3 w-3" />
                 {warning}
               </Badge>
@@ -1065,12 +1063,12 @@ function MedicationReviewRow({
 
       <div className="flex flex-wrap gap-1 lg:block">
         <StockBadge stock={stock} />
-        <Badge variant="outline" className="mt-0 bg-slate-50 text-[11px] text-slate-700 lg:mt-1">
+        <Badge variant="outline" className="mt-0 bg-background text-xs text-foreground lg:mt-1">
           Qty {requiredQuantity}
         </Badge>
       </div>
 
-      <div className="grid grid-cols-3 gap-1 rounded-[8px] border border-slate-200 bg-slate-50 p-1.5 lg:grid-cols-1">
+      <div className="grid grid-cols-3 gap-1 rounded-md border border-border bg-background p-1.5 lg:grid-cols-1">
         <CompactFact value={recommendedBatch?.storageLocation || 'Unmapped'} />
         <CompactFact value={recommendedBatch?.batchNumber || 'No batch'} />
         <CompactFact value={recommendedBatch?.expiryDate ? formatDateOnly(recommendedBatch.expiryDate) : 'No expiry'} />
@@ -1113,16 +1111,16 @@ function FulfillmentColumn({
 }) {
   const nextPick = pickLines.find((line) => line.recommendedBatch) || pickLines[0] || null;
   return (
-    <div className="flex min-h-0 flex-col rounded-[10px] border border-slate-200 bg-white p-2.5 shadow-sm">
+    <div className="flex min-h-0 flex-col rounded-lg border border-border bg-card p-2.5 shadow-sm">
       <PanelHeader
         icon={<PackageCheck className="h-4 w-4" />}
         title="Pick + Pay"
         detail={activeEntry ? `${exceptionCount} exceptions` : 'No active pick'}
       />
 
-      <div className="mt-2 shrink-0 overflow-hidden rounded-[10px] border border-slate-200 bg-slate-950 text-white">
-        <div className="border-b border-white/10 px-3 py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-normal text-slate-400">
+      <div className="mt-2 shrink-0 overflow-hidden rounded-lg border border-border bg-muted text-foreground">
+        <div className="border-b border-current/10 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
             Scan next
           </p>
           {nextPick ? (
@@ -1130,7 +1128,7 @@ function FulfillmentColumn({
               <p className="mt-1 truncate text-sm font-semibold">
                 {nextPick.medication.drugName}
               </p>
-              <p className="text-xs text-slate-300">
+              <p className="text-xs text-muted-foreground">
                 Pick {nextPick.requiredQuantity} · {nextPick.recommendedBatch?.storageLocation || 'Unmapped shelf'}
               </p>
             </>
@@ -1184,31 +1182,31 @@ function FulfillmentColumn({
         />
       </div>
 
-      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-[10px] border border-slate-200 shadow-sm">
-        <div className="shrink-0 border-b border-slate-100 bg-slate-50 px-2.5 py-2">
-          <p className="text-sm font-semibold text-slate-950">Pick Assist</p>
-          <p className="text-xs text-slate-500">
+      <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border shadow-sm">
+        <div className="shrink-0 border-b border-border bg-background px-2.5 py-2">
+          <p className="text-sm font-semibold text-foreground">Pick Assist</p>
+          <p className="text-xs text-muted-foreground">
             Shelf, batch, and split-stock view.
           </p>
         </div>
-        <div className="min-h-0 divide-y divide-slate-100 overflow-y-auto">
+        <div className="min-h-0 divide-y divide-border overflow-y-auto">
           {pickLines.length === 0 ? (
-            <div className="p-3 text-sm text-slate-600">
+            <div className="p-3 text-sm text-muted-foreground">
               Select a prescription to show pick instructions.
             </div>
           ) : (
             pickLines.map((line) => (
-              <div key={line.medication.drugName} className="px-2.5 py-2 transition hover:bg-slate-50">
+              <div key={line.medication.drugName} className="px-2.5 py-2 transition hover:bg-background">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-950">
+                    <p className="truncate text-sm font-semibold text-foreground">
                       {line.medication.drugName}
                     </p>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       Pick {line.requiredQuantity} · {line.stock?.totalNonExpiredStock ?? '—'} available
                     </p>
                   </div>
-                  <Badge variant="outline" className="shrink-0 bg-white text-slate-700">
+                  <Badge variant="outline" className="shrink-0 bg-card text-foreground">
                     {line.recommendedBatch?.batchNumber || 'No batch'}
                   </Badge>
                 </div>
@@ -1223,7 +1221,7 @@ function FulfillmentColumn({
                   />
                 </div>
                 {line.alternateCount > 0 ? (
-                  <p className="mt-2 text-xs font-medium text-blue-700">
+                  <p className="mt-2 text-xs font-medium text-info-text">
                     {line.alternateCount} alternate batch{line.alternateCount === 1 ? '' : 'es'} available if shelf stock is short.
                   </p>
                 ) : null}
@@ -1263,12 +1261,12 @@ function PanelHeader({
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-slate-100 text-slate-800 ring-1 ring-slate-200">
+        <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-foreground ring-1 ring-ring">
           {icon}
         </span>
         <div>
-          <p className="text-sm font-semibold text-slate-950">{title}</p>
-          <p className="text-xs text-slate-500">{detail}</p>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="text-xs text-muted-foreground">{detail}</p>
         </div>
       </div>
     </div>
@@ -1285,14 +1283,14 @@ function CommandStat({
   tone?: 'slate' | 'amber' | 'emerald';
 }) {
   const colors = {
-    slate: 'border-white/10 bg-white/10 text-white',
-    amber: 'border-amber-300/30 bg-amber-300/10 text-amber-100',
-    emerald: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100',
+    slate: 'border-current/10 bg-card/10 text-foreground',
+    amber: 'border-warning-border/30 bg-warning/10 text-warning-text',
+    emerald: 'border-success-border/30 bg-success/10 text-success-text',
   };
 
   return (
-    <div className={`flex items-center justify-between rounded-[8px] border px-2 py-1 ${colors[tone]}`}>
-      <span className="text-[11px] opacity-75">{label}</span>
+    <div className={`flex items-center justify-between rounded-md border px-2 py-1 ${colors[tone]}`}>
+      <span className="text-xs opacity-75">{label}</span>
       <span className="text-sm font-semibold">{value}</span>
     </div>
   );
@@ -1308,13 +1306,13 @@ function QueueMetric({
   intent: 'blue' | 'amber';
 }) {
   const colors = {
-    blue: 'border-blue-100 bg-blue-50 text-blue-800',
-    amber: 'border-amber-100 bg-amber-50 text-amber-800',
+    blue: 'border-info-border bg-info-soft text-info-text',
+    amber: 'border-warning-border bg-warning-soft text-warning-text',
   };
 
   return (
-    <div className={`rounded-[8px] border px-2 py-1.5 ${colors[intent]}`}>
-      <p className="text-[11px] opacity-75">{label}</p>
+    <div className={`rounded-md border px-2 py-1.5 ${colors[intent]}`}>
+      <p className="text-xs opacity-75">{label}</p>
       <p className="text-lg font-semibold leading-5">{value}</p>
     </div>
   );
@@ -1339,18 +1337,18 @@ function StatusChip({
     }[status];
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${
+      className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${
         active
-          ? 'border-white/20 bg-white/10 text-white'
+          ? 'border-current/20 bg-card/10 text-foreground'
           : dispenseStatus === 'DISPENSED' || status === 'dispensed'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+            ? 'border-success-border bg-success-soft text-success-text'
             : dispenseStatus === 'PAUSED' ||
                 dispenseStatus === DISPENSE_TASK_CANCELLED ||
                 status === 'expired'
-              ? 'border-red-200 bg-red-50 text-red-800'
+              ? 'border-destructive-border bg-destructive-soft text-destructive-text'
               : dispenseStatus === 'PARTIALLY_FILLED' || status === 'partial'
-                ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-slate-200 bg-slate-50 text-slate-700'
+                ? 'border-warning-border bg-warning-soft text-warning-text'
+                : 'border-border bg-background text-foreground'
       }`}
     >
       {label}
@@ -1378,12 +1376,12 @@ function LifecycleRail({ active }: { active: DispenseLifecycle }) {
         return (
           <div
             key={step}
-            className={`rounded-full border px-2 py-0.5 text-center text-[10px] font-semibold ${
+            className={`rounded-full border px-2 py-0.5 text-center text-xs font-semibold ${
               isActive
                 ? isExceptional
-                  ? 'border-amber-300 bg-amber-100 text-amber-900'
-                  : 'border-slate-950 bg-slate-950 text-white'
-                : 'border-slate-200 bg-white text-slate-500'
+                  ? 'border-warning-border bg-warning-soft text-warning-text'
+                  : 'border-border bg-muted text-foreground'
+                : 'border-border bg-card text-muted-foreground'
             }`}
           >
             {step}
@@ -1397,16 +1395,16 @@ function LifecycleRail({ active }: { active: DispenseLifecycle }) {
 function StockBadge({ stock }: { stock?: StockCheckItem }) {
   if (!stock) {
     return (
-      <Badge variant="outline" className="bg-slate-50 text-slate-700">
+      <Badge variant="outline" className="bg-background text-foreground">
         Checking
       </Badge>
     );
   }
   const config = {
-    UNMATCHED: 'bg-red-50 text-red-800',
-    OUT_OF_STOCK: 'bg-red-50 text-red-800',
-    LOW_STOCK: 'bg-amber-50 text-amber-800',
-    IN_STOCK: 'bg-emerald-50 text-emerald-800',
+    UNMATCHED: 'bg-destructive-soft text-destructive-text',
+    OUT_OF_STOCK: 'bg-destructive-soft text-destructive-text',
+    LOW_STOCK: 'bg-warning-soft text-warning-text',
+    IN_STOCK: 'bg-success-soft text-success-text',
   }[stock.stockStatus];
   return (
     <Badge variant="outline" className={config}>
@@ -1418,27 +1416,27 @@ function StockBadge({ stock }: { stock?: StockCheckItem }) {
 function MiniFact({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="min-w-0">
-      <p className="text-[11px] font-semibold uppercase tracking-normal text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
         {label}
       </p>
-      <p className="truncate text-sm font-medium text-slate-950">{value}</p>
+      <p className="truncate text-sm font-medium text-foreground">{value}</p>
     </div>
   );
 }
 
 function CompactFact({ value }: { value: string | number }) {
   return (
-    <p className="truncate text-[11px] font-semibold text-slate-800">{value}</p>
+    <p className="truncate text-xs font-semibold text-foreground">{value}</p>
   );
 }
 
 function ScanFact({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="px-2 py-2">
-      <p className="text-[10px] font-semibold uppercase tracking-normal text-slate-400">
+      <p className="text-xs font-semibold uppercase tracking-normal text-muted-foreground">
         {label}
       </p>
-      <p className="truncate text-xs font-semibold text-white">{value}</p>
+      <p className="truncate text-xs font-semibold text-foreground">{value}</p>
     </div>
   );
 }
@@ -1456,10 +1454,10 @@ function ReviewButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-2 py-1 text-[11px] font-semibold transition ${
+      className={`rounded-full border px-2 py-1 text-xs font-semibold transition ${
         active
-          ? 'border-slate-950 bg-slate-950 text-white'
-          : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+          ? 'border-border bg-muted text-foreground'
+          : 'border-border bg-card text-foreground hover:border-border'
       }`}
     >
       {children}
@@ -1479,17 +1477,17 @@ function ChecklistItem({
   done: boolean;
 }) {
   return (
-    <div className="flex gap-2 rounded-[8px] border border-slate-200 bg-white p-1.5 shadow-sm">
+    <div className="flex gap-2 rounded-md border border-border bg-card p-1.5 shadow-sm">
       <div
-        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] ${
-          done ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+          done ? 'bg-success-soft text-success-text' : 'bg-muted text-muted-foreground'
         }`}
       >
         {done ? <CheckCircle2 className="h-4 w-4" /> : icon}
       </div>
       <div>
-        <p className="text-xs font-semibold text-slate-950">{title}</p>
-        <p className="text-[11px] leading-4 text-slate-500 xl:hidden 2xl:block">{detail}</p>
+        <p className="text-xs font-semibold text-foreground">{title}</p>
+        <p className="text-xs leading-4 text-muted-foreground xl:hidden 2xl:block">{detail}</p>
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 'use client';
 
+import { Spinner } from '@/components/ui/spinner';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   CheckCircle2,
   Clock,
-  Loader2,
   PackageCheck,
   Plus,
   RefreshCw,
@@ -18,6 +18,7 @@ import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -52,12 +53,6 @@ type SaleStatus =
   | 'RECONCILIATION_REQUIRED'
   // eslint-disable-next-line no-restricted-syntax -- Partner sale status, not an appointment status.
   | 'CANCELLED';
-type BadgeVariant =
-  | 'default'
-  | 'secondary'
-  | 'destructive'
-  | 'outline'
-  | 'brand';
 
 type SaleItemForm = {
   localId: string;
@@ -148,13 +143,7 @@ const money = (value: number | string | null | undefined) =>
     maximumFractionDigits: 2,
   }).format(Number(value || 0));
 
-const statusTone: Record<SaleStatus, BadgeVariant> = {
-  SUBMITTED: 'secondary',
-  STOCK_COMMITTED: 'default',
-  PARTIAL_STOCK_COMMITTED: 'outline',
-  RECONCILIATION_REQUIRED: 'destructive',
-  CANCELLED: 'destructive',
-};
+
 
 export function PartnerDailySync() {
   const { toast } = useToast();
@@ -334,7 +323,7 @@ export function PartnerDailySync() {
         </div>
         <Button variant="outline" onClick={loadData} disabled={loading}>
           {loading ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Spinner className="mr-2 h-4 w-4 " />
           ) : (
             <RefreshCw className="mr-2 h-4 w-4" />
           )}
@@ -561,7 +550,7 @@ export function PartnerDailySync() {
                 </span>
                 <Button onClick={submitSale} disabled={saving}>
                   {saving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Spinner className="mr-2 h-4 w-4 " />
                   ) : (
                     <Save className="mr-2 h-4 w-4" />
                   )}
@@ -582,7 +571,7 @@ export function PartnerDailySync() {
           <CardContent>
             {missing.length === 0 ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <CheckCircle2 className="h-4 w-4 text-success-text" />
                 No missing entries for the selected date.
               </div>
             ) : (
@@ -651,12 +640,12 @@ export function PartnerDailySync() {
                       </TableCell>
                       <TableCell>{sale.date.slice(0, 10)}</TableCell>
                       <TableCell>
-                        <Badge variant={statusTone[sale.status]}>
+                        <StatusBadge domain="workflow" status={sale.status}>
                           {sale.status.replace(/_/g, ' ')}
-                        </Badge>
+                        </StatusBadge>
                       </TableCell>
                       <TableCell>{sale.totalQuantity}</TableCell>
-                      <TableCell>{money(sale.netAmount)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{money(sale.netAmount)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {sale.lateEntry && (
@@ -689,7 +678,7 @@ export function PartnerDailySync() {
                             onClick={() => void commitStock(sale)}
                           >
                             {committingId === sale.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              <Spinner className="mr-2 h-4 w-4" />
                             ) : outstandingQuantity(sale) <= 0 ? (
                               <PackageCheck className="mr-2 h-4 w-4" />
                             ) : (
@@ -1015,7 +1004,7 @@ function PartnerLineRecovery({
         <p className="text-sm">{item.discrepancyReason}</p>
       )}
       {item.recoveryInventoryItemId && (
-        <p className="text-sm text-emerald-700">
+        <p className="text-sm text-success-text">
           A batch is selected for the outstanding quantity. Retry outstanding
           when stock is available.
         </p>
@@ -1095,7 +1084,7 @@ function PartnerLineRecovery({
         </>
       )}
       {saved && (
-        <p role="status" className="text-sm text-emerald-700">
+        <p role="status" className="text-sm text-success-text">
           Match saved. Use Retry outstanding to deduct only the remaining
           quantities.
         </p>

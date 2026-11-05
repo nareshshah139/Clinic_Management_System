@@ -37,7 +37,7 @@ export function SourceFieldLink({ id, label }: { id: string; label: string }) {
       aria-pressed={context.selectedId === id}
       aria-label={`Show source for ${label}`}
       title="Show on original invoice"
-      className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded text-primary hover:bg-muted focus-visible:outline-2"
+      className="ml-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-primary hover:bg-muted focus-visible:outline-2"
     >
       <ScanLine className="h-4 w-4" />
     </a>
@@ -281,7 +281,7 @@ export function PurchaseSourcePreview({
             aria-label="Invoice source page"
             value={page}
             onChange={(event) => setPage(Number(event.target.value))}
-            className="rounded border bg-background p-1"
+            className="rounded-md border bg-background p-1"
           >
             {Array.from(
               { length: Math.max(pageCount, map?.pages.length || 1) },
@@ -337,7 +337,7 @@ export function PurchaseSourcePreview({
         Captured field
         <select
           aria-label="Captured field"
-          className="mt-1 block w-full min-w-0 rounded border bg-background p-2"
+          className="mt-1 block w-full min-w-0 rounded-md border bg-background p-2"
           value={selectedId}
           onChange={(event) => onSelect(event.target.value)}
         >
@@ -357,7 +357,7 @@ export function PurchaseSourcePreview({
                 <strong>{selected.label}</strong> · captured: {region.value}
               </p>
               {sourceValueChanged(region.value, selected.value) && (
-                <p className="text-amber-800 dark:text-amber-300">
+                <p className="text-warning-text dark:text-warning-text">
                   Edited value: {selected.value || "Blank"}. The highlight still
                   refers to the original reading.
                 </p>
@@ -379,7 +379,7 @@ export function PurchaseSourcePreview({
       </div>
       <div
         ref={viewport}
-        className="h-[52vh] min-h-64 max-h-[720px] overflow-auto rounded border bg-muted"
+        className="h-[52vh] min-h-64 max-h-[720px] overflow-auto rounded-md border bg-muted"
         aria-label="Invoice image viewport"
       >
         {imageError ? (

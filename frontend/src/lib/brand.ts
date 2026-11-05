@@ -124,17 +124,17 @@ export async function extractBrandPaletteFromImage(imageUrl: string = '/letterhe
   };
 }
 
+/**
+ * @cc [owner:nareshshah139,label:accessibility] brand-palette-mode-precedence
+ * Extracted palette values MUST only populate brand-specific variables. Dark and
+ * high-contrast themes MUST retain control of semantic colors and foregrounds.
+ */
 export function applyBrandPaletteToCssVariables(palette: BrandPalette) {
   const root = document.documentElement;
-  root.style.setProperty('--primary', palette.primary);
-  root.style.setProperty('--primary-foreground', palette.primaryForeground);
-  root.style.setProperty('--accent', palette.accent);
-  root.style.setProperty('--accent-foreground', palette.accentForeground);
-  root.style.setProperty('--ring', palette.ring);
-  // Sidebar and charts: align primary and ring for a cohesive look
-  root.style.setProperty('--sidebar-primary', palette.primary);
-  root.style.setProperty('--sidebar-primary-foreground', palette.primaryForeground);
-  root.style.setProperty('--sidebar-ring', palette.ring);
+  root.style.setProperty('--brand-primary', palette.primary);
+  root.style.setProperty('--brand-primary-foreground', palette.primaryForeground);
+  root.style.setProperty('--brand-accent', palette.accent);
+  root.style.setProperty('--brand-accent-foreground', palette.accentForeground);
 }
 
 export function defaultPalette(): BrandPalette {

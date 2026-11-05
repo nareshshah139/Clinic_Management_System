@@ -1,5 +1,6 @@
 "use client";
 
+import { Spinner } from '@/components/ui/spinner';
 import { assessCatalogue, catalogueFieldLabels, catalogueFingerprint, sameCatalogueRequest, type CatalogueAssessment, type CatalogueProduct, type CatalogueRequest, type CatalogueResolution, type CatalogueRow } from '@/lib/purchase-invoice-catalogue';
 import { PurchaseDocumentActions } from "@/components/inventory/PurchaseDocumentActions";
 import {
@@ -15,7 +16,6 @@ import {
   ArrowLeft,
   CheckCircle2,
   FileSearch,
-  Loader2,
   Plus,
   RefreshCw,
   Send,
@@ -938,6 +938,11 @@ const importAttemptIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab]
  * @cc [owner:nareshshah139] receipt-correction-stock-intent
  * Editable purchases MUST allow selecting a posted receipt; removing an existing link MUST
  * explicitly confirm that posting will add stock. Locked or uncertain invoices cannot edit it.
+ */
+/**
+ * @cc [owner:nareshshah139,label:accessibility] posting-control-accessible-state
+ * The posting control MUST retain its action name while pending and expose its busy state.
+ * A loading indicator MUST NOT replace the action's accessible name.
  */
 export function PurchaseInvoiceWorkbench({
   invoiceId,
@@ -3325,7 +3330,7 @@ function PurchaseInvoiceEditor({
           <PurchaseHelp label="Review checks">Correct any mistakes against the original. The final action confirms all current valid values together; missing or invalid values still need correction.</PurchaseHelp>
         </div>
       </div>
-      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-amber-300 bg-amber-50/40 p-4 text-sm">
+      {catalogueChecks > 0 && <section aria-label="Invoice product checks" className="space-y-3 rounded-md border border-warning-border bg-warning-soft/40 p-4 text-sm">
         <h5 className="font-semibold">{catalogue.state === 'pending' ? 'Checking invoice products…' : 'Products need attention'}</h5>
         {catalogue.state === 'failed' && <p role="alert">{catalogue.productSaved ? 'Product details saved. Invoice check could not finish. Retry the check without saving again.' : 'Invoice products could not be checked. Retry the check before final review.'}</p>}
         {catalogueBlockers.map(row => <div key={row.localId} className="space-y-2">
@@ -3565,7 +3570,7 @@ function PurchaseInvoiceEditor({
         <p className="text-sm">Your attempted entry is unchanged. Applying corrections keeps the saved invoice number, supplier identity, original documents and inward receipt link. Saved invoice {comparison.saved.invoiceNumber} is {purchaseInvoiceStatusLabel(comparison.saved).toLowerCase()}.</p>
         {comparison.saved.workflowReceiptId && <p className="text-sm">This bill belongs to an inward receipt. Its receipt link stays with this saved bill and stock must not be received again.</p>}
         <p className="text-sm">This loads your corrections for review. Save corrections and check again to save them. Stock is unchanged.</p>
-        {comparisonDifferences.length ? <ul className="space-y-2 text-sm">{comparisonDifferences.map((difference, index) => <li key={index} className="grid gap-1 rounded border p-2 sm:grid-cols-3"><strong>{difference.label}</strong><span className="break-words">Your entry: {difference.local}</span><span className="break-words">Saved: {difference.saved}</span></li>)}</ul> : <p className="text-sm">The editable values match.</p>}
+        {comparisonDifferences.length ? <ul className="space-y-2 text-sm">{comparisonDifferences.map((difference, index) => <li key={index} className="grid gap-1 rounded-md border p-2 sm:grid-cols-3"><strong>{difference.label}</strong><span className="break-words">Your entry: {difference.local}</span><span className="break-words">Saved: {difference.saved}</span></li>)}</ul> : <p className="text-sm">The editable values match.</p>}
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" disabled={busy} onClick={() => adoptComparison(false)}>Use saved values</Button>
           {access.create && canCorrectPurchase(comparison.saved) && <Button disabled={busy} onClick={() => adoptComparison(true)}>Apply my corrections to this invoice</Button>}
@@ -3578,8 +3583,8 @@ function PurchaseInvoiceEditor({
         <h4 className="font-semibold">These look like different products</h4>
         {pendingMismatch.reference && <p className="break-all text-sm">Reference: {pendingMismatch.reference}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded border p-3"><strong>Invoice product</strong><p>{pendingMismatch.line.productName}</p><p>Pack: {pendingMismatch.line.packSize} · {pendingMismatch.line.packUnitType}</p><p>Kind: {pendingMismatch.line.productKind || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.line.manufacturer || 'Not recorded'}</p></div>
-          <div className="rounded border p-3"><strong>Saved product</strong><p>{pendingMismatch.candidate.drug.name}</p><p>Pack: {pendingMismatch.candidate.drug.packSizeLabel || 'Not recorded'}</p><p>Kind: {pendingMismatch.candidate.drug.productKind || pendingMismatch.candidate.drug.type || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.candidate.drug.manufacturerName || 'Not recorded'}</p><p>Composition: {pendingMismatch.candidate.drug.composition1 || 'Not recorded'}</p><p>Strength: {pendingMismatch.candidate.drug.strength || 'Not recorded'}</p><p>Form: {pendingMismatch.candidate.drug.dosageForm || 'Not recorded'}</p></div>
+          <div className="rounded-md border p-3"><strong>Invoice product</strong><p>{pendingMismatch.line.productName}</p><p>Pack: {pendingMismatch.line.packSize} · {pendingMismatch.line.packUnitType}</p><p>Kind: {pendingMismatch.line.productKind || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.line.manufacturer || 'Not recorded'}</p></div>
+          <div className="rounded-md border p-3"><strong>Saved product</strong><p>{pendingMismatch.candidate.drug.name}</p><p>Pack: {pendingMismatch.candidate.drug.packSizeLabel || 'Not recorded'}</p><p>Kind: {pendingMismatch.candidate.drug.productKind || pendingMismatch.candidate.drug.type || 'Not recorded'}</p><p>Manufacturer: {pendingMismatch.candidate.drug.manufacturerName || 'Not recorded'}</p><p>Composition: {pendingMismatch.candidate.drug.composition1 || 'Not recorded'}</p><p>Strength: {pendingMismatch.candidate.drug.strength || 'Not recorded'}</p><p>Form: {pendingMismatch.candidate.drug.dosageForm || 'Not recorded'}</p></div>
         </div>
         <ul className="list-disc pl-5 text-sm">{pendingMismatch.mismatches.map(message => <li key={message}>{message}</li>)}</ul>
         <div className="flex flex-wrap gap-2">
@@ -3663,8 +3668,8 @@ function PurchaseInvoiceEditor({
         <span className="text-sm text-muted-foreground" role="status" aria-label="Selected rows">{currentSelectedRows.length} of {lines.length} rows selected</span>
       </div>
       <div className="flex flex-wrap items-end gap-3">
-        <label className="text-sm">Change<select className="mt-1 block rounded border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
-        {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<select className="mt-1 block rounded border p-2" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></select></label>}
+        <label className="text-sm">Change<select className="mt-1 block rounded-md border p-2" value={sharedTerms.kind} disabled={batchDisabled} onChange={event => { setSharedTerms(event.target.value === 'gst' ? { kind: 'gst', mode: 'split', rate: '' } : { kind: 'discount', rate: '' }); setBatchState({ kind: 'idle' }); }}><option value="gst">GST</option><option value="discount">Discount</option></select></label>
+        {sharedTerms.kind === 'gst' && <label className="text-sm">GST mode<select className="mt-1 block rounded-md border p-2" value={sharedTerms.mode} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, mode: event.target.value as 'split' | 'integrated' }); setBatchState({ kind: 'idle' }); }}><option value="split">CGST + SGST</option><option value="integrated">IGST</option></select></label>}
         <label className="text-sm">{sharedTerms.kind === 'gst' ? 'Total GST %' : 'Shared discount %'}<Input type="number" min="0" max="100" value={sharedTerms.rate} disabled={batchDisabled} onChange={event => { setSharedTerms({ ...sharedTerms, rate: event.target.value }); setBatchState({ kind: 'idle' }); }} /></label>
         <Button type="button" variant="outline" disabled={batchDisabled || !currentSelectedRows.length} onClick={() => { try { setBatchState({ kind: 'preview', proposal: previewPurchaseTerms(lines, currentSelectedRows, sharedTerms, batchBasis), invoiceId: editingId }); setError(null); } catch (error) { setError(getErrorMessage(error)); } }}>Preview {currentSelectedRows.length} selected rows</Button>
       </div>
@@ -3686,7 +3691,7 @@ function PurchaseInvoiceEditor({
         ) : stockAdded || activeInvoice?.status === "CANCELLED" ? null : activeInvoice?.status === "REVIEWED" ? (
           <>
             <Button onClick={() => saveAndPostInvoice()} disabled={!canCommit || busy}>
-              {committing && <Loader2 className="h-4 w-4 animate-spin" />}
+              {committing && <Spinner className="h-4 w-4 " />}
               {activeInvoice.workflowReceiptId ? "Post bill" : "Add stock"}
             </Button>
             {canReopenReview && <><label className="text-sm">Reason to reopen review<Input aria-label="Reason to reopen review" value={reopenReason} onChange={event => setReopenReason(event.target.value)} disabled={busy} /></label><Button variant="outline" onClick={reopenReviewedInvoice} disabled={busy || !reopenReason.trim()}>{reopeningReview ? "Reopening review…" : "Reopen review and fix products"}</Button></>}
@@ -3694,8 +3699,8 @@ function PurchaseInvoiceEditor({
         ) : canReview && !access.commit && !access.create ? (
           <Button onClick={reviewInvoice} disabled={busy}>Mark Reviewed</Button>
         ) : !activeInvoice || editingSelectedInvoice ? (
-          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-describedby="purchase-posting-guidance">
-            {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          <Button className="h-auto min-h-10 max-w-full whitespace-normal text-left" onClick={() => saveAndPostInvoice(access.commit)} disabled={busy || !!postingBlocker} aria-busy={busy} aria-label={access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"} aria-describedby="purchase-posting-guidance">
+            {busy && <Spinner className="h-4 w-4 " />}
             {access.commit ? postingLabel : "Confirm reviewed values & mark reviewed"}
           </Button>
         ) : (
@@ -3744,9 +3749,7 @@ function PurchaseInvoiceEditor({
             disabled={loadingList}
             aria-label="Refresh purchase invoices"
           >
-            <RefreshCw
-              className={`h-4 w-4 ${loadingList ? "animate-spin" : ""}`}
-            />
+            {loadingList ? <Spinner className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
           </Button>
         </div>
       </div>
@@ -3852,7 +3855,7 @@ function PurchaseInvoiceEditor({
             <p>Choose the posted receipt for these goods. Removing a receipt link will make this bill add stock when posted.</p>
             <div className="flex flex-wrap items-end gap-2">
               <label>Receipt reference
-                <input className="ml-2 rounded border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
+                <input className="ml-2 rounded-md border p-2" value={receiptSearch} onChange={e => setReceiptSearch(e.target.value)} />
               </label>
               <Button type="button" variant="outline" disabled={busy} onClick={async () => {
                 try {
@@ -3862,7 +3865,7 @@ function PurchaseInvoiceEditor({
                 } catch (err) { setError(getErrorMessage(err)); }
               }}>Find posted receipts</Button>
               {!!receiptOptions.length && <label>Posted receipt
-                <select className="ml-2 rounded border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
+                <select className="ml-2 rounded-md border p-2" value={workflowReceiptId} disabled={busy} onChange={e => {
                   setWorkflowReceiptId(e.target.value);
                 }}>
                   <option value="" disabled>Select the receipt for these goods</option>
@@ -3954,7 +3957,7 @@ function PurchaseInvoiceEditor({
         )}
         {stockAdded && activeInvoice?.committedItems?.length && (
           <section
-            className="space-y-2 rounded-md border border-green-600 p-4"
+            className="space-y-2 rounded-md border border-success-border p-4"
             aria-label="Confirmed receipt"
           >
             <h4 className="font-semibold">
@@ -4076,14 +4079,14 @@ function PurchaseInvoiceEditor({
             {showDelegatedRecovery && <div className="space-y-3">
               <p className="text-sm">Use the reference from the original operator's handoff. Recovery checks the exact invoice or stops unfinished work. Unknown historical stock stays locked for physical reconciliation.</p>
               <label className="block">Import attempt ID
-                <input className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.attemptId} disabled={resolvingImport || !!importAttemptId} onChange={event => setDelegatedRecovery(current => ({ ...current, attemptId: event.target.value }))} />
+                <input className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.attemptId} disabled={resolvingImport || !!importAttemptId} onChange={event => setDelegatedRecovery(current => ({ ...current, attemptId: event.target.value }))} />
               </label>
               <label className="block">Original operator ID (optional)
-                <input className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.originalActorId} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, originalActorId: event.target.value }))} />
+                <input className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.originalActorId} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, originalActorId: event.target.value }))} />
               </label>
               <p className="text-sm">If the attempt has not registered yet, enter the original operator ID exactly as shown in their handoff.</p>
               <label className="block">Recovery reason
-                <textarea className="mt-1 block w-full rounded border p-2" value={delegatedRecovery.reason} maxLength={500} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, reason: event.target.value }))} />
+                <textarea className="mt-1 block w-full rounded-md border p-2" value={delegatedRecovery.reason} maxLength={500} disabled={resolvingImport} onChange={event => setDelegatedRecovery(current => ({ ...current, reason: event.target.value }))} />
               </label>
               {access.read && access.create && access.review ? <Button type="button" disabled={resolvingImport || extracting || !delegatedRecovery.attemptId.trim() || !delegatedRecovery.reason.trim()} onClick={recoverDelegatedImport}>Recover import outcome</Button>
                 : <p>A colleague with purchase read, create and review access can recover this import using these details.</p>}
@@ -4373,7 +4376,7 @@ function PurchaseInvoiceEditor({
                         </div>
                         <Button type="button" onClick={() => extractFromInvoiceFile(false)}
                           disabled={!access.create || busy || !!unknownStockInvoiceId || !ocrFile || !importReceivedDate} className="w-full md:w-auto">
-                          {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
+                          {extracting ? <Spinner className="h-4 w-4 " /> : <FileSearch className="h-4 w-4" />}
                           {extracting ? "Reading bill…" : "Scan bill"}
                         </Button>
                         <a href="#distributor-name" className="text-center text-sm underline underline-offset-4" onClick={() => { setShowIntakeHome(false); setManualEntry(true); requestAnimationFrame(() => focusPurchaseField('distributor-name')); }}>Type instead</a>
@@ -4750,7 +4753,7 @@ function PurchaseInvoiceEditor({
                                 }
                               >
                                 {masterRefreshing ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  <Spinner className="h-4 w-4 mr-2 " />
                                 ) : (
                                   <RefreshCw className="h-4 w-4 mr-2" />
                                 )}
@@ -4972,7 +4975,7 @@ function PurchaseInvoiceEditor({
                                       >
                                         {masterConfirming ===
                                           confirmMatchKey && (
-                                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                          <Spinner className="h-4 w-4 mr-2 " />
                                         )}
                                         Confirm Match
                                       </Button>

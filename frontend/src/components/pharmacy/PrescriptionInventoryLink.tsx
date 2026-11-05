@@ -116,7 +116,7 @@ export function PrescriptionInventoryLink({
           <label className="space-y-1">
             Search clinic inventory
             <input
-              className="w-full rounded border p-2"
+              className="w-full rounded-md border p-2"
               value={query}
               onChange={(e) => {
                 setQuery(e.target.value);
@@ -140,7 +140,7 @@ export function PrescriptionInventoryLink({
             {results.map((item) => (
               <label
                 key={item.inventoryItemId}
-                className="flex cursor-pointer gap-3 rounded border p-3"
+                className="flex cursor-pointer gap-3 rounded-md border p-3"
               >
                 <input
                   type="radio"

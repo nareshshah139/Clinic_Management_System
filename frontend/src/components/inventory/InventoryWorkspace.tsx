@@ -1,4 +1,6 @@
 "use client";
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import "./inventory-readability.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -230,14 +232,7 @@ export function InventoryWorkspace() {
   };
   return (
     <main className="inventory-surface min-w-0 space-y-5 pb-12 dark:bg-background dark:text-foreground">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Inventory</h1>
-          <p className="mt-1 text-muted-foreground">
-            Receive, review and manage pharmacy stock.
-          </p>
-        </div>
-        <InventoryAction
+      <PageHeader title={<>Inventory</>} description={<>Receive, review and manage pharmacy stock.</>} actions={<><InventoryAction
           label="Refresh inventory"
           onClick={() => {
             void loadPermissions();
@@ -248,8 +243,7 @@ export function InventoryWorkspace() {
           }}
         >
           <RefreshCw className="h-4 w-4" />
-        </InventoryAction>
-      </header>
+        </InventoryAction></>} />
       <nav
         aria-label="Inventory areas"
         className="flex flex-wrap gap-1 border-b pb-2 print:hidden"
@@ -321,7 +315,7 @@ export function InventoryWorkspace() {
           <Button variant="outline" onClick={() => void loadPermissions()}>Retry permissions</Button>
         </p>
       )}
-      {!caps && !error && <p role="status">Loading inventory permissions…</p>}
+      {!caps && !error && <LoadingSkeleton variant="cards" label="Loading inventory permissions…" />}
       {caps && (
         <>
           {area === "today" && (
@@ -656,7 +650,7 @@ function WorkspaceToday({ navigate, open }: any) {
         error ? (
           <p>Branch queues are unavailable. Retry to see current work.</p>
         ) : (
-          <p role="status">Loading branch queues…</p>
+          <LoadingSkeleton variant="cards" label="Loading branch queues…" />
         )
       ) : (
         <>
@@ -887,7 +881,7 @@ function PurchaseRegister({ query, navigate, onOpen }: any) {
                 <td className="p-3">
                   {purchaseInvoiceStatusLabel(d)}
                 </td>
-                <td className="p-3">{fmtMoney(d.netPayable)}</td>
+                <td className="p-3 text-right tabular-nums">{fmtMoney(d.netPayable)}</td>
                 <td className="p-3">
                   {d.documents?.map((f: any) => (
                     <a

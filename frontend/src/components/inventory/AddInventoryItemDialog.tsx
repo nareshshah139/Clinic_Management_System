@@ -1,5 +1,6 @@
 'use client';
 
+import { Spinner } from "@/components/ui/spinner";
 import { InventoryRegimenFields } from './InventoryRegimenFields';
 import "./inventory-readability.css";
 import { useState } from 'react';
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { apiClient } from '@/lib/api';
-import { Loader2 } from 'lucide-react';
+
 
 interface AddInventoryItemDialogProps {
   open: boolean;
@@ -191,7 +192,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
             onChange={patch => setFormData(prev => ({ ...prev, ...patch } as typeof prev))} />}
           {/* Basic Information */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Basic Information</h3>
+            <h3 className="text-sm font-semibold text-foreground">Basic Information</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -301,7 +302,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Identification */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Identification</h3>
+            <h3 className="text-sm font-semibold text-foreground">Identification</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -328,7 +329,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Pricing */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Pricing</h3>
+            <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -376,7 +377,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Unit & Packaging */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Unit & Packaging</h3>
+            <h3 className="text-sm font-semibold text-foreground">Unit & Packaging</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -426,7 +427,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Stock Levels */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Stock Levels</h3>
+            <h3 className="text-sm font-semibold text-foreground">Stock Levels</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
@@ -481,7 +482,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
 
           {/* Additional Details */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Additional Details</h3>
+            <h3 className="text-sm font-semibold text-foreground">Additional Details</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
@@ -581,8 +582,8 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
           </div>
 
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
-              <p className="text-sm text-red-600">{error}</p>
+            <div className="p-3 bg-destructive-soft border border-destructive-border rounded-md">
+              <p className="text-sm text-destructive-text">{error}</p>
             </div>
           )}
 
@@ -596,7 +597,7 @@ export function AddInventoryItemDialog({ open, onOpenChange, onSuccess }: AddInv
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <Spinner className="mr-2 h-4 w-4 " />}
               Add Item
             </Button>
           </DialogFooter>

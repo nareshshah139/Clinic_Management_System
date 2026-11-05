@@ -1,19 +1,16 @@
 "use client";
 
+import { LoadingSkeleton } from '@/components/ui/skeleton';
+import { PageHeader } from '@/components/ui/page-header';
 import { Suspense } from 'react';
 import PatientsManagement from '@/components/patients/PatientsManagement';
 import { QuickGuide } from '@/components/common/QuickGuide';
 
 export default function PatientsPage() {
   return (
-    <Suspense fallback={<div className="p-4">Loading...</div>}>
+    <Suspense fallback={<LoadingSkeleton label="Loading patients…" />}>
       <div className="space-y-4">
-        <div className="flex flex-wrap justify-between items-center gap-3">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Patients Management</h1>
-            <p className="text-gray-600">Manage patient records and information</p>
-          </div>
-          <QuickGuide
+        <PageHeader title={<>Patients Management</>} description={<>Manage patient records and information</>} actions={<><QuickGuide
             title="Patients Management Guide"
             sections={[
               {
@@ -41,8 +38,7 @@ export default function PatientsPage() {
                 ]
               }
             ]}
-          />
-        </div>
+          /></>} />
         <PatientsManagement />
       </div>
     </Suspense>
