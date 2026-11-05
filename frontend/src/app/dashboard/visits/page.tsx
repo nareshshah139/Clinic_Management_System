@@ -58,7 +58,7 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
   const normalized = normalizePrescription(prescription);
 
   if (!normalized) {
-    return <p className="text-sm text-destructive-text">Unable to display prescription data.</p>;
+    return <p className="text-sm text-red-600">Unable to display prescription data.</p>;
   }
 
   const {
@@ -78,57 +78,57 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-medium text-foreground">Prescription Overview</h3>
+        <h3 className="text-lg font-medium text-gray-900">Prescription Overview</h3>
         <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
           {prescriptionNumber && (
             <div>
-              <span className="text-muted-foreground">Prescription #:</span>
-              <span className="ml-2 text-foreground">{prescriptionNumber}</span>
+              <span className="text-gray-600">Prescription #:</span>
+              <span className="ml-2 text-gray-900">{prescriptionNumber}</span>
             </div>
           )}
           {id && (
             <div>
-              <span className="text-muted-foreground">ID:</span>
-              <span className="ml-2 text-foreground">{id}</span>
+              <span className="text-gray-600">ID:</span>
+              <span className="ml-2 text-gray-900">{id}</span>
             </div>
           )}
           {status && (
             <div>
-              <span className="text-muted-foreground">Status:</span>
-              <span className="ml-2 text-foreground capitalize">{status.toLowerCase()}</span>
+              <span className="text-gray-600">Status:</span>
+              <span className="ml-2 text-gray-900 capitalize">{status.toLowerCase()}</span>
             </div>
           )}
           {createdAt && (
             <div>
-              <span className="text-muted-foreground">Created:</span>
-              <span className="ml-2 text-foreground">{createdAt}</span>
+              <span className="text-gray-600">Created:</span>
+              <span className="ml-2 text-gray-900">{createdAt}</span>
             </div>
           )}
           {reviewDate && (
             <div>
-              <span className="text-muted-foreground">Review Date:</span>
-              <span className="ml-2 text-foreground">{reviewDate}</span>
+              <span className="text-gray-600">Review Date:</span>
+              <span className="ml-2 text-gray-900">{reviewDate}</span>
             </div>
           )}
           {doctor && (
             <div>
-              <span className="text-muted-foreground">Doctor:</span>
-              <span className="ml-2 text-foreground">{doctor}</span>
+              <span className="text-gray-600">Doctor:</span>
+              <span className="ml-2 text-gray-900">{doctor}</span>
             </div>
           )}
           {patient && (
             <div>
-              <span className="text-muted-foreground">Patient:</span>
-              <span className="ml-2 text-foreground">{patient}</span>
+              <span className="text-gray-600">Patient:</span>
+              <span className="ml-2 text-gray-900">{patient}</span>
             </div>
           )}
         </div>
       </div>
 
       <div>
-        <h4 className="text-md font-medium text-foreground">Medications</h4>
+        <h4 className="text-md font-medium text-gray-900">Medications</h4>
         {items.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">No medication items recorded.</p>
+          <p className="mt-2 text-sm text-gray-500">No medication items recorded.</p>
         ) : (
           <div className="mt-3 space-y-3">
             {items.map((item, idx) => {
@@ -175,20 +175,20 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
               }
 
               return (
-                <div key={idx} className="rounded-md border border-border p-3">
+                <div key={idx} className="rounded-md border border-gray-200 p-3">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-medium text-foreground">{name}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-medium text-gray-900">{name}</p>
+                      <p className="text-sm text-gray-600">
                         {dosage && <span className="mr-2">Dosage: {dosage}</span>}
                         {frequency && <span className="mr-2">Frequency: {frequency.replaceAll('_', ' ')}</span>}
                         {duration && <span className="mr-2">Duration: {duration} {durationUnit ?? ''}</span>}
                       </p>
                       {instructionsText && (
-                        <p className="text-sm text-foreground mt-1">Instructions: {instructionsText}</p>
+                        <p className="text-sm text-gray-700 mt-1">Instructions: {instructionsText}</p>
                       )}
                       {additional.length > 0 && (
-                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+                        <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-600">
                           {additional.map((entry, additionalIdx) => (
                             <li key={additionalIdx}>{entry}</li>
                           ))}
@@ -207,20 +207,20 @@ function PrescriptionSummary({ prescription, onPrint }: PrescriptionSummaryProps
         <div className="space-y-3">
           {notes && (
             <div>
-              <h4 className="text-md font-medium text-foreground">Notes</h4>
-              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{notes}</p>
+              <h4 className="text-md font-medium text-gray-900">Notes</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{notes}</p>
             </div>
           )}
           {instructions && (
             <div>
-              <h4 className="text-md font-medium text-foreground">General Instructions</h4>
-              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{instructions}</p>
+              <h4 className="text-md font-medium text-gray-900">General Instructions</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{instructions}</p>
             </div>
           )}
           {pharmacistNotes && (
             <div>
-              <h4 className="text-md font-medium text-foreground">Pharmacist Notes</h4>
-              <p className="mt-1 text-sm text-foreground whitespace-pre-line">{pharmacistNotes}</p>
+              <h4 className="text-md font-medium text-gray-900">Pharmacist Notes</h4>
+              <p className="mt-1 text-sm text-gray-700 whitespace-pre-line">{pharmacistNotes}</p>
             </div>
           )}
         </div>
@@ -289,7 +289,7 @@ const PhotosPanel = dynamic<ComponentType<{ visitId: string }>>(
   {
     ssr: false,
     loading: () => (
-      <div className="flex items-center justify-center py-6 text-sm text-muted-foreground">
+      <div className="flex items-center justify-center py-6 text-sm text-gray-500">
         Loading photos…
       </div>
     ),
@@ -307,7 +307,7 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   const [prescriptionLoading, setPrescriptionLoading] = useState(false);
   const [prescriptionError, setPrescriptionError] = useState<string | null>(null);
 
-  if (historyError) return <div role="alert" className="p-4 text-destructive-text">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
+  if (historyError) return <div role="alert" className="p-4 text-red-700">Unable to load patient history. {historyError} <Button onClick={() => void refresh()}>Retry</Button></div>;
 
   if (loading) {
     return (
@@ -317,8 +317,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
   if (!patientId) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+      <div className="text-center py-8 text-gray-500">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
         <p>Select a patient to view their visit history</p>
       </div>
     );
@@ -326,8 +326,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
 
   if (history.length === 0) {
     return (
-      <div className="text-center py-8 text-muted-foreground">
-        <FileText className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
+      <div className="text-center py-8 text-gray-500">
+        <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
         <p>No documented history to show</p>
       </div>
     );
@@ -336,13 +336,13 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-foreground">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
+        <h3 className="text-lg font-medium text-gray-900">Patient History</h3><Button variant="outline" onClick={() => void refresh()}>Refresh</Button>
         <Badge variant="secondary">{history.length} Records</Badge>
       </div>
       
       <div className="relative">
         {/* Timeline line */}
-        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-muted"></div>
+        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
         
         {/* Timeline items */}
         <div className="space-y-6">
@@ -357,8 +357,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
                 {/* Timeline dot */}
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full border-2 flex items-center justify-center ${
                   index === 0 
-                    ? 'bg-info-soft border-info-border text-info-text'
-                    : 'bg-muted border-border text-muted-foreground'
+                    ? 'bg-blue-100 border-blue-500 text-blue-600'
+                    : 'bg-gray-100 border-gray-300 text-gray-500'
                 }`}>
                   {isProcedure ? (
                     <Activity className="h-4 w-4" />
@@ -440,8 +440,8 @@ function PatientHistoryTimeline({ patientId }: { patientId: string }) {
             </DialogDescription>
           </DialogHeader>
 
-          {prescriptionLoading && <p className="text-sm text-muted-foreground">Loading prescription…</p>}
-          {prescriptionError && <p className="text-sm text-destructive-text">{prescriptionError}</p>}
+          {prescriptionLoading && <p className="text-sm text-gray-500">Loading prescription…</p>}
+          {prescriptionError && <p className="text-sm text-red-600">{prescriptionError}</p>}
 
           {!prescriptionLoading && viewingPrescription && !prescriptionError && (
             <PrescriptionSummary
@@ -649,22 +649,22 @@ function VisitsPageInner() {
       THERAPIST: { 
         label: 'Therapist',
         description: 'Can record vitals, capture photos, and basic assessments (20-25% of visit)',
-        color: 'bg-info-soft text-info-text'
+        color: 'bg-blue-100 text-blue-700'
       },
       NURSE: { 
         label: 'Nurse',
         description: 'Can record vitals, capture photos, complaints, and basic assessments',
-        color: 'bg-success-soft text-success-text'
+        color: 'bg-green-100 text-green-700'
       },
       DOCTOR: { 
         label: 'Doctor',
         description: 'Full access to all visit documentation features',
-        color: 'bg-highlight-soft text-highlight-text'
+        color: 'bg-purple-100 text-purple-700'
       },
       RECEPTION: { 
         label: 'Reception',
         description: 'Can capture photos and basic patient information',
-        color: 'bg-warning-soft text-warning-text'
+        color: 'bg-orange-100 text-orange-700'
       },
     };
     return permissions[currentUserRole as keyof typeof permissions] || permissions.DOCTOR;
@@ -704,21 +704,21 @@ function VisitsPageInner() {
         <CardContent>
           <div className="space-y-4">
             {patients.length === 0 && (
-              <div className="flex items-center gap-3 p-3 bg-destructive-soft rounded-lg">
-                <Users className="h-5 w-5 text-destructive-text" />
+              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+                <Users className="h-5 w-5 text-red-500" />
                 <div>
-                  <p className="text-sm font-medium text-destructive-text">No patients found</p>
-                  <p className="text-xs text-destructive-text">Add at least one patient to create visits</p>
+                  <p className="text-sm font-medium text-red-700">No patients found</p>
+                  <p className="text-xs text-red-600">Add at least one patient to create visits</p>
                 </div>
               </div>
             )}
             
             {doctors.length === 0 && (
-              <div className="flex items-center gap-3 p-3 bg-destructive-soft rounded-lg">
-                <Stethoscope className="h-5 w-5 text-destructive-text" />
+              <div className="flex items-center gap-3 p-3 bg-red-50 rounded-lg">
+                <Stethoscope className="h-5 w-5 text-red-500" />
                 <div>
-                  <p className="text-sm font-medium text-destructive-text">No doctors found</p>
-                  <p className="text-xs text-destructive-text">Add at least one doctor to create visits</p>
+                  <p className="text-sm font-medium text-red-700">No doctors found</p>
+                  <p className="text-xs text-red-600">Add at least one doctor to create visits</p>
                 </div>
               </div>
             )}
@@ -807,8 +807,8 @@ function VisitsPageInner() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-medium text-foreground">Current Role</h3>
-                  <p className="text-xs text-muted-foreground mt-1">{roleInfo.description}</p>
+                  <h3 className="text-sm font-medium text-gray-900">Current Role</h3>
+                  <p className="text-xs text-gray-500 mt-1">{roleInfo.description}</p>
                 </div>
                 <Badge className={roleInfo.color}>
                   {roleInfo.label}
@@ -829,7 +829,7 @@ function VisitsPageInner() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative">
-                <label className="text-sm font-medium text-foreground mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Patient
                 </label>
                 <div className="relative">
@@ -857,12 +857,12 @@ function VisitsPageInner() {
                     }}
                   />
                   {showPatientMenu && (
-                    <div className="absolute z-20 mt-1 w-full bg-card border rounded-md shadow-sm max-h-64 overflow-auto">
+                    <div className="absolute z-20 mt-1 w-full bg-white border rounded-md shadow-sm max-h-64 overflow-auto">
                       {searchingPatients && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>
+                        <div className="px-3 py-2 text-xs text-gray-500">Searching…</div>
                       )}
                       {!searchingPatients && patientOptions.length === 0 && (
-                        <div className="px-3 py-2 text-xs text-muted-foreground">No results</div>
+                        <div className="px-3 py-2 text-xs text-gray-500">No results</div>
                       )}
                       {!searchingPatients && patientOptions.map((p, idx) => (
                         <button
@@ -874,13 +874,13 @@ function VisitsPageInner() {
                             setPatientQuery(p.name || p.phone || p.email || p.id);
                             setShowPatientMenu(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-background' : ''} ${idx === highlightedIndex ? 'bg-info-soft' : ''}`}
+                          className={`w-full text-left px-3 py-2 text-sm ${selectedPatientId === p.id ? 'bg-gray-50' : ''} ${idx === highlightedIndex ? 'bg-blue-50' : ''}`}
                         >
                           <div className="flex items-center gap-2">
                             <Users className="h-4 w-4" />
                             <div className="flex flex-col">
                               <span className="font-medium">{p.name || `Patient ${p.id?.slice(-4) || ''}`}</span>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                              <div className="flex items-center gap-3 text-xs text-gray-500">
                                 <span>ID: {p.id}</span>
                                 {p.phone && <span>📞 {p.phone}</span>}
                                 {p.email && <span>✉️ {p.email}</span>}
@@ -895,7 +895,7 @@ function VisitsPageInner() {
               </div>
 
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
+                <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Select Doctor
                 </label>
                 <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
@@ -910,7 +910,7 @@ function VisitsPageInner() {
                           <span>
                             Dr. {doctor.firstName} {doctor.lastName}
                             {doctor.specialization && (
-                              <span className="text-xs text-muted-foreground ml-2">
+                              <span className="text-xs text-gray-500 ml-2">
                                 {doctor.specialization}
                               </span>
                             )}
@@ -937,8 +937,8 @@ function VisitsPageInner() {
                       <div className="pt-4 border-t">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h4 className="text-sm font-medium text-foreground">Ready to start visit</h4>
-                            <p className="text-xs text-muted-foreground mt-1">
+                            <h4 className="text-sm font-medium text-gray-900">Ready to start visit</h4>
+                            <p className="text-xs text-gray-500 mt-1">
                               Patient: {selectedPatient?.name ?? 'Unknown'} • 
                               Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
                             </p>
@@ -950,8 +950,8 @@ function VisitsPageInner() {
                       </div>
                     )}
                     {!selectedDoctorId && (
-                      <div className="p-4 bg-warning-soft rounded-lg border border-warning-border">
-                        <p className="text-sm text-warning-text">Please select a doctor to start the visit.</p>
+                      <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                        <p className="text-sm text-yellow-800">Please select a doctor to start the visit.</p>
                       </div>
                     )}
                   </TabsContent>
@@ -977,25 +977,25 @@ function VisitsPageInner() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {currentUserRole === 'THERAPIST' && (
                 <>
-                  <div className="flex items-center gap-3 p-3 bg-info-soft rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-info-text" />
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                    <Stethoscope className="h-5 w-5 text-blue-500" />
                     <div>
-                      <p className="text-sm font-medium text-info-text">Vitals Recording</p>
-                      <p className="text-xs text-info-text">BP, HR, Temperature, etc.</p>
+                      <p className="text-sm font-medium text-blue-700">Vitals Recording</p>
+                      <p className="text-xs text-blue-600">BP, HR, Temperature, etc.</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-info-soft rounded-lg">
-                    <User className="h-5 w-5 text-info-text" />
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                    <User className="h-5 w-5 text-blue-500" />
                     <div>
-                      <p className="text-sm font-medium text-info-text">Photo Capture</p>
-                      <p className="text-xs text-info-text">Document patient conditions</p>
+                      <p className="text-sm font-medium text-blue-700">Photo Capture</p>
+                      <p className="text-xs text-blue-600">Document patient conditions</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-info-soft rounded-lg">
-                    <Users className="h-5 w-5 text-info-text" />
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg">
+                    <Users className="h-5 w-5 text-blue-500" />
                     <div>
-                      <p className="text-sm font-medium text-info-text">Basic Assessment</p>
-                      <p className="text-xs text-info-text">Initial observations</p>
+                      <p className="text-sm font-medium text-blue-700">Basic Assessment</p>
+                      <p className="text-xs text-blue-600">Initial observations</p>
                     </div>
                   </div>
                 </>
@@ -1003,25 +1003,25 @@ function VisitsPageInner() {
 
               {currentUserRole === 'NURSE' && (
                 <>
-                  <div className="flex items-center gap-3 p-3 bg-success-soft rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-success-text" />
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                    <Stethoscope className="h-5 w-5 text-green-500" />
                     <div>
-                      <p className="text-sm font-medium text-success-text">Full Vitals</p>
-                      <p className="text-xs text-success-text">Complete vital signs</p>
+                      <p className="text-sm font-medium text-green-700">Full Vitals</p>
+                      <p className="text-xs text-green-600">Complete vital signs</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-success-soft rounded-lg">
-                    <User className="h-5 w-5 text-success-text" />
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                    <User className="h-5 w-5 text-green-500" />
                     <div>
-                      <p className="text-sm font-medium text-success-text">Photo & Complaints</p>
-                      <p className="text-xs text-success-text">Document and record issues</p>
+                      <p className="text-sm font-medium text-green-700">Photo & Complaints</p>
+                      <p className="text-xs text-green-600">Document and record issues</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-success-soft rounded-lg">
-                    <Users className="h-5 w-5 text-success-text" />
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-lg">
+                    <Users className="h-5 w-5 text-green-500" />
                     <div>
-                      <p className="text-sm font-medium text-success-text">Assessment Notes</p>
-                      <p className="text-xs text-success-text">Preliminary findings</p>
+                      <p className="text-sm font-medium text-green-700">Assessment Notes</p>
+                      <p className="text-xs text-green-600">Preliminary findings</p>
                     </div>
                   </div>
                 </>
@@ -1029,25 +1029,25 @@ function VisitsPageInner() {
 
               {currentUserRole === 'DOCTOR' && (
                 <>
-                  <div className="flex items-center gap-3 p-3 bg-highlight-soft rounded-lg">
-                    <Stethoscope className="h-5 w-5 text-highlight-text" />
+                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
+                    <Stethoscope className="h-5 w-5 text-purple-500" />
                     <div>
-                      <p className="text-sm font-medium text-highlight-text">Complete Documentation</p>
-                      <p className="text-xs text-highlight-text">Full SOAP notes</p>
+                      <p className="text-sm font-medium text-purple-700">Complete Documentation</p>
+                      <p className="text-xs text-purple-600">Full SOAP notes</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-highlight-soft rounded-lg">
-                    <User className="h-5 w-5 text-highlight-text" />
+                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
+                    <User className="h-5 w-5 text-purple-500" />
                     <div>
-                      <p className="text-sm font-medium text-highlight-text">Dermatology Specific</p>
-                      <p className="text-xs text-highlight-text">Specialized assessments</p>
+                      <p className="text-sm font-medium text-purple-700">Dermatology Specific</p>
+                      <p className="text-xs text-purple-600">Specialized assessments</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 p-3 bg-highlight-soft rounded-lg">
-                    <Users className="h-5 w-5 text-highlight-text" />
+                  <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-lg">
+                    <Users className="h-5 w-5 text-purple-500" />
                     <div>
-                      <p className="text-sm font-medium text-highlight-text">Treatment Planning</p>
-                      <p className="text-xs text-highlight-text">Complete care plans</p>
+                      <p className="text-sm font-medium text-purple-700">Treatment Planning</p>
+                      <p className="text-xs text-purple-600">Complete care plans</p>
                     </div>
                   </div>
                 </>
@@ -1066,17 +1066,17 @@ function VisitsPageInner() {
           <div className="flex items-center gap-2">
             <PageHeader title={<>Visit Documentation</>} />
             {appointmentData && (
-              <Badge variant="secondary" className="bg-info-soft text-info-text">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-700">
                 <Calendar className="h-3 w-3 mr-1" />
                 From Appointment
               </Badge>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-gray-600">
             Patient: {selectedPatient?.name ?? 'Unknown'} • 
             Doctor: Dr. {selectedDoctor?.firstName} {selectedDoctor?.lastName}
             {appointmentData && (
-              <span className="ml-2 text-info-text">
+              <span className="ml-2 text-blue-600">
                 • {appointmentData.slot} • {appointmentData.visitType}
               </span>
             )}

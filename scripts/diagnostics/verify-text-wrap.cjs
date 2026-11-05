@@ -70,6 +70,36 @@ async function measure(page) {
   }, patientName);
 }
 
+async function verifyControls(page) {
+  return page.evaluate(() => {
+    const text = 'Long clinical label with ConfirmationReferenceWithoutWhitespace';
+    const sources = [
+      ['button', [...document.querySelectorAll('[data-slot="button"]')].find(e => e.textContent.includes('Quick Guide'))],
+      ['select', document.querySelector('[data-slot="select-trigger"]')],
+      ['badge', document.querySelector('[data-slot="badge"]')],
+      ['heading', document.querySelector('h1')?.parentElement?.parentElement],
+    ];
+    return sources.map(([name, source]) => {
+      if (!source) throw new Error(`Missing real ${name} component for label probe`);
+      const host = document.createElement('div');
+      host.style.cssText = 'position:fixed;top:60px;left:10px;width:160px;z-index:9999;background:white';
+      const control = source.cloneNode(true);
+      const target = name === 'select' ? control.querySelector('[data-slot="select-value"]') : name === 'heading' ? control.querySelector('h1') : control;
+      target.textContent = text;
+      host.append(control);
+      document.body.append(host);
+      const box = control.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const rects = [...range.getClientRects()].filter(r => r.width && r.height);
+      const fits = rects.length > 1 && rects.every(r => r.left >= box.left - 1 && r.right <= box.right + 1 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1) && box.width <= 161;
+      host.remove();
+      if (!fits) throw new Error(`${name} label did not wrap inside 160px`);
+      return name;
+    });
+  });
+}
+
 (async () => {
   await fs.mkdir(output, { recursive: true });
   const browser = process.env.WRAP_BROWSER === 'chrome'
@@ -101,6 +131,7 @@ async function measure(page) {
         await page.waitForSelector('[role="dialog"]');
         const dialogText = await page.$eval('[role="dialog"]', e => e.textContent);
         assert.ok(dialogText.includes(patientName), 'Appointment details remain reachable');
+        result.wrappingControls = await verifyControls(page);
       }
     }
 

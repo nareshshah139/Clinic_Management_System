@@ -357,7 +357,7 @@ export function PurchaseSourcePreview({
                 <strong>{selected.label}</strong> · captured: {region.value}
               </p>
               {sourceValueChanged(region.value, selected.value) && (
-                <p className="text-warning-text dark:text-warning-text">
+                <p className="text-amber-800 dark:text-amber-300">
                   Edited value: {selected.value || "Blank"}. The highlight still
                   refers to the original reading.
                 </p>

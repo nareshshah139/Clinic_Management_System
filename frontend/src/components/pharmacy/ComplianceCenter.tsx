@@ -163,9 +163,9 @@ function SummaryMetric({
 }) {
   const toneClass =
     tone === "good"
-      ? "text-success-text"
+      ? "text-emerald-700"
       : tone === "warn"
-        ? "text-warning-text"
+        ? "text-amber-700"
         : "text-foreground";
   return (
     <div className="min-w-0 rounded-md border bg-background p-3">

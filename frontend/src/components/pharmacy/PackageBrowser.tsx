@@ -343,7 +343,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
               {selectedPackage.instructions && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-success-text" />
+                    <CheckCircle className="h-4 w-4 text-green-500" />
                     Usage Instructions
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.instructions}</p>
@@ -353,7 +353,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
               {selectedPackage.indications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-info-text" />
+                    <CheckCircle className="h-4 w-4 text-blue-500" />
                     Indications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.indications}</p>
@@ -363,7 +363,7 @@ export function PackageBrowser({ onSelectPackage, reloadKey }: PackageBrowserPro
               {selectedPackage.contraindications && (
                 <div>
                   <h4 className="font-semibold mb-2 flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-destructive-text" />
+                    <AlertTriangle className="h-4 w-4 text-red-500" />
                     Contraindications
                   </h4>
                   <p className="text-sm text-muted-foreground">{selectedPackage.contraindications}</p>

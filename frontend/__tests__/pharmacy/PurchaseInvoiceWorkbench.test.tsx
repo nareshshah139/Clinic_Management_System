@@ -661,7 +661,7 @@ describe('PurchaseInvoiceWorkbench', () => {
   it('keeps printed corrections independent and blocks unreconciled final submission', async () => {
     renderSavedInvoice();
     await editSelectedInvoice();
-    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-success-border');
+    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
     fireEvent.change(screen.getByLabelText('Reported Net payable'), { target: { value: '130' } });
     fireEvent.click(await reviewConfirmation());
     expect(await screen.findByText(/Printed Net payable differs from the calculated amount/)).toBeVisible();
@@ -676,7 +676,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     const remove = screen.getByRole('button', { name: 'Remove line 2', hidden: true });
     fireEvent.click(remove);
     expect(screen.getAllByLabelText('Product')).toHaveLength(1);
-    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-success-border');
+    expect(screen.getByLabelText('Batch')).not.toHaveClass('border-emerald-600');
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
   });
 
@@ -2357,9 +2357,9 @@ describe('PurchaseInvoiceWorkbench', () => {
     api.updatePharmacyPurchaseInvoiceDraft.mockImplementation(async (_id, payload: any) => ({ ...saved, ...payload, items: payload.items.map((item: any, index: number) => ({ ...item, id: saved.items[index].id })), unresolvedOcrFlags: 0 }));
     const view = renderSavedInvoice(flagged);
     await editSelectedInvoice();
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-warning-border');
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-amber-600');
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: 'CORRECTED-BATCH' } });
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-success-border');
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-emerald-600');
     saveCurrentInvoice();
     await waitFor(() => expect(api.updatePharmacyPurchaseInvoiceDraft).toHaveBeenLastCalledWith('pinv-1', expect.objectContaining({ items: [expect.objectContaining({ batchNumber: 'CORRECTED-BATCH', ocrFlags: [] })] })));
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();
@@ -2367,7 +2367,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     render(<PurchaseInvoiceWorkbench invoiceId="pinv-1" />);
     await screen.findByDisplayValue('CORRECTED-BATCH');
     fireEvent.change(screen.getByLabelText('Batch'), { target: { value: '' } });
-    expect(screen.getByLabelText('Batch')).toHaveClass('border-destructive-border');
+    expect(screen.getByLabelText('Batch')).toHaveClass('border-red-600');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
   });
 
@@ -2380,7 +2380,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     saveCurrentInvoice();
     await reviewConfirmation();
     fireEvent.change(screen.getByLabelText('Distributor'), { target: { value: 'Corrected supplier' } });
-    expect(screen.getByLabelText('GSTIN')).toHaveClass('border-warning-border');
+    expect(screen.getByLabelText('GSTIN')).toHaveClass('border-amber-600');
     expect(await screen.findByText('1 check to finish')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /I verified the invoice against the original/ })).not.toBeInTheDocument();
     const recovery = JSON.parse(sessionStorage.getItem('purchase-intake:branch-1:user-1:pinv-1')!);
@@ -2393,7 +2393,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     renderSavedInvoice({ ...draftInvoice, distributorDlNo: 'DL-TEST', unresolvedOcrFlags: 1, items: [{ ...draftInvoice.items[0], packUnitType: 'Strip', expiryMonth: 13, ocrFlags: ['uncertain_expiry'] }] });
     await editSelectedInvoice();
     expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByLabelText('Exp. Year')).toHaveClass('border-destructive-border');
+    expect(screen.getByLabelText('Exp. Year')).toHaveClass('border-red-600');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
     saveCurrentInvoice();
     const validationFeedback = screen.getByText('Fix Required').closest('[role="alert"]') as HTMLElement;
@@ -2403,7 +2403,7 @@ describe('PurchaseInvoiceWorkbench', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save draft' })).toBeEnabled());
     fireEvent.change(screen.getByLabelText('Exp. Month'), { target: { value: '12' } });
     expect(screen.queryByRole('button', { name: 'Confirm line 1 expiry checked' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Exp. Month')).toHaveClass('border-success-border');
+    expect(screen.getByLabelText('Exp. Month')).toHaveClass('border-emerald-600');
     fireEvent.change(screen.getByLabelText('Exp. Year'), { target: { value: '' } });
     expect(screen.getByLabelText('Exp. Month')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('button', { name: 'Confirm reviewed values & add stock' })).toBeDisabled();
@@ -2540,8 +2540,8 @@ describe('PurchaseInvoiceWorkbench', () => {
     fireEvent.click(within(checks).getByRole('button', { name: 'Back to review' }));
     expect(document.getElementById('purchase-review-checklist')).toHaveFocus();
     expect(checks).toHaveTextContent('2 checks to review');
-    expect(screen.getByLabelText('GSTIN')).toHaveClass('border-warning-border');
-    expect(screen.getByLabelText('HSN')).toHaveClass('border-warning-border');
+    expect(screen.getByLabelText('GSTIN')).toHaveClass('border-amber-600');
+    expect(screen.getByLabelText('HSN')).toHaveClass('border-amber-600');
     expect(api.updatePharmacyPurchaseInvoiceDraft).not.toHaveBeenCalled();
     expect(api.reviewPharmacyPurchaseInvoice).not.toHaveBeenCalled();
     expect(api.commitPharmacyPurchaseInvoiceStock).not.toHaveBeenCalled();

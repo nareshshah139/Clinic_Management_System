@@ -71,7 +71,7 @@ function AppointmentsPageInner() {
         <CardContent className="pt-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div data-tour="doctor-select">
-              <label className="text-sm text-foreground">Doctor</label>
+              <label className="text-sm text-gray-700">Doctor</label>
               <Select value={doctorId} onValueChange={setDoctorId}>
                 <SelectTrigger><SelectValue placeholder="Select doctor" /></SelectTrigger>
                 <SelectContent>
@@ -82,11 +82,11 @@ function AppointmentsPageInner() {
               </Select>
             </div>
             <div data-tour="date-picker">
-              <label className="text-sm text-foreground">Date</label>
+              <label className="text-sm text-gray-700">Date</label>
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm text-foreground">&nbsp;</label>
+              <label className="text-sm text-gray-700">&nbsp;</label>
               <Button
                 variant="outline"
                 className="w-full flex items-center justify-center gap-2"
@@ -104,12 +104,12 @@ function AppointmentsPageInner() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Info className="h-5 w-5 text-info-text" />
+              <Info className="h-5 w-5 text-blue-600" />
               Quick Guide
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <ul className="text-sm text-foreground space-y-2">
+            <ul className="text-sm text-gray-700 space-y-2">
               <li>• <strong>Search patient</strong> by name or phone, then <strong>click any free slot</strong> to book</li>
               <li>• Calendar auto-finds 15-min slots even in larger grid views</li>
               <li>• <strong>Single-click</strong> to book, <strong>double-click</strong> appointment to view/edit/cancel</li>

@@ -487,10 +487,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Invoices</p>
+                <p className="text-sm text-gray-600">Total Invoices</p>
                 <p className="text-2xl font-bold">{invoices.length}</p>
               </div>
-              <FileText className="h-8 w-8 text-info-text" />
+              <FileText className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -499,10 +499,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Amount</p>
+                <p className="text-sm text-gray-600">Total Amount</p>
                 <p className="text-2xl font-bold">₹{stats.totalAmount.toFixed(2)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-success-text" />
+              <DollarSign className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -511,10 +511,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Completed</p>
+                <p className="text-sm text-gray-600">Completed</p>
                 <p className="text-2xl font-bold">{stats.completedInvoices}</p>
               </div>
-              <Calendar className="h-8 w-8 text-highlight-text" />
+              <Calendar className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -523,10 +523,10 @@ export function PharmacyInvoiceList() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Pending Amount</p>
+                <p className="text-sm text-gray-600">Pending Amount</p>
                 <p className="text-2xl font-bold">₹{stats.pendingAmount.toFixed(2)}</p>
               </div>
-              <CreditCard className="h-8 w-8 text-warning-text" />
+              <CreditCard className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
@@ -539,7 +539,7 @@ export function PharmacyInvoiceList() {
             <div>
               <Label>Search</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Invoice number, patient..."
                   value={searchQuery}
@@ -669,7 +669,7 @@ export function PharmacyInvoiceList() {
           ) : (
             <div className="space-y-4">
               {invoices.map((invoice) => (
-                <div key={invoice.id} className="border rounded-lg p-4 hover:bg-background">
+                <div key={invoice.id} className="border rounded-lg p-4 hover:bg-gray-50">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
@@ -678,7 +678,7 @@ export function PharmacyInvoiceList() {
                         <StatusBadge domain="invoice" status={invoice.paymentStatus} />
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-muted-foreground">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm text-gray-600">
                         <div>
                           <p><strong>Patient:</strong> {invoice.patient.name}</p>
                           <p><strong>Phone:</strong> {invoice.billingPhone}</p>
@@ -700,16 +700,16 @@ export function PharmacyInvoiceList() {
                       </div>
                       
                       {/* Items Preview */}
-                      <div className="mt-3 p-3 bg-background rounded-md">
+                      <div className="mt-3 p-3 bg-gray-50 rounded-md">
                         <p className="text-sm font-medium mb-2">Items:</p>
                         <div className="space-y-1">
                           {invoice.items.slice(0, 2).map((item) => (
-                            <p key={item.id} className="text-sm text-muted-foreground">
+                            <p key={item.id} className="text-sm text-gray-600">
                               • {((item as any)?.drug?.name) || ((item as any)?.package?.name) || 'Item'} - Qty: {item.quantity} - ₹{item.totalAmount.toFixed(2)}
                             </p>
                           ))}
                           {invoice.items.length > 2 && (
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-sm text-gray-500">
                               +{invoice.items.length - 2} more items...
                             </p>
                           )}
@@ -739,7 +739,7 @@ export function PharmacyInvoiceList() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleMarkAsPaid(invoice)}
-                          className="text-success-text hover:text-success-text hover:bg-success-soft"
+                          className="text-green-600 hover:text-green-700 hover:bg-green-50"
                           title={pendingPaymentIds.includes(invoice.id) ? "Retry Payment" : "Mark as Paid"}
                         >
                           <CheckCircle className="h-4 w-4" />
@@ -751,7 +751,7 @@ export function PharmacyInvoiceList() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleConfirmInvoice(invoice.id)}
-                            className="text-info-text hover:text-info-text hover:bg-info-soft"
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                             title="Confirm Invoice"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -770,7 +770,7 @@ export function PharmacyInvoiceList() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteInvoice(invoice.id)}
-                        className="text-destructive-text hover:text-destructive-text"
+                        className="text-red-500 hover:text-red-700"
                         title="Delete Invoice"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -792,7 +792,7 @@ export function PharmacyInvoiceList() {
                     Previous
                   </Button>
                   
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-gray-600">
                     Page {pagination.page} of {pagination.pages}
                   </span>
                   

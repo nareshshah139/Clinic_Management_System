@@ -8,3 +8,4 @@ frontend_tests	Existing behavior assertions retained; palette expectations updat
 browser_evidence	Screenshot target changed from palette CSS to named import-results region present in both layouts; Created/Skipped predicate and behavior assertions retained
 verification	PASS: check_presentations.cjs, check_knowledge.py and check_model.py using z3-solver 5.3.1.0; CI independently enforces the refreshed source mapping
 model_results	All state counts, recovery outcomes, six SMT obligations and mutation results unchanged; regenerated counterexamples vary only in tied reason-field selection
+palette_reversion_review	Six fingerprints refreshed after independent review against 6a3d401; eight color class strings and ten palette test expectations changed; handlers, guards, identity, navigation, ACTION_MAP, edge-bindings and backend unchanged

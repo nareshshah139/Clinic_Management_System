@@ -551,8 +551,8 @@ export function AgenticPharmacyDock() {
   };
 
   return (
-    <section className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm">
-      <div className="flex flex-col items-start justify-between gap-3 border-b border-border bg-card px-4 py-3 text-foreground sm:flex-row sm:items-center">
+    <section className="flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-col items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-3 text-slate-950 sm:flex-row sm:items-center">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <Bot className="h-5 w-5" />
@@ -561,8 +561,8 @@ export function AgenticPharmacyDock() {
               variant="outline"
               className={
                 codexReady
-                  ? "border-success-border bg-success-soft text-success-text"
-                  : "border-warning-border bg-warning-soft text-warning-text"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-amber-200 bg-amber-50 text-amber-700"
               }
             >
               {codexReady === null
@@ -572,12 +572,12 @@ export function AgenticPharmacyDock() {
                   : "Assistant unavailable"}
             </Badge>
             {pendingProposalCount > 0 && (
-              <Badge className="bg-warning text-warning-foreground">
+              <Badge className="bg-amber-400 text-slate-950">
                 {pendingProposalCount} pending
               </Badge>
             )}
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-1 text-xs text-slate-500">
             Ask questions, attach pharmacy files, generate charts, and review
             suggested changes to pharmacy records.
           </p>
@@ -657,22 +657,22 @@ export function AgenticPharmacyDock() {
         <div className="flex min-h-0 flex-col">
           <div
             ref={scrollRef}
-            className="min-h-[360px] flex-1 space-y-3 overflow-y-auto bg-background p-3"
+            className="min-h-[360px] flex-1 space-y-3 overflow-y-auto bg-slate-50 p-3"
           >
             {isHistoryThread && (
-              <div className="rounded-md border border-warning-border bg-warning-soft p-3 text-sm text-warning-text">
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                 This thread is in history. Restore it to continue the
                 conversation.
               </div>
             )}
             {creating && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Spinner className="h-4 w-4 " />
                 Starting chat
               </div>
             )}
             {messages.length === 0 && !creating && (
-              <div className="rounded-md border border-dashed border-border bg-card p-4 text-sm text-muted-foreground">
+              <div className="rounded-md border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-600">
                 Ask about stock, billing, purchase invoices, ledger, compliance,
                 or attach a pharmacy file.
               </div>
@@ -682,8 +682,8 @@ export function AgenticPharmacyDock() {
                 key={message.id}
                 className={
                   message.role === "user"
-                    ? "ml-auto max-w-[86%] rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
-                    : "mr-auto max-w-[92%] rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground"
+                    ? "ml-auto max-w-[86%] rounded-md bg-slate-950 px-3 py-2 text-sm text-white"
+                    : "mr-auto max-w-[92%] rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
                 }
               >
                 <p className="whitespace-pre-wrap leading-relaxed">
@@ -693,7 +693,7 @@ export function AgenticPharmacyDock() {
                   <AgentChart chart={message.structured.chart} />
                 )}
                 {message.structured?.report && (
-                  <div className="mt-3 rounded-md border border-info-border bg-info-soft p-3 text-xs text-info-text">
+                  <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 p-3 text-xs text-blue-950">
                     <div className="font-semibold">
                       {String(message.structured.report.title || "Report")}
                     </div>
@@ -717,14 +717,14 @@ export function AgenticPharmacyDock() {
               </div>
             )}
             {sending && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Spinner className="h-4 w-4 " />
                 Codex is working
               </div>
             )}
           </div>
 
-          <div className="border-t border-border bg-card p-3">
+          <div className="border-t border-slate-200 bg-white p-3">
             {selectedAttachmentIds.length > 0 && (
               <div className="mb-2 flex flex-wrap gap-1.5">
                 {attachments
@@ -735,7 +735,7 @@ export function AgenticPharmacyDock() {
                     <button
                       key={attachment.id}
                       type="button"
-                      className="inline-flex max-w-full items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+                      className="inline-flex max-w-full items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs text-slate-700"
                       onClick={() =>
                         setSelectedAttachmentIds((prev) =>
                           prev.filter((id) => id !== attachment.id),
@@ -816,10 +816,10 @@ export function AgenticPharmacyDock() {
           </div>
         </div>
 
-        <div className="hidden min-h-0 border-l border-border bg-card md:flex md:flex-col">
-          <div className="border-b border-border px-3 py-2">
+        <div className="hidden min-h-0 border-l border-slate-200 bg-white md:flex md:flex-col">
+          <div className="border-b border-slate-200 px-3 py-2">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Proposals
               </div>
               <Badge variant="secondary">{pendingProposalCount}</Badge>
@@ -827,7 +827,7 @@ export function AgenticPharmacyDock() {
           </div>
           <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
             {proposals.length === 0 ? (
-              <div className="rounded-md border border-border p-3 text-sm text-muted-foreground">
+              <div className="rounded-md border border-slate-200 p-3 text-sm text-slate-500">
                 No pending updates.
               </div>
             ) : (
@@ -871,14 +871,14 @@ function ThreadRail({
   threadAction: ThreadActionState;
 }) {
   return (
-    <aside className="border-b border-border bg-background md:min-h-0 md:border-b-0 md:border-r">
-      <div className="border-b border-border px-3 py-2">
+    <aside className="border-b border-slate-200 bg-slate-50 md:min-h-0 md:border-b-0 md:border-r">
+      <div className="border-b border-slate-200 px-3 py-2">
         <div className="flex items-center justify-between">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             Chats
           </div>
           {loading && (
-            <Spinner className="h-3.5 w-3.5  text-muted-foreground" />
+            <Spinner className="h-3.5 w-3.5  text-slate-400" />
           )}
         </div>
       </div>
@@ -895,7 +895,7 @@ function ThreadRail({
         />
         <button
           type="button"
-          className="mt-4 flex w-full items-center justify-between rounded-md px-1 py-1 text-xs font-medium text-muted-foreground hover:bg-card hover:text-foreground"
+          className="mt-4 flex w-full items-center justify-between rounded-md px-1 py-1 text-xs font-medium text-slate-500 hover:bg-white hover:text-slate-800"
           onClick={onToggleHistory}
         >
           <span className="flex items-center gap-1.5">
@@ -954,12 +954,12 @@ function ThreadSection({
 }) {
   return (
     <div className={className}>
-      <div className="mb-2 flex items-center gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+      <div className="mb-2 flex items-center gap-1.5 px-1 text-xs font-medium text-slate-500">
         {icon}
         {title}
       </div>
       {sessions.length === 0 ? (
-        <div className="rounded-md border border-dashed border-border bg-card px-2 py-2 text-xs text-muted-foreground">
+        <div className="rounded-md border border-dashed border-slate-200 bg-white px-2 py-2 text-xs text-slate-400">
           {emptyText}
         </div>
       ) : (
@@ -1005,8 +1005,8 @@ function ThreadListItem({
   return (
     <div
       className={cn(
-        "rounded-md border bg-card p-2",
-        selected ? "border-border" : "border-border",
+        "rounded-md border bg-white p-2",
+        selected ? "border-slate-900" : "border-slate-200",
       )}
     >
       <button
@@ -1015,21 +1015,21 @@ function ThreadListItem({
         onClick={onSelect}
       >
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0 truncate text-xs font-semibold text-foreground">
+          <div className="min-w-0 truncate text-xs font-semibold text-slate-900">
             {pharmacyChatTitle(session.title)}
           </div>
           {session.pendingProposalCount ? (
-            <Badge className="h-5 bg-warning px-1.5 text-xs text-warning-foreground">
+            <Badge className="h-5 bg-amber-400 px-1.5 text-xs text-slate-950">
               {session.pendingProposalCount}
             </Badge>
           ) : null}
         </div>
         {session.lastMessage && (
-          <div className="mt-1 line-clamp-2 text-xs leading-snug text-muted-foreground">
+          <div className="mt-1 line-clamp-2 text-xs leading-snug text-slate-500">
             {session.lastMessage}
           </div>
         )}
-        <div className="mt-1 text-xs uppercase tracking-wide text-muted-foreground">
+        <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
           {isArchived ? "History" : "Active"}
         </div>
       </button>
@@ -1083,13 +1083,13 @@ function ProposalCard({
 }) {
   const pending = proposal.status === "PENDING_REVIEW";
   return (
-    <div className="rounded-md border border-border bg-background p-3">
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-foreground">
+          <div className="truncate text-sm font-semibold text-slate-900">
             {proposal.title}
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">
             {proposal.summary}
           </p>
         </div>
@@ -1113,16 +1113,16 @@ function ProposalCard({
         {proposal.actions.map((action) => (
           <div
             key={action.id}
-            className="rounded-md border border-current bg-card px-2 py-1.5 text-xs"
+            className="rounded-md border border-white bg-white px-2 py-1.5 text-xs"
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-slate-700">
                 {pharmacyProposalLabel("action", action.actionType)}
               </span>
-              <span className="text-muted-foreground">{pharmacyProposalLabel("target", action.targetType)}</span>
+              <span className="text-slate-400">{pharmacyProposalLabel("target", action.targetType)}</span>
             </div>
             {action.permissionRequired && (
-              <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <div className="mt-1 flex items-center gap-1 text-xs text-slate-500">
                 <ShieldCheck className="h-3 w-3" />
                 {pharmacyProposalLabel("permission", action.permissionRequired)}
               </div>
@@ -1171,8 +1171,8 @@ function AgentChart({ chart }: { chart: ChartSpec }) {
   if (data.length === 0) return null;
 
   return (
-    <div className="mt-3 rounded-md border border-border bg-card p-3">
-      <div className="mb-2 text-xs font-semibold text-muted-foreground">
+    <div className="mt-3 rounded-md border border-slate-200 bg-white p-3">
+      <div className="mb-2 text-xs font-semibold text-slate-600">
         {chart.title || "Chart"}
       </div>
       <div className="h-52 w-full">

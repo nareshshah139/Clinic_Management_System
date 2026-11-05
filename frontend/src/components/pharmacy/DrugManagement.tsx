@@ -285,7 +285,7 @@ export function DrugManagement() {
       <PageHeader title="Drug Database" description="Manage your pharmacy's drug inventory" actions={
         <Button
           onClick={() => setShowAddDialog(true)}
-          className="bg-info hover:bg-info"
+          className="bg-blue-600 hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add New Drug
@@ -298,12 +298,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Total Drugs</p>
+                <p className="text-sm text-gray-600">Total Drugs</p>
                 <p className="text-2xl font-bold">
                   {pagination.total.toLocaleString()}
                 </p>
               </div>
-              <Pill className="h-8 w-8 text-info-text" />
+              <Pill className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
@@ -312,10 +312,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Categories</p>
+                <p className="text-sm text-gray-600">Categories</p>
                 <p className="text-2xl font-bold">{categories.length}</p>
               </div>
-              <Package className="h-8 w-8 text-success-text" />
+              <Package className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -324,10 +324,10 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Manufacturers</p>
+                <p className="text-sm text-gray-600">Manufacturers</p>
                 <p className="text-2xl font-bold">{manufacturers.length}</p>
               </div>
-              <Building className="h-8 w-8 text-highlight-text" />
+              <Building className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
@@ -336,12 +336,12 @@ export function DrugManagement() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-muted-foreground">Active Drugs</p>
+                <p className="text-sm text-gray-600">Active Drugs</p>
                 <p className="text-2xl font-bold">
                   {drugs.filter((d) => d.isActive).length}
                 </p>
               </div>
-              <Calendar className="h-8 w-8 text-warning-text" />
+              <Calendar className="h-8 w-8 text-orange-600" />
             </div>
           </CardContent>
         </Card>
@@ -354,7 +354,7 @@ export function DrugManagement() {
             <div>
               <Label>Search Drugs</Label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search by name, composition..."
                   value={searchQuery}
@@ -436,7 +436,7 @@ export function DrugManagement() {
               {drugs.map((drug) => (
                 <div
                   key={drug.id}
-                  className="border rounded-lg p-4 hover:bg-background"
+                  className="border rounded-lg p-4 hover:bg-gray-50"
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -453,7 +453,7 @@ export function DrugManagement() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                         <div>
                           <p>
                             <strong>Manufacturer:</strong>{' '}
@@ -488,7 +488,7 @@ export function DrugManagement() {
                       </div>
 
                       {drug.composition2 && (
-                        <p className="text-sm text-info-text mt-2">
+                        <p className="text-sm text-blue-600 mt-2">
                           <strong>Additional:</strong> {drug.composition2}
                         </p>
                       )}
@@ -506,7 +506,7 @@ export function DrugManagement() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleDeleteDrug(drug.id)}
-                        className="text-destructive-text hover:text-destructive-text"
+                        className="text-red-500 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -532,7 +532,7 @@ export function DrugManagement() {
                     Previous
                   </Button>
 
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-sm text-gray-600">
                     Page {pagination.page} of {pagination.pages}
                   </span>
 

@@ -36,9 +36,9 @@ export function batchState(item: any, now = new Date()) {
 export function batchRowClass(item: any, now = new Date()) {
   const tone = batchReviewTone(item, now);
   if (tone === 'neutral') return 'bg-muted/60 text-foreground [&_.text-muted-foreground]:text-foreground/80';
-  if (tone === 'error') return 'bg-destructive-soft dark:bg-destructive/30';
-  if (tone === 'warning') return 'bg-warning-soft dark:bg-warning/30';
-  return 'bg-success-soft dark:bg-success/30';
+  if (tone === 'error') return 'bg-red-50 dark:bg-red-950/30';
+  if (tone === 'warning') return 'bg-amber-50 dark:bg-amber-950/30';
+  return 'bg-emerald-50 dark:bg-emerald-950/30';
 }
 
 /**
