@@ -3,7 +3,7 @@
 import { displayCalendarDate } from '@/lib/date-display';
 import { Spinner } from '@/components/ui/spinner';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
-import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -51,6 +51,44 @@ export interface DoctorDayCalendarProps {
   selectedRoomName?: string;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] non-overlapping-calendar-lanes
+ * Appointments that overlap in time MUST occupy disjoint horizontal lanes.
+ * Every connected overlap group MUST use one lane width; touching endpoints may reuse a lane.
+ */
+function getAppointmentLanes(appointments: AppointmentInSlot[]) {
+  const intervals = appointments.map(appointment => {
+    const [start, end] = appointment.slot.split('-').map(hhmmToMinutes);
+    return { appointment, start, end };
+  }).filter(interval => Number.isFinite(interval.start) && Number.isFinite(interval.end) && interval.end > interval.start)
+    .sort((a, b) => a.start - b.start || a.end - b.end || String(a.appointment.id).localeCompare(String(b.appointment.id)));
+  const groups: typeof intervals[] = [];
+  let groupEnd = -Infinity;
+  for (const interval of intervals) {
+    if (interval.start >= groupEnd) groups.push([]);
+    groups[groups.length - 1].push(interval);
+    groupEnd = Math.max(groupEnd, interval.end);
+  }
+  const lanes = new Map<AppointmentInSlot, { left: number; width: number }>();
+  for (const group of groups) {
+    const ends: number[] = [];
+    const assignments = group.map(interval => {
+      const available = ends.findIndex(end => end <= interval.start);
+      const column = available < 0 ? ends.length : available;
+      ends[column] = interval.end;
+      return { appointment: interval.appointment, column };
+    });
+    const width = 100 / ends.length;
+    assignments.forEach(({ appointment, column }) => lanes.set(appointment, { left: column * width, width }));
+  }
+  return lanes;
+}
+
+/**
+ * @cc [owner:nareshshah139,label:accessibility] appointment-text-containment
+ * Appointment text and actions MUST fit inside their time span when labels wrap.
+ * Resizing or text scaling MUST preserve a uniform time scale and aligned hour labels.
+ */
 export default function DoctorDayCalendar({ 
   doctorId, 
   date, 
@@ -73,6 +111,8 @@ export default function DoctorDayCalendar({
 }: DoctorDayCalendarProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const calendarGrid = useRef<HTMLDivElement>(null);
+  const [pixelsPerMinute, setPixelsPerMinute] = useState(0);
   const [schedule, setSchedule] = useState<AppointmentInSlot[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,8 +136,7 @@ export default function DoctorDayCalendar({
     stepMinutes: Math.max(5, timeSlotConfig.stepMinutes || 10),
     timezone: timeSlotConfig.timezone,
   }), [timeSlotConfig.startHour, timeSlotConfig.endHour, timeSlotConfig.stepMinutes, timeSlotConfig.timezone]);
-  // Tile height so the entire day grid fits in ~80% of the viewport
-  const tileHeightCss = useMemo(() => `calc(80vh / ${Math.max(1, baseGridSlots.length)})`, [baseGridSlots.length]);
+  const tileHeightCss = `max(calc(80vh / ${Math.max(1, baseGridSlots.length)}), ${pixelsPerMinute * Math.max(5, timeSlotConfig.stepMinutes || 10)}px)`;
   const cleanupTimeouts = useMemo(() => createCleanupTimeouts(), []);
   const roomFilterLabel = roomFilter !== 'ALL' ? (selectedRoomName ?? 'Unknown Room') : undefined;
 
@@ -135,7 +174,25 @@ export default function DoctorDayCalendar({
     });
   }, [schedule, visitTypeFilter, roomFilter, optimisticAppointment]);
 
-  // Build quick lookup for overlap checks
+  const appointmentLanes = useMemo(() => getAppointmentLanes(filteredSchedule), [filteredSchedule]);
+
+  useEffect(() => {
+    const grid = calendarGrid.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return;
+    const content = [...grid.querySelectorAll<HTMLElement>('[data-appointment-content]')];
+    const measure = () => {
+      const required = content.reduce((scale, element) => {
+        const minutes = Number(element.dataset.durationMinutes);
+        return minutes > 0 ? Math.max(scale, (element.scrollHeight + 4) / minutes) : scale;
+      }, 0);
+      setPixelsPerMinute(current => Math.abs(current - required) < 0.05 ? current : required);
+    };
+    const observer = new ResizeObserver(measure);
+    content.forEach(element => observer.observe(element));
+    measure();
+    return () => observer.disconnect();
+  }, [filteredSchedule, loading, timeSlotConfig.startHour, timeSlotConfig.endHour]);
+
   const bookedBySlot = useMemo(() => new Map(filteredSchedule.map(a => [a.slot, a])), [filteredSchedule]);
   const showLoadingOverlay = loading && (schedule.length > 0 || !!optimisticAppointment);
 
@@ -355,9 +412,9 @@ export default function DoctorDayCalendar({
                 <span className="mt-2 text-sm font-medium text-info-text">Refreshing schedule…</span>
               </div>
             )}
-            <div className="flex">
+            <div className="flex max-h-[80vh] overflow-y-auto">
               {/* Sticky left gutter with hour labels */}
-              <div className="w-14 sticky left-0 top-0 self-start z-10 bg-card/80 backdrop-blur-sm">
+              <div className="w-14 shrink-0 sticky left-0 self-start z-10 bg-card/80 backdrop-blur-sm">
                 {baseGridSlots.map((slot) => {
                   const slotStart = slot.split('-')[0];
                   const isHourStart = slotStart.endsWith(':00');
@@ -372,7 +429,8 @@ export default function DoctorDayCalendar({
               </div>
               {/* Main calendar grid */}
               <div
-                className="flex-1 grid grid-cols-1 gap-0"
+                ref={calendarGrid}
+                className="min-w-0 h-max flex-1 grid grid-cols-1 gap-0"
                 style={{ position: 'relative', ...(showLoadingOverlay ? { pointerEvents: 'none', opacity: 0.6 } : {}) }}
               >
             {/* Appointment-level background overlays across full spans (merges cells visually) */}
@@ -395,7 +453,6 @@ export default function DoctorDayCalendar({
                 if (apt.visitType === 'TELEMED') return 'var(--highlight-soft)';
                 return 'var(--calendar-consultation)';
               };
-              const byStart = (s: string) => hhmmToMinutes((s || '').split('-')[0] || '00:00');
               return filteredSchedule.map((apt) => {
                 const [as, ae] = (apt.slot || '').split('-');
                 if (!as || !ae) return null;
@@ -406,12 +463,8 @@ export default function DoctorDayCalendar({
                 if (clampedEnd <= clampedStart) return null;
                 const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
                 const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
-                const overlapping = filteredSchedule
-                  .filter((b) => doTimeSlotsOverlap(apt.slot, b.slot))
-                  .sort((a, b) => byStart(a.slot) - byStart(b.slot) || String(a.id || a.slot).localeCompare(String(b.id || b.slot)));
-                const index = Math.max(0, overlapping.findIndex((b) => (b.id && apt.id ? b.id === apt.id : b.slot === apt.slot)));
-                const widthPct = 100 / Math.max(1, overlapping.length);
-                const leftPct = index * widthPct;
+                const lane = appointmentLanes.get(apt);
+                if (!lane) return null;
                 const bg = getColor(apt);
                 return (
                   <div
@@ -420,8 +473,8 @@ export default function DoctorDayCalendar({
                     style={{
                       top: `${topPct}%`,
                       height: `${heightPct}%`,
-                      left: `${leftPct}%`,
-                      width: `${widthPct}%`,
+                      left: `${lane.left}%`,
+                      width: `${lane.width}%`,
                       backgroundColor: bg,
                       borderRadius: 6,
                       zIndex: 1,
@@ -446,59 +499,44 @@ export default function DoctorDayCalendar({
                 if (clampedEnd <= clampedStart) return null;
                 const topPct = ((clampedStart - dayStartMin) * 100) / totalDayMin;
                 const heightPct = ((clampedEnd - clampedStart) * 100) / totalDayMin;
+                const lane = appointmentLanes.get(apt);
+                if (!lane) return null;
                 return (
                   <div
                     key={`span-label-${apt.id || apt.slot}`}
-                    className="absolute left-0 right-0 group"
+                    className="absolute min-w-0 group"
+                    data-appointment-id={apt.id}
                     style={{
                       top: `${topPct}%`,
+                      left: `${lane.left}%`,
+                      width: `${lane.width}%`,
                       height: `${heightPct}%`,
                       pointerEvents: 'auto',
                       color: apt.status === AppointmentStatus.COMPLETED ? 'var(--foreground)' : apt.visitType === 'PROCEDURE' ? 'var(--calendar-procedure-foreground)' : apt.visitType === 'TELEMED' ? 'var(--highlight-text)' : 'var(--calendar-consultation-foreground)',
                       zIndex: 2,
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
                       justifyContent: 'center',
                     }}
                   >
-                    {/* Main appointment info */}
-                    <div
-                      className="font-semibold px-2 py-1 flex-1 flex items-center justify-between"
-                      style={{
-                        color: '#000000',
-                        background: 'transparent',
-                        maxWidth: '70%',
-                        fontSize: 'calc(0.875rem + var(--app-text-increase, 0rem))',
-                        pointerEvents: 'none',
-                      }}
-                    >
-                      {/* Left side - Time and Patient */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                    <div data-appointment-content data-duration-minutes={clampedEnd - clampedStart} style={{ color: '#000000' }} className="w-full min-w-0 space-y-1 p-2 [overflow-wrap:anywhere]">
+                      <div className="flex min-w-0 flex-wrap items-start gap-x-2 gap-y-1 text-sm font-semibold">
                         <span className="text-info-text font-bold">{`${as}-${ae}`}</span>
-                        <span className="font-semibold">
+                        <span className="min-w-0 basis-full sm:basis-0 flex-1">
                           {formatPatientName(apt.patient ?? { name: 'Unknown' })}
                           {apt.visitType === 'PROCEDURE' && apt.notes && (
                             <span className="text-highlight-text font-medium ml-1">({apt.notes})</span>
                           )}
                         </span>
                       </div>
-                      
-                      {/* Center - Status indicators */}
-                      <div className="flex items-center gap-2 flex-1 justify-center">
-                        {apt.isFollowUp && <span className="text-warning-text font-semibold text-xs">FOLLOW-UP</span>}
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                        {apt.isFollowUp && <span className="text-warning-text font-semibold">FOLLOW-UP</span>}
                         <span className="text-highlight-text font-medium">{apt.visitType || 'OPD'}</span>
-                      </div>
-                      
-                      {/* Right side - Demographics and location */}
-                      <div className="flex items-center gap-2 flex-shrink-0">
                         {apt.patient?.age !== undefined && <span className="text-muted-foreground">{apt.patient.age}y</span>}
-                        {apt.patient?.gender && <span className="text-muted-foreground bg-muted px-1 rounded-md text-xs">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
+                        {apt.patient?.gender && <span className="text-muted-foreground bg-muted px-1 rounded-md">{apt.patient.gender.charAt(0).toUpperCase()}</span>}
                         {apt.room?.name && <span className="text-success-text font-medium">{apt.room.name}</span>}
                       </div>
-                    </div>
-                    
-                    {/* Action buttons - appear on hover */}
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex gap-1 ml-2">
+                      <div className="flex min-w-0 flex-wrap gap-1 opacity-100 transition-opacity duration-200 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                       {/* View Appointment Details Button */}
                       <button
                         onClick={(e) => {
@@ -537,6 +575,7 @@ export default function DoctorDayCalendar({
                       >
                         {apt.visit?.id ? 'CONT' : 'START'}
                       </button>
+                      </div>
                     </div>
                   </div>
                 );
