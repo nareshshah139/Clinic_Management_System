@@ -68,6 +68,7 @@ model User {
   branch                     Branch             @relation(fields: [branchId], references: [id])
   visits                     Visit[]
   pharmacyInvoices           PharmacyInvoice[]  @relation("PharmacyInvoiceDoctor")
+  createdPharmacyInvoices    PharmacyInvoice[]  @relation("PharmacyInvoiceCreator")
   partnerDailySalesSubmitted PartnerDailySale[] @relation("PartnerDailySaleSubmittedBy")
   createdPackages            PharmacyPackage[]  @relation("PharmacyPackageCreator")
   whatsappTemplates          WhatsAppTemplate[]
@@ -1328,10 +1329,12 @@ model PharmacyInvoice {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   mutationVersion Int       @default(0)
+  createdById     String?
 
   // Relations
   patient      Patient               @relation(fields: [patientId], references: [id])
   doctor       User?                 @relation("PharmacyInvoiceDoctor", fields: [doctorId], references: [id])
+  createdBy    User?                 @relation("PharmacyInvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
   prescription Prescription?         @relation(fields: [prescriptionId], references: [id])
   branch       Branch                @relation(fields: [branchId], references: [id])
   items        PharmacyInvoiceItem[]
