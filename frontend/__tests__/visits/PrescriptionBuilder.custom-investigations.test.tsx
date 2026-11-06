@@ -67,18 +67,34 @@ it('rejects a duplicate of a saved investigation regardless of case', async () =
   expect(screen.getByRole('button', { name: 'Add custom investigation' })).toBeDisabled();
 });
 
-it('renames a saved investigation and carries the tick over to the new name', async () => {
+const rename = async (from: string, to: string) => {
+  fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
+  fireEvent.click(screen.getByRole('button', { name: `Rename ${from}` }));
+  fireEvent.change(screen.getByRole('textbox', { name: `New name for ${from}` }), { target: { value: to } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: `Save new name for ${from}` })); });
+};
+
+it('renames a saved investigation without changing the text ticked on the open prescription', async () => {
+  api.getClinicInvestigations.mockResolvedValue([{ id: '1', name: 'MRI Brain' }]);
+  api.renameClinicInvestigation.mockResolvedValue({ id: '1', name: 'MRI Brain plain' });
+  const onClinicalDataChange = jest.fn();
+  render(<PrescriptionBuilder patientId="patient" visitId={null} doctorId="doctor" onClinicalDataChange={onClinicalDataChange} />);
+  await act(async () => {});
+  fireEvent.click(checkbox('MRI Brain')!);
+  await rename('MRI Brain', 'MRI Brain plain');
+  expect(api.renameClinicInvestigation).toHaveBeenCalledWith('1', 'MRI Brain plain');
+  expect(checkbox('MRI Brain')).toBeChecked();
+  expect(checkbox('MRI Brain plain')).not.toBeChecked();
+  expect(onClinicalDataChange).toHaveBeenLastCalledWith(expect.objectContaining({ treatmentPlan: expect.objectContaining({ investigations: ['MRI Brain'] }) }));
+});
+
+it('replaces the checkbox when the renamed investigation is not ticked', async () => {
   api.getClinicInvestigations.mockResolvedValue([{ id: '1', name: 'MRI Brain' }]);
   api.renameClinicInvestigation.mockResolvedValue({ id: '1', name: 'MRI Brain plain' });
   await renderBuilder();
-  fireEvent.click(checkbox('MRI Brain')!);
-  fireEvent.click(screen.getByRole('button', { name: 'Manage saved investigations' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Rename MRI Brain' }));
-  fireEvent.change(screen.getByRole('textbox', { name: 'New name for MRI Brain' }), { target: { value: 'MRI Brain plain' } });
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save new name for MRI Brain' })); });
-  expect(api.renameClinicInvestigation).toHaveBeenCalledWith('1', 'MRI Brain plain');
+  await rename('MRI Brain', 'MRI Brain plain');
   expect(checkbox('MRI Brain')).toBeNull();
-  expect(checkbox('MRI Brain plain')).toBeChecked();
+  expect(checkbox('MRI Brain plain')).not.toBeChecked();
 });
 
 it('tells the doctor when a rename collides with an existing investigation', async () => {

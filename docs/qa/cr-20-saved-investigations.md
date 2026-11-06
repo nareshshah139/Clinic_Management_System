@@ -8,7 +8,7 @@ A custom investigation typed into **Add Custom Investigation** is now saved to t
 - The list belongs to the branch. Doctors in another branch do not see it.
 - Names match without regard to case or extra spaces. Typing "  mri   BRAIN " when "MRI Brain" exists does not add a second entry, and the Add button stays disabled.
 - **Manage saved investigations** lists the clinic's saved entries, each with Rename and Remove.
-- Rename changes the checkbox label for every future prescription. If the old name is ticked on the open prescription, the tick moves to the new name.
+- Rename changes the checkbox label for every future prescription. If the old name is ticked on the open prescription, it stays ticked there under the old name, so that prescription records what the doctor chose.
 - Remove asks "Remove … for everyone in the clinic?" first. Confirming deletes the entry from the clinic list. If it is ticked on the open prescription, it stays ticked there.
 - Saved prescriptions keep the investigation text they were written with. Renaming or removing an entry never changes a past prescription.
 - If saving to the clinic list fails, the investigation is still ticked on the current prescription, and a message says it was added to this prescription only. Pressing Add again retries the save.
