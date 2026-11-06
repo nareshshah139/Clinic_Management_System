@@ -14,8 +14,9 @@ export type WorkflowLine = {
   physicalStock?: number; systemStock?: number; disposition?: 'RESTOCK' | 'QUARANTINE' | 'LOSS';
   minStockLevel?: number; maxStockLevel?: number; beforeMin?: number | null; beforeMax?: number | null;
   originalTerms?: Record<string,any>; fefoOverrideReason?:string;
-  manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number;
+  manual?: boolean; location?: string; taxable?: number; tax?: number; total?: number; note?: string;
 };
+export const LEGACY_COUNT_SETTINGS = ['auditEnabled', 'auditDailyCount', 'auditAdjustmentMode', 'approvalValue', 'negativeCountNeedsApproval'] as const;
 export class SaveWorkflowDocumentDto {
   @IsIn(WORKFLOW_KINDS) kind: WorkflowKind;
   @IsString() @MaxLength(160) reference: string;
@@ -34,8 +35,6 @@ export class TransitionWorkflowDto {
   @IsOptional() @IsArray() @IsString({ each: true }) lineIds?: string[];
 }
 export const DEFAULT_INVENTORY_SETTINGS = {
-  auditEnabled: false, auditDailyCount: 10, auditAdjustmentMode: 'APPROVAL',
-  approvalValue: 5000, negativeCountNeedsApproval: true,
   autoMinMaxEnabled: false, lookbackDays: 60, minimumOrders: 1,
   minCoverDays: 10, maxCoverDays: 60, refreshDays: 7,
   includeBounce: false, includeRefill: true, excludedItemIds: [] as string[],

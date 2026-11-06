@@ -10,6 +10,7 @@ import { InventoryWorkflowScheduler } from './inventory-workflow-scheduler.servi
 import { InventoryWorkflowController } from './inventory-workflow.controller';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { InventoryWorkspaceService } from './inventory-workspace.service';
+import { InventoryReconciliationService } from './reconciliation/inventory-reconciliation.service';
 import { Module } from '@nestjs/common';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
@@ -19,7 +20,7 @@ import { PrismaModule } from '../../shared/database/prisma.module';
 @Module({
   imports: [PrismaModule, PharmacyModule],
   controllers: [InventoryStocktakeController, InventoryPurchaseActionsController, InventoryController, InventoryWorkflowController],
-  providers: [InventoryIdentityRecoveryService, InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService],
+  providers: [InventoryIdentityRecoveryService, InventoryPurchaseActionsService, InventoryReplenishmentService, InventoryService, InventoryImportService, InventoryWorkflowService, InventoryWorkspaceService, InventoryWorkflowScheduler, InventoryIntakeService, InventoryLabelService, InventoryReconciliationService],
   exports: [InventoryService],
 })
 export class InventoryModule {}
