@@ -87,7 +87,8 @@ export const measuredNameWords = [
   'spray', 'foam', 'wash', 'syrup', 'suspension', 'drops', 'oil', 'soap',
   'sunscreen', 'conditioner', 'liniment', 'powder',
 ];
-export const quantityDecimals = 6;
+export const quantityScale = 1_000_000;
+export const doseTolerance = 1e-9;
 
 const MEASURED_SELLING_UNITS = new Set(measuredSellingUnits);
 const PACK_SELLING_UNITS = new Set(packSellingUnits);
@@ -104,11 +105,14 @@ const compiledSchedules = queueInstructionSchedules.map(({ pattern, perDay }) =>
   perDay,
 }));
 
-export const normalizeToken = (value: string): string =>
-  value.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+const jsonText = (value: unknown): string =>
+  typeof value === 'string' ? value : value === undefined || value === null ? '' : JSON.stringify(value);
+
+export const normalizeToken = (value: unknown): string =>
+  jsonText(value).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
 
 export const snapQuantity = (value: number): number =>
-  Number(value.toFixed(quantityDecimals));
+  Math.floor(value * quantityScale + 0.5) / quantityScale;
 
 const positiveNumber = (value: unknown): number | null => {
   if (value === undefined || value === null || value === '') return null;
@@ -126,27 +130,27 @@ export function prescribedSchedule(item: BillingPrescriptionItem): PrescribedSch
   const explicit = explicitQuantity(item);
   if (explicit !== null) return { doses: explicit, conflict: false };
 
-  const structured = queueFrequencyPerDay[normalizeToken(item.frequency || '')] ?? null;
-  const instructions = normalizeToken(item.instructions || '');
+  const structured = queueFrequencyPerDay[normalizeToken(item.frequency)] ?? null;
+  const instructions = normalizeToken(item.instructions);
   const fromInstructions =
     compiledSchedules.find(({ regex }) => regex.test(instructions))?.perDay ?? null;
   const perDay = fromInstructions ?? structured;
   const conflict = fromInstructions !== null && !sameRate(fromInstructions, structured);
 
   const duration = positiveNumber(item.duration);
-  const multiplier = queueDurationDays[normalizeToken(item.durationUnit || '') || 'days'] ?? null;
+  const multiplier = queueDurationDays[normalizeToken(item.durationUnit) || 'days'] ?? null;
   if (perDay === null || duration === null || multiplier === null) {
     return { doses: null, conflict };
   }
-  return { doses: Math.ceil(Number((perDay * duration * multiplier).toFixed(9))), conflict };
+  return { doses: Math.ceil(perDay * duration * multiplier - doseTolerance), conflict };
 }
 
 function lineIsMeasured(item: BillingPrescriptionItem, drugName: string): boolean {
-  const nameWords = [drugName, item.genericName || ''].flatMap((name) =>
+  const nameWords = [drugName, item.genericName].flatMap((name) =>
     normalizeToken(name).split('_'),
   );
   return (
-    MEASURED_DOSAGE_UNITS.has(normalizeToken(item.dosageUnit || '')) ||
+    MEASURED_DOSAGE_UNITS.has(normalizeToken(item.dosageUnit)) ||
     nameWords.some((word) => MEASURED_NAME_WORDS.has(word))
   );
 }
@@ -154,7 +158,7 @@ function lineIsMeasured(item: BillingPrescriptionItem, drugName: string): boolea
 const inventoryIsMeasured = (inventory: BillingInventory | null) =>
   inventory !== null &&
   (MEASURED_SELLING_UNITS.has(inventory.unit) ||
-    MEASURED_PACK_UNITS.has(normalizeToken(inventory.packUnit || '')));
+    MEASURED_PACK_UNITS.has(normalizeToken(inventory.packUnit)));
 
 const isMeasured = (
   item: BillingPrescriptionItem,

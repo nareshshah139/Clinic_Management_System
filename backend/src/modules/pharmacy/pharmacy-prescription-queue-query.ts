@@ -6,7 +6,8 @@ import {
   measuredPackUnits,
   measuredSellingUnits,
   packSellingUnits,
-  quantityDecimals,
+  doseTolerance,
+  quantityScale,
   queueDurationDays,
   queueFrequencyPerDay,
   queueInstructionSchedules,
@@ -53,8 +54,9 @@ const numericLookup = (
 
 const textArray = (values: string[]) => Prisma.sql`ARRAY[${Prisma.join(values)}]::text[]`;
 const words = (value: Prisma.Sql) => Prisma.sql`string_to_array(${value}, '_')`;
+const float = (value: number) => Prisma.raw(`${value}::double precision`);
 const snapped = (value: Prisma.Sql) =>
-  Prisma.sql`round((${value})::numeric, ${Prisma.raw(String(quantityDecimals))})::double precision`;
+  Prisma.sql`floor((${value}) * ${float(quantityScale)} + ${float(0.5)}) / ${float(quantityScale)}`;
 
 const medicationNameSql = () => normalized(
   Prisma.sql`coalesce(nullif(item->>'drugName', ''), nullif(item->>'brandName', ''), nullif(item->>'genericName', ''), 'Unknown drug')`,
@@ -108,7 +110,7 @@ export function queueStatusPage(
     queueDurationDays,
     Prisma.sql`coalesce(nullif(${normalized(Prisma.sql`coalesce(item->>'durationUnit', '')`)}, ''), 'days')`,
   );
-  const doses = Prisma.sql`ceil(round((${frequency} * ${duration} * ${multiplier})::numeric, 9))::double precision`;
+  const doses = Prisma.sql`ceil(${frequency} * ${duration} * ${multiplier} - ${float(doseTolerance)})`;
   const lineMeasured = Prisma.sql`(${normalized(Prisma.sql`coalesce(item->>'dosageUnit', '')`)} = ANY(${textArray(measuredDosageUnits)})
     OR ${words(medicationNameSql())} && ${textArray(measuredNameWords)}
     OR ${words(normalized(Prisma.sql`coalesce(item->>'genericName', '')`))} && ${textArray(measuredNameWords)})`;

@@ -146,6 +146,10 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       ['two-lines-share-a-box-of-3', [line('azithral', { ...tablet, duration: 5 }), line('azithral', { ...tablet, duration: 1 })], confirmed(bill('azithral', 2)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered'], [1, 1, 'covered']]],
       ['strips-and-pieces-of-one-drug', [{ drugName: 'TRICOGRO TABLET', drugId: drugs['TRICOGRO TABLET'], ...tablet }], confirmed(bill('tricogroStrips', 2), bill('tricogroPieces', 10)), PrescriptionQueueStatus.DISPENSED, [[30, 30, 'covered']]],
       ['bill-without-inventory', [{ drugName: 'TRICOGRO TABLET', drugId: drugs['TRICOGRO TABLET'], ...tablet }], confirmed({ drugId: drugs['TRICOGRO TABLET'], quantity: 3 }), PrescriptionQueueStatus.PARTIAL, [[30, 3, 'partial']]],
+      ['numeric-instructions', [line('foitrax', { ...tablet, duration: 5, instructions: 2 })], confirmed(bill('foitrax', 5)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered']]],
+      ['array-instructions', [line('foitrax', { ...weekly, instructions: ['weekly'] })], confirmed(bill('foitrax', 16)), PrescriptionQueueStatus.DISPENSED, [[16, 16, 'covered']]],
+      ['numeric-dosage-unit', [line('foitrax', { dosageUnit: 5 })], confirmed(bill('foitrax', 1)), PrescriptionQueueStatus.PARTIAL, [[null, 1, 'unknown']]],
+      ['fraction-past-a-whole-dose', [line('foitrax', { frequency: 'WEEKLY', duration: '4.0000000005', durationUnit: 'WEEKS' })], confirmed(bill('foitrax', 4)), PrescriptionQueueStatus.DISPENSED, [[4, 4, 'covered']]],
       ['completed-invoice-short', [line('tricogroStrips', tablet)], [{ status: 'COMPLETED', items: [bill('tricogroStrips', 1)] }], PrescriptionQueueStatus.DISPENSED, [[30, 10, 'partial']]],
     ];
     for (const [id, items, invoices] of cases) await rx(at, id, items, invoices);
@@ -209,15 +213,23 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       { quantity: 2 },
       { quantity: '1.5' },
       { quantity: 0, frequency: 'ONCE_DAILY', duration: 9 },
+      { frequency: 'ONCE_DAILY', duration: 10, instructions: 7 },
+      { frequency: 'ONCE_DAILY', duration: 30, instructions: ['every alternate day'] },
+      { frequency: 'WEEKLY', duration: '4.0000000005', durationUnit: 'WEEKS' },
+      { frequency: 'TWICE_DAILY', duration: 2.5 },
+      { frequency: ['TWICE_DAILY'], duration: 3, durationUnit: ['WEEKS'] },
     ];
-    const dosageUnits = ['TABLET', 'ML', 'APPLICATION', 'CAPSULE', '', 'drops'];
+    const dosageUnits: unknown[] = ['TABLET', 'ML', 'APPLICATION', 'CAPSULE', '', 'drops', 5, null];
     const expected: Record<string, PrescriptionQueueStatus> = {};
     for (let n = 0; n < 240; n++) {
       const lines = Array.from({ length: 1 + Math.floor(next() * 3) }, () => {
         const key = pick(keys);
         const identity = pick(['inventory', 'drug', 'name'] as const);
+        const label = identity === 'name' && next() < 0.5 ? `${products[key].drug} cream` : products[key].drug;
+        const naming = pick(['drugName', 'drugName', 'brandName', 'genericName'] as const);
         return {
-          drugName: identity === 'name' && next() < 0.5 ? `${products[key].drug} cream` : products[key].drug,
+          [naming]: label,
+          ...(next() < 0.2 ? { genericName: pick(['Hair serum', 'Minoxidil', 'Ketoconazole lotion']) } : {}),
           ...(identity === 'inventory' ? { inventoryItemId: inventory[key] } : {}),
           ...(identity !== 'name' ? { drugId: drugs[products[key].drug] } : {}),
           dosageUnit: pick(dosageUnits),

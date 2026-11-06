@@ -190,6 +190,27 @@ describe('PharmacyPrescriptionQueueService', () => {
     });
   });
 
+  it('counts one tube as covering a gel line with no schedule', async () => {
+    prisma.prescription.findFirst.mockResolvedValue(
+      prescription({
+        items: JSON.stringify([{ drugName: 'Clindamycin Gel', frequency: 'Apply at night' }]),
+        pharmacyInvoices: [
+          { id: 'pharm-invoice-1', status: 'CONFIRMED', items: [{ quantity: 1, drug: { id: 'drug-1', name: 'Clindamycin Gel' } }] },
+        ],
+      }),
+    );
+
+    const entry = await service.findOne('rx-1', branchId);
+
+    expect(entry.status).toBe(PrescriptionQueueStatus.DISPENSED);
+    expect(entry.medications[0]).toMatchObject({
+      prescribedQuantity: 1,
+      quantityInferred: true,
+      dispensedQuantity: 1,
+      coverageStatus: 'covered',
+    });
+  });
+
   it('returns FEFO available stock checks with low stock and near expiry', async () => {
     const futureExpiry = new Date(Date.now() + 20 * 24 * 60 * 60 * 1000);
     const laterExpiry = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
