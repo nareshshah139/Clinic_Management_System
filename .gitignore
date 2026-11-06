@@ -64,3 +64,4 @@ prod-backup*.list
 /output/diagnostics/partner-recovery/
 
 /output/diagnostics/recovery-e2e/
+output/stack/
