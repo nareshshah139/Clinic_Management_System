@@ -14,6 +14,7 @@ import type { SystemStatistics, SystemAlert, Appointment } from '@/lib/types';
 import { useDashboardUser } from '@/components/layout/dashboard-user-context';
 import { useRouter } from 'next/navigation';
 import { QuickGuide } from '@/components/common/QuickGuide';
+import { DoctorPatientPanels } from '@/components/dashboard/DoctorPatientPanels';
 import { formatPatientName, getISTDateString } from '@/lib/utils';
 
 /**
@@ -266,6 +267,8 @@ export default function DashboardPage() {
             }] : [])
           ]}
         /></>} />
+
+      {currentUser?.role === 'DOCTOR' && currentUser.id ? <DoctorPatientPanels doctorId={currentUser.id} /> : null}
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-tour="dashboard-stats">

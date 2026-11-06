@@ -28,7 +28,7 @@ import {
   QueryVisitsDto,
   PatientVisitHistoryDto,
   PatientVisitHistoryQueryDto,
-  DoctorVisitsDto,
+  DoctorVisitsQueryDto,
 } from './dto/query-visit.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -451,7 +451,7 @@ export class VisitsController {
   @Get('doctor/:doctorId')
   getDoctorVisits(
     @Param('doctorId') doctorId: string,
-    @Query() query: Omit<DoctorVisitsDto, 'doctorId'>,
+    @Query() query: DoctorVisitsQueryDto,
     @Request() req: AuthenticatedRequest,
   ) {
     return this.visitsService.getDoctorVisits(

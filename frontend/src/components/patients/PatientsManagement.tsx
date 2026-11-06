@@ -40,6 +40,8 @@ interface PatientFormState {
   walkinDoctorId?: string;
   walkinVisitType?: VisitType;
   walkinRoomId?: string;
+  /** Undefined until loaded or chosen, so an unloaded value is never saved; '' means no primary doctor. */
+  primaryDoctorId?: string;
 }
 
 /**
@@ -473,6 +475,7 @@ export default function PatientsManagement() {
         emergencyContact: form.emergencyContact || undefined,
         referralSource: form.referralSource || undefined,
         consultationType: form.consultationType || undefined,
+        ...(form.primaryDoctorId !== undefined ? { primaryDoctorId: form.primaryDoctorId || null } : {}),
       };
       
       let savedPatientId = form.id;
@@ -594,6 +597,7 @@ export default function PatientsManagement() {
           setForm(prev => ({
             ...prev,
             emergencyContact: (full.emergencyContact ?? prev.emergencyContact) || '',
+            primaryDoctorId: prev.primaryDoctorId ?? (full.primaryDoctorId || ''),
           }));
         }
       } catch {}
@@ -816,6 +820,24 @@ export default function PatientsManagement() {
                     <SelectItem value="OFFLINE">Offline (In-Clinic Visit)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+              <div>
+                <Label id="primaryDoctor-label" htmlFor="primaryDoctor">Primary Doctor</Label>
+                <Select value={form.primaryDoctorId === undefined ? (form.id ? 'LOADING' : 'DEFAULT') : form.primaryDoctorId || 'NONE'}
+                  onValueChange={(v: string) => setForm({ ...form, primaryDoctorId: v === 'NONE' ? '' : v })}>
+                  <SelectTrigger id="primaryDoctor" aria-labelledby="primaryDoctor-label">
+                    <SelectValue placeholder="Select primary doctor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {form.primaryDoctorId === undefined && !form.id && <SelectItem value="DEFAULT">Automatic</SelectItem>}
+                    {form.primaryDoctorId === undefined && form.id && <SelectItem value="LOADING" disabled>Loading…</SelectItem>}
+                    <SelectItem value="NONE">Not assigned</SelectItem>
+                    {doctors.map(d => (
+                      <SelectItem key={d.id} value={d.id}>Dr. {`${d.firstName || ''} ${d.lastName || ''}`.trim().replace(/^dr\.?\s+/i, '')}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {form.primaryDoctorId === undefined && !form.id && <p className="mt-1 text-xs text-gray-500">A doctor registering the patient becomes the primary doctor; otherwise the first visiting doctor does.</p>}
               </div>
               <div className="md:col-span-2">
                 <Label id="referralSource-label" htmlFor="referralSource">How did the patient hear about us?</Label>

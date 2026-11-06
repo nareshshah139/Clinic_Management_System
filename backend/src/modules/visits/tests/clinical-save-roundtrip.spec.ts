@@ -14,7 +14,7 @@ it('round-trips every clinical document through validation, create, update and h
   };
   let stored: any;
   const db: any = {
-    patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }) },
+    patient: { findFirst: jest.fn().mockResolvedValue({ id: 'p' }), updateMany: jest.fn() },
     user: { findFirst: jest.fn().mockResolvedValue({ id: 'd' }) },
     visit: {
       create: jest.fn(async ({ data }) => (stored = { ...data, id: 'v', createdAt: new Date('2026-09-06'), appointment: null })),

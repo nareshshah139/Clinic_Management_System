@@ -30,7 +30,7 @@ export class PatientsController {
 
   @Post()
   create(@Body() createPatientDto: CreatePatientDto, @Request() req: AuthenticatedRequest) {
-    return this.patientsService.create(createPatientDto, req.user.branchId);
+    return this.patientsService.create(createPatientDto, req.user.branchId, req.user);
   }
 
   @Get()
@@ -41,6 +41,7 @@ export class PatientsController {
     @Query('gender') gender: string | undefined,
     @Query('consultationType') consultationType: string | undefined,
     @Query('dateRange') dateRange: string | undefined,
+    @Query('primaryDoctorId') primaryDoctorId: string | undefined,
     @Query('export') exportAll: string | undefined,
     @Request() req: AuthenticatedRequest,
   ) {
@@ -60,6 +61,7 @@ export class PatientsController {
         gender: genderFilter,
         consultationType: consultationTypeFilter,
         dateRange: dateRangeFilter,
+        primaryDoctorId: primaryDoctorId?.trim() || undefined,
       },
       req.user.branchId,
     );

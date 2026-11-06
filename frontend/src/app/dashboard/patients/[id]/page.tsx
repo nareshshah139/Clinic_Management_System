@@ -231,6 +231,9 @@ export default function PatientDetailsPage() {
               <div className="text-gray-500">Primary contact</div>
               <div className="font-medium text-gray-900">{patient.phone || '—'}</div>
               <div className="text-gray-600">{patient.email || '—'}</div>
+              <div className="text-gray-600">
+                Primary doctor: {patient.primaryDoctor ? `Dr. ${`${patient.primaryDoctor.firstName ?? ''} ${patient.primaryDoctor.lastName ?? ''}`.trim().replace(/^dr\.?\s+/i, '')}` : 'Not assigned'}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="text-gray-500">Last visit</div>
