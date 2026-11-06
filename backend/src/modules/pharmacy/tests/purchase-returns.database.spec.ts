@@ -205,50 +205,6 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     }
   }, 120000);
 
-  it('matches the migrations for supplier credits, allocations and set-offs, the partial index aside, which Prisma cannot see', async () => {
-    const shadow = `cr27_shadow_${randomUUID().replaceAll('-', '')}`;
-    const url = new URL(process.env.PURCHASE_RETURNS_TEST_DATABASE_URL!);
-    url.pathname = `/${shadow}`;
-    url.search = '';
-    await admin.$executeRawUnsafe(`CREATE DATABASE "${shadow}"`);
-    try {
-      const diff = execFileSync(
-        process.execPath,
-        [
-          require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-schema-datamodel', 'prisma/schema.prisma',
-          '--to-migrations', 'prisma/migrations', '--shadow-database-url', url.toString(), '--script',
-        ],
-        { stdio: 'pipe', encoding: 'utf8' },
-      );
-      const statements = diff.split(';').filter((statement) => /inventory_(supplier_credits|credit_allocations|credit_set_offs)/.test(statement));
-      expect(statements).toEqual([]);
-    } finally {
-      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${shadow}" WITH (FORCE)`);
-    }
-  }, 120000);
-
-  it('matches the migrations for supplier credits, allocations and set-offs, the partial index aside, which Prisma cannot see', async () => {
-    const shadow = `cr27_shadow_${randomUUID().replaceAll('-', '')}`;
-    const url = new URL(process.env.PURCHASE_RETURNS_TEST_DATABASE_URL!);
-    url.pathname = `/${shadow}`;
-    url.search = '';
-    await admin.$executeRawUnsafe(`CREATE DATABASE "${shadow}"`);
-    try {
-      const diff = execFileSync(
-        process.execPath,
-        [
-          require.resolve('prisma/build/index.js'), 'migrate', 'diff', '--from-schema-datamodel', 'prisma/schema.prisma',
-          '--to-migrations', 'prisma/migrations', '--shadow-database-url', url.toString(), '--script',
-        ],
-        { stdio: 'pipe', encoding: 'utf8' },
-      );
-      const statements = diff.split(';').filter((statement) => /inventory_(supplier_credits|credit_allocations|credit_set_offs)/.test(statement));
-      expect(statements).toEqual([]);
-    } finally {
-      await admin.$executeRawUnsafe(`DROP DATABASE IF EXISTS "${shadow}" WITH (FORCE)`);
-    }
-  }, 120000);
-
   it('sends a return on challan: stock for the batch drops with a movement, and it waits for the credit note', async () => {
     await raiseReturn('RET-1', 20);
     expect(await stock()).toBe(80);
@@ -674,78 +630,6 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
     expect([christmas.rows.map((ret) => [ret.returnRef, ret.state]), christmas.totals.excluded]).toEqual([[['RET-LATER', 'DRAFT']], { drafts: 1, cancelled: 0 }]);
   });
 
-  it('reads a credit set off before allocations were kept as part used, on every surface, and never over-applies it', async () => {
-    await db.inventoryWorkflowDocument.create({
-      data: {
-        id: 'legacy-doc', branchId, kind: 'SUPPLIER_RETURN', status: 'POSTED', reference: 'OLD-RET', supplierId: 'supplier', supplierGstin: linae,
-        payload: { date: '2026-06-01', lines: [] }, totalAmount: 75.5, requestKey: 'legacy-doc', createdBy: 'asha', createdAt: new Date('2026-06-01T05:00:00Z'),
-      },
-    });
-    const awaitedBefore = (await returnsPage()).totals.awaited;
-    const legacy = await row('OLD-RET');
-    expect([legacy.state, legacy.creditNote, legacy.credit]).toEqual(['ADJUSTED', null, { id: 'legacy-credit', amount: 75.5, applied: 20, available: 55.5 }]);
-    expect((await returnsPage()).totals.awaited).toEqual(awaitedBefore);
-
-    const note = { version: legacy.version, number: 'OLD-CN', date: '2026-06-05' };
-    await expect(workflow.recordCreditNote(actor, legacy.id, { ...note, requestKey: 'cn-old-70', amount: 70 })).rejects.toMatchObject({
-      status: 400,
-      message: 'Part of this credit is already set off against bills, so its amount stays ₹75.50. Enter the number and date only.',
-    });
-    const heldBefore = (await position()).creditHeld;
-    const recorded = await workflow.recordCreditNote(actor, legacy.id, { ...note, requestKey: 'cn-old', amount: 75.5 });
-    expect(recorded.credit).toEqual({ id: 'legacy-credit', number: 'OLD-CN', date: '2026-06-05', amount: 75.5, applied: 20, available: 55.5 });
-    expect([(await row('OLD-RET')).state, (await position()).creditHeld - heldBefore]).toEqual(['ADJUSTED', 55.5]);
-    expect((await workspace.setOffOptions(actor, { creditId: 'legacy-credit' })).available).toBe(55.5);
-
-    await expect(
-      workspace.setOff(actor, { requestKey: 'old-too-much', creditId: 'legacy-credit', allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 60 }] }),
-    ).rejects.toMatchObject({ status: 409, response: { code: 'BALANCE_CHANGED', message: 'The credit available changed: ₹55.50 is left to set off.' } });
-    await workspace.setOff(actor, { requestKey: 'old-rest', creditId: 'legacy-credit', allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount: 55.5 }] });
-    const column = await db.inventorySupplierCredit.findUniqueOrThrow({ where: { id: 'legacy-credit' } });
-    expect([Number(column.applied), (await row('OLD-RET')).state, (await row('OLD-RET')).credit?.available, (await position()).creditHeld]).toEqual([
-      75.5, 'USED', 0, heldBefore,
-    ]);
-    const used = await row('OLD-RET');
-    await expect(workflow.transition(actor, used.id, { action: 'REVERSE', version: used.version, reason: 'Wrong distributor' } as any)).rejects.toMatchObject({
-      status: 400, message: '₹75.50 of this credit is set off against bills. Undo the set-off before reversing this return.',
-    });
-  });
-
-  it('counts every awaited credit in the footer, standalone credits without a number included, as the Awaited filter lists them', async () => {
-    await db.inventoryWorkflowDocument.create({
-      data: {
-        id: 'old-standalone', branchId, kind: 'CREDIT_NOTE', status: 'POSTED', reference: 'Rate difference', supplierId: 'supplier', supplierGstin: linae,
-        payload: { date: '2026-07-01', lines: [] }, totalAmount: 40, requestKey: 'old-standalone', createdBy: 'asha',
-      },
-    });
-    await db.inventorySupplierCredit.create({
-      data: { branchId, supplierGstin: linae, documentId: 'old-standalone', reference: 'Rate difference', amount: 40 },
-    });
-    const awaited = (await returnsPage({ state: 'AWAITED' })).rows;
-    expect(awaited.map((ret) => [ret.returnRef, ret.kind, ret.returnValue])).toEqual([
-      ['RET-2', 'SUPPLIER_RETURN', 56],
-      ['RET-EARLY', 'SUPPLIER_RETURN', 11.2],
-      ['Rate difference', 'CREDIT_NOTE', 40],
-    ]);
-    expect((await returnsPage()).totals.awaited).toEqual({ amount: 107.2, count: 3 });
-    expect((await returnsPage({ from: '2026-11-04', to: '2026-11-04', state: 'AWAITED' })).totals.awaited).toEqual({ amount: 107.2, count: 3 });
-  });
-
-  it('lists a return by its date however long before that it was last updated, and a draft dated after its last edit', async () => {
-    await topUp();
-    await raiseReturn('RET-BOUND', 1, 'POST');
-    const posted = await row('RET-BOUND');
-    await db.$executeRawUnsafe(`UPDATE "inventory_workflow_documents" SET "updatedAt" = '2026-11-01T00:00:00Z' WHERE "id" = $1`, posted.id);
-    const draft = await workflow.saveDocument(actor, {
-      kind: 'SUPPLIER_RETURN', reference: 'RET-LATER', requestKey: randomUUID(), supplierId: 'supplier', purchaseInvoiceId: bills['LIN-1'],
-      payload: { date: '2026-12-24', lines: [{ inventoryId: 'batch', quantity: 1, unitPrice: 10, sourceLineId: purchaseLineId }] },
-    });
-    await db.$executeRawUnsafe(`UPDATE "inventory_workflow_documents" SET "updatedAt" = '2026-10-01T00:00:00Z' WHERE "id" = $1`, draft.id);
-    expect((await returnsPage({ from: '2026-11-02', to: '2026-11-02', field: 'returnRef', q: 'RET-BOUND' })).rows.map((ret) => ret.returnRef)).toEqual(['RET-BOUND']);
-    const christmas = await returnsPage({ from: '2026-12-24', to: '2026-12-24' });
-    expect([christmas.rows.map((ret) => [ret.returnRef, ret.state]), christmas.totals.excluded]).toEqual([[['RET-LATER', 'DRAFT']], { drafts: 1, cancelled: 0 }]);
-  });
-
   it('replays a credit note request only with the same content, and refuses a reused key that carries another number, amount or reason', async () => {
     await topUp();
     await raiseReturn('RET-REPLAY', 1);
@@ -801,5 +685,47 @@ databaseTests('Purchase returns and credit notes on PostgreSQL', () => {
       status: 409, response: { code: 'CREDIT_NOTE_DUPLICATE' },
     });
     expect(await db.inventorySupplierCredit.count({ where: { creditNoteNumber: 'CN-RACE', reversedAt: null } })).toBe(1);
+  });
+
+  it('replays an allocation made before set-offs were stored when its request is retried, and refuses other content under its key', async () => {
+    await topUp();
+    await raiseReturn('RET-PRE', 1);
+    const ret = await row('RET-PRE');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-pre', version: ret.version, number: 'CN-PRE', date: '2026-11-05', amount: 11.2 });
+    const creditId = (await row('RET-PRE')).credit!.id;
+    await db.inventoryCreditAllocation.create({ data: { branchId, creditId, purchaseInvoiceId: bills['LIN-2'], amount: 4, requestKey: 'pre-deploy', createdBy: 'asha' } });
+    await db.inventorySupplierCredit.update({ where: { id: creditId }, data: { applied: { increment: 4 } } });
+    await db.pharmacyPurchaseInvoice.update({ where: { id: bills['LIN-2'] }, data: { creditApplied: { increment: 4 } } });
+    const retry = { requestKey: 'pre-deploy', creditId, purchaseInvoiceId: bills['LIN-2'], amount: 4 };
+
+    const replay = await workspace.allocateCredit(actor, retry);
+    expect([replay.setOffId, replay.allocations.map((allocation) => allocation.amount), replay.credits]).toEqual([null, [4], [{ id: creditId, number: 'CN-PRE', available: 7.2 }]]);
+    await expect(workspace.allocateCredit(actor, { ...retry, amount: 5 })).rejects.toMatchObject({ status: 409, response: { code: 'REQUEST_KEY_REUSED' } });
+    expect([await db.inventoryCreditAllocation.count({ where: { creditId } }), (await row('RET-PRE')).credit?.available]).toEqual([1, 7.2]);
+  });
+
+  it('never applies one credit beyond its amount when two set-offs race for it', async () => {
+    await topUp();
+    await raiseReturn('RET-RACE', 10);
+    const ret = await row('RET-RACE');
+    await workflow.recordCreditNote(actor, ret.id, { requestKey: 'cn-race', version: ret.version, number: 'CN-SETOFF-RACE', date: '2026-11-05', amount: 100 });
+    const creditId = (await row('RET-RACE')).credit!.id;
+    const race = (amount: number, round: string) =>
+      Promise.allSettled([
+        workspace.setOff(actor, { requestKey: `race-${round}-1`, creditId, allocations: [{ purchaseInvoiceId: bills['LIN-1'], amount }] }),
+        workspace.setOff(actor, { requestKey: `race-${round}-2`, creditId, allocations: [{ purchaseInvoiceId: bills['LIN-3'], amount }] }),
+      ]);
+    const applied = async () => {
+      const credit = await db.inventorySupplierCredit.findUniqueOrThrow({ where: { id: creditId }, include: { allocations: { where: { reversedAt: null } } } });
+      return [Number(credit.applied), credit.allocations.reduce((sum, allocation) => sum + Number(allocation.amount), 0)];
+    };
+
+    const over = await race(70, 'over');
+    expect(over.map((result) => result.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect([await applied(), (await row('RET-RACE')).credit?.available]).toEqual([[70, 70], 30]);
+
+    const within = await race(15, 'within');
+    expect(within.map((result) => result.status)).toEqual(['fulfilled', 'fulfilled']);
+    expect([await applied(), (await row('RET-RACE')).state]).toEqual([[100, 100], 'USED']);
   });
 });

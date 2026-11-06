@@ -148,8 +148,8 @@ export class PharmacySupplierCreditService {
           throw new ConflictException({ code: 'SET_OFF_UNDONE', message: 'This set-off was undone. Start a new set-off if you still need it.' });
         return this.outcome(tx, actor, earlier.id, earlier.allocations, now);
       }
-      const beforeSetOffs = await tx.inventoryCreditAllocation.findUnique({
-        where: { branchId_requestKey: { branchId: actor.branchId, requestKey } },
+      const beforeSetOffs = await tx.inventoryCreditAllocation.findFirst({
+        where: { branchId: actor.branchId, requestKey, setOffId: null },
       });
       if (beforeSetOffs) return this.replayAllocation(tx, actor, beforeSetOffs, scope, wanted, now);
       const credits = await this.heldCredits(tx, actor.branchId, scope);
