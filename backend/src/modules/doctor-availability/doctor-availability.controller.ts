@@ -30,6 +30,13 @@ const READ_ROLES = [
   UserRole.RECEPTION,
 ];
 
+/**
+ * @cc [owner:nareshshah139,label:security] doctor-availability-route-access
+ * Reading availability and holidays MUST be open to OWNER, ADMIN, DOCTOR and, when they hold
+ * appointments:read, NURSE and RECEPTION; any other role MUST get 403. Changing working hours or
+ * time off MUST be open to OWNER, ADMIN and DOCTOR at the route and MUST be refused to every other
+ * role with 403; the service then limits a DOCTOR to their own hours and time off.
+ */
 @ApiTags('Doctor availability')
 @Controller('doctor-availability')
 @UseGuards(JwtAuthGuard)

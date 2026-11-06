@@ -97,7 +97,12 @@ export function resolveDayAvailability(
   };
 }
 
-/** Time off that overlaps `slot` ("HH:MM-HH:MM", clinic time) on `date`. */
+/**
+ * @cc [owner:nareshshah139,label:product] time-off-slot-overlap
+ * A slot MUST count as blocked when time off overlaps it by any minute, including time off that
+ * starts inside it or covers it whole. Time off ending exactly when the slot starts, or starting
+ * exactly when it ends, MUST NOT block it. Booking and the slot list MUST agree on it.
+ */
 export function timeOffOverlappingSlot(
   date: string,
   slot: string,
