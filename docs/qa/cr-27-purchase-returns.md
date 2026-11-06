@@ -52,7 +52,7 @@ Purchase bills now has two tabs, Purchase and Returns. A return goes back to the
   - **Totals and screens.** The position strip and footer against Payments & dues, a credit-only distributor, the Excel export, tab switching, the Today card, five rows at 1280 x 800 and seven at 1440 x 900, and a 390 px phone with no sideways page scroll.
   - **Access.** The doctor and an admin record and set off; a reception user with read access sees no write controls, and reception without it gets the access message. Hidden panels send no requests.
 - The CR-26 suite passes 20 of 20 and the CR-24/25 suite 23 of 23 as the seeded pharmacist. The access-roles suite passes 93 of 93 checks.
-- Backend: 104 suites and 1370 tests pass in `src`, including the purchase returns database spec (22 tests). That spec proves the partial index, number reuse after reversal, the posting and credit note events, correction, set-off replay and refusal, the old allocate path, credit-only distributors and totals across dates.
+- Backend: 104 suites and 1370 tests pass in `src`, including the purchase returns database spec (23 tests). That spec proves the partial index, number reuse after reversal, the posting and credit note events, correction, set-off replay and refusal, the old allocate path, credit-only distributors and totals across dates.
 - Frontend: 93 suites and 976 tests pass. Both production TypeScript checks pass.
 - The suite found and fixed these before they shipped: the Status column pushed the table 82 px past the edge at 1280, only three rows showed at 1280, More fell off a 390 px screen, and a duplicate number left focus nowhere because the field was still disabled.
 
