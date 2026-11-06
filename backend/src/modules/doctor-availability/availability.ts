@@ -147,7 +147,12 @@ export function parseWeeklyHoursInput(
   return { rows: sorted };
 }
 
-/** The UTC instant at which an IST calendar day starts. */
+/**
+ * @cc [owner:nareshshah139,label:calculation] ist-day-is-a-fixed-24-hour-window
+ * The clinic day for a YYYY-MM-DD date MUST start at 00:00 IST (18:30 UTC the previous day) and last
+ * exactly 24 hours, with no daylight-saving shift, so an instant at 18:29:59.999 UTC belongs to the
+ * previous clinic day and 18:30:00.000 UTC to the next.
+ */
 export function istDayStart(date: string): Date {
   return new Date(Date.parse(`${date}T00:00:00.000Z`) - IST_OFFSET_MINUTES * 60_000);
 }
@@ -156,7 +161,12 @@ export function istDayEnd(date: string): Date {
   return new Date(istDayStart(date).getTime() + MINUTES_PER_DAY * 60_000);
 }
 
-/** India observes no DST, so a fixed offset is exact. */
+/**
+ * @cc [owner:nareshshah139,label:calculation] ist-clock-maps-instants-to-clinic-date
+ * Any UTC instant MUST map to the clinic date and minutes-since-midnight in IST (UTC+5:30), and
+ * agree with ist-day-is-a-fixed-24-hour-window, so "today" and "now" for slot filtering never
+ * disagree with the day an appointment was booked on.
+ */
 export function istClock(now: Date): { date: string; minutes: number } {
   const shifted = new Date(now.getTime() + IST_OFFSET_MINUTES * 60_000);
   return {
@@ -196,6 +206,12 @@ export function overlaps(a: MinuteInterval, b: MinuteInterval): boolean {
   return a.start < b.end && b.start < a.end;
 }
 
+/**
+ * @cc [owner:nareshshah139,label:product] time-off-is-clipped-to-the-ist-day
+ * Leave, holiday and blocked time MUST be cut to the IST day being booked, so time off that starts
+ * the evening before or ends the next morning (UTC dates differ from IST dates) blocks exactly the
+ * minutes it covers on that day and nothing on days it only touches. A partial minute rounds up.
+ */
 function clipTimeOffToDay(date: string, timeOff: TimeOffRow[]): BlockedInterval[] {
   const dayStart = istDayStart(date).getTime();
   const dayEnd = dayStart + MINUTES_PER_DAY * 60_000;
