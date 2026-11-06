@@ -37,9 +37,9 @@ E = z3.Real('E')
 D, p = z3.Ints('D p')
 facts = z3.And(E > 0, D >= 1)
 
-known = z3.Or(explicit, doses_known, line_measured)
+known = z3.Or(explicit, doses_known, line_measured, inv_measured)
 need = z3.If(explicit, E, z3.If(doses_known, z3.ToReal(D), z3.RealVal(1)))
-in_selling_units = z3.Or(explicit, z3.And(z3.Not(doses_known), line_measured))
+in_selling_units = z3.Or(explicit, z3.And(z3.Not(doses_known), z3.Or(line_measured, inv_measured)))
 value = z3.If(in_selling_units, z3.RealVal(1),
               z3.If(z3.Or(line_measured, inv_measured), need,
                     z3.If(inv_packs, z3.If(p > 0, z3.ToReal(p), need), z3.RealVal(1))))

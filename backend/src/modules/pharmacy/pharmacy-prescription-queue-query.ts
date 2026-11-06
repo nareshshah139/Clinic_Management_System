@@ -155,33 +155,37 @@ export function queueStatusPage(
         NULL::double precision AS quantity, 0::double precision AS dispensed
       FROM branch_prescriptions p LEFT JOIN invoice_pool pool ON pool.id = p.id
       UNION ALL
-      SELECT m.id, m.ordinal, allocated.remaining, m.quantity, allocated.dispensed
+      SELECT m.id, m.ordinal, allocated.remaining, allocated.quantity, allocated.dispensed
       FROM coverage previous JOIN medications m ON m.id = previous.id AND m.ordinal = previous.ordinal + 1
       CROSS JOIN LATERAL (
         SELECT coalesce(jsonb_agg(jsonb_set(invoice, '{remaining}',
           to_jsonb((invoice->>'remaining')::double precision - taken / per_unit)) ORDER BY position), '[]'::jsonb) AS remaining,
-          least(coalesce(m.quantity, 'Infinity'::double precision), coalesce(sum(value ORDER BY position), 0)) AS dispensed
+          coalesce(m.quantity, max(need)) AS quantity,
+          least(coalesce(m.quantity, max(need), 'Infinity'::double precision), coalesce(sum(value ORDER BY position), 0)) AS dispensed
         FROM (
-          SELECT invoice, position, per_unit, value, least(value, greatest(0,
-            coalesce(m.quantity, 'Infinity'::double precision) - coalesce(sum(value) OVER (
+          SELECT invoice, position, per_unit, value, need, least(value, greatest(0,
+            coalesce(need, 'Infinity'::double precision) - coalesce(sum(value) OVER (
               ORDER BY position ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING), 0))) AS taken
           FROM (
-            SELECT invoice, position, per_unit, ${snapped(Prisma.sql`available * per_unit`)} AS value
+            SELECT invoice, position, per_unit, ${snapped(Prisma.sql`available * per_unit`)} AS value,
+              coalesce(m.quantity, CASE WHEN bool_or(matched AND (invoice->>'measured')::boolean) OVER () THEN 1::double precision END) AS need
             FROM (
-              SELECT invoice, position, CASE
+              SELECT invoice, position, matched, CASE WHEN matched THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available, CASE
                 WHEN NOT m.need_in_doses THEN 1::double precision
                 WHEN m.measured OR (invoice->>'measured')::boolean THEN m.quantity
                 WHEN (invoice->>'packs')::boolean THEN
                   CASE WHEN (invoice->>'packSize')::double precision > 0 THEN (invoice->>'packSize')::double precision ELSE m.quantity END
-                ELSE 1::double precision END AS per_unit,
-                CASE WHEN CASE
+                ELSE 1::double precision END AS per_unit
+              FROM (
+                SELECT invoice, position, coalesce(CASE
                   WHEN nullif(m.item->>'inventoryItemId', '') IS NOT NULL AND invoice->>'inventoryItemId' IS NOT NULL
                     THEN m.item->>'inventoryItemId' = invoice->>'inventoryItemId'
                   WHEN nullif(m.item->>'drugId', '') IS NOT NULL THEN m.item->>'drugId' = invoice->>'drugId'
                   ELSE m.name <> '' AND invoice->>'name' <> '' AND
                     (strpos(m.name, invoice->>'name') > 0 OR strpos(invoice->>'name', m.name) > 0)
-                  END THEN greatest(0, (invoice->>'remaining')::double precision) ELSE 0 END AS available
-              FROM jsonb_array_elements(previous.remaining) WITH ORDINALITY AS pool(invoice, position)
+                  END, false) AS matched
+                FROM jsonb_array_elements(previous.remaining) WITH ORDINALITY AS pool(invoice, position)
+              ) pool
             ) candidates
           ) valued
         ) portions

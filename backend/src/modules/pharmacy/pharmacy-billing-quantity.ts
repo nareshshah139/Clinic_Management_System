@@ -169,15 +169,22 @@ const isMeasured = (
 /**
  * @cc [owner:nareshshah139,label:product] prescription-line-need
  * A line's need MUST be its explicit quantity in selling units, else its dose count, else
- * 1 selling unit for a measured line. Lines with none of these MUST have an unknown need.
- * The need MUST NOT depend on which inventory item fills it.
+ * 1 selling unit when the line is measured or any invoice item billed for it is a measured
+ * item. Lines with none of these MUST have an unknown need. Only a line with no explicit
+ * quantity and no dose count may take its need from what it was billed as.
  */
-export function prescribedNeed(item: BillingPrescriptionItem, drugName: string): LineNeed | null {
+export function prescribedNeed(
+  item: BillingPrescriptionItem,
+  drugName: string,
+  billedAs: Array<BillingInventory | null> = [],
+): LineNeed | null {
   const explicit = explicitQuantity(item);
   if (explicit !== null) return { amount: explicit, unit: 'selling_units' };
   const { doses } = prescribedSchedule(item);
   if (doses !== null) return { amount: doses, unit: 'doses' };
-  return lineIsMeasured(item, drugName) ? { amount: 1, unit: 'selling_units' } : null;
+  return lineIsMeasured(item, drugName) || billedAs.some(inventoryIsMeasured)
+    ? { amount: 1, unit: 'selling_units' }
+    : null;
 }
 
 /**

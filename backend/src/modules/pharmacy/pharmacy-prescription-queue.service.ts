@@ -1172,15 +1172,14 @@ export class PharmacyPrescriptionQueueService {
     invoiceItems: Array<LoadedInvoiceItem & { remaining: number }>,
   ): QueueMedication {
     const drugName = this.itemDrugName(item);
-    const need = prescribedNeed(item, drugName);
+    const matching = invoiceItems.filter(invoiceItem => item.inventoryItemId && invoiceItem.inventoryItemId
+      ? item.inventoryItemId === invoiceItem.inventoryItemId
+      : item.drugId ? item.drugId === invoiceItem.drug?.id
+        : this.namesMatch(drugName, invoiceItem.drug?.name || ''));
+    const need = prescribedNeed(item, drugName, matching.map(invoiceItem => invoiceItem.inventory ?? null));
     const goal = need?.amount ?? Number.POSITIVE_INFINITY;
     let supplied = 0;
-    for (const invoiceItem of invoiceItems) {
-      const matches = item.inventoryItemId && invoiceItem.inventoryItemId
-        ? item.inventoryItemId === invoiceItem.inventoryItemId
-        : item.drugId ? item.drugId === invoiceItem.drug?.id
-          : this.namesMatch(drugName, invoiceItem.drug?.name || '');
-      if (!matches) continue;
+    for (const invoiceItem of matching) {
       const perUnit = need ? sellingUnitValue(need, item, invoiceItem.inventory ?? null, drugName) : 1;
       const value = snapQuantity(Math.max(0, invoiceItem.remaining) * perUnit);
       invoiceItem.remaining -= Math.min(value, Math.max(0, goal - supplied)) / perUnit;

@@ -41,6 +41,7 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
     folvite: { drug: 'Folvite 5mg', unit: 'STRIPS', packSize: 10, packUnit: 'tablets' },
     minoxidil: { drug: 'Minoxidil 5', unit: 'PACKS', packSize: 1, packUnit: 'g' },
     azithral: { drug: 'Azithral 500', unit: 'BOXES', packSize: 3, packUnit: 'tablets' },
+    ketoconazole: { drug: 'Ketoconazole 2%', unit: 'BOTTLES', packSize: 100, packUnit: 'ml' },
   };
 
   beforeAll(async () => {
@@ -148,6 +149,10 @@ databaseTests('Queue coverage in selling units with PostgreSQL', () => {
       ['bill-without-inventory', [{ drugName: 'TRICOGRO TABLET', drugId: drugs['TRICOGRO TABLET'], ...tablet }], confirmed({ drugId: drugs['TRICOGRO TABLET'], quantity: 3 }), PrescriptionQueueStatus.PARTIAL, [[30, 3, 'partial']]],
       ['numeric-instructions', [line('foitrax', { ...tablet, duration: 5, instructions: 2 })], confirmed(bill('foitrax', 5)), PrescriptionQueueStatus.DISPENSED, [[5, 5, 'covered']]],
       ['array-instructions', [line('foitrax', { ...weekly, instructions: ['weekly'] })], confirmed(bill('foitrax', 16)), PrescriptionQueueStatus.DISPENSED, [[16, 16, 'covered']]],
+      ['unscheduled-line-billed-as-bottle', [line('ketoconazole', { dosageUnit: 'TABLET' })], confirmed(bill('ketoconazole', 1)), PrescriptionQueueStatus.DISPENSED, [[1, 1, 'covered']]],
+      ['unscheduled-line-two-bottles', [line('ketoconazole'), line('ketoconazole')], confirmed(bill('ketoconazole', 1)), PrescriptionQueueStatus.PARTIAL, [[1, 1, 'covered'], [1, 0, 'not_started']]],
+      ['unscheduled-line-bottle-by-drug', [{ drugName: 'Keto shampoo base', drugId: drugs['Ketoconazole 2%'] }], confirmed({ drugId: drugs['Ketoconazole 2%'], quantity: 1 }, bill('ketoconazole', 1)), PrescriptionQueueStatus.DISPENSED, [[1, 1, 'covered']]],
+      ['unscheduled-line-draft-bottle', [line('ketoconazole')], [{ status: 'DRAFT', items: [bill('ketoconazole', 1)] }], PrescriptionQueueStatus.PENDING, [[null, 0, 'unknown']]],
       ['numeric-dosage-unit', [line('foitrax', { dosageUnit: 5 })], confirmed(bill('foitrax', 1)), PrescriptionQueueStatus.PARTIAL, [[null, 1, 'unknown']]],
       ['fraction-past-a-whole-dose', [line('foitrax', { frequency: 'WEEKLY', duration: '4.0000000005', durationUnit: 'WEEKS' })], confirmed(bill('foitrax', 4)), PrescriptionQueueStatus.DISPENSED, [[4, 4, 'covered']]],
       ['completed-invoice-short', [line('tricogroStrips', tablet)], [{ status: 'COMPLETED', items: [bill('tricogroStrips', 1)] }], PrescriptionQueueStatus.DISPENSED, [[30, 10, 'partial']]],
