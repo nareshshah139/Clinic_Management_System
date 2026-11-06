@@ -75,6 +75,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   empty,
   containerRef,
   compact = false,
+  dense = false,
 }: {
   label: string;
   noun: string;
@@ -88,9 +89,10 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
   empty: ReactNode;
   containerRef?: Ref<HTMLDivElement>;
   compact?: boolean;
+  dense?: boolean;
 }) {
   const rowClass = compact ? undefined : 'h-[52px]';
-  const padClass = compact ? 'py-1.5!' : 'py-2!';
+  const padClass = dense ? 'py-1!' : compact ? 'py-1.5!' : 'py-2!';
   const loaded = load.data !== null;
   const firstLoad = !loaded && load.status === 'loading';
   const failed = load.status === 'error';

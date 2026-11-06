@@ -31,7 +31,6 @@ const DOC_SELECT = {
   supplierId: true,
   supplierGstin: true,
   purchaseInvoiceId: true,
-  postedAt: true,
 } as const;
 
 // Posting refuses a return dated more than a day ahead, and posting touches updatedAt, so a
@@ -90,8 +89,7 @@ export class PharmacyPurchaseReturnsRegisterService {
     const ids = (pick: (doc: (typeof docs)[number]) => string | null) => [
       ...new Set(docs.map(pick).filter((id): id is string => Boolean(id))),
     ];
-    const challans = docs.filter((doc) => doc.status === 'CHALLAN').map((doc) => doc.id);
-    const [credits, suppliers, bills, people, sent] = await Promise.all([
+    const [credits, suppliers, bills, people] = await Promise.all([
       this.prisma.inventorySupplierCredit.findMany({
         where: { branchId: actor.branchId, documentId: { in: docs.map((doc) => doc.id) } },
         select: { ...SUPPLIER_CREDIT_BALANCE_SELECT, id: true, documentId: true, creditNoteDate: true },
@@ -105,17 +103,10 @@ export class PharmacyPurchaseReturnsRegisterService {
         select: { id: true, invoiceNumber: true, distributorName: true },
       }),
       peopleById(this.prisma, docs.map((doc) => doc.createdBy)),
-      challans.length
-        ? this.prisma.inventoryWorkflowEvent.findMany({
-            where: { branchId: actor.branchId, documentId: { in: challans }, action: 'CHALLAN' },
-            select: { documentId: true, createdAt: true },
-          })
-        : [],
     ]);
     const creditOf = new Map(credits.map((credit) => [credit.documentId, credit]));
     const supplierName = new Map(suppliers.map((supplier) => [supplier.id, supplier.name]));
     const billOf = new Map(bills.map((bill) => [bill.id, bill]));
-    const sentAt = new Map(sent.map((event) => [event.documentId, event.createdAt]));
     return docs.map((doc) => {
       const bill = doc.purchaseInvoiceId ? billOf.get(doc.purchaseInvoiceId) : undefined;
       return purchaseReturnEntry(
@@ -124,7 +115,6 @@ export class PharmacyPurchaseReturnsRegisterService {
           distributorName: (doc.supplierId && supplierName.get(doc.supplierId)) || bill?.distributorName || null,
           sourceBillNo: bill?.invoiceNumber ?? null,
           credit: creditOf.get(doc.id) ?? null,
-          awaitedSince: sentAt.get(doc.id) ?? doc.postedAt ?? null,
         },
         doc.createdBy ? (people.get(doc.createdBy) ?? null) : null,
         now,

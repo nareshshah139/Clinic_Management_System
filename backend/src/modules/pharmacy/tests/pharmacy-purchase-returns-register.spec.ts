@@ -40,7 +40,6 @@ const doc = (overrides: Partial<ReturnDocumentRecord> = {}): ReturnDocumentRecor
   distributorName: 'Linae Distributors',
   sourceBillNo: 'LIN-1',
   credit: credit(),
-  awaitedSince: null,
   ...overrides,
 });
 
@@ -126,7 +125,6 @@ describe('purchase returns register', () => {
         payload: { date: '2026-10-06', returnType: 'BREAKAGE' },
         totalAmount: 150,
         credit: null,
-        awaitedSince: new Date('2026-10-14T20:00:00Z'),
       }),
       asha,
       now,
@@ -171,11 +169,11 @@ describe('purchase returns register', () => {
 
   const STANDING = { held: 812.5, awaited: { amount: 670, count: 2 } };
 
-  it('counts credit notes awaited across all dates, from the clinic day the goods went on challan', () => {
+  it('counts credit notes awaited across all dates, from the date on the return challan', () => {
     expect(awaitedTotals(entries())).toEqual({ amount: 670, count: 2 });
     expect(awaitedTotals(entries(), medico.toLowerCase())).toEqual({ amount: 0, count: 0 });
     expect(entries().map((row) => [row.returnRef, row.awaitedSince])).toEqual([
-      ['RET-1', null], ['RET-2', '2026-10-15'], ['RET-3', null], ['RET-4', null], ['Rate difference', null], ['RET-OLD', null],
+      ['RET-1', null], ['RET-2', '2026-10-06'], ['RET-3', null], ['RET-4', null], ['Rate difference', null], ['RET-OLD', '2026-03-20'],
     ]);
   });
 

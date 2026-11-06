@@ -154,14 +154,15 @@ it('lists returns for this financial year with the credit note columns, states a
   ]);
   expect(screen.getByRole('tab', { name: 'Returns', selected: true })).toBeInTheDocument();
   expect(['RET-1', 'RET-2', 'RET-3', 'RET-4', 'RET-5', 'Rate difference'].map((ref) => statusCell(ref).textContent)).toEqual([
-    'Credit note awaited · 23d, for 23 days since the challanRecord credit note',
+    'Credit note awaited · 23d, for 23 days since the challan',
     'Received₹100.00 leftSet off',
     'Adjusted₹80.00 leftSet off',
     'Fully used',
     'Draft',
     'Cancelled',
   ]);
-  expect(rowOf('RET-1').cells[1]).toHaveTextContent('—No credit note yetOpen Return RET-1');
+  expect(rowOf('RET-1').cells[1]).toHaveTextContent('Record credit noteOpen Return RET-1');
+  expect(rowOf('RET-5').cells[1]).toHaveTextContent('—No credit note yetOpen Return RET-5');
   expect(rowOf('RET-2').cells[1]).toHaveTextContent('CN-80Open Return RET-2');
   expect(rowOf('RET-2').cells[3]).toHaveTextContent('04 Nov');
   expect(rowOf('RET-3').cells[5]).toHaveTextContent('Linae DistributorsBill LIN-1Breakage');
@@ -169,8 +170,10 @@ it('lists returns for this financial year with the credit note columns, states a
   expect(amountCell('RET-1')).toHaveTextContent('₹224.00return value');
   expect(amountCell('RET-2')).toHaveTextContent('₹100.00Return ₹112.00');
   expect(amountCell('RET-3')).toHaveTextContent(/^₹200\.00$/);
-  expect(screen.getByText(/^Credit held/).textContent).toBe('Credit held (all dates) ₹180.00 · Awaited ₹374.00 (2 returns) · 5 returns in this period');
-  expect(screen.getByText('1 draft and 1 cancelled not included. Awaited counts our return value until the note arrives')).toBeInTheDocument();
+  expect(screen.getByText(/^Credit held/).textContent).toBe('Credit held (all dates) ₹180.00 · Awaited ₹374.00 (2 returns) · 5 returns');
+  expect(screen.getByText(/^Held/).textContent).toBe('Held ₹180.00 · Awaited ₹374.00');
+  expect(screen.getByText('1 draft and 1 cancelled not included. Credit held and Awaited cover all dates; Awaited counts our return value until the note arrives.')).toHaveClass('sr-only');
+  expect(screen.getByRole('button', { name: 'About these totals' })).toBeInTheDocument();
 });
 
 it('opens the return document and starts a new return from the Returns tab', async () => {

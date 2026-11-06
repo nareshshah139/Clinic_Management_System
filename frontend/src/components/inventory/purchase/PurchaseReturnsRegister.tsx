@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { PackageX, Plus } from 'lucide-react';
+import { Info, PackageX, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ToastAction } from '@/components/ui/toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { errorMessage } from '@/components/register/register-query';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
 import { RegisterDenied, RegisterGrid } from '@/components/register/RegisterGrid';
@@ -202,21 +203,41 @@ export function PurchaseReturnsRegister({
     return <RegisterDenied noun="purchase returns" />;
   }
 
+  const totalsNote = data
+    ? [returnsExcludedNote(data.totals.excluded), 'Credit held and Awaited cover all dates; Awaited counts our return value until the note arrives.']
+        .filter(Boolean)
+        .join('. ')
+    : '';
   const summary = failed ? (
     'Totals not available'
   ) : data ? (
     <>
-      Credit held (all dates) {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)} (
-      {returnCount(data.totals.awaited.count)}) · {returnCount(data.totals.count)} in this period
+      <span aria-hidden="true" className="sm:hidden">
+        Held {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)}
+      </span>
+      <span className="max-sm:sr-only">
+        Credit held (all dates) {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)} (
+        {returnCount(data.totals.awaited.count)}) · {returnCount(data.totals.count)}
+      </span>
+      <TooltipProvider delayDuration={200}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label="About these totals"
+            className="ml-1.5 inline-flex size-6 items-center justify-center rounded-full align-[-3px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 max-sm:hidden"
+          >
+            <Info aria-hidden="true" className="size-4" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent className="max-w-80">{totalsNote}</TooltipContent>
+      </Tooltip>
+      </TooltipProvider>
     </>
   ) : (
     <Skeleton className="h-6 w-72" />
   );
-  const note = failed
-    ? 'Could not load purchase returns. Retry to see the latest totals.'
-    : data
-      ? [returnsExcludedNote(data.totals.excluded), 'Awaited counts our return value until the note arrives'].filter(Boolean).join('. ')
-      : '';
+  const note = failed ? 'Could not load purchase returns. Retry to see the latest totals.' : <span className="sr-only">{totalsNote}</span>;
 
   return (
     <div className="flex min-w-0 flex-col gap-3">
@@ -274,6 +295,7 @@ export function PurchaseReturnsRegister({
         onRetry={() => void reload()}
         containerRef={tableRef}
         compact
+        dense
         empty={
           <EmptyState
             icon={PackageX}

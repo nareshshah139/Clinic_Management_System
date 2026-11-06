@@ -92,8 +92,9 @@ export function PurchaseBills({
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="h-10 max-w-none! whitespace-nowrap! text-sm">
-                  More <ChevronDown aria-hidden="true" />
+                <Button variant="outline" className="h-10 max-w-none! whitespace-nowrap! text-sm max-sm:w-10 max-sm:px-0" aria-label="More">
+                  <span className="max-sm:hidden">More</span>
+                  <ChevronDown aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">

@@ -14,7 +14,8 @@ type HandOff = (run: () => void) => void;
 function anchoredStyle(anchor: HTMLElement, width: number, height: number): CSSProperties | undefined {
   if (window.innerWidth < 640) return undefined;
   const rect = anchor.getBoundingClientRect();
-  const left = Math.min(Math.max(EDGE, rect.right - width), window.innerWidth - width - EDGE);
+  const preferred = rect.left + rect.width / 2 < window.innerWidth / 2 ? rect.left : rect.right - width;
+  const left = Math.min(Math.max(EDGE, preferred), window.innerWidth - width - EDGE);
   const below = rect.bottom + GAP;
   const roomBelow = window.innerHeight - EDGE - below;
   const roomAbove = rect.top - GAP - EDGE;

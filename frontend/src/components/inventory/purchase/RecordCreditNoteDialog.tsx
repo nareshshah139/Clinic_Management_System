@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
@@ -60,9 +60,16 @@ export function RecordCreditNoteDialog({
   const differs = Number.isFinite(typed) && typed > 0 && differsFromReturn(typed, row);
   const confirming = confirmed !== null && confirmed === typed;
 
+  const [focusTarget, setFocusTarget] = useState<{ field: Field } | null>(null);
+  useEffect(() => {
+    if (!focusTarget || saving) return;
+    refs[focusTarget.field].current?.focus();
+    setFocusTarget(null);
+  }, [focusTarget, saving, refs]);
+
   const fail = (field: Field | undefined, message: string) => {
     setError({ field, message });
-    if (field) refs[field].current?.focus();
+    if (field) setFocusTarget({ field });
   };
 
   const submit = async (): Promise<DialogOutcome> => {

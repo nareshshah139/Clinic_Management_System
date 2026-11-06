@@ -1,12 +1,12 @@
 'use client';
 
 import { Pencil } from 'lucide-react';
-import { displayCalendarDate } from '@/lib/date-display';
+import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { RegisterDateTime, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
+import { shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
 import {
   RETURN_REASON_LABELS,
   awaitedDays,
@@ -17,7 +17,7 @@ import {
   type ReturnSortKey,
 } from './purchase-returns-model';
 
-const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
+const badgeText = 'whitespace-nowrap px-1.5 py-0 text-xs font-semibold leading-[1.125rem]';
 const noteClass = 'whitespace-nowrap text-xs font-medium leading-tight';
 const actionClass = 'h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!';
 const linkClass =
@@ -34,8 +34,8 @@ export function ReturnStateBadge({ row, today }: { row: PurchaseReturnRow; today
           Credit note awaited
           {days !== null && (
             <>
-              <span aria-hidden="true"> · {days}d</span>
-              <span className="sr-only">, for {days} {days === 1 ? 'day' : 'days'} since the challan</span>
+              <span aria-hidden="true"> · {days === 0 ? 'today' : `${days}d`}</span>
+              <span className="sr-only">{days === 0 ? ', challan sent today' : `, for ${days} ${days === 1 ? 'day' : 'days'} since the challan`}</span>
             </>
           )}
         </Badge>
@@ -44,7 +44,7 @@ export function ReturnStateBadge({ row, today }: { row: PurchaseReturnRow; today
     case 'RECEIVED':
     case 'ADJUSTED':
       return (
-        <span className="flex flex-col items-start gap-0.5">
+        <span className="flex flex-col items-start">
           <Badge variant="info" className={badgeText}>{row.state === 'RECEIVED' ? 'Received' : 'Adjusted'}</Badge>
           <span className={noteClass}>{formatRupees(available)} left</span>
         </span>
@@ -89,20 +89,43 @@ export function returnColumns({
       className: 'w-[1%]',
       cell: (row) => (
         <span className="flex items-start gap-0.5">
-          <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
-            {row.creditNote ? (
-              <span className="ref whitespace-nowrap font-semibold underline-offset-4">{row.creditNote.number}</span>
-            ) : (
-              <span>
-                <span aria-hidden="true">—</span>
-                <span className="sr-only">No credit note yet</span>
-              </span>
-            )}
-            <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
-              <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
-              {row.returnRef}
+          {canRecordCreditNote(row, canWrite) ? (
+            <span className="flex flex-col items-start gap-0.5">
+              <Button
+                id={actionId(row.id)}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 max-w-none! whitespace-nowrap! px-2 text-sm lg:min-h-7!"
+                aria-label={`Record credit note for ${noun(row)} ${row.returnRef}`}
+                aria-haspopup="dialog"
+                onClick={(event) => onAct('record', row, event.currentTarget)}
+              >
+                Record credit note
+              </Button>
+              <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
+                <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
+                  <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
+                  {row.returnRef}
+                </span>
+              </button>
             </span>
-          </button>
+          ) : (
+            <button id={openId(row.id)} type="button" onClick={() => onOpen(row)} className={linkClass}>
+              {row.creditNote ? (
+                <span className="ref whitespace-nowrap font-semibold leading-[1.125rem] underline-offset-4">{row.creditNote.number}</span>
+              ) : (
+                <span className="leading-[1.125rem]">
+                  <span aria-hidden="true">—</span>
+                  <span className="sr-only">No credit note yet</span>
+                </span>
+              )}
+              <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
+                <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
+                {row.returnRef}
+              </span>
+            </button>
+          )}
           {canCorrectCreditNote(row, canWrite) && (
             <Button
               type="button"
@@ -120,12 +143,26 @@ export function returnColumns({
         </span>
       ),
     },
-    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
+    {
+      key: 'entryAt',
+      label: 'Entry Date',
+      sort: 'entryAt',
+      className: 'w-[1%] whitespace-nowrap',
+      cell: (row) => {
+        const [day, time] = displayClinicDateTimeCompact(row.entryAt, today).split(', ');
+        return (
+          <span className="flex flex-col">
+            <span className="leading-[1.125rem]">{day}</span>
+            {time && <span className="text-xs font-medium leading-tight">{time}</span>}
+          </span>
+        );
+      },
+    },
     {
       key: 'creditNoteDate',
       label: 'Credit Note Date',
       sort: 'creditNoteDate',
-      className: 'w-[1%] whitespace-nowrap',
+      className: 'w-[1%] min-w-[6.5rem] whitespace-nowrap',
       cell: (row) => (row.creditNote?.date ? compactDay(displayCalendarDate(row.creditNote.date), today) : '—'),
     },
     {
@@ -140,13 +177,17 @@ export function returnColumns({
       sort: 'distributor',
       className: 'w-full max-w-0 min-w-[9rem]',
       cell: (row) => (
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="truncate font-medium">{row.distributor.name}</span>
+        <span className="flex min-w-0 flex-col">
+          <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="truncate font-medium leading-[1.125rem]">{row.distributor.name}</span>
           {(row.sourceBillNo || row.reason) && (
             <span className="flex min-w-0 items-center gap-1.5">
-              {row.sourceBillNo && <span className="truncate text-xs font-medium leading-tight">Bill {row.sourceBillNo}</span>}
+              {row.sourceBillNo && (
+                <span title={`Bill ${row.sourceBillNo}`} className="truncate text-xs font-medium leading-tight">
+                  Bill {row.sourceBillNo}
+                </span>
+              )}
               {row.reason && (
-                <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-1.5 py-0 text-xs font-medium">
+                <Badge variant="neutral" className="shrink-0 whitespace-nowrap px-1.5 py-0 text-xs font-medium leading-4">
                   {RETURN_REASON_LABELS[row.reason]}
                 </Badge>
               )}
@@ -166,7 +207,7 @@ export function returnColumns({
         const differs = row.creditNote && Math.abs(row.creditNote.amount - row.returnValue) > 0.01;
         return (
           <span className="flex flex-col items-end">
-            <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(amount)}</span>
+            <span className={cn('font-semibold leading-[1.125rem]', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(amount)}</span>
             {!row.creditNote && <span className={noteClass}>{noun(row)} value</span>}
             {differs && <span className={noteClass}>Return {formatRupees(row.returnValue)}</span>}
           </span>
@@ -197,20 +238,6 @@ export function returnColumns({
                   onClick={() => undo.run(row)}
                 >
                   {pending === 'undoing' ? 'Undoing…' : 'Undo'}
-                </Button>
-              )}
-              {canRecordCreditNote(row, canWrite) && (
-                <Button
-                  id={actionId(row.id)}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={actionClass}
-                  aria-label={`Record credit note for ${noun(row)} ${row.returnRef}`}
-                  aria-haspopup="dialog"
-                  onClick={(event) => onAct('record', row, event.currentTarget)}
-                >
-                  Record credit note
                 </Button>
               )}
               {canSetOff(row, canWrite) && (

@@ -97,7 +97,6 @@ export type ReturnDocumentRecord = {
   distributorName: string | null;
   sourceBillNo: string | null;
   credit: ReturnCreditRecord | null;
-  awaitedSince: Date | null;
 };
 
 const DRAFT_STATUSES = ['DRAFT', 'AWAITING_APPROVAL', 'APPROVED'];
@@ -127,6 +126,7 @@ export function purchaseReturnEntry(
   const number = doc.credit?.creditNoteNumber ?? null;
   const gstin = (doc.supplierGstin ?? '').toUpperCase();
   const state = returnCreditState(doc.status, balance ? { number, ...balance } : null);
+  const returnDate = clinicDayOf(payload.date) ?? clinicDay(doc.createdAt);
   return {
     id: doc.id,
     kind: doc.kind as ReturnKind,
@@ -141,7 +141,7 @@ export function purchaseReturnEntry(
           }
         : null,
     entryAt: doc.createdAt.toISOString(),
-    returnDate: clinicDayOf(payload.date) ?? clinicDay(doc.createdAt),
+    returnDate,
     entryBy,
     distributor: { name: doc.distributorName ?? gstin, gstin },
     sourceBillNo: doc.sourceBillNo,
@@ -149,7 +149,7 @@ export function purchaseReturnEntry(
     credit: doc.credit && balance ? { id: doc.credit.id, ...balance } : null,
     state,
     reason: doc.kind === 'SUPPLIER_RETURN' ? supplierReturnReason(payload) : null,
-    awaitedSince: state === 'AWAITED' && doc.awaitedSince ? clinicDay(doc.awaitedSince) : null,
+    awaitedSince: state === 'AWAITED' ? returnDate : null,
   };
 }
 
