@@ -452,6 +452,10 @@ export class BillingService {
       throw new BadRequestException('Refund amount exceeds original payment amount');
     }
 
+    if (amount > (payment.invoice?.received ?? 0)) {
+      throw new BadRequestException('Refund amount exceeds the amount still received on the invoice');
+    }
+
     // Represent refund as a negative payment (cash refund)
     const refundPayment = await this.prisma.newPayment.create({
       data: {

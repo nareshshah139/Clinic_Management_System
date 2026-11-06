@@ -309,6 +309,30 @@ describe('billing refunds', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('stops repeated refunds of one payment once the invoice has nothing left received', async () => {
+    const { service, prisma, invoices } = setup({
+      invoices: [paidInvoice()],
+      payments: [paid()],
+    });
+    await service.processRefund(
+      { paymentId: 'pay-1', amount: 700 } as any,
+      'branch-a',
+    );
+    await expect(
+      service.processRefund(
+        { paymentId: 'pay-1', amount: 400 } as any,
+        'branch-a',
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.newPayment.create).toHaveBeenCalledTimes(1);
+    expect(invoices[0]).toMatchObject({ received: 300, balance: 880 });
+    await service.processRefund(
+      { paymentId: 'pay-1', amount: 300 } as any,
+      'branch-a',
+    );
+    expect(invoices[0]).toMatchObject({ received: 0, balance: 1180 });
+  });
+
   it('denies a refund on another branch payment', async () => {
     const { service, prisma, invoices } = setup({
       invoices: [{ ...paidInvoice(), branchId: 'branch-b' }],
