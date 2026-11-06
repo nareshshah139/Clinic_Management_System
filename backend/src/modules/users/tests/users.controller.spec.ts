@@ -173,7 +173,7 @@ describe('UsersController', () => {
       const result = await controller.changePassword('user-123', changePasswordDto, mockRequest as any);
 
       expect(result).toEqual({ message: 'Password changed successfully' });
-      expect(mockUsersService.changePassword).toHaveBeenCalledWith('user-123', changePasswordDto, 'branch-123');
+      expect(mockUsersService.changePassword).toHaveBeenCalledWith('user-123', changePasswordDto, mockRequest.user);
     });
 
     it('should reset password', async () => {
@@ -224,7 +224,7 @@ describe('UsersController', () => {
       const result = await controller.updateProfile('user-123', updateProfileDto, mockRequest as any);
 
       expect(result).toEqual(updatedUser);
-      expect(mockUsersService.updateProfile).toHaveBeenCalledWith('user-123', updateProfileDto, 'branch-123');
+      expect(mockUsersService.updateProfile).toHaveBeenCalledWith('user-123', updateProfileDto, mockRequest.user);
     });
 
     it('should assign role', async () => {
