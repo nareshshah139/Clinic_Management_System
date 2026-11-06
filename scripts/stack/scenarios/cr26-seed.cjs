@@ -16,6 +16,7 @@ const DISTRIBUTORS = [
 ];
 
 const FY_COUNT = 60;
+const FUTURE_DAY = "2099-01-15";
 const CANCELLED = new Set([13, 41]);
 const NOT_POSTED = new Map([
   [5, "DRAFT"], [29, "DRAFT"], [53, "DRAFT"],
@@ -67,6 +68,12 @@ function buildSpecs(today) {
   extra(101, "SLV", "SLV/2026/0", istInstant("2026-02-03", "15:05"), 2750050, "2026-03-05", "previous");
   extra(102, "NVJ", "NVJ/2025/77", istInstant("2026-03-31", "23:30"), 1250000, "2026-04-30", "previous");
   extra(103, "APX", "APX/2026/0", istInstant("2026-04-01", "00:15"), 880000, "2026-05-01", "current");
+  const plan = (spec, plan) => Object.assign(spec, { plan });
+  // CR-26 fix round: payments dated after now are "scheduled" - they do not reduce the balance but reduce what is payable.
+  extra(104, "SKP", "SKP/2026/FUT-FULL", istInstant(addDays(today, -2), "10:30"), 1860000, addDays(today, 20), "current");
+  plan(specs.at(-1), "FUTURE_FULL");
+  extra(105, "MCW", "MCW/2026/FUT-PART", istInstant(addDays(today, -60), "14:10"), 2400000, addDays(today, -10), "current");
+  plan(specs.at(-1), "FUTURE_PART");
   return specs;
 }
 
@@ -106,6 +113,7 @@ async function seedRows(db, stack) {
       default: break;
     }
     if (s.committedIndex === 10) paidAlloc.splice(0, paidAlloc.length, s.net + 500);
+    const future = s.plan === "FUTURE_FULL" ? s.net : s.plan === "FUTURE_PART" ? Math.round(s.net * 0.4) : 0;
     const invoice = await db.pharmacyPurchaseInvoice.create({
       data: {
         branchId, createdBy: userId[s.creator ?? "null"] ?? null, distributorName: s.dist.name, distributorGstin: s.dist.gstin, distributorDlNo: `MH-PUN-${s.dist.code}-2026`,
@@ -143,26 +151,51 @@ async function seedRows(db, stack) {
       });
       if (!reversed && s.plan === "PAID") paymentGroups.set(s.dist.gstin, { id: payment.id, count: 1, total: amountCents });
     }
+    if (future) {
+      paymentSeq++;
+      await db.pharmacyPurchasePayment.create({
+        data: {
+          branchId, distributorGstin: s.dist.gstin, distributorName: s.dist.name, paymentDate: istInstant(FUTURE_DAY, "00:00"), mode: "NEFT", paidBy: userId.pharmacist,
+          amount: future / 100, referenceNo: `SEED-FUTURE-${paymentSeq}`, requestKey: `seed-payment-${paymentSeq}`,
+          allocations: { create: [{ purchaseInvoiceId: invoice.id, amount: future / 100 }] },
+        },
+      });
+    }
     const live = reversed ? 0 : paidAlloc.reduce((a, b) => a + b, 0);
     model.push({
       id: invoice.id, key: s.key, billNo: s.billNo, distributor: s.dist.name, gstin: s.dist.gstin, billDay: s.invoiceDay, entryAt: s.createdAt.getTime(),
-      net: s.net, paid: live, credit, dueDay: s.dueDay, status: s.status, source: s.source, entryBy: s.creator && names[s.creator] ? names[s.creator] : null, plan: s.plan, fy: s.fy,
+      net: s.net, paid: live, credit, dueDay: s.dueDay, status: s.status, source: s.source, entryBy: s.creator && names[s.creator] ? names[s.creator] : null, plan: s.plan, fy: s.fy, sched: future, schedDay: future ? FUTURE_DAY : null,
     });
   }
   return { model, today, names, distributors: DISTRIBUTORS };
 }
 
+// CR-26 fix round rules: OVERDUE wins over PARTIAL; scheduled (future-dated) payments only reduce `payable`.
 function derive(bill, today) {
   const settled = bill.paid + bill.credit;
-  const outstanding = bill.status === "STOCK_COMMITTED" ? Math.max(bill.net - settled, 0) : 0;
+  const posted = bill.status === "STOCK_COMMITTED";
+  const outstanding = posted ? Math.max(bill.net - settled, 0) : 0;
   const lateDays = bill.dueDay && bill.dueDay < today ? daysBetween(bill.dueDay, today) : 0;
   let state;
   if (bill.status === "CANCELLED") state = "CANCELLED";
-  else if (bill.status !== "STOCK_COMMITTED") state = "NOT_POSTED";
+  else if (!posted) state = "NOT_POSTED";
   else if (outstanding <= 1) state = "PAID";
-  else if (settled > 0) state = "PARTIAL";
-  else state = lateDays > 0 ? "OVERDUE" : "DUE";
-  return { state, outstanding: state === "PAID" ? 0 : outstanding, lateDays: state === "OVERDUE" || state === "PARTIAL" ? lateDays : 0 };
+  else if (lateDays > 0) state = "OVERDUE";
+  else if (settled > 1) state = "PARTIAL";
+  else state = "DUE";
+  const open = ["DUE", "OVERDUE", "PARTIAL"].includes(state);
+  const sched = open ? bill.sched || 0 : 0;
+  return {
+    state,
+    outstanding: state === "PAID" ? 0 : outstanding,
+    lateDays: state === "OVERDUE" ? lateDays : 0,
+    partlyPaid: open && settled > 1,
+    settled,
+    sched,
+    schedDay: sched ? bill.schedDay : null,
+    payable: open ? Math.max(outstanding - sched, 0) : 0,
+    scheduledOnly: open && sched > 0 && outstanding - sched <= 1,
+  };
 }
 
-module.exports = { seed, derive, istDay, addDays, daysBetween, DISTRIBUTORS };
+module.exports = { seed, derive, istDay, istInstant, addDays, daysBetween, DISTRIBUTORS, FUTURE_DAY };
