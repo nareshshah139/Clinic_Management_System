@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingSkeleton } from '@/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,9 +49,8 @@ type PaymentStatusFilter = PharmacyPaymentStatusType | 'all';
 type PaymentMethodFilter = PharmacyPaymentMethodType | 'all';
 type DateRange = 'all' | 'today' | 'week' | 'month' | 'quarter';
 
-const initialSearch = () => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('search') || '');
-
 export function PharmacyInvoiceList() {
+  const initialSearch = useSearchParams()?.get('search') ?? '';
   const [invoices, setInvoices] = useState<PharmacyInvoiceSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState(initialSearch);
@@ -62,7 +62,7 @@ export function PharmacyInvoiceList() {
   }, [invoices]);
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all');
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all');
-  const [dateRange, setDateRange] = useState<DateRange>(() => (initialSearch() ? 'all' : 'today'));
+  const [dateRange, setDateRange] = useState<DateRange>(initialSearch ? 'all' : 'today');
   const [pagination, setPagination] = useState({
     page: 1,
     limit: 20,

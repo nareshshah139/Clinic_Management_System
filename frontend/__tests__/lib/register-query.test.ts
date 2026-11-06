@@ -74,3 +74,11 @@ it('ignores a URL range longer than 400 days', () => {
   expect(parse('from=2025-04-01&to=2026-05-06')).toMatchObject({ from: '2026-04-01', to: '2027-03-31' });
   expect(parse('from=2025-04-01&to=2026-05-05')).toMatchObject({ from: '2025-04-01', to: '2026-05-05' });
 });
+
+it('reads a range back when only one bound differs from the financial year', () => {
+  const query = { ...defaults, to: '2026-04-02' };
+  const params = queryParams(config, query, today);
+  expect(params.toString()).toBe('to=2026-04-02');
+  expect(parse(params.toString())).toEqual(query);
+  expect(parse('from=2026-11-01')).toMatchObject({ from: '2026-11-01', to: '2027-03-31' });
+});

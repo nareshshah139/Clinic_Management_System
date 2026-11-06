@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { PharmacyInvoiceList } from '@/components/pharmacy/PharmacyInvoiceList';
 import { apiClient } from '@/lib/api';
 
+let mockQuery = '';
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mockQuery) }));
 jest.mock('@/lib/api', () => ({ apiClient: { getPharmacyInvoices: jest.fn(), get: jest.fn() } }));
 
 const older = {
@@ -16,10 +18,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   (apiClient.getPharmacyInvoices as jest.Mock).mockResolvedValue({ data: [older], pagination: { page: 1, limit: 20, total: 1, pages: 1 } });
 });
-afterEach(() => window.history.pushState({}, '', '/'));
+afterEach(() => { mockQuery = ''; });
 
 it('opened with ?search=, shows that text in the box and lists the bill from any date', async () => {
-  window.history.pushState({}, '', '/dashboard/pharmacy/invoices?search=PHI-2026-075');
+  mockQuery = 'search=PHI-2026-075';
   render(<PharmacyInvoiceList />);
   expect(await screen.findByText('PHI-2026-075')).toBeInTheDocument();
   expect(screen.getByPlaceholderText('Invoice number, patient...')).toHaveValue('PHI-2026-075');

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PharmacyInvoiceList } from '@/components/pharmacy/PharmacyInvoiceList';
 import { apiClient } from '@/lib/api';
 
+jest.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams() }));
 jest.mock('@/lib/api', () => ({ apiClient: { getPharmacyInvoices: jest.fn(), get: jest.fn() } }));
 
 it('shows the clinic issue day in the sales list and printed invoice across UTC midnight', async () => {

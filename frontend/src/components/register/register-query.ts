@@ -63,9 +63,10 @@ export function parseQuery<Filter extends string, Sort extends string>(
   const field = read('field');
   if (config.searchFields.includes(field)) query.field = field;
   query.q = read('q');
-  const from = read('from');
-  const to = read('to');
-  if (isDay(from) && isDay(to) && !rangeError({ from, to })) Object.assign(query, { from, to });
+  const [rawFrom, rawTo] = [read('from'), read('to')];
+  const valid = (raw: string) => raw === '' || isDay(raw);
+  const range = { from: rawFrom || query.from, to: rawTo || query.to };
+  if (valid(rawFrom) && valid(rawTo) && !rangeError(range)) Object.assign(query, range);
   for (const key of filterKeys(config)) {
     const { param, values } = config.filters[key];
     const value = read(param);

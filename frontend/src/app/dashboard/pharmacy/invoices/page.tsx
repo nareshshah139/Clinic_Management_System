@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { PharmacyInvoiceList } from '@/components/pharmacy/PharmacyInvoiceList';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
@@ -18,7 +19,9 @@ export default function PharmacyInvoicesPage() {
           <h2 className="text-3xl font-bold tracking-tight">Pharmacy Invoices</h2>
         </div>
       </div>
-      <PharmacyInvoiceList />
+      <Suspense fallback={null}>
+        <PharmacyInvoiceList />
+      </Suspense>
     </div>
   );
 } 
