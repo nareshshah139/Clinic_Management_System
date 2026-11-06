@@ -20,6 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertCircle, CalendarDays, ChevronDown, ChevronUp, FlaskConical, Languages, Mic, MicOff, Pill, Plus, RotateCcw, Sparkles, Trash2, Wand2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { apiClient } from '@/lib/api';
+import { ManageClinicInvestigations, hasInvestigation, mergeInvestigationOptions, sameInvestigation, tidyInvestigationName, useClinicInvestigations, type ClinicInvestigation } from './ClinicInvestigations';
 import { handleUnauthorizedRedirect } from '@/lib/authRedirect';
 import { getErrorMessage } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -529,8 +530,35 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   ];
   const [customInvestigationOptions, setCustomInvestigationOptions] = useState<string[]>([]);
   const [newCustomInvestigation, setNewCustomInvestigation] = useState<string>('');
-  const investigationOptions = useMemo(() => [...defaultInvestigationOptions, ...customInvestigationOptions], [customInvestigationOptions]);
+  const clinicInvestigations = useClinicInvestigations(toast);
+  const investigationOptions = useMemo(
+    () => mergeInvestigationOptions(defaultInvestigationOptions, clinicInvestigations.saved.map((entry) => entry.name), customInvestigationOptions),
+    [clinicInvestigations.saved, customInvestigationOptions],
+  );
   const [investigations, setInvestigations, hydrateInvestigations] = useClinicalState<string[]>([], 'investigations', dirtyClinicalFields);
+  const addCustomInvestigation = async () => {
+    const requested = tidyInvestigationName(newCustomInvestigation);
+    if (!requested || hasInvestigation(investigationOptions, requested)) return;
+    setNewCustomInvestigation('');
+    const { name, savedToClinic } = await clinicInvestigations.add(requested);
+    if (!savedToClinic) setCustomInvestigationOptions((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
+    setInvestigations((prev) => (hasInvestigation(prev, name) ? prev : [...prev, name]));
+  };
+  const renameClinicInvestigation = async (entry: ClinicInvestigation, name: string) => {
+    const renamed = await clinicInvestigations.rename(entry, name);
+    if (!renamed) return null;
+    const swap = (list: string[]) => list.map((value) => (sameInvestigation(value, entry.name) ? renamed.name : value));
+    setInvestigations(swap);
+    setCustomInvestigationOptions(swap);
+    return renamed;
+  };
+  const removeClinicInvestigation = async (entry: ClinicInvestigation) => {
+    const removed = await clinicInvestigations.remove(entry);
+    if (removed && hasInvestigation(investigations, entry.name)) {
+      setCustomInvestigationOptions((prev) => (hasInvestigation(prev, entry.name) ? prev : [...prev, entry.name]));
+    }
+    return removed;
+  };
   const [patientHistoryForLearning, setPatientHistoryForLearning] = useState<any[]>([]);
   const [doctorPrescriptionsForLearning, setDoctorPrescriptionsForLearning] = useState<any[]>([]);
   const [learningSourcesStatus, setLearningSourcesStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -5246,27 +5274,23 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                   {investigationOptions.map((opt) => (
                     <label key={opt} className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={investigations.includes(opt)} onChange={(e) => setInvestigations((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => x !== opt))} />
+                      <input type="checkbox" checked={hasInvestigation(investigations, opt)} onChange={(e) => setInvestigations((prev) => e.target.checked ? [...prev, opt] : prev.filter((x) => !sameInvestigation(x, opt)))} />
                       <span>{opt}</span>
                     </label>
                   ))}
                 </div>
                 <div className="flex gap-2 items-end pt-2 border-t">
                   <div className="flex-1">
-                    <label className="text-xs text-gray-600 mb-1 block">Add Custom Investigation</label>
+                    <label htmlFor="custom-investigation-name" className="text-xs text-gray-600 mb-1 block">Add Custom Investigation</label>
                     <Input
+                      id="custom-investigation-name"
                       placeholder="e.g., MRI Brain, CT Scan"
                       value={newCustomInvestigation}
                       onChange={(e) => setNewCustomInvestigation(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newCustomInvestigation.trim()) {
+                        if (e.key === 'Enter') {
                           e.preventDefault();
-                          const trimmed = newCustomInvestigation.trim();
-                          if (!investigationOptions.includes(trimmed)) {
-                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
-                            setInvestigations((prev) => [...prev, trimmed]);
-                            setNewCustomInvestigation('');
-                          }
+                          void addCustomInvestigation();
                         }
                       }}
                     />
@@ -5275,20 +5299,15 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
                     type="button"
                     size="sm"
                     variant="outline"
-                    onClick={() => {
-                          const trimmed = newCustomInvestigation.trim();
-                          if (trimmed && !investigationOptions.includes(trimmed)) {
-                            setCustomInvestigationOptions((prev) => [...prev, trimmed]);
-                            setInvestigations((prev) => [...prev, trimmed]);
-                            setNewCustomInvestigation('');
-                          }
-                    }}
-                    disabled={!newCustomInvestigation.trim() || investigationOptions.includes(newCustomInvestigation.trim())}
+                    onClick={() => void addCustomInvestigation()}
+                    aria-label="Add custom investigation"
+                    disabled={!newCustomInvestigation.trim() || hasInvestigation(investigationOptions, newCustomInvestigation)}
                   >
                     <Plus className="h-4 w-4 mr-1" />
                     Add
                   </Button>
                 </div>
+                <ManageClinicInvestigations saved={clinicInvestigations.saved} onRename={renameClinicInvestigation} onRemove={removeClinicInvestigation} />
               </div>
             </CollapsibleSection>
 
