@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../database/prisma.service';
 
 export type InvoiceNumberType = 'BILLING' | 'PHARMACY' | string;
@@ -8,45 +9,30 @@ export class InvoiceNumbersService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * @cc [owner:nareshshah139,label:integrity;target] invoice-numbers-unique-per-period
+   * @cc [owner:nareshshah139,label:integrity] invoice-numbers-unique-per-period
    * reserve() MUST hand out each number once per type, branch and period: concurrent callers for one
    * key get distinct consecutive numbers, the first call in a period gets 1, and other branches,
-   * types and periods MUST NOT advance. This is a target obligation, not a pass claim.
+   * types and periods MUST NOT advance.
    */
   async reserve(params: { type: InvoiceNumberType; branchId: string; date?: Date }): Promise<{ sequence: number; periodKey: string }> {
     const { type, branchId } = params;
     const date = params.date ?? new Date();
     const periodKey = this.computePeriodKey(type, date);
 
-    // Retry loop to handle unique constraint races
     for (let attempt = 0; attempt < 5; attempt++) {
-      // Try atomic increment first
-      const updated = await (this.prisma as any).numberSequence.updateMany({
-        where: { type, branchId, periodKey },
-        data: { lastNumber: { increment: 1 } },
-      });
-
-      if (updated.count > 0) {
-        const row = await (this.prisma as any).numberSequence.findFirst({
-          where: { type, branchId, periodKey },
+      try {
+        const row = await this.prisma.numberSequence.upsert({
+          where: { type_branchId_periodKey: { type, branchId, periodKey } },
+          update: { lastNumber: { increment: 1 } },
+          create: { type, branchId, periodKey, lastNumber: 1 },
           select: { lastNumber: true },
         });
         return { sequence: row.lastNumber, periodKey };
-      }
-
-      // No row yet; try to create one with sequence = 1
-      try {
-        const created = await (this.prisma as any).numberSequence.create({
-          data: { type, branchId, periodKey, lastNumber: 1 },
-          select: { lastNumber: true },
-        });
-        return { sequence: created.lastNumber, periodKey };
       } catch (err) {
-        // Likely unique conflict due to race; retry
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
       }
     }
 
-    // Fallback: ensure we return something or throw
     throw new Error('Failed to reserve invoice number after multiple attempts');
   }
 

@@ -57,48 +57,41 @@ databaseTests('Invoice number reservation with PostgreSQL', () => {
     ]);
   });
 
-  // Target invoice-numbers-unique-per-period: the increment and the read are separate statements.
-  it.failing(
-    'gives 20 concurrent callers 20 distinct consecutive numbers for one key',
-    async () => {
-      const results = await reserveMany(20, {
-        type: 'BILLING',
-        branchId: 'branch-a',
-        date: day,
-      });
-      expect(results.map((r) => r.sequence).sort((a, b) => a - b)).toEqual(
-        Array.from({ length: 20 }, (_, i) => i + 1),
-      );
-      expect(
-        (
-          await numbers.reserve({
-            type: 'BILLING',
-            branchId: 'branch-a',
-            date: day,
-          })
-        ).sequence,
-      ).toBe(21);
-    },
-  );
+  it('gives 20 concurrent callers 20 distinct consecutive numbers for one key', async () => {
+    const results = await reserveMany(20, {
+      type: 'BILLING',
+      branchId: 'branch-a',
+      date: day,
+    });
+    expect(results.map((r) => r.sequence).sort((a, b) => a - b)).toEqual(
+      Array.from({ length: 20 }, (_, i) => i + 1),
+    );
+    expect(
+      (
+        await numbers.reserve({
+          type: 'BILLING',
+          branchId: 'branch-a',
+          date: day,
+        })
+      ).sequence,
+    ).toBe(21);
+  });
 
-  it.failing(
-    'keeps branches and types independent under concurrency',
-    async () => {
-      const [a, b, pharmacy] = await Promise.all([
-        reserveMany(10, { type: 'BILLING', branchId: 'branch-a', date: day }),
-        reserveMany(10, { type: 'BILLING', branchId: 'branch-b', date: day }),
-        reserveMany(10, { type: 'PHARMACY', branchId: 'branch-a', date: day }),
-      ]);
-      const oneToTen = Array.from({ length: 10 }, (_, i) => i + 1);
-      for (const results of [a, b, pharmacy])
-        expect(results.map((r) => r.sequence).sort((x, y) => x - y)).toEqual(
-          oneToTen,
-        );
-      expect(new Set(pharmacy.map((r) => r.periodKey))).toEqual(
-        new Set(['2026']),
+  it('keeps branches and types independent under concurrency', async () => {
+    const [a, b, pharmacy] = await Promise.all([
+      reserveMany(10, { type: 'BILLING', branchId: 'branch-a', date: day }),
+      reserveMany(10, { type: 'BILLING', branchId: 'branch-b', date: day }),
+      reserveMany(10, { type: 'PHARMACY', branchId: 'branch-a', date: day }),
+    ]);
+    const oneToTen = Array.from({ length: 10 }, (_, i) => i + 1);
+    for (const results of [a, b, pharmacy])
+      expect(results.map((r) => r.sequence).sort((x, y) => x - y)).toEqual(
+        oneToTen,
       );
-    },
-  );
+    expect(new Set(pharmacy.map((r) => r.periodKey))).toEqual(
+      new Set(['2026']),
+    );
+  });
 
   it('restarts BILLING at 1 each day and PHARMACY at 1 each year', async () => {
     await reserveMany(3, { type: 'BILLING', branchId: 'branch-a', date: day });
