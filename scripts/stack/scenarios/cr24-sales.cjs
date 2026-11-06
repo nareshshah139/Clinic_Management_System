@@ -877,6 +877,7 @@ function makeCheck(t) {
     await scrollAll(page, "bottom");
     const fb = await footerBox(page);
     s.ok("pinned total visible in viewport", fb.inside, fb);
+    s.ok("mobile footer is one compact line, at most 64px tall", fb.box.height <= 64, fb.box);
     s.check("mobile total correct", (await footer(page)).total, fmt(finalSum(fySales)));
     const lastRow = await vis(page).locator("tbody tr").last().boundingBox();
     s.ok("footer does not cover the last row", lastRow.y + lastRow.height <= fb.box.y + 1, { lastRowBottom: lastRow.y + lastRow.height, footerTop: fb.box.y });
@@ -998,7 +999,7 @@ function makeCheck(t) {
           const b = el.getBoundingClientRect();
           return { l: Math.round(b.left), r: Math.round(b.right), t: Math.round(b.top), w: Math.round(b.width), h: Math.round(b.height) };
         };
-        const container = table.closest("div.overflow-x-auto") ?? table.parentElement;
+        const container = table.closest("div.overflow-auto") ?? table.parentElement;
         const heads = [...table.querySelectorAll("thead th")].map((th) => ({ text: th.innerText.replace(/\s+/g, " ").trim(), ...box(th) }));
         const actions = [...table.querySelectorAll("tbody tr")].flatMap((tr) => [...tr.querySelectorAll("button[aria-label], a[aria-label]")].map((b) => ({ n: b.getAttribute("aria-label").slice(0, 24), ...box(b) })));
         const lastCells = [...table.querySelectorAll("tbody tr")].map((tr) => box(tr.lastElementChild));
@@ -1006,6 +1007,7 @@ function makeCheck(t) {
         const bar = [...document.querySelectorAll('[role="tabpanel"]')].find((p) => p.getClientRects().length);
         const controls = [...bar.querySelectorAll("select, input[type=search], button")].filter((e) => !e.closest("table") && !e.closest("nav") && e.getClientRects().length && !/Retry/.test(e.innerText)).map((e) => ({ n: e.getAttribute("aria-label") || e.innerText.replace(/\s+/g, " ").trim().slice(0, 18), ...box(e) }));
         const fontOf = (sel) => { const el = table.querySelector(sel); return el ? getComputedStyle(el).fontSize : null; };
+        const badgeSizes = [...table.querySelectorAll('tbody [data-slot="badge"]')].map((b) => parseFloat(getComputedStyle(b).fontSize));
         return {
           iw: innerWidth,
           docSw: document.documentElement.scrollWidth,
@@ -1016,6 +1018,7 @@ function makeCheck(t) {
           actions,
           maxRight: Math.max(...lastCells.map((c) => c.r)),
           minRowHeight: Math.min(...rowHeights),
+          badgeSizes,
           controls,
           fonts: { head: fontOf("thead th"), cell: fontOf("tbody td"), patient: fontOf("tbody td:nth-child(5)"), label: getComputedStyle(bar.querySelector("label")).fontSize },
         };
@@ -1027,6 +1030,7 @@ function makeCheck(t) {
       s.ok(`${tag}: documentElement.scrollWidth <= innerWidth`, m.docSw <= m.iw, { docSw: m.docSw, iw: m.iw });
       s.ok(`${tag}: table container scrollWidth <= clientWidth`, m.containerSw <= m.containerCw, { sw: m.containerSw, cw: m.containerCw });
       s.ok(`${tag}: last cell of every row ends inside the viewport`, m.maxRight <= m.iw, m.maxRight);
+      s.ok(`${tag}: every payment badge computes to at least 14px (${m.badgeSizes.length} badges)`, m.badgeSizes.length > 0 && Math.min(...m.badgeSizes) >= 14, { min: Math.min(...m.badgeSizes) });
       s.ok(`${tag}: rows at least 52px high`, m.minRowHeight >= 52, m.minRowHeight);
       const main = m.controls.filter((c) => !/^(Previous|Next)/.test(c.n) && c.t < 260);
       const spread = Math.max(...main.map((c) => c.t + c.h / 2)) - Math.min(...main.map((c) => c.t + c.h / 2));
@@ -1037,6 +1041,36 @@ function makeCheck(t) {
       await s.shot(page, `13-${tag}-bottom`);
       await page.close();
     }
+  });
+
+  await scenario("13b", "sticky-header-below-xl", async (s) => {
+    const { page } = s.track(await open("pharmacist", { width: 1200, height: 800 }));
+    await goto(page, "/dashboard/pharmacy/sales");
+    const before = await page.evaluate(() => {
+      const table = [...document.querySelectorAll("table")].find((t) => t.getClientRects().length);
+      const wrapper = table.parentElement;
+      const rows = table.querySelectorAll("tbody tr").length;
+      const target = table.querySelectorAll("tbody tr")[Math.min(30, rows - 1)];
+      wrapper.scrollTop = target.offsetTop;
+      return { rows, wrapperScrolls: wrapper.scrollHeight > wrapper.clientHeight + 1, scrollTop: Math.round(wrapper.scrollTop) };
+    });
+    await page.waitForTimeout(250);
+    s.ok("wrapper has at least 31 rows and scrolls vertically", before.rows >= 31 && before.wrapperScrolls && before.scrollTop > 500, before);
+    const after = await page.evaluate(() => {
+      const table = [...document.querySelectorAll("table")].find((t) => t.getClientRects().length);
+      const wrapper = table.parentElement.getBoundingClientRect();
+      const heads = [...table.querySelectorAll("thead th")].map((th) => {
+        const b = th.getBoundingClientRect();
+        return { text: th.innerText.replace(/\s+/g, " ").trim(), top: Math.round(b.top - wrapper.top), h: Math.round(b.height), onTop: document.elementFromPoint(b.left + 4, b.top + b.height / 2)?.closest("th") === th };
+      });
+      return heads;
+    });
+    s.ok("every column header stays pinned at the top of the table after scrolling 30 rows", after.every((h) => h.top >= -1 && h.top <= 2 && h.h > 0 && h.onTop), after);
+    await s.shot(page, "13b-1200-scrolled");
+    await scrollAll(page, "bottom");
+    const fb = await footerBox(page);
+    const last = await vis(page).locator("tbody tr").last().boundingBox();
+    s.ok("footer does not cover the last row at 1200", last.y + last.height <= fb.box.y + 1, { lastBottom: last.y + last.height, footerTop: fb.box.y });
   });
 
   await scenario("14", "due-and-collected", async (s) => {
