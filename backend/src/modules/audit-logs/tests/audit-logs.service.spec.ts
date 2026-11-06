@@ -60,3 +60,54 @@ describe('audit log retention', () => {
     },
   );
 });
+
+describe('audit log service is add-only', () => {
+  const recorded: string[] = [];
+  const delegate = new Proxy({} as Record<string, jest.Mock>, {
+    get: (target, op: string) =>
+      (target[op] ??= jest.fn(async () => {
+        recorded.push(op);
+        return op === 'count'
+          ? 0
+          : op === 'deleteMany'
+            ? { count: 0 }
+            : op === 'findUnique'
+              ? null
+              : [];
+      })),
+  });
+  const service = new AuditLogsService({ auditLog: delegate } as any);
+
+  beforeEach(() => {
+    recorded.length = 0;
+  });
+
+  it('only reads when serving every query method', async () => {
+    await service.findAll({} as any);
+    await service.findOne('log-1');
+    await service.findByEntity('Patient', 'pat-1');
+    await service.findByUser('user-1', {} as any);
+    await service.getStatistics();
+    await service.exportLogs({} as any, 'json');
+    expect(recorded.length).toBeGreaterThan(0);
+    expect(new Set(recorded)).toEqual(
+      new Set(['findMany', 'count', 'findUnique', 'groupBy']),
+    );
+  });
+
+  it('exposes deleteOldLogs as the only mutating method', () => {
+    const methods = Object.getOwnPropertyNames(
+      AuditLogsService.prototype,
+    ).filter((name) => name !== 'constructor');
+    expect(
+      methods.filter((name) =>
+        /^(create|add|update|edit|set|delete|remove|purge|clear)/i.test(name),
+      ),
+    ).toEqual(['deleteOldLogs']);
+  });
+
+  it('deletes through deleteMany only', async () => {
+    await service.deleteOldLogs(30);
+    expect(recorded).toEqual(['deleteMany']);
+  });
+});
