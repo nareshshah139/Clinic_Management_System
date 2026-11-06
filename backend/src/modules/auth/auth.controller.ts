@@ -39,6 +39,12 @@ export class AuthController {
     return this.passwordReset.issueResetCode(req.user, id);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] reset-password-public-throttled
+   * Reset MUST work without a token and MUST allow at most 5 attempts a minute per client. Every
+   * rejected code (unknown, expired, already used, or held by an inactive user) MUST get the same
+   * 400 message, so the response never reveals whether a code or account exists.
+   */
   @Public()
   @Post('reset-password')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -46,6 +52,12 @@ export class AuthController {
     return this.passwordReset.resetPassword(body.code, body.password, body.confirmPassword);
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] login-strict-cookie
+   * Login MUST be public, MUST answer 400 without an identifier and password, and MUST allow at
+   * most 5 attempts a minute per client. Success MUST set auth_token as an HttpOnly, SameSite=Strict
+   * cookie (Secure in production) and return the token and a user without the password hash.
+   */
   @Public()
   @Post('login')
   @Throttle({ default: { ttl: 60_000, limit: 5 } })
@@ -69,6 +81,10 @@ export class AuthController {
     return { access_token, user };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] logout-expires-cookie
+   * Logout MUST be public and MUST expire the HttpOnly auth_token cookie.
+   */
   @Public()
   @Post('logout')
   async logout(@Res({ passthrough: true }) res: Response) {
@@ -125,7 +141,12 @@ export class AuthController {
     };
   }
 
-  // Database backup endpoint (admin only)
+  /**
+   * @cc [owner:nareshshah139,label:security] backup-owner-admin-only
+   * Queueing a backup and reading its status MUST be limited to OWNER and ADMIN; DOCTOR and every
+   * other role MUST get 403 with no job queued. A backup is a whole-database dump, so this is a
+   * deliberate exception to DOCTOR passing every Roles() gate.
+   */
   @ApiBearerAuth()
   @Post('backup')
   async createBackup(@Request() req: AuthenticatedRequest) {
