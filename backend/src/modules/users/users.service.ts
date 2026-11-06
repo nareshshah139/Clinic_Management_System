@@ -240,19 +240,7 @@ export class UsersService {
       updateData.permissions = JSON.stringify(updateUserDto.permissions);
     }
     
-    if (updateUserDto.metadata) {
-      updateData.metadata = JSON.stringify(updateUserDto.metadata);
-    }
-
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: {
-        branch: true,
-      },
-    });
-
-    return this.formatUser(user);
+    return this.formatUser(await this.saveUser(id, updateData));
   }
 
   async deleteUser(id: string, branchId: string) {
@@ -376,21 +364,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const updateData: any = { ...updateProfileDto };
-    
-    if (updateProfileDto.metadata) {
-      updateData.metadata = JSON.stringify(updateProfileDto.metadata);
-    }
-
-    const updatedUser = await this.prisma.user.update({
-      where: { id },
-      data: updateData,
-      include: {
-        branch: true,
-      },
-    });
-
-    return this.formatUser(updatedUser);
+    return this.formatUser(await this.saveUser(id, { ...updateProfileDto }));
   }
 
   async updateUserStatus(id: string, userStatusDto: UserStatusDto, branchId: string) {
@@ -946,6 +920,29 @@ export class UsersService {
   }
 
   /**
+   * @cc [owner:nareshshah139,label:product] user-metadata-merge
+   * Saving a user MUST merge the given metadata keys into the stored settings, so one screen's
+   * save never erases another's (print layout, signature preferences, WhatsApp, working hours).
+   * A key sent as null is removed. Concurrent saves of different keys MUST all be kept.
+   */
+  private async saveUser(id: string, data: Record<string, any>) {
+    const { metadata, ...rest } = data;
+    if (metadata && typeof metadata === 'object') {
+      // Compare-and-swap on the stored text: a concurrent save makes the write miss and we merge again.
+      for (let attempt = 0; ; attempt++) {
+        const stored = await this.prisma.user.findUnique({ where: { id }, select: { metadata: true } });
+        const { count } = await this.prisma.user.updateMany({
+          where: { id, metadata: stored?.metadata ?? null },
+          data: { metadata: JSON.stringify(mergeMetadata(stored?.metadata ?? null, metadata)) },
+        });
+        if (count === 1) break;
+        if (attempt >= 20) throw new ConflictException('Settings changed while saving; please try again.');
+      }
+    }
+    return this.prisma.user.update({ where: { id }, data: rest, include: { branch: true } });
+  }
+
+  /**
    * @cc [owner:nareshshah139,label:security] user-self-service
    * A user's profile and password MUST be changeable only by that user or by an OWNER, ADMIN
    * or DOCTOR (the roles RolesGuard treats as managers); every other role is forbidden.
@@ -976,4 +973,16 @@ export class UsersService {
       metadata: metadataParsed,
     };
   }
+}
+
+/** Shallow-merges a metadata patch into stored JSON; null values remove keys and unreadable JSON starts empty. */
+export function mergeMetadata(stored: string | null, patch: Record<string, unknown>): Record<string, unknown> {
+  let current: Record<string, unknown> = {};
+  try {
+    const parsed = stored ? JSON.parse(stored) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) current = parsed;
+  } catch {}
+  const merged = { ...current, ...patch };
+  for (const [key, value] of Object.entries(patch)) if (value === null) delete merged[key];
+  return merged;
 }
