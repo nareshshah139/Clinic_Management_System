@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { execFileSync } = require("node:child_process");
+const { createRequire } = require("node:module");
 const { chromium } = require("playwright");
 const { bootStack } = require("../boot.cjs");
 const { seed, derive, istDay, daysBetween } = require("./cr26-seed.cjs");
@@ -842,22 +843,23 @@ function makeCheck(t) {
         const r = el.getBoundingClientRect();
         return { left: Math.round(r.left), right: Math.round(r.right), top: Math.round(r.top), bottom: Math.round(r.bottom), w: Math.round(r.width), h: Math.round(r.height) };
       };
-      const heads = [...document.querySelectorAll("thead th")].map((th) => {
+      const panel = [...document.querySelectorAll('[role="tabpanel"]')].find((p) => !p.hidden && p.getClientRects().length) ?? document;
+      const heads = [...panel.querySelectorAll("thead th")].map((th) => {
         const c = th.cloneNode(true);
         c.querySelectorAll(".sr-only").forEach((n) => n.remove());
         return { name: c.textContent.replace(/\s+/g, " ").trim(), ...box(th) };
       });
-      const payCells = [...document.querySelectorAll("tbody tr")].map((tr) => {
+      const payCells = [...panel.querySelectorAll("tbody tr")].map((tr) => {
         const td = tr.querySelector("td:nth-child(8)");
         const flex = td.firstElementChild;
         return { bill: tr.querySelector("td:nth-child(2) button")?.textContent.trim(), right: Math.round(td.getBoundingClientRect().right), content: Math.round(flex.scrollWidth), text: flex.firstElementChild?.innerText.replace(/\s+/g, " ").trim() };
       });
-      const buttons = [...document.querySelectorAll('button[aria-label^="Mark bill"]')].map(box);
-      const container = document.querySelector("table").parentElement; // ADAPT: RegisterGrid's scroller is overflow-auto, not .overflow-x-auto
-      const badgeSizes = [...document.querySelectorAll("tbody tr td:nth-child(8) *")]
+      const buttons = [...panel.querySelectorAll('button[aria-label^="Mark bill"]')].map(box);
+      const container = panel.querySelector("table").parentElement; // ADAPT: RegisterGrid's scroller is overflow-auto, not .overflow-x-auto
+      const badgeSizes = [...panel.querySelectorAll("tbody tr td:nth-child(8) *")]
         .filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))
         .map((el) => parseFloat(getComputedStyle(el).fontSize));
-      const gstin = [...document.querySelectorAll("tbody tr td:nth-child(6) *")].find((el) => /GSTIN|\d{2}[A-Z]{5}\d{4}/.test(el.innerText));
+      const gstin = [...panel.querySelectorAll("tbody tr td:nth-child(6) *")].find((el) => /GSTIN|\d{2}[A-Z]{5}\d{4}/.test(el.innerText));
       return {
         vw, scrollWidth: document.documentElement.scrollWidth, heads, buttons, widestPay: payCells.sort((a, b) => b.right - a.right).slice(0, 3), containerOverflow: container ? container.scrollWidth - container.clientWidth : null,
         badgeMin: Math.min(...badgeSizes), badgeSet: [...new Set(badgeSizes)].sort(), gstinSize: gstin ? parseFloat(getComputedStyle(gstin).fontSize) : null,
@@ -1202,7 +1204,7 @@ function makeCheck(t) {
   });
 
   await scenario("17", "export-xlsx", async (s) => {
-    const XLSX = require("xlsx");
+    const XLSX = createRequire(path.join(root, "backend/package.json"))("xlsx");
     const { page, context } = s.track(await open("pharmacist", { width: 1440, height: 900 }, { stubOpen: false }));
     await goto(page);
     const outstandingStates = ["DUE", "OVERDUE", "PARTIAL"];
@@ -1296,7 +1298,7 @@ function makeCheck(t) {
       s.ok(`reception ${route}: access message shown`, statuses.some((t) => /You don.t have access to purchase bills\./.test(t)), { statuses, body: body.slice(0, 200) });
       s.check(`reception ${route}: no "Forbidden resource"`, /Forbidden resource/.test(body), false);
       const alerts = (await rec.page.locator('[role="alert"]').allInnerTexts()).map((t) => t.trim()).filter(Boolean); // ignore Next's empty route announcer
-      s.check(`reception ${route}: no error alert, no table`, [alerts, await rec.page.locator("table").count()], [[], 0]);
+      s.check(`reception ${route}: no error alert, no table`, [alerts, await vis(rec.page).locator("table").count()], [[], 0]);
     }
     await s.shot(rec.page, "18-reception");
   });
