@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { errorMessage } from '@/components/register/register-query';
-import { ActionDialog, DialogClose } from './ActionDialog';
+import { ActionDialog, DialogClose, type DialogOutcome } from './ActionDialog';
 import { setOffFailure, type WriteFailure } from './purchase-returns-model';
 import { prefillSetOff, setOffProblem, type SetOffOptions, type SetOffResult } from './set-off-model';
 
@@ -46,11 +46,13 @@ export function SetOffCreditDialog({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const returnFocus = useRef(true);
   const firstRef = useRef<HTMLInputElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
   const errorId = useId();
   const leftId = useId();
+  const inputs = useId();
+  const inputId = (id: string) => `${inputs}bill-${id}`;
+  const focusBill = billId && options?.bills.some((bill) => bill.id === billId) ? billId : options?.bills[0]?.id;
 
   const scopeKey = JSON.stringify(scope);
   useEffect(() => {
@@ -82,11 +84,12 @@ export function SetOffCreditDialog({
   const check = options ? setOffProblem(options, amounts) : null;
   const left = check?.left ?? 0;
 
-  const submit = async () => {
-    if (!options || !check) return;
+  const submit = async (): Promise<DialogOutcome> => {
+    if (!options || !check) return 'stay';
     if (check.problem) {
       setError(check.problem);
-      return;
+      if (check.invalidBill) document.getElementById(inputId(check.invalidBill))?.focus();
+      return 'stay';
     }
     setSaving(true);
     setError('');
@@ -96,32 +99,33 @@ export function SetOffCreditDialog({
         { requestKey: key, ...scope, allocations: check.allocations },
         { idempotencyKey: key },
       );
-      returnFocus.current = false;
       onDone(result, check.total);
+      return 'done';
     } catch (failure) {
       const outcome = setOffFailure(failure);
       if (outcome.kind === 'stale') {
-        returnFocus.current = false;
         onStale(outcome);
-        return;
+        return 'done';
       }
       setError(outcome.kind === 'inline' ? outcome.message : '');
       setSaving(false);
+      return 'stay';
     }
   };
 
+  const name = options?.distributor.name ?? distributorName;
   const credits = options?.credits ?? [];
-  const creditLabel =
-    'creditId' in scope && credits[0]?.number ? `credit note ${credits[0].number}` : `${credits.length === 1 ? 'credit note' : 'credit notes'} held`;
+  const creditLabel = credits.length === 1 ? `credit note ${credits[0].number}` : `${credits.length} credit notes`;
   return (
     <ActionDialog
       anchor={anchor}
       width={480}
-      title={<>Set off credit from {distributorName}</>}
+      title={<>Set off credit from {name}</>}
       description={
         options ? (
           <>
-            <span className="font-semibold">{formatRupees(options.available)}</span> available on {creditLabel}. Bills due first are filled first.
+            <span className="font-semibold">{formatRupees(options.available)}</span> available from {creditLabel}.{' '}
+            {billId ? 'Filled against the bill you were paying.' : 'Bills due first are filled first.'}
           </>
         ) : (
           'Loading open bills…'
@@ -129,9 +133,20 @@ export function SetOffCreditDialog({
       }
       saving={saving}
       initialFocus={firstRef}
-      returnFocus={returnFocus}
       onClose={onClose}
-      onSubmit={() => void submit()}
+      onSubmit={submit}
+      footer={() => (
+        <>
+          <DialogClose asChild>
+            <Button ref={cancelRef} type="button" variant="ghost" className="h-10" disabled={saving}>Cancel</Button>
+          </DialogClose>
+          {options && options.bills.length > 0 && (
+            <Button type="submit" className="h-10" disabled={saving || !check || check.total <= 0}>
+              {saving ? 'Saving…' : `Set off ${formatRupees(check?.total ?? 0)}`}
+            </Button>
+          )}
+        </>
+      )}
     >
       {!options && !loadError && (
         <div className="flex flex-col gap-2" aria-hidden="true">
@@ -146,11 +161,11 @@ export function SetOffCreditDialog({
         </div>
       )}
       {options && options.bills.length === 0 && (
-        <p className="text-sm">No posted bill from {distributorName} has anything left to pay. The credit stays available for the next bill.</p>
+        <p className="text-sm">No posted bill from {name} has anything left to pay. The credit stays available for the next bill.</p>
       )}
       {options && options.bills.length > 0 && (
         <table className="w-full border-separate border-spacing-0 text-sm tabular-nums">
-          <caption className="sr-only">Open bills from {distributorName}, due first at the top</caption>
+          <caption className="sr-only">Open bills from {name}, due first at the top</caption>
           <thead>
             <tr className="text-left">
               <th scope="col" className="pb-1 font-semibold">Bill</th>
@@ -160,14 +175,18 @@ export function SetOffCreditDialog({
             </tr>
           </thead>
           <tbody>
-            {options.bills.map((bill, index) => (
-              <tr key={bill.id}>
-                <th scope="row" className="whitespace-nowrap border-t border-border py-1.5 pr-2 text-left font-medium">{bill.billNo}</th>
+            {options.bills.map((bill) => (
+              <tr key={bill.id} className={cn(bill.id === billId && 'bg-info-soft')}>
+                <th scope="row" className="whitespace-nowrap border-t border-border py-1.5 pl-1 pr-2 text-left font-medium">
+                  {bill.billNo}
+                  {bill.id === billId && <span className="block text-xs font-medium leading-tight">Bill you were paying</span>}
+                </th>
                 <td className="whitespace-nowrap border-t border-border py-1.5 pr-2">{bill.dueDate ? shortDay(bill.dueDate) : <span title={`No due date; billed ${displayCalendarDate(bill.billDate)}`}>—</span>}</td>
                 <td className="whitespace-nowrap border-t border-border py-1.5 text-right">{formatRupees(bill.payable)}</td>
                 <td className="border-t border-border py-1.5 pl-2">
                   <Input
-                    ref={index === 0 ? firstRef : undefined}
+                    id={inputId(bill.id)}
+                    ref={bill.id === focusBill ? firstRef : undefined}
                     inputMode="decimal"
                     aria-label={`Set off against bill ${bill.billNo}, up to ${formatRupees(bill.payable)}`}
                     value={amounts[bill.id] ?? ''}
@@ -194,16 +213,6 @@ export function SetOffCreditDialog({
           {error}
         </p>
       )}
-      <div className="flex flex-wrap justify-end gap-2">
-        <DialogClose asChild>
-          <Button ref={cancelRef} type="button" variant="ghost" className="h-10" disabled={saving}>Cancel</Button>
-        </DialogClose>
-        {options && options.bills.length > 0 && (
-          <Button type="submit" className="h-10" disabled={saving || !check || check.total <= 0}>
-            {saving ? 'Saving…' : `Set off ${formatRupees(check?.total ?? 0)}`}
-          </Button>
-        )}
-      </div>
     </ActionDialog>
   );
 }

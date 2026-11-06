@@ -14,10 +14,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { parseQuery } from '@/components/register/register-query';
 import { PurchaseRegister } from './PurchaseRegister';
 import { PurchaseReturnsRegister } from './PurchaseReturnsRegister';
-import type { ReturnKind } from './purchase-returns-model';
+import { RETURNS_QUERY, returnsRequestParams, type ReturnKind } from './purchase-returns-model';
 import { PURCHASE_QUERY, PURCHASE_REGISTERS, PURCHASE_REGISTER_COPY, exportHref, type PurchaseRegisterKind } from './purchase-register-model';
 
 const NO_PARAMS = new URLSearchParams();
+const SHARED_PARAMS = ['gstin', 'from', 'to'];
+
+function exportHrefFor(tab: PurchaseRegisterKind, searchParams: Pick<URLSearchParams, 'get' | 'toString'>, today: string) {
+  if (tab === 'purchases') return exportHref(PURCHASE_REGISTER_COPY.purchases.endpoint, parseQuery(PURCHASE_QUERY, searchParams, today));
+  const params = new URLSearchParams({ format: 'xlsx' });
+  for (const [key, value] of Object.entries(returnsRequestParams(parseQuery(RETURNS_QUERY, searchParams, today))))
+    if (value !== undefined) params.set(key, String(value));
+  return `/api${PURCHASE_REGISTER_COPY.returns.endpoint}?${params}`;
+}
+
+const carried = (params: Pick<URLSearchParams, 'get'>) => {
+  const next = new URLSearchParams();
+  for (const key of SHARED_PARAMS) {
+    const value = params.get(key);
+    if (value) next.set(key, value);
+  }
+  return next;
+};
 
 const tabOf = (params: Pick<URLSearchParams, 'get'>): PurchaseRegisterKind =>
   PURCHASE_REGISTERS.find((register) => register === params.get('tab')) ?? PURCHASE_REGISTERS[0];
@@ -51,10 +69,10 @@ export function PurchaseBills({
     if (register !== PURCHASE_REGISTERS[0]) next.set('tab', register);
     return next;
   };
-  const exportUrl = () => exportHref(PURCHASE_REGISTER_COPY[tab].endpoint, parseQuery(PURCHASE_QUERY, searchParams, getISTDateString()));
+  const exportUrl = () => exportHrefFor(tab, searchParams, getISTDateString());
 
   return (
-    <Tabs value={tab} onValueChange={(value: string) => onTabChange(withTab(value as PurchaseRegisterKind, NO_PARAMS))}>
+    <Tabs value={tab} onValueChange={(value: string) => onTabChange(withTab(value as PurchaseRegisterKind, carried(searchParams)))}>
       <section aria-label="Purchase bills" className="flex min-w-0 flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
           <TabsList aria-label="Purchase registers" className="shrink-0 flex-nowrap">

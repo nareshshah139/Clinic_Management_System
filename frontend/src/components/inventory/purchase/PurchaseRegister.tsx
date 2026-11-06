@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Plus, Receipt } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { displayCalendarDate, displayClinicDateTimeCompact } from '@/lib/date-display';
@@ -37,6 +37,7 @@ import {
   type FilterKey,
   type PurchaseQuery,
   type PurchaseRegisterResponse,
+  type DistributorPosition,
   type PurchaseRegisterRow,
   type SortKey,
 } from './purchase-register-model';
@@ -54,6 +55,8 @@ const linkClass =
  * docs/qa/inventory-workflow-contract-review.md. This is a target obligation, not a pass claim.
  */
 type SettingOff = { gstin: string; name: string; anchor: HTMLElement; billId?: string };
+
+const POSITION_ENDPOINT = '/pharmacy/purchase-register/position';
 
 export function PurchaseRegister({
   active,
@@ -90,15 +93,30 @@ export function PurchaseRegister({
   const data = load.data;
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
-  const settle = useSettleBill({ rows, canSettle, today, reload });
+  const [positionVersion, setPositionVersion] = useState(0);
+  const [position, setPosition] = useState<DistributorPosition | null>(null);
+  const reloadAll = useCallback(async () => {
+    const fresh = await reload();
+    setPositionVersion((version) => version + 1);
+    return fresh;
+  }, [reload]);
+  const settle = useSettleBill({ rows, canSettle, today, reload: reloadAll });
   const creditHeldBy = (gstinOf: string) => data?.creditHeld?.[gstinOf.toUpperCase()] ?? 0;
-  const position = data?.distributorPosition ?? null;
-  const setOffDone = async (message: string, anchor: HTMLElement) => {
-    setSettingOff(null);
-    toast({ title: message });
-    await reload();
-    if (anchor.isConnected) anchor.focus();
-  };
+  const positionGstin = active && data ? (query.filters.distributorGstin || data.onlyDistributor || '').toUpperCase() : '';
+  useEffect(() => {
+    if (!positionGstin) {
+      setPosition(null);
+      return;
+    }
+    let live = true;
+    apiClient.get<DistributorPosition>(POSITION_ENDPOINT, { distributorGstin: positionGstin }).then(
+      (loaded) => live && setPosition(loaded),
+      () => live && setPosition(null),
+    );
+    return () => {
+      live = false;
+    };
+  }, [positionGstin, positionVersion]);
   const setFilter = (key: FilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -237,7 +255,7 @@ export function PurchaseRegister({
         {view.filtered && <ClearFilters onClear={clearAll} />}
       </FilterBar>
 
-      {position && !failed && (
+      {position && position.gstin === positionGstin && !failed && (
         <DistributorPositionStrip
           position={position}
           name={position.name ?? distributorOptions.find((option) => option.value === position.gstin)?.label ?? position.gstin}
@@ -255,7 +273,7 @@ export function PurchaseRegister({
         sort={{ by: query.sortBy, dir: query.sortDir }}
         onSort={(key) => dispatch({ type: 'sort', key })}
         onRowClick={(row) => onOpen(row.id)}
-        onRetry={() => void reload()}
+        onRetry={() => void reloadAll()}
         containerRef={tableRef}
         compact
         empty={
@@ -310,16 +328,17 @@ export function PurchaseRegister({
           anchor={settingOff.anchor}
           billId={settingOff.billId}
           onClose={() => setSettingOff(null)}
-          onDone={(result, total) =>
-            void setOffDone(
-              `Set off ${formatRupees(total)} of ${settingOff.name}’s credit against ${[...new Set(result.bills.map((bill) => bill.billNo))].join(', ')}.`,
-              settingOff.anchor,
-            )
-          }
+          onDone={(result, total) => {
+            setSettingOff(null);
+            const { billId, anchor } = settingOff;
+            void settle.setOff(result, total, billId ? { rowId: billId } : null).then(() => {
+              if (!billId && anchor.isConnected) anchor.focus();
+            });
+          }}
           onStale={(failure) => {
             setSettingOff(null);
             toast({ variant: 'destructive', title: failure.title, description: failure.description });
-            void reload();
+            void reloadAll();
           }}
         />
       )}

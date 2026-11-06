@@ -185,7 +185,7 @@ it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'] as const)('lets %s open the Returns ta
   get.mockImplementation(async (path: string) => {
     if (path === '/inventory/workspace/capabilities') return roleCapabilities[role];
     if (path === '/pharmacy/purchase-returns-register') return returnsPage;
-    if (path === '/pharmacy/purchase-register') return { ...emptyRegister, creditHeld: {}, distributorPosition: null };
+    if (path === '/pharmacy/purchase-register') return { ...emptyRegister, creditHeld: {}, onlyDistributor: null };
     throw new Error(`Unexpected ${path}`);
   });
   render(<InventoryWorkspace />);
@@ -194,18 +194,23 @@ it.each(['PHARMACIST', 'DOCTOR', 'ADMIN'] as const)('lets %s open the Returns ta
   expect(screen.getByRole('tab', { name: 'Returns' })).toHaveAttribute('aria-selected', 'true');
 });
 
-it('opens the supplier returns in progress from Today on the Returns tab', async () => {
+it('counts credit notes awaited on Today and opens the Returns tab filtered to them', async () => {
   mockUrl.set('/dashboard/inventory?area=today');
   serve({ ledger: true, creditWrite: true });
   get.mockImplementation(async (path: string) => {
     if (path === '/inventory/workspace/capabilities') return { kinds: {}, ledger: true, creditWrite: true };
     if (path === '/inventory/workspace/overview')
-      return { asOf: '2026-11-06T06:00:00.000Z', purchases: [], queues: [{ kind: 'SUPPLIER_RETURN', _count: 2 }], recent: [], lowStock: 0, expiring: 0, unlinked: 0 };
+      return { asOf: '2026-11-06T06:00:00.000Z', purchases: [], queues: [{ kind: 'SUPPLIER_RETURN', _count: 2 }], recent: [], lowStock: 0, expiring: 0, unlinked: 0, creditNotesAwaited: 1 };
     if (path === '/pharmacy/purchase-returns-register') return returnsPage;
-    return { ...emptyRegister, creditHeld: {}, distributorPosition: null };
+    return { ...emptyRegister, creditHeld: {}, onlyDistributor: null };
   });
   render(<InventoryWorkspace />);
-  fireEvent.click(await screen.findByRole('button', { name: /Supplier returns in progress/ }));
+  const card = await screen.findByRole('button', { name: /Credit notes awaited/ });
+  expect(card).toHaveTextContent('1');
+  expect(card).toHaveAttribute('title', 'Record the distributor’s credit note when it arrives.');
+  fireEvent.click(card);
   expect(await screen.findByRole('button', { name: 'Record credit note for return RET-1' })).toBeInTheDocument();
-  expect(new URLSearchParams(window.location.search).get('tab')).toBe('returns');
+  const params = new URLSearchParams(window.location.search);
+  expect([params.get('tab'), params.get('state')]).toEqual(['returns', 'AWAITED']);
+  expect(get.mock.calls.find(([path]) => path === '/pharmacy/purchase-returns-register')![1]).toMatchObject({ state: 'AWAITED' });
 });

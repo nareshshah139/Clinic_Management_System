@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useState } from 'react';
 import { apiClient } from '@/lib/api';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
@@ -28,6 +28,8 @@ import {
   type RecordedPayment,
   type SettleFailure,
 } from './purchase-register-model';
+import type { SetOffResult } from './set-off-model';
+import { useRowAction, useUndoWindow } from './useRowAction';
 
 const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
 const UNDER_PAY_TOLERANCE = 0.01;
@@ -113,7 +115,7 @@ function OwedBadge({ row }: { row: PurchaseRegisterRow }) {
 }
 
 type Settling = { row: PurchaseRegisterRow; anchor: HTMLButtonElement };
-type Recent = { payment: RecordedPayment; undoing: boolean };
+type Undoable = { kind: 'payment'; payment: RecordedPayment } | { kind: 'setOff'; setOffId: string; billNos: string[] };
 
 export function useSettleBill({
   rows,
@@ -126,78 +128,60 @@ export function useSettleBill({
   today: string;
   reload: () => Promise<PurchaseRegisterResponse | null>;
 }) {
-  const ids = useId();
   const [settling, setSettling] = useState<Settling | null>(null);
-  const [recent, setRecent] = useState<Record<string, Recent>>({});
-  const [focusIds, setFocusIds] = useState<string[]>([]);
   const [announcement, setAnnouncement] = useState('');
-  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const recentRef = useRef(recent);
-  recentRef.current = recent;
-
-  const settleId = (rowId: string) => `${ids}settle-${rowId}`;
-  const openId = (rowId: string) => `${ids}open-${rowId}`;
-
-  useEffect(() => {
-    if (!focusIds.length) return;
-    focusIds.map((id) => document.getElementById(id)).find((element) => element)?.focus();
-    setFocusIds([]);
-  }, [focusIds, rows]);
-
-  useEffect(() => {
-    const pending = timers.current;
-    return () => pending.forEach(clearTimeout);
-  }, []);
-
-  const forget = (rowId: string) => {
-    clearTimeout(timers.current.get(rowId));
-    timers.current.delete(rowId);
-    setRecent((current) => Object.fromEntries(Object.entries(current).filter(([id]) => id !== rowId)));
-  };
-  const remember = (rowId: string, payment: RecordedPayment) => {
-    clearTimeout(timers.current.get(rowId));
-    timers.current.set(rowId, setTimeout(() => forget(rowId), UNDO_WINDOW_MS));
-    setRecent((current) => ({ ...current, [rowId]: { payment, undoing: false } }));
-  };
-
-  const focusAfter = (fresh: readonly PurchaseRegisterRow[], rowId: string, oldIndex: number) => {
-    const index = fresh.findIndex((row) => row.id === rowId);
-    const next = fresh.slice(index >= 0 ? index + 1 : Math.max(0, oldIndex)).find((row) => canMarkPaid(row, canSettle));
-    const landing = index >= 0 ? rowId : fresh[Math.min(Math.max(0, oldIndex), fresh.length - 1)]?.id;
-    setFocusIds([...(next ? [settleId(next.id)] : []), ...(landing ? [openId(landing)] : [])]);
-  };
+  const action = useRowAction({ reload, next: (row: PurchaseRegisterRow) => canMarkPaid(row, canSettle) });
+  const { actionId: settleId, openId } = action;
+  const undoWindow = useUndoWindow<Undoable>(UNDO_WINDOW_MS);
+  const { remember, forget } = undoWindow;
 
   const undo = async (row: PurchaseRegisterRow, key = requestKey()) => {
-    const entry = recentRef.current[row.id];
+    const entry = undoWindow.entry(row.id);
     if (!entry || entry.undoing) return;
-    setRecent((current) => ({ ...current, [row.id]: { ...entry, undoing: true } }));
+    const undoable = entry.value;
+    const rowIds = undoWindow.sharing(undoable);
+    undoWindow.mark(rowIds, undoable, true);
+    const noun = undoable.kind === 'payment' ? 'payment' : 'set-off';
     try {
-      await apiClient.post(
-        `/pharmacy/purchase-ledger/payments/${encodeURIComponent(entry.payment.id)}/reverse`,
-        { requestKey: key, expectedUpdatedAt: entry.payment.updatedAt, reason: UNDO_REASON },
-        { idempotencyKey: key },
-      );
-      forget(row.id);
+      if (undoable.kind === 'payment')
+        await apiClient.post(
+          `/pharmacy/purchase-ledger/payments/${encodeURIComponent(undoable.payment.id)}/reverse`,
+          { requestKey: key, expectedUpdatedAt: undoable.payment.updatedAt, reason: UNDO_REASON },
+          { idempotencyKey: key },
+        );
+      else
+        await apiClient.post(
+          `/inventory/workspace/credits/set-off/${encodeURIComponent(undoable.setOffId)}/reverse`,
+          { reason: UNDO_REASON },
+          { idempotencyKey: key },
+        );
+      forget(rowIds);
       const fresh = (await reload())?.rows ?? [];
       const now = fresh.find((candidate) => candidate.id === row.id);
-      toast({ title: 'Payment undone', description: `Bill ${row.billNo}: ${now ? paymentText(now, today) : 'no longer paid'}.` });
-      if (now) setFocusIds([settleId(row.id), openId(row.id)]);
+      toast({
+        title: undoable.kind === 'payment' ? 'Payment undone' : 'Set-off undone',
+        description:
+          undoable.kind === 'payment'
+            ? `Bill ${row.billNo}: ${now ? paymentText(now, today) : 'no longer paid'}.`
+            : `The credit is back with the distributor and bill${undoable.billNos.length === 1 ? '' : 's'} ${undoable.billNos.join(', ')} owe${undoable.billNos.length === 1 ? 's' : ''} it again.`,
+      });
+      if (now) action.focus(settleId(row.id), openId(row.id));
     } catch (failure) {
       if ((failure as { status?: number } | null)?.status === 409) {
-        forget(row.id);
+        forget(rowIds);
         toast({
           variant: 'warning',
-          title: 'This payment was already undone',
+          title: `This ${noun} was already undone`,
           description: `The list now shows bill ${row.billNo}’s latest balance.`,
         });
         await reload();
-        setFocusIds([settleId(row.id), openId(row.id)]);
+        action.focus(settleId(row.id), openId(row.id));
         return;
       }
-      remember(row.id, entry.payment);
+      remember(rowIds, undoable);
       toast({
         variant: 'destructive',
-        title: 'Could not undo the payment',
+        title: `Could not undo the ${noun}`,
         description: `${errorMessage(failure)} You can reverse it from Payments & dues.`,
         action: (
           <ToastAction altText="Try undo again" onClick={() => void undo(row, key)}>
@@ -213,9 +197,9 @@ export function useSettleBill({
     const { row } = settling;
     const oldIndex = rows.findIndex((candidate) => candidate.id === row.id);
     setSettling(null);
-    remember(row.id, payment);
+    remember([row.id], { kind: 'payment', payment });
     const remaining = payment.allocations?.find((allocation) => allocation.purchaseInvoiceId === row.id)?.outstandingAfter ?? 0;
-    const fresh = (await reload())?.rows ?? [];
+    const fresh = await action.refresh(row.id, oldIndex);
     const visible = fresh.some((candidate) => candidate.id === row.id);
     if (remaining > UNDER_PAY_TOLERANCE) {
       toast({
@@ -235,7 +219,19 @@ export function useSettleBill({
       });
     }
     setAnnouncement(`Recorded ${formatRupees(amount)} for bill ${row.billNo}.`);
-    focusAfter(fresh, row.id, oldIndex);
+  };
+
+  const setOff = async (result: SetOffResult, total: number, from: { rowId: string } | null) => {
+    const billNos = result.bills.map((bill) => bill.billNo);
+    remember(
+      result.bills.map((bill) => bill.id),
+      { kind: 'setOff', setOffId: result.setOffId, billNos },
+    );
+    const message = `Set off ${formatRupees(total)} of credit against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
+    setAnnouncement(message);
+    toast({ title: message, description: 'Undo is next to the bill for 30 seconds.' });
+    if (from) await action.refresh(from.rowId, rows.findIndex((candidate) => candidate.id === from.rowId));
+    else await reload();
   };
 
   const stale = async (failure: Extract<SettleFailure, { kind: 'stale' }>) => {
@@ -246,8 +242,8 @@ export function useSettleBill({
     toast({ variant: 'warning', title: failure.title, description: failure.description });
     const fresh = (await reload())?.rows ?? [];
     const now = fresh.find((candidate) => candidate.id === row.id);
-    if (now && canMarkPaid(now, canSettle)) setFocusIds([settleId(row.id), openId(row.id)]);
-    else focusAfter(fresh, row.id, oldIndex);
+    if (now && canMarkPaid(now, canSettle)) action.focus(settleId(row.id), openId(row.id));
+    else action.focusAfter(fresh, row.id, oldIndex);
   };
 
   return {
@@ -255,8 +251,9 @@ export function useSettleBill({
     open: (row: PurchaseRegisterRow, anchor: HTMLButtonElement) => setSettling({ row, anchor }),
     close: () => setSettling(null),
     paid,
+    setOff,
     stale,
-    recent,
+    recent: undoWindow.pending,
     undo,
     today,
     settleId,
@@ -284,7 +281,7 @@ export function PaymentCell({
           variant="ghost"
           size="sm"
           className="h-8 whitespace-nowrap! px-2 text-sm font-semibold underline underline-offset-4 lg:min-h-8!"
-          aria-label={`Undo payment for bill ${row.billNo}`}
+          aria-label={`Undo ${recent.value.kind === 'payment' ? 'payment' : 'credit set-off'} for bill ${row.billNo}`}
           disabled={recent.undoing}
           onClick={() => void settle.undo(row)}
         >

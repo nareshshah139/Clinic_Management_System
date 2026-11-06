@@ -66,7 +66,7 @@ export type PurchaseRegisterResponse = {
   entryByOptions: Person[];
   distributorOptions: Distributor[];
   creditHeld: Record<string, number>;
-  distributorPosition: DistributorPosition | null;
+  onlyDistributor: string | null;
 };
 
 export type RecordedPayment = {
@@ -82,7 +82,7 @@ export const UNDO_WINDOW_MS = 30_000;
 
 export const PURCHASE_REGISTER_COPY: Record<PurchaseRegisterKind, { tab: string; noun: string; table: string; endpoint: string; exportable: boolean }> = {
   purchases: { tab: 'Purchase', noun: 'purchase bills', table: 'Purchase bills', endpoint: '/pharmacy/purchase-register', exportable: true },
-  returns: { tab: 'Returns', noun: 'purchase returns', table: 'Purchase returns', endpoint: '/pharmacy/purchase-returns-register', exportable: false },
+  returns: { tab: 'Returns', noun: 'purchase returns', table: 'Purchase returns', endpoint: '/pharmacy/purchase-returns-register', exportable: true },
 };
 
 const LEDGER_WRITER_ROLES: readonly string[] = [UserRole.OWNER, UserRole.ADMIN, UserRole.DOCTOR, UserRole.PHARMACIST, UserRole.ACCOUNTANT];

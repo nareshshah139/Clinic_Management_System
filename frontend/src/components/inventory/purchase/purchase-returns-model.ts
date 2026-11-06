@@ -33,7 +33,13 @@ export type PurchaseReturnRow = {
   credit: { id: string; amount: number; applied: number; available: number } | null;
   state: ReturnCreditState;
   reason: ReturnReason | null;
+  awaitedSince: string | null;
 };
+
+export type CreditNoteTarget = Pick<
+  PurchaseReturnRow,
+  'id' | 'kind' | 'version' | 'returnRef' | 'returnDate' | 'returnValue' | 'sourceBillNo' | 'credit' | 'creditNote'
+> & { distributor: { name: string } };
 
 export type PurchaseReturnsResponse = {
   rows: PurchaseReturnRow[];
@@ -89,7 +95,7 @@ export const RETURN_STATE_LABELS: Record<ReturnCreditState, string> = {
 
 export const RETURN_STATE_FILTER_LABELS: Record<ReturnCreditState, string> = { ...RETURN_STATE_LABELS, AWAITED: 'Awaited' };
 
-export const RETURN_KIND_LABELS: Record<ReturnKind, string> = { SUPPLIER_RETURN: 'Returns', CREDIT_NOTE: 'Credit notes only' };
+export const RETURN_KIND_LABELS: Record<ReturnKind, string> = { SUPPLIER_RETURN: 'Returns only', CREDIT_NOTE: 'Credit notes only' };
 
 export const RETURN_REASON_LABELS: Record<ReturnReason, string> = {
   EXPIRY: 'Expired',
@@ -127,10 +133,19 @@ export function returnsRequestParams(query: ReturnsQuery) {
 }
 
 export const canRecordCreditNote = (row: PurchaseReturnRow, canWrite: boolean) => canWrite && row.state === 'AWAITED';
+export const canCorrectCreditNote = (row: PurchaseReturnRow, canWrite: boolean) =>
+  canWrite && row.creditNote !== null && ['RECEIVED', 'ADJUSTED', 'USED'].includes(row.state);
 export const canSetOff = (row: PurchaseReturnRow, canWrite: boolean) =>
   canWrite && (row.state === 'RECEIVED' || row.state === 'ADJUSTED') && (row.credit?.available ?? 0) > MONEY_TOLERANCE;
-export const amountLocked = (row: PurchaseReturnRow) => (row.credit?.applied ?? 0) > MONEY_TOLERANCE;
-export const differsFromReturn = (amount: number, row: PurchaseReturnRow) => Math.abs(amount - row.returnValue) > MONEY_TOLERANCE;
+export const amountLocked = (row: CreditNoteTarget) => (row.credit?.applied ?? 0) > MONEY_TOLERANCE;
+export const differsFromReturn = (amount: number, row: CreditNoteTarget) => Math.abs(amount - row.returnValue) > MONEY_TOLERANCE;
+export const CONFIRM_OVER_RUPEES = 1;
+export const needsConfirming = (amount: number, row: CreditNoteTarget) => amount - row.returnValue > CONFIRM_OVER_RUPEES;
+
+export function awaitedDays(row: PurchaseReturnRow, today: string) {
+  if (row.state !== 'AWAITED' || !row.awaitedSince) return null;
+  return Math.max(0, Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${row.awaitedSince}T00:00:00Z`)) / 86_400_000));
+}
 
 const plural = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
 export const returnCount = (count: number) => plural(count, 'return', 'returns');
@@ -143,6 +158,7 @@ export function returnsExcludedNote({ drafts, cancelled }: { drafts: number; can
 export function parseCreditNote(
   input: { number: string; date: string; amount: string },
   today: string,
+  returnDate: string,
 ): { value: { number: string; date: string; amount: number } } | { field: 'number' | 'date' | 'amount'; error: string } {
   const number = input.number.trim().replace(/\s+/g, ' ');
   if (!number) return { field: 'number', error: 'Enter the credit note number from the distributor’s note.' };
@@ -150,19 +166,22 @@ export function parseCreditNote(
   const date = parseDisplayDay(input.date);
   if (!date) return { field: 'date', error: 'Enter the credit note date as dd/mm/yyyy.' };
   if (date > today) return { field: 'date', error: `The credit note date cannot be after today, ${formatDisplayDay(today)}.` };
+  if (date < returnDate) return { field: 'date', error: `The credit note date cannot be before the return date, ${formatDisplayDay(returnDate)}.` };
   const amount = Number(input.amount.replace(/[₹,\s]/g, ''));
   if (!Number.isFinite(amount) || amount <= 0) return { field: 'amount', error: 'Enter the credit note amount in rupees.' };
   return { value: { number: number.toUpperCase(), date, amount: Math.round(amount * 100) / 100 } };
 }
 
-export function differenceNote(amount: number, row: PurchaseReturnRow) {
+export function differenceNote(amount: number, row: CreditNoteTarget) {
   const gap = Math.round((amount - row.returnValue) * 100) / 100;
-  return `${gap < 0 ? 'Less' : 'More'} than the return value ${formatRupees(row.returnValue)} by ${formatRupees(Math.abs(gap))}.`;
+  return gap < 0
+    ? `${formatRupees(-gap)} less than your return value. Fine if the distributor’s note says so.`
+    : `${formatRupees(gap)} more than your return value of ${formatRupees(row.returnValue)}. Check the amount on the distributor’s note.`;
 }
 
 export type WriteFailure =
   | { kind: 'stale'; title: string; description: string }
-  | { kind: 'field'; field: 'number'; message: string }
+  | { kind: 'field'; field: 'number' | 'date' | 'amount'; message: string }
   | { kind: 'inline'; message: string };
 
 const codeOf = (error: unknown) => (error as { body?: { code?: unknown } } | null)?.body?.code;
@@ -172,7 +191,10 @@ export function creditNoteFailure(error: unknown): WriteFailure {
   if (codeOf(error) === 'CREDIT_NOTE_DUPLICATE') return { kind: 'field', field: 'number', message: errorMessage(error) };
   if (status === 409 || status === 404)
     return { kind: 'stale', title: 'This return changed', description: 'The list now shows its latest status.' };
-  return { kind: 'inline', message: errorMessage(error) };
+  const message = errorMessage(error);
+  if (status === 400 && /credit note date/i.test(message)) return { kind: 'field', field: 'date', message };
+  if (status === 400 && /amount/i.test(message)) return { kind: 'field', field: 'amount', message };
+  return { kind: 'inline', message };
 }
 
 export function setOffFailure(error: unknown): WriteFailure {

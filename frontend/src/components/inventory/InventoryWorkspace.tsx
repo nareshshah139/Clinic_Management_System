@@ -298,6 +298,12 @@ export function InventoryWorkspace() {
           </select>
         </label>
       )}
+      {area === "stock" && (
+        <button type="button" className="block text-left text-sm underline underline-offset-4 md:hidden"
+          onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
+          Supplier returns are now in Purchase bills › Returns
+        </button>
+      )}
       {menus[area]?.length > 0 && (
         <nav
           aria-label={`${area} tasks`}
@@ -307,6 +313,12 @@ export function InventoryWorkspace() {
             <Button key={id} size="sm" variant={view === id ? "secondary" : "ghost"}
               aria-current={view === id ? "page" : undefined} onClick={() => switchTask(id)}>{label}</Button>
           ))}
+          {area === "stock" && (
+            <button type="button" className="self-center rounded-sm px-2 text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              onClick={() => router.push(`${path}?area=purchases&view=register&tab=returns`, { scroll: false })}>
+              Supplier returns are now in Purchase bills › Returns
+            </button>
+          )}
           {moreTasks.length > 0 && <select aria-label="More inventory tasks" className="max-w-64 rounded-md border bg-background px-3 py-2 text-sm"
             value={moreTasks.some(([id]) => id === view) ? view : ""} onChange={event => switchTask(event.target.value)}>
             <option value="" disabled>More tasks…</option>
@@ -614,12 +626,16 @@ function WorkspaceToday({ navigate, open }: any) {
       detail: "Enter physical counts or approve a reviewed variance.",
       target: { area: "stock", view: "COUNT", status: "OPEN" },
     },
-    {
-      label: "Supplier returns in progress",
-      count: queue("SUPPLIER_RETURN"),
-      detail: "Complete the challan and supplier credit.",
-      target: { area: "purchases", view: "register", tab: "returns" },
-    },
+    ...(data?.creditNotesAwaited != null
+      ? [
+          {
+            label: "Credit notes awaited",
+            count: data.creditNotesAwaited,
+            detail: "Record the distributor’s credit note when it arrives.",
+            target: { area: "purchases", view: "register", tab: "returns", state: "AWAITED" },
+          },
+        ]
+      : []),
     {
       label: "Orders awaiting receipt",
       count: queue("PURCHASE_ORDER"),

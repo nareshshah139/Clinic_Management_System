@@ -15,6 +15,7 @@ import { apiClient } from "@/lib/api";
 import { InventoryAction } from "./InventoryPresentation";
 import { workflowDocumentPresentation, type DocumentKnowledge, type DocumentReference } from "./workflow-document-state";
 import { RETURN_REASONS, RETURN_REASON_LABELS, returnReasonValue } from "./purchase/purchase-returns-model";
+import { RecordCreditNoteDialog } from "./purchase/RecordCreditNoteDialog";
 import { Button } from "@/components/ui/button";
 import {
   workflowKinds,
@@ -134,6 +135,7 @@ export function WorkflowDocumentEditor({
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
+    [recording, setRecording] = useState<HTMLElement | null>(null),
     [reversal, setReversal] = useState(""),
     [showReverse, setShowReverse] = useState(false);
   const lock = useRef(false),
@@ -893,8 +895,8 @@ export function WorkflowDocumentEditor({
               Reason for return
               <select
                 className={inputClass}
-                value={returnReasonValue(form.payload.returnType)}
-                onChange={(e) => payload("returnType", e.target.value)}
+                value={returnReasonValue(form.payload.returnReason ?? form.payload.returnType)}
+                onChange={(e) => payload("returnReason", e.target.value)}
               >
                 {RETURN_REASONS.map((reason) => (
                   <option key={reason} value={reason}>{RETURN_REASON_LABELS[reason]}</option>
@@ -913,6 +915,31 @@ export function WorkflowDocumentEditor({
                 </option>
                 <option value="AGREED_RATE">Agreed rate entered below</option>
               </select>
+            </label>
+          </>
+        )}
+        {kind === "CREDIT_NOTE" && (
+          <>
+            <label className="text-sm">
+              Credit note no.
+              <input
+                className={inputClass + " uppercase"}
+                maxLength={50}
+                autoComplete="off"
+                value={form.payload.creditNoteNumber || ""}
+                onChange={(e) => payload("creditNoteNumber", e.target.value)}
+                placeholder="As printed on the distributor’s note"
+              />
+            </label>
+            <label className="text-sm">
+              Credit note date
+              <input
+                type="date"
+                className={inputClass}
+                max={getISTDateString()}
+                value={form.payload.creditNoteDate || ""}
+                onChange={(e) => payload("creditNoteDate", e.target.value)}
+              />
             </label>
           </>
         )}
@@ -956,7 +983,7 @@ export function WorkflowDocumentEditor({
           </>
         )}
         <label className="text-sm sm:col-span-2">
-          Reason / notes
+          {kind === "SUPPLIER_RETURN" ? "Note (optional)" : "Reason / notes"}
           <input
             className={inputClass}
             value={form.payload.reason || ""}
@@ -1389,6 +1416,11 @@ export function WorkflowDocumentEditor({
                 Release held stock
               </Button>
             )}
+          {kind === "SUPPLIER_RETURN" && doc.status === "CHALLAN" && capabilities?.creditWrite && presentation.canMutate && (
+            <Button aria-haspopup="dialog" onClick={(event) => setRecording(event.currentTarget)} disabled={busy}>
+              Record credit note
+            </Button>
+          )}
           {kind === "INWARD_CHALLAN" && doc.status === "POSTED" && presentation.canMutate && (
             <Button onClick={() => onInvoice(doc)}>
               Create linked purchase bill
@@ -1429,6 +1461,34 @@ export function WorkflowDocumentEditor({
               </Button>
             )}
         </div>
+      )}
+      {recording && doc && (
+        <RecordCreditNoteDialog
+          row={{
+            id: doc.id,
+            kind: "SUPPLIER_RETURN",
+            version: doc.version,
+            returnRef: doc.reference,
+            returnDate: doc.payload?.date || getISTDateString(),
+            returnValue: Number(doc.totalAmount || 0),
+            sourceBillNo: linkedSource?.invoiceNumber ?? null,
+            credit: null,
+            creditNote: null,
+            distributor: { name: suppliers.find((supplier) => supplier.id === doc.supplierId)?.name || doc.supplierGstin || "the distributor" },
+          }}
+          anchor={recording}
+          onClose={() => setRecording(null)}
+          onRecorded={async (recorded) => {
+            setRecording(null);
+            apply(await apiClient.get<any>(`/inventory/workspace/documents/${doc.id}`));
+            setNotice(`Credit note ${recorded.credit.number} recorded: ${fmtMoney(recorded.credit.amount)}. Set it off against bills from Purchase bills › Returns.`);
+            feedback.current?.focus();
+          }}
+          onStale={(failure) => {
+            setRecording(null);
+            setError(`${failure.title}. Check saved status to see its latest state.`);
+          }}
+        />
       )}
       {showReverse && presentation.canMutate && (
         <div className="flex flex-wrap gap-3 rounded-md border p-4">

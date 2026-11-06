@@ -1,6 +1,6 @@
 export const workflowKinds:Record<string,{label:string;area:string;help:string;primary:string}>={
  OPENING_STOCK:{label:'Opening stock entries',area:'stock',help:'Set the opening balance of a new batch with no prior movements. This creates no supplier payable.',primary:'Post opening stock'},
- SUPPLIER_RETURN:{label:'Supplier returns',area:'purchases',help:'Save a draft and send the goods back on a challan. Record the distributor\'s credit note from Purchase bills › Returns when it arrives.',primary:'Create return challan'},
+ SUPPLIER_RETURN:{label:'Supplier returns',area:'purchases',help:'Save a draft and send the goods back on a challan. When the distributor\'s credit note arrives, record it here or from Purchase bills › Returns.',primary:'Create return challan'},
  SALES_RETURN:{label:'Customer returns',area:'sales',help:'Select the original sale and choose restock, quarantine or loss for each returned batch.',primary:'Post return'},
  LOSS:{label:'Loss & breakage',area:'stock',help:'Record a reason and remove damaged or lost units from available stock.',primary:'Post stock loss'},
  HOLD:{label:'Blocked stock',area:'stock',help:'Hold units from sale while keeping them in physical stock. Release from this record.',primary:'Block stock'},
@@ -12,7 +12,7 @@ export const workflowKinds:Record<string,{label:string;area:string;help:string;p
  GATE_PASS:{label:'Gate passes',area:'purchases',help:'Record the delivery reference and linked order or receipt. This document has no stock or payable effect.',primary:'Record gate pass'},
  QUOTATION:{label:'Quotations',area:'sales',help:'Prepare a quotation without reserving or selling stock. Convert once to a sale draft.',primary:'Create sale draft'},
  COUNTER_SALE:{label:'Counter sales',area:'sales',help:'Choose the actual batch and stock unit. Drafts do not reserve; posting reduces available stock.',primary:'Post sale'},
- CREDIT_NOTE:{label:'Credit notes',area:'purchases',help:'Record a supplier credit without stock movement, then allocate it to posted bills.',primary:'Post supplier credit'},
+ CREDIT_NOTE:{label:'Credit notes',area:'purchases',help:'Enter the number and date from the distributor\'s credit note and post it; then set it off against bills from Purchase bills › Returns.',primary:'Post supplier credit'},
  TARGET_REVIEW:{label:'Target proposals',area:'reorder',help:'Compare proposed minimum and maximum levels with the saved values; choose the lines to accept.',primary:'Accept selected targets'},
 };
 export const fmtMoney=(v:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:2}).format(Number(v)||0);

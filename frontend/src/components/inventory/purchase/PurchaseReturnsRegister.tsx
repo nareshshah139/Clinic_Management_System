@@ -1,23 +1,27 @@
 'use client';
 
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { PackageX, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { displayCalendarDate } from '@/lib/date-display';
 import { formatDisplayDay } from '@/lib/date-ranges';
 import { formatRupees } from '@/lib/pharmacy-invoice-print';
-import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
+import { requestKey } from '@/components/inventory/workspace-model';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ToastAction } from '@/components/ui/toast';
+import { errorMessage } from '@/components/register/register-query';
 import { useRegisterQuery } from '@/components/register/useRegisterQuery';
-import { RegisterDateTime, RegisterDenied, RegisterGrid, shortName, type RegisterColumn } from '@/components/register/RegisterGrid';
+import { RegisterDenied, RegisterGrid } from '@/components/register/RegisterGrid';
 import { ClearFilters, DateRangeFilter, FilterBar, FilterSelect, MoreFilters, RegisterSearch } from '@/components/register/RegisterFilters';
 import { RegisterFooter } from '@/components/register/RegisterFooter';
 import { RecordCreditNoteDialog } from './RecordCreditNoteDialog';
 import { SetOffCreditDialog } from './SetOffCreditDialog';
+import { UNDO_REASON, UNDO_WINDOW_MS } from './purchase-register-model';
+import { returnColumns, type ReturnAct } from './returns-columns';
+import { useRowAction, useUndoWindow } from './useRowAction';
+import type { SetOffResult } from './set-off-model';
 import {
   RETURNS_ENDPOINT,
   RETURNS_QUERY,
@@ -36,47 +40,16 @@ import {
   returnsRequestParams,
   type PurchaseReturnRow,
   type PurchaseReturnsResponse,
+  type RecordedCreditNote,
   type ReturnFilterKey,
   type ReturnKind,
-  type ReturnSortKey,
   type ReturnsQuery,
   type WriteFailure,
 } from './purchase-returns-model';
 
-const badgeText = 'whitespace-nowrap px-1.5 py-0.5 text-xs font-semibold';
-const linkClass =
-  'flex flex-col items-start rounded-sm text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&:hover_.ref]:underline';
-const compactDay = (day: string, today: string) => (day.endsWith(` ${today.slice(0, 4)}`) ? day.slice(0, -5) : day);
+export { ReturnStateBadge } from './returns-columns';
 
-export function ReturnStateBadge({ row }: { row: PurchaseReturnRow }) {
-  const available = row.credit?.available ?? 0;
-  switch (row.state) {
-    case 'AWAITED':
-      return <Badge variant="warning" className={badgeText}>Credit note awaited</Badge>;
-    case 'RECEIVED':
-      return (
-        <span className="flex flex-col items-start gap-0.5">
-          <Badge variant="info" className={badgeText}>Received</Badge>
-          <span className="whitespace-nowrap text-xs font-medium leading-tight">{formatRupees(available)} available</span>
-        </span>
-      );
-    case 'ADJUSTED':
-      return (
-        <span className="flex flex-col items-start gap-0.5">
-          <Badge variant="info" className={badgeText}>Adjusted</Badge>
-          <span className="whitespace-nowrap text-xs font-medium leading-tight">{formatRupees(available)} left</span>
-        </span>
-      );
-    case 'USED':
-      return <Badge variant="success" className={badgeText}>Fully used</Badge>;
-    case 'DRAFT':
-      return <Badge variant="neutral" className={badgeText}>Draft</Badge>;
-    case 'CANCELLED':
-      return <Badge variant="neutral" className={cn(badgeText, 'line-through')}>Cancelled</Badge>;
-  }
-}
-
-type Acting = { kind: 'record' | 'setOff'; row: PurchaseReturnRow; anchor: HTMLButtonElement };
+type Acting = { act: ReturnAct; row: PurchaseReturnRow; anchor: HTMLElement };
 
 export function PurchaseReturnsRegister({
   active,
@@ -93,7 +66,6 @@ export function PurchaseReturnsRegister({
   onOpen: (kind: ReturnKind, id: string) => void;
   onNew: () => void;
 }) {
-  const ids = useId();
   const fetchPage = useCallback(
     (query: ReturnsQuery) => apiClient.get<PurchaseReturnsResponse>(RETURNS_ENDPOINT, returnsRequestParams(query)),
     [],
@@ -107,43 +79,100 @@ export function PurchaseReturnsRegister({
     enabled: active,
   });
   const [acting, setActing] = useState<Acting | null>(null);
-  const [focusId, setFocusId] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState('');
+  const action = useRowAction({ reload, next: (row: PurchaseReturnRow) => canRecordCreditNote(row, canWrite) });
+  const undoWindow = useUndoWindow<string>(UNDO_WINDOW_MS);
 
   const data = load.data;
   const rows = data?.rows ?? [];
   const failed = load.status === 'error';
   const setFilter = (key: ReturnFilterKey) => (value: string) => dispatch({ type: 'filter', key, value });
-  const actionId = (rowId: string) => `${ids}act-${rowId}`;
-  const openId = (rowId: string) => `${ids}open-${rowId}`;
+  const indexOf = (row: PurchaseReturnRow) => rows.findIndex((candidate) => candidate.id === row.id);
 
-  useEffect(() => {
-    if (!focusId) return;
-    document.getElementById(focusId)?.focus();
-    setFocusId(null);
-  }, [focusId, rows]);
-
-  const focusAfter = (fresh: readonly PurchaseReturnRow[], row: PurchaseReturnRow, next: (candidate: PurchaseReturnRow) => boolean) => {
-    const index = fresh.findIndex((candidate) => candidate.id === row.id);
-    const following = fresh.slice(index + 1).find(next);
-    const self = fresh[index];
-    if (following) setFocusId(actionId(following.id));
-    else if (self && (canSetOff(self, canWrite) || canRecordCreditNote(self, canWrite))) setFocusId(actionId(self.id));
-    else if (self) setFocusId(openId(self.id));
-  };
-
-  const finish = async (row: PurchaseReturnRow, message: string, next: (candidate: PurchaseReturnRow) => boolean) => {
+  const recorded = async (row: PurchaseReturnRow, result: RecordedCreditNote, corrected: boolean) => {
     setActing(null);
+    const { credit } = result;
+    const message = corrected
+      ? `Credit note ${credit.number} corrected.`
+      : `Credit note ${credit.number} recorded: ${formatRupees(credit.amount)} from ${row.distributor.name}.`;
     setAnnouncement(message);
-    toast({ title: message });
     const fresh = (await reload())?.rows ?? [];
-    focusAfter(fresh, row, next);
+    const now = fresh.find((candidate) => candidate.id === row.id);
+    const settable = now && canSetOff(now, canWrite);
+    toast({
+      title: message,
+      ...(settable && !corrected
+        ? {
+            description: 'Set it off against the distributor’s bills now, or later from this list.',
+            action: (
+              <ToastAction
+                altText={`Set off ${formatRupees(credit.available)} now`}
+                onClick={() => {
+                  const anchor = document.getElementById(action.actionId(row.id));
+                  if (now && anchor) setActing({ act: 'setOff', row: now, anchor });
+                }}
+              >
+                Set off {formatRupees(credit.available)} now
+              </ToastAction>
+            ),
+          }
+        : {}),
+    });
+    if (settable) action.focus(action.actionId(row.id), action.openId(row.id));
+    else action.focusAfter(fresh, row.id, indexOf(row));
   };
+
+  const setOffDone = async (row: PurchaseReturnRow, result: SetOffResult, total: number) => {
+    setActing(null);
+    const billNos = [...new Set(result.bills.map((bill) => bill.billNo))];
+    undoWindow.remember([row.id], result.setOffId);
+    const message = `Set off ${formatRupees(total)} against bill${billNos.length === 1 ? '' : 's'} ${billNos.join(', ')}.`;
+    setAnnouncement(message);
+    toast({ title: message, description: 'Undo is next to the credit note for 30 seconds.' });
+    await action.refresh(row.id, indexOf(row), (candidate) => canSetOff(candidate, canWrite));
+  };
+
+  const undo = async (row: PurchaseReturnRow, key = requestKey()) => {
+    const entry = undoWindow.entry(row.id);
+    if (!entry || entry.undoing) return;
+    const rowIds = undoWindow.sharing(entry.value);
+    undoWindow.mark(rowIds, entry.value, true);
+    try {
+      await apiClient.post(
+        `/inventory/workspace/credits/set-off/${encodeURIComponent(entry.value)}/reverse`,
+        { reason: UNDO_REASON },
+        { idempotencyKey: key },
+      );
+      undoWindow.forget(rowIds);
+      toast({ title: 'Set-off undone', description: `Credit note ${row.creditNote?.number ?? row.returnRef} has its credit back.` });
+      await reload();
+      action.focus(action.actionId(row.id), action.openId(row.id));
+    } catch (failure) {
+      if ((failure as { status?: number } | null)?.status === 409) {
+        undoWindow.forget(rowIds);
+        toast({ variant: 'warning', title: 'This set-off was already undone', description: 'The list now shows the latest balance.' });
+        await reload();
+        action.focus(action.actionId(row.id), action.openId(row.id));
+        return;
+      }
+      undoWindow.mark(rowIds, entry.value, false);
+      toast({
+        variant: 'destructive',
+        title: 'Could not undo the set-off',
+        description: `${errorMessage(failure)} You can reverse it from Payments & dues.`,
+        action: (
+          <ToastAction altText="Try undo again" onClick={() => void undo(row, key)}>
+            Try again
+          </ToastAction>
+        ),
+      });
+    }
+  };
+
   const stale = async (row: PurchaseReturnRow, failure: Extract<WriteFailure, { kind: 'stale' }>) => {
     setActing(null);
     toast({ variant: 'destructive', title: failure.title, description: failure.description });
-    const fresh = (await reload())?.rows ?? [];
-    focusAfter(fresh, row, () => false);
+    await action.refresh(row.id, indexOf(row), () => false);
   };
 
   const entryByOptions = (data?.entryByOptions ?? []).map((person) => ({ value: person.id, label: person.name }));
@@ -153,116 +182,21 @@ export function PurchaseReturnsRegister({
   const gstin = query.filters.distributorGstin;
   if (gstin && !distributorOptions.some((option) => option.value === gstin)) distributorOptions.push({ value: gstin, label: gstin });
 
-  const columns: RegisterColumn<PurchaseReturnRow, ReturnSortKey>[] = [
-    { key: 'srNo', label: 'Sr No', sort: 'srNo', className: 'w-[1%] tabular-nums', cell: (row) => row.srNo },
-    {
-      key: 'creditNoteNo',
-      label: 'Credit Note No.',
-      sort: 'creditNoteNo',
-      pinned: true,
-      interactive: true,
-      className: 'w-[1%]',
-      cell: (row) => (
-        <button id={openId(row.id)} type="button" onClick={() => onOpen(row.kind, row.id)} className={linkClass}>
-          {row.creditNote ? (
-            <span className="ref whitespace-nowrap font-semibold underline-offset-4">{row.creditNote.number}</span>
-          ) : (
-            <span>
-              <span aria-hidden="true">—</span>
-              <span className="sr-only">No credit note yet</span>
-            </span>
-          )}
-          <span className="ref whitespace-nowrap text-xs font-medium leading-tight underline-offset-4">
-            <span className="sr-only">Open {row.kind === 'CREDIT_NOTE' ? 'Credit' : 'Return'} </span>
-            {row.returnRef}
-          </span>
-        </button>
-      ),
-    },
-    { key: 'entryAt', label: 'Entry Date', sort: 'entryAt', className: 'w-[1%]', cell: (row) => <RegisterDateTime value={row.entryAt} today={today} /> },
-    {
-      key: 'creditNoteDate',
-      label: 'Credit Note Date',
-      sort: 'creditNoteDate',
-      className: 'w-[1%] whitespace-nowrap',
-      cell: (row) => (row.creditNote?.date ? compactDay(displayCalendarDate(row.creditNote.date), today) : '—'),
-    },
-    { key: 'entryBy', label: 'Entry By', className: 'w-[1%] whitespace-nowrap', cell: (row) => (row.entryBy ? <span title={row.entryBy.name}>{shortName(row.entryBy.name)}</span> : '—') },
-    {
-      key: 'distributor',
-      label: 'Distributor',
-      sort: 'distributor',
-      className: 'w-full max-w-0 min-w-[7rem]',
-      cell: (row) => (
-        <span className="flex min-w-0 flex-col">
-          <span title={`${row.distributor.name} · GSTIN ${row.distributor.gstin}`} className="truncate font-medium">{row.distributor.name}</span>
-          {(row.sourceBillNo || row.reason) && (
-            <span className="truncate text-xs font-medium leading-tight">
-              {[row.sourceBillNo && `Bill ${row.sourceBillNo}`, row.reason && RETURN_REASON_LABELS[row.reason]].filter(Boolean).join(' · ')}
-            </span>
-          )}
-        </span>
-      ),
-    },
-    {
-      key: 'amount',
-      label: 'Amount',
-      sort: 'amount',
-      align: 'right',
-      className: 'w-[1%] whitespace-nowrap',
-      cell: (row) => {
-        const amount = row.creditNote?.amount ?? row.returnValue;
-        const differs = row.creditNote && Math.abs(row.creditNote.amount - row.returnValue) > 0.01;
-        return (
-          <span className="flex flex-col items-end">
-            <span className={cn('font-semibold', row.state === 'CANCELLED' && 'line-through')}>{formatRupees(amount)}</span>
-            {!row.creditNote && <span className="text-xs font-medium leading-tight">return value</span>}
-            {differs && <span className="text-xs font-medium leading-tight">Return {formatRupees(row.returnValue)}</span>}
-          </span>
-        );
+  const columns = returnColumns({
+    today,
+    canWrite,
+    actionId: action.actionId,
+    openId: action.openId,
+    undo: {
+      pending: (rowId) => {
+        const entry = undoWindow.pending[rowId];
+        return entry ? (entry.undoing ? 'undoing' : 'ready') : null;
       },
+      run: (row) => void undo(row),
     },
-    {
-      key: 'state',
-      label: 'Status',
-      sort: 'state',
-      interactive: true,
-      className: 'w-[1%] whitespace-nowrap py-0.5!',
-      cell: (row) => (
-        <div className="flex items-center justify-between gap-2">
-          <ReturnStateBadge row={row} />
-          {canRecordCreditNote(row, canWrite) && (
-            <Button
-              id={actionId(row.id)}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!"
-              aria-label={`Record credit note for ${row.kind === 'CREDIT_NOTE' ? 'credit' : 'return'} ${row.returnRef}`}
-              aria-haspopup="dialog"
-              onClick={(event) => setActing({ kind: 'record', row, anchor: event.currentTarget })}
-            >
-              Record CN
-            </Button>
-          )}
-          {canSetOff(row, canWrite) && (
-            <Button
-              id={actionId(row.id)}
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 max-w-none! whitespace-nowrap! px-2.5 text-sm lg:min-h-8!"
-              aria-label={`Set off credit note ${row.creditNote?.number ?? row.returnRef} against bills`}
-              aria-haspopup="dialog"
-              onClick={(event) => setActing({ kind: 'setOff', row, anchor: event.currentTarget })}
-            >
-              Set off
-            </Button>
-          )}
-        </div>
-      ),
-    },
-  ];
+    onOpen: (row) => onOpen(row.kind, row.id),
+    onAct: (act, row, anchor) => setActing({ act, row, anchor }),
+  });
 
   if (load.status === 'denied') {
     return <RegisterDenied noun="purchase returns" />;
@@ -272,8 +206,8 @@ export function PurchaseReturnsRegister({
     'Totals not available'
   ) : data ? (
     <>
-      Credit held {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)} ({returnCount(data.totals.awaited.count)}) ·{' '}
-      {returnCount(data.totals.count)}
+      Credit held (all dates) {formatRupees(data.totals.held)} · Awaited {formatRupees(data.totals.awaited.amount)} (
+      {returnCount(data.totals.awaited.count)}) · {returnCount(data.totals.count)} in this period
     </>
   ) : (
     <Skeleton className="h-6 w-72" />
@@ -281,7 +215,7 @@ export function PurchaseReturnsRegister({
   const note = failed
     ? 'Could not load purchase returns. Retry to see the latest totals.'
     : data
-      ? [returnsExcludedNote(data.totals.excluded), 'Awaited is our return value until the credit note arrives'].filter(Boolean).join('. ')
+      ? [returnsExcludedNote(data.totals.excluded), 'Awaited counts our return value until the note arrives'].filter(Boolean).join('. ')
       : '';
 
   return (
@@ -369,38 +303,26 @@ export function PurchaseReturnsRegister({
 
       <p role="status" className="sr-only">{announcement}</p>
 
-      {acting?.kind === 'record' && (
+      {acting && acting.act !== 'setOff' && (
         <RecordCreditNoteDialog
           row={acting.row}
           anchor={acting.anchor}
+          mode={acting.act}
           onClose={() => setActing(null)}
-          onRecorded={(recorded) =>
-            void finish(
-              acting.row,
-              `Credit note ${recorded.credit.number} recorded: ${formatRupees(recorded.credit.amount)} from ${acting.row.distributor.name}.`,
-              (candidate) => canRecordCreditNote(candidate, canWrite),
-            )
-          }
+          onRecorded={(result) => void recorded(acting.row, result, acting.act === 'correct')}
           onStale={(failure) => void stale(acting.row, failure)}
         />
       )}
-      {acting?.kind === 'setOff' && acting.row.credit && (
+      {acting?.act === 'setOff' && acting.row.credit && (
         <SetOffCreditDialog
           scope={{ creditId: acting.row.credit.id }}
           distributorName={acting.row.distributor.name}
           anchor={acting.anchor}
           onClose={() => setActing(null)}
-          onDone={(result, total) =>
-            void finish(
-              acting.row,
-              `Set off ${formatRupees(total)} against ${[...new Set(result.bills.map((bill) => bill.billNo))].join(', ')}.`,
-              (candidate) => canSetOff(candidate, canWrite),
-            )
-          }
+          onDone={(result, total) => void setOffDone(acting.row, result, total)}
           onStale={(failure) => void stale(acting.row, failure)}
         />
       )}
     </div>
   );
 }
-

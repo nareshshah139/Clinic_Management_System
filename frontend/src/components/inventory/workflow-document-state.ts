@@ -117,7 +117,7 @@ export function workflowDocumentPresentation(kind: string, knowledge: DocumentKn
   } else if (status === 'CHALLAN') {
     result.happened = 'Stock has already been sent back to the supplier on this return challan.';
     result.stockEffect = 'changed'; result.stockExplanation = 'Finalising the supplier credit does not return the same stock a second time.';
-    result.recovery = 'When the distributor’s credit note arrives, record its number, date and amount from Purchase bills › Returns. Cancel document only if the goods did not go back.';
+    result.recovery = 'When the distributor’s credit note arrives, choose Record credit note and enter its number, date and amount. Cancel document only if the goods did not go back.';
   } else if (status === 'RELEASED') {
     result.happened = 'Held units were released for use. Release changed availability while physical quantity stayed unchanged by the release.';
     result.stockEffect = 'changed'; result.stockExplanation = 'The original receipt or hold remains in history; review current available and held quantities.';

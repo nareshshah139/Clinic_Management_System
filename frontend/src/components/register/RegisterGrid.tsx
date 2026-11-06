@@ -19,6 +19,7 @@ export type RegisterColumn<Row, Sort extends string = string> = {
   sort?: Sort;
   align?: 'right';
   pinned?: boolean;
+  pinnedEnd?: boolean;
   interactive?: boolean;
   className?: string;
   cell: (row: Row) => ReactNode;
@@ -29,6 +30,8 @@ const headClass =
 const pinnedHeadClass = 'left-0 z-30 max-xl:border-r max-xl:border-border';
 const cellClass = 'px-1! text-sm first:pl-1.5! last:pr-1!';
 const pinnedCellClass = 'sticky left-0 z-10 bg-background group-hover:bg-[var(--accent-soft)] max-xl:border-r max-xl:border-border';
+const pinnedEndHeadClass = 'max-sm:right-0 max-sm:z-30 max-sm:border-l max-sm:border-border';
+const pinnedEndCellClass = 'max-sm:sticky max-sm:right-0 max-sm:z-10 max-sm:bg-background max-sm:group-hover:bg-[var(--accent-soft)] max-sm:border-l max-sm:border-border';
 
 const stopRowClick = (event: MouseEvent) => event.stopPropagation();
 
@@ -116,7 +119,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
                       <TableHead
                         key={column.key}
                         aria-sort={column.sort === undefined ? undefined : active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                        className={cn(headClass, column.pinned && pinnedHeadClass, column.align === 'right' && 'text-right')}
+                        className={cn(headClass, column.pinned && pinnedHeadClass, column.pinnedEnd && pinnedEndHeadClass, column.align === 'right' && 'text-right')}
                       >
                         {column.sort === undefined ? (
                           <HeadLabel column={column as RegisterColumn<unknown>} />
@@ -148,7 +151,7 @@ export function RegisterGrid<Row extends { id: string }, Sort extends string>({
                       <TableCell
                         key={column.key}
                         onClick={column.interactive ? stopRowClick : undefined}
-                        className={cn(cellClass, padClass, column.pinned && pinnedCellClass, column.align === 'right' && 'text-right', column.className)}
+                        className={cn(cellClass, padClass, column.pinned && pinnedCellClass, column.pinnedEnd && pinnedEndCellClass, column.align === 'right' && 'text-right', column.className)}
                       >
                         {column.cell(row)}
                       </TableCell>

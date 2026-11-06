@@ -8,6 +8,7 @@ export type SetOffOptions = {
 };
 
 export type SetOffResult = {
+  setOffId: string;
   allocations: { id: string; creditId: string; creditNoteNumber: string | null; purchaseInvoiceId: string; amount: number }[];
   bills: { id: string; billNo: string; payableAfter: number }[];
   credits: { id: string; number: string | null; available: number }[];
