@@ -364,72 +364,7 @@ describe('UsersService', () => {
     });
   });
 
-  describe('resetPassword', () => {
-    const resetPasswordDto = {
-      email: 'john@example.com',
-    };
 
-    const mockUser = {
-      id: 'user-123',
-      email: 'john@example.com',
-    };
-
-    it('should generate reset token successfully', async () => {
-      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
-      mockJwtService.sign.mockReturnValue('reset-token');
-      mockPrisma.user.update.mockResolvedValue({});
-
-      const result = await service.resetPassword(resetPasswordDto);
-
-      expect(result).toEqual({
-        message: 'Password reset token generated',
-        resetToken: 'reset-token',
-      });
-    });
-
-    it('should throw NotFoundException if user not found', async () => {
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-
-      await expect(service.resetPassword(resetPasswordDto)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-  });
-
-  describe('setPassword', () => {
-    const setPasswordDto = {
-      password: 'newPassword',
-      confirmPassword: 'newPassword',
-      resetToken: 'valid-token',
-    };
-
-    const mockUser = {
-      id: 'user-123',
-      resetToken: 'valid-token',
-      resetTokenExpiry: new Date(Date.now() + 60 * 60 * 1000),
-    };
-
-    it('should set password successfully', async () => {
-      const bcrypt = require('bcrypt');
-      mockJwtService.verify.mockReturnValue({ userId: 'user-123' });
-      mockPrisma.user.findFirst.mockResolvedValue(mockUser);
-      bcrypt.hash.mockResolvedValue('hashedPassword');
-      mockPrisma.user.update.mockResolvedValue({});
-
-      const result = await service.setPassword(setPasswordDto);
-
-      expect(result).toEqual({ message: 'Password set successfully' });
-    });
-
-    it('should throw UnauthorizedException if token is invalid', async () => {
-      mockJwtService.verify.mockReturnValue({ userId: 'user-123' });
-      mockPrisma.user.findFirst.mockResolvedValue(null);
-
-      await expect(service.setPassword(setPasswordDto)).rejects.toThrow(
-        UnauthorizedException,
-      );
-    });
-  });
 
   describe('createBranch', () => {
     const createBranchDto = {

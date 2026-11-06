@@ -4,7 +4,7 @@ import { MAX_SIGNATURE_BYTES } from './doctor-signature';
 import { MAX_LETTERHEAD_BYTES } from './doctor-letterhead';
 import { ValidationPipe } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto, UpdateUserDto, ChangePasswordDto, ResetPasswordDto, SetPasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto, ChangePasswordDto, UpdateProfileDto, AssignRoleDto, UpdatePermissionsDto, UserStatusDto, CreateBranchDto, UpdateBranchDto, CreatePermissionDto, UpdatePermissionDto, CreateRoleDto, UpdateRoleDto } from './dto/user.dto';
 import { QueryUsersDto, QueryBranchesDto, QueryPermissionsDto, QueryRolesDto, UserStatisticsDto, UserActivityDto, UserDashboardDto } from './dto/query-user.dto';
 import { JwtAuthGuard } from '../../shared/guards/jwt-auth.guard';
 import { Roles } from '../../shared/decorators/roles.decorator';
@@ -102,15 +102,7 @@ export class UsersController {
     return this.usersService.changePassword(id, changePasswordDto, req.user);
   }
 
-  @Post('reset-password')
-  resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
-    return this.usersService.resetPassword(resetPasswordDto);
-  }
 
-  @Post('set-password')
-  setPassword(@Body() setPasswordDto: SetPasswordDto) {
-    return this.usersService.setPassword(setPasswordDto);
-  }
 
   @Patch(':id/profile')
   updateProfile(@Param('id') id: string, @Body() updateProfileDto: UpdateProfileDto, @Request() req: AuthenticatedRequest) {
