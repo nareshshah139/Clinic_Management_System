@@ -22,7 +22,8 @@
     "dev:be:minimal": "MINIMAL_BOOT=true npm run start:dev --workspace=backend",
     "test:recovery:e2e": "node e2e/recovery/run.cjs",
     "contracts:format": "cc-check format",
-    "contracts:list": "cc-check list"
+    "contracts:list": "cc-check list",
+    "contracts:check": "cc-check format && node scripts/contracts/check-attachment.cjs"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
