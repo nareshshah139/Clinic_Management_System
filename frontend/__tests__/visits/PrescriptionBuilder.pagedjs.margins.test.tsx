@@ -29,7 +29,7 @@ jest.mock('@/lib/api', () => ({
     getDoctorSignature: jest.fn().mockResolvedValue({ signature: null }),
     getPatientVisitHistory: jest.fn().mockResolvedValue({ visits: [] }),
     getPrinterProfiles: jest.fn().mockResolvedValue([
-      { id: 'prof-1', name: 'Default', isDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
+      { id: 'prof-1', name: 'Default', isDefault: true, appliesByDefault: true, topMarginPx: 170, bottomMarginPx: 45, leftMarginPx: 45, rightMarginPx: 45 },
     ]),
     getPrescriptionTemplates: jest.fn().mockResolvedValue({ templates: [] }),
     getPrescriptionPrintEvents: jest.fn().mockResolvedValue({ totals: {} }),

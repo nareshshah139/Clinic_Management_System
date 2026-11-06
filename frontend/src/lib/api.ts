@@ -1002,8 +1002,9 @@ export class ApiClient {
   }
 
   // Printer Profiles
-  async getPrinterProfiles() {
-    return this.get('/prescriptions/printer-profiles');
+  /** Profiles visible for printing this doctor's prescriptions; `appliesByDefault` marks the one to preselect. */
+  async getPrinterProfiles(doctorId?: string) {
+    return this.get('/prescriptions/printer-profiles', doctorId ? { doctorId } : undefined);
   }
 
   async upsertPrinterProfile(data: { id?: string; name: string; paperPreset?: string; topMarginPx?: number; leftMarginPx?: number; rightMarginPx?: number; bottomMarginPx?: number; contentOffsetXPx?: number; contentOffsetYPx?: number; grayscale?: boolean; bleedSafeMm?: number; metadata?: unknown; isDefault?: boolean }) {

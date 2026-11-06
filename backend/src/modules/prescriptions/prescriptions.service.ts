@@ -1267,11 +1267,29 @@ export class PrescriptionsService {
   }
 
   // PRINTER PROFILES
-  async listPrinterProfiles(branchId: string, ownerId?: string) {
-    return this.prisma.printerProfile.findMany({
-      where: { branchId, OR: [{ ownerId: null }, ownerId ? { ownerId } : undefined].filter(Boolean) as any },
-      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+  /**
+   * @cc [owner:nareshshah139,label:product] doctor-printer-profile-default
+   * The printer profile applied by default MUST follow the prescribing doctor: that doctor's
+   * own default first, else a clinic default (no owner, or owned by non-doctor staff), else none.
+   * One doctor's default MUST NOT apply to another doctor's prescriptions.
+   */
+  async listPrinterProfiles(branchId: string, userId?: string, doctorId?: string) {
+    const ownerIds = [...new Set([userId, doctorId].filter((id): id is string => !!id))];
+    const profiles = await this.prisma.printerProfile.findMany({
+      // Profiles saved by non-doctor staff are clinic printer calibrations, shared with everyone.
+      where: { branchId, OR: [{ ownerId: null }, { owner: { role: { not: 'DOCTOR' } } }, ...(ownerIds.length ? [{ ownerId: { in: ownerIds } }] : [])] },
+      include: { owner: { select: { role: true } } },
+      orderBy: [{ isDefault: 'desc' }, { updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
+    const forDoctor = doctorId ?? userId;
+    const isClinicDefault = (p: (typeof profiles)[number]) => p.isDefault && (!p.ownerId || p.owner?.role !== 'DOCTOR');
+    const applied = profiles.find(p => p.isDefault && p.ownerId === forDoctor && p.owner?.role === 'DOCTOR') ?? profiles.find(isClinicDefault);
+    return profiles.map(({ owner, ...profile }) => ({ ...profile, appliesByDefault: profile.id === applied?.id }));
+  }
+
+  /** Defaults are kept per owner, so each doctor and the clinic can each have one. */
+  private clearOtherDefaults(branchId: string, ownerId: string | null, keepId: string) {
+    return this.prisma.printerProfile.updateMany({ where: { branchId, ownerId, NOT: { id: keepId } }, data: { isDefault: false } });
   }
 
   async upsertPrinterProfile(
@@ -1297,18 +1315,18 @@ export class PrescriptionsService {
     } as any;
     if (body.id) {
       const updated = await this.prisma.printerProfile.update({ where: { id: body.id }, data });
-      if (data.isDefault) await this.prisma.printerProfile.updateMany({ where: { branchId, NOT: { id: updated.id } }, data: { isDefault: false } });
+      if (data.isDefault) await this.clearOtherDefaults(branchId, updated.ownerId, updated.id);
       return updated;
     }
     const created = await this.prisma.printerProfile.create({ data });
-    if (data.isDefault) await this.prisma.printerProfile.updateMany({ where: { branchId, NOT: { id: created.id } }, data: { isDefault: false } });
+    if (data.isDefault) await this.clearOtherDefaults(branchId, created.ownerId, created.id);
     return created;
   }
 
   async setDefaultPrinterProfile(branchId: string, ownerId: string, id: string) {
     const profile = await this.prisma.printerProfile.findFirst({ where: { id, branchId } });
     if (!profile) throw new NotFoundException('Printer profile not found');
-    await this.prisma.printerProfile.updateMany({ where: { branchId }, data: { isDefault: false } });
+    await this.clearOtherDefaults(branchId, profile.ownerId, id);
     return this.prisma.printerProfile.update({ where: { id }, data: { isDefault: true } });
   }
 

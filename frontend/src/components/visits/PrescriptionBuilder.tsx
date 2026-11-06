@@ -3184,20 +3184,25 @@ function PrescriptionBuilder({ consultationType, teleVideoConsent, patientId, vi
   const topMarginSliderValue = effectiveTopMarginPx;
   const bottomMarginSliderValue = effectiveBottomMarginPx;
 
+  const prescribingDoctorId = visitData?.doctor?.id || doctorId;
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [as, pp] = await Promise.all([
           apiClient.getClinicAssets(),
-          apiClient.getPrinterProfiles(),
+          apiClient.getPrinterProfiles(prescribingDoctorId),
         ]);
+        if (cancelled) return;
+        const profiles = Array.isArray(pp) ? pp : [];
         setAssets(Array.isArray(as) ? as : []);
-        setPrinterProfiles(Array.isArray(pp) ? pp : []);
-        const def = (Array.isArray(pp) ? pp : []).find((p: any) => p.isDefault);
-        if (def?.id) setActiveProfileId(def.id);
+        setPrinterProfiles(profiles);
+        const def = profiles.find((p: any) => p.appliesByDefault);
+        setActiveProfileId(current => current && profiles.some((p: any) => p.id === current) ? current : def?.id ?? null);
       } catch {}
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [prescribingDoctorId]);
 
 
   // Old custom pagination removed - now using unified Paged.js system
