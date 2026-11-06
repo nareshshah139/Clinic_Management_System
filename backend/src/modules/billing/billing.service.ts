@@ -373,6 +373,12 @@ export class BillingService {
     throw new BadRequestException('Invoice cancellation is not supported in the current schema');
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:calculation] payment-balance-application
+   * A payment MUST add its amount to the invoice received and set balance to total minus received,
+   * never below 0, so partial payments leave the remainder and full payment settles at 0. The
+   * invoice MUST belong to the authenticated branch, otherwise nothing is written.
+   */
   async processPayment(paymentDto: PaymentDto, branchId: string) {
     const { invoiceId, amount, method, reference, gateway } = paymentDto as any;
 
@@ -423,6 +429,13 @@ export class BillingService {
     return confirmed;
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:integrity] refund-bounds
+   * A refund MUST target a COMPLETED, non-refund payment in the authenticated branch and MUST be
+   * above 0, at most the payment amount, and at most what the invoice still holds as received.
+   * Any other request MUST fail with nothing written. A valid refund MUST add a negative payment
+   * and lower received and raise balance by that amount.
+   */
   async processRefund(refundDto: RefundDto, branchId: string) {
     const { paymentId, amount, reason, notes, gatewayResponse } = refundDto as any;
 
@@ -538,6 +551,11 @@ export class BillingService {
     };
   }
 
+  /**
+   * @cc [owner:nareshshah139,label:security] payment-listing-branch-scope
+   * Payment listings and the payment summary MUST only include payments on invoices of patients in
+   * the authenticated branch, including when filtered by a patient id from another branch.
+   */
   async findAllPayments(query: QueryPaymentsDto, branchId: string) {
     const {
       invoiceId,
@@ -702,6 +720,13 @@ export class BillingService {
   }
 
   // Private helper methods
+  /**
+   * @cc [owner:nareshshah139,label:calculation] invoice-total-arithmetic
+   * An invoice total MUST equal the line amounts after line discount percent, less the overall
+   * discount percent, plus GST per line on the line-discounted amount (before the overall discount).
+   * A line gstRate of 0 MUST add no tax and only a missing rate MAY default to 18. Totals are
+   * not rounded to paise.
+   */
   private calculateInvoiceTotals(items: any[], discount: number = 0) {
     const subtotal = items.reduce((sum, item) => {
       const itemTotal = (item.qty ?? item.quantity) * item.unitPrice;

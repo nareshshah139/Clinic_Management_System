@@ -135,6 +135,11 @@ describe('billing invoice totals', () => {
     expect(data.total).toBeCloseTo(500 + 8000 + 1440, 6);
   });
 
+  it('defaults a missing GST rate to 18 percent', async () => {
+    const data = await totalFor([{ qty: 1, unitPrice: 1000 }]);
+    expect(data.total).toBeCloseTo(1180, 6);
+  });
+
   it('keeps fractional paise from non-round amounts', async () => {
     const data = await totalFor([{ qty: 3, unitPrice: 33.33, gstRate: 18 }]);
     expect(data.total).toBeCloseTo(117.9882, 4);
@@ -435,5 +440,61 @@ describe('billing payment listing branch scope', () => {
       'branch-c',
     );
     expect(result.payments).toEqual([]);
+  });
+});
+
+describe('billing invoice visit and patient scope', () => {
+  const items = [{ qty: 1, unitPrice: 100, gstRate: 0 }];
+
+  it('rejects an invoice for a patient outside the branch before writing', async () => {
+    const { service, prisma } = setup({
+      patients: [{ id: 'pat-1', branchId: 'branch-b' }],
+    });
+    await expect(
+      service.createInvoice({ patientId: 'pat-1', items } as any, 'branch-a'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.newInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a visit that does not belong to the invoice patient in the branch', async () => {
+    const { service, prisma } = setup();
+    await expect(
+      service.createInvoice(
+        { patientId: 'pat-1', visitId: 'visit-of-someone-else', items } as any,
+        'branch-a',
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(prisma.visit.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'visit-of-someone-else',
+        patientId: 'pat-1',
+        patient: { branchId: 'branch-a' },
+      },
+    });
+    expect(prisma.newInvoice.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts a visit of the patient and stores it on the invoice', async () => {
+    const { service, prisma, created } = setup();
+    prisma.visit.findFirst.mockResolvedValueOnce({ id: 'visit-1' });
+    await service.createInvoice(
+      { patientId: 'pat-1', visitId: 'visit-1', items } as any,
+      'branch-a',
+    );
+    expect(created[0]).toMatchObject({
+      visitId: 'visit-1',
+      patientId: 'pat-1',
+      balance: 100,
+    });
+  });
+
+  it('creates a visit-less invoice without looking up a visit', async () => {
+    const { service, prisma, created } = setup();
+    await service.createInvoice(
+      { patientId: 'pat-1', items } as any,
+      'branch-a',
+    );
+    expect(prisma.visit.findFirst).not.toHaveBeenCalled();
+    expect(created).toHaveLength(1);
   });
 });
