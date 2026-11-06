@@ -28,6 +28,30 @@ describe('Recording a distributor credit note', () => {
   });
 });
 
+describe('Posting a supplier credit whose number another post took first', () => {
+  const actor = { id: 'asha', branchId: 'branch', role: 'ADMIN' };
+  const doc = { id: 'credit-doc', kind: 'CREDIT_NOTE', version: 1, payload: { creditNoteNumber: ' cn-9 ' } };
+  const failingWith = (error: unknown) => {
+    const workflow = new InventoryWorkflowService({
+      $transaction: async (run: (tx: unknown) => unknown) => run({ inventoryWorkflowDocument: { findFirst: async () => doc } }),
+    } as any);
+    jest.spyOn(workflow, 'settings').mockResolvedValue({} as any);
+    jest.spyOn(workflow, 'authorize').mockResolvedValue(undefined as any);
+    jest.spyOn(workflow as any, 'move').mockRejectedValue(error);
+    return workflow.transition(actor, doc.id, { action: 'POST', version: 1 } as any).catch((failure) => failure);
+  };
+
+  it('reports a clash on the open credit note index as a duplicate number, and passes any other unique clash through', async () => {
+    const clash = await failingWith(Object.assign(new Error('Unique'), { code: 'P2002', meta: { target: 'inventory_supplier_credits_open_credit_note_key' } }));
+    expect([clash.status, clash.response]).toEqual([
+      409,
+      { code: 'CREDIT_NOTE_DUPLICATE', message: "Credit note CN-9 is already recorded for this distributor. Check the number on the distributor's credit note." },
+    ]);
+    const other = await failingWith(Object.assign(new Error('Unique'), { code: 'P2002', meta: { target: ['documentId'] } }));
+    expect([other.code, other.message]).toEqual(['P2002', 'Unique']);
+  });
+});
+
 describe('Setting credit off against bills', () => {
   const actor = { id: 'asha', branchId: 'branch', role: 'ADMIN' };
   const workspace = new InventoryWorkspaceService({} as any, { permissions: async () => permissionGrants(['*']) } as any, new PharmacySupplierCreditService({} as any));
