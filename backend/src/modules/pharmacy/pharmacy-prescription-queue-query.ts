@@ -33,6 +33,16 @@ export const queueDurationDays: Record<string, number> = {
   years: 365,
 };
 
+const weekdays = 'sunday|monday|tuesday|wednesday|thursday|friday|saturday';
+
+export const queueInstructionSchedules: Array<{ pattern: string; perDay: number }> = [
+  { pattern: '(^|_)(twice_(a|per|every)_week|twice_weekly|(two|2)_times_(a|per)_week)(_|$)', perDay: 2 / 7 },
+  { pattern: '(^|_)(thrice_(a|per|every)_week|thrice_weekly|(three|3)_times_(a|per)_week)(_|$)', perDay: 3 / 7 },
+  { pattern: '(^|_)(alternate_days?|alternative_days?|every_other_day|every_alternate_day|every_second_day)(_|$)', perDay: 1 / 2 },
+  { pattern: '(^|_)(once_(a|per|every)_month|monthly|every_month)(_|$)', perDay: 1 / 30 },
+  { pattern: `(^|_)(once_(a|per|every)_week|weekly|every_week|every_(${weekdays}))(_|$)`, perDay: 1 / 7 },
+];
+
 export type PrescriptionQueueLifecycle = {
   id: string;
   status: string;
@@ -72,6 +82,15 @@ const numericLookup = (
     ' ',
   )} END`;
 
+const instructionLookup = (key: Prisma.Sql) => Prisma.sql`
+  CASE ${Prisma.join(
+    queueInstructionSchedules.map(
+      ({ pattern, perDay }) =>
+        Prisma.sql`WHEN ${key} ~ ${pattern} THEN ${perDay}::double precision`,
+    ),
+    ' ',
+  )} END`;
+
 /**
  * @cc [owner:nareshshah139,label:product] queue-live-status-selection
  * Status filtering and total MUST use all branch prescriptions, posted invoice coverage,
@@ -99,10 +118,12 @@ export function queueStatusPage(
     Prisma.sql`coalesce(item->>'quantity', item->>'prescribedQuantity', item->>'totalQuantity', item->>'qty')`,
   );
   const duration = positiveNumber(Prisma.sql`item->>'duration'`);
-  const frequency = numericLookup(
+  const frequency = Prisma.sql`coalesce(${instructionLookup(
+    normalized(Prisma.sql`coalesce(item->>'instructions', '')`),
+  )}, ${numericLookup(
     queueFrequencyPerDay,
     normalized(Prisma.sql`coalesce(item->>'frequency', '')`),
-  );
+  )})`;
   const multiplier = numericLookup(
     queueDurationDays,
     normalized(Prisma.sql`coalesce(nullif(item->>'durationUnit', ''), 'days')`),
@@ -124,7 +145,7 @@ export function queueStatusPage(
       WHERE patient."branchId" = ${branchId} AND coalesce(to_jsonb(p)->>'status', 'ACTIVE') NOT IN ('DRAFT', 'CANCELLED')
         AND to_jsonb(v)->>'deletedAt' IS NULL
     ), medications AS (
-      SELECT p.id, item, ordinal, coalesce(${explicit}, ceil(${frequency} * ${duration} * ${multiplier})) AS quantity,
+      SELECT p.id, item, ordinal, coalesce(${explicit}, ceil(round((${frequency} * ${duration} * ${multiplier})::numeric, 9))::double precision) AS quantity,
         ${medicationName} AS name
       FROM branch_prescriptions p
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) WITH ORDINALITY AS source(item, ordinal)

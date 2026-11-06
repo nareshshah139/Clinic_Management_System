@@ -1,5 +1,6 @@
 import { lineMetadata, matchPrescriptionLines, prescriptionLineKeys } from './pharmacy-prescription-line-identity';
-import { queueStatusPage, queueFrequencyPerDay, queueDurationDays, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
+import { queueStatusPage, prescriptionQueueLifecycle, PrescriptionQueueLifecycle } from './pharmacy-prescription-queue-query';
+import { billingQuantity, normalizeToken, prescribedSchedule } from './pharmacy-billing-quantity';
 import { availableStock, inventoryIdentityInclude, prescriptionSourceKey, resolvePrescriptionInventory, searchClinicInventory } from './pharmacy-stock-identity';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../shared/database/prisma.service';
@@ -142,6 +143,8 @@ type StockCheckResult = {
   sourceLineKey?: string;
   inventoryItemId?: string | null;
   unit?: string | null;
+  packSize?: number | null;
+  packUnit?: string | null;
   totalOnHandStock?: number;
   heldStock?: number;
   expiredStock?: number;
@@ -316,8 +319,11 @@ export class PharmacyPrescriptionQueueService {
 
   /**
    * @cc [owner:nareshshah139,label:product] stock-check-billing-quantity
-   * Stock checks MUST return each line's prescribed quantity, including the queue's
-   * duration/frequency inference when no explicit quantity was recorded.
+   * Stock checks MUST return each line's billingQuantity. An explicit prescribed quantity MUST win.
+   * Measured items (bottles, tubes, creams, serums and similar) MUST fill 1 selling pack and be flagged.
+   * Countable items MUST bill in the inventory selling unit (doses divided by pack size for strips,
+   * boxes and packs). Free-text instruction schedules MUST override the structured frequency and flag
+   * a conflict. Lines with no computable schedule MUST fill 1 and be flagged. Flags MUST NOT block billing.
    */
   /**
    * @cc [owner:nareshshah139,label:product] queue-stock-check-read-only
@@ -326,11 +332,18 @@ export class PharmacyPrescriptionQueueService {
   async stockCheck(prescriptionId: string, branchId: string) {
     const entry = await this.findOne(prescriptionId, branchId);
     const items = await Promise.all(
-      entry.medications.map(async (item) => ({
-        ...await this.stockCheckMedication(item, branchId),
-        sourceLineKey: item.sourceLineKey,
-        prescribedQuantity: item.prescribedQuantity,
-      })),
+      entry.medications.map(async (item) => {
+        const stock = await this.stockCheckMedication(item, branchId);
+        const inventory = stock.unit
+          ? { unit: stock.unit, packSize: stock.packSize ?? null, packUnit: stock.packUnit ?? null }
+          : null;
+        return {
+          ...stock,
+          sourceLineKey: item.sourceLineKey,
+          prescribedQuantity: item.prescribedQuantity,
+          billingQuantity: billingQuantity(item.sourceItem ?? item, inventory, item.drugName),
+        };
+      }),
     );
 
     return {
@@ -1138,7 +1151,7 @@ export class PharmacyPrescriptionQueueService {
     invoiceItems: Array<LoadedInvoiceItem & { remaining: number }>,
   ): QueueMedication {
     const drugName = this.itemDrugName(item);
-    const prescribedQuantity = this.inferQuantity(item);
+    const prescribedQuantity = prescribedSchedule(item).doses;
     let remaining = prescribedQuantity ?? Number.POSITIVE_INFINITY;
     let dispensedQuantity = 0;
     for (const invoiceItem of invoiceItems) {
@@ -1205,6 +1218,7 @@ export class PharmacyPrescriptionQueueService {
     const lowStock = quantity > 0 && quantity <= threshold;
     return {
       drugName: medication.drugName, inventoryItemId: anchor.id, unit: anchor.unit,
+      packSize: anchor.packSize ?? null, packUnit: anchor.packUnit ?? null,
       matchedDrug: drug ? { id: drug.id, name: drug.name, manufacturerName: drug.manufacturerName } : null,
       stockStatus: quantity === 0 ? 'OUT_OF_STOCK' : lowStock ? 'LOW_STOCK' : 'IN_STOCK',
       totalNonExpiredStock: quantity,
@@ -1277,48 +1291,6 @@ export class PharmacyPrescriptionQueueService {
     }
   }
 
-  private inferQuantity(item: PrescriptionItem): number | null {
-    const explicitQuantity = this.toPositiveNumber(
-      item.quantity ??
-        item.prescribedQuantity ??
-        item.totalQuantity ??
-        item.qty,
-    );
-    if (explicitQuantity !== null) return explicitQuantity;
-
-    const perDay = this.frequencyToPerDay(item.frequency);
-    const duration = this.toPositiveNumber(item.duration);
-    const multiplier = this.durationToDaysMultiplier(item.durationUnit);
-    if (perDay === null || duration === null || multiplier === null) {
-      return null;
-    }
-
-    return Math.ceil(perDay * duration * multiplier);
-  }
-
-  private frequencyToPerDay(frequency?: string | null): number | null {
-    const normalized = this.normalizeName(frequency || '');
-    const map = queueFrequencyPerDay;
-
-    return map[normalized] ?? null;
-  }
-
-  private durationToDaysMultiplier(
-    durationUnit?: string | null,
-  ): number | null {
-    const normalized = this.normalizeName(durationUnit || 'days');
-    const map = queueDurationDays;
-
-    return map[normalized] ?? null;
-  }
-
-  private toPositiveNumber(value?: string | number | null): number | null {
-    if (value === undefined || value === null || value === '') return null;
-    const parsed =
-      typeof value === 'number' ? value : Number.parseFloat(String(value));
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }
-
   private namesMatch(a: string, b: string): boolean {
     const left = this.normalizeName(a);
     const right = this.normalizeName(b);
@@ -1336,11 +1308,7 @@ export class PharmacyPrescriptionQueueService {
   }
 
   private normalizeName(value: string): string {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
+    return normalizeToken(value);
   }
 
   private compareExpiry(a?: Date | null, b?: Date | null): number {
